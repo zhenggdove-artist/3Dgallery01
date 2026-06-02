@@ -73,7 +73,6 @@
   }
 
 
-
   body.exported-viewer .edit-ui,
   body.exported-viewer #editor,
   body.exported-viewer #objectPanel,
@@ -82,6 +81,8 @@
   body.exported-viewer #hud { display:none!important; visibility:hidden!important; pointer-events:none!important; }
   body.exported-viewer #mobileControls{display:flex}
   #viewerEscHint{position:fixed;right:18px;top:18px;z-index:62;display:block;padding:8px 10px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(0,0,0,.38);color:rgba(255,255,255,.82);font:12px/1.2 Arial,'Noto Sans TC',sans-serif;letter-spacing:.04em;pointer-events:none;backdrop-filter:blur(6px)}
+  #status{position:fixed;left:18px;top:18px;z-index:80;display:none;max-width:min(760px,calc(100vw - 36px));padding:10px 12px;border:1px solid rgba(216,192,127,.45);background:rgba(0,0,0,.62);color:#f1e2a8;font:12px/1.45 monospace;white-space:pre-wrap;pointer-events:none;backdrop-filter:blur(6px)}
+  #status.error{display:block;border-color:rgba(255,80,80,.7);color:#ffd5d5;background:rgba(50,0,0,.72)}
 
 </style>
 <script type="importmap">
@@ -102,6 +103,8 @@
     <feDisplacementMap id="screenFxDisplacement" in="SourceGraphic" in2="warpNoise" scale="0" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
   </filter>
 </svg>
+<div id="status" aria-live="polite"></div>
+<div id="viewerEscHint">ESC：釋放滑鼠｜點擊畫面：進入遊走</div>
 <div id="mobileControls" aria-hidden="false">
   <div id="mobileMovePad" data-bound="1"><div id="mobileMoveKnob"></div></div>
   <div id="mobileJumpButton">JUMP</div>
@@ -6558,15 +6561,22 @@ function loadStatue(){
 
 function createProxyActor(){
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.32,1.05,6,12), new THREE.MeshStandardMaterial({color:'#8aa3ff',roughness:.75}));
+  const bodyMat = new THREE.MeshStandardMaterial({color:'#8aa3ff',roughness:.75});
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.32,.32,1.05,16,1), bodyMat);
   body.position.y = .92;
   body.castShadow = true;
+  const capTop = new THREE.Mesh(new THREE.SphereGeometry(.32,16,10,0,Math.PI*2,0,Math.PI/2), bodyMat);
+  capTop.position.y = 1.445;
+  capTop.castShadow = true;
+  const capBottom = new THREE.Mesh(new THREE.SphereGeometry(.32,16,10,0,Math.PI*2,Math.PI/2,Math.PI/2), bodyMat);
+  capBottom.position.y = .395;
+  capBottom.castShadow = true;
   const head = new THREE.Mesh(new THREE.SphereGeometry(.25,16,12), new THREE.MeshStandardMaterial({color:'#ead5bd',roughness:.8}));
   head.position.y = 1.65;
   head.castShadow = true;
   const nose = new THREE.Mesh(new THREE.BoxGeometry(.08,.08,.2), new THREE.MeshStandardMaterial({color:'#333'}));
   nose.position.set(0,1.65,-.31);
-  g.add(body,head,nose);
+  g.add(body,capTop,capBottom,head,nose);
   return g;
 }
 
@@ -11121,21 +11131,7 @@ function exportCurrentSceneHtml(){
   let safeJson = JSON.stringify(snapshot).replace(/</g,'\\u003c').replace(/-->/g,'--\\u003e');
   let html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
   html = html.replace(/const EXPORTED_GALLERY_VIEWER = false;/, 'const EXPORTED_GALLERY_VIEWER = true;');
-  html = html.replace(/let EXPORTED_STATE = null;
-const EXTERNAL_STATE_URLS = ['./state.min.json','./state.json'];
-async function loadBundledExportedState(){
-  let lastError = null;
-  for(const url of EXTERNAL_STATE_URLS){
-    try{
-      const res = await fetch(url, {cache:'no-store'});
-      if(!res.ok) throw new Error(`${url} HTTP ${res.status}`);
-      return await res.json();
-    }catch(err){
-      lastError = err;
-    }
-  }
-  throw lastError || new Error('找不到 state.min.json / state.json');
-}/, `const EXPORTED_STATE = ${safeJson};`);
+  html = html.replace(/const EXPORTED_STATE = null;/, `const EXPORTED_STATE = ${safeJson};`);
   html = stripEditorMarkupForExport(html);
   html = html.replace(/<title>.*?<\/title>/, '<title>Virtual Gallery Scene</title>');
   const blob = new Blob([html], {type:'text/html;charset=utf-8'});
@@ -11181,8 +11177,10 @@ function setStatus(text){
   const el = $('status');
   if(!el) return;
   el.textContent = text;
-  if(EXPORTED_GALLERY_VIEWER && !/(失敗|錯誤|failed|error|找不到|無法)/i.test(String(text))){
-    el.style.display = 'none';
+  const isError = /(失敗|錯誤|failed|error|找不到|無法|HTTP|SyntaxError|TypeError)/i.test(String(text));
+  if(EXPORTED_GALLERY_VIEWER){
+    el.classList.toggle('error', isError);
+    el.style.display = isError ? 'block' : 'none';
   }else{
     el.style.display = 'block';
   }
@@ -11198,6 +11196,7 @@ function setStatus(text){
     console.error('Virtual Gallery init failed:', err);
     const el = document.getElementById('status');
     if(el){
+      el.classList.add('error');
       el.style.display = 'block';
       el.textContent = '初始化失敗：' + (err?.message || err) + '\n請確認 index.html、state.min.json、assets/、models/ 在同一層。';
     }
