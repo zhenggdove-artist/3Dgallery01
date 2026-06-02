@@ -2,7 +2,7 @@
 <html lang="zh-Hant" style="--fx-canvas-filter: none; --fx-overlay-opacity: 0;"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">
-<title>Sin Tower Gallery</title>
+<title>Virtual Gallery Scene</title>
 <style>
   :root{--bg:#060606;--panel:rgba(11,11,12,.9);--line:rgba(255,255,255,.18);--text:#eee;--muted:#aaa;--gold:#d8c07f;--danger:#d66;--ok:#8fd08f}
   html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:Arial,'Noto Sans TC',sans-serif}
@@ -73,17 +73,8 @@
   }
 
 
-  body.exported-viewer .edit-ui,
-  body.exported-viewer #editor,
-  body.exported-viewer #objectPanel,
-  body.exported-viewer #lightPanel,
-  body.exported-viewer #chiselPanel,
-  body.exported-viewer #hud { display:none!important; visibility:hidden!important; pointer-events:none!important; }
-  body.exported-viewer #mobileControls{display:flex}
-  #viewerEscHint{position:fixed;right:18px;top:18px;z-index:62;display:block;padding:8px 10px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(0,0,0,.38);color:rgba(255,255,255,.82);font:12px/1.2 Arial,'Noto Sans TC',sans-serif;letter-spacing:.04em;pointer-events:none;backdrop-filter:blur(6px)}
-  #status{position:fixed;left:18px;top:18px;z-index:80;display:none;max-width:min(760px,calc(100vw - 36px));padding:10px 12px;border:1px solid rgba(216,192,127,.45);background:rgba(0,0,0,.62);color:#f1e2a8;font:12px/1.45 monospace;white-space:pre-wrap;pointer-events:none;backdrop-filter:blur(6px)}
-  #status.error{display:block;border-color:rgba(255,80,80,.7);color:#ffd5d5;background:rgba(50,0,0,.72)}
 
+  body.exported-viewer .window-body{display:none!important}
 </style>
 <script type="importmap">
 {
@@ -94,7 +85,7 @@
 }
 </script>
 </head>
-<body class="fx-enabled fx-dreamcore exported-viewer play-mode" style="background: rgb(220, 233, 225); cursor: default;">
+<body class="exported-viewer play-mode fx-enabled fx-dreamcore" style="background: rgb(220, 233, 225); cursor: default;">
 <canvas id="canvas" data-engine="three.js r160" width="1920" height="912" data-webgl-safety-bound="1" style="touch-action: none; cursor: default;"></canvas>
 <div id="screenFxOverlay" aria-hidden="true" style="opacity: 0;"></div>
 <svg id="screenFxSvg" width="0" height="0" aria-hidden="true" focusable="false" style="position:fixed;width:0;height:0;overflow:hidden;pointer-events:none">
@@ -103,8 +94,17 @@
     <feDisplacementMap id="screenFxDisplacement" in="SourceGraphic" in2="warpNoise" scale="0" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
   </filter>
 </svg>
-<div id="status" aria-live="polite"></div>
-<div id="viewerEscHint">ESC：釋放滑鼠｜點擊畫面：進入遊走</div>
+<div class="window-body">
+  Click：初次鎖定滑鼠／越肩視角；ESC：顯示或隱藏滑鼠游標<br>
+  游標模式：按住滑鼠滾輪拖曳可旋轉視角；Wheel：Zoom In / Out（距離上限已加大）<br>
+  游標顯示後，點選畫面不會重新鎖定滑鼠；必須再按一次 ESC 才會隱藏游標<br>
+  WASD：移動　Mouse：旋轉視角　Wheel：Zoom In / Out　Space：跳躍<br>
+  Shift+C：開關編輯面板（預設已開啟）｜游標模式 Ctrl+1 正上方、Ctrl+2 45度俯視、Ctrl+3 平視｜Ctrl+Z 還原<br>
+  Q／新增牆面：角色前方產生半透明牆，會跟著角色移動；匯入作品後同樣以半透明跟隨角色；Enter：固定<br>
+  游標顯示時可直接點選牆面／地板／地板塊；被選物件會半透明，右側可輸入數值調整尺寸<br>
+  Shift+A：滑鼠調整自建牆大小；Shift+T：選取牆面或作品後開啟 XYZ 旋轉；E：刪除視線前方牆壁<br>
+  點選畫作：選取並調整厚度／厚度增值色　R：重置角色位置
+</div></div>
 <div id="mobileControls" aria-hidden="false">
   <div id="mobileMovePad" data-bound="1"><div id="mobileMoveKnob"></div></div>
   <div id="mobileJumpButton">JUMP</div>
@@ -121,10 +121,10 @@ const ASSET = {
   project01: 'assets/asset_0001.png',
   statueTexture: 'assets/asset_0002.jpg',
   actorTexture: 'assets/asset_0003.jpg',
-  statueObj: 'assets/misc_0001.txt',
-  actorIdle: 'models/model_0001.bin',
-  actorWalk: 'models/model_0002.bin',
-  actorJump: 'models/model_0003.bin'
+  statueObj: 'assets/misc_0001.obj',
+  actorIdle: 'models/model_0001.fbx',
+  actorWalk: 'models/model_0002.fbx',
+  actorJump: 'models/model_0003.fbx'
 };
 
 const DEFAULT_SKY_TEXTURE = 'assets/asset_0004.png';
@@ -133,21 +133,7 @@ const DB_NAME = 'virtualGalleryBuilderDB';
 const STORE_NAME = 'kv';
 const STATE_KEY = 'state.v12.referenceArchitectureReliefGapPerformanceFixed';
 const EXPORTED_GALLERY_VIEWER = true;
-let EXPORTED_STATE = null;
-const EXTERNAL_STATE_URLS = ['./state.min.json','./state.json'];
-async function loadBundledExportedState(){
-  let lastError = null;
-  for(const url of EXTERNAL_STATE_URLS){
-    try{
-      const res = await fetch(url, {cache:'no-store'});
-      if(!res.ok) throw new Error(`${url} HTTP ${res.status}`);
-      return await res.json();
-    }catch(err){
-      lastError = err;
-    }
-  }
-  throw lastError || new Error('找不到 state.min.json / state.json');
-}
+const EXPORTED_STATE = {"room":{"width":36,"depth":30,"height":8.8,"thickness":0.18},"backgroundColor":"#dce9e1","skyTexture":null,"skyTintColor":"#ffffff","skyTintStrength":0,"atmosphere":{"enabled":true,"color":"#d7eee5","intensity":0.21,"opacity":0.81,"layers":0.99},"screenFx":{"enabled":true,"preset":"dreamcore","intensity":0.18,"noise":0,"scanlines":0.06,"chromatic":0.12,"warp":0.03,"glow":0.86,"vignette":0.08,"saturation":0.51,"contrast":0.2,"brightness":1.89,"blur":3.89,"hue":11},"groundRelief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729},"surfaceTransforms":{},"floorTiles":[{"id":"reference_lit_underwater_shelf","title":"參考圖｜右側亮色水底平台","position":{"x":7.2,"y":-0.072,"z":4.75},"size":{"w":11.2,"d":7.4,"t":0.055},"material":{"color":"#effff4","roughness":0.78,"metalness":0,"texture":null,"repeat":[1,1]},"visible":true,"locked":true,"isDraft":false},{"id":"reference_left_deep_floor_tint","title":"參考圖｜左側深水色地面","position":{"x":-8.8,"y":-0.078,"z":1.2},"size":{"w":13.4,"d":23,"t":0.045},"material":{"color":"#5da99e","roughness":0.92,"metalness":0,"texture":null,"repeat":[2,2]},"visible":true,"locked":true,"isDraft":false}],"waterBodies":[{"id":"water_reference_pool","title":"參考圖｜主水池","shape":"rect","position":{"x":-13.128961329537898,"y":0,"z":-9.287327134640535},"size":{"w":100,"d":100,"h":0.58,"t":0.025},"water":{"color":"#78e4d0","opacity":0.72,"level":0.86,"wave":0.34,"causticStrength":1.85,"interferenceStrength":1.45,"motionDistortion":1.75,"splash":0.58},"containerMaterial":{"color":"#d6e4db","roughness":0.96,"metalness":0,"texture":null,"repeat":[1,1]},"visible":true,"locked":true,"isDraft":false}],"surfaces":{"front":{"color":"#d8e4dd","roughness":0.97,"metalness":0,"texture":null,"repeat":[1,1],"visible":true,"locked":false},"back":{"color":"#d8e4dd","roughness":0.97,"metalness":0,"texture":null,"repeat":[1,1],"visible":true,"locked":false},"left":{"color":"#d8e4dd","roughness":0.97,"metalness":0,"texture":null,"repeat":[1,1],"visible":true,"locked":false},"right":{"color":"#d8e4dd","roughness":0.97,"metalness":0,"texture":null,"repeat":[1,1],"visible":true,"locked":false},"floor":{"color":"#9dcfc4","roughness":0.92,"metalness":0,"texture":null,"repeat":[4,4],"visible":true,"locked":true},"ceiling":{"color":"#e4eee8","roughness":0.98,"metalness":0,"texture":null,"repeat":[2,2],"locked":true,"visible":true}},"artworks":[{"id":"art_mpu6ctnm_fkbg3y","title":"SinTower","src":"models/model_0004.glb","transparent":false,"type":"model","format":"glb","wall":"front","offset":0,"y":0,"gap":0.014,"depth":0.01,"position":{"x":2.69,"y":-0.2,"z":0.36},"rotation":{"x":180,"y":40.94312414150375,"z":-180},"manualRotation":true,"snapToWall":false,"doubleSided":false,"backColor":"#1b0f08","backColorManual":false,"backLight":0.1,"backLightManual":false,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":false,"naturalAspect":null,"edgeTintColor":"#ffffff","edgeTintStrength":0,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":true,"size":{"w":4.35082677658645,"h":4.35082677658645,"d":4.35082677658645}},{"id":"art_mpu6ft70_r7y91f","title":"project-01","src":"assets/asset_0005.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.014,"depth":0.1,"position":{"x":-17.612000002384185,"y":3,"z":-3.9325752019256663},"rotation":{"x":0,"y":90,"z":0},"manualRotation":true,"snapToWall":true,"doubleSided":false,"backColor":"#1b0f08","backColorManual":false,"backLight":0.1,"backLightManual":false,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":0.7495769881556683,"edgeTintColor":"#ffffff","edgeTintStrength":0,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":false,"size":{"w":1.9489001692047376,"h":2.6,"d":1}},{"id":"art_mpu6n7kq_2zxngx","title":"01銳-processed","src":"assets/asset_0006.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.1,"depth":0.1,"position":{"x":12.083344535403793,"y":4,"z":14.526000002384187},"rotation":{"x":-180,"y":7.016709298534877e-15,"z":-180},"manualRotation":true,"snapToWall":true,"doubleSided":false,"backColor":"#1b0f08","backColorManual":false,"backLight":0.1,"backLightManual":false,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":0.5530973451327433,"edgeTintColor":"#8f5c76","edgeTintStrength":0.76,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"cementSoft","amount":0.93,"variation":0.95,"seed":104729}},"visible":true,"locked":false,"size":{"w":3.723890133283775,"h":6.732793360977067,"d":1.6831983402442667}},{"id":"art_mpu6s6xb_0f200l","title":"S__82264084-processed","src":"assets/asset_0007.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.014,"depth":0.1,"position":{"x":-17.612000002384185,"y":2.9,"z":-0.07727057345537287},"rotation":{"x":0,"y":90,"z":0},"manualRotation":true,"snapToWall":true,"doubleSided":false,"backColor":"#1b0f08","backColorManual":true,"backLight":0.1,"backLightManual":true,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":1,"edgeTintColor":"#442222","edgeTintStrength":0.63,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":false,"size":{"w":2.978039470938853,"h":2.978039470938853,"d":1.1453997965149452}},{"id":"art_mpv6mxyt_aqijqb","title":"完整-processed","src":"assets/asset_0008.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.1,"depth":0.1,"position":{"x":17.526000002384187,"y":4,"z":0.5363615199601832},"rotation":{"x":0,"y":-90,"z":0},"manualRotation":true,"snapToWall":true,"doubleSided":false,"backColor":"#1b0f08","backColorManual":false,"backLight":0.1,"backLightManual":false,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":0.9033137583892618,"edgeTintColor":"#3d2e2e","edgeTintStrength":0.77,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":false,"size":{"w":5.1434105137446595,"h":5.693935762603791,"d":2.033548486644215}},{"id":"art_mpv6rumk_w5rk5j","title":"P1090144-processed","src":"assets/asset_0009.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.2,"depth":0.1,"position":{"x":17.426000002384185,"y":4,"z":10.786942497637462},"rotation":{"x":0,"y":-90,"z":0},"manualRotation":true,"snapToWall":true,"doubleSided":false,"backColor":"#1b0f08","backColorManual":false,"backLight":0.1,"backLightManual":false,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":0.75,"edgeTintColor":"#3a2727","edgeTintStrength":0.75,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":false,"size":{"w":5.192973363975213,"h":6.923964485300285,"d":2.4728444590358176}},{"id":"art_mpv73uv0_rwsna7","title":"ABCA1DDF-8256-4E1F-B0E4-03C2DE4E9E34-processed","src":"assets/asset_0010.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.1,"depth":0.01,"position":{"x":5.33399999880791,"y":2.3,"z":-5.1},"rotation":{"x":0,"y":90,"z":0},"manualRotation":true,"snapToWall":true,"doubleSided":false,"backColor":"#1b0f08","backColorManual":true,"backLight":0.1,"backLightManual":true,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":1,"edgeTintColor":"#362b2b","edgeTintStrength":0.57,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0,"seed":104729}},"visible":true,"locked":true,"size":{"w":2.5280850820854646,"h":2.5280850820854646,"d":0.9028875293162385}},{"id":"art_mpvhrcpc_9g0f77","title":"2-processed","src":"assets/asset_0011.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.014,"depth":0.01,"position":{"x":-11.24,"y":3.2,"z":-1.82},"rotation":{"x":-180,"y":85.36132126722127,"z":-180},"manualRotation":true,"snapToWall":false,"doubleSided":false,"backColor":"#3a2e27","backColorManual":true,"backLight":0.76,"backLightManual":true,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":0.8579626972740315,"edgeTintColor":"#140f0f","edgeTintStrength":0.86,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":true,"size":{"w":5.007582033110574,"h":5.836596449963334,"d":2.084498732129759}},{"id":"art_mpvifc22_zb6yeu","title":"7-processed","src":"assets/asset_0012.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.03,"depth":0.03,"position":{"x":5.283999998807905,"y":2.2,"z":2.977717206169884},"rotation":{"x":0,"y":90,"z":0},"manualRotation":true,"snapToWall":true,"doubleSided":false,"backColor":"#1b0f08","backColorManual":false,"backLight":0.1,"backLightManual":false,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":0.5626373626373626,"edgeTintColor":"#0b0909","edgeTintStrength":0.94,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":true,"size":{"w":1.5753846153846154,"h":2.8,"d":1}},{"id":"art_mpvimk66_ivlzjz","title":"03-processed","src":"assets/asset_0013.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.1,"depth":0.03,"position":{"x":-3.0410000000000004,"y":2.5,"z":-1.63},"rotation":{"x":0,"y":90,"z":0},"manualRotation":true,"snapToWall":true,"doubleSided":false,"backColor":"#1b0f08","backColorManual":true,"backLight":0.1,"backLightManual":true,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":0.5626373626373626,"edgeTintColor":"#1c1612","edgeTintStrength":0.87,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":true,"size":{"w":2.855847499315631,"h":5.0758227038617605,"d":1.8127938228077713}},{"id":"art_mpviv91n_t86t1r","title":"1-processed","src":"assets/asset_0014.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.014,"depth":0.01,"position":{"x":-8.14,"y":3,"z":-4.46},"rotation":{"x":0,"y":-361.7060095567654,"z":0},"manualRotation":true,"snapToWall":false,"doubleSided":false,"backColor":"#3a2e27","backColorManual":true,"backLight":0.68,"backLightManual":true,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":0.5169877408056042,"edgeTintColor":"#291c0a","edgeTintStrength":0.83,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":true,"size":{"w":2.0636961443085506,"h":3.991769981030432,"d":1.4256321360822957}},{"id":"art_mpvj2vau_5twzx9","title":"22","src":"assets/asset_0015.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.014,"depth":0.01,"position":{"x":-8.09,"y":3.5,"z":0.88},"rotation":{"x":180,"y":10.011461215737178,"z":180},"manualRotation":true,"snapToWall":false,"doubleSided":false,"backColor":"#3a2716","backColorManual":true,"backLight":0.44,"backLightManual":true,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":1.1684458114709608,"edgeTintColor":"#1b0808","edgeTintStrength":0.2,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":false,"size":{"w":7.051859930379745,"h":6.035247729205457,"d":2.1554456175733785}},{"id":"art_mpvov5v1_qdcuoz","title":"S__79716365-processed","src":"assets/asset_0016.png","transparent":true,"type":"image","format":"png","wall":"front","offset":0,"y":2.2,"gap":0.014,"depth":0.1,"position":{"x":-17.61200000238419,"y":2.9,"z":-7.280234961056576},"rotation":{"x":0,"y":90,"z":0},"manualRotation":true,"snapToWall":true,"doubleSided":false,"backColor":"#1b0f08","backColorManual":true,"backLight":0.1,"backLightManual":true,"backRelief":{"preset":"cementRough","amount":0.8,"variation":0.8,"seed":73331},"isDraft":false,"preserveAspect":true,"naturalAspect":0.5626373626373626,"edgeTintColor":"#2c2121","edgeTintStrength":0.8,"surfaceMaterial":{"color":"#ffffff","roughness":0.72,"metalness":0,"texture":null,"repeat":[1,1],"relief":{"preset":"flat","amount":0,"variation":0.5,"seed":104729}},"visible":true,"locked":false,"size":{"w":1.5074823499354546,"h":2.6793143328930937,"d":0.9568979760332473}}],"player":{"modelYOffset":-0.42,"modelYawOffset":180,"speed":6.8,"jumpPower":2.05},"deletedSurfaces":["front","back","left","right"],"customWalls":[],"referenceArchitecture":{"enabled":true,"visible":true,"locked":true,"material":{"color":"#e2eee6","roughness":0.96,"metalness":0,"texture":"assets/asset_0017.jpg","repeat":[1,1],"relief":{"preset":"cementRough","amount":0.54,"variation":1,"seed":106826}},"chiselHoles":[{"id":"hole_mpvdpeet_y6cg7w","type":"hexagon","x":4.695376765446907,"y":0.7823898929619855,"w":1.6,"h":2,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 C"},{"id":"hole_mpvdpfyg_vbv3c1","type":"hexagon","x":3.7454403045944638,"y":1.517302763500473,"w":1.6,"h":2,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 C"},{"id":"hole_mpvdpm9o_uz440f","type":"hexagon","x":-3.7202062800287594,"y":1.8389119431801713,"w":1.6,"h":2,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 D"},{"id":"hole_mpvdpo79_0l819c","type":"hexagon","x":-4.691889590438526,"y":0.8232213705173339,"w":1.6,"h":2,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 D"},{"id":"hole_mpvdq64w_z1ayqw","type":"hexagon","x":-4.98913049697876,"y":1.844395279559242,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 D"},{"id":"hole_mpvdqkhc_gp30h0","type":"hexagon","x":-3.615414980935441,"y":0.9045340317915198,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 D"},{"id":"hole_mpvdqv28_iyz6na","type":"octagon","x":-3.879049577249399,"y":1.0366972947493724,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":-1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 A"},{"id":"hole_mpvdqw1f_t0u1lw","type":"octagon","x":4.67095045473895,"y":1.0366972907138838,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":-1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 B"},{"id":"hole_mpvdqy2d_1k3zsw","type":"octagon","x":-3.5422076964510674,"y":1.7207777040826397,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":-1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 A"},{"id":"hole_mpvdqzw1_0ntv91","type":"octagon","x":4.792351437300566,"y":1.7191253406376323,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":-1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 B"},{"id":"hole_mpvdr1ch_2k14ru","type":"octagon","x":-3.6132389508171543,"y":0.29125851807762926,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":-1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 A"},{"id":"hole_mpvdr28l_g8y8f4","type":"octagon","x":4.943518291230209,"y":0.07218158459285817,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":-1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 B"},{"id":"hole_mpvdr3qm_6gznof","type":"octagon","x":-3.6365226945300013,"y":-0.508947248315277,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":-1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 A"},{"id":"hole_mpvdramy_83uscm","type":"octagon","x":0.4415094549009695,"y":-0.09256388705397844,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":-1,"targetType":"box","axis":"z","panelName":"參考圖｜厚重方柱 7"},{"id":"hole_mpvdre39_aedmkg","type":"octagon","x":-0.3028671310333306,"y":-0.4253545261337113,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"box","axis":"x","panelName":"參考圖｜厚重方柱 7"},{"id":"hole_mpvdrfkv_qqrkeg","type":"octagon","x":-0.20695081631032775,"y":-0.5114753976193009,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":-1,"targetType":"box","axis":"z","panelName":"參考圖｜厚重方柱 7"},{"id":"hole_mpvdrjbg_3am8g6","type":"octagon","x":-0.5134408339166867,"y":1.328215687017655,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"box","axis":"x","panelName":"參考圖｜厚重方柱 7"},{"id":"hole_mpvdrnqb_gl2ti1","type":"octagon","x":0.3174567428011146,"y":0.6970180346786004,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"box","axis":"x","panelName":"參考圖｜厚重方柱 7"},{"id":"hole_mpvdrp1d_1mpmai","type":"octagon","x":-0.36673942262636694,"y":0.4405364750355263,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"box","axis":"x","panelName":"參考圖｜厚重方柱 7"},{"id":"hole_mpvdrxza_vn6pwj","type":"octagon","x":0.15573501993255068,"y":1.91995873530495,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"box","axis":"x","panelName":"參考圖｜厚重方柱 7"},{"id":"hole_mpvdsb9s_h8i7u0","type":"octagon","x":4.845205489040799,"y":-0.09484519017708593,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 A"},{"id":"hole_mpvdsci9_onojjn","type":"octagon","x":4.213043689727783,"y":-0.35249218804824234,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 A"},{"id":"hole_mpvdse35_um4xxo","type":"octagon","x":5.01662743536636,"y":0.6863745625257447,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 A"},{"id":"hole_mpvdsfox_9xwwb3","type":"octagon","x":4.78135214520313,"y":1.6399147881770344,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 A"},{"id":"hole_mpvdsgt8_fexo3u","type":"octagon","x":4.7735901676793695,"y":2.374746684553072,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 A"},{"id":"hole_mpvdsi9o_tph4lk","type":"octagon","x":4.908286801956418,"y":3.182660871126268,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜縱向右拱框 A"},{"id":"hole_mpvdsu0h_9uwwpw","type":"octagon","x":-4.776763851846804,"y":-0.1564637018939401,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 D"},{"id":"hole_mpvdsxtf_m5yxak","type":"octagon","x":-4.0630055138349475,"y":0.3639240264892578,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 D"},{"id":"hole_mpvdt2d9_cn06xz","type":"octagon","x":-4.840789879555144,"y":-0.3603688554710758,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 B"},{"id":"hole_mpvdt3ad_cclv0n","type":"octagon","x":-4.7561553546133535,"y":0.7072112747853465,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 B"},{"id":"hole_mpvdt48a_nj0js3","type":"octagon","x":-4.003616905296646,"y":1.0137464882437532,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 B"},{"id":"hole_mpvdt54w_8k5w9e","type":"octagon","x":-3.887547585001189,"y":0.24930624164094928,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 B"},{"id":"hole_mpvdt6b3_sjnyow","type":"octagon","x":-3.7483525363723436,"y":-0.5031930946545724,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 B"},{"id":"hole_mpvdt7qq_yu9hbz","type":"octagon","x":-4.777218280706524,"y":1.8342697809840858,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 B"},{"id":"hole_mpvdt8qc_7ghzur","type":"octagon","x":-4.713037234977791,"y":2.6550365526159094,"w":1.6,"h":1.5,"r":0.18,"depth":2,"side":1,"targetType":"wall","axis":"z","panelName":"參考圖｜中段橫向拱框 B"}]},"lightSystem":{"enabled":true,"ambient":{"color":"#ecb97e","intensity":0.6},"hemisphere":{"skyColor":"#b9e9d0","groundColor":"#f0b460","intensity":0.25},"lights":[{"id":"light_key","title":"主平行光","type":"directional","color":"#ffffff","intensity":5.07,"position":{"x":-5.224908846480979,"y":11.000587316887081,"z":9.19},"target":{"x":0,"y":2,"z":0},"distance":0,"decay":2,"angle":0.72,"penumbra":0.25,"castShadow":true,"visible":true,"locked":true},{"id":"light_mpv60zve_redpkp","title":"點光源 5","type":"spot","color":"#ebeac6","intensity":19.57,"position":{"x":5.6,"y":3.19,"z":-0.18},"target":{"x":-4.92,"y":-2.13,"z":1.24},"distance":60,"decay":1.32,"angle":0.75,"penumbra":0.25,"castShadow":false,"visible":true,"locked":true},{"id":"light_mpv67r8d_luf4bk","title":"點光源 6","type":"spot","color":"#ffffff","intensity":15.61,"position":{"x":11.29,"y":4.94,"z":9.62},"target":{"x":12.24,"y":3.86,"z":15.24},"distance":26,"decay":1.09,"angle":0.72,"penumbra":0.25,"castShadow":false,"visible":true,"locked":true},{"id":"light_mpv6q79w_ei53or","title":"點光源 7","type":"spot","color":"#ffffff","intensity":8.07,"position":{"x":14.72,"y":4.89,"z":10.67},"target":{"x":18.38,"y":4.6,"z":11},"distance":26,"decay":3.47,"angle":0.92,"penumbra":0.25,"castShadow":false,"visible":true,"locked":true},{"id":"light_mpv6y49k_ko0akf","title":"點光源 8","type":"point","color":"#ffffff","intensity":20,"position":{"x":15.674275364590246,"y":3.9632748651504914,"z":0.69},"target":{"x":12.23,"y":1.4,"z":1.24},"distance":26,"decay":2,"angle":0.72,"penumbra":0.25,"castShadow":false,"visible":true,"locked":true},{"id":"light_mpv6yuoq_ne4y4y","title":"點光源 9","type":"spot","color":"#ffffff","intensity":19.86,"position":{"x":-9.4,"y":4.57,"z":-1.83},"target":{"x":-28.7,"y":-7.75,"z":1.03},"distance":26,"decay":2.14,"angle":0.95,"penumbra":0.32,"castShadow":false,"visible":true,"locked":true},{"id":"light_mpvi9ycn_67llsz","title":"聚光燈 10","type":"spot","color":"#ffffff","intensity":13.09,"position":{"x":6.380001077509804,"y":3.0628526440216177,"z":-6.320783366503458},"target":{"x":2.4929792985695296,"y":0.6206054383941471,"z":-6.684057271700858},"distance":32,"decay":3.43,"angle":1.55,"penumbra":0.25,"castShadow":true,"visible":true,"locked":true},{"id":"light_mpviip0f_bh7zpt","title":"聚光燈 11","type":"spot","color":"#ffffff","intensity":14.06,"position":{"x":7.3,"y":3,"z":2.98},"target":{"x":3.33,"y":1.16,"z":3.35},"distance":32,"decay":3.93,"angle":0.89,"penumbra":0.25,"castShadow":true,"visible":true,"locked":true},{"id":"light_mpvisda0_yt7fk4","title":"聚光燈 12","type":"spot","color":"#ffffff","intensity":2,"position":{"x":-2.04,"y":3.45,"z":-1.89},"target":{"x":-4.22,"y":0.23,"z":-0.91},"distance":32,"decay":3.51,"angle":0.98,"penumbra":0.49,"castShadow":true,"visible":true,"locked":true},{"id":"light_mpvoxcr9_wekqfu","title":"聚光燈 10","type":"spot","color":"#ffffff","intensity":19.57,"position":{"x":-14.07,"y":4.58,"z":-4.31},"target":{"x":-17.51,"y":4.1,"z":-3.91},"distance":32,"decay":1.07,"angle":1.22,"penumbra":0.25,"castShadow":true,"visible":true,"locked":true},{"id":"light_mpvp8dqz_i0vrqa","title":"聚光燈 11","type":"spot","color":"#ffffff","intensity":9.52,"position":{"x":-8.65,"y":4.51,"z":-0.7527689339899638},"target":{"x":-7.33,"y":4.15,"z":4.33},"distance":32,"decay":1.29,"angle":1.35,"penumbra":0.25,"castShadow":true,"visible":true,"locked":true}]},"lightBake":{"enabled":true,"useInPlayMode":true,"brightness":1,"stale":false,"bakedAt":"2026-06-01T21:28:22.938Z","targetCount":241,"version":2,"mode":"shadowCache","data":{}}};
 const IS_TOUCH_DEVICE = (()=>{
   try{ return matchMedia('(hover:none), (pointer:coarse), (max-width:820px)').matches || navigator.maxTouchPoints > 0; }catch{ return false; }
 })();
@@ -275,7 +261,8 @@ const ART_NUMERIC_FIELDS = ['artX','artY','artZ','artW','artH','artD','artDepth'
 // main() is intentionally called at the end of the module after all const/let declarations are initialized.
 
 async function main(){
-  STATE = EXPORTED_STATE ? sanitizeState(EXPORTED_STATE) : (await loadState() || createDefaultState());
+  STATE = sanitizeState(EXPORTED_STATE);
+  console.log('[SinTower] embedded state loaded', {artworks: STATE.artworks?.length, walls: STATE.customWalls?.length, water: STATE.waterBodies?.length});
   if(EXPORTED_GALLERY_VIEWER) prepareExportedViewerDom();
   pushUndoState('initial');
   initThree();
@@ -6561,22 +6548,15 @@ function loadStatue(){
 
 function createProxyActor(){
   const g = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({color:'#8aa3ff',roughness:.75});
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(.32,.32,1.05,16,1), bodyMat);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.32,1.05,6,12), new THREE.MeshStandardMaterial({color:'#8aa3ff',roughness:.75}));
   body.position.y = .92;
   body.castShadow = true;
-  const capTop = new THREE.Mesh(new THREE.SphereGeometry(.32,16,10,0,Math.PI*2,0,Math.PI/2), bodyMat);
-  capTop.position.y = 1.445;
-  capTop.castShadow = true;
-  const capBottom = new THREE.Mesh(new THREE.SphereGeometry(.32,16,10,0,Math.PI*2,Math.PI/2,Math.PI/2), bodyMat);
-  capBottom.position.y = .395;
-  capBottom.castShadow = true;
   const head = new THREE.Mesh(new THREE.SphereGeometry(.25,16,12), new THREE.MeshStandardMaterial({color:'#ead5bd',roughness:.8}));
   head.position.y = 1.65;
   head.castShadow = true;
   const nose = new THREE.Mesh(new THREE.BoxGeometry(.08,.08,.2), new THREE.MeshStandardMaterial({color:'#333'}));
   nose.position.set(0,1.65,-.31);
-  g.add(body,capTop,capBottom,head,nose);
+  g.add(body,head,nose);
   return g;
 }
 
@@ -6590,7 +6570,10 @@ function loadActor(){
     actorModel.traverse(c=>{ if(c.isMesh){ c.castShadow=true; c.receiveShadow=true; }});
     repairActorMaterials(actorModel);
     playerGroup.add(actorModel);
-    actorProxy.visible = false; // FBX 成功載入後隱藏代理膠囊，避免多餘物件黏在角色上。
+    
+    let __actorMeshCount = 0;
+    actorModel.traverse(c=>{ if(c.isMesh) __actorMeshCount++; });
+    actorProxy.visible = __actorMeshCount === 0; // 只有在 FBX 真的有可見 mesh 時才隱藏代理角色。
     mixer = new THREE.AnimationMixer(actorModel);
     if(model.animations[0]) actions.idle = mixer.clipAction(stripRootMotionClip(model.animations[0]));
     loadClip('walk', ASSET.actorWalk); // 使用使用者上傳的 跑步.fbx 作為移動動畫
@@ -11173,35 +11156,13 @@ async function dbSet(key,value){
   });
 }
 
-function setStatus(text){
-  const el = $('status');
-  if(!el) return;
-  el.textContent = text;
-  const isError = /(失敗|錯誤|failed|error|找不到|無法|HTTP|SyntaxError|TypeError)/i.test(String(text));
-  if(EXPORTED_GALLERY_VIEWER){
-    el.classList.toggle('error', isError);
-    el.style.display = isError ? 'block' : 'none';
-  }else{
-    el.style.display = 'block';
-  }
-}
+function setStatus(text){ const el = $('status'); if(el) el.textContent = text; }
 
-(async()=>{
-  try{
-    if(EXPORTED_GALLERY_VIEWER){
-      EXPORTED_STATE = await loadBundledExportedState();
-    }
-    await main();
-  }catch(err){
-    console.error('Virtual Gallery init failed:', err);
-    const el = document.getElementById('status');
-    if(el){
-      el.classList.add('error');
-      el.style.display = 'block';
-      el.textContent = '初始化失敗：' + (err?.message || err) + '\n請確認 index.html、state.min.json、assets/、models/ 在同一層。';
-    }
-  }
-})();
+main().catch(err=>{
+  console.error('Virtual Gallery init failed:', err);
+  const el = document.getElementById('status');
+  if(el) el.textContent = '初始化失敗：' + (err?.message || err);
+});
 
 </script>
 

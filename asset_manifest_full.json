@@ -21,30 +21,30 @@
     "originalTextLength": 306323
   },
   {
-    "filename": "misc_0001.txt",
-    "relativePath": "assets/misc_0001.txt",
-    "mime": "text/plain",
+    "filename": "misc_0001.obj",
+    "relativePath": "assets/misc_0001.obj",
+    "mime": "text/plain+obj",
     "extractedBytes": 293365,
     "originalTextLength": 391179
   },
   {
-    "filename": "model_0001.bin",
-    "relativePath": "models/model_0001.bin",
-    "mime": "application/octet-stream",
+    "filename": "model_0001.fbx",
+    "relativePath": "models/model_0001.fbx",
+    "mime": "model/fbx",
     "extractedBytes": 708496,
     "originalTextLength": 944701
   },
   {
-    "filename": "model_0002.bin",
-    "relativePath": "models/model_0002.bin",
-    "mime": "application/octet-stream",
+    "filename": "model_0002.fbx",
+    "relativePath": "models/model_0002.fbx",
+    "mime": "model/fbx",
     "extractedBytes": 493888,
     "originalTextLength": 658557
   },
   {
-    "filename": "model_0003.bin",
-    "relativePath": "models/model_0003.bin",
-    "mime": "application/octet-stream",
+    "filename": "model_0003.fbx",
+    "relativePath": "models/model_0003.fbx",
+    "mime": "model/fbx",
     "extractedBytes": 612464,
     "originalTextLength": 816657
   },
@@ -56,9 +56,9 @@
     "originalTextLength": 2998602
   },
   {
-    "filename": "model_0004.bin",
-    "relativePath": "models/model_0004.bin",
-    "mime": "application/octet-stream",
+    "filename": "model_0004.glb",
+    "relativePath": "models/model_0004.glb",
+    "mime": "model/gltf-binary",
     "extractedBytes": 83413944,
     "originalTextLength": 111218629
   },
