@@ -1,0 +1,156 @@
+[
+  {
+    "filename": "asset_0001.png",
+    "relativePath": "assets/asset_0001.png",
+    "mime": "image/png",
+    "extractedBytes": 3453186,
+    "originalTextLength": 4604270
+  },
+  {
+    "filename": "asset_0002.jpg",
+    "relativePath": "assets/asset_0002.jpg",
+    "mime": "image/jpeg",
+    "extractedBytes": 229725,
+    "originalTextLength": 306323
+  },
+  {
+    "filename": "asset_0003.jpg",
+    "relativePath": "assets/asset_0003.jpg",
+    "mime": "image/jpeg",
+    "extractedBytes": 229725,
+    "originalTextLength": 306323
+  },
+  {
+    "filename": "misc_0001.txt",
+    "relativePath": "assets/misc_0001.txt",
+    "mime": "text/plain",
+    "extractedBytes": 293365,
+    "originalTextLength": 391179
+  },
+  {
+    "filename": "model_0001.bin",
+    "relativePath": "models/model_0001.bin",
+    "mime": "application/octet-stream",
+    "extractedBytes": 708496,
+    "originalTextLength": 944701
+  },
+  {
+    "filename": "model_0002.bin",
+    "relativePath": "models/model_0002.bin",
+    "mime": "application/octet-stream",
+    "extractedBytes": 493888,
+    "originalTextLength": 658557
+  },
+  {
+    "filename": "model_0003.bin",
+    "relativePath": "models/model_0003.bin",
+    "mime": "application/octet-stream",
+    "extractedBytes": 612464,
+    "originalTextLength": 816657
+  },
+  {
+    "filename": "asset_0004.png",
+    "relativePath": "assets/asset_0004.png",
+    "mime": "image/png",
+    "extractedBytes": 2248933,
+    "originalTextLength": 2998602
+  },
+  {
+    "filename": "model_0004.bin",
+    "relativePath": "models/model_0004.bin",
+    "mime": "application/octet-stream",
+    "extractedBytes": 83413944,
+    "originalTextLength": 111218629
+  },
+  {
+    "filename": "asset_0005.png",
+    "relativePath": "assets/asset_0005.png",
+    "mime": "image/png",
+    "extractedBytes": 1418715,
+    "originalTextLength": 1891642
+  },
+  {
+    "filename": "asset_0006.png",
+    "relativePath": "assets/asset_0006.png",
+    "mime": "image/png",
+    "extractedBytes": 18620200,
+    "originalTextLength": 24826958
+  },
+  {
+    "filename": "asset_0007.png",
+    "relativePath": "assets/asset_0007.png",
+    "mime": "image/png",
+    "extractedBytes": 3364817,
+    "originalTextLength": 4486446
+  },
+  {
+    "filename": "asset_0008.png",
+    "relativePath": "assets/asset_0008.png",
+    "mime": "image/png",
+    "extractedBytes": 16457431,
+    "originalTextLength": 21943266
+  },
+  {
+    "filename": "asset_0009.png",
+    "relativePath": "assets/asset_0009.png",
+    "mime": "image/png",
+    "extractedBytes": 9799619,
+    "originalTextLength": 13066182
+  },
+  {
+    "filename": "asset_0010.png",
+    "relativePath": "assets/asset_0010.png",
+    "mime": "image/png",
+    "extractedBytes": 1783654,
+    "originalTextLength": 2378230
+  },
+  {
+    "filename": "asset_0011.png",
+    "relativePath": "assets/asset_0011.png",
+    "mime": "image/png",
+    "extractedBytes": 5130587,
+    "originalTextLength": 6840806
+  },
+  {
+    "filename": "asset_0012.png",
+    "relativePath": "assets/asset_0012.png",
+    "mime": "image/png",
+    "extractedBytes": 2337610,
+    "originalTextLength": 3116838
+  },
+  {
+    "filename": "asset_0013.png",
+    "relativePath": "assets/asset_0013.png",
+    "mime": "image/png",
+    "extractedBytes": 1214483,
+    "originalTextLength": 1619334
+  },
+  {
+    "filename": "asset_0014.png",
+    "relativePath": "assets/asset_0014.png",
+    "mime": "image/png",
+    "extractedBytes": 5125307,
+    "originalTextLength": 6833766
+  },
+  {
+    "filename": "asset_0015.png",
+    "relativePath": "assets/asset_0015.png",
+    "mime": "image/png",
+    "extractedBytes": 14805631,
+    "originalTextLength": 19740866
+  },
+  {
+    "filename": "asset_0016.png",
+    "relativePath": "assets/asset_0016.png",
+    "mime": "image/png",
+    "extractedBytes": 4982352,
+    "originalTextLength": 6643158
+  },
+  {
+    "filename": "asset_0017.jpg",
+    "relativePath": "assets/asset_0017.jpg",
+    "mime": "image/jpeg",
+    "extractedBytes": 1000941,
+    "originalTextLength": 1334611
+  }
+]
