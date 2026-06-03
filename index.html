@@ -59,13 +59,13 @@
   body.fx-enabled.fx-dreamcore #screenFxOverlay{mix-blend-mode:soft-light;}
   body.fx-enabled.fx-weirdcore #screenFxOverlay{mix-blend-mode:difference;}
 
-  #mobileControls{position:fixed;left:18px;right:18px;bottom:18px;z-index:60;display:none;width:calc(100vw - 36px);align-items:flex-end;justify-content:space-between;pointer-events:none;user-select:none;-webkit-user-select:none;touch-action:none}
-  #mobileMovePad{width:94px;height:94px;border-radius:999px;background:rgba(128,128,128,.34);border:1px solid rgba(255,255,255,.22);position:relative;pointer-events:auto;touch-action:none;backdrop-filter:blur(4px)}
+  #mobileControls{position:fixed;left:18px;right:18px;bottom:18px;z-index:2147483600;display:none;width:calc(100vw - 36px);align-items:flex-end;justify-content:space-between;pointer-events:auto;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+  #mobileMovePad{width:94px;height:94px;border-radius:999px;background:rgba(128,128,128,.34);border:1px solid rgba(255,255,255,.22);position:relative;pointer-events:auto;touch-action:none;-webkit-touch-callout:none;backdrop-filter:blur(4px)}
   #mobileMoveKnob{position:absolute;left:31px;top:31px;width:32px;height:32px;border-radius:999px;background:rgba(170,170,170,.72);border:1px solid rgba(255,255,255,.28);box-shadow:0 6px 18px rgba(0,0,0,.28);transform:translate3d(0,0,0);pointer-events:none}
-  #mobileJumpButton{width:59px;height:59px;border-radius:999px;background:rgba(128,128,128,.38);border:1px solid rgba(255,255,255,.25);color:#eee;font:700 11px/1 Arial,'Noto Sans TC',sans-serif;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;backdrop-filter:blur(4px);margin-left:auto}
+  #mobileJumpButton{width:59px;height:59px;border-radius:999px;background:rgba(128,128,128,.38);border:1px solid rgba(255,255,255,.25);color:#eee;font:700 11px/1 Arial,'Noto Sans TC',sans-serif;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;-webkit-touch-callout:none;backdrop-filter:blur(4px);margin-left:auto}
   body.exported-viewer .edit-ui{display:none!important}
   body.exported-viewer #mobileControls{display:flex}
-  #viewerEscHint{position:fixed;right:18px;top:18px;z-index:62;display:none;padding:8px 10px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(0,0,0,.38);color:rgba(255,255,255,.82);font:12px/1.2 Arial,'Noto Sans TC',sans-serif;letter-spacing:.04em;pointer-events:none;backdrop-filter:blur(6px)}
+  #viewerEscHint{position:fixed;right:18px;top:18px;z-index:2147483601;display:none;padding:8px 10px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(0,0,0,.38);color:rgba(255,255,255,.82);font:12px/1.2 Arial,'Noto Sans TC',sans-serif;letter-spacing:.04em;pointer-events:none;backdrop-filter:blur(6px)}
   body.exported-viewer #viewerEscHint{display:block}
   @media (hover:none), (pointer:coarse), (max-width:820px){
     #mobileControls{display:flex}
@@ -106,7 +106,7 @@
   點選畫作：選取並調整厚度／厚度增值色　R：重置角色位置
 </div></div>
 <div id="mobileControls" aria-hidden="false">
-  <div id="mobileMovePad" data-bound="1"><div id="mobileMoveKnob"></div></div>
+  <div id="mobileMovePad"><div id="mobileMoveKnob"></div></div>
   <div id="mobileJumpButton">JUMP</div>
 </div>
 
@@ -178,8 +178,8 @@ let screenFxTargetSize = new THREE.Vector2(0,0);
 const screenFxDrawSize = new THREE.Vector2();
 const MAX_RENDER_PIXELS = 7_200_000;
 const MAX_SCREENFX_PIXELS = 6_400_000;
-const VIEWER_MOBILE_RENDER_PIXELS = 2_400_000;
-const VIEWER_MOBILE_SCREENFX_PIXELS = 2_000_000;
+const VIEWER_MOBILE_RENDER_PIXELS = MAX_RENDER_PIXELS;
+const VIEWER_MOBILE_SCREENFX_PIXELS = MAX_SCREENFX_PIXELS;
 let webglContextLost = false;
 let roomGroup, customWallGroup, floorTileGroup, waterGroup, referenceArchitectureGroup, artworkGroup, playerGroup, actorModel, actorProxy, statue, lightRigGroup;
 let surfaces = {}, customWallMeshes = {}, floorTileMeshes = {}, waterBodyMeshes = {}, artworkMeshes = {}, lightControlObjects = {}, lightTargetObjects = {};
@@ -265,6 +265,7 @@ async function main(){
   if(EXPORTED_GALLERY_VIEWER) prepareExportedViewerDom();
   pushUndoState('initial');
   initThree();
+  if(EXPORTED_GALLERY_VIEWER) bindInput();
   buildSkyBackground();
   buildAtmosphereEffect();
   applyScreenFx();
@@ -279,8 +280,8 @@ async function main(){
     buildEditor();
     applyObjectVisibilityLocks();
     renderObjectPanel();
+    bindInput();
   }
-  bindInput();
   if(EXPORTED_GALLERY_VIEWER) enterExportedViewerMode();
   setStatus(EXPORTED_GALLERY_VIEWER ? '已載入作品集場景。手機可使用左下移動鍵與跳躍鍵；單指拖曳旋轉視角；雙指縮放；ESC 返回上一頁。' : '已載入。Shift+C 開啟編輯；Q 新增牆；E 刪除牆。');
   animate();
@@ -799,7 +800,7 @@ function effectiveScreenFxPixelBudget(){
 
 function computeSafePixelRatio(maxPixels=MAX_RENDER_PIXELS){
   const cssPixels = Math.max(1, Math.floor(innerWidth * innerHeight));
-  const rawLimit = (EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) ? 1.75 : 2;
+  const rawLimit = (EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) ? 3 : 2;
   const raw = Math.min(Number(window.devicePixelRatio || 1), rawLimit);
   const capped = Math.sqrt(effectiveRenderPixelBudget(maxPixels) / cssPixels);
   return Math.max(1, Math.min(raw, capped));
@@ -3239,9 +3240,7 @@ function referenceArchitectureMaterial(kind='wall'){
   if(cfg.texture){
     mat.map = getSharedTexture(cfg.texture, cfg.repeat || [1,1], THREE.SRGBColorSpace);
   }
-  // Reference architecture relief is generated as a stable tessellated geometry overlay.
-  // Do not use bumpMap here: material-space bump was too subtle on huge walls and could shimmer while lights/water moved.
-  return mat;
+  return applyReferenceReliefToMaterial(mat, cfg);
 }
 
 function makeRectangleShape(width, height){
@@ -4595,11 +4594,11 @@ function createWaterMaterial(body){
       varying float vFinePattern;
       float rippleAt(vec2 pos, vec2 center, float gain, float delay){
         float age = max(0.0, uRippleAge - delay);
-        float active = smoothstep(0.0, 0.22, uRippleAge - delay);
+        float rippleActive = smoothstep(0.0, 0.22, uRippleAge - delay);
         float d = distance(pos, center);
         float packet = sin(d*22.0 - age*12.5) * exp(-d*1.55) * exp(-age*1.38);
         float secondary = sin(d*36.0 - age*18.0) * exp(-d*2.55) * exp(-age*1.75) * .34;
-        return (packet + secondary) * uRippleStrength * gain * active;
+        return (packet + secondary) * uRippleStrength * gain * rippleActive;
       }
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453123); }
       float noise(vec2 p){
@@ -5836,9 +5835,9 @@ function createArtworkGroup(art, loader){
     const fitted = fitImageArtworkToNaturalAspect(art, texture.image, {force:!art.naturalAspect});
     if(fitted){
       placeArtwork(art);
-      syncArtEditor();
+      if(!EXPORTED_GALLERY_VIEWER) syncArtEditor();
     }
-    if(fitted) scheduleSave();
+    if(fitted && !EXPORTED_GALLERY_VIEWER) scheduleSave();
     refreshImageArtworkSurface(art);
   }, undefined, err=>console.warn('art texture failed', art.title, err));
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -6784,32 +6783,78 @@ function setupMobileControls(){
   const knob = $('mobileMoveKnob');
   const jumpBtn = $('mobileJumpButton');
   const canvas = $('canvas');
-  if(!pad || !knob || !jumpBtn || pad.dataset.bound === '1') return;
-  pad.dataset.bound = '1';
+  if(!pad || !knob || !jumpBtn || pad.dataset.mobileRuntimeBound === '1') return;
+  pad.dataset.mobileRuntimeBound = '1';
   let movePointerId = null;
-  const centerPad = ev=>{
+  let moveTouchId = null;
+  let lastMoveTouchAt = 0;
+  const eventNow = ()=> (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  const findTouchById = (list, id)=>{
+    if(id === null || id === undefined || !list) return null;
+    for(let i=0; i<list.length; i++){
+      if(list[i].identifier === id) return list[i];
+    }
+    return null;
+  };
+  const touchFromEvent = (ev, id=null)=>{
+    return findTouchById(ev?.touches, id) || findTouchById(ev?.changedTouches, id) || ev?.touches?.[0] || ev?.changedTouches?.[0] || null;
+  };
+  const centerPadAt = (clientX, clientY)=>{
     const rect = pad.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const max = rect.width * .34;
-    let dx = ev.clientX - cx;
-    let dy = ev.clientY - cy;
+    let dx = clientX - cx;
+    let dy = clientY - cy;
     const len = Math.hypot(dx,dy);
     if(len > max){ dx = dx / len * max; dy = dy / len * max; }
     knob.style.transform = `translate3d(${dx}px,${dy}px,0)`;
     applyMobileMoveVector(dx, dy);
   };
-  const stopMove = ev=>{
-    if(movePointerId !== null && ev.pointerId !== movePointerId) return;
+  const centerPad = ev=>centerPadAt(ev.clientX, ev.clientY);
+  const resetMove = ()=>{
     movePointerId = null;
+    moveTouchId = null;
     knob.style.transform = 'translate3d(0,0,0)';
     resetMobileMoveKeys();
-    try{ pad.releasePointerCapture?.(ev.pointerId); }catch{}
   };
+  const stopMove = ev=>{
+    if(movePointerId !== null && ev.pointerId !== movePointerId) return;
+    const pid = movePointerId;
+    resetMove();
+    try{ if(pid !== null) pad.releasePointerCapture?.(pid); }catch{}
+    ev?.preventDefault?.();
+    ev?.stopPropagation?.();
+  };
+  pad.addEventListener('touchstart', ev=>{
+    const t = touchFromEvent(ev);
+    if(!t) return;
+    ev.preventDefault(); ev.stopPropagation();
+    lastMoveTouchAt = eventNow();
+    moveTouchId = t.identifier;
+    movePointerId = null;
+    centerPadAt(t.clientX, t.clientY);
+  }, {passive:false});
+  pad.addEventListener('touchmove', ev=>{
+    if(moveTouchId === null) return;
+    const t = touchFromEvent(ev, moveTouchId);
+    if(!t) return;
+    ev.preventDefault(); ev.stopPropagation();
+    centerPadAt(t.clientX, t.clientY);
+  }, {passive:false});
+  const stopTouchMove = ev=>{
+    if(moveTouchId === null) return;
+    if(ev?.touches?.length && !findTouchById(ev.changedTouches, moveTouchId)) return;
+    ev.preventDefault(); ev.stopPropagation();
+    resetMove();
+  };
+  pad.addEventListener('touchend', stopTouchMove, {passive:false});
+  pad.addEventListener('touchcancel', stopTouchMove, {passive:false});
   pad.addEventListener('pointerdown', ev=>{
+    if(moveTouchId !== null || eventNow() - lastMoveTouchAt < 140) return;
     ev.preventDefault(); ev.stopPropagation();
     movePointerId = ev.pointerId;
-    pad.setPointerCapture?.(ev.pointerId);
+    try{ pad.setPointerCapture?.(ev.pointerId); }catch{}
     centerPad(ev);
   }, {passive:false});
   pad.addEventListener('pointermove', ev=>{
@@ -6819,7 +6864,16 @@ function setupMobileControls(){
   }, {passive:false});
   pad.addEventListener('pointerup', stopMove, {passive:false});
   pad.addEventListener('pointercancel', stopMove, {passive:false});
+  let lastJumpTouchAt = 0;
+  jumpBtn.addEventListener('touchstart', ev=>{
+    const t = touchFromEvent(ev);
+    if(!t) return;
+    ev.preventDefault(); ev.stopPropagation();
+    lastJumpTouchAt = eventNow();
+    jump();
+  }, {passive:false});
   jumpBtn.addEventListener('pointerdown', ev=>{
+    if(eventNow() - lastJumpTouchAt < 160) return;
     ev.preventDefault(); ev.stopPropagation();
     jump();
   }, {passive:false});
@@ -6857,6 +6911,43 @@ function setupMobileControls(){
   let lookLastX = 0;
   let lookLastY = 0;
   const allowTouchLook = ()=> EXPORTED_GALLERY_VIEWER || IS_TOUCH_DEVICE;
+  let lookTouchId = null;
+  let lookTouchLastX = 0;
+  let lookTouchLastY = 0;
+  canvas.addEventListener('touchstart', ev=>{
+    if(!allowTouchLook() || isInsideMobileControls(ev.target)) return;
+    if(ev.touches.length !== 1 || lookTouchId !== null) return;
+    const t = ev.touches[0];
+    lookTouchId = t.identifier;
+    lookTouchLastX = t.clientX;
+    lookTouchLastY = t.clientY;
+    ev.preventDefault();
+    ev.stopPropagation();
+  }, {passive:false});
+  canvas.addEventListener('touchmove', ev=>{
+    if(lookTouchId === null) return;
+    if(ev.touches.length !== 1){
+      lookTouchId = null;
+      return;
+    }
+    const t = findTouchById(ev.touches, lookTouchId);
+    if(!t) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const dx = t.clientX - lookTouchLastX;
+    const dy = t.clientY - lookTouchLastY;
+    lookTouchLastX = t.clientX;
+    lookTouchLastY = t.clientY;
+    camYaw -= dx * .006;
+    camPitch = clamp(camPitch - dy * .0048, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
+  }, {passive:false});
+  const stopTouchLook = ev=>{
+    if(lookTouchId === null) return;
+    if(ev?.touches?.length && !findTouchById(ev.changedTouches, lookTouchId)) return;
+    lookTouchId = null;
+  };
+  canvas.addEventListener('touchend', stopTouchLook, {passive:false});
+  canvas.addEventListener('touchcancel', stopTouchLook, {passive:false});
   canvas.addEventListener('pointerdown', ev=>{
     if(!allowTouchLook() || ev.pointerType === 'mouse' || isInsideMobileControls(ev.target)) return;
     if(lookPointerId !== null) return;
@@ -6967,13 +7058,13 @@ function enterExportedViewerMode(){
   selectedReferenceArchitectureActive = false;
   selectedLightObjectActive = false;
   STATE.lightBake = sanitizeLightBake(STATE?.lightBake);
-  // GitHub Pages runtime uses live light parameters from the exported state.
-  // Do not freeze the shadow cache here: the cache was not exported as image data and it can make the wall/material result look flattened.
-  STATE.lightBake.enabled = false;
-  STATE.lightBake.useInPlayMode = false;
+  STATE.lightBake.enabled = true;
+  STATE.lightBake.useInPlayMode = true;
+  STATE.lightBake.stale = false;
   document.body.classList.add('exported-viewer','play-mode');
   updateCursorVisibility();
-  disableBakedLightingRuntime();
+  forceUpdateShadowMapsForLightingBake();
+  applyPlayModePerformanceLighting(true);
 }
 
 function bindInput(){
@@ -10265,6 +10356,7 @@ function syncArtSelect(){
 function getSelectedArt(){ return STATE.artworks.find(a=>a.id===selectedArtworkId) || STATE.artworks[0] || null; }
 
 function syncArtEditor(){
+  if(EXPORTED_GALLERY_VIEWER || !$('artSelect')) return;
   const art = getSelectedArt();
   if(!art){
     artEditorDirty = false;
