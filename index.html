@@ -151,6 +151,20 @@ const ASSET = {
 };
 
 const DEFAULT_SKY_TEXTURE = 'assets/asset_0004.png';
+const ASSET_CACHE_VERSION = '20260604-input-smoke-artwork-cache';
+
+function isLocalGalleryAssetUrl(src){
+  if(typeof src !== 'string') return false;
+  const value = src.trim();
+  if(!value || /^data:/i.test(value) || /^blob:/i.test(value) || /^https?:\/\//i.test(value)) return false;
+  return /^(?:\.{1,2}\/)?(?:assets|models)\//i.test(value) || /\.(png|jpe?g|webp|gif|fbx|glb|gltf|obj)$/i.test(value);
+}
+
+function versionedAssetUrl(src){
+  if(!EXPORTED_GALLERY_VIEWER || !isLocalGalleryAssetUrl(src)) return src;
+  const joiner = String(src).includes('?') ? '&' : '?';
+  return `${src}${joiner}v=${encodeURIComponent(ASSET_CACHE_VERSION)}`;
+}
 
 const DB_NAME = 'virtualGalleryBuilderDB';
 const STORE_NAME = 'kv';
@@ -273,6 +287,7 @@ const UNDO_ASSET_PREFIX = '__UNDO_ASSET__:';
 const UNDO_ASSET_THRESHOLD = 120_000;
 const undoAssetStore = new Map();
 const keys = { w:false,a:false,s:false,d:false };
+const mobileMoveKeys = { w:false,a:false,s:false,d:false };
 const player = { position:new THREE.Vector3(0,0,5.8), radius:.34, height:1.72 };
 let objectEditorDirty = false;
 let artEditorDirty = false;
@@ -410,6 +425,11 @@ function maybeReleaseGalleryLoadingGate(){
   clearTimeout(galleryLoading.quietTimer);
   if(galleryLoading.errors.length) return;
   if(!galleryLoading.sceneReady || !galleryLoading.managerIdle) return;
+  const requiredLoaded = galleryLoading.expectedTotal || 0;
+  if(requiredLoaded && galleryLoading.itemsLoaded < requiredLoaded){
+    galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 240);
+    return;
+  }
   const now = performance.now?.() || Date.now();
   const quietMs = now - galleryLoading.lastActivityAt;
   if(quietMs < 700){
@@ -508,16 +528,32 @@ function installGalleryDebugState(){
       camYaw,
       camPitch,
       keys:{...keys},
+      mobileMoveKeys:{...mobileMoveKeys},
+      effectiveMove:movementVector(),
+      actorLoaded:!!actorModel,
+      actorProxyVisible:!!actorProxy?.visible,
+      water:{inside:!!waterRuntime.inside, swimming:!!waterRuntime.swimming, wading:!!waterRuntime.wading},
+      loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, currentUrl:galleryLoading.currentUrl},
+      artworks:(STATE?.artworks || []).map(art=>({
+        title:art.title,
+        src:art.src,
+        position:art.position ? {x:art.position.x, y:art.position.y, z:art.position.z} : null,
+        size:art.size ? {w:art.size.w, h:art.size.h, d:art.size.d} : null
+      })),
       player:{x:player.position.x, y:player.position.y, z:player.position.z},
       canvasRect: rect ? {left:rect.left, top:rect.top, width:rect.width, height:rect.height} : null
     };
   };
+  window.render_game_to_text = ()=>JSON.stringify(window.__galleryDebugState());
 }
 
 // main() is intentionally called at the end of the module after all const/let declarations are initialized.
 
 async function main(){
   STATE = EXPORTED_STATE ? sanitizeState(EXPORTED_STATE) : (await loadState() || createDefaultState());
+  if(EXPORTED_GALLERY_VIEWER){
+    STATE.atmosphere = {...(STATE.atmosphere || {}), enabled:true, color:'#ccebe2', intensity:.36, opacity:.88, layers:.99};
+  }
   if(EXPORTED_GALLERY_VIEWER) prepareExportedViewerDom();
   installGalleryDebugState();
   configureGalleryLoadingManager();
@@ -828,7 +864,7 @@ function applyReferenceArchitecturePresetToState(state, options={}){
   s.skyTexture = null;
   s.skyTintColor = '#ffffff';
   s.skyTintStrength = 0;
-  s.atmosphere = {enabled:true, color:'#d7eee5', intensity:.24, opacity:.42, layers:.62};
+  s.atmosphere = {enabled:true, color:'#ccebe2', intensity:.36, opacity:.88, layers:.72};
   s.screenFx = {enabled:false,preset:'none',intensity:.65,noise:.25,scanlines:.25,chromatic:.22,warp:.08,glow:.18,vignette:.12,saturation:1.04,contrast:1.02,brightness:1.04,blur:0,hue:0};
   s.groundRelief = {preset:'flat', amount:0, variation:.5, seed:104729};
   s.surfaceTransforms = {};
@@ -1315,7 +1351,7 @@ function buildSkyBackground(){
   disposeSkyBackground();
   const src = STATE?.skyTexture;
   if(!src) return;
-  new THREE.TextureLoader().load(src, tex=>{
+  new THREE.TextureLoader().load(versionedAssetUrl(src), tex=>{
     if(token !== skyLoadToken){ tex.dispose(); return; }
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = THREE.RepeatWrapping;
@@ -1591,9 +1627,9 @@ function buildAtmosphereVolume(intensity, atm, memoryScale=1){
         density *= vertical;
 
         float nearFade = smoothstep(1.4, 8.2, length(vWorld - uCameraWorld));
-        float alpha = density * nearFade * mix(0.08, 0.72, pow(uIntensity, 1.10)) * uOpacity;
+        float alpha = density * nearFade * mix(0.16, 0.76, pow(uIntensity, 1.04)) * uOpacity;
         // 透明度獨立控制最終上限，避免強度與不透明度綁死。
-        alpha = clamp(alpha, 0.0, mix(0.02, mix(0.22, 0.62, uIntensity), uOpacity));
+        alpha = clamp(alpha, 0.0, mix(0.08, mix(0.28, 0.62, uIntensity), uOpacity));
         if(alpha < 0.004) discard;
         gl_FragColor = vec4(uColor, alpha);
       }
@@ -1622,7 +1658,7 @@ function buildAtmosphereEffect(){
   const memoryScale = deviceMemory <= 4 ? .38 : (deviceMemory <= 6 ? .58 : (deviceMemory <= 8 ? .78 : 1));
   buildAtmosphereVolume(intensity, atm, memoryScale);
 
-  const count = Math.round(THREE.MathUtils.lerp(26000, 125000, Math.pow(intensity, .82)) * memoryScale);
+  const count = Math.round(THREE.MathUtils.lerp(14000, 62000, Math.pow(intensity, .82)) * memoryScale);
   const radius = THREE.MathUtils.lerp(8, 24, intensity);
   const height = THREE.MathUtils.lerp(4, 13, intensity);
   const positions = new Float32Array(count * 3);
@@ -1645,8 +1681,8 @@ function buildAtmosphereEffect(){
       ? THREE.MathUtils.lerp(.22, .66, Math.pow(rand(), 1.7))
       : THREE.MathUtils.lerp(.44, 1.16, Math.pow(rand(), 2.1));
     alphas[i] = dust
-      ? THREE.MathUtils.lerp(.018, .09, rand()) * THREE.MathUtils.lerp(.65, 1.05, intensity)
-      : THREE.MathUtils.lerp(.008, .032, rand()) * THREE.MathUtils.lerp(.45, .75, intensity);
+      ? THREE.MathUtils.lerp(.026, .12, rand()) * THREE.MathUtils.lerp(.76, 1.12, intensity)
+      : THREE.MathUtils.lerp(.012, .044, rand()) * THREE.MathUtils.lerp(.54, .82, intensity);
     speeds[i] = THREE.MathUtils.lerp(.04, .5, rand()) * THREE.MathUtils.lerp(.48, 1.18, intensity);
     phases[i] = rand() * Math.PI * 200;
     drifts[i] = THREE.MathUtils.lerp(.018, .32, Math.pow(rand(), .7)) * THREE.MathUtils.lerp(.5, 1.35, intensity);
@@ -2201,7 +2237,7 @@ function getSharedTexture(src, repeat=[1,1], colorSpace=THREE.SRGBColorSpace){
   const key = textureCacheKey(src, repeat, colorSpace === THREE.SRGBColorSpace ? 'srgb' : 'linear');
   let tex = sharedTextureCache.get(key);
   if(tex) return tex;
-  tex = textureLoader.load(src);
+  tex = textureLoader.load(versionedAssetUrl(src));
   tex.colorSpace = colorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(Number(repeat?.[0] || 1), Number(repeat?.[1] || 1));
@@ -6092,7 +6128,7 @@ function createArtworkGroup(art, loader){
     loadArtworkModel(art, group);
     return group;
   }
-  const tex = loader.load(art.src, texture=>{
+  const tex = loader.load(versionedAssetUrl(art.src), texture=>{
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy?.() || 1, 8);
     const fitted = fitImageArtworkToNaturalAspect(art, texture.image, {force:!art.naturalAspect});
@@ -6252,9 +6288,9 @@ function loadArtworkModel(art, group){
     setStatus(`3D 作品載入失敗：${art.title}`);
   };
   if(format === 'fbx'){
-    new FBXLoader().load(art.src, fbx=>onLoaded(fbx), undefined, onError);
+    new FBXLoader().load(versionedAssetUrl(art.src), fbx=>onLoaded(fbx), undefined, onError);
   }else{
-    new GLTFLoader().load(art.src, gltf=>onLoaded(gltf.scene || gltf.scenes?.[0]), undefined, onError);
+    new GLTFLoader().load(versionedAssetUrl(art.src), gltf=>onLoaded(gltf.scene || gltf.scenes?.[0]), undefined, onError);
   }
 }
 
@@ -6794,10 +6830,10 @@ function snapArtworkToNearestWall(art){
 }
 
 function loadStatue(){
-  const tex = new THREE.TextureLoader().load(ASSET.statueTexture);
+  const tex = new THREE.TextureLoader().load(versionedAssetUrl(ASSET.statueTexture));
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.MeshStandardMaterial({map:tex,roughness:.9,metalness:.02});
-  new OBJLoader().load(ASSET.statueObj, obj=>{
+  new OBJLoader().load(versionedAssetUrl(ASSET.statueObj), obj=>{
     obj.traverse(c=>{ if(c.isMesh){ c.material=mat; c.castShadow=true; c.receiveShadow=true; }});
     obj.scale.setScalar(.022);
     obj.position.set(-4.2,.02,-2.2);
@@ -6825,7 +6861,7 @@ function loadActor(){
   actorProxy = createProxyActor();
   playerGroup.add(actorProxy);
   const loader = new FBXLoader();
-  loader.load(ASSET.actorIdle, model=>{
+  loader.load(versionedAssetUrl(ASSET.actorIdle), model=>{
     actorModel = model;
     normaliseActorModel(actorModel, 1.72);
     actorModel.traverse(c=>{ if(c.isMesh){ c.castShadow=true; c.receiveShadow=true; }});
@@ -6910,7 +6946,7 @@ function stripRootMotionClip(clip){
 }
 
 function repairActorMaterials(model){
-  const actorTexture = new THREE.TextureLoader().load(ASSET.actorTexture, tex=>{ tex.needsUpdate = true; });
+  const actorTexture = new THREE.TextureLoader().load(versionedAssetUrl(ASSET.actorTexture), tex=>{ tex.needsUpdate = true; });
   actorTexture.colorSpace = THREE.SRGBColorSpace;
   actorTexture.wrapS = THREE.ClampToEdgeWrapping;
   actorTexture.wrapT = THREE.ClampToEdgeWrapping;
@@ -6935,7 +6971,7 @@ function repairActorMaterials(model){
 }
 
 function loadClip(name,url){
-  new FBXLoader().load(url, fbx=>{
+  new FBXLoader().load(versionedAssetUrl(url), fbx=>{
     if(!mixer || !fbx.animations[0]) return;
     const action = mixer.clipAction(stripRootMotionClip(fbx.animations[0]));
     if(name==='jump') action.setLoop(THREE.LoopOnce,1).clampWhenFinished = true;
@@ -7002,13 +7038,13 @@ function applyMiddleViewDragMove(e){
   ctrlViewDragLastX = clientX;
   ctrlViewDragLastY = clientY;
   if(dx || dy){
-    applyCameraLookDelta(dx, dy, .0072, .0072);
+    applyCameraLookDelta(dx, dy, .0044, .0044);
     updateCamera();
   }
   return true;
 }
 
-function applyCameraLookDelta(dx, dy, yawScale=.006, pitchScale=.0048){
+function applyCameraLookDelta(dx, dy, yawScale=.0034, pitchScale=.0028){
   if(!galleryInputReady()) return;
   if(!Number.isFinite(dx) || !Number.isFinite(dy)) return;
   camYaw -= dx * yawScale;
@@ -7087,15 +7123,18 @@ function isInsideMobileControls(target){
 }
 
 function resetMobileMoveKeys(){
-  keys.w = false; keys.a = false; keys.s = false; keys.d = false;
+  mobileMoveKeys.w = false;
+  mobileMoveKeys.a = false;
+  mobileMoveKeys.s = false;
+  mobileMoveKeys.d = false;
 }
 
 function applyMobileMoveVector(dx, dy){
   const dead = 10;
-  keys.w = dy < -dead;
-  keys.s = dy > dead;
-  keys.a = dx < -dead;
-  keys.d = dx > dead;
+  mobileMoveKeys.w = dy < -dead;
+  mobileMoveKeys.s = dy > dead;
+  mobileMoveKeys.a = dx < -dead;
+  mobileMoveKeys.d = dx > dead;
 }
 
 function setupMobileControls(){
@@ -8974,8 +9013,8 @@ function jump(){
 }
 
 function movementVector(){
-  const forward = (keys.w?1:0) - (keys.s?1:0);
-  const strafe = (keys.d?1:0) - (keys.a?1:0);
+  const forward = ((keys.w || mobileMoveKeys.w)?1:0) - ((keys.s || mobileMoveKeys.s)?1:0);
+  const strafe = ((keys.d || mobileMoveKeys.d)?1:0) - ((keys.a || mobileMoveKeys.a)?1:0);
   return {forward, strafe};
 }
 
