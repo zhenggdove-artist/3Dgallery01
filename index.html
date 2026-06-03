@@ -120,11 +120,11 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 const ASSET = {
   project01: 'assets/asset_0001.png',
   statueTexture: 'assets/asset_0002.jpg',
-  actorTexture: 'assets/asset_0003.jpg',
+  actorTexture: 'models/mainplayer/asset_0003.jpg',
   statueObj: 'assets/misc_0001.obj',
-  actorIdle: 'models/model_0001.fbx',
-  actorWalk: 'models/model_0002.fbx',
-  actorJump: 'models/model_0003.fbx'
+  actorIdle: 'models/mainplayer/Orc Idle.fbx',
+  actorWalk: 'models/mainplayer/跑步.fbx',
+  actorJump: 'models/mainplayer/跳躍.fbx'
 };
 
 const DEFAULT_SKY_TEXTURE = 'assets/asset_0004.png';
@@ -261,8 +261,7 @@ const ART_NUMERIC_FIELDS = ['artX','artY','artZ','artW','artH','artD','artDepth'
 // main() is intentionally called at the end of the module after all const/let declarations are initialized.
 
 async function main(){
-  STATE = sanitizeState(EXPORTED_STATE);
-  console.log('[SinTower] embedded state loaded', {artworks: STATE.artworks?.length, walls: STATE.customWalls?.length, water: STATE.waterBodies?.length});
+  STATE = EXPORTED_STATE ? sanitizeState(EXPORTED_STATE) : (await loadState() || createDefaultState());
   if(EXPORTED_GALLERY_VIEWER) prepareExportedViewerDom();
   pushUndoState('initial');
   initThree();
@@ -274,10 +273,8 @@ async function main(){
   buildReferenceArchitecture();
   buildWaterBodies();
   buildArtworks();
-  applyExportRuntimeRestoration('after-buildArtworks');
   loadStatue();
   loadActor();
-  applyExportRuntimeRestoration('after-loadActor');
   if(!EXPORTED_GALLERY_VIEWER){
     buildEditor();
     applyObjectVisibilityLocks();
@@ -6572,10 +6569,7 @@ function loadActor(){
     actorModel.traverse(c=>{ if(c.isMesh){ c.castShadow=true; c.receiveShadow=true; }});
     repairActorMaterials(actorModel);
     playerGroup.add(actorModel);
-    
-    let __actorMeshCount = 0;
-    actorModel.traverse(c=>{ if(c.isMesh) __actorMeshCount++; });
-    actorProxy.visible = __actorMeshCount === 0; // 只有在 FBX 真的有可見 mesh 時才隱藏代理角色。
+    actorProxy.visible = false; // FBX 成功載入後隱藏代理膠囊，避免多餘物件黏在角色上。
     mixer = new THREE.AnimationMixer(actorModel);
     if(model.animations[0]) actions.idle = mixer.clipAction(stripRootMotionClip(model.animations[0]));
     loadClip('walk', ASSET.actorWalk); // 使用使用者上傳的 跑步.fbx 作為移動動畫
@@ -11158,227 +11152,6 @@ async function dbSet(key,value){
 
 function setStatus(text){ const el = $('status'); if(el) el.textContent = text; }
 
-
-function applyExportRuntimeRestoration(stage='runtime'){
-  if(!EXPORTED_GALLERY_VIEWER || !STATE) return;
-  try{
-    if(!window.__sinTowerRuntimeLog) window.__sinTowerRuntimeLog = [];
-    window.__sinTowerRuntimeLog.push({stage, t: Date.now(), artworks: STATE.artworks?.length || 0});
-    restoreExportSurfaceTexture();
-    restoreExportArtworkFallbacks();
-    restoreExportActorFallback();
-    // Re-run again after async loaders and image decoding.
-    if(!window.__sinTowerRestorationTimersInstalled){
-      window.__sinTowerRestorationTimersInstalled = true;
-      [250, 900, 1800, 3600].forEach(ms=>setTimeout(()=>applyExportRuntimeRestoration('timer-'+ms), ms));
-    }
-  }catch(err){
-    console.warn('[SinTower] runtime restoration failed', stage, err);
-  }
-}
-
-function exportLoadTextureOnce(src, {srgb=true, repeat=[1,1]}={}){
-  if(!src) return null;
-  window.__sinTowerTextureCache = window.__sinTowerTextureCache || new Map();
-  const key = `${src}|${repeat[0]}|${repeat[1]}|${srgb}`;
-  if(window.__sinTowerTextureCache.has(key)) return window.__sinTowerTextureCache.get(key);
-  const tex = new THREE.TextureLoader().load(src, t=>{
-    if(srgb) t.colorSpace = THREE.SRGBColorSpace;
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(repeat[0] || 1, repeat[1] || 1);
-    t.anisotropy = Math.min(renderer?.capabilities?.getMaxAnisotropy?.() || 1, 16);
-    t.needsUpdate = true;
-  }, undefined, err=>console.warn('[SinTower] texture restore load failed', src, err));
-  if(srgb) tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(repeat[0] || 1, repeat[1] || 1);
-  window.__sinTowerTextureCache.set(key, tex);
-  return tex;
-}
-
-function restoreExportSurfaceTexture(){
-  if(!renderer) return;
-  // Use the exported architecture texture as the global stone/cement material reference.
-  const texSrc = STATE.referenceArchitecture?.material?.texture || 'assets/asset_0017.jpg';
-  const roomTex = exportLoadTextureOnce(texSrc, {srgb:true, repeat:[4,4]});
-  const archTex = exportLoadTextureOnce(texSrc, {srgb:true, repeat:STATE.referenceArchitecture?.material?.repeat || [1,1]});
-  const apply = (obj, tex, bumpScale=.085)=>{
-    if(!obj?.isMesh || !obj.material) return;
-    if(obj.userData?.isWater || obj.userData?.isArtwork || obj.userData?.isArtworkFront || obj.userData?.isArtworkBack || obj.userData?.isLightMarker) return;
-    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-    for(const mat of mats){
-      if(!mat || mat.userData?.__exportTextureRestored) continue;
-      if('map' in mat) mat.map = tex;
-      if('bumpMap' in mat) mat.bumpMap = tex;
-      if('bumpScale' in mat) mat.bumpScale = bumpScale;
-      if('roughness' in mat) mat.roughness = Math.max(.82, safeFinite(mat.roughness,.96));
-      if('metalness' in mat) mat.metalness = 0;
-      if(mat.color && (!obj.userData?.referenceArchitecture)) mat.color.set(STATE.surfaces?.floor?.color || '#d8e4dd');
-      mat.userData.__exportTextureRestored = true;
-      mat.needsUpdate = true;
-    }
-    obj.castShadow = true;
-    obj.receiveShadow = true;
-  };
-  roomGroup?.traverse?.(obj=>apply(obj, roomTex, .055));
-  customWallGroup?.traverse?.(obj=>apply(obj, roomTex, .06));
-  floorTileGroup?.traverse?.(obj=>apply(obj, roomTex, .045));
-  referenceArchitectureGroup?.traverse?.(obj=>apply(obj, archTex, .12));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.autoUpdate = true;
-  renderer.shadowMap.needsUpdate = true;
-}
-
-function restoreExportArtworkFallbacks(){
-  if(!scene || !STATE?.artworks?.length) return;
-  if(!window.__exportFallbackArtworks){
-    window.__exportFallbackArtworks = new THREE.Group();
-    window.__exportFallbackArtworks.name = 'export-artwork-visibility-fallbacks';
-    scene.add(window.__exportFallbackArtworks);
-  }
-  const root = window.__exportFallbackArtworks;
-  const existing = new Set(root.children.map(c=>c.userData?.artId).filter(Boolean));
-  const textureLoader = new THREE.TextureLoader();
-  for(const art of STATE.artworks || []){
-    if(art.visible === false) continue;
-    // Keep original groups visible if they exist.
-    const original = artworkMeshes?.[art.id];
-    if(original){
-      original.visible = true;
-      original.frustumCulled = false;
-      original.traverse(obj=>{
-        obj.frustumCulled = false;
-        if(obj.material){
-          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-          for(const mat of mats){
-            if(!mat) continue;
-            if('side' in mat) mat.side = THREE.DoubleSide;
-            if('alphaTest' in mat) mat.alphaTest = Math.min(safeFinite(mat.alphaTest,.01), .01);
-            if('depthWrite' in mat) mat.depthWrite = false;
-            mat.needsUpdate = true;
-          }
-        }
-      });
-    }
-    if(existing.has(art.id)) continue;
-    if(art.type === 'model'){
-      const g = new THREE.Group();
-      g.name = `export-fallback-model-${art.title || art.id}`;
-      g.userData.artId = art.id;
-      placeExportFallbackGroup(g, art);
-      const placeholder = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({color:'#bfb6a8', roughness:.85, metalness:0, side:THREE.DoubleSide}));
-      placeholder.position.y = .5;
-      placeholder.castShadow = true;
-      placeholder.receiveShadow = true;
-      g.add(placeholder);
-      root.add(g);
-      new GLTFLoader().load(art.src, gltf=>{
-        g.remove(placeholder);
-        const model = gltf.scene || gltf.scenes?.[0];
-        if(!model) return;
-        normalizeArtworkModel(model);
-        model.traverse(obj=>{
-          obj.frustumCulled = false;
-          if(obj.isMesh){
-            obj.castShadow = true;
-            obj.receiveShadow = true;
-            if(obj.material){
-              const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-              mats.forEach(mat=>{ if(mat){ mat.side = THREE.DoubleSide; mat.needsUpdate = true; }});
-            }
-          }
-        });
-        g.add(model);
-        renderer.shadowMap.needsUpdate = true;
-      }, undefined, err=>console.warn('[SinTower] fallback GLB failed', art.title, art.src, err));
-      continue;
-    }
-    const w = Math.max(.02, safeFinite(art.size?.w, 3));
-    const h = Math.max(.02, safeFinite(art.size?.h, 3));
-    const depth = Math.max(.01, safeFinite(art.depth, .1));
-    const g = new THREE.Group();
-    g.name = `export-fallback-artwork-${art.title || art.id}`;
-    g.userData.artId = art.id;
-    placeExportFallbackGroup(g, art, false);
-    const tex = textureLoader.load(art.src, t=>{
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = Math.min(renderer?.capabilities?.getMaxAnisotropy?.() || 1, 16);
-      t.needsUpdate = true;
-    }, undefined, err=>console.warn('[SinTower] fallback artwork image failed', art.title, art.src, err));
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const mat = new THREE.MeshBasicMaterial({map:tex, transparent:true, alphaTest:.01, side:THREE.DoubleSide, depthTest:true, depthWrite:false, toneMapped:false});
-    const front = new THREE.Mesh(new THREE.PlaneGeometry(w,h,1,1), mat);
-    front.name = `export-fallback-front-${art.title || art.id}`;
-    front.renderOrder = 120;
-    front.frustumCulled = false;
-    g.add(front);
-    const edgeMat = new THREE.MeshStandardMaterial({color:art.edgeTintColor || art.backColor || '#2a1712', roughness:.9, metalness:0, side:THREE.DoubleSide});
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(w,h,1,1), edgeMat);
-    back.position.z = -depth;
-    back.renderOrder = 110;
-    back.frustumCulled = false;
-    g.add(back);
-    // Thin block gives the work a visible thickness without relying on the original triangulated extrusion.
-    const box = new THREE.Mesh(new THREE.BoxGeometry(w,h,depth), edgeMat.clone());
-    box.position.z = -depth/2;
-    box.renderOrder = 100;
-    box.frustumCulled = false;
-    box.castShadow = false;
-    box.receiveShadow = false;
-    g.add(box);
-    root.add(g);
-  }
-}
-
-function placeExportFallbackGroup(g, art, modelScale=true){
-  const r = art.rotation || {x:0,y:0,z:0};
-  g.position.set(safeFinite(art.position?.x,0), safeFinite(art.position?.y,2.2), safeFinite(art.position?.z,0));
-  g.rotation.set(deg(safeFinite(r.x,0)), deg(safeFinite(r.y,0)), deg(safeFinite(r.z,0)));
-  if(modelScale) g.scale.set(safeFinite(art.size?.w,1), safeFinite(art.size?.h,1), safeFinite(art.size?.d,1));
-  else g.scale.set(1,1,1);
-  g.visible = art.visible !== false;
-  g.frustumCulled = false;
-}
-
-function restoreExportActorFallback(){
-  if(!playerGroup) return;
-  if(!window.__exportVisibleActor){
-    const g = new THREE.Group();
-    g.name = 'export-visible-player-proxy';
-    const bodyMat = new THREE.MeshStandardMaterial({color:'#08718c', roughness:.72, metalness:0, depthTest:false, depthWrite:false});
-    const bellyMat = new THREE.MeshStandardMaterial({color:'#d9b178', roughness:.75, metalness:0, depthTest:false, depthWrite:false});
-    const whiteMat = new THREE.MeshStandardMaterial({color:'#f7f1e7', roughness:.65, metalness:0, depthTest:false, depthWrite:false});
-    const eyeMat = new THREE.MeshStandardMaterial({color:'#06495c', roughness:.4, metalness:0, depthTest:false, depthWrite:false});
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(.34,.34,1.05,28), bodyMat); body.position.y=.72;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(.36,32,16), whiteMat); head.position.y=1.42;
-    const belly = new THREE.Mesh(new THREE.SphereGeometry(.26,24,12), bellyMat); belly.scale.set(1,.65,.32); belly.position.set(0,.83,.31);
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(.055,16,8), eyeMat); eye.position.set(.12,1.47,.34);
-    [body,head,belly,eye].forEach(o=>{ o.renderOrder=900; o.frustumCulled=false; g.add(o); });
-    playerGroup.add(g);
-    window.__exportVisibleActor = g;
-  }
-  window.__exportVisibleActor.visible = true;
-  // Keep the proxy slightly above the water plane so the viewer always sees a controllable body.
-  window.__exportVisibleActor.position.y = Math.max(0, safeFinite(STATE.player?.modelYOffset,-.42)) + .05;
-  if(actorProxy){ actorProxy.visible = true; actorProxy.traverse?.(o=>{ o.frustumCulled=false; if(o.material){ const mats=Array.isArray(o.material)?o.material:[o.material]; mats.forEach(m=>{m.depthWrite=false; m.needsUpdate=true;}); }}); }
-  if(actorModel){
-    actorModel.visible = true;
-    actorModel.traverse(o=>{
-      o.frustumCulled = false;
-      if(o.isMesh){
-        o.visible = true;
-        o.castShadow = true;
-        o.receiveShadow = true;
-        if(o.material){
-          const mats=Array.isArray(o.material)?o.material:[o.material];
-          mats.forEach(m=>{ if(m){ m.side=THREE.DoubleSide; m.depthWrite=false; m.needsUpdate=true; }});
-        }
-      }
-    });
-  }
-}
 
 main().catch(err=>{
   console.error('Virtual Gallery init failed:', err);
