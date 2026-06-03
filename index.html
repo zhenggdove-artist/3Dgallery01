@@ -236,6 +236,11 @@ let ctrlViewDrag = false;
 let ctrlViewDragLastX = 0;
 let ctrlViewDragLastY = 0;
 let ctrlViewDragPointerId = null;
+let exportedMouseLookDrag = false;
+let exportedMouseLookPointerId = null;
+let exportedMouseLookLastX = 0;
+let exportedMouseLookLastY = 0;
+let exportedMouseLookActive = false;
 let playerYaw = 0;
 let playerVelocityY = 0;
 let selectedWallId = null;
@@ -485,11 +490,36 @@ function galleryInputReady(){
   return !EXPORTED_GALLERY_VIEWER || galleryLoading.released;
 }
 
+function installGalleryDebugState(){
+  if(!EXPORTED_GALLERY_VIEWER) return;
+  window.__galleryDebugState = ()=>{
+    const canvas = $('canvas');
+    const rect = canvas?.getBoundingClientRect?.();
+    return {
+      ready: galleryInputReady(),
+      released: !!galleryLoading.released,
+      pointerLocked,
+      fallbackMouseLook,
+      cursorFreeMode,
+      desiredPointerLocked,
+      exportedMouseLookDrag,
+      exportedMouseLookActive,
+      isTouchDevice: IS_TOUCH_DEVICE,
+      camYaw,
+      camPitch,
+      keys:{...keys},
+      player:{x:player.position.x, y:player.position.y, z:player.position.z},
+      canvasRect: rect ? {left:rect.left, top:rect.top, width:rect.width, height:rect.height} : null
+    };
+  };
+}
+
 // main() is intentionally called at the end of the module after all const/let declarations are initialized.
 
 async function main(){
   STATE = EXPORTED_STATE ? sanitizeState(EXPORTED_STATE) : (await loadState() || createDefaultState());
   if(EXPORTED_GALLERY_VIEWER) prepareExportedViewerDom();
+  installGalleryDebugState();
   configureGalleryLoadingManager();
   setGalleryLoadingPhase('初始化 WebGL 與光影...');
   pushUndoState('initial');
@@ -6972,9 +7002,66 @@ function applyMiddleViewDragMove(e){
   ctrlViewDragLastX = clientX;
   ctrlViewDragLastY = clientY;
   if(dx || dy){
-    camYaw -= dx * .0072;
-    camPitch = clamp(camPitch - dy * .0072, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
+    applyCameraLookDelta(dx, dy, .0072, .0072);
     updateCamera();
+  }
+  return true;
+}
+
+function applyCameraLookDelta(dx, dy, yawScale=.006, pitchScale=.0048){
+  if(!galleryInputReady()) return;
+  if(!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+  camYaw -= dx * yawScale;
+  camPitch = clamp(camPitch - dy * pitchScale, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
+}
+
+function startExportedMouseLookDrag(e){
+  if(!EXPORTED_GALLERY_VIEWER || !galleryInputReady()) return false;
+  if(e?.pointerType === 'touch') return false;
+  if(e?.button !== 0) return false;
+  if(isInsideEditUi(e.target) || isInsideMobileControls(e.target)) return false;
+  exportedMouseLookDrag = true;
+  exportedMouseLookPointerId = Number.isFinite(e.pointerId) ? e.pointerId : null;
+  exportedMouseLookLastX = Number.isFinite(e.clientX) ? e.clientX : 0;
+  exportedMouseLookLastY = Number.isFinite(e.clientY) ? e.clientY : 0;
+  exportedMouseLookActive = true;
+  cursorFreeMode = false;
+  desiredPointerLocked = true;
+  fallbackMouseLook = true;
+  updateCursorVisibility();
+  try{ e.currentTarget?.setPointerCapture?.(e.pointerId); }catch{}
+  requestStablePointerLock();
+  e.preventDefault?.();
+  e.stopPropagation?.();
+  return true;
+}
+
+function applyExportedMouseLookDrag(e){
+  if(!exportedMouseLookDrag) return false;
+  if(exportedMouseLookPointerId !== null && Number.isFinite(e?.pointerId) && e.pointerId !== exportedMouseLookPointerId) return false;
+  if(pointerLocked) return false;
+  e.preventDefault?.();
+  e.stopPropagation?.();
+  const clientX = Number.isFinite(e.clientX) ? e.clientX : exportedMouseLookLastX;
+  const clientY = Number.isFinite(e.clientY) ? e.clientY : exportedMouseLookLastY;
+  const mx = Number.isFinite(e.movementX) ? e.movementX : 0;
+  const my = Number.isFinite(e.movementY) ? e.movementY : 0;
+  const dx = Math.abs(mx) > 0 ? mx : clientX - exportedMouseLookLastX;
+  const dy = Math.abs(my) > 0 ? my : clientY - exportedMouseLookLastY;
+  exportedMouseLookLastX = clientX;
+  exportedMouseLookLastY = clientY;
+  applyCameraLookDelta(dx, dy);
+  return true;
+}
+
+function stopExportedMouseLookDrag(e){
+  if(!exportedMouseLookDrag) return false;
+  if(exportedMouseLookPointerId !== null && Number.isFinite(e?.pointerId) && e.pointerId !== exportedMouseLookPointerId) return false;
+  const pid = exportedMouseLookPointerId;
+  exportedMouseLookDrag = false;
+  exportedMouseLookPointerId = null;
+  if(pid !== null && renderer?.domElement?.releasePointerCapture){
+    try{ renderer.domElement.releasePointerCapture(pid); }catch{}
   }
   return true;
 }
@@ -7092,6 +7179,14 @@ function setupMobileControls(){
   };
   pad.addEventListener('touchend', stopTouchMove, {passive:false});
   pad.addEventListener('touchcancel', stopTouchMove, {passive:false});
+  const stopTouchMoveIfReleased = ev=>{
+    if(moveTouchId === null) return;
+    if(findTouchById(ev?.touches, moveTouchId)) return;
+    ev?.preventDefault?.();
+    resetMove();
+  };
+  document.addEventListener('touchend', stopTouchMoveIfReleased, {passive:false});
+  document.addEventListener('touchcancel', stopTouchMoveIfReleased, {passive:false});
   pad.addEventListener('pointerdown', ev=>{
     if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
     if(moveTouchId !== null || eventNow() - lastMoveTouchAt < 140) return;
@@ -7108,6 +7203,12 @@ function setupMobileControls(){
   }, {passive:false});
   pad.addEventListener('pointerup', stopMove, {passive:false});
   pad.addEventListener('pointercancel', stopMove, {passive:false});
+  const stopPointerMoveIfReleased = ev=>{
+    if(movePointerId === null || ev.pointerId !== movePointerId) return;
+    stopMove(ev);
+  };
+  document.addEventListener('pointerup', stopPointerMoveIfReleased, {passive:false});
+  document.addEventListener('pointercancel', stopPointerMoveIfReleased, {passive:false});
   let lastJumpTouchAt = 0;
   jumpBtn.addEventListener('touchstart', ev=>{
     if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
@@ -7162,20 +7263,21 @@ function setupMobileControls(){
   let lookTouchId = null;
   let lookTouchLastX = 0;
   let lookTouchLastY = 0;
-  canvas.addEventListener('touchstart', ev=>{
+  document.addEventListener('touchstart', ev=>{
     if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
     if(!allowTouchLook() || isInsideMobileControls(ev.target)) return;
     if(ev.touches.length > 1 && !touchesIncludeMobileControls(ev.touches)) return;
     if(lookTouchId !== null) return;
     const t = ev.changedTouches?.[0] || ev.touches?.[0];
     if(!t) return;
+    if(isInsideMobileControls(t.target)) return;
     lookTouchId = t.identifier;
     lookTouchLastX = t.clientX;
     lookTouchLastY = t.clientY;
     ev.preventDefault();
     ev.stopPropagation();
   }, {passive:false});
-  canvas.addEventListener('touchmove', ev=>{
+  document.addEventListener('touchmove', ev=>{
     if(!galleryInputReady()){ lookTouchId = null; ev.preventDefault(); ev.stopPropagation(); return; }
     if(lookTouchId === null) return;
     if(ev.touches.length > 1 && !touchesIncludeMobileControls(ev.touches)){
@@ -7190,18 +7292,18 @@ function setupMobileControls(){
     const dy = t.clientY - lookTouchLastY;
     lookTouchLastX = t.clientX;
     lookTouchLastY = t.clientY;
-    camYaw -= dx * .006;
-    camPitch = clamp(camPitch - dy * .0048, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
+    applyCameraLookDelta(dx, dy);
   }, {passive:false});
   const stopTouchLook = ev=>{
     if(lookTouchId === null) return;
     if(ev?.touches?.length && !findTouchById(ev.changedTouches, lookTouchId)) return;
     lookTouchId = null;
   };
-  canvas.addEventListener('touchend', stopTouchLook, {passive:false});
-  canvas.addEventListener('touchcancel', stopTouchLook, {passive:false});
-  canvas.addEventListener('pointerdown', ev=>{
+  document.addEventListener('touchend', stopTouchLook, {passive:false});
+  document.addEventListener('touchcancel', stopTouchLook, {passive:false});
+  document.addEventListener('pointerdown', ev=>{
     if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(lookTouchId !== null) return;
     if(!allowTouchLook() || ev.pointerType === 'mouse' || isInsideMobileControls(ev.target)) return;
     if(lookPointerId !== null) return;
     ev.preventDefault();
@@ -7211,7 +7313,8 @@ function setupMobileControls(){
     lookLastY = ev.clientY;
     try{ canvas.setPointerCapture?.(ev.pointerId); }catch{}
   }, {passive:false});
-  canvas.addEventListener('pointermove', ev=>{
+  document.addEventListener('pointermove', ev=>{
+    if(lookTouchId !== null) return;
     if(!galleryInputReady()){ lookPointerId = null; ev.preventDefault(); ev.stopPropagation(); return; }
     if(ev.pointerId !== lookPointerId) return;
     ev.preventDefault();
@@ -7220,16 +7323,15 @@ function setupMobileControls(){
     const dy = ev.clientY - lookLastY;
     lookLastX = ev.clientX;
     lookLastY = ev.clientY;
-    camYaw -= dx * .006;
-    camPitch = clamp(camPitch - dy * .0048, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
+    applyCameraLookDelta(dx, dy);
   }, {passive:false});
   const stopLook = ev=>{
     if(ev.pointerId !== lookPointerId) return;
     lookPointerId = null;
     try{ canvas.releasePointerCapture?.(ev.pointerId); }catch{}
   };
-  canvas.addEventListener('pointerup', stopLook, {passive:false});
-  canvas.addEventListener('pointercancel', stopLook, {passive:false});
+  document.addEventListener('pointerup', stopLook, {passive:false});
+  document.addEventListener('pointercancel', stopLook, {passive:false});
 }
 
 
@@ -7309,10 +7411,12 @@ function handleExportedViewerKeyUp(e){
 }
 
 function enterExportedViewerMode(){
-  cursorFreeMode = false;
+  cursorFreeMode = true;
   desiredPointerLocked = false;
   pointerLocked = false;
-  fallbackMouseLook = !IS_TOUCH_DEVICE;
+  fallbackMouseLook = false;
+  exportedMouseLookDrag = false;
+  exportedMouseLookActive = false;
   selectedWallId = null;
   selectedRoomWallKey = null;
   selectedFloorTileId = null;
@@ -7349,24 +7453,26 @@ function bindInput(){
       desiredPointerLocked = true;
       cursorFreeMode = false;
       fallbackMouseLook = false;
+      exportedMouseLookDrag = false;
       clearSelectableSelection();
     }else{
       lastPointerUnlockAt = performance.now();
       if(desiredPointerLocked && !cursorFreeMode){
         // Keep play mode visually active while a lock request is pending or has failed.
         // Do not switch back to edit mode by accident; ESC showCursorByEsc() clears desiredPointerLocked first.
-        fallbackMouseLook = false;
+        fallbackMouseLook = EXPORTED_GALLERY_VIEWER && exportedMouseLookActive;
       }else{
         desiredPointerLocked = false;
         cursorFreeMode = true;
         fallbackMouseLook = false;
+        exportedMouseLookActive = false;
       }
     }
     updateCursorVisibility();
   });
   document.addEventListener('pointerlockerror', ()=>{
     pointerLocked = false;
-    fallbackMouseLook = false;
+    fallbackMouseLook = EXPORTED_GALLERY_VIEWER && exportedMouseLookActive;
     if(desiredPointerLocked && !cursorFreeMode){
       // Keep the interface in play mode even if the browser refuses Pointer Lock.
       // The next click on the canvas will request Pointer Lock again; do not reopen editor windows.
@@ -7376,6 +7482,7 @@ function bindInput(){
     }
     desiredPointerLocked = false;
     cursorFreeMode = true;
+    exportedMouseLookActive = false;
     updateCursorVisibility();
     setStatus('Pointer Lock 未啟用；請再次點擊畫面或按 ESC 重新切換游標。');
   });
@@ -7383,6 +7490,8 @@ function bindInput(){
     desiredPointerLocked = false;
     cursorFreeMode = true;
     fallbackMouseLook = false;
+    exportedMouseLookDrag = false;
+    exportedMouseLookActive = false;
     ctrlViewDrag = false;
     ctrlViewDragLastX = 0;
     ctrlViewDragLastY = 0;
@@ -7390,6 +7499,7 @@ function bindInput(){
   });
   $('canvas').addEventListener('pointerdown', e=>{
     if(isInsideEditUi(e.target) || isInsideMobileControls(e.target)) return;
+    if(startExportedMouseLookDrag(e)) return;
     if(consumePlayModePointerEvent(e)) return;
     if(startMiddleViewDrag(e)) return;
     if(!pointerLocked && !fallbackMouseLook){
@@ -7439,6 +7549,7 @@ function bindInput(){
     if(ctrlViewDrag) e.preventDefault();
   });
   document.addEventListener('pointermove', e=>{
+    if(applyExportedMouseLookDrag(e)) return;
     if(applyMiddleViewDragMove(e)) return;
     if(isPlayCursorDisabled()){
       hideChiselPreview();
@@ -7459,9 +7570,8 @@ function bindInput(){
     if(wallScaleMode){ resizeSelectedWallByMouse(e); return; }
     if((!pointerLocked && !fallbackMouseLook) || transformControls?.dragging) return;
     if(fallbackMouseLook && cursorFreeMode) return;
-    camYaw -= e.movementX * .006;
+    applyCameraLookDelta(e.movementX, e.movementY);
     // movementY 往上為負值；這裡轉成鏡頭 pitch，而不是平移鏡頭高度。
-    camPitch = clamp(camPitch - e.movementY * .0048, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
   }, true);
   window.addEventListener('wheel', e=>{
     if(isInsideEditUi(e.target) || isInsideMobileControls(e.target)) return;
@@ -7551,7 +7661,11 @@ function bindInput(){
     if(e.code==='KeyD') keys.d = false;
   }, true);
   window.addEventListener('pointerup', e=>{
+    stopExportedMouseLookDrag(e);
     stopMiddleViewDrag(e);
+  }, true);
+  window.addEventListener('pointercancel', e=>{
+    stopExportedMouseLookDrag(e);
   }, true);
   window.addEventListener('mouseup', e=>{
     if(!ctrlViewDrag) return;
@@ -7974,8 +8088,10 @@ function setupFloatingWindows(){
 function updateCursorVisibility(){
   if(EXPORTED_GALLERY_VIEWER){
     document.body.classList.add('exported-viewer','play-mode');
-    document.body.style.cursor = IS_TOUCH_DEVICE ? 'default' : 'none';
-    if(renderer?.domElement) renderer.domElement.style.cursor = IS_TOUCH_DEVICE ? 'default' : 'none';
+    const hide = pointerLocked || fallbackMouseLook || exportedMouseLookDrag;
+    const value = hide ? 'none' : 'default';
+    document.body.style.cursor = value;
+    if(renderer?.domElement) renderer.domElement.style.cursor = value;
     hideChiselPreview();
     applyPlayModePerformanceLighting(true);
     return;
