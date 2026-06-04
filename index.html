@@ -248,10 +248,10 @@ let pendingEscRelock = false;
 let lastPointerUnlockAt = 0;
 let camYaw = 0, camPitch = deg(-8);
 let cameraViewMode = 'shoulder';
-let cameraDistance = 4.35;
+let cameraDistance = IS_TOUCH_DEVICE ? 12 : 4.35;
 const CAMERA_DISTANCE_MIN = 1.65;
 const CAMERA_DISTANCE_MAX = 36;
-const VIEWER_MOBILE_CAMERA_DISTANCE = 9.2;
+const VIEWER_MOBILE_CAMERA_DISTANCE = 12;
 const CAMERA_PITCH_MIN = deg(-88);
 const CAMERA_PITCH_MAX = deg(88);
 const cameraObstructionFade = {
@@ -540,19 +540,35 @@ function cloneGalleryStateValue(value){
   try{ return JSON.parse(JSON.stringify(value)); }catch{ return value; }
 }
 
-function applyMandatoryExportedArtworkCorrections(state){
-  if(!EXPORTED_GALLERY_VIEWER || !state || !Array.isArray(state.artworks)) return state;
-  const replacement = state.artworks.find(art=>art?.src === 'assets/asset_0011.png' || art?.title === '2-processed');
-  const removed = state.artworks.find(art=>art?.src === 'assets/asset_0014.png' || art?.title === '1-processed');
+function normalizeArtworkLookupText(value){
+  return String(value || '').replace(/\\/g,'/').split(/[?#]/)[0].trim().toLowerCase();
+}
+
+function isRemovedRequiredArtwork(art){
+  const src = normalizeArtworkLookupText(art?.src);
+  const title = normalizeArtworkLookupText(art?.title);
+  return title === '1-processed' || src.endsWith('/asset_0014.png') || src.endsWith('/1-processed.png');
+}
+
+function isRequiredReplacementArtwork(art){
+  const src = normalizeArtworkLookupText(art?.src);
+  const title = normalizeArtworkLookupText(art?.title);
+  return title === '2-processed' || src.endsWith('/asset_0011.png') || src.endsWith('/2-processed.png');
+}
+
+function applyRequiredArtworkCorrections(state){
+  if(!state || !Array.isArray(state.artworks)) return state;
+  const replacement = state.artworks.find(isRequiredReplacementArtwork);
+  const removed = state.artworks.find(isRemovedRequiredArtwork);
   if(replacement && removed && replacement !== removed){
     for(const key of ['wall','offset','y','gap','position','rotation','manualRotation','snapToWall']){
       replacement[key] = cloneGalleryStateValue(removed[key]);
     }
     replacement.visible = true;
     replacement.locked = true;
-    state.artworks = state.artworks.filter(art=>art !== removed);
+    state.artworks = state.artworks.filter(art=>!isRemovedRequiredArtwork(art));
   }else if(removed){
-    state.artworks = state.artworks.filter(art=>art !== removed);
+    state.artworks = state.artworks.filter(art=>!isRemovedRequiredArtwork(art));
   }
   return state;
 }
@@ -611,7 +627,7 @@ function installGalleryDebugState(){
 
 async function main(){
   STATE = EXPORTED_STATE ? sanitizeState(EXPORTED_STATE) : (await loadState() || createDefaultState());
-  if(EXPORTED_GALLERY_VIEWER) applyMandatoryExportedArtworkCorrections(STATE);
+  applyRequiredArtworkCorrections(STATE);
   if(EXPORTED_GALLERY_VIEWER){
     STATE.atmosphere = {...(STATE.atmosphere || {}), enabled:true, color:'#ccebe2', intensity:.36, opacity:.88, layers:.99};
   }
@@ -9082,7 +9098,7 @@ function resetPlayer(){
   playerVelocityY = 0;
   camYaw = 0;
   playerYaw = 0;
-  if(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE){
+  if(IS_TOUCH_DEVICE){
     cameraDistance = VIEWER_MOBILE_CAMERA_DISTANCE;
     camPitch = deg(-8);
   }
@@ -9752,7 +9768,7 @@ function restoreCameraObstructionFade(keep=new Set()){
 }
 
 function updateCameraObstructionFade(target){
-  if(!(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) || !camera || !target){
+  if(!IS_TOUCH_DEVICE || !camera || !target){
     restoreCameraObstructionFade();
     return;
   }
@@ -9801,21 +9817,21 @@ function updateCamera(){
     const camPos = bodyTarget.clone()
       .addScaledVector(backward, horizontal)
       .add(new THREE.Vector3(0, height, 0));
-    camera.position.lerp(camPos, EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? .56 : .32);
+    camera.position.lerp(camPos, IS_TOUCH_DEVICE ? .56 : .32);
     camera.lookAt(bodyTarget);
     updateCameraObstructionFade(bodyTarget);
     return;
   }
 
   // 越肩位置只做固定肩位與 zoom 距離；滑鼠上下控制的是 lookAt 的仰角。
-  const shoulderOffset = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? 0 : .62;
-  const cameraHeightOffset = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? .82 : .62;
-  const aimDistance = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? Math.max(5.5, cameraDistance * .9) : 8.5;
+  const shoulderOffset = IS_TOUCH_DEVICE ? 0 : .62;
+  const cameraHeightOffset = IS_TOUCH_DEVICE ? .82 : .62;
+  const aimDistance = IS_TOUCH_DEVICE ? Math.max(5.5, cameraDistance * .9) : 8.5;
   const camPos = bodyTarget.clone()
     .addScaledVector(backward, cameraDistance)
     .addScaledVector(right, shoulderOffset)
     .add(new THREE.Vector3(0,cameraHeightOffset,0));
-  camera.position.lerp(camPos, EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? .56 : .32);
+  camera.position.lerp(camPos, IS_TOUCH_DEVICE ? .56 : .32);
 
   const lookTarget = bodyTarget.clone()
     .addScaledVector(forward, aimDistance)
