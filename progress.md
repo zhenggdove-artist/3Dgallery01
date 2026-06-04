@@ -17,16 +17,3 @@ Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement conf
 
 TODO:
 - None.
-
-## 2026-06-04 follow-up
-
-- Added a mobile-only runtime GLB for the largest artwork model (`models/model_0004.mobile.glb`). Desktop still loads the original `models/model_0004.glb`.
-- Fixed the low-FPS movement bug by letting player physics catch up in small substeps instead of discarding elapsed time when mobile frames are slow.
-- Swapped the exported placement data for `2-processed` / `assets/asset_0011.png` and `1-processed` / `assets/asset_0014.png`.
-- Cleaned touch-event cancellation so mobile browsers no longer spam non-cancelable `touchmove` errors.
-- Verified with Playwright/CDP:
-  - mobile loads `models/model_0004.mobile.glb`, keeps WebGL context alive, and releases the loading gate at `23/23`;
-  - mobile joystick holds `w=true` and moves player from `z=5.8` to `z=-3.99`;
-  - mobile touch look changes yaw from `0` to `0.306`;
-  - mobile placement has `2-processed` at `(-8.14, 3, -4.46)` and `1-processed` at `(-11.24, 3.2, -1.82)`;
-  - desktop still loads `models/model_0004.glb`, keeps SinTower at `1,999,908` triangles, and left-drag look changes yaw from `0` to `0.442`.
