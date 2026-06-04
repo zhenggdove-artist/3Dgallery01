@@ -174,6 +174,13 @@ const EXPORTED_STATE = {"room":{"width":36,"depth":30,"height":8.8,"thickness":0
 const IS_TOUCH_DEVICE = (()=>{
   try{ return matchMedia('(hover:none), (pointer:coarse), (max-width:820px)').matches || navigator.maxTouchPoints > 0; }catch{ return false; }
 })();
+function runtimeGalleryAssetUrl(src){
+  const value = String(src || '').replace(/\\/g,'/').trim();
+  if(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE && value === 'models/model_0004.glb'){
+    return 'models/model_0004.mobile.glb';
+  }
+  return src;
+}
 const ROOM = { width:22, depth:18, height:7, thickness:0.18 };
 const SURFACE_LABELS = {
   front:'前牆／北牆／主作品牆',
@@ -216,7 +223,7 @@ const screenFxDrawSize = new THREE.Vector2();
 const MAX_RENDER_PIXELS = 7_200_000;
 const MAX_SCREENFX_PIXELS = 6_400_000;
 const VIEWER_MOBILE_RENDER_PIXELS = MAX_RENDER_PIXELS;
-const VIEWER_MOBILE_SCREENFX_PIXELS = MAX_SCREENFX_PIXELS;
+const VIEWER_MOBILE_SCREENFX_PIXELS = 1_650_000;
 let webglContextLost = false;
 let roomGroup, customWallGroup, floorTileGroup, waterGroup, referenceArchitectureGroup, artworkGroup, playerGroup, actorModel, actorProxy, statue, lightRigGroup;
 let surfaces = {}, customWallMeshes = {}, floorTileMeshes = {}, waterBodyMeshes = {}, artworkMeshes = {}, lightControlObjects = {}, lightTargetObjects = {};
@@ -347,7 +354,7 @@ function collectExpectedGalleryAssets(state){
   addExpectedGalleryAsset(urls, ASSET.actorJump);
   addExpectedGalleryAsset(urls, state?.skyTexture);
   addExpectedGalleryAsset(urls, state?.referenceArchitecture?.material?.texture);
-  for(const art of state?.artworks || []) addExpectedGalleryAsset(urls, art?.src);
+  for(const art of state?.artworks || []) addExpectedGalleryAsset(urls, runtimeGalleryAssetUrl(art?.src));
   for(const cfg of Object.values(state?.surfaces || {})) addExpectedGalleryAsset(urls, cfg?.texture);
   for(const tile of state?.floorTiles || []) addExpectedGalleryAsset(urls, tile?.material?.texture);
   for(const body of state?.waterBodies || []){
@@ -424,14 +431,25 @@ function maybeReleaseGalleryLoadingGate(){
   updateGalleryLoadingUI();
   clearTimeout(galleryLoading.quietTimer);
   if(galleryLoading.errors.length) return;
-  if(!galleryLoading.sceneReady || !galleryLoading.managerIdle) return;
+  const now = performance.now?.() || Date.now();
+  const quietMs = now - galleryLoading.lastActivityAt;
   const requiredLoaded = galleryLoading.expectedTotal || 0;
-  if(requiredLoaded && galleryLoading.itemsLoaded < requiredLoaded){
+  const nearComplete = requiredLoaded
+    ? galleryLoading.itemsLoaded >= Math.max(0, requiredLoaded - 1)
+    : galleryLoading.itemsLoaded >= Math.max(0, galleryLoading.itemsTotal - 1);
+  if(galleryLoading.sceneReady && !galleryLoading.managerIdle && nearComplete && quietMs > (IS_TOUCH_DEVICE ? 2600 : 5200)){
+    galleryLoading.managerIdle = true;
+    galleryLoading.phase = '完成核心資源，整理大型作品...';
+  }
+  if(!galleryLoading.sceneReady || !galleryLoading.managerIdle){
+    galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 320);
+    return;
+  }
+  const allowQuietMobileTail = IS_TOUCH_DEVICE && nearComplete && quietMs > 2600;
+  if(requiredLoaded && galleryLoading.itemsLoaded < requiredLoaded && !allowQuietMobileTail){
     galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 240);
     return;
   }
-  const now = performance.now?.() || Date.now();
-  const quietMs = now - galleryLoading.lastActivityAt;
   if(quietMs < 700){
     galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 720 - quietMs);
     return;
@@ -533,7 +551,7 @@ function installGalleryDebugState(){
       actorLoaded:!!actorModel,
       actorProxyVisible:!!actorProxy?.visible,
       water:{inside:!!waterRuntime.inside, swimming:!!waterRuntime.swimming, wading:!!waterRuntime.wading},
-      loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, currentUrl:galleryLoading.currentUrl},
+      loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl},
       artworks:(STATE?.artworks || []).map(art=>({
         title:art.title,
         src:art.src,
@@ -6288,9 +6306,9 @@ function loadArtworkModel(art, group){
     setStatus(`3D 作品載入失敗：${art.title}`);
   };
   if(format === 'fbx'){
-    new FBXLoader().load(versionedAssetUrl(art.src), fbx=>onLoaded(fbx), undefined, onError);
+    new FBXLoader().load(versionedAssetUrl(runtimeGalleryAssetUrl(art.src)), fbx=>onLoaded(fbx), undefined, onError);
   }else{
-    new GLTFLoader().load(versionedAssetUrl(art.src), gltf=>onLoaded(gltf.scene || gltf.scenes?.[0]), undefined, onError);
+    new GLTFLoader().load(versionedAssetUrl(runtimeGalleryAssetUrl(art.src)), gltf=>onLoaded(gltf.scene || gltf.scenes?.[0]), undefined, onError);
   }
 }
 
@@ -7148,6 +7166,9 @@ function setupMobileControls(){
   let moveTouchId = null;
   let lastMoveTouchAt = 0;
   const eventNow = ()=> (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  const preventDefaultIfCancelable = ev=>{
+    if(ev?.cancelable !== false) ev?.preventDefault?.();
+  };
   const findTouchById = (list, id)=>{
     if(id === null || id === undefined || !list) return null;
     for(let i=0; i<list.length; i++){
@@ -7189,31 +7210,31 @@ function setupMobileControls(){
     const pid = movePointerId;
     resetMove();
     try{ if(pid !== null) pad.releasePointerCapture?.(pid); }catch{}
-    ev?.preventDefault?.();
+    preventDefaultIfCancelable(ev);
     ev?.stopPropagation?.();
   };
   pad.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     const t = touchFromEvent(ev);
     if(!t) return;
-    ev.preventDefault(); ev.stopPropagation();
+    preventDefaultIfCancelable(ev); ev.stopPropagation();
     lastMoveTouchAt = eventNow();
     moveTouchId = t.identifier;
     movePointerId = null;
     centerPadAt(t.clientX, t.clientY);
   }, {passive:false});
   pad.addEventListener('touchmove', ev=>{
-    if(!galleryInputReady()){ resetMove(); ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ resetMove(); preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(moveTouchId === null) return;
     const t = touchFromEvent(ev, moveTouchId);
     if(!t) return;
-    ev.preventDefault(); ev.stopPropagation();
+    preventDefaultIfCancelable(ev); ev.stopPropagation();
     centerPadAt(t.clientX, t.clientY);
   }, {passive:false});
   const stopTouchMove = ev=>{
     if(moveTouchId === null) return;
     if(ev?.touches?.length && !findTouchById(ev.changedTouches, moveTouchId)) return;
-    ev.preventDefault(); ev.stopPropagation();
+    preventDefaultIfCancelable(ev); ev.stopPropagation();
     resetMove();
   };
   pad.addEventListener('touchend', stopTouchMove, {passive:false});
@@ -7221,7 +7242,7 @@ function setupMobileControls(){
   const stopTouchMoveIfReleased = ev=>{
     if(moveTouchId === null) return;
     if(findTouchById(ev?.touches, moveTouchId)) return;
-    ev?.preventDefault?.();
+    preventDefaultIfCancelable(ev);
     resetMove();
   };
   document.addEventListener('touchend', stopTouchMoveIfReleased, {passive:false});
@@ -7250,10 +7271,10 @@ function setupMobileControls(){
   document.addEventListener('pointercancel', stopPointerMoveIfReleased, {passive:false});
   let lastJumpTouchAt = 0;
   jumpBtn.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     const t = touchFromEvent(ev);
     if(!t) return;
-    ev.preventDefault(); ev.stopPropagation();
+    preventDefaultIfCancelable(ev); ev.stopPropagation();
     lastJumpTouchAt = eventNow();
     jump();
   }, {passive:false});
@@ -7267,21 +7288,21 @@ function setupMobileControls(){
   let lastTouchEndAt = 0;
   document.addEventListener('touchend', ev=>{
     const now = Date.now();
-    if(ev.touches.length === 0 && now - lastTouchEndAt < 320) ev.preventDefault();
+    if(ev.touches.length === 0 && now - lastTouchEndAt < 320) preventDefaultIfCancelable(ev);
     lastTouchEndAt = now;
   }, {passive:false});
 
   let pinchDistance = 0;
   canvas.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(ev.touches.length === 2 && !touchesIncludeMobileControls(ev.touches)){
       const a = ev.touches[0], b = ev.touches[1];
       pinchDistance = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-      ev.preventDefault();
+      preventDefaultIfCancelable(ev);
     }
   }, {passive:false});
   canvas.addEventListener('touchmove', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(ev.touches.length === 2 && !touchesIncludeMobileControls(ev.touches)){
       const a = ev.touches[0], b = ev.touches[1];
       const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
@@ -7289,7 +7310,7 @@ function setupMobileControls(){
         zoomCamera((pinchDistance - d) * 1.35);
       }
       pinchDistance = d;
-      ev.preventDefault();
+      preventDefaultIfCancelable(ev);
     }
   }, {passive:false});
   canvas.addEventListener('touchend', ev=>{ if(ev.touches.length < 2) pinchDistance = 0; }, {passive:false});
@@ -7303,7 +7324,7 @@ function setupMobileControls(){
   let lookTouchLastX = 0;
   let lookTouchLastY = 0;
   document.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(!allowTouchLook() || isInsideMobileControls(ev.target)) return;
     if(ev.touches.length > 1 && !touchesIncludeMobileControls(ev.touches)) return;
     if(lookTouchId !== null) return;
@@ -7313,11 +7334,11 @@ function setupMobileControls(){
     lookTouchId = t.identifier;
     lookTouchLastX = t.clientX;
     lookTouchLastY = t.clientY;
-    ev.preventDefault();
+    preventDefaultIfCancelable(ev);
     ev.stopPropagation();
   }, {passive:false});
   document.addEventListener('touchmove', ev=>{
-    if(!galleryInputReady()){ lookTouchId = null; ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ lookTouchId = null; preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(lookTouchId === null) return;
     if(ev.touches.length > 1 && !touchesIncludeMobileControls(ev.touches)){
       lookTouchId = null;
@@ -7325,7 +7346,7 @@ function setupMobileControls(){
     }
     const t = findTouchById(ev.touches, lookTouchId);
     if(!t) return;
-    ev.preventDefault();
+    preventDefaultIfCancelable(ev);
     ev.stopPropagation();
     const dx = t.clientX - lookTouchLastX;
     const dy = t.clientY - lookTouchLastY;
@@ -10993,8 +11014,17 @@ function updateWallFromEditor(){
 function animate(){
   requestAnimationFrame(animate);
   if(webglContextLost) return;
-  const dt = Math.min(clock.getDelta(),.033);
-  updatePlayer(dt);
+  const rawDt = Math.min(clock.getDelta(), IS_TOUCH_DEVICE ? .35 : .18);
+  const dt = Math.min(rawDt,.033);
+  let remainingPlayerDt = rawDt;
+  let playerSteps = 0;
+  const maxPlayerSteps = IS_TOUCH_DEVICE ? 12 : 6;
+  while(remainingPlayerDt > 0.0001 && playerSteps < maxPlayerSteps){
+    const stepDt = Math.min(remainingPlayerDt, .033);
+    updatePlayer(stepDt);
+    remainingPlayerDt -= stepDt;
+    playerSteps++;
+  }
   updatePendingWallPlacement();
   updatePendingArtworkPlacement();
   updatePendingFloorTilePlacement();
