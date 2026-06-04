@@ -1,5 +1,31 @@
 Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement confusion, invisible smoke, too-fast look controls, mobile forward movement, and performance without reducing visual quality.
 
+## 2026-06-04 current `index.html` correction
+
+- User explicitly requested that the primary file is `index.html`; no other HTML entry should be treated as the target for this round.
+- Re-read the actual exported state and asset images. The white rectangular artwork shown in the user's Image #2 is `project-01` / `assets/asset_0005.png`, not `1-processed` / `asset_0014.png`.
+- The requested replacement artwork in the user's Image #3 is `S__82264084-processed` / `assets/asset_0007.png`, not `2-processed` / `asset_0011.png`.
+- Directly updated the embedded `EXPORTED_STATE` in `index.html`:
+  - removed `project-01` / `asset_0005.png`;
+  - placed `S__82264084-processed` / `asset_0007.png` at the old white artwork position `(-17.612000002384185, 3, -3.9325752019256663)` with rotation `{x:0, y:90, z:0}`;
+  - kept total artwork count at 12 and kept the replacement artwork's own size/material.
+- Updated the runtime correction guards so future stale state removes only `project-01` / `asset_0005.png` and uses only `S__82264084-processed` / `asset_0007.png` as the replacement.
+- Mobile camera/control changes in `index.html`:
+  - mobile default camera distance is `15.5`;
+  - mobile FOV is `66`;
+  - mobile camera follow now copies directly to the target camera position instead of lagging behind the player;
+  - mobile shoulder offset is `0`, with a lifted aim target so the actor stays in the lower-middle screen area;
+  - touch look now passes `dx` directly into `applyCameraLookDelta`, so rightward swipe turns the view right;
+  - pinch handlers are bound on both `canvas` and `document`;
+  - obstruction fade now uses cached world bounding boxes instead of expensive geometry raycasts.
+- Verification:
+  - module syntax check passed for `index.html`;
+  - mobile debug state reports `cameraDistance=15.5`, `cameraFov=66`, `hasWrongWhiteArtwork=false`;
+  - debug state reports exactly one target artwork: `assets/asset_0007.png` at `(-17.612000002384185, 3, -3.9325752019256663)`;
+  - look test: `dx=150` changes yaw from `0` to `-0.51`, matching rightward view movement;
+  - pinch out test changes camera distance from `15.5` to `7.5405`; pinch in returns it to `15.5`;
+  - forward mobile movement after 1.2s keeps `playerScreen.ndcX` effectively `0` and `effectiveMove.forward=1`.
+
 ## 2026-06-04
 
 - Added cache-busting for local `assets/` and `models/` in exported viewer mode so GitHub Pages/mobile browsers do not reuse stale artwork, wall texture, or actor files.
