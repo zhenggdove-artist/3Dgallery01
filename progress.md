@@ -32,3 +32,27 @@ TODO:
 - Verified:
   - mobile DPR=3 loads `models/model_0004.mobile.glb`, reaches `23/23`, has no console errors, and joystick movement works;
   - desktop loads `models/model_0004.glb`, actor FBX is loaded, proxy actor is hidden, and left-drag changes yaw from `0` to `0.442`.
+
+## 2026-06-04 artwork swap and mobile camera/control fix
+
+- Added an exported-viewer runtime correction that removes `assets/asset_0014.png` (`1-processed`) from `STATE.artworks` and moves `assets/asset_0011.png` (`2-processed`) to the removed artwork's position/rotation `(-8.14, 3, -4.46)` / `y=-361.706...`, while preserving the stone artwork's own size/material.
+- Fixed a loading-gate edge case: if a late large asset updates `itemsLoaded` after `managerIdle=true`, `onProgress` now re-runs `maybeReleaseGalleryLoadingGate()`.
+- Mobile camera changes are deliberately limited to exported touch devices:
+  - default mobile camera distance is now `9.2` instead of `4.35`;
+  - shoulder offset is `0` on mobile so the actor stays horizontally centered;
+  - mobile camera follow lerp is faster to keep the actor from drifting away from center;
+  - camera-obstructing room/reference/custom-wall meshes are temporarily faded using cloned per-mesh materials only on mobile, then restored.
+- Mobile input changes:
+  - touch horizontal look uses a mobile-only inverted yaw path, leaving desktop mouse look unchanged;
+  - pinch zoom now uses distance ratio (`zoomCameraByScale`) and cancels active single-finger look while pinching;
+  - joystick reset is also bound at `window` level for `touchend`/`touchcancel`/`blur` to avoid stuck movement.
+- Verified with Playwright/CDP:
+  - mobile DPR=1 loading releases with `cameraDistance=9.2`, `asset_0014.png` absent, and `asset_0011.png` at the requested position;
+  - left swipe changes yaw from `0` to `-0.272`;
+  - pinch out changes camera distance from `9.2` to `5.75`;
+  - joystick forward sets `effectiveMove.forward=1` and moves the player; after touch end, `effectiveMove` returns to `0`;
+  - player screen center after movement is effectively centered (`ndcX ~= 0`);
+  - desktop route still loads original `models/model_0004.glb`, releases the loading gate, and does not include `asset_0014.png`.
+
+TODO:
+- None.

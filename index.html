@@ -251,8 +251,14 @@ let cameraViewMode = 'shoulder';
 let cameraDistance = 4.35;
 const CAMERA_DISTANCE_MIN = 1.65;
 const CAMERA_DISTANCE_MAX = 36;
+const VIEWER_MOBILE_CAMERA_DISTANCE = 9.2;
 const CAMERA_PITCH_MIN = deg(-88);
 const CAMERA_PITCH_MAX = deg(88);
+const cameraObstructionFade = {
+  raycaster:null,
+  faded:new Map(),
+  lastCheckAt:0
+};
 let ctrlViewDrag = false;
 let ctrlViewDragLastX = 0;
 let ctrlViewDragLastY = 0;
@@ -509,6 +515,7 @@ function configureGalleryLoadingManager(){
     galleryLoading.itemsTotal = Math.max(galleryLoading.itemsTotal, itemsTotal || 0);
     galleryLoading.lastActivityAt = performance.now?.() || Date.now();
     updateGalleryLoadingUI();
+    if(galleryLoading.sceneReady) maybeReleaseGalleryLoadingGate();
   };
   manager.onError = url=>{
     galleryLoading.errors.push(url || galleryLoading.currentUrl || 'unknown asset');
@@ -528,11 +535,42 @@ function galleryInputReady(){
   return !EXPORTED_GALLERY_VIEWER || galleryLoading.released;
 }
 
+function cloneGalleryStateValue(value){
+  if(value === undefined || value === null || typeof value !== 'object') return value;
+  try{ return JSON.parse(JSON.stringify(value)); }catch{ return value; }
+}
+
+function applyMandatoryExportedArtworkCorrections(state){
+  if(!EXPORTED_GALLERY_VIEWER || !state || !Array.isArray(state.artworks)) return state;
+  const replacement = state.artworks.find(art=>art?.src === 'assets/asset_0011.png' || art?.title === '2-processed');
+  const removed = state.artworks.find(art=>art?.src === 'assets/asset_0014.png' || art?.title === '1-processed');
+  if(replacement && removed && replacement !== removed){
+    for(const key of ['wall','offset','y','gap','position','rotation','manualRotation','snapToWall']){
+      replacement[key] = cloneGalleryStateValue(removed[key]);
+    }
+    replacement.visible = true;
+    replacement.locked = true;
+    state.artworks = state.artworks.filter(art=>art !== removed);
+  }else if(removed){
+    state.artworks = state.artworks.filter(art=>art !== removed);
+  }
+  return state;
+}
+
 function installGalleryDebugState(){
   if(!EXPORTED_GALLERY_VIEWER) return;
   window.__galleryDebugState = ()=>{
     const canvas = $('canvas');
     const rect = canvas?.getBoundingClientRect?.();
+    const playerScreen = (camera && player) ? (()=> {
+      const p = player.position.clone().add(new THREE.Vector3(0,1.08,0)).project(camera);
+      return {
+        ndcX:p.x,
+        ndcY:p.y,
+        x:(p.x * .5 + .5) * (rect?.width || innerWidth),
+        y:(-.5 * p.y + .5) * (rect?.height || innerHeight)
+      };
+    })() : null;
     return {
       ready: galleryInputReady(),
       released: !!galleryLoading.released,
@@ -545,6 +583,8 @@ function installGalleryDebugState(){
       isTouchDevice: IS_TOUCH_DEVICE,
       camYaw,
       camPitch,
+      cameraDistance,
+      cameraObstructionFaded:cameraObstructionFade.faded.size,
       keys:{...keys},
       mobileMoveKeys:{...mobileMoveKeys},
       effectiveMove:movementVector(),
@@ -556,9 +596,11 @@ function installGalleryDebugState(){
         title:art.title,
         src:art.src,
         position:art.position ? {x:art.position.x, y:art.position.y, z:art.position.z} : null,
+        rotation:art.rotation ? {x:art.rotation.x, y:art.rotation.y, z:art.rotation.z} : null,
         size:art.size ? {w:art.size.w, h:art.size.h, d:art.size.d} : null
       })),
       player:{x:player.position.x, y:player.position.y, z:player.position.z},
+      playerScreen,
       canvasRect: rect ? {left:rect.left, top:rect.top, width:rect.width, height:rect.height} : null
     };
   };
@@ -569,6 +611,7 @@ function installGalleryDebugState(){
 
 async function main(){
   STATE = EXPORTED_STATE ? sanitizeState(EXPORTED_STATE) : (await loadState() || createDefaultState());
+  if(EXPORTED_GALLERY_VIEWER) applyMandatoryExportedArtworkCorrections(STATE);
   if(EXPORTED_GALLERY_VIEWER){
     STATE.atmosphere = {...(STATE.atmosphere || {}), enabled:true, color:'#ccebe2', intensity:.36, opacity:.88, layers:.99};
   }
@@ -7069,6 +7112,10 @@ function applyCameraLookDelta(dx, dy, yawScale=.0034, pitchScale=.0028){
   camPitch = clamp(camPitch - dy * pitchScale, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
 }
 
+function applyTouchCameraLookDelta(dx, dy){
+  applyCameraLookDelta(-dx, dy);
+}
+
 function startExportedMouseLookDrag(e){
   if(!EXPORTED_GALLERY_VIEWER || !galleryInputReady()) return false;
   if(e?.pointerType === 'touch') return false;
@@ -7247,6 +7294,9 @@ function setupMobileControls(){
   };
   document.addEventListener('touchend', stopTouchMoveIfReleased, {passive:false});
   document.addEventListener('touchcancel', stopTouchMoveIfReleased, {passive:false});
+  window.addEventListener('touchend', stopTouchMoveIfReleased, {passive:false});
+  window.addEventListener('touchcancel', stopTouchMoveIfReleased, {passive:false});
+  window.addEventListener('blur', resetMove);
   pad.addEventListener('pointerdown', ev=>{
     if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
     if(moveTouchId !== null || eventNow() - lastMoveTouchAt < 140) return;
@@ -7293,28 +7343,40 @@ function setupMobileControls(){
   }, {passive:false});
 
   let pinchDistance = 0;
+  let pinchActive = false;
+  const pinchDistanceFromTouches = touches=>{
+    if(!touches || touches.length < 2) return 0;
+    const a = touches[0], b = touches[1];
+    return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+  };
   canvas.addEventListener('touchstart', ev=>{
     if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(ev.touches.length === 2 && !touchesIncludeMobileControls(ev.touches)){
-      const a = ev.touches[0], b = ev.touches[1];
-      pinchDistance = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+      pinchActive = true;
+      pinchDistance = pinchDistanceFromTouches(ev.touches);
+      lookTouchId = null;
+      lookPointerId = null;
       preventDefaultIfCancelable(ev);
+      ev.stopPropagation();
     }
   }, {passive:false});
   canvas.addEventListener('touchmove', ev=>{
     if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
-    if(ev.touches.length === 2 && !touchesIncludeMobileControls(ev.touches)){
-      const a = ev.touches[0], b = ev.touches[1];
-      const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+    if((pinchActive || ev.touches.length === 2) && ev.touches.length === 2 && !touchesIncludeMobileControls(ev.touches)){
+      const d = pinchDistanceFromTouches(ev.touches);
       if(pinchDistance > 0){
-        zoomCamera((pinchDistance - d) * 1.35);
+        zoomCameraByScale(d / pinchDistance);
       }
       pinchDistance = d;
+      pinchActive = true;
+      lookTouchId = null;
+      lookPointerId = null;
       preventDefaultIfCancelable(ev);
+      ev.stopPropagation();
     }
   }, {passive:false});
-  canvas.addEventListener('touchend', ev=>{ if(ev.touches.length < 2) pinchDistance = 0; }, {passive:false});
-  canvas.addEventListener('touchcancel', ()=>{ pinchDistance = 0; }, {passive:false});
+  canvas.addEventListener('touchend', ev=>{ if(ev.touches.length < 2){ pinchDistance = 0; pinchActive = false; } }, {passive:false});
+  canvas.addEventListener('touchcancel', ()=>{ pinchDistance = 0; pinchActive = false; }, {passive:false});
 
   let lookPointerId = null;
   let lookLastX = 0;
@@ -7326,7 +7388,7 @@ function setupMobileControls(){
   document.addEventListener('touchstart', ev=>{
     if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(!allowTouchLook() || isInsideMobileControls(ev.target)) return;
-    if(ev.touches.length > 1 && !touchesIncludeMobileControls(ev.touches)) return;
+    if(pinchActive || ev.touches.length > 1 && !touchesIncludeMobileControls(ev.touches)) return;
     if(lookTouchId !== null) return;
     const t = ev.changedTouches?.[0] || ev.touches?.[0];
     if(!t) return;
@@ -7339,6 +7401,10 @@ function setupMobileControls(){
   }, {passive:false});
   document.addEventListener('touchmove', ev=>{
     if(!galleryInputReady()){ lookTouchId = null; preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
+    if(pinchActive){
+      lookTouchId = null;
+      return;
+    }
     if(lookTouchId === null) return;
     if(ev.touches.length > 1 && !touchesIncludeMobileControls(ev.touches)){
       lookTouchId = null;
@@ -7352,7 +7418,7 @@ function setupMobileControls(){
     const dy = t.clientY - lookTouchLastY;
     lookTouchLastX = t.clientX;
     lookTouchLastY = t.clientY;
-    applyCameraLookDelta(dx, dy);
+    applyTouchCameraLookDelta(dx, dy);
   }, {passive:false});
   const stopTouchLook = ev=>{
     if(lookTouchId === null) return;
@@ -7364,6 +7430,7 @@ function setupMobileControls(){
   document.addEventListener('pointerdown', ev=>{
     if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
     if(lookTouchId !== null) return;
+    if(pinchActive) return;
     if(!allowTouchLook() || ev.pointerType === 'mouse' || isInsideMobileControls(ev.target)) return;
     if(lookPointerId !== null) return;
     ev.preventDefault();
@@ -7375,6 +7442,7 @@ function setupMobileControls(){
   }, {passive:false});
   document.addEventListener('pointermove', ev=>{
     if(lookTouchId !== null) return;
+    if(pinchActive) return;
     if(!galleryInputReady()){ lookPointerId = null; ev.preventDefault(); ev.stopPropagation(); return; }
     if(ev.pointerId !== lookPointerId) return;
     ev.preventDefault();
@@ -7383,7 +7451,7 @@ function setupMobileControls(){
     const dy = ev.clientY - lookLastY;
     lookLastX = ev.clientX;
     lookLastY = ev.clientY;
-    applyCameraLookDelta(dx, dy);
+    applyTouchCameraLookDelta(dx, dy);
   }, {passive:false});
   const stopLook = ev=>{
     if(ev.pointerId !== lookPointerId) return;
@@ -7484,6 +7552,10 @@ function enterExportedViewerMode(){
   selectedArtworkActive = false;
   selectedReferenceArchitectureActive = false;
   selectedLightObjectActive = false;
+  if(IS_TOUCH_DEVICE){
+    cameraDistance = Math.max(cameraDistance, VIEWER_MOBILE_CAMERA_DISTANCE);
+    camPitch = Math.min(camPitch, deg(-6));
+  }
   STATE.lightBake = sanitizeLightBake(STATE?.lightBake);
   STATE.lightBake.enabled = true;
   STATE.lightBake.useInPlayMode = true;
@@ -9010,6 +9082,10 @@ function resetPlayer(){
   playerVelocityY = 0;
   camYaw = 0;
   playerYaw = 0;
+  if(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE){
+    cameraDistance = VIEWER_MOBILE_CAMERA_DISTANCE;
+    camPitch = deg(-8);
+  }
 }
 
 function getPlayerJumpPower(){
@@ -9609,6 +9685,108 @@ function setCameraViewPreset(mode){
   setStatus(`視角模式：${label}。滾輪可調整與主角距離。`);
 }
 
+function isObjectDescendantOf(obj, root){
+  if(!obj || !root) return false;
+  let cur = obj;
+  while(cur){
+    if(cur === root) return true;
+    cur = cur.parent;
+  }
+  return false;
+}
+
+function cloneCameraFadeMaterial(material){
+  if(Array.isArray(material)) return material.map(mat=>mat?.clone ? mat.clone() : mat);
+  return material?.clone ? material.clone() : material;
+}
+
+function forEachMaterial(material, fn){
+  if(Array.isArray(material)){
+    for(const mat of material) if(mat) fn(mat);
+  }else if(material) fn(material);
+}
+
+function disposeCameraFadeMaterial(material){
+  forEachMaterial(material, mat=>mat?.dispose?.());
+}
+
+function makeCameraFadeMaterial(mesh){
+  const material = cloneCameraFadeMaterial(mesh.material);
+  forEachMaterial(material, mat=>{
+    mat.transparent = true;
+    mat.opacity = Math.min(safeFinite(mat.opacity, 1), .24);
+    mat.depthWrite = false;
+    mat.needsUpdate = true;
+  });
+  return material;
+}
+
+function isCameraObstructionCandidate(obj){
+  if(!obj?.isMesh || !obj.visible || !obj.material) return false;
+  if(obj === skyMesh || obj === atmosphereVolumeMesh || obj === atmospherePoints || obj === chiselPreviewMesh) return false;
+  if(isObjectDescendantOf(obj, artworkGroup) || isObjectDescendantOf(obj, waterGroup) || isObjectDescendantOf(obj, playerGroup)) return false;
+  return isObjectDescendantOf(obj, referenceArchitectureGroup) || isObjectDescendantOf(obj, customWallGroup) || isObjectDescendantOf(obj, roomGroup);
+}
+
+function setCameraObstructionFaded(mesh, shouldFade){
+  const rec = cameraObstructionFade.faded.get(mesh);
+  if(shouldFade){
+    if(rec) return;
+    const original = mesh.material;
+    const faded = makeCameraFadeMaterial(mesh);
+    mesh.material = faded;
+    cameraObstructionFade.faded.set(mesh, {original, faded});
+    return;
+  }
+  if(!rec) return;
+  mesh.material = rec.original;
+  disposeCameraFadeMaterial(rec.faded);
+  cameraObstructionFade.faded.delete(mesh);
+}
+
+function restoreCameraObstructionFade(keep=new Set()){
+  for(const mesh of Array.from(cameraObstructionFade.faded.keys())){
+    if(keep.has(mesh)) continue;
+    setCameraObstructionFaded(mesh, false);
+  }
+}
+
+function updateCameraObstructionFade(target){
+  if(!(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) || !camera || !target){
+    restoreCameraObstructionFade();
+    return;
+  }
+  const roots = [referenceArchitectureGroup, customWallGroup, roomGroup].filter(root=>root?.visible !== false);
+  if(!roots.length){
+    restoreCameraObstructionFade();
+    return;
+  }
+  const now = performance.now?.() || Date.now();
+  if(now - cameraObstructionFade.lastCheckAt < 82) return;
+  cameraObstructionFade.lastCheckAt = now;
+  const origin = camera.position.clone();
+  const toTarget = target.clone().sub(origin);
+  const dist = toTarget.length();
+  if(dist < .2){
+    restoreCameraObstructionFade();
+    return;
+  }
+  if(!cameraObstructionFade.raycaster) cameraObstructionFade.raycaster = new THREE.Raycaster();
+  cameraObstructionFade.raycaster.set(origin, toTarget.normalize());
+  cameraObstructionFade.raycaster.near = .05;
+  cameraObstructionFade.raycaster.far = Math.max(.1, dist - .18);
+  const hits = cameraObstructionFade.raycaster.intersectObjects(roots, true);
+  const blockers = new Set();
+  for(const hit of hits){
+    if(isCameraObstructionCandidate(hit.object)){
+      blockers.add(hit.object);
+      if(blockers.size >= 12) break;
+    }
+  }
+  restoreCameraObstructionFade(blockers);
+  for(const mesh of blockers) setCameraObstructionFaded(mesh, true);
+}
+
 function updateCamera(){
   const bodyTarget = player.position.clone().add(new THREE.Vector3(0,1.34,0));
   const forward = getCameraForward();
@@ -9623,28 +9801,38 @@ function updateCamera(){
     const camPos = bodyTarget.clone()
       .addScaledVector(backward, horizontal)
       .add(new THREE.Vector3(0, height, 0));
-    camera.position.lerp(camPos, .32);
+    camera.position.lerp(camPos, EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? .56 : .32);
     camera.lookAt(bodyTarget);
+    updateCameraObstructionFade(bodyTarget);
     return;
   }
 
   // 越肩位置只做固定肩位與 zoom 距離；滑鼠上下控制的是 lookAt 的仰角。
+  const shoulderOffset = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? 0 : .62;
+  const cameraHeightOffset = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? .82 : .62;
+  const aimDistance = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? Math.max(5.5, cameraDistance * .9) : 8.5;
   const camPos = bodyTarget.clone()
     .addScaledVector(backward, cameraDistance)
-    .addScaledVector(right,.62)
-    .add(new THREE.Vector3(0,.62,0));
-  camera.position.lerp(camPos,.32);
+    .addScaledVector(right, shoulderOffset)
+    .add(new THREE.Vector3(0,cameraHeightOffset,0));
+  camera.position.lerp(camPos, EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? .56 : .32);
 
-  const aimDistance = 8.5;
   const lookTarget = bodyTarget.clone()
     .addScaledVector(forward, aimDistance)
     .add(new THREE.Vector3(0, Math.tan(camPitch) * aimDistance, 0));
   camera.lookAt(lookTarget);
+  updateCameraObstructionFade(bodyTarget);
 }
 
 function zoomCamera(deltaY){
   const factor = deltaY > 0 ? 1.12 : .88;
   cameraDistance = clamp(cameraDistance * factor, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX);
+  updateCamera();
+}
+
+function zoomCameraByScale(scale){
+  if(!Number.isFinite(scale) || scale <= 0) return;
+  cameraDistance = clamp(cameraDistance / scale, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX);
   updateCamera();
 }
 
