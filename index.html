@@ -152,7 +152,7 @@ const ASSET = {
 
 const DEFAULT_SKY_TEXTURE = 'assets/asset_0004.png';
 const SCREEN_FX_DEFAULTS = Object.freeze({enabled:false,preset:'none',intensity:0,noise:0,scanlines:0,chromatic:0,warp:0,glow:0,vignette:0,saturation:1,contrast:1,brightness:1,blur:0,hue:0});
-const ASSET_CACHE_VERSION = '20260605-mobile-arpg-control-stability';
+const ASSET_CACHE_VERSION = '20260605-mobile-hard-stability-v2';
 
 function isLocalGalleryAssetUrl(src){
   if(typeof src !== 'string') return false;
@@ -223,9 +223,14 @@ let screenFxTargetSize = new THREE.Vector2(0,0);
 const screenFxDrawSize = new THREE.Vector2();
 const MAX_RENDER_PIXELS = 7_200_000;
 const MAX_SCREENFX_PIXELS = 6_400_000;
-const VIEWER_MOBILE_RENDER_PIXELS = 2_600_000;
-const VIEWER_MOBILE_SCREENFX_PIXELS = 1_200_000;
-const VIEWER_MOBILE_DPR_LIMIT = 2;
+const VIEWER_MOBILE_RENDER_PIXELS = 1_450_000;
+const VIEWER_MOBILE_SCREENFX_PIXELS = 420_000;
+const VIEWER_MOBILE_DPR_LIMIT = 1.35;
+const MOBILE_VIEWER = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE;
+const MOBILE_LOOK_SENSITIVITY_SCALE = MOBILE_VIEWER ? 0.8 : 1;
+const PLAYER_SPEED_SCALE = 0.8;
+const MOBILE_REFERENCE_COLLISION_ENABLED = false;
+const MOBILE_FAST_RENDER = MOBILE_VIEWER;
 let webglContextLost = false;
 let roomGroup, customWallGroup, floorTileGroup, waterGroup, referenceArchitectureGroup, artworkGroup, playerGroup, actorModel, actorProxy, statue, lightRigGroup;
 let surfaces = {}, customWallMeshes = {}, floorTileMeshes = {}, waterBodyMeshes = {}, artworkMeshes = {}, lightControlObjects = {}, lightTargetObjects = {};
@@ -250,8 +255,8 @@ let pendingEscRelock = false;
 let lastPointerUnlockAt = 0;
 let camYaw = 0, camPitch = deg(-8);
 let cameraViewMode = 'shoulder';
-const VIEWER_MOBILE_CAMERA_DISTANCE = 12.5;
-const VIEWER_MOBILE_FOV = 60;
+const VIEWER_MOBILE_CAMERA_DISTANCE = 9.8;
+const VIEWER_MOBILE_FOV = 58;
 const VIEWER_DESKTOP_FOV = 58;
 let cameraDistance = IS_TOUCH_DEVICE ? VIEWER_MOBILE_CAMERA_DISTANCE : 4.35;
 const CAMERA_DISTANCE_MIN = 1.65;
@@ -609,6 +614,9 @@ function installGalleryDebugState(){
       cameraDistance,
       cameraFov:camera?.fov ?? null,
       cameraObstructionFaded:cameraObstructionFade.faded.size,
+      mobileFastRender:MOBILE_FAST_RENDER,
+      playerSpeedScale:PLAYER_SPEED_SCALE,
+      lookScale:MOBILE_LOOK_SENSITIVITY_SCALE,
       keys:{...keys},
       mobileMoveKeys:{...mobileMoveKeys},
       mobileMoveVector:{...mobileMoveVector},
@@ -1274,7 +1282,7 @@ function initThree(){
   renderer.setSize(innerWidth,innerHeight,false);
   bindWebGLContextSafety(renderer.domElement);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !MOBILE_FAST_RENDER;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   initScreenFxPostProcess();
   roomGroup = new THREE.Group(); roomGroup.name = 'room'; scene.add(roomGroup);
@@ -2300,6 +2308,12 @@ function getScreenFxPresetIndex(preset){
 function updateScreenFxUniforms(){
   if(!screenFxMaterial) return false;
   const fx = getScreenFxConfig();
+  if(MOBILE_FAST_RENDER){
+    const u = screenFxMaterial.uniforms;
+    u.uEnabled.value = 0;
+    u.uIntensity.value = 0;
+    return false;
+  }
   const enabled = !!fx.enabled && fx.preset !== 'none' && fx.intensity > .001;
   const k = clamp01(fx.intensity);
   const u = screenFxMaterial.uniforms;
@@ -5895,6 +5909,7 @@ function triggerWaterRipple(body, strengthScale=1, options={}){
   const m = waterBodyMetrics(body);
   const y = m.surfaceY + .045;
   const pos = new THREE.Vector3(player.position.x, y, player.position.z);
+  if(MOBILE_FAST_RENDER) return;
   if(opts.splash === false){
     if(opts.foam !== false) spawnWaterFoamRing(pos, body, strengthScale * .62);
   }else{
@@ -6991,10 +7006,10 @@ function createProxyActor(){
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(.32,1.05,6,12), new THREE.MeshStandardMaterial({color:'#8aa3ff',roughness:.75}));
   body.position.y = .92;
-  body.castShadow = true;
+  body.castShadow = !MOBILE_FAST_RENDER;
   const head = new THREE.Mesh(new THREE.SphereGeometry(.25,16,12), new THREE.MeshStandardMaterial({color:'#ead5bd',roughness:.8}));
   head.position.y = 1.65;
-  head.castShadow = true;
+  head.castShadow = !MOBILE_FAST_RENDER;
   const nose = new THREE.Mesh(new THREE.BoxGeometry(.08,.08,.2), new THREE.MeshStandardMaterial({color:'#333'}));
   nose.position.set(0,1.65,-.31);
   g.add(body,head,nose);
@@ -7008,7 +7023,7 @@ function loadActor(){
   loader.load(versionedAssetUrl(ASSET.actorIdle), model=>{
     actorModel = model;
     normaliseActorModel(actorModel, 1.72);
-    actorModel.traverse(c=>{ if(c.isMesh){ c.castShadow=true; c.receiveShadow=true; }});
+    actorModel.traverse(c=>{ if(c.isMesh){ c.castShadow=!MOBILE_FAST_RENDER; c.receiveShadow=true; forceMobileActorMaterialVisible(c); }});
     repairActorMaterials(actorModel);
     playerGroup.add(actorModel);
     actorProxy.visible = false; // FBX 成功載入後隱藏代理膠囊，避免多餘物件黏在角色上。
@@ -7182,7 +7197,7 @@ function applyMiddleViewDragMove(e){
   ctrlViewDragLastX = clientX;
   ctrlViewDragLastY = clientY;
   if(dx || dy){
-    applyCameraLookDelta(dx, dy, .0044, .0044);
+    applyCameraLookDelta(dx, dy, .00352, .00352);
     updateCamera();
   }
   return true;
@@ -7191,8 +7206,9 @@ function applyMiddleViewDragMove(e){
 function applyCameraLookDelta(dx, dy, yawScale=.0034, pitchScale=.0028){
   if(!galleryInputReady()) return;
   if(!Number.isFinite(dx) || !Number.isFinite(dy)) return;
-  camYaw -= dx * yawScale;
-  camPitch = clamp(camPitch - dy * pitchScale, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
+  const scale = MOBILE_VIEWER ? MOBILE_LOOK_SENSITIVITY_SCALE : 1;
+  camYaw -= dx * yawScale * scale;
+  camPitch = clamp(camPitch - dy * pitchScale * scale, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
 }
 
 function applyTouchCameraLookDelta(dx, dy){
@@ -7314,6 +7330,11 @@ function setupMobileControls(){
   const preventDefaultIfCancelable = ev=>{
     if(ev?.cancelable !== false) ev?.preventDefault?.();
   };
+  const stopMobileInputEvent = ev=>{
+    preventDefaultIfCancelable(ev);
+    ev?.stopPropagation?.();
+    ev?.stopImmediatePropagation?.();
+  };
   const findTouchById = (list, id)=>{
     if(id === null || id === undefined || !list) return null;
     for(let i=0; i<list.length; i++){
@@ -7359,27 +7380,27 @@ function setupMobileControls(){
     ev?.stopPropagation?.();
   };
   pad.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ stopMobileInputEvent(ev); return; }
     const t = touchFromEvent(ev);
     if(!t) return;
-    preventDefaultIfCancelable(ev); ev.stopPropagation();
+    stopMobileInputEvent(ev);
     lastMoveTouchAt = eventNow();
     moveTouchId = t.identifier;
     movePointerId = null;
     centerPadAt(t.clientX, t.clientY);
   }, {passive:false});
   pad.addEventListener('touchmove', ev=>{
-    if(!galleryInputReady()){ resetMove(); preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ resetMove(); stopMobileInputEvent(ev); return; }
     if(moveTouchId === null) return;
     const t = touchFromEvent(ev, moveTouchId);
     if(!t) return;
-    preventDefaultIfCancelable(ev); ev.stopPropagation();
+    stopMobileInputEvent(ev);
     centerPadAt(t.clientX, t.clientY);
   }, {passive:false});
   const stopTouchMove = ev=>{
     if(moveTouchId === null) return;
     if(ev?.touches?.length && !findTouchById(ev.changedTouches, moveTouchId)) return;
-    preventDefaultIfCancelable(ev); ev.stopPropagation();
+    stopMobileInputEvent(ev);
     resetMove();
   };
   pad.addEventListener('touchend', stopTouchMove, {passive:false});
@@ -7396,17 +7417,17 @@ function setupMobileControls(){
   window.addEventListener('touchcancel', stopTouchMoveIfReleased, {passive:false});
   window.addEventListener('blur', resetMove);
   pad.addEventListener('pointerdown', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ stopMobileInputEvent(ev); return; }
     if(moveTouchId !== null || eventNow() - lastMoveTouchAt < 140) return;
-    ev.preventDefault(); ev.stopPropagation();
+    stopMobileInputEvent(ev);
     movePointerId = ev.pointerId;
     try{ pad.setPointerCapture?.(ev.pointerId); }catch{}
     centerPad(ev);
   }, {passive:false});
   pad.addEventListener('pointermove', ev=>{
-    if(!galleryInputReady()){ resetMove(); ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ resetMove(); stopMobileInputEvent(ev); return; }
     if(ev.pointerId !== movePointerId) return;
-    ev.preventDefault(); ev.stopPropagation();
+    stopMobileInputEvent(ev);
     centerPad(ev);
   }, {passive:false});
   pad.addEventListener('pointerup', stopMove, {passive:false});
@@ -7419,17 +7440,17 @@ function setupMobileControls(){
   document.addEventListener('pointercancel', stopPointerMoveIfReleased, {passive:false});
   let lastJumpTouchAt = 0;
   jumpBtn.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ stopMobileInputEvent(ev); return; }
     const t = touchFromEvent(ev);
     if(!t) return;
-    preventDefaultIfCancelable(ev); ev.stopPropagation();
+    stopMobileInputEvent(ev);
     lastJumpTouchAt = eventNow();
     jump();
   }, {passive:false});
   jumpBtn.addEventListener('pointerdown', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ stopMobileInputEvent(ev); return; }
     if(eventNow() - lastJumpTouchAt < 160) return;
-    ev.preventDefault(); ev.stopPropagation();
+    stopMobileInputEvent(ev);
     jump();
   }, {passive:false});
 
@@ -7448,18 +7469,17 @@ function setupMobileControls(){
     return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
   };
   const handlePinchStart = ev=>{
-    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ stopMobileInputEvent(ev); return; }
     if(ev.touches.length === 2 && !touchesIncludeMobileControls(ev.touches)){
       pinchActive = true;
       pinchDistance = pinchDistanceFromTouches(ev.touches);
       lookTouchId = null;
       lookPointerId = null;
-      preventDefaultIfCancelable(ev);
-      ev.stopPropagation();
+      stopMobileInputEvent(ev);
     }
   };
   const handlePinchMove = ev=>{
-    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ stopMobileInputEvent(ev); return; }
     if((pinchActive || ev.touches.length === 2) && ev.touches.length === 2 && !touchesIncludeMobileControls(ev.touches)){
       const d = pinchDistanceFromTouches(ev.touches);
       if(pinchDistance > 0){
@@ -7469,8 +7489,7 @@ function setupMobileControls(){
       pinchActive = true;
       lookTouchId = null;
       lookPointerId = null;
-      preventDefaultIfCancelable(ev);
-      ev.stopPropagation();
+      stopMobileInputEvent(ev);
     }
   };
   const handlePinchEnd = ev=>{
@@ -7496,7 +7515,7 @@ function setupMobileControls(){
   let lookTouchLastX = 0;
   let lookTouchLastY = 0;
   document.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ stopMobileInputEvent(ev); return; }
     if(!allowTouchLook() || isInsideMobileControls(ev.target)) return;
     if(pinchActive || ev.touches.length > 1 && !touchesIncludeMobileControls(ev.touches)) return;
     if(lookTouchId !== null) return;
@@ -7510,7 +7529,7 @@ function setupMobileControls(){
     ev.stopPropagation();
   }, {passive:false});
   document.addEventListener('touchmove', ev=>{
-    if(!galleryInputReady()){ lookTouchId = null; preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ lookTouchId = null; stopMobileInputEvent(ev); return; }
     if(pinchActive){
       lookTouchId = null;
       return;
@@ -7538,13 +7557,12 @@ function setupMobileControls(){
   document.addEventListener('touchend', stopTouchLook, {passive:false});
   document.addEventListener('touchcancel', stopTouchLook, {passive:false});
   document.addEventListener('pointerdown', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ stopMobileInputEvent(ev); return; }
     if(lookTouchId !== null) return;
     if(pinchActive) return;
     if(!allowTouchLook() || ev.pointerType === 'mouse' || isInsideMobileControls(ev.target)) return;
     if(lookPointerId !== null) return;
-    ev.preventDefault();
-    ev.stopPropagation();
+    stopMobileInputEvent(ev);
     lookPointerId = ev.pointerId;
     lookLastX = ev.clientX;
     lookLastY = ev.clientY;
@@ -7553,10 +7571,9 @@ function setupMobileControls(){
   document.addEventListener('pointermove', ev=>{
     if(lookTouchId !== null) return;
     if(pinchActive) return;
-    if(!galleryInputReady()){ lookPointerId = null; ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ lookPointerId = null; stopMobileInputEvent(ev); return; }
     if(ev.pointerId !== lookPointerId) return;
-    ev.preventDefault();
-    ev.stopPropagation();
+    stopMobileInputEvent(ev);
     const dx = ev.clientX - lookLastX;
     const dy = ev.clientY - lookLastY;
     lookLastX = ev.clientX;
@@ -9220,6 +9237,11 @@ function jump(){
   }
 }
 
+function getEffectivePlayerSpeed(){
+  const base = clamp(safeFinite(STATE.player?.speed,4.2),1,9);
+  return base * PLAYER_SPEED_SCALE;
+}
+
 function movementVector(){
   let forward = ((keys.w ? 1 : 0) - (keys.s ? 1 : 0));
   let strafe = ((keys.d ? 1 : 0) - (keys.a ? 1 : 0));
@@ -9271,7 +9293,9 @@ function movePlayerWithCollision(delta){
   if(!delta || !Number.isFinite(delta.x) || !Number.isFinite(delta.z)) return false;
   const total = Math.hypot(delta.x, delta.z);
   if(total < .000001) return false;
-  const chunks = IS_TOUCH_DEVICE ? Math.max(1, Math.ceil(total / .055)) : Math.max(1, Math.ceil(total / .12));
+  const obstacles = [...getCollisionWallMeshes(), ...getCollisionWaterContainers()];
+  const stepLimit = MOBILE_VIEWER ? .18 : (IS_TOUCH_DEVICE ? .11 : .12);
+  const chunks = Math.max(1, Math.ceil(total / stepLimit));
   const stepX = delta.x / chunks;
   const stepZ = delta.z / chunks;
   let moved = false;
@@ -9279,23 +9303,36 @@ function movePlayerWithCollision(delta){
     const nextBoth = player.position.clone();
     nextBoth.x += stepX;
     nextBoth.z += stepZ;
-    if(!collides(nextBoth)){
+    if(!collides(nextBoth, obstacles)){
       player.position.x = nextBoth.x;
       player.position.z = nextBoth.z;
       moved = true;
       continue;
     }
-    const nextX = player.position.clone();
-    nextX.x += stepX;
-    const canX = !collides(nextX);
     const nextZ = player.position.clone();
     nextZ.z += stepZ;
-    const canZ = !collides(nextZ);
-    if(canX){ player.position.x = nextX.x; moved = true; }
+    const canZ = !collides(nextZ, obstacles);
+    const nextX = player.position.clone();
+    nextX.x += stepX;
+    const canX = !collides(nextX, obstacles);
     if(canZ){ player.position.z = nextZ.z; moved = true; }
-    if(!canX && !canZ) resolvePlayerWallOverlaps();
+    if(canX){ player.position.x = nextX.x; moved = true; }
+    if(!canX && !canZ && !MOBILE_VIEWER) resolvePlayerWallOverlaps();
   }
   return moved;
+}
+
+function forceMobileActorMaterialVisible(obj){
+  if(!MOBILE_VIEWER || !obj?.isMesh || !obj.material) return;
+  const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+  for(const mat of mats){
+    if(!mat || mat.userData?.mobileActorVisiblePatch) continue;
+    mat.userData.mobileActorVisiblePatch = true;
+    mat.depthTest = false;
+    mat.depthWrite = false;
+    mat.needsUpdate = true;
+  }
+  obj.renderOrder = 9999;
 }
 
 function ensureMobileActorRenderSafety(){
@@ -9318,12 +9355,20 @@ function ensureMobileActorRenderSafety(){
       if(obj?.isMesh){
         obj.visible = true;
         obj.frustumCulled = false;
+        forceMobileActorMaterialVisible(obj);
       }
     });
     if(actorProxy) actorProxy.visible = false;
   }else if(actorProxy){
     actorProxy.visible = true;
     actorProxy.frustumCulled = false;
+    actorProxy.traverse?.(obj=>{
+      if(obj?.isMesh){
+        obj.visible = true;
+        obj.frustumCulled = false;
+        forceMobileActorMaterialVisible(obj);
+      }
+    });
   }
 }
 
@@ -9349,7 +9394,7 @@ function updatePlayer(dt){
   const facingDirection = moving ? direction.clone().normalize() : null;
   const waterMoveScale = waterStateBefore.swimming ? .48 : (waterStateBefore.wading ? .72 : 1);
   if(moving){
-    direction.normalize().multiplyScalar(clamp(safeFinite(STATE.player?.speed,4.2),1,9) * waterMoveScale * dt);
+    direction.normalize().multiplyScalar(getEffectivePlayerSpeed() * waterMoveScale * dt);
     movePlayerWithCollision(direction);
   }
 
@@ -9546,7 +9591,7 @@ function getCollisionWallMeshes(){
     const mesh = surfaces[key];
     if(mesh) list.push({id:key, mesh, type:'room'});
   }
-  if(referenceArchitectureGroup && STATE?.referenceArchitecture?.enabled !== false && STATE?.referenceArchitecture?.visible !== false){
+  if(referenceArchitectureGroup && STATE?.referenceArchitecture?.enabled !== false && STATE?.referenceArchitecture?.visible !== false && (MOBILE_REFERENCE_COLLISION_ENABLED || !MOBILE_VIEWER)){
     for(const item of referenceCollisionItems){
       if(item?.mesh?.visible !== false) list.push(item);
     }
@@ -9818,9 +9863,9 @@ function curvedWallCollisionHit(item, pLocal3, mesh, radius, pad=0){
   return {item, axis:'curve', penetration:limit - best.d, resolvedWorld};
 }
 
-function collides(pos){
-  const obstacles = [...getCollisionWallMeshes(), ...getCollisionWaterContainers()];
-  for(const item of obstacles){
+function collides(pos, obstacles=null){
+  const list = obstacles || [...getCollisionWallMeshes(), ...getCollisionWaterContainers()];
+  for(const item of list){
     if(obstacleCollisionHit(item, pos, 0)) return true;
   }
   return false;
@@ -9992,6 +10037,10 @@ function restoreCameraObstructionFade(keep=new Set()){
 }
 
 function updateCameraObstructionFade(target){
+  if(MOBILE_FAST_RENDER){
+    restoreCameraObstructionFade();
+    return;
+  }
   if(!IS_TOUCH_DEVICE || !camera || !target){
     restoreCameraObstructionFade();
     return;
@@ -10045,16 +10094,16 @@ function updateCamera(){
 
   if(mobileViewer){
     // 手機輸出模式使用固定的 ARPG 第三人稱相機：角色水平置中、相機不延遲跟隨、視線固定壓住角色在螢幕中下。
-    const mobileDistance = clamp(cameraDistance, 8.2, CAMERA_DISTANCE_MAX);
+    const mobileDistance = clamp(cameraDistance, 7.6, 11.2);
     const camPos = bodyTarget.clone()
       .addScaledVector(backward, mobileDistance)
-      .add(new THREE.Vector3(0, 2.62, 0));
+      .add(new THREE.Vector3(0, 2.22, 0));
     placeCamera(camPos);
-    const aimDistance = 6.4;
-    const pitchOffset = Math.tan(clamp(camPitch, deg(-28), deg(18))) * 3.2;
+    const aimDistance = 6.2;
+    const pitchOffset = Math.tan(clamp(camPitch, deg(-24), deg(14))) * 2.45;
     const lookTarget = bodyTarget.clone()
       .addScaledVector(forward, aimDistance)
-      .add(new THREE.Vector3(0, 2.18 + pitchOffset, 0));
+      .add(new THREE.Vector3(0, 1.28 + pitchOffset, 0));
     camera.lookAt(lookTarget);
     updateCameraObstructionFade(bodyTarget);
     return;
@@ -11455,11 +11504,11 @@ function updateWallFromEditor(){
 function animate(){
   requestAnimationFrame(animate);
   if(webglContextLost) return;
-  const rawDt = Math.min(clock.getDelta(), IS_TOUCH_DEVICE ? .35 : .18);
-  const dt = Math.min(rawDt,.033);
+  const rawDt = Math.min(clock.getDelta(), MOBILE_VIEWER ? .09 : (IS_TOUCH_DEVICE ? .18 : .18));
+  const dt = Math.min(rawDt, MOBILE_VIEWER ? .025 : .033);
   let remainingPlayerDt = rawDt;
   let playerSteps = 0;
-  const maxPlayerSteps = IS_TOUCH_DEVICE ? 12 : 6;
+  const maxPlayerSteps = MOBILE_VIEWER ? 4 : (IS_TOUCH_DEVICE ? 8 : 6);
   while(remainingPlayerDt > 0.0001 && playerSteps < maxPlayerSteps){
     const stepDt = Math.min(remainingPlayerDt, .033);
     updatePlayer(stepDt);
@@ -11781,7 +11830,7 @@ function enableBakedLightingRuntime(){
     }
   });
   if(renderer?.shadowMap){
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = !MOBILE_FAST_RENDER;
     renderer.shadowMap.autoUpdate = false;
     renderer.shadowMap.needsUpdate = false;
   }
