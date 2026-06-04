@@ -151,7 +151,7 @@ const ASSET = {
 };
 
 const DEFAULT_SKY_TEXTURE = 'assets/asset_0004.png';
-const ASSET_CACHE_VERSION = '20260604-input-smoke-artwork-cache';
+const ASSET_CACHE_VERSION = '20260604-mobile-water-fog-art-placement';
 
 function isLocalGalleryAssetUrl(src){
   if(typeof src !== 'string') return false;
@@ -164,6 +164,48 @@ function versionedAssetUrl(src){
   if(!EXPORTED_GALLERY_VIEWER || !isLocalGalleryAssetUrl(src)) return src;
   const joiner = String(src).includes('?') ? '&' : '?';
   return `${src}${joiner}v=${encodeURIComponent(ASSET_CACHE_VERSION)}`;
+}
+
+function runtimeGalleryAssetUrl(src){
+  if(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE && /(^|\/)model_0004\.glb$/i.test(String(src || ''))){
+    return String(src).replace(/model_0004\.glb$/i, 'model_0004.mobile.glb');
+  }
+  return src;
+}
+
+function cloneGalleryStateValue(value){
+  if(value === null || typeof value !== 'object') return value;
+  if(Array.isArray(value)) return value.map(cloneGalleryStateValue);
+  const out = {};
+  for(const [key, val] of Object.entries(value)) out[key] = cloneGalleryStateValue(val);
+  return out;
+}
+
+function applyExportedArtworkPlacementCorrections(state){
+  if(!EXPORTED_GALLERY_VIEWER || !state?.artworks) return;
+  const irregularStone = state.artworks.find(art=>art?.title === '2-processed' && /asset_0011\.png$/i.test(String(art.src || '')));
+  const tallStone = state.artworks.find(art=>art?.title === '1-processed' && /asset_0014\.png$/i.test(String(art.src || '')));
+  if(!irregularStone || !tallStone) return;
+  if(Math.abs(safeFinite(irregularStone.position?.x, 0) - (-8.14)) < .01 && Math.abs(safeFinite(irregularStone.position?.z, 0) - (-4.46)) < .01) return;
+  const placementKeys = ['wall','offset','y','gap','depth','position','rotation','manualRotation','snapToWall','size'];
+  const saved = {};
+  for(const key of placementKeys) saved[key] = cloneGalleryStateValue(irregularStone[key]);
+  for(const key of placementKeys) irregularStone[key] = cloneGalleryStateValue(tallStone[key]);
+  for(const key of placementKeys) tallStone[key] = cloneGalleryStateValue(saved[key]);
+}
+
+function defaultPlayerSpawnPosition(){
+  return {x:0, y:0, z:5.8};
+}
+
+function applyDefaultPlayerSpawnPose(){
+  const spawn = defaultPlayerSpawnPosition();
+  player.position.set(spawn.x, spawn.y, spawn.z);
+  playerVelocityY = 0;
+  camYaw = 0;
+  camPitch = (EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) ? deg(-10) : deg(-8);
+  cameraDistance = (EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) ? 6.2 : 4.35;
+  playerYaw = 0;
 }
 
 const DB_NAME = 'virtualGalleryBuilderDB';
@@ -203,6 +245,7 @@ let scene, camera, renderer, clock;
 let skyMesh = null, skyLoadToken = 0;
 let atmospherePoints = null, atmosphereMaterial = null, atmosphereGeometry = null, atmosphereTexture = null, atmosphereUniforms = null;
 let atmosphereVolumeMesh = null, atmosphereVolumeGeometry = null, atmosphereVolumeMaterial = null, atmosphereVolumeUniforms = null, atmosphereCloudTexture = null;
+let waterCausticTexture = null;
 let atmosphereRebuildTimer = null;
 let screenFxNoiseTexture = null;
 let screenFxTime = 0;
@@ -218,7 +261,7 @@ const MAX_SCREENFX_PIXELS = 6_400_000;
 const VIEWER_MOBILE_RENDER_PIXELS = MAX_RENDER_PIXELS;
 const VIEWER_MOBILE_SCREENFX_PIXELS = MAX_SCREENFX_PIXELS;
 let webglContextLost = false;
-let roomGroup, customWallGroup, floorTileGroup, waterGroup, referenceArchitectureGroup, artworkGroup, playerGroup, actorModel, actorProxy, statue, lightRigGroup;
+let roomGroup, customWallGroup, floorTileGroup, waterGroup, referenceArchitectureGroup, artworkGroup, playerGroup, actorModel, actorProxy, playerVisibilityShell, statue, lightRigGroup;
 let surfaces = {}, customWallMeshes = {}, floorTileMeshes = {}, waterBodyMeshes = {}, artworkMeshes = {}, lightControlObjects = {}, lightTargetObjects = {};
 let referenceCollisionItems = [];
 let lastChiselTarget = null;
@@ -320,6 +363,7 @@ const galleryLoading = {
   detail:null,
   item:null
 };
+const galleryPerfOverrides = {skipPlayer:false, skipRender:false};
 
 function isLoadableGalleryAssetUrl(src){
   if(typeof src !== 'string') return false;
@@ -347,7 +391,7 @@ function collectExpectedGalleryAssets(state){
   addExpectedGalleryAsset(urls, ASSET.actorJump);
   addExpectedGalleryAsset(urls, state?.skyTexture);
   addExpectedGalleryAsset(urls, state?.referenceArchitecture?.material?.texture);
-  for(const art of state?.artworks || []) addExpectedGalleryAsset(urls, art?.src);
+  for(const art of state?.artworks || []) addExpectedGalleryAsset(urls, runtimeGalleryAssetUrl(art?.src));
   for(const cfg of Object.values(state?.surfaces || {})) addExpectedGalleryAsset(urls, cfg?.texture);
   for(const tile of state?.floorTiles || []) addExpectedGalleryAsset(urls, tile?.material?.texture);
   for(const body of state?.waterBodies || []){
@@ -424,8 +468,15 @@ function maybeReleaseGalleryLoadingGate(){
   updateGalleryLoadingUI();
   clearTimeout(galleryLoading.quietTimer);
   if(galleryLoading.errors.length) return;
-  if(!galleryLoading.sceneReady || !galleryLoading.managerIdle) return;
   const requiredLoaded = galleryLoading.expectedTotal || 0;
+  const allKnownItemsLoaded = galleryLoading.itemsTotal > 0
+    && galleryLoading.itemsLoaded >= galleryLoading.itemsTotal
+    && (!requiredLoaded || galleryLoading.itemsLoaded >= requiredLoaded);
+  if(allKnownItemsLoaded) galleryLoading.managerIdle = true;
+  if(!galleryLoading.sceneReady || !galleryLoading.managerIdle){
+    galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 240);
+    return;
+  }
   if(requiredLoaded && galleryLoading.itemsLoaded < requiredLoaded){
     galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 240);
     return;
@@ -515,11 +566,36 @@ function installGalleryDebugState(){
   window.__galleryDebugState = ()=>{
     const canvas = $('canvas');
     const rect = canvas?.getBoundingClientRect?.();
+    let playerScreen = null;
+    if(rect && camera && playerGroup){
+      const box = new THREE.Box3().setFromObject(playerGroup);
+      if(!box.isEmpty()){
+        const corners = [
+          new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+          new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+          new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+          new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+          new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+          new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+          new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+          new THREE.Vector3(box.max.x, box.max.y, box.max.z)
+        ].map(p=>p.project(camera));
+        const xs = corners.map(p=>(p.x * .5 + .5) * rect.width);
+        const ys = corners.map(p=>(-.5 * p.y + .5) * rect.height);
+        const zs = corners.map(p=>p.z);
+        playerScreen = {
+          minX:Math.min(...xs), maxX:Math.max(...xs),
+          minY:Math.min(...ys), maxY:Math.max(...ys),
+          minZ:Math.min(...zs), maxZ:Math.max(...zs)
+        };
+      }
+    }
     return {
       ready: galleryInputReady(),
       released: !!galleryLoading.released,
       pointerLocked,
       fallbackMouseLook,
+      webglContextLost,
       cursorFreeMode,
       desiredPointerLocked,
       exportedMouseLookDrag,
@@ -527,13 +603,25 @@ function installGalleryDebugState(){
       isTouchDevice: IS_TOUCH_DEVICE,
       camYaw,
       camPitch,
+      cameraDistance,
       keys:{...keys},
       mobileMoveKeys:{...mobileMoveKeys},
       effectiveMove:movementVector(),
       actorLoaded:!!actorModel,
       actorProxyVisible:!!actorProxy?.visible,
+      playerScreen,
       water:{inside:!!waterRuntime.inside, swimming:!!waterRuntime.swimming, wading:!!waterRuntime.wading},
-      loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, currentUrl:galleryLoading.currentUrl},
+      loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl},
+      render:renderer ? {
+        pixelRatio:renderer.getPixelRatio?.() || 1,
+        calls:renderer.info?.render?.calls || 0,
+        triangles:renderer.info?.render?.triangles || 0,
+        points:renderer.info?.render?.points || 0,
+        geometries:renderer.info?.memory?.geometries || 0,
+        textures:renderer.info?.memory?.textures || 0,
+        screenFxTarget:{w:screenFxTargetSize.x, h:screenFxTargetSize.y},
+        atmospherePoints:atmosphereGeometry?.attributes?.position?.count || 0
+      } : null,
       artworks:(STATE?.artworks || []).map(art=>({
         title:art.title,
         src:art.src,
@@ -545,6 +633,68 @@ function installGalleryDebugState(){
     };
   };
   window.render_game_to_text = ()=>JSON.stringify(window.__galleryDebugState());
+  window.__galleryPerfDebug = (opts={})=>{
+    if(Object.prototype.hasOwnProperty.call(opts, 'screenFx')){
+      STATE.screenFx = {...getScreenFxConfig(), enabled:!!opts.screenFx};
+      applyScreenFx();
+    }
+    if(Object.prototype.hasOwnProperty.call(opts, 'atmosphere')){
+      const visible = !!opts.atmosphere;
+      if(atmospherePoints) atmospherePoints.visible = visible;
+      if(atmosphereVolumeMesh) atmosphereVolumeMesh.visible = visible;
+    }
+    if(Object.prototype.hasOwnProperty.call(opts, 'water') && waterGroup) waterGroup.visible = !!opts.water;
+    if(Object.prototype.hasOwnProperty.call(opts, 'reference') && referenceArchitectureGroup) referenceArchitectureGroup.visible = !!opts.reference;
+    if(Object.prototype.hasOwnProperty.call(opts, 'sinTower')){
+      const art = (STATE?.artworks || []).find(item=>item.title === 'SinTower');
+      const mesh = art ? artworkMeshes?.[art.id] : null;
+      if(mesh) mesh.visible = !!opts.sinTower;
+    }
+    if(Object.prototype.hasOwnProperty.call(opts, 'shadowMap') && renderer?.shadowMap) renderer.shadowMap.enabled = !!opts.shadowMap;
+    if(Object.prototype.hasOwnProperty.call(opts, 'skipPlayer')) galleryPerfOverrides.skipPlayer = !!opts.skipPlayer;
+    if(Object.prototype.hasOwnProperty.call(opts, 'skipRender')) galleryPerfOverrides.skipRender = !!opts.skipRender;
+    if(Number.isFinite(opts.camYawDeg)) camYaw = deg(opts.camYawDeg);
+    if(Number.isFinite(opts.camPitchDeg)) camPitch = clamp(deg(opts.camPitchDeg), CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
+    if(Number.isFinite(opts.cameraDistance)) cameraDistance = clamp(opts.cameraDistance, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX);
+    if(opts.playerPosition && typeof opts.playerPosition === 'object'){
+      player.position.set(
+        safeFinite(opts.playerPosition.x, player.position.x),
+        safeFinite(opts.playerPosition.y, player.position.y),
+        safeFinite(opts.playerPosition.z, player.position.z)
+      );
+      playerGroup?.position.copy(player.position);
+    }
+    if(Number.isFinite(opts.pixelRatio) && renderer){
+      renderer.setPixelRatio(clamp(opts.pixelRatio, 1, 3));
+      renderer.setSize(innerWidth, innerHeight, false);
+      resizeScreenFxTarget();
+    }
+    renderer?.renderLists?.dispose?.();
+    return window.__galleryDebugState();
+  };
+  window.__gallerySceneStats = ()=>{
+    const meshStats = root=>{
+      const stats = {meshes:0, triangles:0, visibleTriangles:0};
+      root?.traverse?.(obj=>{
+        if(!obj?.isMesh || !obj.geometry) return;
+        const tri = obj.geometry.index
+          ? Math.floor(obj.geometry.index.count / 3)
+          : Math.floor((obj.geometry.attributes?.position?.count || 0) / 3);
+        stats.meshes += 1;
+        stats.triangles += tri;
+        if(obj.visible !== false) stats.visibleTriangles += tri;
+      });
+      return stats;
+    };
+    return {
+      scene:meshStats(scene),
+      referenceArchitecture:meshStats(referenceArchitectureGroup),
+      water:meshStats(waterGroup),
+      artworks:meshStats(artworkGroup),
+      player:meshStats(playerGroup),
+      artworkBreakdown:(STATE?.artworks || []).map(art=>({title:art.title, src:art.src, ...meshStats(artworkMeshes?.[art.id])}))
+    };
+  };
 }
 
 // main() is intentionally called at the end of the module after all const/let declarations are initialized.
@@ -553,6 +703,8 @@ async function main(){
   STATE = EXPORTED_STATE ? sanitizeState(EXPORTED_STATE) : (await loadState() || createDefaultState());
   if(EXPORTED_GALLERY_VIEWER){
     STATE.atmosphere = {...(STATE.atmosphere || {}), enabled:true, color:'#ccebe2', intensity:.36, opacity:.88, layers:.99};
+    applyExportedArtworkPlacementCorrections(STATE);
+    applyDefaultPlayerSpawnPose();
   }
   if(EXPORTED_GALLERY_VIEWER) prepareExportedViewerDom();
   installGalleryDebugState();
@@ -1124,7 +1276,13 @@ function initThree(){
   scene = new THREE.Scene();
   applyEnvironmentColors();
   camera = new THREE.PerspectiveCamera(58, innerWidth/innerHeight, .08, 2500);
-  renderer = new THREE.WebGLRenderer({canvas:$('canvas'),antialias:true, powerPreference:'high-performance'});
+  renderer = new THREE.WebGLRenderer({
+    canvas:$('canvas'),
+    antialias:!(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE),
+    powerPreference:'high-performance',
+    stencil:false,
+    alpha:false
+  });
   renderer.setPixelRatio(computeSafePixelRatio(MAX_RENDER_PIXELS));
   renderer.setSize(innerWidth,innerHeight,false);
   bindWebGLContextSafety(renderer.domElement);
@@ -1229,6 +1387,15 @@ function updateLightTargetFromControlRotation(light, holder){
   return true;
 }
 
+function applyShadowMapBudget(light, requestedSize){
+  if(!light?.shadow?.mapSize) return;
+  const size = (EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE)
+    ? Math.min(requestedSize, 1024)
+    : requestedSize;
+  light.shadow.mapSize.width = size;
+  light.shadow.mapSize.height = size;
+}
+
 function rebuildLightSystem(){
   if(!lightRigGroup) return;
   if(transformControls?.object && findUserDataValueInHierarchy(transformControls.object, 'lightId', scene)){
@@ -1268,16 +1435,13 @@ function rebuildLightSystem(){
       light.shadow.camera.right = 36;
       light.shadow.camera.top = 36;
       light.shadow.camera.bottom = -36;
-      light.shadow.mapSize.width = 2048;
-      light.shadow.mapSize.height = 2048;
+      applyShadowMapBudget(light, 2048);
     }else if(item.type === 'spot'){
       light = new THREE.SpotLight(item.color, item.intensity, item.distance, item.angle, item.penumbra, item.decay);
-      light.shadow.mapSize.width = 2048;
-      light.shadow.mapSize.height = 2048;
+      applyShadowMapBudget(light, 2048);
     }else{
       light = new THREE.PointLight(item.color, item.intensity, item.distance, item.decay);
-      light.shadow.mapSize.width = 1024;
-      light.shadow.mapSize.height = 1024;
+      applyShadowMapBudget(light, 1024);
     }
     light.name = item.title || item.id || 'light';
     light.position.set(0,0,0);
@@ -1515,6 +1679,7 @@ function buildAtmosphereVolume(intensity, atm, memoryScale=1){
   // 改用單一相機包覆式 procedural fog dome：一個 shader 霧體覆蓋視野，成本固定，不會一片一片，也不會 OOM。
   const opacity = clamp(safeFinite(atm.opacity,.72),0,1);
   const layers = clamp(safeFinite(atm.layers,.55),0,1);
+  const fastMobileAtmosphere = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE;
   const radius = THREE.MathUtils.lerp(26, 62, intensity);
   atmosphereVolumeGeometry = new THREE.SphereGeometry(radius, 48, 24);
   atmosphereVolumeUniforms = {
@@ -1523,7 +1688,9 @@ function buildAtmosphereVolume(intensity, atm, memoryScale=1){
     uOpacity:{value:opacity},
     uLayers:{value:layers},
     uColor:{value:new THREE.Color(atm.color)},
-    uCameraWorld:{value:new THREE.Vector3()}
+    uCameraWorld:{value:new THREE.Vector3()},
+    uCloudTex:{value:createAtmosphereCloudTexture()},
+    uFastMode:{value:fastMobileAtmosphere ? 1 : 0}
   };
   atmosphereVolumeMaterial = new THREE.ShaderMaterial({
     uniforms:atmosphereVolumeUniforms,
@@ -1551,6 +1718,8 @@ function buildAtmosphereVolume(intensity, atm, memoryScale=1){
       uniform float uLayers;
       uniform vec3 uColor;
       uniform vec3 uCameraWorld;
+      uniform sampler2D uCloudTex;
+      uniform float uFastMode;
       varying vec3 vWorld;
       varying vec3 vLocal;
 
@@ -1595,6 +1764,27 @@ function buildAtmosphereVolume(intensity, atm, memoryScale=1){
       void main(){
         vec3 dir = normalize(vLocal);
         float t = uTime * (0.018 + uIntensity * 0.045);
+        if(uFastMode > 0.5){
+          vec2 uvA = dir.xz * (0.36 + uIntensity * 0.18) + vec2(t * 0.42, -t * 0.27);
+          vec2 uvB = (dir.xy + dir.yz * 0.42) * (0.58 + uLayers * 0.24) + vec2(-t * 0.31, t * 0.22);
+          vec2 uvC = dir.zx * (1.04 + uLayers * 0.72) + vec2(t * 0.13, t * 0.19);
+          float low = texture2D(uCloudTex, uvA).r;
+          float mid = texture2D(uCloudTex, uvB).r;
+          float fine = texture2D(uCloudTex, uvC).r;
+          float body = low * 0.58 + mid * mix(0.24, 0.36, uLayers) + fine * mix(0.06, 0.18, uLayers);
+          float threshold = mix(0.62, 0.34, uIntensity);
+          float density = smoothstep(threshold - 0.16, threshold + 0.24, body);
+          density += smoothstep(threshold + 0.06, threshold + 0.36, mid * 0.7 + fine * 0.3) * mix(0.04, 0.16, uLayers);
+          float vertical = smoothstep(-0.52, 0.34, dir.y) * (1.0 - smoothstep(0.84, 1.0, dir.y));
+          vertical += (1.0 - abs(dir.y)) * 0.52;
+          vertical = clamp(vertical, 0.0, 1.0);
+          float nearFade = smoothstep(1.2, 7.8, length(vWorld - uCameraWorld));
+          float alpha = density * vertical * nearFade * mix(0.18, 0.72, pow(uIntensity, 1.04)) * uOpacity;
+          alpha = clamp(alpha, 0.0, mix(0.10, mix(0.30, 0.60, uIntensity), uOpacity));
+          if(alpha < 0.004) discard;
+          gl_FragColor = vec4(uColor, alpha);
+          return;
+        }
         vec3 anchored = vWorld * (0.018 + uIntensity * 0.014) + vec3(t * 1.35, t * 0.42, -t * 0.88);
         vec3 warp = vec3(
           fbm(anchored * 1.7 + vec3(7.1, 0.0, 2.3)),
@@ -1658,7 +1848,10 @@ function buildAtmosphereEffect(){
   const memoryScale = deviceMemory <= 4 ? .38 : (deviceMemory <= 6 ? .58 : (deviceMemory <= 8 ? .78 : 1));
   buildAtmosphereVolume(intensity, atm, memoryScale);
 
-  const count = Math.round(THREE.MathUtils.lerp(14000, 62000, Math.pow(intensity, .82)) * memoryScale);
+  const fastMobileAtmosphere = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE;
+  const count = fastMobileAtmosphere
+    ? Math.round(THREE.MathUtils.lerp(3600, 11800, Math.pow(intensity, .82)) * Math.min(1, memoryScale + .18))
+    : Math.round(THREE.MathUtils.lerp(14000, 62000, Math.pow(intensity, .82)) * memoryScale);
   const radius = THREE.MathUtils.lerp(8, 24, intensity);
   const height = THREE.MathUtils.lerp(4, 13, intensity);
   const positions = new Float32Array(count * 3);
@@ -2135,7 +2328,7 @@ function resizeScreenFxTarget(){
   if(screenFxTarget && screenFxTargetSize.x === w && screenFxTargetSize.y === h) return;
   disposeScreenFxTarget();
   screenFxTarget = new THREE.WebGLRenderTarget(w, h, {
-    depthBuffer:true,
+    depthBuffer:false,
     stencilBuffer:false,
     colorSpace:THREE.SRGBColorSpace,
     samples:0
@@ -2940,8 +3133,11 @@ function createClosedGeometryReliefShellOverlay({geometry, matCfg, fallbackColor
   work.boundingBox?.getSize(bboxSize);
   const maxDim = Math.max(bboxSize.x || 0, bboxSize.y || 0, bboxSize.z || 0, .001);
   const baseTarget = .34 / Math.max(1, preset.freq * (.72 + cfg.variation * .95));
-  const targetEdge = clamp(Math.max(baseTarget, maxDim / 115), .055, .24);
-  const denseMaxVertices = userData?.referenceArchitecture ? 52000 : 76000;
+  const mobileReferenceRelief = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE && userData?.referenceArchitecture;
+  const targetEdge = clamp(Math.max(baseTarget, maxDim / (mobileReferenceRelief ? 68 : 115)), mobileReferenceRelief ? .11 : .055, mobileReferenceRelief ? .36 : .24);
+  const denseMaxVertices = userData?.referenceArchitecture
+    ? (mobileReferenceRelief ? 18000 : 52000)
+    : 76000;
   const dense = densifyGeometryByEdgeLength(work, {
     targetEdge,
     maxPasses:7,
@@ -3926,10 +4122,11 @@ function createReferenceClippedReliefGridGeometry({width, height, holes=[], matC
 
   // Keep the reference-building relief lighter than regular editable walls.
   // The building contains many arch panels and beams; high tessellation here causes global stutter.
-  const density = 14 + cfg.variation * 30;
+  const mobileDensityScale = (EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) ? .56 : 1;
+  const density = (14 + cfg.variation * 30) * mobileDensityScale;
   const aspect = clamp(width / Math.max(height,.001), .25, 5.5);
-  const segX = Math.round(clamp(density * Math.sqrt(aspect), 18, 92));
-  const segY = Math.round(clamp(density / Math.sqrt(aspect), 14, 68));
+  const segX = Math.round(clamp(density * Math.sqrt(aspect), EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? 10 : 18, EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? 54 : 92));
+  const segY = Math.round(clamp(density / Math.sqrt(aspect), EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? 8 : 14, EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? 40 : 68));
   const rep = Array.isArray(matCfg?.repeat) ? matCfg.repeat : [1,1];
 
   const solid = new Array(segX * segY).fill(false);
@@ -4045,7 +4242,7 @@ function addReferenceReliefPlaneToGroup(group, {width, height, position, rotatio
     fallbackColor:matCfg?.color || '#e2eee6',
     userData:{referenceArchitecture:true, referenceArchitectureId:'referenceArchitecture', isReferenceRelief:true},
     name:name || 'reference-relief-plane',
-    detailScale:.42
+    detailScale:(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) ? .24 : .42
   });
   if(!mesh) return null;
   mesh.material?.dispose?.();
@@ -4115,7 +4312,7 @@ function createReferenceBoxReliefGroup({name, position, scale, materialKind='wal
     fallbackColor:matCfg?.color || '#e2eee6',
     userData:{referenceArchitecture:true, referenceArchitectureId:'referenceArchitecture', isReferenceRelief:true},
     name:`${name || '參考圖建築方體'}｜六面凹凸`,
-    detailScale:.35
+    detailScale:(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) ? .22 : .35
   });
   if(!group) return null;
   group.traverse(obj=>{
@@ -4376,7 +4573,8 @@ function addReferenceWallPanel({name,width,height,thickness,holes,position,rotat
   const base = addReferenceMesh(mesh, name, materialKind);
   // Robust chisel geometry already contains the recessed floor / through-hole volume.
   // Do not add the old cap decals, because they were the cause of visible pushed-out slabs.
-  if(hasUserChisel){
+  const mobileReferenceMaterialRelief = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE;
+  if(hasUserChisel && !mobileReferenceMaterialRelief){
     attachChiseledReliefOverlayToMesh(base, {
       matCfg:STATE?.referenceArchitecture?.material,
       fallbackColor:STATE?.referenceArchitecture?.material?.color || '#e2eee6',
@@ -4388,7 +4586,7 @@ function addReferenceWallPanel({name,width,height,thickness,holes,position,rotat
     addChiselRecessDecalsToWallMesh(base, geometryHoles, thickness, false);
   }
   // Chiseled panels use an exact clone of the rebuilt cut mesh for relief, not the old full-box overlay.
-  const relief = hasUserChisel ? null : createReferenceWallPanelReliefGroup({name,width,height,thickness,holes:geometryHoles,position,rotationY,materialKind});
+  const relief = hasUserChisel || mobileReferenceMaterialRelief ? null : createReferenceWallPanelReliefGroup({name,width,height,thickness,holes:geometryHoles,position,rotationY,materialKind});
   if(relief) referenceArchitectureGroup.add(relief);
   return base;
 }
@@ -4407,7 +4605,8 @@ function addReferenceBox(name, position, scale, materialKind='wall'){
   mesh.userData.referenceGeometryBaked = !!boxHoles.length;
   mesh.userData.referenceBoxChiselHoles = boxHoles.map(h=>({...h}));
   const base = addReferenceMesh(mesh, name, materialKind);
-  if(boxHoles.length){
+  const mobileReferenceMaterialRelief = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE;
+  if(boxHoles.length && !mobileReferenceMaterialRelief){
     attachChiseledReliefOverlayToMesh(base, {
       matCfg:STATE?.referenceArchitecture?.material,
       fallbackColor:STATE?.referenceArchitecture?.material?.color || '#e2eee6',
@@ -4416,7 +4615,7 @@ function addReferenceBox(name, position, scale, materialKind='wall'){
       referenceMaterialKind:materialKind
     });
   }
-  const relief = boxHoles.length ? null : createReferenceBoxReliefGroup({name, position, scale, materialKind});
+  const relief = boxHoles.length || mobileReferenceMaterialRelief ? null : createReferenceBoxReliefGroup({name, position, scale, materialKind});
   if(relief) referenceArchitectureGroup.add(relief);
   return base;
 }
@@ -4544,7 +4743,8 @@ function buildReferenceArchitecture(){
 
   referenceArchitectureGroup.traverse(obj=>{
     if(obj.isMesh){
-      obj.frustumCulled = false;
+      obj.geometry?.computeBoundingSphere?.();
+      obj.frustumCulled = true;
     }
   });
 }
@@ -4843,7 +5043,212 @@ function createWaterDiskGeometry(radius=1, radialSegments=80, angularSegments=19
   return geo;
 }
 
+function useTextureBackedMobileWater(){
+  return EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE;
+}
+
+function createWaterCausticTexture(){
+  if(waterCausticTexture) return waterCausticTexture;
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const data = img.data;
+  const tau = Math.PI * 2;
+  const rand = seededRandom(532611);
+  for(let y=0;y<size;y++){
+    const v = y / size;
+    for(let x=0;x<size;x++){
+      const u = x / size;
+      const a1 = Math.sin(tau * (u * 3 + v * 2));
+      const b1 = Math.sin(tau * (u * 1 - v * 4 + .17));
+      const a2 = Math.sin(tau * (u * 7 - v * 3 + .31));
+      const b2 = Math.sin(tau * (u * 4 + v * 6 + .08));
+      const a3 = Math.sin(tau * (u * 11 + v * 5 + .23));
+      const b3 = Math.sin(tau * (u * 9 - v * 8 + .41));
+      const line1 = Math.pow(Math.max(0, 1 - Math.abs(a1 - b1) * 1.38), 5.4);
+      const line2 = Math.pow(Math.max(0, 1 - Math.abs(a2 - b2) * 1.62), 6.0);
+      const line3 = Math.pow(Math.max(0, 1 - Math.abs(a3 - b3) * 1.84), 7.2);
+      const ripple = Math.pow(Math.max(0, Math.sin(tau * (u * 5 + v * 5 + Math.sin(tau * (u - v)) * .18)) * .5 + .5), 8.0) * .18;
+      const grain = (rand() - .5) * .035;
+      const value = clamp((line1 * .72 + line2 * .44 + line3 * .24 + ripple + grain) * 255, 0, 255);
+      const i = (y * size + x) * 4;
+      data[i] = data[i+1] = data[i+2] = value;
+      data[i+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  waterCausticTexture = new THREE.CanvasTexture(canvas);
+  waterCausticTexture.colorSpace = THREE.NoColorSpace;
+  waterCausticTexture.wrapS = THREE.RepeatWrapping;
+  waterCausticTexture.wrapT = THREE.RepeatWrapping;
+  waterCausticTexture.minFilter = THREE.LinearMipmapLinearFilter;
+  waterCausticTexture.magFilter = THREE.LinearFilter;
+  waterCausticTexture.generateMipmaps = true;
+  return waterCausticTexture;
+}
+
+function createTextureBackedWaterMaterial(body){
+  const water = body.water || {};
+  const uniforms = {
+    uTime:{value:0},
+    uColor:{value:new THREE.Color(validColor(water.color)?water.color:'#4bbcff')},
+    uOpacity:{value:clamp(safeFinite(water.opacity,.55),.05,.95)},
+    uWave:{value:clamp(safeFinite(water.wave,.45),0,1)},
+    uCausticStrength:{value:clamp(safeFinite(water.causticStrength,1),0,3)},
+    uInterferenceStrength:{value:clamp(safeFinite(water.interferenceStrength,1),0,3)},
+    uMotionCenter:{value:new THREE.Vector2(999,999)},
+    uMotionStrength:{value:0},
+    uRippleAge:{value:99},
+    uRippleCenter:{value:new THREE.Vector2(999,999)},
+    uRippleStrength:{value:0},
+    uHalfSize:{value:new THREE.Vector2(1,1)},
+    uShape:{value:0},
+    uCausticTex:{value:createWaterCausticTexture()}
+  };
+  const w = clamp(safeFinite(body.size?.w,4),.2,500);
+  const d = clamp(safeFinite(body.size?.d,2),.2,500);
+  const t = clamp(safeFinite(body.size?.t,.12),.02,Math.min(w,d)/2);
+  if(body.shape === 'cylinder' || body.shape === 'oval'){
+    const r = Math.max(.1, Math.min(w,d)/2);
+    uniforms.uHalfSize.value.set(Math.max(.05,r-t), Math.max(.05,r-t));
+    uniforms.uShape.value = 1;
+  }else{
+    uniforms.uHalfSize.value.set(Math.max(.025,(w-t*2)/2), Math.max(.025,(d-t*2)/2));
+    uniforms.uShape.value = 0;
+  }
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
+    transparent:true,
+    depthWrite:false,
+    depthTest:true,
+    side:THREE.DoubleSide,
+    vertexShader:`
+      uniform float uTime;
+      uniform float uWave;
+      uniform float uRippleAge;
+      uniform vec2 uRippleCenter;
+      uniform float uRippleStrength;
+      uniform vec2 uHalfSize;
+      uniform float uShape;
+      varying vec2 vUv;
+      varying vec2 vLocal;
+      varying float vFoam;
+      varying float vWaveHeight;
+      varying float vEdgeMask;
+      float rippleAt(vec2 pos, vec2 center, float gain, float delay){
+        float age = max(0.0, uRippleAge - delay);
+        float rippleActive = smoothstep(0.0, 0.22, uRippleAge - delay);
+        float d = distance(pos, center);
+        float packet = sin(d*22.0 - age*12.5) * exp(-d*1.55) * exp(-age*1.38);
+        float secondary = sin(d*36.0 - age*18.0) * exp(-d*2.55) * exp(-age*1.75) * .34;
+        return (packet + secondary) * uRippleStrength * gain * rippleActive;
+      }
+      void main(){
+        vUv = uv;
+        vec3 p = position;
+        vec2 pos = p.xy;
+        vLocal = pos;
+        float slow = sin(p.x*1.05 + uTime*1.05) * 0.020 + cos(p.y*1.26 - uTime*.92) * 0.017;
+        float cross = sin((p.x*.72+p.y*1.13)*3.55 + uTime*1.85) * 0.011;
+        float fine = sin(p.x*8.0 + p.y*5.7 + uTime*3.1) * 0.0045 + cos(p.x*12.5 - p.y*7.6 - uTime*2.4) * 0.0035;
+        float chop = sin((p.x*2.6 - p.y*1.9) + sin(p.y*1.7 + uTime*.8) + uTime*2.4) * 0.008;
+        float ripple = rippleAt(pos, uRippleCenter, 1.0, 0.0);
+        float edgeDelay = 0.18;
+        if(uShape < 0.5){
+          float edgeDist = min(uHalfSize.x - abs(uRippleCenter.x), uHalfSize.y - abs(uRippleCenter.y));
+          edgeDelay = clamp(edgeDist * 1.55, 0.08, 1.85);
+          ripple += rippleAt(pos, vec2( 2.0*uHalfSize.x - uRippleCenter.x, uRippleCenter.y), .52, edgeDelay);
+          ripple += rippleAt(pos, vec2(-2.0*uHalfSize.x - uRippleCenter.x, uRippleCenter.y), .52, edgeDelay);
+          ripple += rippleAt(pos, vec2(uRippleCenter.x,  2.0*uHalfSize.y - uRippleCenter.y), .52, edgeDelay);
+          ripple += rippleAt(pos, vec2(uRippleCenter.x, -2.0*uHalfSize.y - uRippleCenter.y), .52, edgeDelay);
+          float ex = smoothstep(0.0, .20, uHalfSize.x - abs(pos.x));
+          float ey = smoothstep(0.0, .20, uHalfSize.y - abs(pos.y));
+          vEdgeMask = 1.0 - min(ex, ey);
+        }else{
+          float r = max(.05, uHalfSize.x);
+          float cLen = length(uRippleCenter);
+          vec2 dir = cLen > .001 ? uRippleCenter / cLen : vec2(1.0,0.0);
+          float edgeDist = max(0.0, r - cLen);
+          edgeDelay = clamp(edgeDist * 1.55, 0.08, 1.85);
+          vec2 mirror = dir * r * 2.0 - uRippleCenter;
+          ripple += rippleAt(pos, mirror, .60, edgeDelay);
+          vEdgeMask = 1.0 - smoothstep(0.0,.28, r - length(pos));
+        }
+        float waveHeight = (slow + cross + fine + chop) * (0.38 + uWave * 3.8) + ripple * (0.105 + uWave*.18);
+        p.z += waveHeight;
+        vWaveHeight = waveHeight;
+        vFoam = clamp(abs(ripple) * 2.2 + vEdgeMask*.10 + smoothstep(.70,.98,uWave)*0.085 + smoothstep(.16,.85,abs(waveHeight))*0.07, 0.0, 1.0);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0);
+      }
+    `,
+    fragmentShader:`
+      uniform sampler2D uCausticTex;
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      uniform float uTime;
+      uniform float uWave;
+      uniform float uCausticStrength;
+      uniform float uInterferenceStrength;
+      uniform vec2 uMotionCenter;
+      uniform float uMotionStrength;
+      varying vec2 vUv;
+      varying vec2 vLocal;
+      varying float vFoam;
+      varying float vWaveHeight;
+      varying float vEdgeMask;
+      void main(){
+        float edge = smoothstep(0.0,.045,vUv.x)*smoothstep(0.0,.045,vUv.y)*smoothstep(0.0,.045,1.0-vUv.x)*smoothstep(0.0,.045,1.0-vUv.y);
+        vec2 motionVec = vLocal - uMotionCenter;
+        float motionDist = length(motionVec);
+        vec2 motionDir = motionVec / max(motionDist, 0.001);
+        float motionWake = exp(-motionDist * 1.55) * uMotionStrength;
+        vec2 wakeOffset = motionDir * sin(motionDist * 10.5 - uTime * 5.4) * motionWake * .10;
+        vec2 uvA = vLocal * (0.030 + uWave * .010) + vec2(uTime*.030, -uTime*.024) + wakeOffset;
+        vec2 uvB = vLocal * (0.058 + uWave * .015) + vec2(-uTime*.020, uTime*.030) - wakeOffset * .7;
+        vec2 uvC = vLocal * (0.108 + uWave * .018) + vec2(uTime*.012, uTime*.018);
+        float causticTex = texture2D(uCausticTex, uvA).r * .76 + texture2D(uCausticTex, uvB).r * .42 + texture2D(uCausticTex, uvC).r * .22;
+        float largeFlow = sin((vLocal.x*.85 + vLocal.y*.43) * 3.1 + uTime*1.15) * .5 + .5;
+        float crossFlow = sin((vLocal.x*1.35 - vLocal.y*.9) * 5.4 - uTime*1.75) * .5 + .5;
+        float interference = pow(max(0.0, 1.0 - abs(largeFlow - crossFlow)*2.2), 2.4) * .24 * uInterferenceStrength;
+        float motionRing = pow(sin(motionDist * 18.0 - uTime * 6.6) * .5 + .5, 2.0) * exp(-motionDist * 1.35) * uMotionStrength;
+        float causticNet = clamp((causticTex + interference) * edge * (1.12 + uWave * 1.86) * uCausticStrength + motionRing * .34 * edge * uCausticStrength, 0.0, 3.0);
+        float crest = smoothstep(.030, .55, abs(vWaveHeight));
+        float waveSpec = crest * (.18 + uWave*.42) + causticTex * (.045 + uWave*.055);
+        float slopeShade = clamp(.5 + vWaveHeight * (1.2 + uWave*.45), 0.0, 1.0);
+        vec3 deep = max(uColor * vec3(.48,.78,1.05), uColor * 0.48);
+        vec3 mid = max(uColor * vec3(1.02,1.26,1.38), uColor * 0.88);
+        vec3 c = mix(deep, mid, clamp(.34 + largeFlow*.18 + crossFlow*.16 + causticNet*.9 + waveSpec*.7 + slopeShade*.18,0.0,1.0));
+        c = mix(c, c * vec3(.72,.84,.92), clamp((1.0-slopeShade)*.42 + crest*.12,0.0,.55));
+        vec3 causticWhite = vec3(.82, 1.0, .94);
+        c = mix(c, vec3(.82,.96,1.0), clamp(vFoam*.48 + causticNet*.22 + waveSpec*.28,0.0,.68));
+        c = mix(c, causticWhite, clamp(causticNet*.82, 0.0, .86));
+        c += causticWhite * causticNet * .42;
+        float clarity = clamp(uOpacity,0.0,1.0);
+        vec3 clearTint = mix(c, uColor * vec3(1.18,1.36,1.45), .26);
+        vec3 denseTint = mix(uColor * vec3(.38,.74,1.0), c, .52);
+        c = mix(denseTint, clearTint, clarity);
+        c += vec3(.035,.075,.095) * (1.0 - clarity);
+        c += uColor * (vEdgeMask*.16 + causticNet*.16 + .10);
+        c = max(c, uColor * .62 + vec3(.015,.04,.055));
+        float waterAlpha = clamp(.60 + clarity*.22 + causticNet*.12 + vFoam*.08, .58, .92);
+        gl_FragColor = vec4(c, waterAlpha);
+      }
+    `
+  });
+  mat.blending = THREE.NormalBlending;
+  mat.toneMapped = false;
+  mat.premultipliedAlpha = false;
+  mat.userData.waterUniforms = uniforms;
+  mat.userData.textureBackedMobileWater = true;
+  return mat;
+}
+
 function createWaterMaterial(body){
+  if(useTextureBackedMobileWater()) return createTextureBackedWaterMaterial(body);
   const water = body.water || {};
   const uniforms = {
     uTime:{value:0},
@@ -5074,7 +5479,97 @@ function createWaterMaterial(body){
   return mat;
 }
 
+function createTextureBackedWaterCausticOverlayMaterial(body){
+  const water = body.water || {};
+  const uniforms = {
+    uTime:{value:0},
+    uColor:{value:new THREE.Color(validColor(water.color)?water.color:'#4bbcff')},
+    uWave:{value:clamp(safeFinite(water.wave,.45),0,1)},
+    uCausticStrength:{value:clamp(safeFinite(water.causticStrength,1),0,3)},
+    uInterferenceStrength:{value:clamp(safeFinite(water.interferenceStrength,1),0,3)},
+    uMotionCenter:{value:new THREE.Vector2(999,999)},
+    uMotionStrength:{value:0},
+    uRippleAge:{value:99},
+    uRippleCenter:{value:new THREE.Vector2(999,999)},
+    uRippleStrength:{value:0},
+    uHalfSize:{value:new THREE.Vector2(1,1)},
+    uShape:{value:0},
+    uCausticTex:{value:createWaterCausticTexture()}
+  };
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
+    transparent:true,
+    depthWrite:false,
+    depthTest:true,
+    side:THREE.DoubleSide,
+    toneMapped:false,
+    vertexShader:`
+      varying vec2 vUv;
+      varying vec2 vLocal;
+      void main(){
+        vUv = uv;
+        vLocal = position.xy;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+      }
+    `,
+    fragmentShader:`
+      uniform sampler2D uCausticTex;
+      uniform float uTime;
+      uniform float uWave;
+      uniform float uCausticStrength;
+      uniform float uInterferenceStrength;
+      uniform float uRippleAge;
+      uniform vec2 uRippleCenter;
+      uniform float uRippleStrength;
+      uniform vec2 uMotionCenter;
+      uniform float uMotionStrength;
+      uniform vec3 uColor;
+      varying vec2 vUv;
+      varying vec2 vLocal;
+      float ripplePulse(vec2 p){
+        float age = max(0.0, uRippleAge);
+        float d = distance(p, uRippleCenter);
+        float width = 0.18 + age * 0.018;
+        float ring = (1.0 - smoothstep(0.0, width, abs(d - age * 1.15))) * exp(-age * 1.18) * uRippleStrength;
+        return clamp(ring, 0.0, 1.0);
+      }
+      void main(){
+        float edge = smoothstep(0.0,.022,vUv.x)*smoothstep(0.0,.022,vUv.y)*smoothstep(0.0,.022,1.0-vUv.x)*smoothstep(0.0,.022,1.0-vUv.y);
+        vec2 motionVec = vLocal - uMotionCenter;
+        float motionDist = length(motionVec);
+        vec2 motionDir = motionVec / max(motionDist, 0.001);
+        float wake = exp(-motionDist * 1.48) * uMotionStrength;
+        vec2 wakeOffset = motionDir * sin(motionDist * 11.5 - uTime * 6.0) * wake * .11;
+        vec2 uvA = vLocal * (0.026 + uWave * .010) + vec2(uTime*.026, -uTime*.020) + wakeOffset;
+        vec2 uvB = vLocal * (0.052 + uWave * .014) + vec2(-uTime*.017, uTime*.026) - wakeOffset * .7;
+        vec2 uvC = vLocal * (0.102 + uWave * .018) + vec2(uTime*.011, uTime*.017);
+        float net = texture2D(uCausticTex, uvA).r * .72 + texture2D(uCausticTex, uvB).r * .46 + texture2D(uCausticTex, uvC).r * .26;
+        float flow = sin((vLocal.x*1.16 + vLocal.y*.72) * 2.4 + uTime*.96) * .5 + .5;
+        float interference = pow(max(0.0, 1.0 - abs(sin(vLocal.x*3.2 + vLocal.y*1.4 + uTime*.82) - sin(vLocal.x*.9 - vLocal.y*3.8 - uTime*.67))*1.05), 2.6);
+        float ring = ripplePulse(vLocal);
+        net = clamp(net * max(0.0, uCausticStrength) + interference * .16 * uInterferenceStrength + wake * .30 + ring * .34, 0.0, 3.0);
+        float hot = smoothstep(.46, .86, net);
+        float pulse = .76 + .24 * sin(uTime*1.65 + flow*6.2831853);
+        float alpha = clamp((net*.54 + hot*.46) * pulse * (0.72 + uWave*1.08) * edge, 0.0, .94);
+        vec3 paleGreen = vec3(.58, 1.00, .88);
+        vec3 white = vec3(1.0, 1.0, .96);
+        vec3 col = mix(paleGreen, white, hot);
+        col = mix(col, max(uColor, paleGreen), .10);
+        gl_FragColor = vec4(col * (1.22 + hot*1.35 + wake*.38 + ring*.28), alpha);
+      }
+    `
+  });
+  mat.blending = THREE.AdditiveBlending;
+  mat.premultipliedAlpha = false;
+  mat.userData.waterUniforms = uniforms;
+  mat.userData.isWaterCausticOverlay = true;
+  mat.userData.preserveWaterVisibility = true;
+  mat.userData.textureBackedMobileWater = true;
+  return mat;
+}
+
 function createWaterCausticOverlayMaterial(body){
+  if(useTextureBackedMobileWater()) return createTextureBackedWaterCausticOverlayMaterial(body);
   const water = body.water || {};
   const uniforms = {
     uTime:{value:0},
@@ -5268,7 +5763,8 @@ function createRectWaterBody(body){
   const front = new THREE.Mesh(new THREE.BoxGeometry(w,h,t), mat); front.position.set(0,h/2,d/2-t/2);
   const back = new THREE.Mesh(new THREE.BoxGeometry(w,h,t), mat); back.position.set(0,h/2,-d/2+t/2);
   for(const m of [bottom,left,right,front,back]){ m.castShadow=true; m.receiveShadow=true; group.add(m); }
-  const waterGeo = new THREE.PlaneGeometry(Math.max(.05,w-t*2), Math.max(.05,d-t*2), 168, 168);
+  const waterSegments = useTextureBackedMobileWater() ? 72 : 168;
+  const waterGeo = new THREE.PlaneGeometry(Math.max(.05,w-t*2), Math.max(.05,d-t*2), waterSegments, waterSegments);
   const waterMat = createWaterMaterial(body);
   const waterMesh = new THREE.Mesh(waterGeo, waterMat);
   waterMesh.rotation.x = -Math.PI/2;
@@ -5276,39 +5772,41 @@ function createRectWaterBody(body){
   waterMesh.renderOrder = 19;
   waterMesh.userData.isWaterSurface = true;
   group.add(waterMesh);
-  const causticMat = createWaterCausticOverlayMaterial(body);
-  const causticMesh = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(.05,w-t*2), Math.max(.05,d-t*2), 2, 2), causticMat);
-  causticMesh.rotation.x = -Math.PI/2;
-  causticMesh.position.y = waterMesh.position.y + .014;
-  causticMesh.renderOrder = 26;
-  causticMesh.userData.isWaterCausticOverlay = true;
-  group.add(causticMesh);
-  const basePlateMat = new THREE.MeshBasicMaterial({
-    color:validColor(body.water?.color) ? body.water.color : '#4bbcff',
-    transparent:true,
-    opacity:clamp(.58 - clamp(safeFinite(body.water?.opacity,.55),.05,.95)*.18, .40, .58),
-    depthWrite:false,
-    depthTest:true,
-    side:THREE.DoubleSide,
-    toneMapped:false
-  });
-  basePlateMat.userData.preserveWaterVisibility = true;
-  const basePlate = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(.05,w-t*2), Math.max(.05,d-t*2), 8, 8), basePlateMat);
-  basePlate.rotation.x = -Math.PI/2;
-  basePlate.position.y = waterMesh.position.y - .006;
-  basePlate.renderOrder = 18;
-  basePlate.userData.isWaterColorBase = true;
-  group.add(basePlate);
-  const fillH = Math.max(.018, waterMesh.position.y - t*.60);
-  if(fillH > .018){
-    const fill = new THREE.Mesh(new THREE.BoxGeometry(Math.max(.05,w-t*2), fillH, Math.max(.05,d-t*2)), createWaterTintVolumeMaterial(body));
-    fill.position.y = t*.52 + fillH/2;
-    fill.renderOrder = 17;
-    fill.userData.isWaterVolumeFill = true;
-    group.add(fill);
-  }
   waterRuntime.materials.set(body.id, waterMat);
-  waterRuntime.materials.set(`${body.id}:caustic`, causticMat);
+  if(!useTextureBackedMobileWater()){
+    const causticMat = createWaterCausticOverlayMaterial(body);
+    const causticMesh = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(.05,w-t*2), Math.max(.05,d-t*2), 2, 2), causticMat);
+    causticMesh.rotation.x = -Math.PI/2;
+    causticMesh.position.y = waterMesh.position.y + .014;
+    causticMesh.renderOrder = 26;
+    causticMesh.userData.isWaterCausticOverlay = true;
+    group.add(causticMesh);
+    const basePlateMat = new THREE.MeshBasicMaterial({
+      color:validColor(body.water?.color) ? body.water.color : '#4bbcff',
+      transparent:true,
+      opacity:clamp(.58 - clamp(safeFinite(body.water?.opacity,.55),.05,.95)*.18, .40, .58),
+      depthWrite:false,
+      depthTest:true,
+      side:THREE.DoubleSide,
+      toneMapped:false
+    });
+    basePlateMat.userData.preserveWaterVisibility = true;
+    const basePlate = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(.05,w-t*2), Math.max(.05,d-t*2), 8, 8), basePlateMat);
+    basePlate.rotation.x = -Math.PI/2;
+    basePlate.position.y = waterMesh.position.y - .006;
+    basePlate.renderOrder = 18;
+    basePlate.userData.isWaterColorBase = true;
+    group.add(basePlate);
+    const fillH = Math.max(.018, waterMesh.position.y - t*.60);
+    if(fillH > .018){
+      const fill = new THREE.Mesh(new THREE.BoxGeometry(Math.max(.05,w-t*2), fillH, Math.max(.05,d-t*2)), createWaterTintVolumeMaterial(body));
+      fill.position.y = t*.52 + fillH/2;
+      fill.renderOrder = 17;
+      fill.userData.isWaterVolumeFill = true;
+      group.add(fill);
+    }
+    waterRuntime.materials.set(`${body.id}:caustic`, causticMat);
+  }
   return group;
 }
 
@@ -5329,7 +5827,9 @@ function createRoundWaterBody(body){
   bottom.scale.x = w/(2*r);
   bottom.scale.z = d/(2*r);
   for(const m of [side,bottom]){ m.castShadow=true; m.receiveShadow=true; group.add(m); }
-  const waterGeo = createWaterDiskGeometry(Math.max(.05,r-t), 88, 192);
+  const waterGeo = useTextureBackedMobileWater()
+    ? createWaterDiskGeometry(Math.max(.05,r-t), 44, 96)
+    : createWaterDiskGeometry(Math.max(.05,r-t), 88, 192);
   const waterMat = createWaterMaterial(body);
   const waterMesh = new THREE.Mesh(waterGeo, waterMat);
   waterMesh.rotation.x = -Math.PI/2;
@@ -5339,45 +5839,47 @@ function createRoundWaterBody(body){
   waterMesh.renderOrder = 19;
   waterMesh.userData.isWaterSurface = true;
   group.add(waterMesh);
-  const causticMat = createWaterCausticOverlayMaterial(body);
-  const causticMesh = new THREE.Mesh(new THREE.CircleGeometry(Math.max(.05,r-t), 96), causticMat);
-  causticMesh.rotation.x = -Math.PI/2;
-  causticMesh.scale.x = (w-t*2)/(2*Math.max(.05,r-t));
-  causticMesh.scale.y = (d-t*2)/(2*Math.max(.05,r-t));
-  causticMesh.position.y = waterMesh.position.y + .014;
-  causticMesh.renderOrder = 26;
-  causticMesh.userData.isWaterCausticOverlay = true;
-  group.add(causticMesh);
-  const basePlateMat = new THREE.MeshBasicMaterial({
-    color:validColor(body.water?.color) ? body.water.color : '#4bbcff',
-    transparent:true,
-    opacity:clamp(.58 - clamp(safeFinite(body.water?.opacity,.55),.05,.95)*.18, .40, .58),
-    depthWrite:false,
-    depthTest:true,
-    side:THREE.DoubleSide,
-    toneMapped:false
-  });
-  basePlateMat.userData.preserveWaterVisibility = true;
-  const basePlate = new THREE.Mesh(new THREE.CircleGeometry(Math.max(.05,r-t),96), basePlateMat);
-  basePlate.rotation.x = -Math.PI/2;
-  basePlate.scale.x = (w-t*2)/(2*Math.max(.05,r-t));
-  basePlate.scale.y = (d-t*2)/(2*Math.max(.05,r-t));
-  basePlate.position.y = waterMesh.position.y - .006;
-  basePlate.renderOrder = 18;
-  basePlate.userData.isWaterColorBase = true;
-  group.add(basePlate);
-  const fillH = Math.max(.018, waterMesh.position.y - t*.60);
-  if(fillH > .018){
-    const fill = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(.05,r-t), Math.max(.05,r-t), fillH, 64, 1, false), createWaterTintVolumeMaterial(body));
-    fill.position.y = t*.52 + fillH/2;
-    fill.scale.x = (w-t*2)/(2*Math.max(.05,r-t));
-    fill.scale.z = (d-t*2)/(2*Math.max(.05,r-t));
-    fill.renderOrder = 17;
-    fill.userData.isWaterVolumeFill = true;
-    group.add(fill);
-  }
   waterRuntime.materials.set(body.id, waterMat);
-  waterRuntime.materials.set(`${body.id}:caustic`, causticMat);
+  if(!useTextureBackedMobileWater()){
+    const causticMat = createWaterCausticOverlayMaterial(body);
+    const causticMesh = new THREE.Mesh(new THREE.CircleGeometry(Math.max(.05,r-t), 96), causticMat);
+    causticMesh.rotation.x = -Math.PI/2;
+    causticMesh.scale.x = (w-t*2)/(2*Math.max(.05,r-t));
+    causticMesh.scale.y = (d-t*2)/(2*Math.max(.05,r-t));
+    causticMesh.position.y = waterMesh.position.y + .014;
+    causticMesh.renderOrder = 26;
+    causticMesh.userData.isWaterCausticOverlay = true;
+    group.add(causticMesh);
+    const basePlateMat = new THREE.MeshBasicMaterial({
+      color:validColor(body.water?.color) ? body.water.color : '#4bbcff',
+      transparent:true,
+      opacity:clamp(.58 - clamp(safeFinite(body.water?.opacity,.55),.05,.95)*.18, .40, .58),
+      depthWrite:false,
+      depthTest:true,
+      side:THREE.DoubleSide,
+      toneMapped:false
+    });
+    basePlateMat.userData.preserveWaterVisibility = true;
+    const basePlate = new THREE.Mesh(new THREE.CircleGeometry(Math.max(.05,r-t),96), basePlateMat);
+    basePlate.rotation.x = -Math.PI/2;
+    basePlate.scale.x = (w-t*2)/(2*Math.max(.05,r-t));
+    basePlate.scale.y = (d-t*2)/(2*Math.max(.05,r-t));
+    basePlate.position.y = waterMesh.position.y - .006;
+    basePlate.renderOrder = 18;
+    basePlate.userData.isWaterColorBase = true;
+    group.add(basePlate);
+    const fillH = Math.max(.018, waterMesh.position.y - t*.60);
+    if(fillH > .018){
+      const fill = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(.05,r-t), Math.max(.05,r-t), fillH, 64, 1, false), createWaterTintVolumeMaterial(body));
+      fill.position.y = t*.52 + fillH/2;
+      fill.scale.x = (w-t*2)/(2*Math.max(.05,r-t));
+      fill.scale.z = (d-t*2)/(2*Math.max(.05,r-t));
+      fill.renderOrder = 17;
+      fill.userData.isWaterVolumeFill = true;
+      group.add(fill);
+    }
+    waterRuntime.materials.set(`${body.id}:caustic`, causticMat);
+  }
   return group;
 }
 
@@ -6250,7 +6752,8 @@ function applyUnlitMaterialsToArtworkModel(root){
     obj.material = Array.isArray(obj.material) ? mats.map(makeUnlitArtworkMaterial) : makeUnlitArtworkMaterial(mats[0]);
     obj.castShadow = true;
     obj.receiveShadow = true;
-    obj.frustumCulled = false;
+    obj.geometry?.computeBoundingSphere?.();
+    obj.frustumCulled = true;
     obj.userData.galleryLitArtwork = true;
   });
 }
@@ -6288,9 +6791,9 @@ function loadArtworkModel(art, group){
     setStatus(`3D 作品載入失敗：${art.title}`);
   };
   if(format === 'fbx'){
-    new FBXLoader().load(versionedAssetUrl(art.src), fbx=>onLoaded(fbx), undefined, onError);
+    new FBXLoader().load(versionedAssetUrl(runtimeGalleryAssetUrl(art.src)), fbx=>onLoaded(fbx), undefined, onError);
   }else{
-    new GLTFLoader().load(versionedAssetUrl(art.src), gltf=>onLoaded(gltf.scene || gltf.scenes?.[0]), undefined, onError);
+    new GLTFLoader().load(versionedAssetUrl(runtimeGalleryAssetUrl(art.src)), gltf=>onLoaded(gltf.scene || gltf.scenes?.[0]), undefined, onError);
   }
 }
 
@@ -6857,9 +7360,31 @@ function createProxyActor(){
   return g;
 }
 
+function createMobilePlayerVisibilityShell(){
+  if(!(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) || playerVisibilityShell || !playerGroup) return;
+  const mat = new THREE.MeshBasicMaterial({
+    color:0x244b49,
+    transparent:true,
+    opacity:.14,
+    depthTest:false,
+    depthWrite:false,
+    side:THREE.DoubleSide,
+    toneMapped:false,
+    fog:false
+  });
+  const shell = new THREE.Mesh(new THREE.CapsuleGeometry(.24,.78,6,12), mat);
+  shell.name = 'mobile-player-visibility-shell';
+  shell.renderOrder = 43;
+  shell.scale.set(1.02,1.02,1.02);
+  playerVisibilityShell = shell;
+  playerGroup.add(shell);
+  applyActorSettings();
+}
+
 function loadActor(){
   actorProxy = createProxyActor();
   playerGroup.add(actorProxy);
+  createMobilePlayerVisibilityShell();
   const loader = new FBXLoader();
   loader.load(versionedAssetUrl(ASSET.actorIdle), model=>{
     actorModel = model;
@@ -6896,7 +7421,8 @@ function normaliseActorModel(model, targetHeight){
 
 function applyActorSettings(){
   const cfg = STATE.player || {modelYOffset:-0.42, modelYawOffset:180, speed:4.2};
-  const yOff = clamp(safeFinite(cfg.modelYOffset,-0.42), -1.2, .8);
+  const mobileVisibilityLift = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE ? .46 : 0;
+  const yOff = clamp(safeFinite(cfg.modelYOffset,-0.42) + mobileVisibilityLift, -1.2, .8);
   const yawOff = clamp(safeFinite(cfg.modelYawOffset,180), -180, 180);
   if(actorModel){
     actorModel.position.set(
@@ -6907,6 +7433,7 @@ function applyActorSettings(){
     actorModel.rotation.y = deg(yawOff);
   }
   if(actorProxy) actorProxy.position.y = yOff;
+  if(playerVisibilityShell) playerVisibilityShell.position.y = yOff + .92;
 }
 
 function ensureProjectedUV(geometry){
@@ -6958,11 +7485,16 @@ function repairActorMaterials(model){
     child.castShadow = true;
     child.receiveShadow = false;
     child.frustumCulled = false;
+    const mobileViewer = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE;
+    child.renderOrder = mobileViewer ? 44 : 36;
     const mat = new THREE.MeshBasicMaterial({
       map:actorTexture,
-      color:0xffffff,
+      color:mobileViewer ? 0xffe0cf : 0xffffff,
       side:THREE.DoubleSide,
       toneMapped:false,
+      fog:false,
+      depthTest:!mobileViewer,
+      depthWrite:!mobileViewer,
       alphaTest:.001
     });
     mat.needsUpdate = true;
@@ -7148,6 +7680,9 @@ function setupMobileControls(){
   let moveTouchId = null;
   let lastMoveTouchAt = 0;
   const eventNow = ()=> (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  const preventDefaultIfCancelable = ev=>{
+    if(ev?.cancelable !== false) ev?.preventDefault?.();
+  };
   const findTouchById = (list, id)=>{
     if(id === null || id === undefined || !list) return null;
     for(let i=0; i<list.length; i++){
@@ -7189,31 +7724,31 @@ function setupMobileControls(){
     const pid = movePointerId;
     resetMove();
     try{ if(pid !== null) pad.releasePointerCapture?.(pid); }catch{}
-    ev?.preventDefault?.();
+    preventDefaultIfCancelable(ev);
     ev?.stopPropagation?.();
   };
   pad.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     const t = touchFromEvent(ev);
     if(!t) return;
-    ev.preventDefault(); ev.stopPropagation();
+    preventDefaultIfCancelable(ev); ev.stopPropagation();
     lastMoveTouchAt = eventNow();
     moveTouchId = t.identifier;
     movePointerId = null;
     centerPadAt(t.clientX, t.clientY);
   }, {passive:false});
   pad.addEventListener('touchmove', ev=>{
-    if(!galleryInputReady()){ resetMove(); ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ resetMove(); preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(moveTouchId === null) return;
     const t = touchFromEvent(ev, moveTouchId);
     if(!t) return;
-    ev.preventDefault(); ev.stopPropagation();
+    preventDefaultIfCancelable(ev); ev.stopPropagation();
     centerPadAt(t.clientX, t.clientY);
   }, {passive:false});
   const stopTouchMove = ev=>{
     if(moveTouchId === null) return;
     if(ev?.touches?.length && !findTouchById(ev.changedTouches, moveTouchId)) return;
-    ev.preventDefault(); ev.stopPropagation();
+    preventDefaultIfCancelable(ev); ev.stopPropagation();
     resetMove();
   };
   pad.addEventListener('touchend', stopTouchMove, {passive:false});
@@ -7221,7 +7756,7 @@ function setupMobileControls(){
   const stopTouchMoveIfReleased = ev=>{
     if(moveTouchId === null) return;
     if(findTouchById(ev?.touches, moveTouchId)) return;
-    ev?.preventDefault?.();
+    preventDefaultIfCancelable(ev);
     resetMove();
   };
   document.addEventListener('touchend', stopTouchMoveIfReleased, {passive:false});
@@ -7250,10 +7785,10 @@ function setupMobileControls(){
   document.addEventListener('pointercancel', stopPointerMoveIfReleased, {passive:false});
   let lastJumpTouchAt = 0;
   jumpBtn.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     const t = touchFromEvent(ev);
     if(!t) return;
-    ev.preventDefault(); ev.stopPropagation();
+    preventDefaultIfCancelable(ev); ev.stopPropagation();
     lastJumpTouchAt = eventNow();
     jump();
   }, {passive:false});
@@ -7267,21 +7802,21 @@ function setupMobileControls(){
   let lastTouchEndAt = 0;
   document.addEventListener('touchend', ev=>{
     const now = Date.now();
-    if(ev.touches.length === 0 && now - lastTouchEndAt < 320) ev.preventDefault();
+    if(ev.touches.length === 0 && now - lastTouchEndAt < 320) preventDefaultIfCancelable(ev);
     lastTouchEndAt = now;
   }, {passive:false});
 
   let pinchDistance = 0;
   canvas.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(ev.touches.length === 2 && !touchesIncludeMobileControls(ev.touches)){
       const a = ev.touches[0], b = ev.touches[1];
       pinchDistance = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-      ev.preventDefault();
+      preventDefaultIfCancelable(ev);
     }
   }, {passive:false});
   canvas.addEventListener('touchmove', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(ev.touches.length === 2 && !touchesIncludeMobileControls(ev.touches)){
       const a = ev.touches[0], b = ev.touches[1];
       const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
@@ -7289,7 +7824,7 @@ function setupMobileControls(){
         zoomCamera((pinchDistance - d) * 1.35);
       }
       pinchDistance = d;
-      ev.preventDefault();
+      preventDefaultIfCancelable(ev);
     }
   }, {passive:false});
   canvas.addEventListener('touchend', ev=>{ if(ev.touches.length < 2) pinchDistance = 0; }, {passive:false});
@@ -7303,7 +7838,7 @@ function setupMobileControls(){
   let lookTouchLastX = 0;
   let lookTouchLastY = 0;
   document.addEventListener('touchstart', ev=>{
-    if(!galleryInputReady()){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(!allowTouchLook() || isInsideMobileControls(ev.target)) return;
     if(ev.touches.length > 1 && !touchesIncludeMobileControls(ev.touches)) return;
     if(lookTouchId !== null) return;
@@ -7313,11 +7848,11 @@ function setupMobileControls(){
     lookTouchId = t.identifier;
     lookTouchLastX = t.clientX;
     lookTouchLastY = t.clientY;
-    ev.preventDefault();
+    preventDefaultIfCancelable(ev);
     ev.stopPropagation();
   }, {passive:false});
   document.addEventListener('touchmove', ev=>{
-    if(!galleryInputReady()){ lookTouchId = null; ev.preventDefault(); ev.stopPropagation(); return; }
+    if(!galleryInputReady()){ lookTouchId = null; preventDefaultIfCancelable(ev); ev.stopPropagation(); return; }
     if(lookTouchId === null) return;
     if(ev.touches.length > 1 && !touchesIncludeMobileControls(ev.touches)){
       lookTouchId = null;
@@ -7325,7 +7860,7 @@ function setupMobileControls(){
     }
     const t = findTouchById(ev.touches, lookTouchId);
     if(!t) return;
-    ev.preventDefault();
+    preventDefaultIfCancelable(ev);
     ev.stopPropagation();
     const dx = t.clientX - lookTouchLastX;
     const dy = t.clientY - lookTouchLastY;
@@ -8985,10 +9520,8 @@ function clearChiselHolesForCurrentTarget(){
 }
 
 function resetPlayer(){
-  player.position.set(0,0,5.8);
-  playerVelocityY = 0;
-  camYaw = 0;
-  playerYaw = 0;
+  applyDefaultPlayerSpawnPose();
+  playerGroup?.position.copy(player.position);
 }
 
 function getPlayerJumpPower(){
@@ -9588,6 +10121,35 @@ function setCameraViewPreset(mode){
   setStatus(`視角模式：${label}。滾輪可調整與主角距離。`);
 }
 
+function cameraCollisionMeshes(){
+  const meshes = [];
+  for(const item of getCollisionWallMeshes()){
+    if(item?.mesh?.isObject3D && item.mesh.visible !== false) meshes.push(item.mesh);
+  }
+  for(const item of getCollisionWaterContainers()){
+    const bodyMesh = item?.body?.id ? waterBodyMeshes[item.body.id] : null;
+    if(bodyMesh?.isObject3D && bodyMesh.visible !== false) meshes.push(bodyMesh);
+  }
+  return meshes;
+}
+
+function resolveCameraObstruction(target, desired){
+  const offset = desired.clone().sub(target);
+  const distance = offset.length();
+  if(distance < .05) return desired;
+  const meshes = cameraCollisionMeshes();
+  if(!meshes.length) return desired;
+  const origin = target.clone().addScaledVector(offset, .08 / distance);
+  const direction = offset.normalize();
+  const raycaster = new THREE.Raycaster(origin, direction, 0, Math.max(.1, distance - .12));
+  const hits = raycaster.intersectObjects(meshes, true)
+    .filter(hit=>hit.distance > .05 && !hit.object?.userData?.isWaterSurface);
+  if(!hits.length) return desired;
+  const hit = hits[0];
+  const safeDistance = clamp(hit.distance - .28, .7, distance);
+  return origin.clone().addScaledVector(direction, safeDistance);
+}
+
 function updateCamera(){
   const bodyTarget = player.position.clone().add(new THREE.Vector3(0,1.34,0));
   const forward = getCameraForward();
@@ -9602,7 +10164,7 @@ function updateCamera(){
     const camPos = bodyTarget.clone()
       .addScaledVector(backward, horizontal)
       .add(new THREE.Vector3(0, height, 0));
-    camera.position.lerp(camPos, .32);
+    camera.position.lerp(resolveCameraObstruction(bodyTarget, camPos), .32);
     camera.lookAt(bodyTarget);
     return;
   }
@@ -9610,11 +10172,11 @@ function updateCamera(){
   // 越肩位置只做固定肩位與 zoom 距離；滑鼠上下控制的是 lookAt 的仰角。
   const camPos = bodyTarget.clone()
     .addScaledVector(backward, cameraDistance)
-    .addScaledVector(right,.62)
+    .addScaledVector(right,(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) ? -1.25 : .62)
     .add(new THREE.Vector3(0,.62,0));
-  camera.position.lerp(camPos,.32);
+  camera.position.lerp(resolveCameraObstruction(bodyTarget, camPos),.32);
 
-  const aimDistance = 8.5;
+  const aimDistance = (EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE) ? 3.8 : 8.5;
   const lookTarget = bodyTarget.clone()
     .addScaledVector(forward, aimDistance)
     .add(new THREE.Vector3(0, Math.tan(camPitch) * aimDistance, 0));
@@ -10993,21 +11555,35 @@ function updateWallFromEditor(){
 function animate(){
   requestAnimationFrame(animate);
   if(webglContextLost) return;
-  const dt = Math.min(clock.getDelta(),.033);
-  updatePlayer(dt);
+  const rawDt = Math.min(clock.getDelta(), IS_TOUCH_DEVICE ? .5 : .18);
+  const visualDt = Math.min(rawDt,.033);
+  if(EXPORTED_GALLERY_VIEWER && !galleryLoading.released){
+    return;
+  }
+  if(!galleryPerfOverrides.skipPlayer){
+    let remainingPlayerDt = rawDt;
+    let playerSteps = 0;
+    const maxPlayerSteps = IS_TOUCH_DEVICE ? 16 : 6;
+    while(remainingPlayerDt > 0.0001 && playerSteps < maxPlayerSteps){
+      const stepDt = Math.min(remainingPlayerDt, .033);
+      updatePlayer(stepDt);
+      remainingPlayerDt -= stepDt;
+      playerSteps++;
+    }
+  }
   updatePendingWallPlacement();
   updatePendingArtworkPlacement();
   updatePendingFloorTilePlacement();
   updatePendingWaterBodyPlacement();
   updateCamera();
   if(skyMesh) skyMesh.position.copy(camera.position);
-  updateAtmosphereEffect(dt);
-  updateWaterEffects(dt);
-  updateScreenFxEffect(dt);
+  updateAtmosphereEffect(visualDt);
+  updateWaterEffects(visualDt);
+  updateScreenFxEffect(visualDt);
   updateChiselPreview();
-  if(mixer) mixer.update(dt);
-  applySwimArmMotion(dt);
-  renderSceneWithScreenFx();
+  if(mixer) mixer.update(visualDt);
+  applySwimArmMotion(visualDt);
+  if(!galleryPerfOverrides.skipRender) renderSceneWithScreenFx();
 }
 
 function onResize(){
@@ -11209,11 +11785,26 @@ function countVisibleShadowLights(){
   return count;
 }
 
+function geometryTriangleCount(geometry){
+  if(!geometry) return 0;
+  return geometry.index
+    ? Math.floor(geometry.index.count / 3)
+    : Math.floor((geometry.attributes?.position?.count || 0) / 3);
+}
+
 function forceUpdateShadowMapsForLightingBake(){
   if(!renderer || !scene || !camera) return;
   const prevEnabled = !!renderer.shadowMap.enabled;
   const prevAutoUpdate = renderer.shadowMap.autoUpdate !== false;
   const previousShadowStates = new Map();
+  const mutedShadowCasters = [];
+  if(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE){
+    scene.traverse?.(obj=>{
+      if(!obj?.isMesh || !obj.castShadow || geometryTriangleCount(obj.geometry) < 180000) return;
+      mutedShadowCasters.push(obj);
+      obj.castShadow = false;
+    });
+  }
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.autoUpdate = true;
   renderer.shadowMap.needsUpdate = true;
@@ -11231,6 +11822,7 @@ function forceUpdateShadowMapsForLightingBake(){
     if(light.target) light.target.updateMatrixWorld(true);
   }
   renderer.render(scene, camera);
+  for(const obj of mutedShadowCasters) obj.castShadow = true;
   for(const [light, state] of previousShadowStates.entries()){
     if(!light?.shadow) continue;
     if('autoUpdate' in light.shadow) light.shadow.autoUpdate = state.autoUpdate;
