@@ -18,6 +18,72 @@ Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement conf
 TODO:
 - None.
 
+## 2026-06-04 handoff update after forced-entry fix
+
+Latest user complaint:
+- The user still saw the wrong white/tall artwork in the scene and reported that mobile camera distance, horizontal look direction, and player centering were still wrong.
+- The user was not asking about browser cache; do not answer by blaming cache.
+
+Root cause found:
+- The deployed project has more than one reachable HTML entry.
+- Previous fixes were mostly in `index.html`.
+- The tracked file `光照烘焙_輸出純遊玩模式_手機優化修正版.html` is also served by GitHub Pages and did not contain the latest artwork/mobile-control fixes.
+- That large Chinese HTML has `EXPORTED_STATE = null` and loads scene state from IndexedDB key `state.v12.referenceArchitectureReliefGapPerformanceFixed`, so old local scene data can still contain `1-processed` / `asset_0014.png`.
+- `galleryOUTPUT.html` exists locally but is ignored by Git and is not the pushed GitHub Pages source.
+
+Latest commit pushed:
+- `4e48524 Fix mobile gallery controls and forced artwork swap`
+- Pushed to `origin/main`.
+
+Files changed in latest commit:
+- `index.html`
+- `光照烘焙_輸出純遊玩模式_手機優化修正版.html`
+
+What was implemented:
+- Added `applyRequiredArtworkCorrections(state)` to both HTML entries.
+- The correction runs after state load, not only in exported viewer mode.
+- It removes any artwork matching:
+  - title `1-processed`
+  - `assets/asset_0014.png`
+  - `assets/1-processed.png`
+- It finds replacement artwork matching:
+  - title `2-processed`
+  - `assets/asset_0011.png`
+  - `assets/2-processed.png`
+- If both exist, it copies the removed artwork's placement fields onto the replacement:
+  - `wall`, `offset`, `y`, `gap`, `position`, `rotation`, `manualRotation`, `snapToWall`
+- Verified target placement is `position: {x:-8.14, y:3, z:-4.46}` and `rotation.y:-361.706...`.
+- Mobile default camera distance is now `12`, including the non-exported Chinese entry.
+- Mobile shoulder offset is `0`, camera height offset is `.82`, and follow lerp is faster on touch devices.
+- Mobile obstruction fade was added to the Chinese entry as a temporary material clone on blocking room/reference/custom-wall meshes only.
+- Mobile input in the Chinese entry was upgraded:
+  - separate `mobileMoveKeys` from keyboard `keys`;
+  - joystick touch/pointer handling no longer interferes with camera look;
+  - single-finger look uses `applyTouchCameraLookDelta(dx, dy)` so horizontal direction matches the user request;
+  - pinch zoom uses `zoomCameraByScale(d / pinchDistance)`;
+  - joystick reset also listens on document/window touch end/cancel/blur.
+- Added `window.__galleryDebugState()` and `window.render_game_to_text()` to the Chinese entry for future browser-state debugging.
+
+Verification performed locally:
+- Started local server at `http://127.0.0.1:8097/`, then stopped it.
+- JS syntax check passed for:
+  - `index.html`
+  - `光照烘焙_輸出純遊玩模式_手機優化修正版.html`
+- Browser/CDP checks with mobile emulation:
+  - `index.html`: `removedCount: 0`, replacement `2-processed` at `(-8.14, 3, -4.46)`, `cameraDistance: 12`, actor FBX loaded.
+  - Chinese entry with manually injected old IndexedDB state: `removedCount: 0`, replacement `2-processed` at `(-8.14, 3, -4.46)`, `cameraDistance: 12`, `yawDelta: +0.306` after rightward touch drag.
+  - Chinese entry joystick test: pushing up set `effectiveMove.forward = 1`, `mobileMoveKeys.w = true`, and moved player `z` from `5.8` to `5.400832`.
+
+Known notes for the next AI:
+- Do not edit `galleryOUTPUT.html` expecting it to deploy; it is ignored and over 100 MB.
+- If the user reports the same wrong artwork again, inspect which URL they opened first. The Chinese HTML and `index.html` both now include forced correction, but GitHub Pages propagation may take a short time after push.
+- Be careful with `rg` on `index.html`; it contains a huge inline exported state and can flood the terminal.
+- The latest fix deliberately does not reduce visual quality: no texture downscaling, no wall relief removal, no lighting downgrade.
+- There are many existing Chrome processes on the machine; if Playwright becomes slow, use a fresh browser context and avoid waiting on heavy full asset loading unless the check needs it.
+
+Current TODO:
+- None known after commit `4e48524`.
+
 ## 2026-06-04 revert and mobile-control fix
 
 - Reverted commit `1e79ce8` because it changed the visual feel of the gallery and made parts of the architecture look transparent.
