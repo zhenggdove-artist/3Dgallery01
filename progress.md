@@ -215,3 +215,29 @@ Verification so far:
 
 Current TODO:
 - None after this change is pushed to `origin/main`.
+
+## 2026-06-05 water-walk audio debug and background music
+
+Current user request:
+- Debug the broken player walking-in-water sound. It was continuing to play automatically instead of following user movement.
+- Add looping background music from `sound/backgroundmusic.MP3`.
+
+Diagnosis:
+- Reproduced the audio state-machine bug with a small Node harness: repeated `updateWaterWalkSound(false)` calls created a new fade timer every frame.
+- Root cause: the previous fade guard allowed inactive-but-currently-fading water-walk audio to call `fadeOutRuntimeSound('waterWalk')` again, clearing and restarting the fade before it could finish.
+
+Changes made:
+- `updateWaterWalkSound(false)` now starts fade-out only on the active-to-inactive transition; later inactive frames return immediately and let the existing fade complete.
+- Added `backgroundMusic` to `SOUND_ASSET`, preloads it as a looping runtime audio node, skips muted one-shot priming for that node, and starts it after audio unlock.
+- Background music uses `BACKGROUND_MUSIC_VOLUME = .28` and does not participate in `stopRuntimeSounds()`, which remains scoped to the water-walk loop.
+
+Verification so far:
+- Bug harness before the fix produced `intervalsStarted=13`; fixed harness produced `intervalsStarted=1`.
+- Extracted `index.html` module script, removed import lines, and parsed it with Node `new Function(...)`: passed.
+- Local HTTP `HEAD` checks for all five runtime sound files returned `200`, including `backgroundmusic.MP3`.
+- Static JS checks passed for background-music asset wiring, loop-node creation, skip-priming behavior, start-after-unlock behavior, and the fixed water-walk fade guard.
+- Static Playwright screenshot with JavaScript disabled saved to `output/audio-debug-static-loading.png` and visually inspected: loading still shows only `0%` plus `Loading asset 0 of 1.`.
+- The required `develop-web-game` Playwright client was attempted again with a two-frame no-input payload, but this large WebGL page still timed out under headless SwiftShader; no committed code was changed to work around that test limitation.
+
+Current TODO:
+- None after this change is pushed to `origin/main`.
