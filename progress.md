@@ -216,6 +216,43 @@ Verification so far:
 Current TODO:
 - None after this change is pushed to `origin/main`.
 
+## 2026-06-05 artwork water impact splash upgrade
+
+Current user request:
+- Artwork/item water impact splash is still too small, too sparse, and not detailed/realistic enough.
+- Splash particle count must be at least 10 times the current amount.
+- Splash height must be higher.
+- Item water impact must create water ripples like player water movement, with more/larger ripple layers.
+- Push the result to GitHub Pages.
+
+Diagnosis:
+- `WATER_IMPACT_RESPONSE_SCALE = 4` increased impact strength, but `spawnWaterSplash()` still clamped particle count to a maximum of 86 because it used `clamp(splash,0,1)`.
+- The global water particle pool limit was 560, so even if more particles were requested they would be trimmed away.
+- Item impact already touched `uRippleCenter` and `uMotionCenter`, but `uRippleStrength` and `uMotionStrength` were capped too low for a heavy dropped artwork impact, and only one foam ring was spawned.
+
+Changes made:
+- Added artwork-impact-only constants:
+  - `ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER = 10`
+  - `ARTWORK_WATER_IMPACT_PARTICLE_LIMIT = 1800`
+  - height, outward, ring-layer, and ring-scale multipliers.
+- `spawnWaterSplash()` now accepts options for particle multiplier, pool limit, height multiplier, outward multiplier, particle lifetime, and multi-layer foam rings.
+- Artwork water impacts now spawn 5 expanding foam/ripple rings plus 3 delayed aftershock ripple rings.
+- Artwork water impacts now raise shader ripple cap to `4.8` and motion/wake cap to `5.2`, so the water surface and caustic/motion reaction are much larger.
+- Droplets now include vertical plume particles, crown-splash particles, and smaller mist particles for a denser, more detailed impact.
+- Player water movement still uses the old/default splash path; only artwork/item impact receives the heavy settings.
+
+Verification so far:
+- Extracted `index.html` module script, removed import lines, and parsed it with Node `new Function(...)`: passed.
+- `git diff --check`: passed.
+- Static math check confirmed the old capped count was 86 and the new artwork-impact count is 860, exactly 10x.
+- Static math check confirmed the high plume upward velocity ceiling is substantially higher than the previous path.
+- Local HTTP `HEAD` for `index.html` returned `200`.
+- Static Playwright screenshot with JavaScript disabled saved to `output/artwork-water-impact-static-loading.png` and visually inspected: loading still shows only `0%` plus `Loading asset 0 of 1.`.
+- The required `develop-web-game` Playwright client was attempted with the standard short action payload, but the large WebGL page still timed out under headless SwiftShader; residual headless processes were cleaned up.
+
+Current TODO:
+- None after this change is pushed to `origin/main`.
+
 ## 2026-06-05 restore to 06e4e46, smoke off, mobile audio gate, and held model rotation
 
 Current user request:

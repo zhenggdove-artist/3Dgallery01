@@ -247,6 +247,12 @@ const TOUCH_PLAYER_SPEED_SCALE = 0.8;
 const DESKTOP_PLAYER_SPEED_SCALE = 0.6;
 const PLAYER_SPEED_SCALE = IS_TOUCH_DEVICE ? TOUCH_PLAYER_SPEED_SCALE : DESKTOP_PLAYER_SPEED_SCALE;
 const WATER_IMPACT_RESPONSE_SCALE = 4;
+const ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER = 10;
+const ARTWORK_WATER_IMPACT_PARTICLE_LIMIT = 1800;
+const ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER = 2.25;
+const ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER = 1.65;
+const ARTWORK_WATER_IMPACT_RIPPLE_LAYERS = 5;
+const ARTWORK_WATER_IMPACT_RING_SCALE_MULTIPLIER = 2.35;
 const WATER_WALK_VOLUME = .42;
 const WATER_WALK_FADE_MS = 520;
 const BACKGROUND_MUSIC_VOLUME = .28;
@@ -6295,47 +6301,108 @@ function waterRippleLocalPoint(body, world){
   return new THREE.Vector2(p.x, -p.z);
 }
 
-function spawnWaterFoamRing(pos, body, strength=1){
+function disposeWaterParticle(p){
+  p?.mesh?.parent?.remove(p.mesh);
+  p?.mesh?.material?.dispose?.();
+}
+
+function pushWaterParticle(particle, limit=560){
+  const max = Math.max(80, Math.round(safeFinite(limit,560)));
+  while(waterRuntime.particles.length >= max){
+    disposeWaterParticle(waterRuntime.particles.shift());
+  }
+  waterRuntime.particles.push(particle);
+}
+
+function spawnWaterFoamRing(pos, body, strength=1, options={}){
   const splash = clamp(safeFinite(body.water?.splash,.85),0,1) * strength;
   if(splash <= .02) return;
+  const opts = options && typeof options === 'object' ? options : {};
   if(!sharedSplashRingGeometry) sharedSplashRingGeometry = new THREE.RingGeometry(.16,.22,40);
   const color = validColor(body.water?.color) ? body.water.color : '#4bbcff';
-  const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:clamp(.28 + splash*.18,.18,.55), depthWrite:false, side:THREE.DoubleSide, toneMapped:false});
+  const opacityMultiplier = Math.max(.1, safeFinite(opts.opacityMultiplier,1));
+  const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:clamp((.28 + splash*.18) * opacityMultiplier,.18,.82), depthWrite:false, side:THREE.DoubleSide, toneMapped:false});
   const ring = new THREE.Mesh(sharedSplashRingGeometry, mat);
   ring.position.copy(pos);
+  ring.position.y += safeFinite(opts.yOffset,0);
   ring.rotation.x = -Math.PI/2;
-  const desiredScale = THREE.MathUtils.lerp(.9,2.8,clamp(splash,0,1));
+  const scaleMultiplier = Math.max(.2, safeFinite(opts.scaleMultiplier,1));
+  const desiredScale = THREE.MathUtils.lerp(.9,2.8,clamp(splash,0,1)) * scaleMultiplier;
   const edgeLimit = Math.max(.08, waterBoundaryDistance(body, pos) * .92);
   const maxScale = Math.max(.22, edgeLimit / .22);
   ring.scale.setScalar(Math.min(desiredScale, maxScale));
   ring.renderOrder = 25;
   waterGroup.add(ring);
-  waterRuntime.particles.push({mesh:ring, vel:new THREE.Vector3(0,0,0), life:0, maxLife:THREE.MathUtils.lerp(.42,.9,clamp(splash,0,1)), ring:true, startScale:ring.scale.x, maxScale});
+  pushWaterParticle({
+    mesh:ring,
+    vel:new THREE.Vector3(0,0,0),
+    life:0,
+    maxLife:THREE.MathUtils.lerp(.42,.9,clamp(splash,0,1)) * Math.max(.1, safeFinite(opts.lifeMultiplier,1)),
+    ring:true,
+    startScale:ring.scale.x,
+    maxScale,
+    opacityFactor:clamp(.42 * opacityMultiplier,.16,.86),
+    growMultiplier:Math.max(.4, safeFinite(opts.growMultiplier,2.8))
+  }, safeFinite(opts.particleLimit,560));
 }
 
-function spawnWaterSplash(pos, body, strengthScale=1){
+function spawnWaterSplash(pos, body, strengthScale=1, options={}){
   const splash = clamp(safeFinite(body.water?.splash,.85),0,1) * strengthScale;
   if(splash <= .02) return;
+  const opts = options && typeof options === 'object' ? options : {};
+  const particleMultiplier = Math.max(1, safeFinite(opts.particleMultiplier,1));
+  const particleLimit = Math.max(560, Math.round(safeFinite(opts.particleLimit,560)));
+  const heightMultiplier = Math.max(.2, safeFinite(opts.heightMultiplier,1));
+  const outwardMultiplier = Math.max(.2, safeFinite(opts.outwardMultiplier,1));
+  const lifeMultiplier = Math.max(.2, safeFinite(opts.lifeMultiplier,1));
   if(!sharedSplashGeometry) sharedSplashGeometry = new THREE.SphereGeometry(.026,7,5);
   const color = validColor(body.water?.color) ? body.water.color : '#4bbcff';
-  spawnWaterFoamRing(pos, body, strengthScale);
-  const count = Math.round(THREE.MathUtils.lerp(18,86,clamp(splash,0,1)));
+  const ringLayers = Math.max(1, Math.round(safeFinite(opts.ringLayers,1)));
+  const ringScaleMultiplier = Math.max(.2, safeFinite(opts.ringScaleMultiplier,1));
+  for(let layer=0; layer<ringLayers; layer++){
+    const layerFade = Math.max(.34, 1 - layer * .11);
+    spawnWaterFoamRing(pos, body, strengthScale * layerFade, {
+      particleLimit,
+      scaleMultiplier:ringScaleMultiplier * (1 + layer * .38),
+      lifeMultiplier:lifeMultiplier * (1 + layer * .18),
+      opacityMultiplier:Math.max(.36, 1 - layer * .09),
+      growMultiplier:2.8 + layer * .42,
+      yOffset:layer * .006
+    });
+  }
+  const baseCount = Math.round(THREE.MathUtils.lerp(18,86,clamp(splash,0,1)));
+  const count = Math.min(Math.max(baseCount, Math.round(baseCount * particleMultiplier)), Math.max(baseCount, particleLimit - 1));
   for(let i=0;i<count;i++){
-    if(waterRuntime.particles.length > 560){
-      const old = waterRuntime.particles.shift();
-      old?.mesh?.parent?.remove(old.mesh);
-      old?.mesh?.material?.dispose?.();
-    }
-    const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:THREE.MathUtils.lerp(.58,.92,Math.random()), depthWrite:false, toneMapped:false});
+    const stream = Math.random();
+    const plume = stream < .20;
+    const mist = !plume && stream > .68;
+    const opacity = mist ? THREE.MathUtils.lerp(.28,.58,Math.random()) : THREE.MathUtils.lerp(.58,.94,Math.random());
+    const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity, depthWrite:false, toneMapped:false});
     const mesh = new THREE.Mesh(sharedSplashGeometry, mat);
     mesh.position.copy(pos);
+    mesh.position.y += mist ? THREE.MathUtils.randFloat(.02,.14) : 0;
     const a = Math.random()*Math.PI*2;
-    const outward = THREE.MathUtils.lerp(.42,2.6,Math.random()) * (0.65 + splash*.95);
-    const upward = THREE.MathUtils.lerp(.85,3.8,Math.pow(Math.random(),.55)) * (0.5 + splash*.85);
+    let outward = THREE.MathUtils.lerp(.42,2.6,Math.random()) * (0.65 + splash*.95) * outwardMultiplier;
+    let upward = THREE.MathUtils.lerp(.85,3.8,Math.pow(Math.random(),.55)) * (0.5 + splash*.85) * heightMultiplier;
+    if(plume){
+      outward *= THREE.MathUtils.lerp(.18,.46,Math.random());
+      upward *= THREE.MathUtils.lerp(1.18,1.72,Math.random());
+    }else if(mist){
+      outward *= THREE.MathUtils.lerp(1.05,1.85,Math.random());
+      upward *= THREE.MathUtils.lerp(.72,1.32,Math.random());
+    }
     const vel = new THREE.Vector3(Math.cos(a)*outward, upward, Math.sin(a)*outward);
-    mesh.scale.setScalar(THREE.MathUtils.lerp(.55,1.55,Math.random()) * (0.85 + splash*.5));
+    const sizeScale = mist ? THREE.MathUtils.lerp(.22,.66,Math.random()) : THREE.MathUtils.lerp(.55,1.65,Math.random());
+    mesh.scale.setScalar(sizeScale * (0.85 + splash*.5));
     waterGroup.add(mesh);
-    waterRuntime.particles.push({mesh, vel, life:0, maxLife:THREE.MathUtils.lerp(.42,1.15,Math.random()), bodyId:body.id});
+    pushWaterParticle({
+      mesh,
+      vel,
+      life:0,
+      maxLife:THREE.MathUtils.lerp(.42,1.15,Math.random()) * lifeMultiplier * (mist ? 1.18 : 1),
+      bodyId:body.id,
+      opacityFactor:mist ? .56 : .86
+    }, particleLimit);
   }
 }
 
@@ -6405,9 +6472,9 @@ function updateWaterEffects(dt){
     p.life += dt;
     if(p.ring){
       const k = 1 - p.life / p.maxLife;
-      const grow = p.startScale * (1 + (1-k)*2.8);
+      const grow = p.startScale * (1 + (1-k) * safeFinite(p.growMultiplier,2.8));
       p.mesh.scale.setScalar(Math.min(grow, p.maxScale || grow));
-      if(p.mesh.material) p.mesh.material.opacity = Math.max(0,k*.42);
+      if(p.mesh.material) p.mesh.material.opacity = Math.max(0,k * safeFinite(p.opacityFactor,.42));
     }else{
       p.vel.y -= 4.9*dt;
       p.vel.multiplyScalar(Math.pow(.76,dt));
@@ -6423,11 +6490,10 @@ function updateWaterEffects(dt){
         }
       }
       const k = 1 - p.life / p.maxLife;
-      if(p.mesh.material) p.mesh.material.opacity = Math.max(0,k*.82);
+      if(p.mesh.material) p.mesh.material.opacity = Math.max(0,k * safeFinite(p.opacityFactor,.82));
     }
     if(p.life >= p.maxLife){
-      p.mesh.parent?.remove(p.mesh);
-      p.mesh.material?.dispose?.();
+      disposeWaterParticle(p);
       waterRuntime.particles.splice(i,1);
     }
   }
@@ -9813,22 +9879,48 @@ function findWaterBodyAtWorldPosition(world){
 
 function triggerWaterRippleAt(body, worldPos, strengthScale=1, options={}){
   if(!body || !worldPos) return;
+  const opts = options && typeof options === 'object' ? options : {};
   const mats = [waterRuntime.materials.get(body.id), waterRuntime.materials.get(`${body.id}:caustic`)].filter(Boolean);
   const local = waterRippleLocalPoint(body, worldPos);
   const splash = clamp(safeFinite(body.water?.splash,.85),0,1);
+  const rippleScale = Math.max(.1, safeFinite(opts.rippleScale,1));
+  const rippleStrengthCap = Math.max(2.1, safeFinite(opts.rippleStrengthCap,2.1));
+  const motionScale = Math.max(.1, safeFinite(opts.motionScale,1));
+  const motionStrengthCap = Math.max(2.2, safeFinite(opts.motionStrengthCap,2.2));
   for(const mat of mats){
     const u = mat.userData?.waterUniforms;
     if(!u) continue;
     if(u.uRippleCenter) u.uRippleCenter.value.copy(local);
     if(u.uRippleAge) u.uRippleAge.value = 0;
-    if(u.uRippleStrength) u.uRippleStrength.value = clamp(splash * strengthScale,0,2.1);
+    if(u.uRippleStrength) u.uRippleStrength.value = Math.max(u.uRippleStrength.value || 0, clamp(splash * strengthScale * rippleScale,0,rippleStrengthCap));
     if(u.uMotionCenter) u.uMotionCenter.value.copy(local);
-    if(u.uMotionStrength) u.uMotionStrength.value = Math.max(u.uMotionStrength.value || 0, clamp(strengthScale, .2, 2.2));
+    if(u.uMotionStrength) u.uMotionStrength.value = Math.max(u.uMotionStrength.value || 0, clamp(strengthScale * motionScale, .2, motionStrengthCap));
   }
   const m = waterBodyMetrics(body);
   const pos = new THREE.Vector3(worldPos.x, m.surfaceY + .045, worldPos.z);
-  if(options?.splash === false) spawnWaterFoamRing(pos, body, strengthScale * .7);
-  else spawnWaterSplash(pos, body, strengthScale);
+  if(opts.splash === false) spawnWaterFoamRing(pos, body, strengthScale * .7, opts);
+  else spawnWaterSplash(pos, body, strengthScale, opts);
+  const aftershockRipples = Math.max(0, Math.round(safeFinite(opts.aftershockRipples,0)));
+  if(aftershockRipples > 0){
+    const delayedPos = pos.clone();
+    for(let i=1; i<=aftershockRipples; i++){
+      window.setTimeout(()=>{
+        triggerWaterRippleAt(body, delayedPos, strengthScale * Math.max(.22, .62 - i * .12), {
+          splash:false,
+          foam:true,
+          aftershockRipples:0,
+          particleLimit:safeFinite(opts.particleLimit,560),
+          scaleMultiplier:Math.max(1, safeFinite(opts.ringScaleMultiplier,1)) * (1 + i * .55),
+          lifeMultiplier:Math.max(1, safeFinite(opts.lifeMultiplier,1)) * (1 + i * .16),
+          opacityMultiplier:.62,
+          rippleScale:rippleScale * Math.max(.24, .62 - i * .12),
+          rippleStrengthCap,
+          motionScale:motionScale * .44,
+          motionStrengthCap
+        });
+      }, i * 135);
+    }
+  }
 }
 
 function clearArtworkInteractionState(artId){
@@ -9956,7 +10048,22 @@ function updateArtworkPhysics(dt){
         if(pos.y <= m.surfaceY + .08){
           pos.y = m.surfaceY + .08;
           if(!body.splashed){
-            triggerWaterRippleAt(afterWater, pos, (body.mode === 'kick' ? 1.35 : 1.18) * WATER_IMPACT_RESPONSE_SCALE);
+            const impactEnergy = clamp((body.velocity.length() + Math.abs(body.velocity.y)) / 16, 1, 2.35);
+            const impactStrength = (body.mode === 'kick' ? 1.35 : 1.18) * WATER_IMPACT_RESPONSE_SCALE * impactEnergy;
+            triggerWaterRippleAt(afterWater, pos, impactStrength, {
+              particleMultiplier:ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER,
+              particleLimit:ARTWORK_WATER_IMPACT_PARTICLE_LIMIT,
+              heightMultiplier:ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER,
+              outwardMultiplier:ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER,
+              lifeMultiplier:1.28,
+              ringLayers:ARTWORK_WATER_IMPACT_RIPPLE_LAYERS,
+              ringScaleMultiplier:ARTWORK_WATER_IMPACT_RING_SCALE_MULTIPLIER,
+              rippleScale:1.55,
+              rippleStrengthCap:4.8,
+              motionScale:1.75,
+              motionStrengthCap:5.2,
+              aftershockRipples:3
+            });
             playRuntimeSound('artworkWaterDrop', {cooldown:180, volume:.82});
             body.splashed = true;
           }
