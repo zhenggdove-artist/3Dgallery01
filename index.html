@@ -100,7 +100,7 @@
 }
 </script>
 </head>
-<body class="exported-viewer play-mode fx-enabled fx-dreamcore gallery-loading" style="background: rgb(220, 233, 225); cursor: default;">
+<body class="exported-viewer play-mode gallery-loading" style="background: rgb(220, 233, 225); cursor: default;">
 <canvas id="canvas" data-engine="three.js r160" width="1920" height="912" data-webgl-safety-bound="1" style="touch-action: none; cursor: default;"></canvas>
 <div id="screenFxOverlay" aria-hidden="true" style="opacity: 0;"></div>
 <svg id="screenFxSvg" width="0" height="0" aria-hidden="true" focusable="false" style="position:fixed;width:0;height:0;overflow:hidden;pointer-events:none">
@@ -284,6 +284,8 @@ const CAMERA_DISTANCE_MIN = 1.35;
 const CAMERA_DISTANCE_MAX = 36;
 const CAMERA_PITCH_MIN = deg(-88);
 const CAMERA_PITCH_MAX = deg(88);
+const MOBILE_CAMERA_PITCH_MIN = deg(-72);
+const MOBILE_CAMERA_PITCH_MAX = deg(72);
 const cameraObstructionFade = {
   faded:new Map(),
   lastCheckAt:0,
@@ -1020,15 +1022,15 @@ function installGalleryDebugState(){
 
 function applyRequiredLightingAndShadowCorrections(state){
   if(!state || typeof state !== 'object') return;
-  // 20260605: keep the dreamcore filter and realtime shadows, but disable the smoke/fog particle field.
+  // 20260605: keep realtime shadows, but disable smoke/fog and the dreamcore screen filter.
   state.atmosphere = {enabled:false, color:'#d7eee5', intensity:0, opacity:0, layers:0};
-  state.screenFx = {enabled:true,preset:'dreamcore',intensity:.18,noise:0,scanlines:.06,chromatic:.12,warp:.03,glow:.86,vignette:.08,saturation:.51,contrast:.2,brightness:1.89,blur:3.89,hue:11};
+  state.screenFx = {enabled:false,preset:'none',intensity:0,noise:0,scanlines:0,chromatic:0,warp:0,glow:0,vignette:0,saturation:1,contrast:1,brightness:1,blur:0,hue:0};
   state.lightSystem = sanitizeLightSystem(state.lightSystem);
   state.lightSystem.enabled = true;
   state.lightSystem.ambient = {...(state.lightSystem.ambient || {}), color:(state.lightSystem.ambient?.color || '#dff7ef'), intensity:0};
   state.lightSystem.hemisphere = {...(state.lightSystem.hemisphere || {}), skyColor:(state.lightSystem.hemisphere?.skyColor || '#f2fff8'), groundColor:(state.lightSystem.hemisphere?.groundColor || '#223631'), intensity:0};
   state.lightBake = {...createDefaultLightBake(), ...(state.lightBake || {}), enabled:false, useInPlayMode:false, stale:true, data:{}};
-  state.lightingDebugMarker = '20260605_disable_flat_environment_light_disable_smoke_fx_realtime_shadows';
+  state.lightingDebugMarker = '20260605_disable_smoke_and_dreamcore_fx_realtime_shadows';
 }
 
 async function main(){
@@ -10711,12 +10713,19 @@ function updateCamera(){
     const mobileDistance = clamp(cameraDistance, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX);
     const zoomT = clamp((mobileDistance - CAMERA_DISTANCE_MIN) / Math.max(.001, VIEWER_MOBILE_CAMERA_DISTANCE - CAMERA_DISTANCE_MIN), 0, 1);
     const mobileHeight = THREE.MathUtils.lerp(.72, 2.15, zoomT);
+    const mobilePitch = clamp(camPitch, MOBILE_CAMERA_PITCH_MIN, MOBILE_CAMERA_PITCH_MAX);
+    const pitchSin = Math.sin(mobilePitch);
+    const pitchHorizontal = clamp(Math.cos(mobilePitch), .32, 1);
+    const roomHeight = safeFinite(STATE?.room?.height, ROOM.height);
+    const eyeHeightMax = Math.max(.45, roomHeight - bodyTarget.y - .45);
+    const eyeHeight = clamp(mobileHeight - pitchSin * mobileDistance * .38, .45, eyeHeightMax);
     const camPos = clampMobileCameraInsideRoom(bodyTarget.clone()
-      .addScaledVector(backward, mobileDistance)
-      .add(new THREE.Vector3(0, mobileHeight, 0)));
+      .addScaledVector(backward, mobileDistance * pitchHorizontal)
+      .add(new THREE.Vector3(0, eyeHeight, 0)));
     placeCamera(camPos);
-    const pitchOffset = Math.tan(clamp(camPitch, deg(-24), deg(14))) * 1.25;
-    const lookTarget = player.position.clone().add(new THREE.Vector3(0, 1.72 + pitchOffset, 0));
+    const lookTarget = bodyTarget.clone()
+      .addScaledVector(forward, Math.max(2.5, mobileDistance * .8))
+      .add(new THREE.Vector3(0, pitchSin * mobileDistance * 1.05, 0));
     camera.lookAt(lookTarget);
     updateCameraObstructionFade(bodyTarget);
     return;

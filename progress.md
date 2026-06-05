@@ -281,3 +281,33 @@ Verification so far:
 
 Current TODO:
 - None after this change is pushed to `origin/main`.
+
+## 2026-06-05 camera look debug and dreamcore filter off
+
+Current user request:
+- Debug the camera being stuck in a tiny up/down range and unable to rotate freely.
+- Turn off the dreamcore filter.
+- Push the result to GitHub Pages.
+
+Diagnosis:
+- The base camera input was still updating yaw and pitch, and `camPitch` was already allowed to move between `-88` and `88` degrees.
+- The exported mobile viewer camera branch ignored most of that pitch. It clamped the actual `lookAt` vertical offset to only `-24` to `14` degrees and kept the camera position at a fixed height, so touch look felt locked to a narrow vertical range.
+- Dreamcore was still forced on at startup by `applyRequiredLightingAndShadowCorrections()`, and the initial body class also included `fx-enabled fx-dreamcore`.
+
+Changes made:
+- Removed the initial `fx-enabled fx-dreamcore` body classes.
+- Runtime correction now keeps smoke/fog off and forces `screenFx` to `enabled:false` with `preset:'none'`.
+- Added mobile camera pitch limits of `-72` to `72` degrees.
+- Updated the mobile viewer camera branch so pitch affects both camera height/distance and the look target, instead of using the old narrow `-24` to `14` degree clamp.
+
+Verification so far:
+- Extracted `index.html` module script, removed import lines, and parsed it with Node `new Function(...)`: passed.
+- `git diff --check`: passed.
+- Static checks passed for dreamcore startup classes being inactive, runtime screen filter being disabled, and the old narrow mobile pitch clamp being removed.
+- Local HTTP `HEAD` for `index.html` returned `200`.
+- Static Playwright screenshot with JavaScript disabled saved to `output/camera-filter-static-loading.png` and visually inspected: loading still shows only `0%` plus `Loading asset 0 of 1.`.
+- Mobile camera math harness confirmed applied pitch clamps to `-72` and `72` degrees, with camera position and look target both responding to pitch.
+- The required `develop-web-game` Playwright client was attempted with the standard short action payload, but the large WebGL page still timed out under headless SwiftShader; residual headless processes were cleaned up.
+
+Current TODO:
+- None after this change is pushed to `origin/main`.
