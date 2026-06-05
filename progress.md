@@ -148,3 +148,42 @@ Current TODO:
 
 TODO:
 - None.
+
+## 2026-06-05 documentation catch-up and audio/loading update
+
+Current user request:
+- Read the project Markdown, supplement missing records for user-edited content, change the loading page to English, hide every resource name/file name/path from loading, show only percentage plus `Loading asset X of Y.`, add water-movement and water-impact sounds, then push to GitHub Pages.
+
+Unrecorded project state found after the last handoff notes:
+- `index.html` is still the GitHub Pages entry point. `README.txt` confirms Pages root must contain `index.html`, `state.min.json`, `asset_manifest_full.json`, `assets/`, and `models/`.
+- Several commits after `132e26c` changed `index.html` without updating this Markdown. Current runtime includes expanded mobile controls: joystick movement plus `T` take, `K` attack, and `J` jump buttons.
+- Current runtime includes ARPG-style artwork interaction: `startTakeArtwork()`, `throwHeldArtwork()`, and `attackArtwork()` let the player pick up artwork, hold it in front of the camera, throw it, or kick it; thrown/kicked artworks use physics and can float on water.
+- Current runtime includes water-body gameplay and editing support: water bodies have container/material settings, water-level/wave/caustic/motion-distortion/splash values, player wading/swimming state, ripples, foam rings, splash particles, and water container collision.
+- Current runtime includes screen FX and lighting/shadow corrections that were not recorded before: `applyRequiredLightingAndShadowCorrections()` keeps smoke/dreamcore FX, disables flat ambient/hemisphere fill, disables stale baked light data, and tags `lightingDebugMarker = 20260605_disable_flat_environment_light_restore_smoke_fx_realtime_shadows`.
+- Current runtime includes shadow-cache/light-bake controls that preserve current light/shadow shape in play mode while stopping shadow-map recalculation, plus forced shadow-map refresh before baking.
+- Current mobile viewer state uses `models/model_0004.mobile.glb`, `VIEWER_MOBILE_CAMERA_DISTANCE = 7.2`, `MOBILE_VIEWER_START_POSE = {x:-1.6, y:0, z:1.95, yaw:0, pitchDeg:-10}`, and camera obstruction fade for blocking architecture/walls.
+- Asset binaries `assets/22.png`, `assets/asset_0015.png`, and `assets/stone13.png` were updated after the previous notes.
+- New sound files already existed in `sound/` for water walking, player water landing, and item water drop.
+
+Changes made in this round:
+- Loading gate visible text is now English-only and limited to:
+  - percentage, e.g. `37%`;
+  - `Loading asset X of Y.`
+- Loading no longer displays resource names, file names, paths, current URLs, or failure file labels. The old detail/item UI is hidden or overwritten by the asset count line.
+- Added a small runtime audio manager:
+  - unlocks/prepares audio from first pointer, touch, or keyboard input;
+  - cache-busts local sound URLs with the existing `ASSET_CACHE_VERSION`;
+  - stops the looping walk sound when the viewer is not ready or the window blurs.
+- Added sound triggers:
+  - water walking loop plays while the player is moving inside water and not head-submerged;
+  - player water-landing sound plays once when falling crosses the water surface;
+  - artwork water-drop sound plays once when thrown/kicked artwork first touches water.
+
+Verification so far:
+- Extracted `index.html` module script, removed import lines, and parsed it with Node `new Function(...)`: passed.
+- Loading DOM check at `http://127.0.0.1:8098/index.html?debugInput`: visible text was exactly two lines (`0%` and `Loading asset 0 of 1.`), with no `assets/`, `models/`, `sound/`, file extensions, or `ESC` hint.
+- Static Playwright screenshot saved to `output/loading-static-check.png` and visually inspected: only percentage, progress bar, and `Loading asset 0 of 1.` are visible.
+- Local HTTP checks for all three sound files returned `200`.
+
+Current TODO:
+- None after this change is pushed to `origin/main` for GitHub Pages.

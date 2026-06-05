@@ -72,15 +72,16 @@
   #loadingGate{position:fixed;inset:0;z-index:2147483642;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:linear-gradient(180deg,rgba(8,13,11,.94),rgba(18,30,27,.92));color:#eef7f1;font-family:Arial,'Noto Sans TC',sans-serif;pointer-events:auto}
   #loadingGate[hidden]{display:none!important}
   #loadingPanel{width:min(680px,calc(100vw - 48px));display:grid;gap:12px}
-  #loadingHeader{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
-  #loadingTitle{font-size:18px;font-weight:700;letter-spacing:.04em}
+  #loadingHeader{display:flex;align-items:flex-end;justify-content:center;gap:12px}
+  #loadingTitle{display:none;font-size:18px;font-weight:700;letter-spacing:.04em}
   #loadingPercent{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
   #loadingProgressTrack{height:13px;width:100%;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.18)}
   #loadingProgressBar{height:100%;width:0%;border-radius:inherit;background:linear-gradient(90deg,#92f2df,#e9fff5);box-shadow:0 0 18px rgba(146,242,223,.45);transition:width .18s ease}
   #loadingDetail{font-size:13px;line-height:1.45;color:rgba(238,247,241,.88)}
-  #loadingItem{min-height:18px;font:12px/1.5 Consolas,'Courier New',monospace;color:rgba(238,247,241,.72);word-break:break-all}
+  #loadingItem{display:none;min-height:18px;font:12px/1.5 Consolas,'Courier New',monospace;color:rgba(238,247,241,.72);word-break:break-all}
   #loadingGate[data-error="1"] #loadingProgressBar{background:linear-gradient(90deg,#ff9a9a,#ffd4d4)}
   body.gallery-loading #mobileControls{display:none}
+  body.gallery-loading #viewerEscHint{display:none}
   @media (hover:none), (pointer:coarse), (max-width:820px){
     #mobileControls{display:flex}
     #editor,#objectPanel,#lightPanel{max-width:calc(100vw - 28px);width:calc(100vw - 28px);right:14px;left:auto}
@@ -99,7 +100,7 @@
 }
 </script>
 </head>
-<body class="exported-viewer play-mode fx-enabled fx-dreamcore" style="background: rgb(220, 233, 225); cursor: default;">
+<body class="exported-viewer play-mode fx-enabled fx-dreamcore gallery-loading" style="background: rgb(220, 233, 225); cursor: default;">
 <canvas id="canvas" data-engine="three.js r160" width="1920" height="912" data-webgl-safety-bound="1" style="touch-action: none; cursor: default;"></canvas>
 <div id="screenFxOverlay" aria-hidden="true" style="opacity: 0;"></div>
 <svg id="screenFxSvg" width="0" height="0" aria-hidden="true" focusable="false" style="position:fixed;width:0;height:0;overflow:hidden;pointer-events:none">
@@ -130,12 +131,12 @@
 <div id="loadingGate" role="status" aria-live="polite" aria-busy="true">
   <div id="loadingPanel">
     <div id="loadingHeader">
-      <div id="loadingTitle">正在載入畫廊</div>
+      <div id="loadingTitle" aria-hidden="true"></div>
       <div id="loadingPercent">0%</div>
     </div>
     <div id="loadingProgressTrack"><div id="loadingProgressBar"></div></div>
-    <div id="loadingDetail">初始化場景...</div>
-    <div id="loadingItem">準備資源清單...</div>
+    <div id="loadingDetail">Loading asset 0 of 1.</div>
+    <div id="loadingItem" aria-hidden="true"></div>
   </div>
 </div>
 
@@ -160,6 +161,11 @@ const ASSET = {
 const DEFAULT_SKY_TEXTURE = 'assets/asset_0004.png';
 const SCREEN_FX_DEFAULTS = Object.freeze({enabled:false,preset:'none',intensity:0,noise:0,scanlines:0,chromatic:0,warp:0,glow:0,vignette:0,saturation:1,contrast:1,brightness:1,blur:0,hue:0});
 const ASSET_CACHE_VERSION = '20260605-light-match-baked-reference-v1';
+const SOUND_ASSET = Object.freeze({
+  waterWalk: 'sound/主角水中走路.MP3',
+  playerWaterLanding: 'sound/主角跳到水里.mp3',
+  artworkWaterDrop: 'sound/物品掉到水里.mp3'
+});
 
 function isLocalGalleryAssetUrl(src){
   if(typeof src !== 'string') return false;
@@ -324,6 +330,7 @@ let objectEditorDirty = false;
 let artEditorDirty = false;
 let waterEditorDirty = false;
 const waterRuntime = {materials:new Map(), lastSplashAt:new Map(), particles:[], lastPlayerPos:new THREE.Vector3(), hasLastPlayer:false, current:null, inside:false, swimming:false, wading:false};
+const runtimeAudio = {ready:false, unlocked:false, nodes:{}, lastPlayed:{}, waterWalkActive:false};
 const ARPG_INTERACTION = {range:5.2, holdDistance:1.82, holdHeight:1.38, sideOffset:.22, kickSpeed:8.4, throwSpeed:8.8, gravity:8.6};
 let heldArtworkId = null;
 const artworkPhysics = new Map();
@@ -467,22 +474,10 @@ function updateGalleryLoadingUI(){
   galleryLoading.gate.dataset.error = galleryLoading.errors.length ? '1' : '0';
   if(galleryLoading.bar) galleryLoading.bar.style.width = `${pct}%`;
   if(galleryLoading.percent) galleryLoading.percent.textContent = `${pct}%`;
-  if(galleryLoading.detail){
-    if(galleryLoading.errors.length){
-      galleryLoading.detail.textContent = `讀取失敗：${galleryLoadingAssetLabel(galleryLoading.errors[0])}`;
-    }else{
-      galleryLoading.detail.textContent = `${galleryLoading.phase}（${displayLoaded}/${displayTotal}）`;
-    }
-  }
-  if(galleryLoading.item){
-    if(galleryLoading.errors.length){
-      galleryLoading.item.textContent = '請確認 GitHub Pages 上對應模型、貼圖或作品檔案存在後重新整理。';
-    }else{
-      galleryLoading.item.textContent = galleryLoading.currentUrl ? `目前資源：${galleryLoadingAssetLabel(galleryLoading.currentUrl)}` : '正在建立資源清單...';
-    }
-  }
+  const assetLine = `Loading asset ${displayLoaded} of ${displayTotal}.`;
+  if(galleryLoading.detail) galleryLoading.detail.textContent = assetLine;
+  if(galleryLoading.item) galleryLoading.item.textContent = '';
 }
-
 function maybeReleaseGalleryLoadingGate(){
   if(!EXPORTED_GALLERY_VIEWER || galleryLoading.released) return;
   updateGalleryLoadingUI();
@@ -583,6 +578,126 @@ function configureGalleryLoadingManager(){
 
 function galleryInputReady(){
   return !EXPORTED_GALLERY_VIEWER || galleryLoading.released;
+}
+
+function runtimeAudioTime(){
+  return performance.now?.() || Date.now();
+}
+
+function versionedRuntimeSoundUrl(src){
+  if(!EXPORTED_GALLERY_VIEWER || typeof src !== 'string' || !src.trim()) return src;
+  const joiner = src.includes('?') ? '&' : '?';
+  return src + joiner + 'v=' + encodeURIComponent(ASSET_CACHE_VERSION);
+}
+
+function createRuntimeAudioNode(src, {loop=false, volume=1}={}){
+  const audio = new Audio(versionedRuntimeSoundUrl(src));
+  audio.preload = 'auto';
+  audio.loop = !!loop;
+  audio.volume = clamp(volume, 0, 1);
+  audio.playsInline = true;
+  audio.addEventListener('error', ()=>{ audio._runtimeAudioFailed = true; });
+  try{ audio.load(); }catch{}
+  return audio;
+}
+
+function prepareRuntimeAudio(){
+  if(runtimeAudio.ready) return;
+  runtimeAudio.ready = true;
+  runtimeAudio.nodes.waterWalk = createRuntimeAudioNode(SOUND_ASSET.waterWalk, {loop:true, volume:.42});
+  runtimeAudio.nodes.playerWaterLanding = createRuntimeAudioNode(SOUND_ASSET.playerWaterLanding, {volume:.78});
+  runtimeAudio.nodes.artworkWaterDrop = createRuntimeAudioNode(SOUND_ASSET.artworkWaterDrop, {volume:.82});
+}
+
+function unlockRuntimeAudio(){
+  prepareRuntimeAudio();
+  if(runtimeAudio.unlocked) return;
+  runtimeAudio.unlocked = true;
+  for(const [key, audio] of Object.entries(runtimeAudio.nodes)){
+    if(!audio || audio._runtimeAudioFailed) continue;
+    const wasMuted = audio.muted;
+    audio.muted = true;
+    try{
+      const result = audio.play();
+      if(result?.then){
+        result.then(()=>{
+          if(key === 'waterWalk' && runtimeAudio.waterWalkActive){
+            audio.muted = wasMuted;
+            return;
+          }
+          audio.pause();
+          try{ audio.currentTime = 0; }catch{}
+          audio.muted = wasMuted;
+        }).catch(()=>{ audio.muted = wasMuted; });
+      }else{
+        if(!(key === 'waterWalk' && runtimeAudio.waterWalkActive)){
+          audio.pause();
+          try{ audio.currentTime = 0; }catch{}
+        }
+        audio.muted = wasMuted;
+      }
+    }catch{
+      audio.muted = wasMuted;
+    }
+  }
+}
+
+function bindRuntimeAudioUnlock(){
+  if(runtimeAudio.unlockBound) return;
+  runtimeAudio.unlockBound = true;
+  window.addEventListener('pointerdown', unlockRuntimeAudio, {passive:true});
+  window.addEventListener('touchstart', unlockRuntimeAudio, {passive:true});
+  window.addEventListener('keydown', unlockRuntimeAudio, true);
+}
+
+function playRuntimeSound(key, {restart=true, cooldown=0, volume=null}={}){
+  prepareRuntimeAudio();
+  const audio = runtimeAudio.nodes[key];
+  if(!audio || audio._runtimeAudioFailed) return;
+  const now = runtimeAudioTime();
+  if(cooldown > 0 && now - (runtimeAudio.lastPlayed[key] || 0) < cooldown) return;
+  runtimeAudio.lastPlayed[key] = now;
+  if(volume !== null) audio.volume = clamp(volume, 0, 1);
+  if(restart){
+    try{ audio.currentTime = 0; }catch{}
+  }
+  try{
+    const result = audio.play();
+    result?.catch?.(()=>{});
+  }catch{}
+}
+
+function updateWaterWalkSound(active){
+  if(!active && !runtimeAudio.ready) return;
+  prepareRuntimeAudio();
+  const audio = runtimeAudio.nodes.waterWalk;
+  if(!audio || audio._runtimeAudioFailed) return;
+  if(active){
+    if(!runtimeAudio.waterWalkActive || audio.paused){
+      runtimeAudio.waterWalkActive = true;
+      playRuntimeSound('waterWalk', {restart:false, cooldown:220});
+    }
+    return;
+  }
+  runtimeAudio.waterWalkActive = false;
+  if(!audio.paused){
+    audio.pause();
+    try{ audio.currentTime = 0; }catch{}
+  }
+}
+
+function stopRuntimeSounds(){
+  updateWaterWalkSound(false);
+}
+
+function maybePlayPlayerWaterLandingSound(previousY, previousVelocityY, waterState){
+  if(!waterState?.inside || !waterState.body) return;
+  if(waterState.headSubmerged) return;
+  const crossedSurface = previousY > waterState.surfaceY + .10 && player.position.y <= waterState.surfaceY + .10;
+  const falling = previousVelocityY < -.35 || playerVelocityY < -.35;
+  if(crossedSurface && falling){
+    playRuntimeSound('playerWaterLanding', {cooldown:520, volume:.78});
+  }
 }
 
 const MOBILE_VIEWER_START_POSE = Object.freeze({x:-1.6, y:0, z:1.95, yaw:0, pitchDeg:-10, cameraDistance:VIEWER_MOBILE_CAMERA_DISTANCE});
@@ -7815,6 +7930,7 @@ function bindInput(){
   updateCursorVisibility();
   bindWaterControls();
   setupMobileControls();
+  bindRuntimeAudioUnlock();
 
   document.body.addEventListener('click', e=>{
     if(EXPORTED_GALLERY_VIEWER) return;
@@ -7872,6 +7988,7 @@ function bindInput(){
     ctrlViewDrag = false;
     ctrlViewDragLastX = 0;
     ctrlViewDragLastY = 0;
+    stopRuntimeSounds();
     updateCursorVisibility();
   });
   $('canvas').addEventListener('pointerdown', e=>{
@@ -9697,6 +9814,7 @@ function updateArtworkPhysics(dt){
           pos.y = m.surfaceY + .08;
           if(!body.splashed){
             triggerWaterRippleAt(afterWater, pos, body.mode === 'kick' ? 1.35 : 1.18);
+            playRuntimeSound('artworkWaterDrop', {cooldown:180, volume:.82});
             body.splashed = true;
           }
           body.floating = true;
@@ -9724,6 +9842,7 @@ function updateArtworkPhysics(dt){
 function updatePlayer(dt){
   if(!galleryInputReady()){
     resetMobileMoveKeys();
+    stopRuntimeSounds();
     playerVelocityY = 0;
     if(playerGroup){
       playerGroup.position.copy(player.position);
@@ -9732,6 +9851,8 @@ function updatePlayer(dt){
     }
     return;
   }
+  const previousPlayerY = player.position.y;
+  const previousPlayerVelocityY = playerVelocityY;
   const waterStateBefore = getPlayerWaterState();
   const move = movementVector();
   const direction = new THREE.Vector3();
@@ -9789,6 +9910,9 @@ function updatePlayer(dt){
   player.position.x = clamp(player.position.x, bounds.minX, bounds.maxX);
   player.position.z = clamp(player.position.z, bounds.minZ, bounds.maxZ);
   resolvePlayerWallOverlaps();
+  const waterStateAfter = getPlayerWaterState();
+  maybePlayPlayerWaterLandingSound(previousPlayerY, previousPlayerVelocityY, waterStateAfter);
+  updateWaterWalkSound(moving && waterStateAfter.inside && !waterStateAfter.headSubmerged);
   playerGroup.position.copy(player.position);
   ensureMobileActorRenderSafety();
   enforceActorFacing(facingDirection);
