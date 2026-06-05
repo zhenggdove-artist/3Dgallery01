@@ -1531,6 +1531,10 @@ function rebuildLightSystem(){
     marker.userData.lightId = item.id;
     marker.userData.isLightMarker = true;
     marker.renderOrder = 30;
+    if(EXPORTED_GALLERY_VIEWER){
+      marker.visible = false;
+      marker.raycast = ()=>{};
+    }
     holder.add(marker);
 
     if(item.type === 'directional' || item.type === 'spot'){
@@ -1551,9 +1555,12 @@ function rebuildLightSystem(){
 
 function updateLightMarkerVisibility(){
   if(!lightRigGroup) return;
-  const showMarkers = !isPlayMode();
+  const showMarkers = !EXPORTED_GALLERY_VIEWER && !isPlayMode();
   lightRigGroup.traverse(obj=>{
-    if(obj?.userData?.isLightMarker) obj.visible = showMarkers;
+    if(obj?.userData?.isLightMarker){
+      obj.visible = showMarkers;
+      if(EXPORTED_GALLERY_VIEWER) obj.raycast = ()=>{};
+    }
   });
 }
 
@@ -12218,6 +12225,7 @@ function refreshBakedLightingRuntime(){
 
 function applyPlayModePerformanceLighting(play=isPlayMode()){
   if(EXPORTED_GALLERY_VIEWER){
+    updateLightMarkerVisibility();
     disableBakedLightingRuntime();
     if(renderer?.shadowMap){
       renderer.shadowMap.enabled = true;
