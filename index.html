@@ -163,6 +163,7 @@ const SCREEN_FX_DEFAULTS = Object.freeze({enabled:false,preset:'none',intensity:
 const ASSET_CACHE_VERSION = '20260605-light-match-baked-reference-v1';
 const SOUND_ASSET = Object.freeze({
   waterWalk: 'sound/主角水中走路.MP3',
+  playerWaterExit: 'sound/主角跳出水時.MP3',
   playerWaterLanding: 'sound/主角跳到水里.mp3',
   artworkWaterDrop: 'sound/物品掉到水里.mp3'
 });
@@ -241,7 +242,12 @@ const VIEWER_MOBILE_SCREENFX_PIXELS = 420_000;
 const VIEWER_MOBILE_DPR_LIMIT = 1.35;
 const MOBILE_VIEWER = EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE;
 const MOBILE_LOOK_SENSITIVITY_SCALE = MOBILE_VIEWER ? 0.8 : 1;
-const PLAYER_SPEED_SCALE = 0.8;
+const TOUCH_PLAYER_SPEED_SCALE = 0.8;
+const DESKTOP_PLAYER_SPEED_SCALE = 0.6;
+const PLAYER_SPEED_SCALE = IS_TOUCH_DEVICE ? TOUCH_PLAYER_SPEED_SCALE : DESKTOP_PLAYER_SPEED_SCALE;
+const WATER_IMPACT_RESPONSE_SCALE = 4;
+const WATER_WALK_VOLUME = .42;
+const WATER_WALK_FADE_MS = 520;
 const MOBILE_REFERENCE_COLLISION_ENABLED = false;
 const MOBILE_FAST_RENDER = false; // shadows must stay enabled in exported viewer
 let webglContextLost = false;
@@ -330,8 +336,8 @@ let objectEditorDirty = false;
 let artEditorDirty = false;
 let waterEditorDirty = false;
 const waterRuntime = {materials:new Map(), lastSplashAt:new Map(), particles:[], lastPlayerPos:new THREE.Vector3(), hasLastPlayer:false, current:null, inside:false, swimming:false, wading:false};
-const runtimeAudio = {ready:false, unlocked:false, nodes:{}, lastPlayed:{}, waterWalkActive:false};
-const ARPG_INTERACTION = {range:5.2, holdDistance:1.82, holdHeight:1.38, sideOffset:.22, kickSpeed:8.4, throwSpeed:8.8, gravity:8.6};
+const runtimeAudio = {ready:false, unlocked:false, nodes:{}, lastPlayed:{}, fadeTimers:{}, waterWalkActive:false};
+const ARPG_INTERACTION = {range:5.2, holdDistance:1.82, holdHeight:1.38, sideOffset:.22, kickSpeed:8.4, throwSpeed:17.6, gravity:8.6};
 let heldArtworkId = null;
 const artworkPhysics = new Map();
 let sharedSplashGeometry = null;
@@ -594,7 +600,9 @@ function createRuntimeAudioNode(src, {loop=false, volume=1}={}){
   const audio = new Audio(versionedRuntimeSoundUrl(src));
   audio.preload = 'auto';
   audio.loop = !!loop;
-  audio.volume = clamp(volume, 0, 1);
+  const safeVolume = clamp(volume, 0, 1);
+  audio.volume = safeVolume;
+  audio._runtimeDefaultVolume = safeVolume;
   audio.playsInline = true;
   audio.addEventListener('error', ()=>{ audio._runtimeAudioFailed = true; });
   try{ audio.load(); }catch{}
@@ -604,7 +612,8 @@ function createRuntimeAudioNode(src, {loop=false, volume=1}={}){
 function prepareRuntimeAudio(){
   if(runtimeAudio.ready) return;
   runtimeAudio.ready = true;
-  runtimeAudio.nodes.waterWalk = createRuntimeAudioNode(SOUND_ASSET.waterWalk, {loop:true, volume:.42});
+  runtimeAudio.nodes.waterWalk = createRuntimeAudioNode(SOUND_ASSET.waterWalk, {loop:true, volume:WATER_WALK_VOLUME});
+  runtimeAudio.nodes.playerWaterExit = createRuntimeAudioNode(SOUND_ASSET.playerWaterExit, {volume:.78});
   runtimeAudio.nodes.playerWaterLanding = createRuntimeAudioNode(SOUND_ASSET.playerWaterLanding, {volume:.78});
   runtimeAudio.nodes.artworkWaterDrop = createRuntimeAudioNode(SOUND_ASSET.artworkWaterDrop, {volume:.82});
 }
@@ -650,10 +659,44 @@ function bindRuntimeAudioUnlock(){
   window.addEventListener('keydown', unlockRuntimeAudio, true);
 }
 
+function clearRuntimeAudioFade(key){
+  const timer = runtimeAudio.fadeTimers?.[key];
+  if(timer){
+    clearInterval(timer);
+    delete runtimeAudio.fadeTimers[key];
+  }
+}
+
+function fadeOutRuntimeSound(key, {duration=420, reset=true}={}){
+  const audio = runtimeAudio.nodes[key];
+  if(!audio || audio._runtimeAudioFailed) return;
+  clearRuntimeAudioFade(key);
+  const defaultVolume = clamp(audio._runtimeDefaultVolume ?? audio.volume ?? 1, 0, 1);
+  if(audio.paused || audio.volume <= .001){
+    audio.pause();
+    if(reset) try{ audio.currentTime = 0; }catch{}
+    audio.volume = defaultVolume;
+    return;
+  }
+  const startVolume = audio.volume;
+  const startedAt = runtimeAudioTime();
+  runtimeAudio.fadeTimers[key] = setInterval(()=>{
+    const t = clamp((runtimeAudioTime() - startedAt) / Math.max(1, duration), 0, 1);
+    audio.volume = startVolume * (1 - t);
+    if(t >= 1){
+      clearRuntimeAudioFade(key);
+      audio.pause();
+      if(reset) try{ audio.currentTime = 0; }catch{}
+      audio.volume = defaultVolume;
+    }
+  }, 40);
+}
+
 function playRuntimeSound(key, {restart=true, cooldown=0, volume=null}={}){
   prepareRuntimeAudio();
   const audio = runtimeAudio.nodes[key];
   if(!audio || audio._runtimeAudioFailed) return;
+  clearRuntimeAudioFade(key);
   const now = runtimeAudioTime();
   if(cooldown > 0 && now - (runtimeAudio.lastPlayed[key] || 0) < cooldown) return;
   runtimeAudio.lastPlayed[key] = now;
@@ -673,17 +716,15 @@ function updateWaterWalkSound(active){
   const audio = runtimeAudio.nodes.waterWalk;
   if(!audio || audio._runtimeAudioFailed) return;
   if(active){
-    if(!runtimeAudio.waterWalkActive || audio.paused){
-      runtimeAudio.waterWalkActive = true;
-      playRuntimeSound('waterWalk', {restart:false, cooldown:220});
-    }
+    clearRuntimeAudioFade('waterWalk');
+    runtimeAudio.waterWalkActive = true;
+    audio.volume = WATER_WALK_VOLUME;
+    if(audio.paused) playRuntimeSound('waterWalk', {restart:false, cooldown:0, volume:WATER_WALK_VOLUME});
     return;
   }
+  if(!runtimeAudio.waterWalkActive && !runtimeAudio.fadeTimers.waterWalk) return;
   runtimeAudio.waterWalkActive = false;
-  if(!audio.paused){
-    audio.pause();
-    try{ audio.currentTime = 0; }catch{}
-  }
+  fadeOutRuntimeSound('waterWalk', {duration:WATER_WALK_FADE_MS});
 }
 
 function stopRuntimeSounds(){
@@ -696,6 +737,7 @@ function maybePlayPlayerWaterLandingSound(previousY, previousVelocityY, waterSta
   const crossedSurface = previousY > waterState.surfaceY + .10 && player.position.y <= waterState.surfaceY + .10;
   const falling = previousVelocityY < -.35 || playerVelocityY < -.35;
   if(crossedSurface && falling){
+    triggerWaterRipple(waterState.body, 1.2 * WATER_IMPACT_RESPONSE_SCALE);
     playRuntimeSound('playerWaterLanding', {cooldown:520, volume:.78});
   }
 }
@@ -9466,7 +9508,10 @@ function jump(){
   if(waterState.inside && waterState.body){
     playerVelocityY = Math.max(playerVelocityY, (waterState.swimming ? 1.65 : 3.2) * getPlayerJumpPower());
     // 角色完全在水面下方時，按跳躍只應該產生游泳上浮，不應在遠方水面炸出水花。
-    if(!waterState.headSubmerged) triggerWaterRipple(waterState.body, waterState.swimming ? 1.25 : 1.2);
+    if(!waterState.headSubmerged){
+      triggerWaterRipple(waterState.body, (waterState.swimming ? 1.25 : 1.2) * WATER_IMPACT_RESPONSE_SCALE);
+      playRuntimeSound('playerWaterExit', {cooldown:420, volume:.78});
+    }
     manualActionUntil = performance.now()+520;
     return;
   }
@@ -9813,7 +9858,7 @@ function updateArtworkPhysics(dt){
         if(pos.y <= m.surfaceY + .08){
           pos.y = m.surfaceY + .08;
           if(!body.splashed){
-            triggerWaterRippleAt(afterWater, pos, body.mode === 'kick' ? 1.35 : 1.18);
+            triggerWaterRippleAt(afterWater, pos, (body.mode === 'kick' ? 1.35 : 1.18) * WATER_IMPACT_RESPONSE_SCALE);
             playRuntimeSound('artworkWaterDrop', {cooldown:180, volume:.82});
             body.splashed = true;
           }

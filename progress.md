@@ -187,3 +187,31 @@ Verification so far:
 
 Current TODO:
 - None after this change is pushed to `origin/main` for GitHub Pages.
+
+## 2026-06-05 water jump, movement, throw, and splash tuning
+
+Current user request:
+- Add the player jump-out-of-water sound from `sound/`.
+- Fade the water-walking loop when movement stops instead of cutting it off.
+- Reduce desktop player movement speed to 75% of the current effective speed.
+- Double the thrown artwork/item launch speed.
+- Make player water exit, player water landing, and item water-drop splash reactions 3-5x larger.
+- Push the finished change to GitHub Pages.
+
+Changes made:
+- Added `playerWaterExit` to runtime sound assets and preload/unlock handling.
+- Water-walking audio now keeps its loop but fades out over `WATER_WALK_FADE_MS` when movement stops, then pauses/resets after the fade.
+- Desktop effective player speed scale changed from `0.8` to `0.6`; touch devices keep the previous `0.8` scale.
+- `ARPG_INTERACTION.throwSpeed` changed from `8.8` to `17.6`; kick speed is unchanged.
+- Added `WATER_IMPACT_RESPONSE_SCALE = 4` and applied it only to jump-out-of-water, player water landing, and artwork/item water-drop splash trigger strengths.
+
+Verification so far:
+- Extracted `index.html` module script, removed import lines, and parsed it with Node `new Function(...)`: passed.
+- `git diff --check`: passed.
+- Local HTTP `HEAD` checks for all four runtime sound files returned `200`, including the new jump-out-of-water sound.
+- Static Playwright screenshot with JavaScript disabled saved to `output/water-tuning-static-loading.png` and visually inspected: loading still shows only `0%` plus `Loading asset 0 of 1.`.
+- Static JS checks passed for the new sound path, desktop/touch speed scales, doubled throw speed, water-walk fade call, and scaled splash trigger points.
+- The required `develop-web-game` Playwright client was attempted with a short space-key payload, but this project still timed out under headless SwiftShader before completing the run; no committed code was changed to work around that test limitation.
+
+Current TODO:
+- None after this change is pushed to `origin/main`.
