@@ -216,6 +216,46 @@ Verification so far:
 Current TODO:
 - None after this change is pushed to `origin/main`.
 
+## 2026-06-05 restore to 06e4e46, smoke off, mobile audio gate, and held model rotation
+
+Current user request:
+- Restore the project to commit `06e4e46` on `main` first.
+- Turn off the smoke effect.
+- Fix mobile audio so background music is loaded and playing before entering the site, instead of only starting after jump/move input.
+- Fix 3D model artwork flipping upside down when picked up with `T`.
+- Push the result to GitHub Pages.
+
+Restore:
+- Local `main` was reset hard to `06e4e46` as requested before applying fixes.
+- The remote had one newer commit (`95f8260`) after `06e4e46`, so the final push for this round needs to overwrite remote `main` with the restored-base fix commit.
+
+Diagnosis:
+- Smoke/fog was not coming from editor state alone; `applyRequiredLightingAndShadowCorrections()` explicitly restored `state.atmosphere.enabled=true` every run.
+- Background music was created as an `Audio` node but was not part of the loading gate readiness model. On mobile, browsers generally require a user gesture for audible playback, so the fix keeps the loading gate up until the background music is loaded and playback has started from the first touch/pointer/key gesture.
+- Held artwork rotation was shared for images and 3D models. `updateHeldArtwork()` changed `rotation.y` and `rotation.z` every frame, which destroys the 3D model's preserved orientation when picked up.
+
+Changes made:
+- Runtime correction now disables atmosphere/smoke with `enabled:false`, `intensity:0`, `opacity:0`, and `layers:0`, while keeping the existing dreamcore screen filter and realtime shadow corrections.
+- Background music now has loading/playback tracking:
+  - `loadeddata`/`canplay`/`canplaythrough` mark the audio asset loaded;
+  - `playing` marks background music started;
+  - loading progress includes one audio item;
+  - gallery release waits for both background audio loaded and background audio started;
+  - first loading-screen touch/pointer/key unlocks audio and starts background music before the site is released.
+- If the first unlock attempt cannot start music yet, later gestures retry instead of being ignored.
+- Held 3D model artwork keeps its existing rotation while being carried; only non-model/image artwork gets the floating spin.
+- Added audio flags to `window.__galleryDebugState()` for non-UI verification.
+
+Verification so far:
+- Extracted `index.html` module script, removed import lines, and parsed it with Node `new Function(...)`: passed.
+- Static JS checks passed for smoke disabled, audio loading gate fields, release waiting on runtime audio, background music load/play tracking, retryable unlock behavior, and model-only rotation guard.
+- Local HTTP `HEAD` checks for all five runtime sound files returned `200`.
+- Static Playwright screenshot with JavaScript disabled saved to `output/fix-audio-smoke-static-loading.png` and visually inspected: loading still shows only `0%` plus `Loading asset 0 of 1.`.
+- The required `develop-web-game` Playwright client was attempted with a `space` unlock payload, but this large WebGL page still timed out under headless SwiftShader; residual headless processes were cleaned up.
+
+Current TODO:
+- None after this restored-base fix is pushed to `origin/main`.
+
 ## 2026-06-05 water-walk audio debug and background music
 
 Current user request:

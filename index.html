@@ -338,7 +338,7 @@ let objectEditorDirty = false;
 let artEditorDirty = false;
 let waterEditorDirty = false;
 const waterRuntime = {materials:new Map(), lastSplashAt:new Map(), particles:[], lastPlayerPos:new THREE.Vector3(), hasLastPlayer:false, current:null, inside:false, swimming:false, wading:false};
-const runtimeAudio = {ready:false, unlocked:false, nodes:{}, lastPlayed:{}, fadeTimers:{}, waterWalkActive:false};
+const runtimeAudio = {ready:false, unlocked:false, nodes:{}, lastPlayed:{}, fadeTimers:{}, waterWalkActive:false, backgroundMusicReady:false, backgroundMusicStarted:false, backgroundMusicAutoplayLastAt:0};
 const ARPG_INTERACTION = {range:5.2, holdDistance:1.82, holdHeight:1.38, sideOffset:.22, kickSpeed:8.4, throwSpeed:17.6, gravity:8.6};
 let heldArtworkId = null;
 const artworkPhysics = new Map();
@@ -362,6 +362,8 @@ const galleryLoading = {
   currentUrl:'',
   errors:[],
   lastActivityAt:0,
+  audioExpected:0,
+  audioLoaded:0,
   quietTimer:null,
   gate:null,
   bar:null,
@@ -463,8 +465,10 @@ function setGalleryLoadingPhase(text){
 function updateGalleryLoadingUI(){
   if(!EXPORTED_GALLERY_VIEWER || galleryLoading.released) return;
   if(!ensureGalleryLoadingGate()) return;
-  const displayTotal = Math.max(galleryLoading.itemsTotal, galleryLoading.expectedTotal, 1);
-  const displayLoaded = clamp(galleryLoading.itemsLoaded, 0, displayTotal);
+  const assetTotal = Math.max(galleryLoading.itemsTotal, galleryLoading.expectedTotal, 1);
+  const audioTotal = Math.max(0, galleryLoading.audioExpected || 0);
+  const displayTotal = Math.max(1, assetTotal + audioTotal);
+  const displayLoaded = clamp(clamp(galleryLoading.itemsLoaded, 0, assetTotal) + clamp(galleryLoading.audioLoaded || 0, 0, audioTotal), 0, displayTotal);
   const assetRatio = displayTotal ? displayLoaded / displayTotal : 0;
   let ratio = assetRatio;
   if(galleryLoading.errors.length){
@@ -509,6 +513,10 @@ function maybeReleaseGalleryLoadingGate(){
     galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 240);
     return;
   }
+  if(!runtimeAudioReadyForGalleryRelease()){
+    galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 240);
+    return;
+  }
   if(quietMs < 700){
     galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 720 - quietMs);
     return;
@@ -549,6 +557,8 @@ function configureGalleryLoadingManager(){
   if(galleryLoading.configured) return;
   galleryLoading.configured = true;
   galleryLoading.expectedTotal = collectExpectedGalleryAssets(STATE).size;
+  prepareRuntimeAudio();
+  bindRuntimeAudioUnlock();
   galleryLoading.lastActivityAt = performance.now?.() || Date.now();
   document.body.classList.add('gallery-loading');
   updateGalleryLoadingUI();
@@ -611,11 +621,49 @@ function createRuntimeAudioNode(src, {loop=false, volume=1}={}){
   return audio;
 }
 
+function markBackgroundMusicReady(){
+  if(runtimeAudio.backgroundMusicReady) return;
+  runtimeAudio.backgroundMusicReady = true;
+  galleryLoading.audioLoaded = Math.max(galleryLoading.audioLoaded || 0, 1);
+  galleryLoading.lastActivityAt = performance.now?.() || Date.now();
+  startBackgroundMusic({allowWithoutUnlock:true});
+  updateGalleryLoadingUI();
+  maybeReleaseGalleryLoadingGate();
+}
+
+function markBackgroundMusicStarted(){
+  if(runtimeAudio.backgroundMusicStarted) return;
+  runtimeAudio.backgroundMusicStarted = true;
+  galleryLoading.lastActivityAt = performance.now?.() || Date.now();
+  updateGalleryLoadingUI();
+  maybeReleaseGalleryLoadingGate();
+}
+
+function trackBackgroundMusicLoading(audio){
+  if(!audio || audio._runtimeBackgroundTracked) return;
+  audio._runtimeBackgroundTracked = true;
+  galleryLoading.audioExpected = Math.max(galleryLoading.audioExpected || 0, 1);
+  const ready = ()=>markBackgroundMusicReady();
+  const started = ()=>markBackgroundMusicStarted();
+  audio.addEventListener('loadeddata', ready, {once:true});
+  audio.addEventListener('canplay', ready, {once:true});
+  audio.addEventListener('canplaythrough', ready, {once:true});
+  audio.addEventListener('playing', started);
+  audio.addEventListener('error', ()=>{
+    if(!galleryLoading.errors.some(err=>String(err).includes('background music'))){
+      galleryLoading.errors.push('background music failed');
+    }
+    updateGalleryLoadingUI();
+  });
+  if(audio.readyState >= 2) ready();
+}
+
 function prepareRuntimeAudio(){
   if(runtimeAudio.ready) return;
   runtimeAudio.ready = true;
   runtimeAudio.nodes.waterWalk = createRuntimeAudioNode(SOUND_ASSET.waterWalk, {loop:true, volume:WATER_WALK_VOLUME});
   runtimeAudio.nodes.backgroundMusic = createRuntimeAudioNode(SOUND_ASSET.backgroundMusic, {loop:true, volume:BACKGROUND_MUSIC_VOLUME});
+  trackBackgroundMusicLoading(runtimeAudio.nodes.backgroundMusic);
   runtimeAudio.nodes.playerWaterExit = createRuntimeAudioNode(SOUND_ASSET.playerWaterExit, {volume:.78});
   runtimeAudio.nodes.playerWaterLanding = createRuntimeAudioNode(SOUND_ASSET.playerWaterLanding, {volume:.78});
   runtimeAudio.nodes.artworkWaterDrop = createRuntimeAudioNode(SOUND_ASSET.artworkWaterDrop, {volume:.82});
@@ -623,7 +671,10 @@ function prepareRuntimeAudio(){
 
 function unlockRuntimeAudio(){
   prepareRuntimeAudio();
-  if(runtimeAudio.unlocked) return;
+  if(runtimeAudio.unlocked){
+    startBackgroundMusic();
+    return;
+  }
   runtimeAudio.unlocked = true;
   for(const [key, audio] of Object.entries(runtimeAudio.nodes)){
     if(!audio || audio._runtimeAudioFailed) continue;
@@ -715,12 +766,41 @@ function playRuntimeSound(key, {restart=true, cooldown=0, volume=null}={}){
   }catch{}
 }
 
-function startBackgroundMusic(){
-  if(!runtimeAudio.unlocked) return;
+function startBackgroundMusic({allowWithoutUnlock=false}={}){
+  prepareRuntimeAudio();
+  if(!runtimeAudio.unlocked && !allowWithoutUnlock) return false;
+  const audio = runtimeAudio.nodes.backgroundMusic;
+  if(!audio || audio._runtimeAudioFailed) return false;
+  if(!audio.paused){
+    markBackgroundMusicStarted();
+    return true;
+  }
+  const now = runtimeAudioTime();
+  if(allowWithoutUnlock && !runtimeAudio.unlocked && now - runtimeAudio.backgroundMusicAutoplayLastAt < 1200) return false;
+  if(allowWithoutUnlock && !runtimeAudio.unlocked) runtimeAudio.backgroundMusicAutoplayLastAt = now;
+  audio.volume = BACKGROUND_MUSIC_VOLUME;
+  try{
+    const result = audio.play();
+    if(result?.then){
+      result.then(markBackgroundMusicStarted).catch(()=>{});
+    }else{
+      markBackgroundMusicStarted();
+    }
+    return true;
+  }catch{
+    return false;
+  }
+}
+
+function runtimeAudioReadyForGalleryRelease(){
+  if(!EXPORTED_GALLERY_VIEWER) return true;
   prepareRuntimeAudio();
   const audio = runtimeAudio.nodes.backgroundMusic;
-  if(!audio || audio._runtimeAudioFailed || !audio.paused) return;
-  playRuntimeSound('backgroundMusic', {restart:false, cooldown:0, volume:BACKGROUND_MUSIC_VOLUME});
+  if(!audio || audio._runtimeAudioFailed) return false;
+  if(runtimeAudio.backgroundMusicReady && !runtimeAudio.backgroundMusicStarted){
+    startBackgroundMusic({allowWithoutUnlock:true});
+  }
+  return !!(runtimeAudio.backgroundMusicReady && runtimeAudio.backgroundMusicStarted);
 }
 
 function updateWaterWalkSound(active){
@@ -859,6 +939,7 @@ function installGalleryDebugState(){
       actorLoaded:!!actorModel,
       actorProxyVisible:!!actorProxy?.visible,
       water:{inside:!!waterRuntime.inside, swimming:!!waterRuntime.swimming, wading:!!waterRuntime.wading},
+      audio:{backgroundMusicReady:!!runtimeAudio.backgroundMusicReady, backgroundMusicStarted:!!runtimeAudio.backgroundMusicStarted, unlocked:!!runtimeAudio.unlocked},
       loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl},
       hasWrongWhiteArtwork:artworkList.some(isRemovedRequiredArtwork),
       targetArtworks:artworkList.filter(isRequiredReplacementArtwork).map(art=>({
@@ -939,15 +1020,15 @@ function installGalleryDebugState(){
 
 function applyRequiredLightingAndShadowCorrections(state){
   if(!state || typeof state !== 'object') return;
-  // 20260605: keep the smoke and dreamcore filter, but kill flat global fill light.
-  state.atmosphere = {enabled:true, color:'#d7eee5', intensity:.21, opacity:.81, layers:.99};
+  // 20260605: keep the dreamcore filter and realtime shadows, but disable the smoke/fog particle field.
+  state.atmosphere = {enabled:false, color:'#d7eee5', intensity:0, opacity:0, layers:0};
   state.screenFx = {enabled:true,preset:'dreamcore',intensity:.18,noise:0,scanlines:.06,chromatic:.12,warp:.03,glow:.86,vignette:.08,saturation:.51,contrast:.2,brightness:1.89,blur:3.89,hue:11};
   state.lightSystem = sanitizeLightSystem(state.lightSystem);
   state.lightSystem.enabled = true;
   state.lightSystem.ambient = {...(state.lightSystem.ambient || {}), color:(state.lightSystem.ambient?.color || '#dff7ef'), intensity:0};
   state.lightSystem.hemisphere = {...(state.lightSystem.hemisphere || {}), skyColor:(state.lightSystem.hemisphere?.skyColor || '#f2fff8'), groundColor:(state.lightSystem.hemisphere?.groundColor || '#223631'), intensity:0};
   state.lightBake = {...createDefaultLightBake(), ...(state.lightBake || {}), enabled:false, useInPlayMode:false, stale:true, data:{}};
-  state.lightingDebugMarker = '20260605_disable_flat_environment_light_restore_smoke_fx_realtime_shadows';
+  state.lightingDebugMarker = '20260605_disable_flat_environment_light_disable_smoke_fx_realtime_shadows';
 }
 
 async function main(){
@@ -9840,8 +9921,10 @@ function updateHeldArtwork(dt){
     .add(new THREE.Vector3(0, ARPG_INTERACTION.holdHeight + Math.sin(performance.now()*.003)*.08, 0));
   art.position = {x:base.x, y:base.y, z:base.z};
   art.rotation = art.rotation || {x:0,y:0,z:0};
-  art.rotation.y = (safeFinite(art.rotation.y,0) + dt * 82) % 360;
-  art.rotation.z = Math.sin(performance.now()*.0024) * 7;
+  if(art.type !== 'model'){
+    art.rotation.y = (safeFinite(art.rotation.y,0) + dt * 82) % 360;
+    art.rotation.z = Math.sin(performance.now()*.0024) * 7;
+  }
   placeArtwork(art);
 }
 
