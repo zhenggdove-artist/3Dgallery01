@@ -253,13 +253,13 @@ const MOBILE_LOOK_SENSITIVITY_SCALE = MOBILE_VIEWER ? 0.8 : 1;
 const TOUCH_PLAYER_SPEED_SCALE = 0.8;
 const DESKTOP_PLAYER_SPEED_SCALE = 0.6;
 const PLAYER_SPEED_SCALE = IS_TOUCH_DEVICE ? TOUCH_PLAYER_SPEED_SCALE : DESKTOP_PLAYER_SPEED_SCALE;
-const WATER_IMPACT_RESPONSE_SCALE = 4;
-const ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER = 10;
-const ARTWORK_WATER_IMPACT_PARTICLE_LIMIT = IS_TOUCH_DEVICE ? 560 : 900;
-const ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER = .92;
-const ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER = 1.02;
-const ARTWORK_WATER_IMPACT_RIPPLE_LAYERS = 5;
-const ARTWORK_WATER_IMPACT_RING_SCALE_MULTIPLIER = 2.35;
+const WATER_IMPACT_RESPONSE_SCALE = 2.15;
+const ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER = IS_TOUCH_DEVICE ? .72 : 1;
+const ARTWORK_WATER_IMPACT_PARTICLE_LIMIT = IS_TOUCH_DEVICE ? 220 : 360;
+const ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER = .78;
+const ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER = .86;
+const ARTWORK_WATER_IMPACT_RIPPLE_LAYERS = 3;
+const ARTWORK_WATER_IMPACT_RING_SCALE_MULTIPLIER = 1.55;
 const DETAILED_SPLASH_POOL_SIZE = IS_TOUCH_DEVICE ? 2 : 3;
 const WATER_SURFACE_SEGMENTS = IS_TOUCH_DEVICE ? 88 : 112;
 const GALLERY_DUST_COUNT = IS_TOUCH_DEVICE ? 700 : 1200;
@@ -364,6 +364,7 @@ let heldArtworkId = null;
 const artworkPhysics = new Map();
 let sharedSplashGeometry = null;
 let sharedSplashRingGeometry = null;
+let sharedDetailedSplashSheetGeometry = null;
 let swimStrokePhase = 0;
 let swimDiveVisual = 0;
 let swimBoneCache = null;
@@ -1036,22 +1037,23 @@ function installGalleryDebugState(){
       const impactPosition = isPointInsideWaterFootprint(body,previewPosition)
         ? new THREE.Vector3(previewPosition.x,metrics.surfaceY+.045,previewPosition.z)
         : new THREE.Vector3(safeFinite(body.position?.x,0),metrics.surfaceY+.045,safeFinite(body.position?.z,0));
-      triggerWaterRippleAt(body,impactPosition,5.25,{
+      triggerWaterRippleAt(body,impactPosition,2.65,{
         detailedGpu:true,
         physicalImpact:true,
-        physicalImpactStrength:5.0,
-        impactVelocity:new THREE.Vector3(3,-8,1.4),
+        physicalImpactStrength:2.55,
+        impactVelocity:new THREE.Vector3(3,-6,1.4),
+        impactRadius:.62,
         particleMultiplier:ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER,
         particleLimit:ARTWORK_WATER_IMPACT_PARTICLE_LIMIT,
         heightMultiplier:ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER,
         outwardMultiplier:ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER,
-        lifeMultiplier:1.28,
+        lifeMultiplier:1,
         ringLayers:ARTWORK_WATER_IMPACT_RIPPLE_LAYERS,
         ringScaleMultiplier:ARTWORK_WATER_IMPACT_RING_SCALE_MULTIPLIER,
-        rippleScale:1.55,
-        rippleStrengthCap:4.8,
-        motionScale:1.75,
-        motionStrengthCap:5.2,
+        rippleScale:1.2,
+        rippleStrengthCap:3.2,
+        motionScale:1.35,
+        motionStrengthCap:3.6,
         aftershockRipples:0
       });
       return true;
@@ -1137,7 +1139,7 @@ function installWaterSplashDebugButton(){
   const controls = document.createElement('div');
   controls.id = 'debugWaterSplashControls';
   controls.style.cssText = 'position:fixed;left:12px;top:12px;z-index:2147483646;display:flex;flex-wrap:wrap;gap:5px;max-width:calc(100vw - 24px)';
-  for(const [label,seconds] of [['SPLASH RISE',.08],['SPLASH CROWN',.28],['SPLASH RINGS',.82],['SPLASH LIVE',-1],['SPLASH STRESS',null],['SPLASH CLEANUP',-2],['PERF SHADOW CACHE',-3],['PERF REFERENCE OFF',-4]]){
+  for(const [label,seconds] of [['SPLASH RISE',.08],['SPLASH SHEET',.28],['SPLASH RINGS',.82],['SPLASH LIVE',-1],['SPLASH STRESS',null],['SPLASH CLEANUP',-2],['PERF SHADOW CACHE',-3],['PERF REFERENCE OFF',-4]]){
     const button = document.createElement('button');
     button.textContent = label;
     button.style.cssText = 'width:112px;padding:9px 5px;border-radius:8px;border:1px solid rgba(255,255,255,.7);background:rgba(0,0,0,.76);color:white;font:700 10px Arial;cursor:pointer';
@@ -5602,6 +5604,7 @@ function createWaterMaterial(body){
     uImpactAge:{value:99},
     uImpactCenter:{value:new THREE.Vector2(999,999)},
     uImpactStrength:{value:0},
+    uImpactRadius:{value:.55},
     uHalfSize:{value:new THREE.Vector2(1,1)},
     uShape:{value:0}
   };
@@ -5631,6 +5634,7 @@ function createWaterMaterial(body){
       uniform float uImpactAge;
       uniform vec2 uImpactCenter;
       uniform float uImpactStrength;
+      uniform float uImpactRadius;
       uniform vec2 uHalfSize;
       uniform float uShape;
       varying vec2 vUv;
@@ -5702,14 +5706,15 @@ function createWaterMaterial(body){
         float impactEnergy = clamp(uImpactStrength / 5.0,0.0,1.0);
         float impactActive = (1.0 - step(4.8,impactAge)) * step(.001,uImpactStrength);
         float impactD = distance(pos,uImpactCenter);
-        float bowlRadius = mix(1.15,2.45,impactEnergy) + impactAge*.28;
+        float footprintRadius = clamp(uImpactRadius,.18,1.6);
+        float bowlRadius = footprintRadius * mix(.82,1.28,impactEnergy) + impactAge*.22;
         float bowl = exp(-pow(impactD / max(.08,bowlRadius),2.0)*2.25) * exp(-impactAge*2.05) * impactActive;
-        float frontRadius = .55 + impactAge*3.7;
-        float frontWidth = .32 + impactAge*.16;
+        float frontRadius = footprintRadius*.76 + impactAge*2.85;
+        float frontWidth = .13 + footprintRadius*.16 + impactAge*.095;
         float front = exp(-pow(abs(impactD-frontRadius) / max(.12,frontWidth),2.0)*2.35) * exp(-impactAge*.72) * impactActive;
         float trailingGate = (1.0 - smoothstep(frontRadius-.35,frontRadius+2.2,impactD)) * smoothstep(.18,.72,impactAge);
         float trailing = sin((impactD-frontRadius)*6.2) * exp(-impactD*.12) * exp(-impactAge*1.08) * trailingGate * impactActive;
-        float impactHeight = -bowl * (.16 + uImpactStrength*.070) + front * (.075 + uImpactStrength*.031) + trailing * (.030 + uImpactStrength*.010);
+        float impactHeight = -bowl * (.10 + uImpactStrength*.048) + front * (.052 + uImpactStrength*.022) + trailing * (.020 + uImpactStrength*.007);
         float waveHeight = baseWave * waveGain + ripple * (0.105 + uWave*.18) + impactHeight;
         p.z += waveHeight;
         vImpactBowl = clamp(bowl * (0.38 + impactEnergy*.92),0.0,1.0);
@@ -6634,6 +6639,7 @@ function makeDetailedSplashPointMaterial(){
     vertexShader:`
       uniform float uTime;
       uniform float uPixelRatio;
+      attribute vec3 aOrigin;
       attribute vec3 aVelocity;
       attribute float aDelay;
       attribute float aLife;
@@ -6649,7 +6655,7 @@ function makeDetailedSplashPointMaterial(){
         float t = max(0.0, rawTime);
         float mist = step(1.5, aKind);
         float dragTime = t / (1.0 + t * mix(.13, .34, mist));
-        vec3 p = aVelocity * dragTime;
+        vec3 p = aOrigin + aVelocity * dragTime;
         p.y -= mix(4.7, 2.45, mist) * t * t;
         float swirl = sin(t * 8.0 + aPhase * 6.2831853) * mist;
         p.x += swirl * t * .13;
@@ -6692,37 +6698,107 @@ function makeDetailedSplashPointMaterial(){
   return material;
 }
 
-function makeDetailedSplashCrownMaterial(){
+function createDetailedSplashSheetGeometry(lobeCount=10, rows=4){
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  const seeds = [];
+  const indices = [];
+  const random = seededSplashRandom(0x51f15e);
+  for(let lobe=0; lobe<lobeCount; lobe++){
+    const center = (lobe / lobeCount) * Math.PI * 2 + (random()-.5) * .22;
+    const halfWidth = THREE.MathUtils.lerp(.12,.21,random());
+    const topHeight = THREE.MathUtils.lerp(.72,1.0,random());
+    const outwardLean = THREE.MathUtils.lerp(.10,.22,random());
+    const baseIndex = positions.length / 3;
+    for(let row=0; row<=rows; row++){
+      const v = row / rows;
+      const taper = THREE.MathUtils.lerp(1,.20,Math.pow(v,1.2));
+      const radius = .52 + outwardLean*v + Math.sin(v*Math.PI)*.055;
+      const y = v * topHeight;
+      for(const side of [-1,1]){
+        const angle = center + side * halfWidth * taper;
+        const ca = Math.cos(angle), sa = Math.sin(angle);
+        positions.push(ca*radius,y,sa*radius);
+        normals.push(ca,0,sa);
+        uvs.push(side < 0 ? 0 : 1,v);
+        seeds.push(lobe / Math.max(1,lobeCount-1));
+      }
+    }
+    for(let row=0; row<rows; row++){
+      const a = baseIndex + row*2;
+      const b = a+1;
+      const c = a+2;
+      const d = a+3;
+      indices.push(a,c,b,b,c,d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+  geometry.setAttribute('aSeed',new THREE.Float32BufferAttribute(seeds,1));
+  geometry.setIndex(indices);
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function makeDetailedSplashSheetMaterial(){
   return new THREE.ShaderMaterial({
     uniforms:{
-      uTime:{value:99},
+      uProgress:{value:1},
       uOpacity:{value:0},
-      uColor:{value:new THREE.Color('#8fefff')}
+      uColor:{value:new THREE.Color('#8fefff')},
+      uDirection:{value:new THREE.Vector2(0,0)},
+      uDirectionality:{value:0}
     },
     vertexShader:`
+      uniform float uProgress;
+      uniform vec2 uDirection;
+      uniform float uDirectionality;
+      attribute float aSeed;
       varying vec2 vUv;
+      varying float vSeed;
+      varying float vFresnel;
       void main(){
         vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+        vSeed = aSeed;
+        vec3 p = position;
+        float rise = 1.0-exp(-uProgress*11.0);
+        float collapse = smoothstep(.48,1.0,uProgress);
+        float flutter = sin(aSeed*37.0+uProgress*14.0+uv.y*5.0)*.018*uv.y;
+        p.xz *= 1.0 + uv.y*(uProgress*.16+flutter);
+        p.xz += uDirection * (uDirectionality*uv.y*uProgress*.18);
+        p.y *= rise;
+        p.y -= collapse*collapse*(.04+uv.y*.19);
+        vec4 mvPosition = modelViewMatrix*vec4(p,1.0);
+        vec3 n = normalize(normalMatrix*normal);
+        vec3 viewDir = normalize(-mvPosition.xyz);
+        vFresnel = 1.0-abs(dot(n,viewDir));
+        gl_Position = projectionMatrix*mvPosition;
       }
     `,
     fragmentShader:`
-      uniform float uTime;
+      uniform float uProgress;
       uniform float uOpacity;
       uniform vec3 uColor;
       varying vec2 vUv;
+      varying float vSeed;
+      varying float vFresnel;
       void main(){
-        float angle = vUv.x * 6.2831853;
-        float teeth = .5 + .5 * sin(angle * 11.0 + sin(angle * 5.0) * 1.7);
-        float tornTop = .62 + teeth * .30;
-        float topMask = 1.0 - smoothstep(tornTop, tornTop + .055, vUv.y);
-        float strands = .48 + .52 * smoothstep(-.7,.72,sin(angle * 23.0 + uTime * 3.2));
-        float baseFoam = 1.0 - smoothstep(.0,.19,vUv.y);
-        float shimmer = .72 + .28 * sin(angle * 17.0 - vUv.y * 13.0 + uTime * 7.0);
-        float alpha = (baseFoam * .72 + topMask * strands * (.62 - vUv.y * .23)) * uOpacity;
-        vec3 color = mix(uColor, vec3(1.0), .35 + shimmer * .32);
-        if(alpha <= .01) discard;
-        gl_FragColor = vec4(color, alpha);
+        float side = abs(vUv.x-.5)*2.0;
+        float sideFade = 1.0-smoothstep(.66,1.0,side);
+        float topFade = 1.0-smoothstep(.83,1.0,vUv.y);
+        float topRim = smoothstep(.80,.98,vUv.y);
+        float sideRim = smoothstep(.70,.98,side);
+        float breakup = .78+.22*sin(vSeed*53.0+vUv.y*19.0);
+        float temporalFade = 1.0-smoothstep(.44,1.0,uProgress);
+        float body = sideFade*mix(.22,.46,clamp(vFresnel,0.0,1.0))*topFade;
+        float rim = (topRim*.42+sideRim*.18)*breakup;
+        float alpha = (body+rim)*uOpacity*temporalFade;
+        if(alpha<=.008) discard;
+        vec3 sheetColor = mix(uColor*.84,vec3(.94,1.0,1.0),clamp(vFresnel*.42+rim*.34,0.0,.72));
+        gl_FragColor = vec4(sheetColor,clamp(alpha,0.0,.68));
       }
     `,
     transparent:true,
@@ -6762,18 +6838,18 @@ function makeDetailedSplashRingMaterial(){
         float r = length(p);
         if(r > 1.02) discard;
         float angle = atan(p.y,p.x);
-        float travel = min(1.0, uTime / 1.52);
-        float breakup = .58 + .42 * sin(angle * 19.0 + sin(angle * 7.0) * 2.0 + uTime * 4.5);
-        float granular = .68 + .32 * sin(angle * 43.0 - uTime * 7.0);
-        float rings = ringLine(.12 + travel*.58,.010 + travel*.014,r);
-        rings += ringLine(.20 + travel*.73,.009 + travel*.013,r) * step(1.5,uLayerCount);
-        rings += ringLine(.29 + travel*.62,.008 + travel*.012,r) * step(2.5,uLayerCount);
-        rings += ringLine(.38 + travel*.49,.007 + travel*.011,r) * step(3.5,uLayerCount);
-        rings += ringLine(.48 + travel*.38,.006 + travel*.010,r) * step(4.5,uLayerCount);
-        float foam = rings * mix(.55,1.0,breakup) * mix(.72,1.0,granular);
-        float core = (1.0-smoothstep(.0,.16,r)) * (1.0-smoothstep(.0,.36,uTime));
-        float fade = 1.0 - smoothstep(.72,1.65,uTime);
-        float alpha = clamp((foam + core*.66) * uOpacity * fade,0.0,.92);
+        float travel = smoothstep(0.0,1.0,min(1.0,uTime/1.48));
+        float breakup = .52 + .48 * sin(angle * 13.0 + sin(angle * 5.0) * 1.6 + uTime * 3.7);
+        float granular = .62 + .38 * sin(angle * 31.0 - uTime * 5.6);
+        float primary = ringLine(.12 + travel*.72,.012 + travel*.018,r);
+        float secondaryGate = smoothstep(.08,.24,uTime) * step(1.5,uLayerCount);
+        float trailingGate = smoothstep(.18,.38,uTime) * step(2.5,uLayerCount);
+        float secondary = ringLine(.09 + travel*.52,.010 + travel*.015,r) * secondaryGate;
+        float trailing = ringLine(.07 + travel*.34,.009 + travel*.013,r) * trailingGate;
+        float foam = (primary + secondary*.68 + trailing*.42) * mix(.46,1.0,breakup) * mix(.68,1.0,granular);
+        float core = (1.0-smoothstep(.0,.18,r)) * (1.0-smoothstep(.02,.30,uTime));
+        float fade = 1.0 - smoothstep(.58,1.56,uTime);
+        float alpha = clamp((foam + core*.48) * uOpacity * fade,0.0,.82);
         if(alpha <= .008) discard;
         gl_FragColor = vec4(mix(uColor,vec3(1.0),.22),alpha*.76);
       }
@@ -6789,6 +6865,7 @@ function makeDetailedSplashRingMaterial(){
 function createDetailedSplashSlot(capacity){
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(capacity * 3),3));
+  geometry.setAttribute('aOrigin', new THREE.BufferAttribute(new Float32Array(capacity * 3),3));
   geometry.setAttribute('aVelocity', new THREE.BufferAttribute(new Float32Array(capacity * 3),3));
   geometry.setAttribute('aDelay', new THREE.BufferAttribute(new Float32Array(capacity),1));
   geometry.setAttribute('aLife', new THREE.BufferAttribute(new Float32Array(capacity),1));
@@ -6801,9 +6878,10 @@ function createDetailedSplashSlot(capacity){
   points.frustumCulled = false;
   points.renderOrder = 32;
 
-  const crown = new THREE.Mesh(new THREE.CylinderGeometry(.86,.18,1,36,1,true), makeDetailedSplashCrownMaterial());
-  crown.renderOrder = 31;
-  crown.frustumCulled = false;
+  if(!sharedDetailedSplashSheetGeometry) sharedDetailedSplashSheetGeometry = createDetailedSplashSheetGeometry();
+  const sheet = new THREE.Mesh(sharedDetailedSplashSheetGeometry,makeDetailedSplashSheetMaterial());
+  sheet.renderOrder = 31;
+  sheet.frustumCulled = false;
 
   const ring = new THREE.Mesh(new THREE.PlaneGeometry(2,2,1,1), makeDetailedSplashRingMaterial());
   ring.rotation.x = -Math.PI/2;
@@ -6814,9 +6892,9 @@ function createDetailedSplashSlot(capacity){
   const group = new THREE.Group();
   group.name = 'pooled-detailed-water-impact';
   group.visible = false;
-  group.add(ring,crown,points);
+  group.add(ring,sheet,points);
   waterEffectsGroup.add(group);
-  return {group,points,crown,ring,capacity,active:false,age:99,duration:0,crownDuration:.72,ringDuration:1.65,crownRadius:1,crownHeight:1,ringRadius:1,particleCount:0,serial:0};
+  return {group,points,sheet,ring,capacity,active:false,age:99,duration:0,sheetDuration:.68,ringDuration:1.6,sheetRadius:1,sheetHeight:1,ringRadius:1,particleCount:0,serial:0};
 }
 
 function ensureDetailedSplashPool(){
@@ -6852,84 +6930,100 @@ function spawnDetailedWaterImpact(pos, body, splash, options={}){
   const slot = acquireDetailedSplashSlot();
   if(!slot) return;
   const opts = options && typeof options === 'object' ? options : {};
-  const impact = clamp(safeFinite(splash,1),.25,6.5);
-  const requested = Math.max(180,Math.round(THREE.MathUtils.lerp(48,86,clamp(impact,0,1)) * Math.max(1,safeFinite(opts.particleMultiplier,1))));
-  const count = Math.min(slot.capacity,requested);
+  const impact = clamp(safeFinite(splash,1),.20,4.5);
+  const energy = clamp((impact-.20)/3.4,0,1);
+  const density = clamp(safeFinite(opts.particleMultiplier,1),.35,1.25);
+  const requested = Math.round(THREE.MathUtils.lerp(IS_TOUCH_DEVICE ? 96 : 120,slot.capacity,energy)*density);
+  const count = Math.min(slot.capacity,Math.max(IS_TOUCH_DEVICE ? 72 : 96,requested));
   const seed = (++waterRuntime.detailedSplashSerial * 2654435761) ^ Math.round((pos.x + 57.3) * 997) ^ Math.round((pos.z - 31.7) * 991);
   const random = seededSplashRandom(seed);
+  const origin = slot.points.geometry.attributes.aOrigin.array;
   const velocity = slot.points.geometry.attributes.aVelocity.array;
   const delay = slot.points.geometry.attributes.aDelay.array;
   const life = slot.points.geometry.attributes.aLife.array;
   const size = slot.points.geometry.attributes.aSize.array;
   const kind = slot.points.geometry.attributes.aKind.array;
   const phase = slot.points.geometry.attributes.aPhase.array;
-  const heightGain = clamp(safeFinite(opts.heightMultiplier,1),.35,1.65) * (.78 + Math.sqrt(impact) * .22);
-  const outwardGain = clamp(safeFinite(opts.outwardMultiplier,1),.35,1.75) * (.78 + Math.sqrt(impact) * .18);
+  const impactRadius = clamp(safeFinite(opts.impactRadius,.55),.18,1.5);
+  const heightGain = clamp(safeFinite(opts.heightMultiplier,1),.35,1.35) * THREE.MathUtils.lerp(.86,1.12,energy);
+  const outwardGain = clamp(safeFinite(opts.outwardMultiplier,1),.35,1.45) * THREE.MathUtils.lerp(.88,1.16,energy);
   const impactVelocity = opts.impactVelocity?.isVector3 ? opts.impactVelocity : null;
   const directional = impactVelocity ? new THREE.Vector2(impactVelocity.x,impactVelocity.z) : new THREE.Vector2();
+  const horizontalSpeed = directional.length();
   if(directional.lengthSq() > .001) directional.normalize();
+  const directionality = clamp(horizontalSpeed/18,0,.72);
   const goldenAngle = 2.399963229728653;
   let maxLife = 0;
   for(let i=0;i<count;i++){
     const distribution = random();
-    const particleKind = distribution < .14 ? 0 : (distribution < .78 ? 1 : 2);
+    const particleKind = distribution < .12 ? 0 : (distribution < .78 ? 1 : 2);
     const angle = particleKind === 1 ? i * goldenAngle + (random()-.5)*.24 : random()*Math.PI*2;
+    const originRadius = particleKind === 0
+      ? THREE.MathUtils.lerp(.04,.22,random())*impactRadius
+      : THREE.MathUtils.lerp(.42,.92,random())*impactRadius;
+    origin[i*3] = Math.cos(angle)*originRadius;
+    origin[i*3+1] = THREE.MathUtils.lerp(.006,.035,random());
+    origin[i*3+2] = Math.sin(angle)*originRadius;
     let outward;
     let upward;
     let particleSize;
     let particleDelay;
     if(particleKind === 0){
-      outward = THREE.MathUtils.lerp(.18,.72,random()) * outwardGain;
-      upward = THREE.MathUtils.lerp(5.5,8.8,Math.pow(random(),.42)) * heightGain;
-      particleSize = THREE.MathUtils.lerp(4.1,7.2,random());
-      particleDelay = random()*.035;
+      outward = THREE.MathUtils.lerp(.10,.46,random()) * outwardGain;
+      upward = THREE.MathUtils.lerp(3.6,6.2,Math.pow(random(),.46)) * heightGain;
+      particleSize = THREE.MathUtils.lerp(3.8,6.6,random());
+      particleDelay = random()*.028;
     }else if(particleKind === 1){
-      outward = THREE.MathUtils.lerp(2.3,5.7,Math.pow(random(),.72)) * outwardGain;
-      upward = THREE.MathUtils.lerp(3.4,6.7,Math.pow(random(),.55)) * heightGain;
-      particleSize = THREE.MathUtils.lerp(2.7,5.6,random());
-      particleDelay = random()*.075;
+      outward = THREE.MathUtils.lerp(1.4,3.8,Math.pow(random(),.72)) * outwardGain;
+      upward = THREE.MathUtils.lerp(2.5,5.2,Math.pow(random(),.58)) * heightGain;
+      particleSize = THREE.MathUtils.lerp(2.5,5.1,random());
+      particleDelay = random()*.065;
     }else{
-      outward = THREE.MathUtils.lerp(3.8,7.8,random()) * outwardGain;
-      upward = THREE.MathUtils.lerp(2.3,5.3,Math.pow(random(),.68)) * heightGain;
-      particleSize = THREE.MathUtils.lerp(1.3,3.0,random());
-      particleDelay = THREE.MathUtils.lerp(.035,.16,random());
+      outward = THREE.MathUtils.lerp(2.8,5.3,random()) * outwardGain;
+      upward = THREE.MathUtils.lerp(1.8,3.8,Math.pow(random(),.68)) * heightGain;
+      particleSize = THREE.MathUtils.lerp(1.2,2.7,random());
+      particleDelay = THREE.MathUtils.lerp(.03,.13,random());
     }
-    const bias = particleKind === 0 ? .04 : .18;
+    const bias = (particleKind === 0 ? .04 : .24)*directionality;
     velocity[i*3] = Math.cos(angle)*outward + directional.x * outward * bias;
     velocity[i*3+1] = upward;
     velocity[i*3+2] = Math.sin(angle)*outward + directional.y * outward * bias;
     delay[i] = particleDelay;
-    const flightLife = upward / (particleKind === 2 ? 3.2 : 5.15);
-    life[i] = clamp(flightLife * THREE.MathUtils.lerp(.82,1.08,random()),.52,2.25) * Math.max(.45,safeFinite(opts.lifeMultiplier,1));
+    const flightLife = upward / (particleKind === 2 ? 2.7 : 4.85);
+    life[i] = clamp(flightLife * THREE.MathUtils.lerp(.82,1.08,random()),.42,1.65) * clamp(safeFinite(opts.lifeMultiplier,1),.55,1.35);
     size[i] = particleSize;
     kind[i] = particleKind;
     phase[i] = random();
     maxLife = Math.max(maxLife,delay[i]+life[i]);
   }
-  for(const name of ['aVelocity','aDelay','aLife','aSize','aKind','aPhase']) slot.points.geometry.attributes[name].needsUpdate = true;
+  for(const name of ['aOrigin','aVelocity','aDelay','aLife','aSize','aKind','aPhase']) slot.points.geometry.attributes[name].needsUpdate = true;
   slot.points.geometry.setDrawRange(0,count);
-  const color = new THREE.Color(validColor(body.water?.color) ? body.water.color : '#4bbcff').lerp(new THREE.Color('#e8ffff'),.46);
+  const color = new THREE.Color(validColor(body.water?.color) ? body.water.color : '#4bbcff').lerp(new THREE.Color('#e8ffff'),.34);
   slot.points.material.uniforms.uColor.value.copy(color);
   slot.points.material.uniforms.uTime.value = 0;
   slot.points.material.uniforms.uPixelRatio.value = Math.min(renderer?.getPixelRatio?.() || 1,1.6);
-  slot.crown.material.uniforms.uColor.value.copy(color);
+  slot.sheet.material.uniforms.uColor.value.copy(color);
+  slot.sheet.material.uniforms.uProgress.value = 0;
+  slot.sheet.material.uniforms.uDirection.value.copy(directional);
+  slot.sheet.material.uniforms.uDirectionality.value = directionality;
+  slot.sheet.rotation.y = random()*Math.PI*2;
   slot.ring.material.uniforms.uColor.value.copy(color);
-  slot.ring.material.uniforms.uLayerCount.value = clamp(Math.round(safeFinite(opts.ringLayers,5)),1,5);
-  const edge = Math.max(.42,waterBoundaryDistance(body,pos)*.94);
-  slot.ringRadius = Math.min(edge,4.6,THREE.MathUtils.lerp(1.7,3.75,clamp(impact/5,0,1)) * Math.max(.5,safeFinite(opts.ringScaleMultiplier,1)));
-  slot.crownRadius = Math.min(Math.max(.38,edge*.66),THREE.MathUtils.lerp(.62,1.28,clamp(impact/5,0,1)));
-  slot.crownHeight = THREE.MathUtils.lerp(.95,2.25,clamp(impact/5,0,1)) * Math.min(1.4,heightGain);
+  slot.ring.material.uniforms.uLayerCount.value = clamp(Math.round(safeFinite(opts.ringLayers,3)),1,3);
+  const edge = Math.max(.34,waterBoundaryDistance(body,pos)*.94);
+  slot.ringRadius = Math.min(edge,4.2,(THREE.MathUtils.lerp(1.05,2.25,energy)+impactRadius*.48)*clamp(safeFinite(opts.ringScaleMultiplier,1),.55,1.8));
+  slot.sheetRadius = Math.min(Math.max(.34,edge*.72),clamp(impactRadius*THREE.MathUtils.lerp(1.02,1.34,energy)+energy*.16,.34,1.35));
+  slot.sheetHeight = THREE.MathUtils.lerp(.38,1.02,energy)*heightGain;
   slot.group.position.copy(pos);
   slot.group.visible = true;
   slot.points.visible = true;
   slot.ring.visible = true;
-  slot.crown.visible = true;
+  slot.sheet.visible = true;
   slot.age = 0;
   slot.duration = Math.max(maxLife,slot.ringDuration) + .08;
   slot.active = true;
   slot.particleCount = count;
   slot.serial = waterRuntime.detailedSplashSerial;
-  waterRuntime.lastDetailedSplash = {particleCount:count,requestedParticleCount:requested,poolSize:DETAILED_SPLASH_POOL_SIZE,drawCalls:3,impact:+impact.toFixed(2),mobile:IS_TOUCH_DEVICE};
+  waterRuntime.lastDetailedSplash = {particleCount:count,requestedParticleCount:requested,poolSize:DETAILED_SPLASH_POOL_SIZE,drawCalls:3,impact:+impact.toFixed(2),impactRadius:+impactRadius.toFixed(2),mobile:IS_TOUCH_DEVICE};
   syncDetailedSplashTelemetry();
 }
 
@@ -6942,14 +7036,12 @@ function updateDetailedWaterImpacts(dt,force=false){
     slot.ring.material.uniforms.uTime.value = slot.age;
     slot.ring.material.uniforms.uOpacity.value = 1;
     slot.ring.scale.setScalar(slot.ringRadius);
-    const crownPhase = clamp(slot.age / slot.crownDuration,0,1);
-    const crownLift = Math.sin(crownPhase * Math.PI);
-    const crownHeight = Math.max(.015,slot.crownHeight * crownLift);
-    slot.crown.visible = crownPhase < 1;
-    slot.crown.scale.set(slot.crownRadius * (.68 + crownPhase*.62),crownHeight,slot.crownRadius * (.68 + crownPhase*.62));
-    slot.crown.position.y = crownHeight*.5;
-    slot.crown.material.uniforms.uTime.value = slot.age;
-    slot.crown.material.uniforms.uOpacity.value = Math.pow(1-crownPhase,.62) * Math.min(1,crownPhase*8);
+    const sheetPhase = clamp(slot.age / slot.sheetDuration,0,1);
+    slot.sheet.visible = sheetPhase < 1;
+    slot.sheet.scale.set(slot.sheetRadius,slot.sheetHeight,slot.sheetRadius);
+    slot.sheet.position.y = 0;
+    slot.sheet.material.uniforms.uProgress.value = sheetPhase;
+    slot.sheet.material.uniforms.uOpacity.value = Math.min(1,sheetPhase*10);
     if(slot.age >= slot.duration){
       slot.active = false;
       slot.group.visible = false;
@@ -10527,6 +10619,7 @@ function triggerWaterRippleAt(body, worldPos, strengthScale=1, options={}){
       if(u.uImpactCenter) u.uImpactCenter.value.copy(local);
       if(u.uImpactAge) u.uImpactAge.value = 0;
       if(u.uImpactStrength) u.uImpactStrength.value = Math.max(u.uImpactStrength.value || 0, physicalImpactStrength);
+      if(u.uImpactRadius) u.uImpactRadius.value = clamp(safeFinite(opts.impactRadius,.55),.18,1.5);
     }
   }
   const m = waterBodyMetrics(body);
@@ -10655,6 +10748,30 @@ function updateHeldArtwork(dt){
   placeArtwork(art);
 }
 
+function getArtworkWaterImpactProfile(art, velocity){
+  const group = getArtworkRuntimeGroup(art?.id);
+  let impactRadius = .48;
+  if(group){
+    group.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(group);
+    if(Number.isFinite(box.min.x) && Number.isFinite(box.max.x)){
+      const size = box.getSize(new THREE.Vector3());
+      const footprintDiameter = Math.sqrt(Math.max(.04,size.x)*Math.max(.04,size.z));
+      impactRadius = clamp(footprintDiameter*.34,.24,1.25);
+    }
+  }
+  const verticalSpeed = Math.max(0,-safeFinite(velocity?.y,0));
+  const horizontalSpeed = Math.hypot(safeFinite(velocity?.x,0),safeFinite(velocity?.z,0));
+  // Water displacement is governed mainly by velocity normal to the surface and
+  // the object's footprint. Horizontal throw speed only adds a small directional
+  // wake; treating it as vertical energy was the source of the oversized splash.
+  const normalEnergy = clamp(verticalSpeed/8,0,1.35);
+  const glideEnergy = clamp(horizontalSpeed/18,0,1)*.16;
+  const displacedVolume = clamp((impactRadius-.24)/1.01,0,1)*.18;
+  const energy = clamp(.32+normalEnergy*.75+glideEnergy+displacedVolume,.38,1.4);
+  return {impactRadius,energy,verticalSpeed,horizontalSpeed};
+}
+
 function updateArtworkPhysics(dt){
   if(!artworkPhysics.size) return;
   for(const [id, body] of [...artworkPhysics.entries()]){
@@ -10681,24 +10798,26 @@ function updateArtworkPhysics(dt){
         if(pos.y <= m.surfaceY + .08){
           pos.y = m.surfaceY + .08;
           if(!body.splashed){
-            const impactEnergy = clamp((body.velocity.length() + Math.abs(body.velocity.y)) / 16, 1, 2.35);
-            const impactStrength = (body.mode === 'kick' ? 1.35 : 1.18) * WATER_IMPACT_RESPONSE_SCALE * impactEnergy;
+            const impactProfile = getArtworkWaterImpactProfile(art,body.velocity);
+            const modeGain = body.mode === 'kick' ? 1.05 : 1;
+            const impactStrength = WATER_IMPACT_RESPONSE_SCALE*modeGain*impactProfile.energy;
             triggerWaterRippleAt(afterWater, pos, impactStrength, {
               detailedGpu:true,
               physicalImpact:true,
-              physicalImpactStrength:clamp(impactStrength*.92,1.4,5.2),
+              physicalImpactStrength:clamp(impactStrength*.96,.75,3.8),
               impactVelocity:body.velocity.clone(),
+              impactRadius:impactProfile.impactRadius,
               particleMultiplier:ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER,
               particleLimit:ARTWORK_WATER_IMPACT_PARTICLE_LIMIT,
-              heightMultiplier:ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER,
-              outwardMultiplier:ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER,
-              lifeMultiplier:1.28,
+              heightMultiplier:ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER*THREE.MathUtils.lerp(.88,1.06,impactProfile.energy/1.4),
+              outwardMultiplier:ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER*THREE.MathUtils.lerp(.92,1.08,impactProfile.energy/1.4),
+              lifeMultiplier:1,
               ringLayers:ARTWORK_WATER_IMPACT_RIPPLE_LAYERS,
               ringScaleMultiplier:ARTWORK_WATER_IMPACT_RING_SCALE_MULTIPLIER,
-              rippleScale:1.55,
-              rippleStrengthCap:4.8,
-              motionScale:1.75,
-              motionStrengthCap:5.2,
+              rippleScale:1.2,
+              rippleStrengthCap:3.2,
+              motionScale:1.35,
+              motionStrengthCap:3.6,
               aftershockRipples:0
             });
             playRuntimeSound('artworkWaterDrop', {cooldown:180, volume:.82});

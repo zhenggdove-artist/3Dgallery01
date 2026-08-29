@@ -238,6 +238,32 @@ Implementation direction:
 - Replaced that heavy artwork-only path with a fixed-size pooled GPU effect. Ballistic droplet positions are evaluated in a vertex shader, so hundreds of droplets render in one draw call instead of hundreds of draw calls.
 - The visual is layered into a deterministic central jet, crown droplets, outer mist, an animated torn crown sheet, and five shader-drawn foam/ripple rings.
 - Desktop uses a three-slot pool capped at 900 droplets per impact; touch devices use a two-slot pool capped at 560. Repeated impacts recycle the oldest slot and allocate no new scene objects.
+
+## 2026-08-29 natural artwork water-impact correction
+
+Current user request:
+- Remove the unnatural white-line inverted cone shown when artwork is thrown into water.
+- Rebuild the response around recognizable game-water physics while keeping the gallery smooth.
+
+Root cause:
+- The inverted cone was literal geometry, not a random WebGL artifact: `CylinderGeometry(.86,.18,1,36,1,true)` made a continuous sheet whose top was almost five times wider than its base.
+- The crown fragment shader covered that frustum with high-contrast strands, so the translucent surface read as a white wire cone.
+- Impact strength counted most of the artwork's large horizontal throw velocity as vertical displacement energy, exaggerating splash height and water-surface deformation.
+
+Changes:
+- Replaced the continuous frustum with ten disconnected, tapered splash-sheet lobes in one shared `BufferGeometry` and one draw call. The lobes rise, flare slightly, fall, and fade without forming a closed cone.
+- Kept the effect at three draw calls per active impact: one GPU point cloud, one broken splash sheet, and one ripple plane.
+- Added per-droplet annular origins so crown droplets emerge from the displaced-water rim instead of every particle radiating from one mathematical point.
+- Reduced the GPU particle pool from 900/560 to 360 desktop / 220 touch and reduced the pool density on touch devices. No per-droplet Mesh or Material is created.
+- Reworked ripple rendering from five simultaneous graphic rings to a primary wavefront plus two weaker delayed trailing waves.
+- Added footprint-aware impact response. Surface depression and splash radius now use the artwork's world-space waterline footprint; vertical velocity controls most splash energy, while horizontal velocity only biases the spray direction and adds a small wake contribution.
+- Added `uImpactRadius` to the water-surface shader, reducing the previous oversized fixed-radius bowl and tying the cavity/rim to displaced area.
+
+Verification:
+- `index.html` module syntax check passes.
+- `git diff --check` passes.
+- Static reference checks confirm the old `CylinderGeometry(.86,.18,...)` and every crown reference are removed.
+- The local WebGL visual test path remains query-gated through `debugInput` / `debugWaterSplash`; external browser acquisition was unavailable in the current restricted runtime, so deployment preview still requires the connected browser or GitHub-hosted branch.
 - Kept the existing water-surface displacement/caustic response and item water-drop audio.
 - Added debug telemetry for active pooled impacts, legacy Mesh particle count, per-impact droplet count, and draw-call count.
 
