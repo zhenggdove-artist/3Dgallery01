@@ -216,6 +216,40 @@ Verification so far:
 Current TODO:
 - None after this change is pushed to `origin/main`.
 
+## 2026-08-29 brightness, dust, physical water response, and deep performance diagnosis
+
+Current user request:
+- Reduce the overall gallery brightness by 50%.
+- Restore visible gray dust motes.
+- Make thrown artwork deform the water surface: a deep impact-center depression, large ripples, and waves instead of only a detached splash.
+- Deep-debug severe gallery lag and make desktop/mobile operation substantially smoother.
+
+Diagnosis loop:
+- Added query-gated frame telemetry for FPS, frame interval, CPU-side frame work, p95 work, draw calls, triangles, points, geometries, textures, and pixel ratio. It is inactive during normal gallery use.
+- Next: capture desktop/mobile baseline before changing rendering behavior, rank falsifiable performance hypotheses, then change one variable at a time.
+
+## 2026-08-29 detailed artwork water-impact rebuild
+
+Current user request:
+- Replace the crude artwork/item water splash with a highly detailed but computationally lean effect that does not make the 3D gallery stutter.
+
+Implementation direction:
+- Diagnosed the main performance risk: the previous artwork impact path created as many as 860 separate Three.js Mesh objects and materials for one impact.
+- Replaced that heavy artwork-only path with a fixed-size pooled GPU effect. Ballistic droplet positions are evaluated in a vertex shader, so hundreds of droplets render in one draw call instead of hundreds of draw calls.
+- The visual is layered into a deterministic central jet, crown droplets, outer mist, an animated torn crown sheet, and five shader-drawn foam/ripple rings.
+- Desktop uses a three-slot pool capped at 900 droplets per impact; touch devices use a two-slot pool capped at 560. Repeated impacts recycle the oldest slot and allocate no new scene objects.
+- Kept the existing water-surface displacement/caustic response and item water-drop audio.
+- Added debug telemetry for active pooled impacts, legacy Mesh particle count, per-impact droplet count, and draw-call count.
+
+Current TODO:
+- Completed syntax check and `git diff --check` successfully.
+- Ran the required `develop-web-game` client; as in previous project notes, the full scene stalled in headless SwiftShader after loading the large WebGL assets, so the run was stopped after a bounded wait.
+- Used the hardware-accelerated in-app browser against the same local `index.html` and visually inspected frozen rise, crown, and ripple phases. The first pass looked like oversized glass spheres; retuned sprite perspective, sizes, opacity, height, and outward spread, then reloaded and inspected all phases again.
+- Final desktop stress telemetry after eight rapid impacts: three pooled active slots, nine draw calls, 860 droplets per impact, zero legacy particle Meshes, and zero console errors.
+- Final mobile-width stress telemetry: two pooled active slots, six draw calls, 560 droplets per impact, zero legacy particle Meshes, and zero console errors.
+- Forced-lifetime cleanup test ended with zero active splash slots and zero splash draw calls, confirming reuse/cleanup.
+- None remaining.
+
 ## 2026-06-05 artwork water impact splash upgrade
 
 Current user request:

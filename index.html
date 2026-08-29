@@ -66,6 +66,10 @@
   .mobileActionButton{width:59px;height:59px;border-radius:999px;background:rgba(128,128,128,.38);border:1px solid rgba(255,255,255,.25);color:#eee;font:700 20px/1 Arial,'Noto Sans TC',sans-serif;letter-spacing:.02em;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;-webkit-touch-callout:none;backdrop-filter:blur(4px);box-shadow:0 8px 20px rgba(0,0,0,.18);transition:transform .08s ease,background .08s ease,filter .08s ease}
   .mobileActionButton.is-pressed{transform:scale(.9);background:rgba(205,205,205,.58);filter:brightness(1.32)}
   body.exported-viewer .edit-ui{display:none!important}
+  /* A 50%-opaque black compositor layer halves the final scene luminance
+     without the expensive offscreen texture pass caused by CSS brightness(). */
+  #galleryBrightnessOverlay{position:fixed;inset:0;z-index:5;pointer-events:none;background:rgba(0,0,0,.5);display:none}
+  body.exported-viewer #galleryBrightnessOverlay{display:block}
   body.exported-viewer #mobileControls{display:flex}
   #viewerEscHint{position:fixed;right:18px;top:18px;z-index:2147483601;display:none;padding:8px 10px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(0,0,0,.38);color:rgba(255,255,255,.82);font:12px/1.2 Arial,'Noto Sans TC',sans-serif;letter-spacing:.04em;pointer-events:none;backdrop-filter:blur(6px)}
   body.exported-viewer #viewerEscHint{display:block}
@@ -103,6 +107,7 @@
 <body class="exported-viewer play-mode gallery-loading" style="background: rgb(220, 233, 225); cursor: default;">
 <canvas id="canvas" data-engine="three.js r160" width="1920" height="912" data-webgl-safety-bound="1" style="touch-action: none; cursor: default;"></canvas>
 <div id="screenFxOverlay" aria-hidden="true" style="opacity: 0;"></div>
+<div id="galleryBrightnessOverlay" aria-hidden="true"></div>
 <svg id="screenFxSvg" width="0" height="0" aria-hidden="true" focusable="false" style="position:fixed;width:0;height:0;overflow:hidden;pointer-events:none">
   <filter id="screenFxSWarp" x="-8%" y="-8%" width="116%" height="116%" color-interpolation-filters="sRGB">
     <feTurbulence id="screenFxWarpNoise" type="fractalNoise" baseFrequency="0.006 0.028" numOctaves="1" seed="11" result="warpNoise"></feTurbulence>
@@ -190,6 +195,7 @@ const EXPORTED_STATE = {"room":{"width":36,"depth":30,"height":8.8,"thickness":0
 const IS_TOUCH_DEVICE = (()=>{
   try{ return matchMedia('(hover:none), (pointer:coarse), (max-width:820px)').matches || navigator.maxTouchPoints > 0; }catch{ return false; }
 })();
+const DEBUG_INPUT_ENABLED = new URLSearchParams(location.search).has('debugInput');
 function runtimeGalleryAssetUrl(src){
   const value = String(src || '').replace(/\\/g,'/').trim();
   if(EXPORTED_GALLERY_VIEWER && IS_TOUCH_DEVICE && value === 'models/model_0004.glb'){
@@ -226,6 +232,7 @@ let scene, camera, renderer, clock;
 let skyMesh = null, skyLoadToken = 0;
 let atmospherePoints = null, atmosphereMaterial = null, atmosphereGeometry = null, atmosphereTexture = null, atmosphereUniforms = null;
 let atmosphereVolumeMesh = null, atmosphereVolumeGeometry = null, atmosphereVolumeMaterial = null, atmosphereVolumeUniforms = null, atmosphereCloudTexture = null;
+let galleryDustPoints = null, galleryDustGeometry = null, galleryDustMaterial = null, galleryDustUniforms = null;
 let atmosphereRebuildTimer = null;
 let screenFxNoiseTexture = null;
 let screenFxTime = 0;
@@ -248,18 +255,22 @@ const DESKTOP_PLAYER_SPEED_SCALE = 0.6;
 const PLAYER_SPEED_SCALE = IS_TOUCH_DEVICE ? TOUCH_PLAYER_SPEED_SCALE : DESKTOP_PLAYER_SPEED_SCALE;
 const WATER_IMPACT_RESPONSE_SCALE = 4;
 const ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER = 10;
-const ARTWORK_WATER_IMPACT_PARTICLE_LIMIT = 1800;
-const ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER = 2.25;
-const ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER = 1.65;
+const ARTWORK_WATER_IMPACT_PARTICLE_LIMIT = IS_TOUCH_DEVICE ? 560 : 900;
+const ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER = .92;
+const ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER = 1.02;
 const ARTWORK_WATER_IMPACT_RIPPLE_LAYERS = 5;
 const ARTWORK_WATER_IMPACT_RING_SCALE_MULTIPLIER = 2.35;
+const DETAILED_SPLASH_POOL_SIZE = IS_TOUCH_DEVICE ? 2 : 3;
+const WATER_SURFACE_SEGMENTS = IS_TOUCH_DEVICE ? 88 : 112;
+const GALLERY_DUST_COUNT = IS_TOUCH_DEVICE ? 700 : 1200;
 const WATER_WALK_VOLUME = .42;
 const WATER_WALK_FADE_MS = 520;
 const BACKGROUND_MUSIC_VOLUME = .28;
 const MOBILE_REFERENCE_COLLISION_ENABLED = false;
 const MOBILE_FAST_RENDER = false; // shadows must stay enabled in exported viewer
 let webglContextLost = false;
-let roomGroup, customWallGroup, floorTileGroup, waterGroup, referenceArchitectureGroup, artworkGroup, playerGroup, actorModel, actorProxy, statue, lightRigGroup;
+let roomGroup, customWallGroup, floorTileGroup, waterGroup, waterEffectsGroup, referenceArchitectureGroup, artworkGroup, playerGroup, actorModel, actorProxy, statue, lightRigGroup;
+let mobileActorSafetyPatchedModel = null, mobileActorSafetyPatchedProxy = null;
 let surfaces = {}, customWallMeshes = {}, floorTileMeshes = {}, waterBodyMeshes = {}, artworkMeshes = {}, lightControlObjects = {}, lightTargetObjects = {};
 let referenceCollisionItems = [];
 let lastChiselTarget = null;
@@ -345,7 +356,8 @@ const player = { position:new THREE.Vector3(0,0,5.8), radius:.34, height:1.72 };
 let objectEditorDirty = false;
 let artEditorDirty = false;
 let waterEditorDirty = false;
-const waterRuntime = {materials:new Map(), lastSplashAt:new Map(), particles:[], lastPlayerPos:new THREE.Vector3(), hasLastPlayer:false, current:null, inside:false, swimming:false, wading:false};
+const waterRuntime = {materials:new Map(), lastSplashAt:new Map(), particles:[], detailedSplashes:[], detailedSplashCursor:0, detailedSplashSerial:0, freezeDetailedSplashes:false, lastDetailedSplash:null, lastPlayerPos:new THREE.Vector3(), hasLastPlayer:false, current:null, inside:false, swimming:false, wading:false};
+const galleryPerfRuntime = {lastFrameAt:0, frameIntervals:[], workTimes:[], frameCount:0};
 const runtimeAudio = {ready:false, unlocked:false, nodes:{}, lastPlayed:{}, fadeTimers:{}, waterWalkActive:false, backgroundMusicReady:false, backgroundMusicStarted:false, backgroundMusicAutoplayLastAt:0};
 const ARPG_INTERACTION = {range:5.2, holdDistance:1.82, holdHeight:1.38, sideOffset:.22, kickSpeed:8.4, throwSpeed:17.6, gravity:8.6};
 let heldArtworkId = null;
@@ -538,6 +550,18 @@ function maybeReleaseGalleryLoadingGate(){
 
 function releaseGalleryLoadingGate(){
   if(galleryLoading.released) return;
+  // All large meshes are present now. Refresh every shadow map once behind the
+  // loading gate, then freeze it; otherwise late model loads can leave the
+  // exported viewer doing six 2048px shadow passes on every frame.
+  if(EXPORTED_GALLERY_VIEWER && renderer && scene && camera){
+    disableBakedLightingRuntime();
+    STATE.lightBake = sanitizeLightBake(STATE?.lightBake);
+    STATE.lightBake.enabled = true;
+    STATE.lightBake.useInPlayMode = true;
+    STATE.lightBake.stale = false;
+    forceUpdateShadowMapsForLightingBake();
+    applyPlayModePerformanceLighting(true);
+  }
   galleryLoading.released = true;
   galleryLoading.itemsLoaded = Math.max(galleryLoading.itemsLoaded, galleryLoading.itemsTotal, galleryLoading.expectedTotal);
   updateGalleryLoadingUI();
@@ -946,7 +970,14 @@ function installGalleryDebugState(){
       effectiveMove:movementVector(),
       actorLoaded:!!actorModel,
       actorProxyVisible:!!actorProxy?.visible,
-      water:{inside:!!waterRuntime.inside, swimming:!!waterRuntime.swimming, wading:!!waterRuntime.wading},
+      water:{
+        inside:!!waterRuntime.inside,
+        swimming:!!waterRuntime.swimming,
+        wading:!!waterRuntime.wading,
+        detailedSplashActive:waterRuntime.detailedSplashes.filter(slot=>slot.active).length,
+        legacyParticleMeshes:waterRuntime.particles.length,
+        lastDetailedSplash:waterRuntime.lastDetailedSplash
+      },
       audio:{backgroundMusicReady:!!runtimeAudio.backgroundMusicReady, backgroundMusicStarted:!!runtimeAudio.backgroundMusicStarted, unlocked:!!runtimeAudio.unlocked},
       loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl},
       hasWrongWhiteArtwork:artworkList.some(isRemovedRequiredArtwork),
@@ -997,6 +1028,83 @@ function installGalleryDebugState(){
       resetMobileMoveKeys();
       return true;
     }
+    if(action.type === 'waterSplash'){
+      const body = (STATE.waterBodies || []).find(item=>item && item.visible !== false && !item.isDraft);
+      if(!body) return false;
+      const metrics = waterBodyMetrics(body);
+      const previewPosition = player.position.clone().addScaledVector(getCameraForward(),3.1);
+      const impactPosition = isPointInsideWaterFootprint(body,previewPosition)
+        ? new THREE.Vector3(previewPosition.x,metrics.surfaceY+.045,previewPosition.z)
+        : new THREE.Vector3(safeFinite(body.position?.x,0),metrics.surfaceY+.045,safeFinite(body.position?.z,0));
+      triggerWaterRippleAt(body,impactPosition,5.25,{
+        detailedGpu:true,
+        physicalImpact:true,
+        physicalImpactStrength:5.0,
+        impactVelocity:new THREE.Vector3(3,-8,1.4),
+        particleMultiplier:ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER,
+        particleLimit:ARTWORK_WATER_IMPACT_PARTICLE_LIMIT,
+        heightMultiplier:ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER,
+        outwardMultiplier:ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER,
+        lifeMultiplier:1.28,
+        ringLayers:ARTWORK_WATER_IMPACT_RIPPLE_LAYERS,
+        ringScaleMultiplier:ARTWORK_WATER_IMPACT_RING_SCALE_MULTIPLIER,
+        rippleScale:1.55,
+        rippleStrengthCap:4.8,
+        motionScale:1.75,
+        motionStrengthCap:5.2,
+        aftershockRipples:0
+      });
+      return true;
+    }
+    if(action.type === 'waterSplashStep'){
+      updateDetailedWaterImpacts(clamp(safeFinite(action.seconds,.1),0,.8),true);
+      renderSceneWithScreenFx();
+      return true;
+    }
+    if(action.type === 'waterSplashStage'){
+      for(const slot of waterRuntime.detailedSplashes){ slot.active = false; slot.group.visible = false; }
+      waterRuntime.freezeDetailedSplashes = false;
+      window.__galleryDebugInput({type:'waterSplash'});
+      waterRuntime.freezeDetailedSplashes = true;
+      const stagedSeconds = clamp(safeFinite(action.seconds,.18),0,.95);
+      updateDetailedWaterImpacts(stagedSeconds,true);
+      for(const mat of waterRuntime.materials.values()){
+        const impactAge = mat.userData?.waterUniforms?.uImpactAge;
+        if(impactAge && impactAge.value < 5) impactAge.value = stagedSeconds;
+      }
+      renderSceneWithScreenFx();
+      return true;
+    }
+    if(action.type === 'waterSplashStress'){
+      for(const slot of waterRuntime.detailedSplashes){ slot.active = false; slot.group.visible = false; }
+      waterRuntime.freezeDetailedSplashes = false;
+      for(let i=0;i<8;i++) window.__galleryDebugInput({type:'waterSplash'});
+      waterRuntime.freezeDetailedSplashes = true;
+      updateDetailedWaterImpacts(.28,true);
+      renderSceneWithScreenFx();
+      return true;
+    }
+    if(action.type === 'waterSplashCleanup'){
+      waterRuntime.freezeDetailedSplashes = false;
+      updateDetailedWaterImpacts(5,true);
+      renderSceneWithScreenFx();
+      return true;
+    }
+    if(action.type === 'perfShadowCache'){
+      forceUpdateShadowMapsForLightingBake();
+      enableBakedLightingRuntime();
+      galleryPerfRuntime.lastFrameAt = 0;
+      galleryPerfRuntime.frameIntervals.length = 0;
+      galleryPerfRuntime.workTimes.length = 0;
+      return true;
+    }
+    if(action.type === 'perfReferenceOff'){
+      if(referenceArchitectureGroup) referenceArchitectureGroup.visible = false;
+      galleryPerfRuntime.lastFrameAt = 0;
+      galleryPerfRuntime.frameIntervals.length = 0;
+      galleryPerfRuntime.workTimes.length = 0;
+      return true;
+    }
     return false;
   };
   window.advanceTime = ms=>{
@@ -1021,6 +1129,29 @@ function installGalleryDebugState(){
     }
     renderSceneWithScreenFx();
   };
+}
+
+function installWaterSplashDebugButton(){
+  const params = new URLSearchParams(location.search);
+  if(!params.has('debugInput') || !params.has('debugWaterSplash') || $('debugWaterSplashControls')) return;
+  const controls = document.createElement('div');
+  controls.id = 'debugWaterSplashControls';
+  controls.style.cssText = 'position:fixed;left:12px;top:12px;z-index:2147483646;display:flex;flex-wrap:wrap;gap:5px;max-width:calc(100vw - 24px)';
+  for(const [label,seconds] of [['SPLASH RISE',.08],['SPLASH CROWN',.28],['SPLASH RINGS',.82],['SPLASH LIVE',-1],['SPLASH STRESS',null],['SPLASH CLEANUP',-2],['PERF SHADOW CACHE',-3],['PERF REFERENCE OFF',-4]]){
+    const button = document.createElement('button');
+    button.textContent = label;
+    button.style.cssText = 'width:112px;padding:9px 5px;border-radius:8px;border:1px solid rgba(255,255,255,.7);background:rgba(0,0,0,.76);color:white;font:700 10px Arial;cursor:pointer';
+    button.addEventListener('click',()=>{
+      window.__galleryDebugReleaseInput?.();
+      waterRuntime.freezeDetailedSplashes = false;
+      window.__galleryDebugInput?.(seconds === -4 ? {type:'perfReferenceOff'} : seconds === -3 ? {type:'perfShadowCache'} : seconds === -2 ? {type:'waterSplashCleanup'} : seconds === -1 ? {type:'waterSplash'} : seconds == null ? {type:'waterSplashStress'} : {type:'waterSplashStage',seconds});
+      controls.style.opacity = '0';
+      controls.style.pointerEvents = 'none';
+      window.setTimeout(()=>{ controls.style.opacity = '1'; controls.style.pointerEvents = 'auto'; },1200);
+    });
+    controls.appendChild(button);
+  }
+  document.body.appendChild(controls);
 }
 
 // main() is intentionally called at the end of the module after all const/let declarations are initialized.
@@ -1074,6 +1205,7 @@ async function main(){
   if(EXPORTED_GALLERY_VIEWER) enterExportedViewerMode();
   setStatus(EXPORTED_GALLERY_VIEWER ? '已載入作品集場景。手機可使用左下移動鍵與跳躍鍵；單指拖曳旋轉視角；雙指縮放；ESC 返回上一頁。' : '已載入。Shift+C 開啟編輯；Q 新增牆；E 刪除牆。');
   markGallerySceneReady();
+  installWaterSplashDebugButton();
   animate();
 }
 
@@ -1629,6 +1761,7 @@ function initThree(){
   customWallGroup = new THREE.Group(); customWallGroup.name = 'custom-walls'; scene.add(customWallGroup);
   floorTileGroup = new THREE.Group(); floorTileGroup.name = 'floor-tiles'; scene.add(floorTileGroup);
   waterGroup = new THREE.Group(); waterGroup.name = 'water-bodies'; scene.add(waterGroup);
+  waterEffectsGroup = new THREE.Group(); waterEffectsGroup.name = 'pooled-water-effects'; scene.add(waterEffectsGroup);
   referenceArchitectureGroup = new THREE.Group(); referenceArchitectureGroup.name = 'reference-architecture'; scene.add(referenceArchitectureGroup);
   artworkGroup = new THREE.Group(); artworkGroup.name = 'artworks'; scene.add(artworkGroup);
   lightRigGroup = new THREE.Group(); lightRigGroup.name = 'light-rig'; scene.add(lightRigGroup);
@@ -2014,6 +2147,99 @@ function disposeAtmosphereEffect(){
   renderer?.renderLists?.dispose?.();
 }
 
+function disposeGalleryDust(){
+  if(galleryDustPoints){
+    scene?.remove(galleryDustPoints);
+    galleryDustPoints = null;
+  }
+  galleryDustGeometry?.dispose?.();
+  galleryDustMaterial?.dispose?.();
+  galleryDustGeometry = null;
+  galleryDustMaterial = null;
+  galleryDustUniforms = null;
+}
+
+function buildGalleryDust(){
+  if(!scene) return;
+  disposeGalleryDust();
+  const count = GALLERY_DUST_COUNT;
+  const positions = new Float32Array(count * 3);
+  const sizes = new Float32Array(count);
+  const alphas = new Float32Array(count);
+  const phases = new Float32Array(count);
+  const speeds = new Float32Array(count);
+  const rand = seededRandom((STATE?.groundRelief?.seed || 104729) + 47251);
+  for(let i=0; i<count; i++){
+    const angle = rand() * Math.PI * 2;
+    const radius = Math.sqrt(rand()) * 11;
+    positions[i*3] = Math.cos(angle) * radius;
+    positions[i*3+1] = THREE.MathUtils.lerp(-2.8, 6.2, rand());
+    positions[i*3+2] = Math.sin(angle) * radius;
+    sizes[i] = THREE.MathUtils.lerp(1.8, 4.0, Math.pow(rand(), 1.45));
+    alphas[i] = THREE.MathUtils.lerp(.54, .92, rand());
+    phases[i] = rand() * Math.PI * 2;
+    speeds[i] = THREE.MathUtils.lerp(.18, .62, rand());
+  }
+  galleryDustGeometry = new THREE.BufferGeometry();
+  galleryDustGeometry.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  galleryDustGeometry.setAttribute('aSize', new THREE.BufferAttribute(sizes,1));
+  galleryDustGeometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas,1));
+  galleryDustGeometry.setAttribute('aPhase', new THREE.BufferAttribute(phases,1));
+  galleryDustGeometry.setAttribute('aSpeed', new THREE.BufferAttribute(speeds,1));
+  galleryDustUniforms = {
+    uTime:{value:0},
+    uPixelRatio:{value:Math.min(window.devicePixelRatio || 1, 1.5)},
+    uColor:{value:new THREE.Color('#aaa7a1')}
+  };
+  galleryDustMaterial = new THREE.ShaderMaterial({
+    uniforms:galleryDustUniforms,
+    transparent:true,
+    depthWrite:false,
+    depthTest:true,
+    blending:THREE.NormalBlending,
+    toneMapped:false,
+    vertexShader:`
+      uniform float uTime;
+      uniform float uPixelRatio;
+      attribute float aSize;
+      attribute float aAlpha;
+      attribute float aPhase;
+      attribute float aSpeed;
+      varying float vAlpha;
+      void main(){
+        float t = uTime * aSpeed + aPhase;
+        vec3 p = position;
+        p.x += sin(t * .73 + position.z * .11) * .32;
+        p.y += sin(t * .47 + position.x * .09) * .18;
+        p.z += cos(t * .61 + position.y * .17) * .28;
+        vec4 mv = modelViewMatrix * vec4(p,1.0);
+        float perspective = clamp(86.0 / max(2.0,-mv.z), .42, 2.25);
+        gl_PointSize = clamp(aSize * uPixelRatio * perspective, 1.8, 7.0);
+        vAlpha = aAlpha * (1.0 - smoothstep(2.5,22.0,length(p.xz)));
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader:`
+      uniform vec3 uColor;
+      varying float vAlpha;
+      void main(){
+        float d = length(gl_PointCoord - vec2(.5));
+        float alpha = (1.0 - smoothstep(.16,.5,d)) * vAlpha;
+        if(alpha < .012) discard;
+        gl_FragColor = vec4(uColor,alpha);
+      }
+    `
+  });
+  galleryDustPoints = new THREE.Points(galleryDustGeometry,galleryDustMaterial);
+  galleryDustPoints.name = 'gallery-gpu-gray-dust';
+  galleryDustPoints.userData.isGalleryDust = true;
+  galleryDustPoints.raycast = ()=>{};
+  galleryDustPoints.frustumCulled = false;
+  galleryDustPoints.renderOrder = 25;
+  if(camera) galleryDustPoints.position.copy(camera.position);
+  scene.add(galleryDustPoints);
+}
+
 function buildAtmosphereVolume(intensity, atm, memoryScale=1){
   // 重新製作：不用 fog cards、不用大量 3D 霧團。
   // 改用單一相機包覆式 procedural fog dome：一個 shader 霧體覆蓋視野，成本固定，不會一片一片，也不會 OOM。
@@ -2152,6 +2378,7 @@ function buildAtmosphereVolume(intensity, atm, memoryScale=1){
 function buildAtmosphereEffect(){
   if(!scene) return;
   disposeAtmosphereEffect();
+  buildGalleryDust();
   applyEnvironmentColors();
   const atm = getAtmosphereConfig();
   if(!atm.enabled || atm.intensity <= 0.001) return;
@@ -2271,12 +2498,17 @@ function buildAtmosphereEffect(){
 }
 
 function updateAtmosphereEffect(dt){
+  if(galleryDustUniforms) galleryDustUniforms.uTime.value += dt;
   if(atmosphereUniforms) atmosphereUniforms.uTime.value += dt;
   if(atmosphereVolumeUniforms){
     atmosphereVolumeUniforms.uTime.value += dt;
     if(camera) atmosphereVolumeUniforms.uCameraWorld.value.copy(camera.position);
   }
   if(camera){
+    if(galleryDustPoints){
+      galleryDustPoints.position.lerp(camera.position, 1 - Math.pow(.025,dt));
+      galleryDustPoints.rotation.y += dt * .0025;
+    }
     if(atmospherePoints){
       atmospherePoints.position.lerp(camera.position, .1);
       atmospherePoints.rotation.y += dt * .006;
@@ -5053,7 +5285,8 @@ function buildReferenceArchitecture(){
 
   referenceArchitectureGroup.traverse(obj=>{
     if(obj.isMesh){
-      obj.frustumCulled = false;
+      obj.frustumCulled = true;
+      obj.geometry?.computeBoundingSphere?.();
     }
   });
 }
@@ -5366,6 +5599,9 @@ function createWaterMaterial(body){
     uRippleAge:{value:99},
     uRippleCenter:{value:new THREE.Vector2(999,999)},
     uRippleStrength:{value:0},
+    uImpactAge:{value:99},
+    uImpactCenter:{value:new THREE.Vector2(999,999)},
+    uImpactStrength:{value:0},
     uHalfSize:{value:new THREE.Vector2(1,1)},
     uShape:{value:0}
   };
@@ -5392,6 +5628,9 @@ function createWaterMaterial(body){
       uniform float uRippleAge;
       uniform vec2 uRippleCenter;
       uniform float uRippleStrength;
+      uniform float uImpactAge;
+      uniform vec2 uImpactCenter;
+      uniform float uImpactStrength;
       uniform vec2 uHalfSize;
       uniform float uShape;
       varying vec2 vUv;
@@ -5400,6 +5639,8 @@ function createWaterMaterial(body){
       varying float vWaveHeight;
       varying float vEdgeMask;
       varying float vFinePattern;
+      varying float vImpactBowl;
+      varying float vImpactRim;
       float rippleAt(vec2 pos, vec2 center, float gain, float delay){
         float age = max(0.0, uRippleAge - delay);
         float rippleActive = smoothstep(0.0, 0.22, uRippleAge - delay);
@@ -5457,8 +5698,22 @@ function createWaterMaterial(body){
           vEdgeMask = 1.0 - smoothstep(0.0,.28, r - length(pos));
         }
         float baseWave = (slow + cross + fine + chop + microA + microB + n) * (0.18 + uWave*2.6);
-        float waveHeight = baseWave * waveGain + ripple * (0.105 + uWave*.18);
+        float impactAge = max(0.0,uImpactAge);
+        float impactEnergy = clamp(uImpactStrength / 5.0,0.0,1.0);
+        float impactActive = (1.0 - step(4.8,impactAge)) * step(.001,uImpactStrength);
+        float impactD = distance(pos,uImpactCenter);
+        float bowlRadius = mix(1.15,2.45,impactEnergy) + impactAge*.28;
+        float bowl = exp(-pow(impactD / max(.08,bowlRadius),2.0)*2.25) * exp(-impactAge*2.05) * impactActive;
+        float frontRadius = .55 + impactAge*3.7;
+        float frontWidth = .32 + impactAge*.16;
+        float front = exp(-pow(abs(impactD-frontRadius) / max(.12,frontWidth),2.0)*2.35) * exp(-impactAge*.72) * impactActive;
+        float trailingGate = (1.0 - smoothstep(frontRadius-.35,frontRadius+2.2,impactD)) * smoothstep(.18,.72,impactAge);
+        float trailing = sin((impactD-frontRadius)*6.2) * exp(-impactD*.12) * exp(-impactAge*1.08) * trailingGate * impactActive;
+        float impactHeight = -bowl * (.16 + uImpactStrength*.070) + front * (.075 + uImpactStrength*.031) + trailing * (.030 + uImpactStrength*.010);
+        float waveHeight = baseWave * waveGain + ripple * (0.105 + uWave*.18) + impactHeight;
         p.z += waveHeight;
+        vImpactBowl = clamp(bowl * (0.38 + impactEnergy*.92),0.0,1.0);
+        vImpactRim = clamp(front * (0.32 + impactEnergy*.86),0.0,1.0);
         vWaveHeight = waveHeight;
         vFinePattern = abs(fine + microA*1.8 + microB*1.5) * (34.0 + uWave*42.0) + noise(pos*8.5 + uTime*.25)*.45 + noise(pos*21.0 - uTime*.38)*.28;
         vFoam = clamp(abs(ripple) * 2.2 + vEdgeMask*.10 + smoothstep(.70,.98,uWave)*0.085 + smoothstep(.16,.85,abs(waveHeight))*0.07, 0.0, 1.0);
@@ -5480,6 +5735,8 @@ function createWaterMaterial(body){
       varying float vWaveHeight;
       varying float vEdgeMask;
       varying float vFinePattern;
+      varying float vImpactBowl;
+      varying float vImpactRim;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(269.5,183.3))) * 43758.5453); }
       vec2 hash22(vec2 p){
         p = vec2(dot(p, vec2(127.1,311.7)), dot(p, vec2(269.5,183.3)));
@@ -5557,6 +5814,8 @@ function createWaterMaterial(body){
         c = mix(c, c * vec3(.72,.84,.92), clamp((1.0-slopeShade)*.42 + crest*.12,0.0,.55));
         c = mix(c, vec3(.82,.96,1.0), clamp(vFoam*.48 + caustic*.34 + waveSpec*.28,0.0,.68));
         vec3 causticWhite = vec3(.82, 1.0, .94);
+        c *= mix(vec3(1.0),vec3(.34,.55,.62),clamp(vImpactBowl*.82,0.0,.72));
+        c = mix(c,causticWhite,clamp(vImpactRim*.66,0.0,.58));
         c = mix(c, causticWhite, clamp(causticNet*.72 + caustic*.08, 0.0, .78));
         c += causticWhite * causticNet * (.20 + uWave*.24);
         c += causticWhite * motionRing * (0.18 + uCausticStrength * 0.10);
@@ -5572,6 +5831,8 @@ function createWaterMaterial(body){
         c = mix(c, causticWhite, clamp(causticNet*.82, 0.0, .86));
         c += causticWhite * causticNet * .42;
         c = max(c, uColor * .62 + vec3(.015,.04,.055));
+        c = mix(c,uColor * vec3(.10,.20,.23),clamp(vImpactBowl*.94,0.0,.86));
+        c += causticWhite * vImpactRim * .34;
         gl_FragColor = vec4(c, 1.0);
       }
     `
@@ -5777,7 +6038,7 @@ function createRectWaterBody(body){
   const front = new THREE.Mesh(new THREE.BoxGeometry(w,h,t), mat); front.position.set(0,h/2,d/2-t/2);
   const back = new THREE.Mesh(new THREE.BoxGeometry(w,h,t), mat); back.position.set(0,h/2,-d/2+t/2);
   for(const m of [bottom,left,right,front,back]){ m.castShadow=true; m.receiveShadow=true; group.add(m); }
-  const waterGeo = new THREE.PlaneGeometry(Math.max(.05,w-t*2), Math.max(.05,d-t*2), 168, 168);
+  const waterGeo = new THREE.PlaneGeometry(Math.max(.05,w-t*2), Math.max(.05,d-t*2), WATER_SURFACE_SEGMENTS, WATER_SURFACE_SEGMENTS);
   const waterMat = createWaterMaterial(body);
   const waterMesh = new THREE.Mesh(waterGeo, waterMat);
   waterMesh.rotation.x = -Math.PI/2;
@@ -5785,13 +6046,16 @@ function createRectWaterBody(body){
   waterMesh.renderOrder = 19;
   waterMesh.userData.isWaterSurface = true;
   group.add(waterMesh);
-  const causticMat = createWaterCausticOverlayMaterial(body);
-  const causticMesh = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(.05,w-t*2), Math.max(.05,d-t*2), 2, 2), causticMat);
-  causticMesh.rotation.x = -Math.PI/2;
-  causticMesh.position.y = waterMesh.position.y + .014;
-  causticMesh.renderOrder = 26;
-  causticMesh.userData.isWaterCausticOverlay = true;
-  group.add(causticMesh);
+  let causticMat = null;
+  if(!EXPORTED_GALLERY_VIEWER){
+    causticMat = createWaterCausticOverlayMaterial(body);
+    const causticMesh = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(.05,w-t*2), Math.max(.05,d-t*2), 2, 2), causticMat);
+    causticMesh.rotation.x = -Math.PI/2;
+    causticMesh.position.y = waterMesh.position.y + .014;
+    causticMesh.renderOrder = 26;
+    causticMesh.userData.isWaterCausticOverlay = true;
+    group.add(causticMesh);
+  }
   const basePlateMat = new THREE.MeshBasicMaterial({
     color:validColor(body.water?.color) ? body.water.color : '#4bbcff',
     transparent:true,
@@ -5817,7 +6081,7 @@ function createRectWaterBody(body){
     group.add(fill);
   }
   waterRuntime.materials.set(body.id, waterMat);
-  waterRuntime.materials.set(`${body.id}:caustic`, causticMat);
+  if(causticMat) waterRuntime.materials.set(`${body.id}:caustic`, causticMat);
   return group;
 }
 
@@ -5838,7 +6102,7 @@ function createRoundWaterBody(body){
   bottom.scale.x = w/(2*r);
   bottom.scale.z = d/(2*r);
   for(const m of [side,bottom]){ m.castShadow=true; m.receiveShadow=true; group.add(m); }
-  const waterGeo = createWaterDiskGeometry(Math.max(.05,r-t), 88, 192);
+  const waterGeo = createWaterDiskGeometry(Math.max(.05,r-t), IS_TOUCH_DEVICE ? 52 : 64, IS_TOUCH_DEVICE ? 112 : 144);
   const waterMat = createWaterMaterial(body);
   const waterMesh = new THREE.Mesh(waterGeo, waterMat);
   waterMesh.rotation.x = -Math.PI/2;
@@ -5848,15 +6112,18 @@ function createRoundWaterBody(body){
   waterMesh.renderOrder = 19;
   waterMesh.userData.isWaterSurface = true;
   group.add(waterMesh);
-  const causticMat = createWaterCausticOverlayMaterial(body);
-  const causticMesh = new THREE.Mesh(new THREE.CircleGeometry(Math.max(.05,r-t), 96), causticMat);
-  causticMesh.rotation.x = -Math.PI/2;
-  causticMesh.scale.x = (w-t*2)/(2*Math.max(.05,r-t));
-  causticMesh.scale.y = (d-t*2)/(2*Math.max(.05,r-t));
-  causticMesh.position.y = waterMesh.position.y + .014;
-  causticMesh.renderOrder = 26;
-  causticMesh.userData.isWaterCausticOverlay = true;
-  group.add(causticMesh);
+  let causticMat = null;
+  if(!EXPORTED_GALLERY_VIEWER){
+    causticMat = createWaterCausticOverlayMaterial(body);
+    const causticMesh = new THREE.Mesh(new THREE.CircleGeometry(Math.max(.05,r-t), 96), causticMat);
+    causticMesh.rotation.x = -Math.PI/2;
+    causticMesh.scale.x = (w-t*2)/(2*Math.max(.05,r-t));
+    causticMesh.scale.y = (d-t*2)/(2*Math.max(.05,r-t));
+    causticMesh.position.y = waterMesh.position.y + .014;
+    causticMesh.renderOrder = 26;
+    causticMesh.userData.isWaterCausticOverlay = true;
+    group.add(causticMesh);
+  }
   const basePlateMat = new THREE.MeshBasicMaterial({
     color:validColor(body.water?.color) ? body.water.color : '#4bbcff',
     transparent:true,
@@ -5886,7 +6153,7 @@ function createRoundWaterBody(body){
     group.add(fill);
   }
   waterRuntime.materials.set(body.id, waterMat);
-  waterRuntime.materials.set(`${body.id}:caustic`, causticMat);
+  if(causticMat) waterRuntime.materials.set(`${body.id}:caustic`, causticMat);
   return group;
 }
 
@@ -6346,10 +6613,359 @@ function spawnWaterFoamRing(pos, body, strength=1, options={}){
   }, safeFinite(opts.particleLimit,560));
 }
 
+function seededSplashRandom(seed){
+  let value = (Math.round(seed) || 1) >>> 0;
+  return ()=>{
+    value += 0x6D2B79F5;
+    let t = value;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeDetailedSplashPointMaterial(){
+  const material = new THREE.ShaderMaterial({
+    uniforms:{
+      uTime:{value:99},
+      uColor:{value:new THREE.Color('#8fefff')},
+      uPixelRatio:{value:Math.min(renderer?.getPixelRatio?.() || 1, 1.6)}
+    },
+    vertexShader:`
+      uniform float uTime;
+      uniform float uPixelRatio;
+      attribute vec3 aVelocity;
+      attribute float aDelay;
+      attribute float aLife;
+      attribute float aSize;
+      attribute float aKind;
+      attribute float aPhase;
+      varying float vAlpha;
+      varying float vKind;
+      varying float vPhase;
+      void main(){
+        float rawTime = uTime - aDelay;
+        float alive = step(0.0, rawTime) * step(rawTime, aLife);
+        float t = max(0.0, rawTime);
+        float mist = step(1.5, aKind);
+        float dragTime = t / (1.0 + t * mix(.13, .34, mist));
+        vec3 p = aVelocity * dragTime;
+        p.y -= mix(4.7, 2.45, mist) * t * t;
+        float swirl = sin(t * 8.0 + aPhase * 6.2831853) * mist;
+        p.x += swirl * t * .13;
+        p.z += cos(t * 7.0 + aPhase * 6.2831853) * mist * t * .13;
+        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        float perspective = 5.2 / max(1.0, -mvPosition.z);
+        gl_PointSize = min(10.5, aSize * uPixelRatio * perspective) * alive;
+        float appear = smoothstep(0.0, .045, t);
+        float disappear = 1.0 - smoothstep(aLife * .58, aLife, t);
+        vAlpha = alive * appear * disappear;
+        vKind = aKind;
+        vPhase = aPhase;
+      }
+    `,
+    fragmentShader:`
+      uniform vec3 uColor;
+      varying float vAlpha;
+      varying float vKind;
+      varying float vPhase;
+      void main(){
+        vec2 q = gl_PointCoord - .5;
+        float kindScale = mix(.70, .54, step(1.5, vKind));
+        q.y *= kindScale;
+        float d = length(q) * 2.0;
+        if(d > 1.0 || vAlpha <= .001) discard;
+        float body = smoothstep(1.0, .52, d);
+        float rim = smoothstep(1.0, .72, d) - smoothstep(.72, .32, d);
+        float highlight = smoothstep(.30, .02, length(q - vec2(-.16,.18)));
+        float sparkle = .88 + .12 * sin(vPhase * 29.0);
+        vec3 color = mix(uColor * .78, vec3(1.0), highlight * .82 + rim * .22);
+        gl_FragColor = vec4(color * sparkle, body * vAlpha * mix(.88,.38,step(1.5,vKind)));
+      }
+    `,
+    transparent:true,
+    depthWrite:false,
+    blending:THREE.NormalBlending,
+    toneMapped:false
+  });
+  return material;
+}
+
+function makeDetailedSplashCrownMaterial(){
+  return new THREE.ShaderMaterial({
+    uniforms:{
+      uTime:{value:99},
+      uOpacity:{value:0},
+      uColor:{value:new THREE.Color('#8fefff')}
+    },
+    vertexShader:`
+      varying vec2 vUv;
+      void main(){
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+      }
+    `,
+    fragmentShader:`
+      uniform float uTime;
+      uniform float uOpacity;
+      uniform vec3 uColor;
+      varying vec2 vUv;
+      void main(){
+        float angle = vUv.x * 6.2831853;
+        float teeth = .5 + .5 * sin(angle * 11.0 + sin(angle * 5.0) * 1.7);
+        float tornTop = .62 + teeth * .30;
+        float topMask = 1.0 - smoothstep(tornTop, tornTop + .055, vUv.y);
+        float strands = .48 + .52 * smoothstep(-.7,.72,sin(angle * 23.0 + uTime * 3.2));
+        float baseFoam = 1.0 - smoothstep(.0,.19,vUv.y);
+        float shimmer = .72 + .28 * sin(angle * 17.0 - vUv.y * 13.0 + uTime * 7.0);
+        float alpha = (baseFoam * .72 + topMask * strands * (.62 - vUv.y * .23)) * uOpacity;
+        vec3 color = mix(uColor, vec3(1.0), .35 + shimmer * .32);
+        if(alpha <= .01) discard;
+        gl_FragColor = vec4(color, alpha);
+      }
+    `,
+    transparent:true,
+    depthWrite:false,
+    side:THREE.DoubleSide,
+    blending:THREE.NormalBlending,
+    toneMapped:false
+  });
+}
+
+function makeDetailedSplashRingMaterial(){
+  return new THREE.ShaderMaterial({
+    uniforms:{
+      uTime:{value:99},
+      uOpacity:{value:0},
+      uColor:{value:new THREE.Color('#8fefff')},
+      uLayerCount:{value:5}
+    },
+    vertexShader:`
+      varying vec2 vUv;
+      void main(){
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+      }
+    `,
+    fragmentShader:`
+      uniform float uTime;
+      uniform float uOpacity;
+      uniform vec3 uColor;
+      uniform float uLayerCount;
+      varying vec2 vUv;
+      float ringLine(float radius, float width, float r){
+        return 1.0 - smoothstep(width, width * 2.35, abs(r-radius));
+      }
+      void main(){
+        vec2 p = (vUv - .5) * 2.0;
+        float r = length(p);
+        if(r > 1.02) discard;
+        float angle = atan(p.y,p.x);
+        float travel = min(1.0, uTime / 1.52);
+        float breakup = .58 + .42 * sin(angle * 19.0 + sin(angle * 7.0) * 2.0 + uTime * 4.5);
+        float granular = .68 + .32 * sin(angle * 43.0 - uTime * 7.0);
+        float rings = ringLine(.12 + travel*.58,.010 + travel*.014,r);
+        rings += ringLine(.20 + travel*.73,.009 + travel*.013,r) * step(1.5,uLayerCount);
+        rings += ringLine(.29 + travel*.62,.008 + travel*.012,r) * step(2.5,uLayerCount);
+        rings += ringLine(.38 + travel*.49,.007 + travel*.011,r) * step(3.5,uLayerCount);
+        rings += ringLine(.48 + travel*.38,.006 + travel*.010,r) * step(4.5,uLayerCount);
+        float foam = rings * mix(.55,1.0,breakup) * mix(.72,1.0,granular);
+        float core = (1.0-smoothstep(.0,.16,r)) * (1.0-smoothstep(.0,.36,uTime));
+        float fade = 1.0 - smoothstep(.72,1.65,uTime);
+        float alpha = clamp((foam + core*.66) * uOpacity * fade,0.0,.92);
+        if(alpha <= .008) discard;
+        gl_FragColor = vec4(mix(uColor,vec3(1.0),.22),alpha*.76);
+      }
+    `,
+    transparent:true,
+    depthWrite:false,
+    side:THREE.DoubleSide,
+    blending:THREE.NormalBlending,
+    toneMapped:false
+  });
+}
+
+function createDetailedSplashSlot(capacity){
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(capacity * 3),3));
+  geometry.setAttribute('aVelocity', new THREE.BufferAttribute(new Float32Array(capacity * 3),3));
+  geometry.setAttribute('aDelay', new THREE.BufferAttribute(new Float32Array(capacity),1));
+  geometry.setAttribute('aLife', new THREE.BufferAttribute(new Float32Array(capacity),1));
+  geometry.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array(capacity),1));
+  geometry.setAttribute('aKind', new THREE.BufferAttribute(new Float32Array(capacity),1));
+  geometry.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(capacity),1));
+  geometry.setDrawRange(0,0);
+  const pointMaterial = makeDetailedSplashPointMaterial();
+  const points = new THREE.Points(geometry, pointMaterial);
+  points.frustumCulled = false;
+  points.renderOrder = 32;
+
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(.86,.18,1,36,1,true), makeDetailedSplashCrownMaterial());
+  crown.renderOrder = 31;
+  crown.frustumCulled = false;
+
+  const ring = new THREE.Mesh(new THREE.PlaneGeometry(2,2,1,1), makeDetailedSplashRingMaterial());
+  ring.rotation.x = -Math.PI/2;
+  ring.position.y = .012;
+  ring.renderOrder = 30;
+  ring.frustumCulled = false;
+
+  const group = new THREE.Group();
+  group.name = 'pooled-detailed-water-impact';
+  group.visible = false;
+  group.add(ring,crown,points);
+  waterEffectsGroup.add(group);
+  return {group,points,crown,ring,capacity,active:false,age:99,duration:0,crownDuration:.72,ringDuration:1.65,crownRadius:1,crownHeight:1,ringRadius:1,particleCount:0,serial:0};
+}
+
+function ensureDetailedSplashPool(){
+  if(!waterEffectsGroup) return;
+  while(waterRuntime.detailedSplashes.length < DETAILED_SPLASH_POOL_SIZE){
+    waterRuntime.detailedSplashes.push(createDetailedSplashSlot(ARTWORK_WATER_IMPACT_PARTICLE_LIMIT));
+  }
+}
+
+function acquireDetailedSplashSlot(){
+  ensureDetailedSplashPool();
+  if(!waterRuntime.detailedSplashes.length) return null;
+  const inactive = waterRuntime.detailedSplashes.find(slot=>!slot.active);
+  if(inactive) return inactive;
+  const slot = waterRuntime.detailedSplashes[waterRuntime.detailedSplashCursor % waterRuntime.detailedSplashes.length];
+  waterRuntime.detailedSplashCursor = (waterRuntime.detailedSplashCursor + 1) % waterRuntime.detailedSplashes.length;
+  return slot;
+}
+
+function syncDetailedSplashTelemetry(){
+  if(!DEBUG_INPUT_ENABLED) return;
+  const canvas = $('canvas');
+  if(!canvas) return;
+  const active = waterRuntime.detailedSplashes.filter(slot=>slot.active).length;
+  canvas.dataset.detailedSplashActive = String(active);
+  canvas.dataset.detailedSplashDrawCalls = String(active * 3);
+  canvas.dataset.detailedSplashPoolSize = String(DETAILED_SPLASH_POOL_SIZE);
+  canvas.dataset.detailedSplashParticles = String(waterRuntime.lastDetailedSplash?.particleCount || 0);
+  canvas.dataset.legacyWaterParticleMeshes = String(waterRuntime.particles.length);
+}
+
+function spawnDetailedWaterImpact(pos, body, splash, options={}){
+  const slot = acquireDetailedSplashSlot();
+  if(!slot) return;
+  const opts = options && typeof options === 'object' ? options : {};
+  const impact = clamp(safeFinite(splash,1),.25,6.5);
+  const requested = Math.max(180,Math.round(THREE.MathUtils.lerp(48,86,clamp(impact,0,1)) * Math.max(1,safeFinite(opts.particleMultiplier,1))));
+  const count = Math.min(slot.capacity,requested);
+  const seed = (++waterRuntime.detailedSplashSerial * 2654435761) ^ Math.round((pos.x + 57.3) * 997) ^ Math.round((pos.z - 31.7) * 991);
+  const random = seededSplashRandom(seed);
+  const velocity = slot.points.geometry.attributes.aVelocity.array;
+  const delay = slot.points.geometry.attributes.aDelay.array;
+  const life = slot.points.geometry.attributes.aLife.array;
+  const size = slot.points.geometry.attributes.aSize.array;
+  const kind = slot.points.geometry.attributes.aKind.array;
+  const phase = slot.points.geometry.attributes.aPhase.array;
+  const heightGain = clamp(safeFinite(opts.heightMultiplier,1),.35,1.65) * (.78 + Math.sqrt(impact) * .22);
+  const outwardGain = clamp(safeFinite(opts.outwardMultiplier,1),.35,1.75) * (.78 + Math.sqrt(impact) * .18);
+  const impactVelocity = opts.impactVelocity?.isVector3 ? opts.impactVelocity : null;
+  const directional = impactVelocity ? new THREE.Vector2(impactVelocity.x,impactVelocity.z) : new THREE.Vector2();
+  if(directional.lengthSq() > .001) directional.normalize();
+  const goldenAngle = 2.399963229728653;
+  let maxLife = 0;
+  for(let i=0;i<count;i++){
+    const distribution = random();
+    const particleKind = distribution < .14 ? 0 : (distribution < .78 ? 1 : 2);
+    const angle = particleKind === 1 ? i * goldenAngle + (random()-.5)*.24 : random()*Math.PI*2;
+    let outward;
+    let upward;
+    let particleSize;
+    let particleDelay;
+    if(particleKind === 0){
+      outward = THREE.MathUtils.lerp(.18,.72,random()) * outwardGain;
+      upward = THREE.MathUtils.lerp(5.5,8.8,Math.pow(random(),.42)) * heightGain;
+      particleSize = THREE.MathUtils.lerp(4.1,7.2,random());
+      particleDelay = random()*.035;
+    }else if(particleKind === 1){
+      outward = THREE.MathUtils.lerp(2.3,5.7,Math.pow(random(),.72)) * outwardGain;
+      upward = THREE.MathUtils.lerp(3.4,6.7,Math.pow(random(),.55)) * heightGain;
+      particleSize = THREE.MathUtils.lerp(2.7,5.6,random());
+      particleDelay = random()*.075;
+    }else{
+      outward = THREE.MathUtils.lerp(3.8,7.8,random()) * outwardGain;
+      upward = THREE.MathUtils.lerp(2.3,5.3,Math.pow(random(),.68)) * heightGain;
+      particleSize = THREE.MathUtils.lerp(1.3,3.0,random());
+      particleDelay = THREE.MathUtils.lerp(.035,.16,random());
+    }
+    const bias = particleKind === 0 ? .04 : .18;
+    velocity[i*3] = Math.cos(angle)*outward + directional.x * outward * bias;
+    velocity[i*3+1] = upward;
+    velocity[i*3+2] = Math.sin(angle)*outward + directional.y * outward * bias;
+    delay[i] = particleDelay;
+    const flightLife = upward / (particleKind === 2 ? 3.2 : 5.15);
+    life[i] = clamp(flightLife * THREE.MathUtils.lerp(.82,1.08,random()),.52,2.25) * Math.max(.45,safeFinite(opts.lifeMultiplier,1));
+    size[i] = particleSize;
+    kind[i] = particleKind;
+    phase[i] = random();
+    maxLife = Math.max(maxLife,delay[i]+life[i]);
+  }
+  for(const name of ['aVelocity','aDelay','aLife','aSize','aKind','aPhase']) slot.points.geometry.attributes[name].needsUpdate = true;
+  slot.points.geometry.setDrawRange(0,count);
+  const color = new THREE.Color(validColor(body.water?.color) ? body.water.color : '#4bbcff').lerp(new THREE.Color('#e8ffff'),.46);
+  slot.points.material.uniforms.uColor.value.copy(color);
+  slot.points.material.uniforms.uTime.value = 0;
+  slot.points.material.uniforms.uPixelRatio.value = Math.min(renderer?.getPixelRatio?.() || 1,1.6);
+  slot.crown.material.uniforms.uColor.value.copy(color);
+  slot.ring.material.uniforms.uColor.value.copy(color);
+  slot.ring.material.uniforms.uLayerCount.value = clamp(Math.round(safeFinite(opts.ringLayers,5)),1,5);
+  const edge = Math.max(.42,waterBoundaryDistance(body,pos)*.94);
+  slot.ringRadius = Math.min(edge,4.6,THREE.MathUtils.lerp(1.7,3.75,clamp(impact/5,0,1)) * Math.max(.5,safeFinite(opts.ringScaleMultiplier,1)));
+  slot.crownRadius = Math.min(Math.max(.38,edge*.66),THREE.MathUtils.lerp(.62,1.28,clamp(impact/5,0,1)));
+  slot.crownHeight = THREE.MathUtils.lerp(.95,2.25,clamp(impact/5,0,1)) * Math.min(1.4,heightGain);
+  slot.group.position.copy(pos);
+  slot.group.visible = true;
+  slot.points.visible = true;
+  slot.ring.visible = true;
+  slot.crown.visible = true;
+  slot.age = 0;
+  slot.duration = Math.max(maxLife,slot.ringDuration) + .08;
+  slot.active = true;
+  slot.particleCount = count;
+  slot.serial = waterRuntime.detailedSplashSerial;
+  waterRuntime.lastDetailedSplash = {particleCount:count,requestedParticleCount:requested,poolSize:DETAILED_SPLASH_POOL_SIZE,drawCalls:3,impact:+impact.toFixed(2),mobile:IS_TOUCH_DEVICE};
+  syncDetailedSplashTelemetry();
+}
+
+function updateDetailedWaterImpacts(dt,force=false){
+  if(waterRuntime.freezeDetailedSplashes && !force) return;
+  for(const slot of waterRuntime.detailedSplashes){
+    if(!slot.active) continue;
+    slot.age += dt;
+    slot.points.material.uniforms.uTime.value = slot.age;
+    slot.ring.material.uniforms.uTime.value = slot.age;
+    slot.ring.material.uniforms.uOpacity.value = 1;
+    slot.ring.scale.setScalar(slot.ringRadius);
+    const crownPhase = clamp(slot.age / slot.crownDuration,0,1);
+    const crownLift = Math.sin(crownPhase * Math.PI);
+    const crownHeight = Math.max(.015,slot.crownHeight * crownLift);
+    slot.crown.visible = crownPhase < 1;
+    slot.crown.scale.set(slot.crownRadius * (.68 + crownPhase*.62),crownHeight,slot.crownRadius * (.68 + crownPhase*.62));
+    slot.crown.position.y = crownHeight*.5;
+    slot.crown.material.uniforms.uTime.value = slot.age;
+    slot.crown.material.uniforms.uOpacity.value = Math.pow(1-crownPhase,.62) * Math.min(1,crownPhase*8);
+    if(slot.age >= slot.duration){
+      slot.active = false;
+      slot.group.visible = false;
+    }
+  }
+  syncDetailedSplashTelemetry();
+}
+
 function spawnWaterSplash(pos, body, strengthScale=1, options={}){
   const splash = clamp(safeFinite(body.water?.splash,.85),0,1) * strengthScale;
   if(splash <= .02) return;
   const opts = options && typeof options === 'object' ? options : {};
+  if(opts.detailedGpu){
+    spawnDetailedWaterImpact(pos,body,splash,opts);
+    return;
+  }
   const particleMultiplier = Math.max(1, safeFinite(opts.particleMultiplier,1));
   const particleLimit = Math.max(560, Math.round(safeFinite(opts.particleLimit,560)));
   const heightMultiplier = Math.max(.2, safeFinite(opts.heightMultiplier,1));
@@ -6419,12 +7035,15 @@ function applyWaterMotionCausticDistortion(body, strength){
 }
 
 function updateWaterEffects(dt){
+  updateDetailedWaterImpacts(dt);
   for(const [id, mat] of waterRuntime.materials.entries()){
     const u = mat.userData?.waterUniforms;
     if(!u) continue;
     u.uTime.value += dt;
     if(u.uRippleAge) u.uRippleAge.value += dt;
     if(u.uRippleStrength) u.uRippleStrength.value *= Math.pow(.22, dt);
+    if(u.uImpactAge && !waterRuntime.freezeDetailedSplashes) u.uImpactAge.value += dt;
+    if(u.uImpactStrength && !waterRuntime.freezeDetailedSplashes) u.uImpactStrength.value *= Math.pow(.62, dt);
     if(u.uMotionStrength) u.uMotionStrength.value *= Math.pow(.10, dt);
   }
   const moving = movementVector().forward !== 0 || movementVector().strafe !== 0;
@@ -6821,7 +7440,7 @@ function applyUnlitMaterialsToArtworkModel(root){
     obj.material = Array.isArray(obj.material) ? mats.map(makeUnlitArtworkMaterial) : makeUnlitArtworkMaterial(mats[0]);
     obj.castShadow = true;
     obj.receiveShadow = true;
-    obj.frustumCulled = false;
+    obj.frustumCulled = true;
     obj.userData.galleryLitArtwork = true;
   });
 }
@@ -7436,6 +8055,7 @@ function loadActor(){
   const loader = new FBXLoader();
   loader.load(versionedAssetUrl(ASSET.actorIdle), model=>{
     actorModel = model;
+    mobileActorSafetyPatchedModel = null;
     normaliseActorModel(actorModel, 1.72);
     actorModel.traverse(c=>{ if(c.isMesh){ c.castShadow=!MOBILE_FAST_RENDER; c.receiveShadow=true; forceMobileActorMaterialVisible(c); }});
     repairActorMaterials(actorModel);
@@ -9774,7 +10394,7 @@ function forceMobileActorMaterialVisible(obj){
   obj.frustumCulled = false;
   const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
   for(const mat of mats){
-    if(!mat) continue;
+    if(!mat || mat.userData?.mobileActorVisiblePatch) continue;
     mat.userData.mobileActorVisiblePatch = true;
     // 角色必須留在真實 3D 深度裡；不要用 depthTest=false 把模型疊成螢幕貼紙。
     mat.depthTest = true;
@@ -9800,24 +10420,30 @@ function ensureMobileActorRenderSafety(){
   if(actorModel){
     actorModel.visible = true;
     actorModel.frustumCulled = false;
-    actorModel.traverse?.(obj=>{
-      if(obj?.isMesh){
-        obj.visible = true;
-        obj.frustumCulled = false;
-        forceMobileActorMaterialVisible(obj);
-      }
-    });
+    if(mobileActorSafetyPatchedModel !== actorModel){
+      actorModel.traverse?.(obj=>{
+        if(obj?.isMesh){
+          obj.visible = true;
+          obj.frustumCulled = false;
+          forceMobileActorMaterialVisible(obj);
+        }
+      });
+      mobileActorSafetyPatchedModel = actorModel;
+    }
     if(actorProxy) actorProxy.visible = false;
   }else if(actorProxy){
     actorProxy.visible = true;
     actorProxy.frustumCulled = false;
-    actorProxy.traverse?.(obj=>{
-      if(obj?.isMesh){
-        obj.visible = true;
-        obj.frustumCulled = false;
-        forceMobileActorMaterialVisible(obj);
-      }
-    });
+    if(mobileActorSafetyPatchedProxy !== actorProxy){
+      actorProxy.traverse?.(obj=>{
+        if(obj?.isMesh){
+          obj.visible = true;
+          obj.frustumCulled = false;
+          forceMobileActorMaterialVisible(obj);
+        }
+      });
+      mobileActorSafetyPatchedProxy = actorProxy;
+    }
   }
 }
 
@@ -9887,6 +10513,8 @@ function triggerWaterRippleAt(body, worldPos, strengthScale=1, options={}){
   const rippleStrengthCap = Math.max(2.1, safeFinite(opts.rippleStrengthCap,2.1));
   const motionScale = Math.max(.1, safeFinite(opts.motionScale,1));
   const motionStrengthCap = Math.max(2.2, safeFinite(opts.motionStrengthCap,2.2));
+  const physicalImpact = opts.physicalImpact === true;
+  const physicalImpactStrength = clamp(safeFinite(opts.physicalImpactStrength,splash * strengthScale),.25,5.2);
   for(const mat of mats){
     const u = mat.userData?.waterUniforms;
     if(!u) continue;
@@ -9895,6 +10523,11 @@ function triggerWaterRippleAt(body, worldPos, strengthScale=1, options={}){
     if(u.uRippleStrength) u.uRippleStrength.value = Math.max(u.uRippleStrength.value || 0, clamp(splash * strengthScale * rippleScale,0,rippleStrengthCap));
     if(u.uMotionCenter) u.uMotionCenter.value.copy(local);
     if(u.uMotionStrength) u.uMotionStrength.value = Math.max(u.uMotionStrength.value || 0, clamp(strengthScale * motionScale, .2, motionStrengthCap));
+    if(physicalImpact){
+      if(u.uImpactCenter) u.uImpactCenter.value.copy(local);
+      if(u.uImpactAge) u.uImpactAge.value = 0;
+      if(u.uImpactStrength) u.uImpactStrength.value = Math.max(u.uImpactStrength.value || 0, physicalImpactStrength);
+    }
   }
   const m = waterBodyMetrics(body);
   const pos = new THREE.Vector3(worldPos.x, m.surfaceY + .045, worldPos.z);
@@ -10051,6 +10684,10 @@ function updateArtworkPhysics(dt){
             const impactEnergy = clamp((body.velocity.length() + Math.abs(body.velocity.y)) / 16, 1, 2.35);
             const impactStrength = (body.mode === 'kick' ? 1.35 : 1.18) * WATER_IMPACT_RESPONSE_SCALE * impactEnergy;
             triggerWaterRippleAt(afterWater, pos, impactStrength, {
+              detailedGpu:true,
+              physicalImpact:true,
+              physicalImpactStrength:clamp(impactStrength*.92,1.4,5.2),
+              impactVelocity:body.velocity.clone(),
               particleMultiplier:ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER,
               particleLimit:ARTWORK_WATER_IMPACT_PARTICLE_LIMIT,
               heightMultiplier:ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER,
@@ -10062,7 +10699,7 @@ function updateArtworkPhysics(dt){
               rippleStrengthCap:4.8,
               motionScale:1.75,
               motionStrengthCap:5.2,
-              aftershockRipples:3
+              aftershockRipples:0
             });
             playRuntimeSound('artworkWaterDrop', {cooldown:180, volume:.82});
             body.splashed = true;
@@ -10670,7 +11307,7 @@ function makeCameraFadeMaterial(mesh){
 
 function isCameraObstructionCandidate(obj){
   if(!obj?.isMesh || !obj.visible || !obj.material) return false;
-  if(obj === skyMesh || obj === atmosphereVolumeMesh || obj === atmospherePoints || obj === chiselPreviewMesh) return false;
+  if(obj === skyMesh || obj === atmosphereVolumeMesh || obj === atmospherePoints || obj === galleryDustPoints || obj === chiselPreviewMesh) return false;
   if(isObjectDescendantOf(obj, artworkGroup) || isObjectDescendantOf(obj, waterGroup) || isObjectDescendantOf(obj, playerGroup)) return false;
   return isObjectDescendantOf(obj, referenceArchitectureGroup) || isObjectDescendantOf(obj, customWallGroup) || isObjectDescendantOf(obj, roomGroup);
 }
@@ -12231,9 +12868,65 @@ function updateWallFromEditor(){
   if(!w.isDraft) scheduleSave();
 }
 
+function recordGalleryFramePerformance(frameStart){
+  if(!DEBUG_INPUT_ENABLED || !renderer) return;
+  const now = performance.now();
+  const interval = galleryPerfRuntime.lastFrameAt > 0 ? now - galleryPerfRuntime.lastFrameAt : 0;
+  galleryPerfRuntime.lastFrameAt = now;
+  galleryPerfRuntime.frameCount++;
+  galleryPerfRuntime.workTimes.push(Math.max(0,now-frameStart));
+  if(interval > 0 && interval < 500) galleryPerfRuntime.frameIntervals.push(interval);
+  if(galleryPerfRuntime.workTimes.length > 180) galleryPerfRuntime.workTimes.shift();
+  if(galleryPerfRuntime.frameIntervals.length > 180) galleryPerfRuntime.frameIntervals.shift();
+  if(galleryPerfRuntime.frameCount % 20 !== 0) return;
+  const average = values=>values.length ? values.reduce((sum,value)=>sum+value,0)/values.length : 0;
+  const percentile95 = values=>{
+    if(!values.length) return 0;
+    const sorted = [...values].sort((a,b)=>a-b);
+    return sorted[Math.min(sorted.length-1,Math.floor(sorted.length*.95))];
+  };
+  const canvas = $('canvas');
+  if(!canvas) return;
+  const averageInterval = average(galleryPerfRuntime.frameIntervals);
+  canvas.dataset.perfFps = averageInterval > 0 ? (1000/averageInterval).toFixed(1) : '0';
+  canvas.dataset.perfFrameMs = averageInterval.toFixed(2);
+  canvas.dataset.perfWorkMs = average(galleryPerfRuntime.workTimes).toFixed(2);
+  canvas.dataset.perfP95WorkMs = percentile95(galleryPerfRuntime.workTimes).toFixed(2);
+  canvas.dataset.perfDrawCalls = String(renderer.info.render.calls || 0);
+  canvas.dataset.perfTriangles = String(renderer.info.render.triangles || 0);
+  canvas.dataset.perfPoints = String(renderer.info.render.points || 0);
+  canvas.dataset.perfGeometries = String(renderer.info.memory.geometries || 0);
+  canvas.dataset.perfTextures = String(renderer.info.memory.textures || 0);
+  canvas.dataset.perfPixelRatio = String(renderer.getPixelRatio?.() || 1);
+  if(galleryPerfRuntime.frameCount % 60 === 0){
+    const triangleCount = root=>{
+      let total = 0;
+      root?.traverse?.(obj=>{
+        if(!obj?.isMesh || obj.visible === false || !obj.geometry) return;
+        const geometryCount = obj.geometry.index?.count || obj.geometry.attributes?.position?.count || 0;
+        total += Math.round(geometryCount / 3) * Math.max(1,obj.isInstancedMesh ? obj.count : 1);
+      });
+      return total;
+    };
+    const shadowLights = [];
+    lightRigGroup?.traverse?.(obj=>{ if(obj?.isLight && obj.visible !== false && obj.castShadow) shadowLights.push(obj); });
+    canvas.dataset.perfGroupTriangles = JSON.stringify({
+      room:triangleCount(roomGroup),
+      customWalls:triangleCount(customWallGroup),
+      floorTiles:triangleCount(floorTileGroup),
+      water:triangleCount(waterGroup),
+      reference:triangleCount(referenceArchitectureGroup),
+      artworks:triangleCount(artworkGroup),
+      player:triangleCount(playerGroup)
+    });
+    canvas.dataset.perfShadowLights = String(shadowLights.length);
+  }
+}
+
 function animate(){
   requestAnimationFrame(animate);
   if(webglContextLost) return;
+  const frameStart = DEBUG_INPUT_ENABLED ? performance.now() : 0;
   const rawDt = Math.min(clock.getDelta(), MOBILE_VIEWER ? .09 : (IS_TOUCH_DEVICE ? .18 : .18));
   const dt = Math.min(rawDt, MOBILE_VIEWER ? .025 : .033);
   let remainingPlayerDt = rawDt;
@@ -12261,6 +12954,7 @@ function animate(){
   if(mixer) mixer.update(dt);
   applySwimArmMotion(dt);
   renderSceneWithScreenFx();
+  recordGalleryFramePerformance(frameStart);
 }
 
 function onResize(){
@@ -12304,7 +12998,7 @@ function meshHasRenderableMaterial(mesh){
 function isStaticLightingBakeTarget(mesh){
   if(!meshHasRenderableMaterial(mesh)) return false;
   if(mesh.userData?.isLightMarker || mesh.userData?.isLightControl || mesh.userData?.skipChiselTarget) return false;
-  if(mesh === skyMesh || mesh === atmosphereVolumeMesh || mesh === atmospherePoints || mesh === chiselPreviewMesh) return false;
+  if(mesh === skyMesh || mesh === atmosphereVolumeMesh || mesh === atmospherePoints || mesh === galleryDustPoints || mesh === chiselPreviewMesh) return false;
   const roots = [roomGroup, customWallGroup, floorTileGroup, referenceArchitectureGroup, artworkGroup];
   return roots.some(root=>root && (mesh === root || root.children.includes(mesh) || isDescendantOf(mesh, root)));
 }
@@ -12607,11 +13301,11 @@ function refreshBakedLightingRuntime(){
 function applyPlayModePerformanceLighting(play=isPlayMode()){
   if(EXPORTED_GALLERY_VIEWER){
     updateLightMarkerVisibility();
-    disableBakedLightingRuntime();
-    if(renderer?.shadowMap){
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.autoUpdate = true;
-      renderer.shadowMap.needsUpdate = true;
+    const shadowCacheEnabled = enableBakedLightingRuntime();
+    if(!shadowCacheEnabled && renderer?.shadowMap){
+      renderer.shadowMap.enabled = !MOBILE_FAST_RENDER;
+      renderer.shadowMap.autoUpdate = false;
+      renderer.shadowMap.needsUpdate = false;
     }
     return;
   }
