@@ -216,6 +216,38 @@ Verification so far:
 Current TODO:
 - None after this change is pushed to `origin/main`.
 
+## 2026-08-30 continuation after web ChatGPT changes
+
+Current user request:
+- Inspect and preserve the latest corrections made through web ChatGPT, then continue improving the artwork water-impact effect and severe gallery lag.
+- Keep the gallery 50% darker, retain visible gray dust, and make the water surface respond with a deep impact-center depression plus large waves/ripples.
+
+Continuity check:
+- Confirmed the latest web-edited repository state was clean at commit `4a59aa1` (`A`) before making this continuation.
+- Continued directly from that commit without resetting, reverting, or replacing the web changes.
+
+Final splash refinement:
+- Kept the fixed pooled GPU architecture and the same three draw calls per active impact: one point cloud, one torn crown sheet, and one shader ripple plane.
+- Refined the point shader into vertically stretched main droplets and softer round mist, with stronger water/specular highlights after the 50% gallery dimming overlay.
+- Refined the crown shader with lacy breakup, torn top edges, foam at the base, and a highlighted rim.
+- Increased ripple-edge contrast and shifted the impact tint toward pale water rather than gray.
+- Corrected reverse-edge `smoothstep` expressions so the shader result is defined and portable across WebGL drivers.
+- Added no geometry, per-particle meshes, runtime allocations, or extra draw calls for these visual changes.
+
+Performance and visual verification:
+- Confirmed the dominant lag source from the web-edited build: exported viewer startup disabled its baked shadow-cache runtime and forced six shadow-casting lights to refresh every frame. The hardware probe fell from about `51.01 ms` average work (`171.10 ms` p95) to about `5.76 ms` (`7.40 ms` p95) when those shadow maps were refreshed once and frozen.
+- Preserved the web fix that uses the one-time shadow refresh/cache path, restores frustum culling for architecture/artwork meshes, lowers water-grid density, omits the redundant exported-viewer caustic overlay, and caches the mobile actor safety traversal/material setup.
+- Hardware-accelerated desktop at `1440x900`: steady CPU-side frame work `7.48 ms`; eight rapid impacts recycle into three active slots and nine splash draw calls at `7.53 ms`, with 860 droplets per impact and zero legacy particle Meshes.
+- Hardware-accelerated mobile at `390x844`: steady `55.3 FPS`, `4.50 ms` frame work, and `5.80 ms` p95; stress remained `55.7 FPS`, `4.29 ms`, two active slots, six splash draw calls, 560 droplets per impact, and zero legacy particle Meshes.
+- Final mobile reload after removing measurement-only controls ran at `58.1 FPS`, `4.34 ms` frame work, and `5.30 ms` p95 with one active detailed impact.
+- Visually inspected desktop and mobile rise/crown/ripple stages: darkened architecture, visible gray dust, raised splash plume, crown sheet/mist, and concentric impact deformation were all present.
+- No new WebGL or shader errors were logged. Existing project warnings remain for textures without image data and FBX vertices with more than four skinning weights.
+- The required headless `develop-web-game` client was attempted with the standard action payload; the full scene again stalled under SwiftShader and was stopped after a bounded wait. Hardware-browser regression testing completed successfully instead.
+- Removed the temporary shadow-cache/reference-visibility measurement buttons and actions. Query-gated splash stage/stress controls and performance telemetry remain available for future regression testing and are invisible in normal gallery use.
+
+Current TODO:
+- None.
+
 ## 2026-08-29 brightness, dust, physical water response, and deep performance diagnosis
 
 Current user request:
