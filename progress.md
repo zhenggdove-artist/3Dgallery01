@@ -270,6 +270,32 @@ Implementation direction:
 - Replaced that heavy artwork-only path with a fixed-size pooled GPU effect. Ballistic droplet positions are evaluated in a vertex shader, so hundreds of droplets render in one draw call instead of hundreds of draw calls.
 - The visual is layered into a deterministic central jet, crown droplets, outer mist, an animated torn crown sheet, and five shader-drawn foam/ripple rings.
 - Desktop uses a three-slot pool capped at 900 droplets per impact; touch devices use a two-slot pool capped at 560. Repeated impacts recycle the oldest slot and allocate no new scene objects.
+
+## 2026-08-29 natural artwork water-impact correction
+
+Current user request:
+- Remove the unnatural white-line inverted cone shown when artwork is thrown into water.
+- Rebuild the response around recognizable game-water physics while keeping the gallery smooth.
+
+Root cause:
+- The inverted cone was literal geometry, not a random WebGL artifact: `CylinderGeometry(.86,.18,1,36,1,true)` made a continuous sheet whose top was almost five times wider than its base.
+- The crown fragment shader covered that frustum with high-contrast strands, so the translucent surface read as a white wire cone.
+- Impact strength counted most of the artwork's large horizontal throw velocity as vertical displacement energy, exaggerating splash height and water-surface deformation.
+
+Changes:
+- Replaced the continuous frustum with ten disconnected, tapered splash-sheet lobes in one shared `BufferGeometry` and one draw call. The lobes rise, flare slightly, fall, and fade without forming a closed cone.
+- Kept the effect at three draw calls per active impact: one GPU point cloud, one broken splash sheet, and one ripple plane.
+- Added per-droplet annular origins so crown droplets emerge from the displaced-water rim instead of every particle radiating from one mathematical point.
+- Reduced the GPU particle pool from 900/560 to 360 desktop / 220 touch and reduced the pool density on touch devices. No per-droplet Mesh or Material is created.
+- Reworked ripple rendering from five simultaneous graphic rings to a primary wavefront plus two weaker delayed trailing waves.
+- Added footprint-aware impact response. Surface depression and splash radius now use the artwork's world-space waterline footprint; vertical velocity controls most splash energy, while horizontal velocity only biases the spray direction and adds a small wake contribution.
+- Added `uImpactRadius` to the water-surface shader, reducing the previous oversized fixed-radius bowl and tying the cavity/rim to displaced area.
+
+Verification:
+- `index.html` module syntax check passes.
+- `git diff --check` passes.
+- Static reference checks confirm the old `CylinderGeometry(.86,.18,...)` and every crown reference are removed.
+- The local WebGL visual test path remains query-gated through `debugInput` / `debugWaterSplash`; external browser acquisition was unavailable in the current restricted runtime, so deployment preview still requires the connected browser or GitHub-hosted branch.
 - Kept the existing water-surface displacement/caustic response and item water-drop audio.
 - Added debug telemetry for active pooled impacts, legacy Mesh particle count, per-impact droplet count, and draw-call count.
 
@@ -414,3 +440,24 @@ Verification so far:
 
 Current TODO:
 - None after this change is pushed to `origin/main`.
+
+## 2026-08-30 merge-conflict resolution before push
+
+Diagnosis:
+- Local `main` at `d4d4181` and remote `origin/main` at `dc6afce` had diverged by one commit each.
+- GitHub Desktop had already started a merge; `index.html` contained three unresolved conflict regions while `progress.md` merged normally.
+- The remote commit replaced the old cone/crown splash with a directional multi-lobe water sheet using per-particle origins and Fresnel shading. Blindly choosing the local conflict side would have left that sheet fragment referencing an undeclared `uTime` uniform.
+
+Resolution:
+- Preserved the remote sheet geometry, directional motion, Fresnel fragment shader, per-particle `aOrigin`, and natural water tint.
+- Preserved the local portable droplet `smoothstep` expressions, brighter droplet/ripple highlights, and removal of temporary performance-probe controls.
+- Renamed the staged debug phase to `SPLASH SHEET` without restoring the removed shadow/reference measurement buttons.
+
+Verification:
+- Conflict-marker scan, module syntax check, and `git diff --check` passed.
+- Hardware WebGL browser loaded all 24 assets and compiled the merged shaders with zero console errors.
+- Eight-impact stress state reported three pooled effects, nine splash draw calls, 214 particles for the latest impact, zero legacy particle Meshes, `3.50 ms` average CPU frame work, and `4.40 ms` p95.
+- The required headless game client was attempted but again stalled under SwiftShader; it was stopped after a bounded wait. Hardware-browser visual/state/error verification passed.
+
+Current TODO:
+- None after the merge commit is pushed to `origin/main`.
