@@ -495,3 +495,37 @@ Verification:
 
 Current TODO:
 - None after the final commit is pushed to `origin/main`.
+
+## 2026-08-31 real artwork restoration, physical water lifetime, and aged backrooms
+
+Current user request:
+- Fix 3D artwork that had been replaced by a coarse mesh.
+- Further shorten artwork throw distance; enlarge and refine size-driven splashes; keep water waves alive long enough to feel physical.
+- Preserve every artwork's exact sewer dimensions in the backrooms and raise the office instead of shrinking art.
+- Replace the crude backrooms wallpaper with aged detail, moldy wallpaper/drop-ceiling edges, and curled hanging wallpaper while keeping the page smooth.
+
+Diagnosis and implementation so far:
+- Confirmed the coarse model was not an asset-load failure: `createBackroomsArtworkLodProxy()` deliberately hid the real GLB in the backrooms and beyond 3.25 units. Removed the proxy, its scene/load hooks, and its per-frame LOD scan; the real optimized GLB is now the only model render path.
+- Removed both backrooms artwork scale formulas. Backrooms snapshots now copy the sewer `size.w/h/d` values exactly. Wall art is placed from its unchanged height, and backrooms height is derived from the tallest artwork with a 9.2-unit minimum.
+- Throw speed changed from `17.6/3` to `17.6/6`, about 2.93 horizontal units per second.
+- Expanded the dimension-driven impact range to a 14-unit cavity/rim radius and 28-unit wave travel, with displaced volume contributing directly to radius and depth.
+- Physical water impact lifetime is now 10.5 seconds with a slower propagating, damped wave packet. The pooled foam ring lasts 5.4 seconds, the crown sheet 1.18 seconds, and droplets can live up to 2.8 seconds before the bounded size multiplier.
+- Detailed splash stays fixed-pool/three-draw-call: 540 desktop or 320 touch points per slot, 32 narrow curved crown tongues with 10 vertical rows and procedural perforation, smaller droplet sprites, and no per-droplet meshes.
+- Rebuilt the backrooms with 512px aged procedural wallpaper/ceiling maps, an instanced metal T-grid, one instanced mold-decal batch, and one instanced curved hanging-wallpaper batch. This adds only three grouped draw calls.
+- Moved the flooded-office entry pose onto the front-wall display side and reduced only its default third-person camera distance to 3.8 so the camera cannot sit behind the maze wall. The first view now frames a full-size artwork and the aged wallpaper.
+
+Verification:
+- Module syntax check and `git diff --check` pass.
+- Static regression assertions pass for no artwork proxy symbols, exact copied artwork sizes, dynamic room height, shortened throw speed, extended wave/ring lifetimes, refined crown geometry, and instanced aging details.
+- The required `develop-web-game` client was attempted with the standard action payload. As in prior project notes, headless SwiftShader stalled while loading the 38 MB optimized GLB, so it was stopped after a bounded 50-second wait. No visual downgrade was added for the test environment.
+- Hardware-WebGL inspection confirmed the full `SinTower` GLB renders in the sewer; no cylinder/base proxy remains.
+- Physical calibration at velocity `(3,-6,1.4)` now reports:
+  - `2 x 2 x 0.5`: radius `1.786`, depression `0.685`, wave distance `5.624`.
+  - `20 x 20 x 2`: radius `13.384`, depression `2.328`, wave distance `28`.
+- Visually inspected the detailed splash at 0.28 seconds, the layered response at 0.82 seconds, and the propagated wave at 4.2 seconds. The final narrow/perforated sheet removed the wide polygon-column appearance from the first pass.
+- Representative large-artwork impact uses 309 GPU points on the tested touch path, 3 splash draw calls, and 0 legacy per-droplet meshes; sampled work was `3.16 ms` average / `3.70 ms` p95.
+- Eight-impact stress test stayed bounded at 3 pooled active slots / 9 splash draw calls / 0 legacy meshes, with `3.17 ms` average / `3.80 ms` p95. Forced cleanup returned to 0 active slots / 0 splash draw calls.
+- Final flooded-backrooms entry sample: `60.1 FPS`, 36 draw calls, `1.58 ms` average work, `2.10 ms` p95. The first view shows a full-size artwork; aged wallpaper, mold, hanging wallpaper, and T-grid remain batched.
+
+Current TODO:
+- None. Changes are intentionally left uncommitted/unpushed because this request did not ask for a push.
