@@ -529,3 +529,35 @@ Verification:
 
 Current TODO:
 - None. Changes are intentionally left uncommitted/unpushed because this request did not ask for a push.
+
+## 2026-08-31 continuous backrooms office and five-second water response
+
+Latest request and evidence:
+- Reviewed the supplied 15.38-second reference video as contact sheets. Its readable sequence is a compact annular crown, atomized droplets/foam, then a broad outward surface response rather than isolated vertical ribbons.
+- The supplied backrooms screenshot matches two code-level causes: the wallpaper texture baked mold into both tile edges and repeated vertically 3.5 times; the detailed splash geometry explicitly generated 32 independent tall lobes.
+
+Implemented so far:
+- Wallpaper now repeats horizontally but is clamped to one floor-to-ceiling vertical sheet. Baked top/bottom aging therefore appears only at real wall edges, while the instanced mold and hanging wallpaper details remain.
+- Replaced 32 isolated splash lobes with one continuous 56-segment, six-row low annular crown. It keeps the existing fixed GPU pool and three draw calls per active impact.
+- Surface and foam-ring shaders now share an adjustable five-second duration and damping curve. The physical center cavity collapses first, while the wavefront travels outward and settles smoothly at the configured duration.
+- Added persistent water-impact tuning for splash height, crown height, spread, particle density, ripple duration/distance, center depression, and damping.
+- Added a separate draggable `waterImpactPanel`; in the exported viewer Shift+C opens the water-only tuning mode, Escape closes it, and preview/reset are available without entering gameplay input.
+- Split fluorescent tubes into one stable instanced batch and two broken instanced batches. Only the two broken materials and linked point lights flicker, keeping the runtime update allocation-free and adding two draw calls.
+- Scene switching retains the strict sewer-group visibility mask already present in current HEAD; debug telemetry now reports whether every sewer architecture/light group is hidden in the backrooms.
+
+Verification so far:
+- Module syntax check and `git diff --check` pass.
+- The required standard web-game client was attempted before visual edits; as previously documented for this project, headless SwiftShader stalled during the large model load and was stopped after a bounded 30-second attempt.
+
+Current TODO:
+- None. Hardware WebGL verification is complete; changes remain uncommitted/unpushed because this request did not ask for a push.
+
+Final verification:
+- Continuous wallpaper renders without the three repeated horizontal mold bands. The higher walls remain single meshes; mold decals and curled wallpaper stay separately instanced at real top/bottom edges.
+- Backrooms telemetry reports `sewerGroupsHidden=true`; the room, custom-wall, floor-tile, reference-architecture, and sewer light-rig groups are all hidden while the flooded office is active.
+- The two broken-light batches changed from powers `[0.918,0.025]` to `[0.766,0.745]` in a 420 ms sample, confirming independent continuous flicker; stable tubes remain unaffected.
+- Shift+C opens the separate 326 px water physics window. All eight controls, preview, reset, close, live values, and exported-viewer persistence work.
+- At 4.2 seconds the outward wave remains active with 309 GPU droplets in the representative model response. Cleanup after the configured five-second response returns the splash pool to zero.
+- Eight-impact stress remains capped at three desktop pool slots / nine splash draw calls / zero legacy per-droplet meshes. Cleanup returns to zero active slots.
+- With the denser single-draw-call water grid and full 676k-triangle artwork visible, sampled frame work is `3.69 ms` average / `5.40 ms` p95; draw calls remain 73 in the sewer sample. The in-app browser throttles RAF to roughly 18–20 FPS in the background, so performance acceptance uses measured frame-work time rather than that throttled interval.
+- Module syntax, static regression assertions, and `git diff --check` pass. No application JavaScript or WebGL shader errors were logged; the browser harness itself emitted intermittent generic Chromium `UnknownError` messages during two selector deadline overruns.

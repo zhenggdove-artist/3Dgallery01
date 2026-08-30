@@ -98,6 +98,14 @@
 
 
   body.exported-viewer .window-body{display:none!important}
+  #waterImpactPanel{left:18px;top:76px;width:326px;max-height:calc(100vh - 96px);padding:12px;border:1px solid rgba(130,224,235,.38);background:rgba(7,17,20,.93);box-shadow:0 18px 55px rgba(0,0,0,.58);backdrop-filter:blur(12px);font-size:11px}
+  #waterImpactPanel[hidden]{display:none!important}
+  #waterImpactPanel label{grid-template-columns:118px minmax(0,1fr) 42px;margin:8px 0}
+  #waterImpactPanel output{color:#b9f5ff;text-align:right;font:10px/1.2 Consolas,monospace}
+  #waterImpactPanel .water-panel-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:11px}
+  #waterImpactPanel .water-panel-note{margin:9px 0 0;color:#8ca5a8;font-size:10px;line-height:1.5}
+  body.exported-viewer.water-tuning-mode #waterImpactPanel{display:block!important}
+  body.exported-viewer.water-tuning-mode #waterImpactPanel .window-body{display:block!important}
 </style>
 <script type="importmap">
 {
@@ -113,6 +121,20 @@
 <div id="screenFxOverlay" aria-hidden="true" style="opacity: 0;"></div>
 <div id="galleryBrightnessOverlay" aria-hidden="true"></div>
 <button id="sceneToggleButton" type="button" aria-label="切換展場場景">場景：下水道｜B</button>
+<aside id="waterImpactPanel" class="edit-ui" data-window-title="水花物理調整｜Shift+C">
+  <h1>水花物理調整</h1>
+  <label>飛濺高度<input id="waterSplashHeight" type="range" min="0.2" max="1.6" step="0.05"><output id="waterSplashHeightValue"></output></label>
+  <label>水冠高度<input id="waterCrownHeight" type="range" min="0.2" max="1.5" step="0.05"><output id="waterCrownHeightValue"></output></label>
+  <label>向外擴散<input id="waterSplashSpread" type="range" min="0.4" max="2" step="0.05"><output id="waterSplashSpreadValue"></output></label>
+  <label>水滴密度<input id="waterParticleDensity" type="range" min="0.35" max="1.25" step="0.05"><output id="waterParticleDensityValue"></output></label>
+  <label>漣漪時間<input id="waterRippleDuration" type="range" min="3" max="8" step="0.1"><output id="waterRippleDurationValue"></output></label>
+  <label>漣漪距離<input id="waterRippleDistance" type="range" min="0.6" max="1.8" step="0.05"><output id="waterRippleDistanceValue"></output></label>
+  <label>中心凹陷<input id="waterDepressionDepth" type="range" min="0.5" max="2" step="0.05"><output id="waterDepressionDepthValue"></output></label>
+  <label>波浪衰減<input id="waterRippleDamping" type="range" min="0" max="1" step="0.05"><output id="waterRippleDampingValue"></output></label>
+  <div class="water-panel-actions"><button id="previewWaterImpact" type="button" class="ok">預覽水花</button><button id="resetWaterImpact" type="button">恢復預設</button></div>
+  <button id="closeWaterImpactPanel" type="button">完成調整</button>
+  <p class="water-panel-note">所有參數仍會依作品實際長、寬、高與入水速度自動換算；粒子使用固定 GPU 池，不會因拉高密度持續增加記憶體。</p>
+</aside>
 <svg id="screenFxSvg" width="0" height="0" aria-hidden="true" focusable="false" style="position:fixed;width:0;height:0;overflow:hidden;pointer-events:none">
   <filter id="screenFxSWarp" x="-8%" y="-8%" width="116%" height="116%" color-interpolation-filters="sRGB">
     <feTurbulence id="screenFxWarpNoise" type="fractalNoise" baseFrequency="0.006 0.028" numOctaves="1" seed="11" result="warpNoise"></feTurbulence>
@@ -266,7 +288,9 @@ const ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER = 1.02;
 const ARTWORK_WATER_IMPACT_RIPPLE_LAYERS = 3;
 const ARTWORK_WATER_IMPACT_RING_SCALE_MULTIPLIER = 1.55;
 const DETAILED_SPLASH_POOL_SIZE = IS_TOUCH_DEVICE ? 2 : 3;
-const WATER_SURFACE_SEGMENTS = IS_TOUCH_DEVICE ? 88 : 112;
+// The single water draw call uses a denser grid so a deep impact cavity stays
+// round instead of exposing meter-wide triangular facets across the 100m pool.
+const WATER_SURFACE_SEGMENTS = IS_TOUCH_DEVICE ? 160 : 192;
 // Thirty times as many motes at one fifth the diameter only raises theoretical
 // fragment coverage by about 20% (30 * .2^2) and remains one GPU draw call.
 const GALLERY_DUST_COUNT = IS_TOUCH_DEVICE ? 21_000 : 36_000;
@@ -274,6 +298,16 @@ const ARTWORK_IMPACT_REFERENCE_SIZE = Object.freeze({width:20,height:20,depth:2,
 const ARTWORK_IMPACT_MAX_RADIUS = 14;
 const ARTWORK_IMPACT_MAX_WAVE_DISTANCE = 28;
 const BACKROOMS_MIN_HEIGHT = 9.2;
+const DEFAULT_WATER_IMPACT_TUNING = Object.freeze({
+  splashHeight:.72,
+  crownHeight:.88,
+  splashSpread:1,
+  particleDensity:1,
+  rippleDuration:5,
+  rippleDistance:1,
+  depressionDepth:1,
+  rippleDamping:.42
+});
 const WATER_WALK_VOLUME = .42;
 const WATER_WALK_FADE_MS = 520;
 const BACKGROUND_MUSIC_VOLUME = .28;
@@ -286,6 +320,7 @@ let mobileActorSafetyPatchedModel = null, mobileActorSafetyPatchedProxy = null;
 let surfaces = {}, customWallMeshes = {}, floorTileMeshes = {}, waterBodyMeshes = {}, artworkMeshes = {}, lightControlObjects = {}, lightTargetObjects = {};
 let referenceCollisionItems = [];
 let backroomsCollisionItems = [];
+const backroomsFlickerRuntime = [];
 let lastChiselTarget = null;
 let chiselPreviewMesh = null;
 let chiselPreviewKey = "";
@@ -376,7 +411,7 @@ const gallerySceneRuntime = {
   initialized:false,
   backroomsHeight:BACKROOMS_MIN_HEIGHT,
   artworkStates:{sewer:null,backrooms:null},
-  playerPoses:{sewer:null,backrooms:{x:3.4,y:0,z:11.4,yaw:deg(180),pitch:deg(16),cameraDistance:3.8}}
+  playerPoses:{sewer:null,backrooms:{x:0,y:0,z:1,yaw:deg(-35),pitch:deg(18),cameraDistance:3.8}}
 };
 const runtimeAudio = {ready:false, unlocked:false, nodes:{}, lastPlayed:{}, fadeTimers:{}, waterWalkActive:false, backgroundMusicReady:false, backgroundMusicStarted:false, backgroundMusicAutoplayLastAt:0};
 const ARPG_INTERACTION = {range:5.2, holdDistance:1.82, holdHeight:1.38, sideOffset:.22, kickSpeed:8.4, throwSpeed:17.6/6, gravity:8.6};
@@ -1005,8 +1040,8 @@ function installGalleryDebugState(){
         lastDetailedSplash:waterRuntime.lastDetailedSplash,
         lastArtworkImpactProfile:waterRuntime.lastArtworkImpactProfile
       },
-      tuning:{throwSpeed:ARPG_INTERACTION.throwSpeed,dustCount:GALLERY_DUST_COUNT,dustDrawCalls:galleryDustPoints?.visible === false ? 0 : (galleryDustPoints ? 1 : 0)},
-      backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.length,lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0},
+      tuning:{throwSpeed:ARPG_INTERACTION.throwSpeed,dustCount:GALLERY_DUST_COUNT,dustDrawCalls:galleryDustPoints?.visible === false ? 0 : (galleryDustPoints ? 1 : 0),waterImpact:{...getWaterImpactTuning()}},
+      backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.length,lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0,flickerGroups:backroomsFlickerRuntime.length,sewerGroupsHidden:[roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false)},
       audio:{backgroundMusicReady:!!runtimeAudio.backgroundMusicReady, backgroundMusicStarted:!!runtimeAudio.backgroundMusicStarted, unlocked:!!runtimeAudio.unlocked},
       loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl},
       hasWrongWhiteArtwork:artworkList.some(isRemovedRequiredArtwork),
@@ -1151,6 +1186,7 @@ function installGalleryDebugState(){
       updateCamera();
       if(skyMesh) skyMesh.position.copy(camera.position);
       updateAtmosphereEffect(dt || 1 / 60);
+      updateBackroomsFlicker(performance.now()/1000 + i*(dt || 1/60));
       updateWaterEffects(dt || 1 / 60);
       updateScreenFxEffect(dt || 1 / 60);
       if(!EXPORTED_GALLERY_VIEWER) updateChiselPreview();
@@ -1185,6 +1221,111 @@ function installWaterSplashDebugButton(){
   document.body.appendChild(controls);
 }
 
+const WATER_IMPACT_EDITOR_FIELDS = Object.freeze({
+  waterSplashHeight:{key:'splashHeight',digits:2,suffix:'×'},
+  waterCrownHeight:{key:'crownHeight',digits:2,suffix:'×'},
+  waterSplashSpread:{key:'splashSpread',digits:2,suffix:'×'},
+  waterParticleDensity:{key:'particleDensity',digits:2,suffix:'×'},
+  waterRippleDuration:{key:'rippleDuration',digits:1,suffix:'s'},
+  waterRippleDistance:{key:'rippleDistance',digits:2,suffix:'×'},
+  waterDepressionDepth:{key:'depressionDepth',digits:2,suffix:'×'},
+  waterRippleDamping:{key:'rippleDamping',digits:2,suffix:''}
+});
+
+function syncWaterImpactEditor(){
+  const tuning = getWaterImpactTuning();
+  for(const [id,meta] of Object.entries(WATER_IMPACT_EDITOR_FIELDS)){
+    const input=$(id), output=$(`${id}Value`);
+    if(input) input.value=String(tuning[meta.key]);
+    if(output) output.textContent=`${tuning[meta.key].toFixed(meta.digits)}${meta.suffix}`;
+  }
+}
+
+function persistWaterImpactTuning(){
+  if(EXPORTED_GALLERY_VIEWER){
+    try{ localStorage.setItem('gallery.waterImpactTuning',JSON.stringify(STATE.waterImpactTuning)); }catch{}
+  }else scheduleSave();
+}
+
+function updateWaterImpactTuningFromEditor(){
+  const next={...getWaterImpactTuning()};
+  for(const [id,meta] of Object.entries(WATER_IMPACT_EDITOR_FIELDS)){
+    if($(id)) next[meta.key]=Number($(id).value);
+  }
+  STATE.waterImpactTuning=sanitizeWaterImpactTuning(next);
+  syncWaterImpactEditor();
+  persistWaterImpactTuning();
+}
+
+function previewWaterImpactFromEditor(){
+  const body=(STATE.waterBodies||[]).find(item=>item&&item.visible!==false&&!item.isDraft);
+  if(!body) return false;
+  const metrics=waterBodyMetrics(body);
+  const previewPosition=player.position.clone().addScaledVector(getCameraForward(),3.1);
+  const impactPosition=isPointInsideWaterFootprint(body,previewPosition)
+    ? new THREE.Vector3(previewPosition.x,metrics.surfaceY+.045,previewPosition.z)
+    : new THREE.Vector3(safeFinite(body.position?.x,0),metrics.surfaceY+.045,safeFinite(body.position?.z,0));
+  const representative=(STATE.artworks||[]).find(art=>art.type==='model') || (STATE.artworks||[]).reduce((best,art)=>{
+    const volume=Math.max(.001,safeFinite(art?.size?.w,0)*safeFinite(art?.size?.h,0)*safeFinite(art?.size?.d,0));
+    return !best||volume>best.volume?{art,volume}:best;
+  },null)?.art;
+  const impactVelocity=new THREE.Vector3(1.4,-6.4,.8);
+  const impactProfile=calculateArtworkWaterImpactProfile({
+    width:safeFinite(representative?.size?.w,4.35),
+    height:safeFinite(representative?.size?.h,4.35),
+    depth:safeFinite(representative?.size?.d,4.35)
+  },impactVelocity);
+  const impactStrength=WATER_IMPACT_RESPONSE_SCALE*impactProfile.energy;
+  triggerWaterRippleAt(body,impactPosition,impactStrength,{
+    detailedGpu:true,physicalImpact:true,
+    physicalImpactStrength:clamp(impactStrength*.96,.75,8.5),impactVelocity,
+    impactRadius:impactProfile.impactRadius,impactDepth:impactProfile.impactDepth,waveDistance:impactProfile.waveDistance,
+    impactDimensions:impactProfile.dimensions,sizeScale:impactProfile.sizeScale,
+    particleMultiplier:ARTWORK_WATER_IMPACT_PARTICLE_MULTIPLIER,particleLimit:ARTWORK_WATER_IMPACT_PARTICLE_LIMIT,
+    heightMultiplier:ARTWORK_WATER_IMPACT_HEIGHT_MULTIPLIER*impactProfile.splashHeightScale,
+    outwardMultiplier:ARTWORK_WATER_IMPACT_OUTWARD_MULTIPLIER*impactProfile.splashOutwardScale,
+    lifeMultiplier:clamp(1.08+impactProfile.sizeScale*.14,1.18,1.62),
+    ringLayers:ARTWORK_WATER_IMPACT_RIPPLE_LAYERS,
+    ringScaleMultiplier:ARTWORK_WATER_IMPACT_RING_SCALE_MULTIPLIER*impactProfile.ringScale,
+    rippleScale:1.2+impactProfile.sizeScale*.32,
+    rippleStrengthCap:clamp(3.2+impactProfile.sizeScale*1.35,3.8,7.8),
+    motionScale:1.35+impactProfile.footprintScale*.55,
+    motionStrengthCap:clamp(3.6+impactProfile.sizeScale*1.2,4.2,7.6),aftershockRipples:0
+  });
+  setStatus?.('已用目前參數預覽 3D 作品入水效果。');
+  return true;
+}
+
+function toggleWaterImpactTuningMode(force){
+  const panel=$('waterImpactPanel');
+  if(!panel) return false;
+  const current=EXPORTED_GALLERY_VIEWER?document.body.classList.contains('water-tuning-mode'):!panel.hidden;
+  const open=typeof force==='boolean'?force:!current;
+  panel.hidden=!open;
+  document.body.classList.toggle('water-tuning-mode',open);
+  if(open){
+    desiredPointerLocked=false;pointerLocked=false;fallbackMouseLook=false;cursorFreeMode=true;
+    try{ document.exitPointerLock?.(); }catch{}
+    syncWaterImpactEditor();
+  }
+  updateCursorVisibility?.();
+  return open;
+}
+
+function bindWaterImpactEditor(){
+  const panel=$('waterImpactPanel');
+  if(!panel||panel.dataset.waterEditorBound==='1') return;
+  panel.dataset.waterEditorBound='1';
+  for(const id of Object.keys(WATER_IMPACT_EDITOR_FIELDS)) if($(id)) $(id).addEventListener('input',updateWaterImpactTuningFromEditor);
+  if($('previewWaterImpact')) $('previewWaterImpact').onclick=previewWaterImpactFromEditor;
+  if($('resetWaterImpact')) $('resetWaterImpact').onclick=()=>{
+    STATE.waterImpactTuning={...DEFAULT_WATER_IMPACT_TUNING};
+    syncWaterImpactEditor();persistWaterImpactTuning();previewWaterImpactFromEditor();
+  };
+  if($('closeWaterImpactPanel')) $('closeWaterImpactPanel').onclick=()=>toggleWaterImpactTuningMode(false);
+  syncWaterImpactEditor();
+}
+
 // main() is intentionally called at the end of the module after all const/let declarations are initialized.
 
 
@@ -1203,6 +1344,12 @@ function applyRequiredLightingAndShadowCorrections(state){
 
 async function main(){
   STATE = EXPORTED_STATE ? sanitizeState(EXPORTED_STATE) : (await loadState() || createDefaultState());
+  if(EXPORTED_GALLERY_VIEWER){
+    try{
+      const savedTuning=JSON.parse(localStorage.getItem('gallery.waterImpactTuning')||'null');
+      if(savedTuning) STATE.waterImpactTuning=sanitizeWaterImpactTuning(savedTuning);
+    }catch{}
+  }
   applyRequiredArtworkCorrections(STATE);
   resetModelArtworkLoadTracking(STATE);
   applyRequiredLightingAndShadowCorrections(STATE);
@@ -1233,12 +1380,14 @@ async function main(){
   installArtworkImpactCalibrationTelemetry();
   loadStatue();
   loadActor();
+  bindWaterImpactEditor();
   if(!EXPORTED_GALLERY_VIEWER){
     buildEditor();
     applyObjectVisibilityLocks();
     renderObjectPanel();
     bindInput();
   }
+  if(EXPORTED_GALLERY_VIEWER) setupFloatingWindows();
   if(EXPORTED_GALLERY_VIEWER) enterExportedViewerMode();
   setStatus(EXPORTED_GALLERY_VIEWER ? '已載入作品集場景。手機可使用左下移動鍵與跳躍鍵；單指拖曳旋轉視角；雙指縮放；ESC 返回上一頁。' : '已載入。Shift+C 開啟編輯；Q 新增牆；E 刪除牆。');
   markGallerySceneReady();
@@ -1435,6 +1584,25 @@ function chiselHoleLabel(h){
 }
 
 
+function sanitizeWaterImpactTuning(raw={}){
+  return {
+    splashHeight:clamp(safeFinite(raw.splashHeight,DEFAULT_WATER_IMPACT_TUNING.splashHeight),.2,1.6),
+    crownHeight:clamp(safeFinite(raw.crownHeight,DEFAULT_WATER_IMPACT_TUNING.crownHeight),.2,1.5),
+    splashSpread:clamp(safeFinite(raw.splashSpread,DEFAULT_WATER_IMPACT_TUNING.splashSpread),.4,2),
+    particleDensity:clamp(safeFinite(raw.particleDensity,DEFAULT_WATER_IMPACT_TUNING.particleDensity),.35,1.25),
+    rippleDuration:clamp(safeFinite(raw.rippleDuration,DEFAULT_WATER_IMPACT_TUNING.rippleDuration),3,8),
+    rippleDistance:clamp(safeFinite(raw.rippleDistance,DEFAULT_WATER_IMPACT_TUNING.rippleDistance),.6,1.8),
+    depressionDepth:clamp(safeFinite(raw.depressionDepth,DEFAULT_WATER_IMPACT_TUNING.depressionDepth),.5,2),
+    rippleDamping:clamp(safeFinite(raw.rippleDamping,DEFAULT_WATER_IMPACT_TUNING.rippleDamping),0,1)
+  };
+}
+
+function getWaterImpactTuning(){
+  if(!STATE) return {...DEFAULT_WATER_IMPACT_TUNING};
+  STATE.waterImpactTuning = sanitizeWaterImpactTuning(STATE.waterImpactTuning);
+  return STATE.waterImpactTuning;
+}
+
 function createDefaultState(){
   const state = {
     room:{...ROOM},
@@ -1445,6 +1613,7 @@ function createDefaultState(){
     atmosphere:{enabled:false, color:'#d8d0bf', intensity:.32, opacity:.72, layers:.55},
     screenFx:{enabled:false,preset:'none',intensity:.65,noise:.25,scanlines:.25,chromatic:.22,warp:.08,glow:.18,vignette:.28,saturation:1.12,contrast:1.08,brightness:1,blur:0,hue:0},
     groundRelief:{preset:'flat', amount:0, variation:.5, seed:104729},
+    waterImpactTuning:{...DEFAULT_WATER_IMPACT_TUNING},
     surfaceTransforms:{},
     floorTiles:[],
     waterBodies:[],
@@ -1592,6 +1761,7 @@ function sanitizeState(raw){
     variation: clamp(safeFinite(gr.variation,.5),0,1),
     seed: safeFinite(gr.seed,104729)
   };
+  s.waterImpactTuning = sanitizeWaterImpactTuning(raw.waterImpactTuning);
   s.surfaceTransforms = {};
   for(const key of SURFACE_KEYS){
     if(raw.surfaceTransforms?.[key]) s.surfaceTransforms[key] = sanitizeSurfaceTransform(key, raw.surfaceTransforms[key], s.room);
@@ -2093,8 +2263,11 @@ function createBackroomsPatternTexture(kind='wall'){
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(kind === 'wall' ? 6 : 8,kind === 'wall' ? 3.5 : 8);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = kind === 'wall' ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+  // One continuous floor-to-ceiling wallpaper sheet. Repeating the baked top/bottom
+  // mold vertically was the source of the three dark horizontal "stacked walls".
+  texture.repeat.set(kind === 'wall' ? 6 : 8,kind === 'wall' ? 1 : 8);
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.anisotropy = Math.min(renderer?.capabilities?.getMaxAnisotropy?.() || 1,4);
@@ -2220,6 +2393,7 @@ function buildBackroomsEnvironment(){
   if(!backroomsGroup || backroomsGroup.userData.built) return;
   backroomsGroup.userData.built = true;
   backroomsCollisionItems = [];
+  backroomsFlickerRuntime.length = 0;
   const height = Math.max(BACKROOMS_MIN_HEIGHT,safeFinite(gallerySceneRuntime.backroomsHeight,BACKROOMS_MIN_HEIGHT));
   const wallTexture = createBackroomsPatternTexture('wall');
   const floorTexture = createBackroomsPatternTexture('floor');
@@ -2262,35 +2436,74 @@ function buildBackroomsEnvironment(){
   const housingGeometry = new THREE.BoxGeometry(3.8,.13,.82);
   const tubeGeometry = new THREE.BoxGeometry(3.25,.045,.10);
   const housingMaterial = new THREE.MeshStandardMaterial({color:'#292614',roughness:.88,metalness:.15});
-  const tubeMaterial = new THREE.MeshStandardMaterial({color:'#fff0a9',emissive:'#ffd45e',emissiveIntensity:3.4,roughness:.42,metalness:0,toneMapped:true});
   const housings = new THREE.InstancedMesh(housingGeometry,housingMaterial,fixturePositions.length);
-  const tubes = new THREE.InstancedMesh(tubeGeometry,tubeMaterial,fixturePositions.length*2);
   housings.name = 'backrooms-fluorescent-housings';
-  tubes.name = 'backrooms-fluorescent-tubes';
-  housings.castShadow = tubes.castShadow = false;
+  housings.castShadow = false;
   housings.receiveShadow = true;
   const matrix = new THREE.Matrix4();
   fixturePositions.forEach(([x,z],i)=>{
     matrix.makeTranslation(x,height-.23,z);
     housings.setMatrixAt(i,matrix);
-    matrix.makeTranslation(x,height-.31,z-.19);
-    tubes.setMatrixAt(i*2,matrix);
-    matrix.makeTranslation(x,height-.31,z+.19);
-    tubes.setMatrixAt(i*2+1,matrix);
   });
   housings.instanceMatrix.needsUpdate = true;
-  tubes.instanceMatrix.needsUpdate = true;
-  backroomsGroup.add(housings,tubes);
+  backroomsGroup.add(housings);
 
-  backroomsLightGroup.add(new THREE.AmbientLight('#d4b85d',.62));
-  backroomsLightGroup.add(new THREE.HemisphereLight('#e7d17d','#27210d',.34));
-  const activeLights = IS_TOUCH_DEVICE ? [0,3,7] : [0,2,3,5,7];
+  const tubeSets = [
+    {name:'stable',indices:[0,1,3,5,7],phase:0,speed:0},
+    {name:'broken-a',indices:[2,6],phase:1.73,speed:17.2},
+    {name:'broken-b',indices:[4],phase:4.91,speed:23.6}
+  ];
+  for(const set of tubeSets){
+    const material = new THREE.MeshStandardMaterial({
+      color:set.speed ? '#c2b77a' : '#fff0a9',
+      emissive:set.speed ? '#e4bd45' : '#ffd45e',
+      emissiveIntensity:set.speed ? 2.2 : 3.4,
+      roughness:.42,metalness:0,toneMapped:true
+    });
+    const tubes = new THREE.InstancedMesh(tubeGeometry,material,set.indices.length*2);
+    tubes.name = `backrooms-fluorescent-tubes-${set.name}`;
+    tubes.castShadow = false;
+    set.indices.forEach((fixtureIndex,localIndex)=>{
+      const [x,z] = fixturePositions[fixtureIndex];
+      matrix.makeTranslation(x,height-.31,z-.19);
+      tubes.setMatrixAt(localIndex*2,matrix);
+      matrix.makeTranslation(x,height-.31,z+.19);
+      tubes.setMatrixAt(localIndex*2+1,matrix);
+    });
+    tubes.instanceMatrix.needsUpdate = true;
+    backroomsGroup.add(tubes);
+    if(set.speed) backroomsFlickerRuntime.push({material,indices:new Set(set.indices),phase:set.phase,speed:set.speed,lights:[]});
+  }
+
+  backroomsLightGroup.add(new THREE.AmbientLight('#d4b85d',.48));
+  backroomsLightGroup.add(new THREE.HemisphereLight('#e7d17d','#27210d',.28));
+  const activeLights = IS_TOUCH_DEVICE ? [0,2,7] : [0,2,3,5,7];
   for(const index of activeLights){
     const [x,z] = fixturePositions[index];
     const light = new THREE.PointLight(index === 3 ? '#d3bb66' : '#ffe299',IS_TOUCH_DEVICE ? 7.1 : 8.6,14.5,2);
     light.position.set(x,height-.62,z);
     light.castShadow = false;
     backroomsLightGroup.add(light);
+    const flicker = backroomsFlickerRuntime.find(item=>item.indices.has(index));
+    if(flicker){
+      light.userData.baseIntensity = light.intensity;
+      flicker.lights.push(light);
+    }
+  }
+}
+
+function updateBackroomsFlicker(timeSeconds){
+  if(gallerySceneRuntime.mode !== 'backrooms' || !backroomsLightGroup?.visible) return;
+  for(const item of backroomsFlickerRuntime){
+    const t = timeSeconds*item.speed+item.phase;
+    const sample = Math.sin(t*12.9898)*43758.5453;
+    const noise = sample-Math.floor(sample);
+    const stutter = Math.sin(t*2.3)+Math.sin(t*5.7+1.4)*.48;
+    const blackout = noise < .23 || stutter < -.72;
+    const power = blackout ? .025 : clamp(.58+noise*.48+Math.sin(t*.91)*.12,.42,1);
+    item.lastPower = power;
+    item.material.emissiveIntensity = .04+power*3.35;
+    for(const light of item.lights) light.intensity = safeFinite(light.userData.baseIntensity,8.6)*power;
   }
 }
 
@@ -6102,6 +6315,8 @@ function createWaterMaterial(body){
     uImpactRadius:{value:.55},
     uImpactDepth:{value:.18},
     uImpactWaveDistance:{value:3.2},
+    uImpactDuration:{value:5},
+    uImpactDamping:{value:.42},
     uHalfSize:{value:new THREE.Vector2(1,1)},
     uShape:{value:0}
   };
@@ -6134,6 +6349,8 @@ function createWaterMaterial(body){
       uniform float uImpactRadius;
       uniform float uImpactDepth;
       uniform float uImpactWaveDistance;
+      uniform float uImpactDuration;
+      uniform float uImpactDamping;
       uniform vec2 uHalfSize;
       uniform float uShape;
       varying vec2 vUv;
@@ -6203,18 +6420,22 @@ function createWaterMaterial(body){
         float baseWave = (slow + cross + fine + chop + microA + microB + n) * (0.18 + uWave*2.6);
         float impactAge = max(0.0,uImpactAge);
         float impactEnergy = clamp(uImpactStrength / 8.0,0.0,1.0);
-        float impactActive = (1.0 - step(10.5,impactAge)) * step(.001,uImpactStrength);
+        float impactDuration = max(1.0,uImpactDuration);
+        float settleStart = impactDuration*mix(.82,.54,clamp(uImpactDamping,0.0,1.0));
+        float settle = 1.0-smoothstep(settleStart,impactDuration,impactAge);
+        float impactActive = (1.0-step(impactDuration+.05,impactAge))*step(.001,uImpactStrength);
         float impactD = distance(pos,uImpactCenter);
         float footprintRadius = clamp(uImpactRadius,.18,14.0);
         float travelDistance = clamp(uImpactWaveDistance,2.0,28.0);
         float bowlRadius = footprintRadius * mix(.84,1.38,impactEnergy) + impactAge*(.14+footprintRadius*.026);
-        float bowl = exp(-pow(impactD / max(.08,bowlRadius),2.0)*2.25) * exp(-impactAge*.96) * impactActive;
-        float frontTravel = min(travelDistance,impactAge*(travelDistance/5.4+.32));
+        float bowlFade = 1.0-smoothstep(0.0,max(.65,impactDuration*.34),impactAge);
+        float bowl = exp(-pow(impactD / max(.08,bowlRadius),2.0)*2.25)*bowlFade*impactActive;
+        float frontTravel = min(travelDistance,impactAge*(travelDistance/impactDuration));
         float frontRadius = footprintRadius*.78 + frontTravel;
         float frontWidth = .16 + footprintRadius*.18 + frontTravel*.042;
-        float front = exp(-pow(abs(impactD-frontRadius) / max(.12,frontWidth),2.0)*2.35) * exp(-impactAge*.20) * impactActive;
+        float front = exp(-pow(abs(impactD-frontRadius) / max(.12,frontWidth),2.0)*2.35)*settle*impactActive;
         float trailingGate = (1.0 - smoothstep(frontRadius-.35,frontRadius+max(2.2,travelDistance*.30),impactD)) * smoothstep(.16,.68,impactAge);
-        float trailing = sin((impactD-frontRadius)*mix(6.4,3.5,impactEnergy)) * exp(-impactD/max(1.2,travelDistance*.78)) * exp(-impactAge*.31) * trailingGate * impactActive;
+        float trailing = sin((impactD-frontRadius)*mix(6.4,3.5,impactEnergy))*exp(-impactD/max(1.2,travelDistance*.78))*exp(-impactAge*(.10+uImpactDamping*.18))*trailingGate*settle*impactActive;
         float physicalDepth = clamp(uImpactDepth,.10,3.4);
         float impactHeight = -bowl * physicalDepth + front * physicalDepth*.48 + trailing * physicalDepth*.22;
         float waveHeight = baseWave * waveGain + ripple * (0.105 + uWave*.18) + impactHeight;
@@ -7203,40 +7424,31 @@ function makeDetailedSplashPointMaterial(){
   return material;
 }
 
-function createDetailedSplashSheetGeometry(lobeCount=32, rows=10){
+function createDetailedSplashSheetGeometry(segments=56, rows=6){
   const positions = [];
   const normals = [];
   const uvs = [];
   const seeds = [];
   const indices = [];
-  const random = seededSplashRandom(0x51f15e);
-  for(let lobe=0; lobe<lobeCount; lobe++){
-    const center = (lobe / lobeCount) * Math.PI * 2 + (random()-.5) * .22;
-    const halfWidth = THREE.MathUtils.lerp(.05,.105,random());
-    const topHeight = THREE.MathUtils.lerp(.48,1.0,random());
-    const outwardLean = THREE.MathUtils.lerp(.08,.27,random());
-    const curvePhase = random()*Math.PI*2;
-    const baseIndex = positions.length / 3;
+  // A single low annular crown. The previous geometry created 32 isolated tall
+  // ribbons, which read as tentacles whenever artwork scaling amplified them.
+  for(let segment=0; segment<=segments; segment++){
+    const u = segment/segments;
+    const angle = u*Math.PI*2;
+    const crest = .70+.12*Math.sin(angle*5+1.1)+.075*Math.sin(angle*11-.6);
     for(let row=0; row<=rows; row++){
       const v = row / rows;
-      const taper = THREE.MathUtils.lerp(1,.07,Math.pow(v,1.16));
-      const radius = .52 + outwardLean*v + Math.sin(v*Math.PI)*.055 + Math.sin(v*Math.PI*3+curvePhase)*.018*v;
-      const y = v * topHeight;
-      for(const side of [-1,1]){
-        const angle = center + side * halfWidth * taper + Math.sin(v*Math.PI*2+curvePhase)*.014*v;
-        const ca = Math.cos(angle), sa = Math.sin(angle);
-        positions.push(ca*radius,y,sa*radius);
-        normals.push(ca,0,sa);
-        uvs.push(side < 0 ? 0 : 1,v);
-        seeds.push(lobe / Math.max(1,lobeCount-1));
+      const radius = .58+v*.20+Math.sin(v*Math.PI)*.055+Math.sin(angle*7+v*4.2)*.012*v;
+      const ca = Math.cos(angle), sa = Math.sin(angle);
+      positions.push(ca*radius,v*crest,sa*radius);
+      normals.push(ca,.10,sa);
+      uvs.push(u,v);
+      seeds.push(u);
+      if(segment<segments && row<rows){
+        const a=segment*(rows+1)+row;
+        const b=(segment+1)*(rows+1)+row;
+        indices.push(a,b,a+1,a+1,b,b+1);
       }
-    }
-    for(let row=0; row<rows; row++){
-      const a = baseIndex + row*2;
-      const b = a+1;
-      const c = a+2;
-      const d = a+3;
-      indices.push(a,c,b,b,c,d);
     }
   }
   const geometry = new THREE.BufferGeometry();
@@ -7272,11 +7484,11 @@ function makeDetailedSplashSheetMaterial(){
         vec3 p = position;
         float rise = 1.0-exp(-uProgress*11.0);
         float collapse = smoothstep(.48,1.0,uProgress);
-        float flutter = sin(aSeed*37.0+uProgress*14.0+uv.y*5.0)*.018*uv.y;
-        p.xz *= 1.0 + uv.y*(uProgress*.16+flutter);
-        p.xz += uDirection * (uDirectionality*uv.y*uProgress*.18);
+        float flutter = sin(aSeed*43.0+uProgress*13.0+uv.y*5.0)*.012*uv.y;
+        p.xz *= 1.0 + uv.y*(uProgress*.13+flutter);
+        p.xz += uDirection * (uDirectionality*uv.y*uProgress*.10);
         p.y *= rise;
-        p.y -= collapse*collapse*(.04+uv.y*.19);
+        p.y -= collapse*collapse*(.03+uv.y*.14);
         vec4 mvPosition = modelViewMatrix*vec4(p,1.0);
         vec3 n = normalize(normalMatrix*normal);
         vec3 viewDir = normalize(-mvPosition.xyz);
@@ -7292,17 +7504,13 @@ function makeDetailedSplashSheetMaterial(){
       varying float vSeed;
       varying float vFresnel;
       void main(){
-        float side = abs(vUv.x-.5)*2.0;
-        float sideFade = 1.0-smoothstep(.66,1.0,side);
-        float topFade = 1.0-smoothstep(.83,1.0,vUv.y);
-        float topRim = smoothstep(.80,.98,vUv.y);
-        float sideRim = smoothstep(.70,.98,side);
-        float breakup = .72+.28*sin(vSeed*53.0+vUv.y*23.0);
-        float lace = .5+.5*sin(vUv.y*47.0+vSeed*91.0+side*8.0);
-        float perforation = smoothstep(.72,.96,lace)*smoothstep(.36,.90,vUv.y);
-        float temporalFade = 1.0-smoothstep(.44,1.0,uProgress);
-        float body = sideFade*mix(.10,.29,clamp(vFresnel,0.0,1.0))*topFade*(1.0-perforation*.86);
-        float rim = (topRim*.48+sideRim*.22)*breakup*(1.0-perforation*.35);
+        float breakup = .70+.30*sin(vSeed*49.0+vUv.y*19.0);
+        float lace = .5+.5*sin(vUv.y*39.0+vSeed*83.0+sin(vSeed*31.0)*3.0);
+        float perforation = smoothstep(.78,.97,lace)*smoothstep(.42,.92,vUv.y);
+        float temporalFade = 1.0-smoothstep(.38,1.0,uProgress);
+        float lowerFade = smoothstep(.02,.15,vUv.y);
+        float body = lowerFade*mix(.14,.35,clamp(vFresnel,0.0,1.0))*(1.0-perforation*.84);
+        float rim = smoothstep(.78,.99,vUv.y)*.62*breakup*(1.0-perforation*.30);
         float alpha = (body+rim)*uOpacity*temporalFade;
         if(alpha<=.008) discard;
         vec3 sheetColor = mix(uColor*.84,vec3(.94,1.0,1.0),clamp(vFresnel*.42+rim*.34,0.0,.72));
@@ -7321,6 +7529,8 @@ function makeDetailedSplashRingMaterial(){
   return new THREE.ShaderMaterial({
     uniforms:{
       uTime:{value:99},
+      uDuration:{value:5},
+      uDamping:{value:.42},
       uOpacity:{value:0},
       uColor:{value:new THREE.Color('#8fefff')},
       uLayerCount:{value:5}
@@ -7334,6 +7544,8 @@ function makeDetailedSplashRingMaterial(){
     `,
     fragmentShader:`
       uniform float uTime;
+      uniform float uDuration;
+      uniform float uDamping;
       uniform float uOpacity;
       uniform vec3 uColor;
       uniform float uLayerCount;
@@ -7346,7 +7558,8 @@ function makeDetailedSplashRingMaterial(){
         float r = length(p);
         if(r > 1.02) discard;
         float angle = atan(p.y,p.x);
-        float travel = smoothstep(0.0,1.0,min(1.0,uTime/4.8));
+        float duration = max(1.0,uDuration);
+        float travel = smoothstep(0.0,1.0,min(1.0,uTime/duration));
         float breakup = .52 + .48 * sin(angle * 13.0 + sin(angle * 5.0) * 1.6 + uTime * 3.7);
         float granular = .62 + .38 * sin(angle * 31.0 - uTime * 5.6);
         float primary = ringLine(.12 + travel*.72,.012 + travel*.018,r);
@@ -7356,7 +7569,8 @@ function makeDetailedSplashRingMaterial(){
         float trailing = ringLine(.07 + travel*.34,.009 + travel*.013,r) * trailingGate;
         float foam = (primary + secondary*.68 + trailing*.42) * mix(.46,1.0,breakup) * mix(.68,1.0,granular);
         float core = (1.0-smoothstep(.0,.18,r)) * (1.0-smoothstep(.02,.30,uTime));
-        float fade = 1.0 - smoothstep(3.7,5.25,uTime);
+        float fadeStart = duration*mix(.82,.54,clamp(uDamping,0.0,1.0));
+        float fade = 1.0-smoothstep(fadeStart,duration,uTime);
         float alpha = clamp((foam + core*.48) * uOpacity * fade,0.0,.82);
         if(alpha <= .008) discard;
         gl_FragColor = vec4(mix(uColor,vec3(1.0),.42),alpha*.88);
@@ -7402,7 +7616,7 @@ function createDetailedSplashSlot(capacity){
   group.visible = false;
   group.add(ring,sheet,points);
   waterEffectsGroup.add(group);
-  return {group,points,sheet,ring,capacity,active:false,age:99,duration:0,sheetDuration:1.18,ringDuration:5.4,sheetRadius:1,sheetHeight:1,ringRadius:1,particleCount:0,serial:0};
+  return {group,points,sheet,ring,capacity,active:false,age:99,duration:0,sheetDuration:.96,ringDuration:5,sheetRadius:1,sheetHeight:1,ringRadius:1,particleCount:0,serial:0};
 }
 
 function ensureDetailedSplashPool(){
@@ -7438,9 +7652,10 @@ function spawnDetailedWaterImpact(pos, body, splash, options={}){
   const slot = acquireDetailedSplashSlot();
   if(!slot) return;
   const opts = options && typeof options === 'object' ? options : {};
+  const tuning = getWaterImpactTuning();
   const impact = clamp(safeFinite(splash,1),.20,8);
   const energy = clamp((impact-.20)/6.4,0,1);
-  const density = clamp(safeFinite(opts.particleMultiplier,1),.35,1.25);
+  const density = clamp(safeFinite(opts.particleMultiplier,1)*tuning.particleDensity,.35,1.25);
   const sizeScale = clamp(safeFinite(opts.sizeScale,1),.35,3.4);
   const requested = Math.round(THREE.MathUtils.lerp(IS_TOUCH_DEVICE ? 142 : 188,slot.capacity,energy)*density);
   const count = Math.min(slot.capacity,Math.max(IS_TOUCH_DEVICE ? 112 : 156,requested));
@@ -7454,8 +7669,8 @@ function spawnDetailedWaterImpact(pos, body, splash, options={}){
   const kind = slot.points.geometry.attributes.aKind.array;
   const phase = slot.points.geometry.attributes.aPhase.array;
   const impactRadius = clamp(safeFinite(opts.impactRadius,.55),.18,ARTWORK_IMPACT_MAX_RADIUS);
-  const heightGain = clamp(safeFinite(opts.heightMultiplier,1),.35,3.4) * THREE.MathUtils.lerp(.90,1.38,energy) * THREE.MathUtils.lerp(.94,1.62,clamp((sizeScale-.35)/3.05,0,1));
-  const outwardGain = clamp(safeFinite(opts.outwardMultiplier,1),.35,3.6) * THREE.MathUtils.lerp(.90,1.52,energy) * THREE.MathUtils.lerp(.96,1.72,clamp((sizeScale-.35)/3.05,0,1));
+  const heightGain = clamp(safeFinite(opts.heightMultiplier,1)*tuning.splashHeight,.2,3.4) * THREE.MathUtils.lerp(.90,1.38,energy) * THREE.MathUtils.lerp(.94,1.62,clamp((sizeScale-.35)/3.05,0,1));
+  const outwardGain = clamp(safeFinite(opts.outwardMultiplier,1)*tuning.splashSpread,.25,3.6) * THREE.MathUtils.lerp(.90,1.52,energy) * THREE.MathUtils.lerp(.96,1.72,clamp((sizeScale-.35)/3.05,0,1));
   const impactVelocity = opts.impactVelocity?.isVector3 ? opts.impactVelocity : null;
   const directional = impactVelocity ? new THREE.Vector2(impactVelocity.x,impactVelocity.z) : new THREE.Vector2();
   const horizontalSpeed = directional.length();
@@ -7519,12 +7734,15 @@ function spawnDetailedWaterImpact(pos, body, splash, options={}){
   slot.sheet.rotation.y = random()*Math.PI*2;
   slot.ring.material.uniforms.uColor.value.copy(color);
   slot.ring.material.uniforms.uLayerCount.value = clamp(Math.round(safeFinite(opts.ringLayers,3)),1,3);
+  slot.ring.material.uniforms.uDuration.value = tuning.rippleDuration;
+  slot.ring.material.uniforms.uDamping.value = tuning.rippleDamping;
   const edge = Math.max(.34,waterBoundaryDistance(body,pos)*.94);
-  const requestedWaveDistance = clamp(safeFinite(opts.waveDistance,impactRadius*3.1),2,ARTWORK_IMPACT_MAX_WAVE_DISTANCE);
+  const requestedWaveDistance = clamp(safeFinite(opts.waveDistance,impactRadius*3.1)*tuning.rippleDistance,2,ARTWORK_IMPACT_MAX_WAVE_DISTANCE);
   const requestedRingRadius = Math.max(requestedWaveDistance*.72,THREE.MathUtils.lerp(1.05,3.4,energy)+impactRadius*1.26);
   slot.ringRadius = Math.min(edge,22,requestedRingRadius*clamp(safeFinite(opts.ringScaleMultiplier,1),.55,2.2));
   slot.sheetRadius = Math.min(Math.max(.34,edge*.82),clamp(impactRadius*THREE.MathUtils.lerp(.78,1.18,energy)+energy*.34,.34,10.5));
-  slot.sheetHeight = clamp(THREE.MathUtils.lerp(.50,1.62,energy)*heightGain*Math.sqrt(sizeScale),.38,9);
+  slot.sheetHeight = clamp(THREE.MathUtils.lerp(.42,1.08,energy)*Math.sqrt(sizeScale)*tuning.crownHeight,.22,3.2);
+  slot.ringDuration = tuning.rippleDuration;
   slot.group.position.copy(pos);
   slot.group.visible = true;
   slot.points.visible = true;
@@ -7540,6 +7758,7 @@ function spawnDetailedWaterImpact(pos, body, splash, options={}){
     requestedParticleCount:requested,
     poolSize:DETAILED_SPLASH_POOL_SIZE,
     drawCalls:3,
+    rippleDuration:+tuning.rippleDuration.toFixed(2),
     impact:+impact.toFixed(2),
     impactRadius:+impactRadius.toFixed(2),
     impactDepth:+safeFinite(opts.impactDepth,.18).toFixed(2),
@@ -7659,7 +7878,7 @@ function updateWaterEffects(dt){
     if(u.uRippleAge) u.uRippleAge.value += dt;
     if(u.uRippleStrength) u.uRippleStrength.value *= Math.pow(.22, dt);
     if(u.uImpactAge && !waterRuntime.freezeDetailedSplashes) u.uImpactAge.value += dt;
-    if(u.uImpactStrength && !waterRuntime.freezeDetailedSplashes) u.uImpactStrength.value *= Math.pow(.82, dt);
+    if(u.uImpactStrength && !waterRuntime.freezeDetailedSplashes) u.uImpactStrength.value *= Math.pow(.96, dt);
     if(u.uMotionStrength) u.uMotionStrength.value *= Math.pow(.10, dt);
   }
   const moving = movementVector().forward !== 0 || movementVector().strafe !== 0;
@@ -9306,9 +9525,12 @@ function handleExportedViewerKeyDown(e){
   if(e.code === 'Escape'){
     e.preventDefault();
     e.stopPropagation();
+    if(document.body.classList.contains('water-tuning-mode')){ toggleWaterImpactTuningMode(false); return; }
     goBackFromExportedViewer();
     return;
   }
+  if(e.code==='KeyC' && e.shiftKey){ e.preventDefault(); toggleWaterImpactTuningMode(); return; }
+  if(document.body.classList.contains('water-tuning-mode') && e.target?.closest?.('#waterImpactPanel')) return;
   if(!galleryInputReady()){
     if(e.code==='KeyW' || e.code==='ArrowUp' || e.code==='KeyA' || e.code==='ArrowLeft' ||
        e.code==='KeyS' || e.code==='ArrowDown' || e.code==='KeyD' || e.code==='ArrowRight' ||
@@ -9936,7 +10158,7 @@ function bindObjectPanel(){
 
 function captureFloatingWindowStates(){
   const states = {};
-  for(const id of ['editor','hud','status','objectPanel','lightPanel','chiselPanel']){
+  for(const id of ['editor','hud','status','objectPanel','lightPanel','chiselPanel','waterImpactPanel']){
     const el = $(id);
     if(!el) continue;
     states[id] = {
@@ -9969,7 +10191,7 @@ function confirmPendingPlacementPreservingWindows(){
 }
 
 function setupFloatingWindows(){
-  for(const id of ['editor','hud','status','objectPanel','lightPanel','chiselPanel']){
+  for(const id of ['editor','hud','status','objectPanel','lightPanel','chiselPanel','waterImpactPanel']){
     const el = $(id);
     if(!el || el.dataset.floatingReady) continue;
     el.dataset.floatingReady = '1';
@@ -9984,11 +10206,12 @@ function setupFloatingWindows(){
     el.appendChild(header);
     el.appendChild(body);
     const rect = el.getBoundingClientRect();
-    el.style.left = rect.left + 'px';
-    el.style.top = rect.top + 'px';
+    const hiddenWaterPanel = id === 'waterImpactPanel' && rect.width < 10;
+    el.style.left = (hiddenWaterPanel ? 18 : rect.left) + 'px';
+    el.style.top = (hiddenWaterPanel ? 76 : rect.top) + 'px';
     el.style.right = 'auto';
     el.style.bottom = 'auto';
-    el.style.width = Math.max(rect.width, id === 'status' ? 240 : 180) + 'px';
+    el.style.width = Math.max(rect.width, id === 'waterImpactPanel' ? 326 : (id === 'status' ? 240 : 180)) + 'px';
     if(id !== 'status' && rect.height > 48) el.style.height = Math.min(rect.height, window.innerHeight - 28) + 'px';
     const minBtn = header.querySelector('.window-minimize');
     minBtn.addEventListener('click', ev=>{
@@ -11130,6 +11353,7 @@ function findWaterBodyAtWorldPosition(world){
 function triggerWaterRippleAt(body, worldPos, strengthScale=1, options={}){
   if(!body || !worldPos) return;
   const opts = options && typeof options === 'object' ? options : {};
+  const tuning = getWaterImpactTuning();
   const mats = [waterRuntime.materials.get(body.id), waterRuntime.materials.get(`${body.id}:caustic`)].filter(Boolean);
   const local = waterRippleLocalPoint(body, worldPos);
   const splash = clamp(safeFinite(body.water?.splash,.85),0,1);
@@ -11152,8 +11376,10 @@ function triggerWaterRippleAt(body, worldPos, strengthScale=1, options={}){
       if(u.uImpactAge) u.uImpactAge.value = 0;
       if(u.uImpactStrength) u.uImpactStrength.value = Math.max(u.uImpactStrength.value || 0, physicalImpactStrength);
       if(u.uImpactRadius) u.uImpactRadius.value = clamp(safeFinite(opts.impactRadius,.55),.18,ARTWORK_IMPACT_MAX_RADIUS);
-      if(u.uImpactDepth) u.uImpactDepth.value = clamp(safeFinite(opts.impactDepth,.18),.10,3.4);
-      if(u.uImpactWaveDistance) u.uImpactWaveDistance.value = clamp(safeFinite(opts.waveDistance,3.2),2,ARTWORK_IMPACT_MAX_WAVE_DISTANCE);
+      if(u.uImpactDepth) u.uImpactDepth.value = clamp(safeFinite(opts.impactDepth,.18)*tuning.depressionDepth,.10,3.4);
+      if(u.uImpactWaveDistance) u.uImpactWaveDistance.value = clamp(safeFinite(opts.waveDistance,3.2)*tuning.rippleDistance,2,ARTWORK_IMPACT_MAX_WAVE_DISTANCE);
+      if(u.uImpactDuration) u.uImpactDuration.value = tuning.rippleDuration;
+      if(u.uImpactDamping) u.uImpactDamping.value = tuning.rippleDamping;
     }
   }
   const m = waterBodyMetrics(body);
@@ -13034,7 +13260,7 @@ function buildEditor(){
 }
 
 function syncAllEditor(){
-  syncEnvironmentEditor(); syncReferenceArchitectureMaterialEditor(); syncAtmosphereEditor(); syncScreenFxEditor(); syncGroundReliefEditor(); syncSurfaceEditor(); syncArtSelect(); syncArtEditor(); syncActorEditor(); syncWallSelect(); syncWallEditor(); syncObjectEditor(); syncLightEditor(); syncChiselPanel(); renderObjectPanel();
+  syncEnvironmentEditor(); syncReferenceArchitectureMaterialEditor(); syncAtmosphereEditor(); syncScreenFxEditor(); syncGroundReliefEditor(); syncSurfaceEditor(); syncArtSelect(); syncArtEditor(); syncActorEditor(); syncWallSelect(); syncWallEditor(); syncObjectEditor(); syncLightEditor(); syncChiselPanel(); syncWaterImpactEditor(); renderObjectPanel();
 }
 
 function setGroundReliefEditorDisabled(disabled){
@@ -13606,6 +13832,9 @@ function recordGalleryFramePerformance(frameStart){
   canvas.dataset.perfTextures = String(renderer.info.memory.textures || 0);
   canvas.dataset.perfPixelRatio = String(renderer.getPixelRatio?.() || 1);
   canvas.dataset.perfSceneMode = gallerySceneRuntime.mode;
+  canvas.dataset.perfBackroomsFlickerGroups = String(backroomsFlickerRuntime.length);
+  canvas.dataset.perfBackroomsFlickerPowers = JSON.stringify(backroomsFlickerRuntime.map(item=>+(item.lastPower||0).toFixed(3)));
+  canvas.dataset.perfSewerGroupsHidden = String([roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false));
   canvas.dataset.perfDustCount = String(GALLERY_DUST_COUNT);
   canvas.dataset.perfThrowSpeed = String(ARPG_INTERACTION.throwSpeed);
   if(galleryPerfRuntime.frameCount % 60 === 0){
@@ -13658,6 +13887,7 @@ function animate(){
   updateCamera();
   if(skyMesh) skyMesh.position.copy(camera.position);
   updateAtmosphereEffect(dt);
+  updateBackroomsFlicker(performance.now()/1000);
   updateWaterEffects(dt);
   updateScreenFxEffect(dt);
   if(!EXPORTED_GALLERY_VIEWER) updateChiselPreview();
