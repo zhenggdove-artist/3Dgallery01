@@ -461,3 +461,37 @@ Verification:
 
 Current TODO:
 - None after the merge commit is pushed to `origin/main`.
+
+## 2026-08-30 size-driven water, flooded backrooms, and performance pass
+
+Current user request:
+- Reduce artwork throw distance to one third.
+- Scale splash height, water depression, ripple depth, and wave travel from each thrown artwork's world-space width/height/depth, using `20 x 20 x 2` as the large reference.
+- Shrink airborne dust to one fifth while increasing its count thirty times.
+- Add a switchable flooded-office/backrooms gallery with placed artwork and lighting.
+- Deep-debug lag, verify desktop/mobile behavior, and push the result.
+
+Root causes and changes:
+- Throw speed was still the previous `17.6`; it is now exactly `17.6 / 3 = 5.866666...`.
+- The prior water response clamped artwork radius near `1.25-1.6`, erasing most size differences. The new pure impact profile uses world-space footprint, volume, width, height, depth, vertical speed, and horizontal wake direction. It drives shader cavity radius/depth, wave travel, pooled sheet height/spread, and ring radius with bounded caps.
+- Water now receives `uImpactDepth` and `uImpactWaveDistance`; the impact center makes a real negative displacement bowl, while the rim and trailing waves propagate outward according to the computed dimensions.
+- Dust count is `21,000` touch / `36,000` desktop, particle diameter is one fifth of the old value, and all dust still renders as one `THREE.Points` draw call. The theoretical fragment coverage changes by only about `30 * 0.2^2 = 1.2x`.
+- Added a `B`/button-switchable flooded backrooms office with low drop ceiling, procedural yellow-brown wall/ceiling textures, maze collision walls, shared geometry, instanced fluorescent fixtures, no-shadow local lights, murky water tint, per-scene artwork/player transforms, and preserved artwork interaction.
+- Added a two-draw-call low-poly LOD for the heavy 3D artwork in the backrooms and at distance in the sewer. The original detailed model appears again at close inspection. Exported mode now uses the existing optimized GLB on desktop as well as touch devices.
+- Exported reference architecture keeps material bump relief but skips its redundant high-tessellation relief shell. This reduced visible sewer geometry from roughly 3.05 million to about 0.18 million triangles at the tested start view without removing the textured bump appearance.
+- Fixed a loading deadlock: scene entry no longer waits for background music autoplay to start. It waits only for the audio file to be ready; playback retries on the normal first-input unlock path. Production `/` now exits the 100% loading gate automatically.
+
+Verification:
+- Module syntax check and `git diff --check` pass.
+- Required `develop-web-game` client was attempted and stopped after a bounded wait because the full page again stalled under headless SwiftShader; hardware WebGL testing completed instead.
+- Production URL without debug parameters automatically left the loading gate, showed the scene button, switched to `場景：淹水後室｜B`, switched back, and logged zero browser errors.
+- Dimension calibration at the same velocity:
+  - `2 x 2 x 0.5`: radius `1.067`, depression `0.462`, wave distance `3.132`.
+  - `20 x 20 x 2`: radius `8.036`, depression `1.313`, wave distance `18`.
+- Desktop tuning telemetry: throw speed `5.866666...`, dust `36,000`; touch telemetry: dust `21,000`.
+- Stable flooded-backrooms desktop sample: about `52 FPS`, `38` draw calls, `43,740` visible triangles, `5.46 ms` average frame work, `2.90 ms` p95. The in-app browser throttled background/mobile RAF intervals, so mobile validation uses frame-work cost plus geometry/draw-call counts rather than its reported RAF FPS.
+- Touch-size backrooms sample: `30` base draw calls, `22,060` visible triangles, `21,000` dust points.
+- Stress test preserves the fixed pool: desktop `3` active slots / `9` splash draw calls; touch `2` slots / `6` splash draw calls; both report `0` legacy per-droplet Meshes and zero console errors.
+
+Current TODO:
+- None after the final commit is pushed to `origin/main`.
