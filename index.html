@@ -123,7 +123,7 @@
 <button id="sceneToggleButton" type="button" aria-label="切換展場場景">場景：下水道｜B</button>
 <aside id="waterImpactPanel" class="edit-ui" data-window-title="水花物理調整｜Shift+C">
   <h1>水花物理調整</h1>
-  <label>飛濺高度<input id="waterSplashHeight" type="range" min="0.2" max="1.6" step="0.05"><output id="waterSplashHeightValue"></output></label>
+  <label>飛濺總高度<input id="waterSplashHeight" type="range" min="0.2" max="2.5" step="0.05"><output id="waterSplashHeightValue"></output></label>
   <label>水冠高度<input id="waterCrownHeight" type="range" min="0.2" max="1.5" step="0.05"><output id="waterCrownHeightValue"></output></label>
   <label>向外擴散<input id="waterSplashSpread" type="range" min="0.4" max="2" step="0.05"><output id="waterSplashSpreadValue"></output></label>
   <label>水滴密度<input id="waterParticleDensity" type="range" min="0.35" max="1.25" step="0.05"><output id="waterParticleDensityValue"></output></label>
@@ -321,6 +321,10 @@ let surfaces = {}, customWallMeshes = {}, floorTileMeshes = {}, waterBodyMeshes 
 let referenceCollisionItems = [];
 let backroomsCollisionItems = [];
 const backroomsFlickerRuntime = [];
+const backroomsArtworkLightRuntime = [];
+let backroomsArtworkLightLastUpdate = 0;
+let backroomsArtworkLightsWereActive = false;
+let backroomsFurnitureDrawCalls = 0;
 let lastChiselTarget = null;
 let chiselPreviewMesh = null;
 let chiselPreviewKey = "";
@@ -355,7 +359,10 @@ const cameraObstructionFade = {
   faded:new Map(),
   lastCheckAt:0,
   candidates:null,
-  candidateKey:''
+  candidateKey:'',
+  inverse:new THREE.Matrix4(),
+  localStart:new THREE.Vector3(),
+  localEnd:new THREE.Vector3()
 };
 let ctrlViewDrag = false;
 let ctrlViewDragLastX = 0;
@@ -411,7 +418,7 @@ const gallerySceneRuntime = {
   initialized:false,
   backroomsHeight:BACKROOMS_MIN_HEIGHT,
   artworkStates:{sewer:null,backrooms:null},
-  playerPoses:{sewer:null,backrooms:{x:0,y:0,z:1,yaw:deg(-35),pitch:deg(18),cameraDistance:3.8}}
+  playerPoses:{sewer:null,backrooms:{x:10,y:0,z:9.5,yaw:0,pitch:deg(-18),cameraDistance:3.8}}
 };
 const runtimeAudio = {ready:false, unlocked:false, nodes:{}, lastPlayed:{}, fadeTimers:{}, waterWalkActive:false, backgroundMusicReady:false, backgroundMusicStarted:false, backgroundMusicAutoplayLastAt:0};
 const ARPG_INTERACTION = {range:5.2, holdDistance:1.82, holdHeight:1.38, sideOffset:.22, kickSpeed:8.4, throwSpeed:17.6/6, gravity:8.6};
@@ -1041,7 +1048,7 @@ function installGalleryDebugState(){
         lastArtworkImpactProfile:waterRuntime.lastArtworkImpactProfile
       },
       tuning:{throwSpeed:ARPG_INTERACTION.throwSpeed,dustCount:GALLERY_DUST_COUNT,dustDrawCalls:galleryDustPoints?.visible === false ? 0 : (galleryDustPoints ? 1 : 0),waterImpact:{...getWaterImpactTuning()}},
-      backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.length,lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0,flickerGroups:backroomsFlickerRuntime.length,sewerGroupsHidden:[roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false)},
+      backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.filter(item=>item?.type!=='backroomsFurniture').length,furnitureColliders:backroomsCollisionItems.filter(item=>item?.type==='backroomsFurniture').length,furnitureDrawCalls:backroomsFurnitureDrawCalls,lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0,artworkLights:{total:backroomsArtworkLightRuntime.length,active:backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length,budget:IS_TOUCH_DEVICE?3:6},flickerGroups:backroomsFlickerRuntime.length,sewerGroupsHidden:[roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false)},
       audio:{backgroundMusicReady:!!runtimeAudio.backgroundMusicReady, backgroundMusicStarted:!!runtimeAudio.backgroundMusicStarted, unlocked:!!runtimeAudio.unlocked},
       loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl},
       hasWrongWhiteArtwork:artworkList.some(isRemovedRequiredArtwork),
@@ -1183,6 +1190,7 @@ function installGalleryDebugState(){
       updatePendingArtworkPlacement();
       updatePendingFloorTilePlacement();
       updatePendingWaterBodyPlacement();
+      enforceGallerySceneIsolation();
       updateCamera();
       if(skyMesh) skyMesh.position.copy(camera.position);
       updateAtmosphereEffect(dt || 1 / 60);
@@ -1586,7 +1594,7 @@ function chiselHoleLabel(h){
 
 function sanitizeWaterImpactTuning(raw={}){
   return {
-    splashHeight:clamp(safeFinite(raw.splashHeight,DEFAULT_WATER_IMPACT_TUNING.splashHeight),.2,1.6),
+    splashHeight:clamp(safeFinite(raw.splashHeight,DEFAULT_WATER_IMPACT_TUNING.splashHeight),.2,2.5),
     crownHeight:clamp(safeFinite(raw.crownHeight,DEFAULT_WATER_IMPACT_TUNING.crownHeight),.2,1.5),
     splashSpread:clamp(safeFinite(raw.splashSpread,DEFAULT_WATER_IMPACT_TUNING.splashSpread),.4,2),
     particleDensity:clamp(safeFinite(raw.particleDensity,DEFAULT_WATER_IMPACT_TUNING.particleDensity),.35,1.25),
@@ -2275,10 +2283,10 @@ function createBackroomsPatternTexture(kind='wall'){
   return texture;
 }
 
-function addBackroomsWall(wallGeometry, material, x, z, width, depth, height=gallerySceneRuntime.backroomsHeight || BACKROOMS_MIN_HEIGHT){
+function addBackroomsWall(wallGeometry, material, x, z, width, depth, height=gallerySceneRuntime.backroomsHeight || BACKROOMS_MIN_HEIGHT, baseY=0){
   const mesh = new THREE.Mesh(wallGeometry,material);
   mesh.name = 'backrooms-office-wall';
-  mesh.position.set(x,height*.5,z);
+  mesh.position.set(x,baseY+height*.5,z);
   mesh.scale.set(width,height,depth);
   mesh.castShadow = false;
   mesh.receiveShadow = true;
@@ -2389,6 +2397,233 @@ function addBackroomsAgingDetails(wallTexture,height){
   backroomsGroup.add(peels);
 }
 
+function addBackroomsPartitionWithDoors(wallGeometry,material,{axis='x',fixed=0,min=-1,max=1,doors=[],height=BACKROOMS_MIN_HEIGHT,thickness=.24,doorWidth=1.65,doorHeight=3.05}={}){
+  const openings=(doors || []).map(center=>({
+    start:clamp(center-doorWidth*.5,min,max),
+    end:clamp(center+doorWidth*.5,min,max),
+    center:clamp(center,min,max)
+  })).filter(opening=>opening.end-opening.start>.05).sort((a,b)=>a.start-b.start);
+  const addSpan=(start,end,spanHeight=height,baseY=0)=>{
+    const length=end-start;
+    if(length<=.04 || spanHeight<=.04) return;
+    if(axis==='x') addBackroomsWall(wallGeometry,material,(start+end)*.5,fixed,length,thickness,spanHeight,baseY);
+    else addBackroomsWall(wallGeometry,material,fixed,(start+end)*.5,thickness,length,spanHeight,baseY);
+  };
+  let cursor=min;
+  for(const opening of openings){
+    addSpan(cursor,opening.start);
+    addSpan(opening.start,opening.end,Math.max(.18,height-doorHeight),doorHeight);
+    cursor=Math.max(cursor,opening.end);
+  }
+  addSpan(cursor,max);
+}
+
+function createBackroomsFurnitureTexture(kind='wood'){
+  const canvas=document.createElement('canvas');
+  canvas.width=256;canvas.height=256;
+  const ctx=canvas.getContext('2d');
+  const rand=seededRandom(kind==='wood'?47293:71933);
+  ctx.fillStyle=kind==='wood'?'#66512e':'#555443';
+  ctx.fillRect(0,0,256,256);
+  if(kind==='wood'){
+    for(let y=0;y<256;y+=9){
+      ctx.strokeStyle=`rgba(32,22,11,${THREE.MathUtils.lerp(.08,.24,rand())})`;
+      ctx.lineWidth=THREE.MathUtils.lerp(.6,2.2,rand());
+      ctx.beginPath();ctx.moveTo(0,y+rand()*5);ctx.bezierCurveTo(70,y-4+rand()*9,178,y+5-rand()*10,256,y+rand()*5);ctx.stroke();
+    }
+  }else{
+    for(let i=0;i<110;i++){
+      const x=rand()*256,y=rand()*256,r=THREE.MathUtils.lerp(1,8,rand());
+      ctx.fillStyle=`rgba(${rand()>.5?'35,31,19':'130,113,65'},${THREE.MathUtils.lerp(.035,.18,rand())})`;
+      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+    }
+  }
+  for(let i=0;i<52;i++){
+    const x=rand()*256,y=rand()*256,len=THREE.MathUtils.lerp(8,58,rand());
+    ctx.strokeStyle=`rgba(218,203,145,${THREE.MathUtils.lerp(.025,.14,rand())})`;
+    ctx.lineWidth=THREE.MathUtils.lerp(.35,1.4,rand());
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+len,y+THREE.MathUtils.lerp(-4,4,rand()));ctx.stroke();
+  }
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.colorSpace=THREE.SRGBColorSpace;
+  texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
+  texture.repeat.set(2,2);
+  texture.anisotropy=Math.min(renderer?.capabilities?.getMaxAnisotropy?.() || 1,4);
+  texture.needsUpdate=true;
+  return texture;
+}
+
+function addBackroomsFurnitureCollision(x,z,width,depth,yaw=0){
+  const proxy=new THREE.Object3D();
+  proxy.name='backrooms-furniture-collision';
+  proxy.position.set(x,.72,z);
+  proxy.rotation.y=yaw;
+  proxy.scale.set(width,1.44,depth);
+  proxy.userData.backroomsFurnitureCollision=true;
+  backroomsGroup.add(proxy);
+  backroomsCollisionItems.push({id:`backrooms-furniture-${backroomsCollisionItems.length}`,mesh:proxy,type:'backroomsFurniture'});
+}
+
+function buildBackroomsOfficeFurniture(){
+  const unitGeometry=new THREE.BoxGeometry(1,1,1);
+  const woodTexture=createBackroomsFurnitureTexture('wood');
+  const metalTexture=createBackroomsFurnitureTexture('metal');
+  const materials={
+    wood:new THREE.MeshStandardMaterial({map:woodTexture,color:'#8b7040',roughness:.86,metalness:.03}),
+    metal:new THREE.MeshStandardMaterial({map:metalTexture,color:'#6c6b55',roughness:.72,metalness:.42}),
+    fabric:new THREE.MeshStandardMaterial({color:'#514b32',roughness:.98,metalness:0}),
+    dark:new THREE.MeshStandardMaterial({color:'#171812',roughness:.68,metalness:.24}),
+    screen:new THREE.MeshStandardMaterial({color:'#263f37',emissive:'#406f61',emissiveIntensity:.62,roughness:.48,metalness:.08}),
+    paper:new THREE.MeshStandardMaterial({color:'#c4b987',roughness:.96,metalness:0}),
+    porcelain:new THREE.MeshStandardMaterial({color:'#b9b69b',roughness:.78,metalness:.02})
+  };
+  const placements=Object.fromEntries(Object.keys(materials).map(key=>[key,[]]));
+  const add=(kind,x,y,z,sx,sy,sz,yaw=0,pitch=0,roll=0)=>placements[kind].push({x,y,z,sx,sy,sz,yaw,pitch,roll});
+  const local=(x,z,dx,dz,yaw)=>({x:x+dx*Math.cos(yaw)+dz*Math.sin(yaw),z:z-dx*Math.sin(yaw)+dz*Math.cos(yaw)});
+  const addDesk=(x,z,yaw=0,{damaged=false,monitor=true}={})=>{
+    add('wood',x,1.08,z,2.8,.18,1.32,yaw,damaged ? .04 : 0,damaged ? .075 : 0);
+    const legs=[[-1.13,-.46],[1.13,-.46],[-1.13,.46],[1.13,.46]];
+    legs.forEach(([dx,dz],index)=>{
+      if(damaged && index===3) return;
+      const p=local(x,z,dx,dz,yaw);add('metal',p.x,.54,p.z,.13,1.04,.13,yaw,0,damaged&&index===2?.18:0);
+    });
+    const drawer=local(x,z,-.88,.05,yaw);add('metal',drawer.x,.67,drawer.z,.62,.82,.84,yaw);
+    if(damaged){
+      const openDrawer=local(x,z,-.88,.72,yaw);add('metal',openDrawer.x,.73,openDrawer.z,.55,.18,.68,yaw,0,.05);
+    }
+    if(monitor){
+      const m=local(x,z,.34,-.15,yaw);add('dark',m.x,1.57,m.z,1.08,.72,.10,yaw);const s=local(x,z,.34,-.208,yaw);add('screen',s.x,1.57,s.z,.91,.55,.025,yaw);
+      const stand=local(x,z,.34,-.02,yaw);add('dark',stand.x,1.22,stand.z,.12,.32,.12,yaw);
+    }
+    for(let i=0;i<3;i++){
+      const p=local(x,z,-.18+i*.34,.30+(i%2)*.06,yaw);add('paper',p.x,1.19+i*.006,p.z,.46,.012,.31,yaw+(i-1)*.13,0,i*.02);
+    }
+    addBackroomsFurnitureCollision(x,z,2.75,1.26,yaw);
+  };
+  const addChair=(x,z,yaw=0,broken=false)=>{
+    add('fabric',x,.63,z,.68,.16,.68,yaw,0,broken ? .22 : 0);
+    const back=local(x,z,0,.37,yaw);add('fabric',back.x,1.07,back.z,.68,.76,.13,yaw,broken ? .16 : 0,broken ? .26 : 0);
+    const legs=[[-.24,-.24],[.24,-.24],[-.24,.24],[.24,.24]];
+    legs.forEach(([dx,dz],index)=>{
+      const p=local(x,z,dx,dz,yaw);
+      if(broken && index===3){const fallen=local(x,z,.58,.1,yaw);add('metal',fallen.x,.15,fallen.z,.10,.72,.10,yaw,0,1.18);return;}
+      add('metal',p.x,.32,p.z,.09,.58,.09,yaw,0,broken&&index===1?.16:0);
+    });
+  };
+  const addCabinet=(x,z,width=1.2,height=2.5,yaw=0,open=false)=>{
+    add('metal',x,height*.5,z,width,height,.62,yaw);
+    const front=local(x,z,0,-.326,yaw);add('wood',front.x,height*.52,front.z,width*.86,height*.82,.035,yaw,0,open?.22:0);
+    for(let i=1;i<4;i++){const p=local(x,z,0,-.352,yaw);add('dark',p.x,height*(i/4),p.z,width*.76,.025,.018,yaw);}
+    addBackroomsFurnitureCollision(x,z,width,.64,yaw);
+  };
+  const addMeetingTable=(x,z)=>{
+    add('wood',x,1.08,z,2.15,.20,6.2,0,0,.025);
+    for(const dz of [-2.45,2.45]) for(const dx of [-.72,.72]) add('metal',x+dx,.54,z+dz,.14,1.04,.14);
+    addBackroomsFurnitureCollision(x,z,2.1,6.1,0);
+    for(const dz of [-2.35,-.8,.8,2.35]){addChair(x-1.55,z+dz,-Math.PI/2,dz===2.35);addChair(x+1.55,z+dz,Math.PI/2,false);}
+  };
+
+  addDesk(-11.4,-8.4,0,{damaged:true});addChair(-11.4,-10.1,0);addCabinet(-15.4,-8.6,1.4,2.8,0,true);
+  add('wood',-2.3,1.05,-9.1,4.5,1.95,.82,0);add('wood',-.45,1.05,-7.45,.82,1.95,3.3,0);addChair(-3.1,-10.35,0);addCabinet(-5.55,-10.7,1.15,2.6,0,false);
+  add('metal',11.1,1.04,-12.6,8.7,1.95,.72,0);add('porcelain',14.3,.68,-4.55,1.05,1.22,1.48,0);add('porcelain',9.4,.68,-4.55,1.05,1.22,1.48,0);
+  addMeetingTable(-13.1,8.1);
+  addDesk(-6.65,5.25,0,{damaged:false});addChair(-6.65,6.45,Math.PI);addDesk(-6.65,10.2,Math.PI,{damaged:true});addChair(-6.65,8.95,0,true);
+  addDesk(-.15,5.3,0,{damaged:false});addChair(-.15,6.55,Math.PI);addDesk(-.15,10.2,Math.PI,{damaged:false});addChair(-.15,8.95,0);
+  addDesk(7.3,5.4,0,{damaged:true});addChair(7.3,6.7,Math.PI,true);addDesk(11.3,5.4,0,{damaged:false});addChair(11.3,6.7,Math.PI);
+  addCabinet(15.25,8.4,1.35,3.05,0,true);addCabinet(15.25,11.65,1.35,3.05,0,false);addCabinet(11.8,12.9,1.45,2.45,Math.PI/2,true);
+
+  const rand=seededRandom(33491);
+  for(let i=0;i<38;i++){
+    const x=THREE.MathUtils.lerp(-15.2,15.2,rand()),z=THREE.MathUtils.lerp(-12.6,12.6,rand());
+    add(i%4===0?'wood':'paper',x,.08+rand()*.035,z,THREE.MathUtils.lerp(.12,.52,rand()),THREE.MathUtils.lerp(.018,.05,rand()),THREE.MathUtils.lerp(.08,.34,rand()),rand()*Math.PI,rand()*.12-.06,rand()*.3-.15);
+  }
+
+  backroomsFurnitureDrawCalls=0;
+  const matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3(),quaternion=new THREE.Quaternion(),euler=new THREE.Euler();
+  for(const [kind,list] of Object.entries(placements)){
+    if(!list.length) continue;
+    const batch=new THREE.InstancedMesh(unitGeometry,materials[kind],list.length);
+    batch.name=`backrooms-office-furniture-${kind}`;
+    list.forEach((item,index)=>{
+      quaternion.setFromEuler(euler.set(item.pitch,item.yaw,item.roll));
+      matrix.compose(position.set(item.x,item.y,item.z),quaternion,scale.set(item.sx,item.sy,item.sz));
+      batch.setMatrixAt(index,matrix);
+    });
+    batch.instanceMatrix.needsUpdate=true;
+    batch.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    batch.castShadow=false;batch.receiveShadow=true;
+    batch.computeBoundingBox?.();batch.computeBoundingSphere?.();
+    backroomsGroup.add(batch);
+    backroomsFurnitureDrawCalls++;
+  }
+}
+
+function buildBackroomsArtworkLights(){
+  for(const rec of backroomsArtworkLightRuntime){
+    backroomsLightGroup?.remove(rec.light);
+    if(rec.target) backroomsLightGroup?.remove(rec.target);
+  }
+  backroomsArtworkLightRuntime.length=0;
+  const sources=(STATE?.lightSystem?.lights || []).filter(light=>light?.visible!==false && safeFinite(light?.intensity,0)>.01);
+  const sewer=gallerySceneRuntime.artworkStates.sewer || {};
+  const office=gallerySceneRuntime.artworkStates.backrooms || {};
+  if(!sources.length) return;
+  const yAxis=new THREE.Vector3(0,1,0);
+  for(const art of STATE?.artworks || []){
+    const from=sewer[art.id],to=office[art.id];
+    if(!from || !to) continue;
+    const oldCenter=new THREE.Vector3(from.position.x,from.position.y,from.position.z);
+    const newCenter=new THREE.Vector3(to.position.x,to.position.y,to.position.z);
+    let source=null,best=Infinity;
+    for(const candidate of sources){
+      const focus=candidate.type==='point' ? candidate.position : candidate.target;
+      const distance=oldCenter.distanceToSquared(new THREE.Vector3(safeFinite(focus?.x,0),safeFinite(focus?.y,0),safeFinite(focus?.z,0)));
+      if(distance<best){best=distance;source=candidate;}
+    }
+    if(!source) continue;
+    const sourcePosition=new THREE.Vector3(safeFinite(source.position?.x,0),safeFinite(source.position?.y,4),safeFinite(source.position?.z,0));
+    const sourceFocus=source.type==='point' ? oldCenter : new THREE.Vector3(safeFinite(source.target?.x,0),safeFinite(source.target?.y,0),safeFinite(source.target?.z,0));
+    const offset=sourcePosition.clone().sub(sourceFocus).applyAxisAngle(yAxis,deg(safeFinite(to.rotation?.y,0)-safeFinite(from.rotation?.y,0)));
+    if(offset.length()<1.2) offset.set(0,2.8,3.2);
+    if(offset.length()>10) offset.setLength(10);
+    sourcePosition.copy(newCenter).add(offset);
+    let light,target=null;
+    if(source.type==='point'){
+      light=new THREE.PointLight(source.color,Math.max(1.4,safeFinite(source.intensity,2)*.88),clamp(safeFinite(source.distance,22),8,30),clamp(safeFinite(source.decay,2),.5,3));
+    }else{
+      light=new THREE.SpotLight(source.color,Math.max(1.8,safeFinite(source.intensity,3)*.92),clamp(safeFinite(source.distance,26),10,36),clamp(safeFinite(source.angle,.72),.28,1.15),clamp(safeFinite(source.penumbra,.25),.12,.86),clamp(safeFinite(source.decay,2),.5,3));
+      target=new THREE.Object3D();target.position.copy(newCenter);target.name=`office-art-light-target-${art.id}`;backroomsLightGroup.add(target);light.target=target;
+    }
+    light.name=`office-art-light-${art.id}`;
+    light.position.copy(sourcePosition);light.castShadow=false;light.visible=false;
+    light.userData.officeArtworkLight=true;light.userData.artId=art.id;light.userData.sourceLightId=source.id;
+    backroomsLightGroup.add(light);
+    backroomsArtworkLightRuntime.push({light,target,artId:art.id,sourceId:source.id,distanceSq:Infinity});
+  }
+}
+
+function updateBackroomsArtworkLights(force=false){
+  const active=gallerySceneRuntime.mode==='backrooms' && backroomsLightGroup?.visible===true;
+  if(!active){
+    if(backroomsArtworkLightsWereActive) for(const rec of backroomsArtworkLightRuntime) rec.light.visible=false;
+    backroomsArtworkLightsWereActive=false;
+    return;
+  }
+  backroomsArtworkLightsWereActive=true;
+  const now=performance.now?.() || Date.now();
+  if(!force && now-backroomsArtworkLightLastUpdate<220) return;
+  backroomsArtworkLightLastUpdate=now;
+  for(const rec of backroomsArtworkLightRuntime){
+    const group=artworkMeshes?.[rec.artId];
+    rec.distanceSq=group ? player.position.distanceToSquared(group.position) : Infinity;
+  }
+  backroomsArtworkLightRuntime.sort((a,b)=>a.distanceSq-b.distanceSq);
+  const budget=IS_TOUCH_DEVICE?3:6;
+  for(let i=0;i<backroomsArtworkLightRuntime.length;i++) backroomsArtworkLightRuntime[i].light.visible=i<budget;
+  const canvas=$('canvas');
+  if(canvas) canvas.dataset.backroomsArtworkLights=`${Math.min(budget,backroomsArtworkLightRuntime.length)}/${backroomsArtworkLightRuntime.length}`;
+}
+
 function buildBackroomsEnvironment(){
   if(!backroomsGroup || backroomsGroup.userData.built) return;
   backroomsGroup.userData.built = true;
@@ -2422,16 +2657,23 @@ function buildBackroomsEnvironment(){
   addBackroomsWall(wallGeometry,wallMaterial,16.9,0,.22,28,height);
   addBackroomsWall(wallGeometry,wallMaterial,0,-13.9,34,.22,height);
   addBackroomsWall(wallGeometry,wallMaterial,0,13.9,34,.22,height);
-  for(const [x,z,w,d] of [
-    [-6,-10,.25,7.8],[-6,2.7,.25,11.2],[-6,11.7,.25,4.2],
-    [6,-10,.25,7.8],[6,0,.25,10.6],[6,10.8,.25,6.2],
-    [-12,-5.5,9.7,.25],[0,-5.5,7.5,.25],[12,-5.5,9.7,.25],
-    [-12,7.5,9.7,.25],[0,7.5,7.5,.25],[12,7.5,9.7,.25]
-  ]) addBackroomsWall(wallGeometry,wallMaterial,x,z,w,d,height);
+  // Floor-plan topology: management/reception/service rooms to the north, a
+  // continuous central corridor, and four departments along the south edge.
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'x',fixed:-2,min:-16.9,max:16.9,doors:[-11.5,-2.0,10.7],height});
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'x',fixed:1.8,min:-16.9,max:16.9,doors:[-13.2,-6.6,-.15,9.7],height});
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:-6.4,min:-13.9,max:-2,doors:[],height});
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:5.2,min:-13.9,max:-2,doors:[-10.2],height});
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'x',fixed:-7.35,min:5.2,max:16.9,doors:[14.2],height});
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:-9.6,min:1.8,max:13.9,doors:[],height});
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:-3.6,min:1.8,max:13.9,doors:[],height});
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:3.6,min:1.8,max:13.9,doors:[],height});
   addBackroomsAgingDetails(wallTexture,height);
+  buildBackroomsOfficeFurniture();
 
   const fixturePositions = [
-    [-11,-10],[-1,-10],[10,-10],[-11,0],[-1,0],[10,0],[-11,10],[6.8,10]
+    [-12,-9.4],[-1.6,-9.5],[10.7,-10.5],[10.7,-4.6],
+    [-12.4,-.1],[-4.2,-.1],[4.2,-.1],[12.3,-.1],
+    [-13.1,8],[-6.6,8],[-.1,8],[7.7,8],[13.1,8]
   ];
   const housingGeometry = new THREE.BoxGeometry(3.8,.13,.82);
   const tubeGeometry = new THREE.BoxGeometry(3.25,.045,.10);
@@ -2449,9 +2691,9 @@ function buildBackroomsEnvironment(){
   backroomsGroup.add(housings);
 
   const tubeSets = [
-    {name:'stable',indices:[0,1,3,5,7],phase:0,speed:0},
-    {name:'broken-a',indices:[2,6],phase:1.73,speed:17.2},
-    {name:'broken-b',indices:[4],phase:4.91,speed:23.6}
+    {name:'stable',indices:[0,1,4,5,7,8,9,11],phase:0,speed:0},
+    {name:'broken-a',indices:[2,6,12],phase:1.73,speed:17.2},
+    {name:'broken-b',indices:[3,10],phase:4.91,speed:23.6}
   ];
   for(const set of tubeSets){
     const material = new THREE.MeshStandardMaterial({
@@ -2477,7 +2719,7 @@ function buildBackroomsEnvironment(){
 
   backroomsLightGroup.add(new THREE.AmbientLight('#d4b85d',.48));
   backroomsLightGroup.add(new THREE.HemisphereLight('#e7d17d','#27210d',.28));
-  const activeLights = IS_TOUCH_DEVICE ? [0,2,7] : [0,2,3,5,7];
+  const activeLights = IS_TOUCH_DEVICE ? [0,4,11] : [0,2,4,8,11];
   for(const index of activeLights){
     const [x,z] = fixturePositions[index];
     const light = new THREE.PointLight(index === 3 ? '#d3bb66' : '#ffe299',IS_TOUCH_DEVICE ? 7.1 : 8.6,14.5,2);
@@ -2490,10 +2732,11 @@ function buildBackroomsEnvironment(){
       flicker.lights.push(light);
     }
   }
+  buildBackroomsArtworkLights();
 }
 
 function updateBackroomsFlicker(timeSeconds){
-  if(gallerySceneRuntime.mode !== 'backrooms' || !backroomsLightGroup?.visible) return;
+  if(gallerySceneRuntime.mode !== 'backrooms' || !backroomsLightGroup?.visible){updateBackroomsArtworkLights();return;}
   for(const item of backroomsFlickerRuntime){
     const t = timeSeconds*item.speed+item.phase;
     const sample = Math.sin(t*12.9898)*43758.5453;
@@ -2505,6 +2748,7 @@ function updateBackroomsFlicker(timeSeconds){
     item.material.emissiveIntensity = .04+power*3.35;
     for(const light of item.lights) light.intensity = safeFinite(light.userData.baseIntensity,8.6)*power;
   }
+  updateBackroomsArtworkLights();
 }
 
 function captureArtworkSceneState(mode){
@@ -2527,9 +2771,10 @@ function captureArtworkSceneState(mode){
 function createBackroomsArtworkState(){
   const sewer = gallerySceneRuntime.artworkStates.sewer || captureArtworkSceneState('sewer');
   const slots = [
-    {x:-12.2,z:13.72,yaw:180},{x:-5.1,z:13.72,yaw:180},{x:3.4,z:13.72,yaw:180},{x:11.8,z:13.72,yaw:180},
-    {x:-16.72,z:10.0,yaw:90},{x:-16.72,z:3.2,yaw:90},{x:-16.72,z:-4.0,yaw:90},{x:-16.72,z:-10.8,yaw:90},
-    {x:16.72,z:9.8,yaw:-90},{x:16.72,z:1.0,yaw:-90},{x:16.72,z:-9.2,yaw:-90}
+    {x:-12.2,z:-13.72,yaw:0},{x:-2.1,z:-13.72,yaw:0},{x:10.6,z:-13.72,yaw:0},
+    {x:-13.2,z:13.72,yaw:180},{x:-6.5,z:13.72,yaw:180},{x:-.1,z:13.72,yaw:180},{x:9.7,z:13.72,yaw:180},
+    {x:-16.72,z:-8.5,yaw:90},{x:-16.72,z:7.7,yaw:90},
+    {x:16.72,z:-9.2,yaw:-90},{x:16.72,z:8.2,yaw:-90}
   ];
   const snapshot = {};
   let slotIndex = 0;
@@ -2540,7 +2785,7 @@ function createBackroomsArtworkState(){
     tallestArtwork = Math.max(tallestArtwork,safeFinite(base.size.h,0));
     if(art.type === 'model'){
       snapshot[art.id] = {
-        position:{x:0,y:.08,z:-10.4},
+        position:{x:5.25,y:.08,z:10.7},
         rotation:{x:base.rotation.x,y:base.rotation.y+26,z:base.rotation.z},
         size:{...base.size},
         visible:true
@@ -2624,13 +2869,8 @@ function setGallerySceneMode(mode,{preserveCurrent=true,restorePlayer=true}={}){
   applyArtworkSceneState(next);
   if(restorePlayer) applyGalleryPlayerPose(next);
   const isBackrooms = next === 'backrooms';
-  if(roomGroup) roomGroup.visible = !isBackrooms;
-  if(customWallGroup) customWallGroup.visible = !isBackrooms;
-  if(floorTileGroup) floorTileGroup.visible = !isBackrooms;
-  if(referenceArchitectureGroup) referenceArchitectureGroup.visible = !isBackrooms;
-  if(lightRigGroup) lightRigGroup.visible = !isBackrooms;
-  if(backroomsGroup) backroomsGroup.visible = isBackrooms;
-  if(backroomsLightGroup) backroomsLightGroup.visible = isBackrooms;
+  applyGallerySceneVisibilityMask();
+  updateBackroomsArtworkLights(true);
   if(statue) statue.visible = !isBackrooms;
   if(skyMesh) skyMesh.visible = !isBackrooms;
   if(isBackrooms){
@@ -2655,6 +2895,33 @@ function setGallerySceneMode(mode,{preserveCurrent=true,restorePlayer=true}={}){
   gallerySceneRuntime.initialized = true;
   updateCamera();
   setStatus(isBackrooms ? '已切換至淹水後室辦公室；按 B 可回到下水道展場。' : '已切換至下水道展場；按 B 可進入淹水後室辦公室。');
+}
+
+function applyGallerySceneVisibilityMask(){
+  const isBackrooms = gallerySceneRuntime.mode === 'backrooms';
+  const sewerArchitectureVisible = !isBackrooms;
+  if(roomGroup) roomGroup.visible = sewerArchitectureVisible;
+  if(customWallGroup) customWallGroup.visible = sewerArchitectureVisible;
+  if(floorTileGroup) floorTileGroup.visible = sewerArchitectureVisible;
+  if(referenceArchitectureGroup){
+    const stateVisible = STATE?.referenceArchitecture?.enabled !== false && STATE?.referenceArchitecture?.visible !== false;
+    referenceArchitectureGroup.visible = sewerArchitectureVisible && stateVisible;
+  }
+  if(lightRigGroup) lightRigGroup.visible = sewerArchitectureVisible;
+  if(backroomsGroup) backroomsGroup.visible = isBackrooms;
+  if(backroomsLightGroup) backroomsLightGroup.visible = isBackrooms;
+  const canvas=$('canvas');
+  if(canvas){
+    canvas.dataset.sceneIsolation=isBackrooms?'backrooms-only':'sewer-only';
+    canvas.dataset.sewerGroupsHidden=String([roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false));
+  }
+}
+
+function enforceGallerySceneIsolation(){
+  const isBackrooms=gallerySceneRuntime.mode==='backrooms';
+  const sewerLeak=isBackrooms && [roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].some(group=>group?.visible===true);
+  const officeLeak=!isBackrooms && (backroomsGroup?.visible===true || backroomsLightGroup?.visible===true);
+  if(sewerLeak || officeLeak) applyGallerySceneVisibilityMask();
 }
 
 function toggleGalleryScene(){
@@ -7645,6 +7912,9 @@ function syncDetailedSplashTelemetry(){
   canvas.dataset.detailedSplashDrawCalls = String(active * 3);
   canvas.dataset.detailedSplashPoolSize = String(DETAILED_SPLASH_POOL_SIZE);
   canvas.dataset.detailedSplashParticles = String(waterRuntime.lastDetailedSplash?.particleCount || 0);
+  canvas.dataset.detailedSplashHeightGain = String(waterRuntime.lastDetailedSplash?.heightGain || 0);
+  canvas.dataset.detailedSplashSheetHeight = String(waterRuntime.lastDetailedSplash?.sheetHeight || 0);
+  canvas.dataset.detailedSplashHeightSetting = String(waterRuntime.lastDetailedSplash?.splashHeight || getWaterImpactTuning().splashHeight);
   canvas.dataset.legacyWaterParticleMeshes = String(waterRuntime.particles.length);
 }
 
@@ -7669,7 +7939,15 @@ function spawnDetailedWaterImpact(pos, body, splash, options={}){
   const kind = slot.points.geometry.attributes.aKind.array;
   const phase = slot.points.geometry.attributes.aPhase.array;
   const impactRadius = clamp(safeFinite(opts.impactRadius,.55),.18,ARTWORK_IMPACT_MAX_RADIUS);
-  const heightGain = clamp(safeFinite(opts.heightMultiplier,1)*tuning.splashHeight,.2,3.4) * THREE.MathUtils.lerp(.90,1.38,energy) * THREE.MathUtils.lerp(.94,1.62,clamp((sizeScale-.35)/3.05,0,1));
+  // Treat the editor value as a visible total-height control. The previous path
+  // multiplied an already large size response by 0.2-1.6 and then clamped it,
+  // while the crown ignored this slider entirely. A response relative to the
+  // documented default preserves the default look and makes the full range useful.
+  const splashHeightResponse = Math.pow(
+    clamp(tuning.splashHeight / DEFAULT_WATER_IMPACT_TUNING.splashHeight,.18,3.5),
+    1.12
+  );
+  const heightGain = clamp(safeFinite(opts.heightMultiplier,1)*splashHeightResponse,.18,5.8) * THREE.MathUtils.lerp(.90,1.38,energy) * THREE.MathUtils.lerp(.94,1.62,clamp((sizeScale-.35)/3.05,0,1));
   const outwardGain = clamp(safeFinite(opts.outwardMultiplier,1)*tuning.splashSpread,.25,3.6) * THREE.MathUtils.lerp(.90,1.52,energy) * THREE.MathUtils.lerp(.96,1.72,clamp((sizeScale-.35)/3.05,0,1));
   const impactVelocity = opts.impactVelocity?.isVector3 ? opts.impactVelocity : null;
   const directional = impactVelocity ? new THREE.Vector2(impactVelocity.x,impactVelocity.z) : new THREE.Vector2();
@@ -7741,7 +8019,7 @@ function spawnDetailedWaterImpact(pos, body, splash, options={}){
   const requestedRingRadius = Math.max(requestedWaveDistance*.72,THREE.MathUtils.lerp(1.05,3.4,energy)+impactRadius*1.26);
   slot.ringRadius = Math.min(edge,22,requestedRingRadius*clamp(safeFinite(opts.ringScaleMultiplier,1),.55,2.2));
   slot.sheetRadius = Math.min(Math.max(.34,edge*.82),clamp(impactRadius*THREE.MathUtils.lerp(.78,1.18,energy)+energy*.34,.34,10.5));
-  slot.sheetHeight = clamp(THREE.MathUtils.lerp(.42,1.08,energy)*Math.sqrt(sizeScale)*tuning.crownHeight,.22,3.2);
+  slot.sheetHeight = clamp(THREE.MathUtils.lerp(.42,1.08,energy)*Math.sqrt(sizeScale)*tuning.crownHeight*splashHeightResponse,.12,6.8);
   slot.ringDuration = tuning.rippleDuration;
   slot.group.position.copy(pos);
   slot.group.visible = true;
@@ -7764,6 +8042,9 @@ function spawnDetailedWaterImpact(pos, body, splash, options={}){
     impactDepth:+safeFinite(opts.impactDepth,.18).toFixed(2),
     waveDistance:+requestedWaveDistance.toFixed(2),
     sizeScale:+sizeScale.toFixed(2),
+    splashHeight:+tuning.splashHeight.toFixed(2),
+    heightGain:+heightGain.toFixed(2),
+    sheetHeight:+slot.sheetHeight.toFixed(2),
     dimensions:opts.impactDimensions || null,
     mobile:IS_TOUCH_DEVICE
   };
@@ -10046,13 +10327,14 @@ function applyObjectVisibilityLocks(){
   for(const art of STATE.artworks || []){
     if(artworkMeshes[art.id]) artworkMeshes[art.id].visible = art.visible !== false;
   }
-  if(referenceArchitectureGroup){
-    referenceArchitectureGroup.visible = STATE.referenceArchitecture?.enabled !== false && STATE.referenceArchitecture?.visible !== false;
-  }
   for(const light of STATE.lightSystem?.lights || []){
     const group = lightControlObjects[light.id];
     if(group) group.visible = light.visible !== false;
   }
+  // Object/editor refreshes must never override the active gallery scene. Pointer-lock
+  // acquisition calls this path, which previously made the sewer architecture visible
+  // again inside the backrooms after the first left click.
+  applyGallerySceneVisibilityMask();
 }
 
 function selectedObjectKey(){
@@ -11109,7 +11391,7 @@ function clearChiselHolesForCurrentTarget(){
 
 function resetPlayer(){
   if(gallerySceneRuntime.mode === 'backrooms'){
-    gallerySceneRuntime.playerPoses.backrooms = {x:4.7,y:0,z:8.4,yaw:0,pitch:deg(-8),cameraDistance:IS_TOUCH_DEVICE ? VIEWER_MOBILE_CAMERA_DISTANCE : 4.35};
+    gallerySceneRuntime.playerPoses.backrooms = {x:10,y:0,z:9.5,yaw:0,pitch:deg(-18),cameraDistance:3.8};
     applyGalleryPlayerPose('backrooms');
     return;
   }
@@ -12231,7 +12513,8 @@ function makeCameraFadeMaterial(mesh){
   const material = cloneCameraFadeMaterial(mesh.material);
   forEachMaterial(material, mat=>{
     mat.transparent = true;
-    mat.opacity = Math.min(safeFinite(mat.opacity, 1), .24);
+    // A camera-blocking wall should read as absent, not as a large ghost cube.
+    mat.opacity = Math.min(safeFinite(mat.opacity, 1), .035);
     mat.depthWrite = false;
     mat.needsUpdate = true;
   });
@@ -12281,10 +12564,14 @@ function getCameraObstructionCandidates(roots){
       const obj = stack.pop();
       if(!obj || obj.visible === false) continue;
       if(isCameraObstructionCandidate(obj)){
-        const box = new THREE.Box3().setFromObject(obj);
-        if(!box.isEmpty()){
-          box.expandByScalar(.08);
-          candidates.push({mesh:obj, box});
+        const geometry = obj.geometry;
+        if(geometry){
+          if(!geometry.boundingBox) geometry.computeBoundingBox?.();
+          const localBox = geometry.boundingBox?.clone?.();
+          if(localBox && !localBox.isEmpty()){
+            localBox.expandByScalar(.025);
+            candidates.push({mesh:obj, localBox});
+          }
         }
         continue;
       }
@@ -12297,12 +12584,23 @@ function getCameraObstructionCandidates(roots){
   return candidates;
 }
 
+function segmentIntersectsOrientedMeshBounds(record,start,end){
+  const mesh = record?.mesh;
+  const localBox = record?.localBox;
+  if(!mesh || !localBox) return false;
+  mesh.updateWorldMatrix?.(true,false);
+  cameraObstructionFade.inverse.copy(mesh.matrixWorld).invert();
+  cameraObstructionFade.localStart.copy(start).applyMatrix4(cameraObstructionFade.inverse);
+  cameraObstructionFade.localEnd.copy(end).applyMatrix4(cameraObstructionFade.inverse);
+  return segmentIntersectsBox(cameraObstructionFade.localStart,cameraObstructionFade.localEnd,localBox);
+}
+
 function collectCameraObstructionBlockers(candidates, start, end, blockers){
   for(const rec of candidates){
     if(blockers.size >= 12) break;
     const obj = rec?.mesh;
     if(!obj || obj.visible === false) continue;
-    if(segmentIntersectsBox(start, end, rec.box)) blockers.add(obj);
+    if(segmentIntersectsOrientedMeshBounds(rec,start,end)) blockers.add(obj);
   }
 }
 
@@ -13834,6 +14132,8 @@ function recordGalleryFramePerformance(frameStart){
   canvas.dataset.perfSceneMode = gallerySceneRuntime.mode;
   canvas.dataset.perfBackroomsFlickerGroups = String(backroomsFlickerRuntime.length);
   canvas.dataset.perfBackroomsFlickerPowers = JSON.stringify(backroomsFlickerRuntime.map(item=>+(item.lastPower||0).toFixed(3)));
+  canvas.dataset.perfBackroomsFurnitureDrawCalls = String(backroomsFurnitureDrawCalls);
+  canvas.dataset.perfBackroomsArtworkLights = `${backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length}/${backroomsArtworkLightRuntime.length}`;
   canvas.dataset.perfSewerGroupsHidden = String([roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false));
   canvas.dataset.perfDustCount = String(GALLERY_DUST_COUNT);
   canvas.dataset.perfThrowSpeed = String(ARPG_INTERACTION.throwSpeed);
@@ -13884,6 +14184,7 @@ function animate(){
   updatePendingWaterBodyPlacement();
   updateHeldArtwork(dt);
   updateArtworkPhysics(dt);
+  enforceGallerySceneIsolation();
   updateCamera();
   if(skyMesh) skyMesh.position.copy(camera.position);
   updateAtmosphereEffect(dt);
@@ -14181,7 +14482,7 @@ function enableBakedLightingRuntime(){
   bakedLightingRuntime.hiddenMarkers.clear();
   bakedLightingRuntime.frozenShadowLights.clear();
   bakedLightingRuntime.materialCache.clear();
-  if(lightRigGroup) lightRigGroup.visible = true;
+  if(lightRigGroup) lightRigGroup.visible = gallerySceneRuntime.mode !== 'backrooms';
   scene?.traverse?.(obj=>{
     if(obj?.userData?.isLightMarker){
       bakedLightingRuntime.hiddenMarkers.set(obj, obj.visible !== false);
@@ -14223,7 +14524,7 @@ function disableBakedLightingRuntime(){
     light.shadow.needsUpdate = state.needsUpdate;
   }
   bakedLightingRuntime.frozenShadowLights.clear();
-  if(lightRigGroup) lightRigGroup.visible = true;
+  if(lightRigGroup) lightRigGroup.visible = gallerySceneRuntime.mode !== 'backrooms';
   if(renderer?.shadowMap){
     renderer.shadowMap.enabled = bakedLightingRuntime.previousShadowEnabled;
     renderer.shadowMap.autoUpdate = bakedLightingRuntime.previousShadowAutoUpdate;

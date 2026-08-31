@@ -561,3 +561,37 @@ Final verification:
 - Eight-impact stress remains capped at three desktop pool slots / nine splash draw calls / zero legacy per-droplet meshes. Cleanup returns to zero active slots.
 - With the denser single-draw-call water grid and full 676k-triangle artwork visible, sampled frame work is `3.69 ms` average / `5.40 ms` p95; draw calls remain 73 in the sewer sample. The in-app browser throttles RAF to roughly 18–20 FPS in the background, so performance acceptance uses measured frame-work time rather than that throttled interval.
 - Module syntax, static regression assertions, and `git diff --check` pass. No application JavaScript or WebGL shader errors were logged; the browser harness itself emitted intermittent generic Chromium `UnknownError` messages during two selector deadline overruns.
+
+## 2026-09-01 office-plan, scene-isolation, and splash-height diagnosis
+
+Latest request:
+- Make the water splash-height control visibly effective.
+- Remove the strange semi-transparent box in the sewer and stop sewer columns appearing in the office after a left click.
+- Rebuild the flooded office from the supplied management/reception/pantry/toilet/corridor/department floor plan, add damaged office furniture, carry artwork lighting into it, and retain flickering fluorescent lights plus dust without lag.
+
+Confirmed root causes and first fix chunk:
+- Pointer-lock acquisition clears editor selection; that calls `applyObjectVisibilityLocks()`, which previously forced `referenceArchitectureGroup.visible` from saved state without respecting the active gallery scene. Centralized the scene visibility mask and made editor/object refresh plus baked-light restoration scene-aware.
+- Mobile camera obstruction used world-axis-aligned boxes around rotated architecture. Those oversized boxes caused false blockers and exposed the faded mesh as the screenshot's large translucent cube. Candidate checks now transform the camera segment into each mesh's local box (an oriented-box test) and true blockers fade nearly invisibly instead of becoming ghost boxes.
+- Splash height affected droplet launch velocity but not the dominant crown sheet and was heavily flattened by a clamp. It now produces a nonlinear response relative to the default, drives both droplets and crown height, exposes a wider 0.2-2.5 range, and reports effective height telemetry.
+- Module syntax and `git diff --check` pass after this chunk.
+- The required standard web-game client was attempted against the pre-fix build; as in prior rounds it stalled for 50 seconds in headless SwiftShader while loading the large GLB and was stopped. Hardware-WebGL verification remains required after the office rebuild.
+
+Completed implementation:
+- Replaced the generic maze with the supplied plan's topology: north management/reception/pantry/toilet rooms, a continuous middle corridor, and south meeting/sales/accounting/production-storage rooms. Door openings include overhead lintels rather than full-height gaps.
+- Added damaged/scuffed management, reception, meeting, sales, accounting, production, pantry, and toilet furniture. Desks, chair parts, monitors, cabinets, papers, porcelain, open drawers, missing legs, and debris are packed into seven static `InstancedMesh` batches; collision uses render-free oriented proxies.
+- Moved the full-size model into the larger production/storage room and retained every artwork's exact sewer `w/h/d`. Backrooms height still derives from the tallest artwork.
+- Migrated the authored sewer artwork lighting by assigning each office artwork its nearest original light, rotating the original light offset into the artwork's office orientation, and preserving color/type/intensity behavior without shadows. Twelve migrated artwork-light records exist; only the nearest six desktop / three touch lights are active and culling updates at 220 ms intervals.
+- Retained thirteen instanced fluorescent fixtures in room/corridor positions, split across one stable and two independently flickering tube batches. Dust remains a single 36,000-point desktop / 21,000-point touch draw call.
+
+Final verification:
+- Hardware WebGL sewer screenshot no longer contains the large translucent box.
+- Backrooms switch reports `sceneIsolation=backrooms-only`, `sewerGroupsHidden=true`, and `artLights=6/12`. Reproducing the exact left-click/Pointer-Lock sequence twice preserved those values; sewer columns never reappeared.
+- The production/storage entry visibly shows flooded desks, damaged chairs, monitors, papers, the corridor doorway, and moving water. Furniture stays at seven draw calls.
+- Splash-height UI measured at identical particle count: setting `0.20` produced `heightGain=0.54`, `sheetHeight=0.17`; setting `2.50` produced `heightGain=7.36`, `sheetHeight=2.86`. Default reset returned to `0.72`, confirming the slider now affects both droplets and crown.
+- Stable office hardware sample after warm-up: `1.73 ms` average CPU work, `2.50 ms` p95, 78 draw calls, 36,000 dust points. The browser-reported RAF FPS is background-throttled and is not used as the acceptance signal.
+- Repeated preview stress remains bounded at three pooled impacts / nine splash draw calls / zero legacy particle meshes; sampled work was `3.37 ms` with `7.90 ms` p95 and 84 total draw calls.
+- Broken fluorescent powers changed from `[0.735,0.025]` to `[0.025,0.84]`, confirming independent flicker. No application/WebGL errors were logged.
+- Module syntax, static regression assertions, and `git diff --check` pass. The required standard client was attempted again after the rebuild and hit the same bounded SwiftShader/large-GLB stall; hardware WebGL supplied the interaction, visual, and performance evidence.
+
+Current TODO:
+- None. Changes remain uncommitted/unpushed because this request did not ask for a push.
