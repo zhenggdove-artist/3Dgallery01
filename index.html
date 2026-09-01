@@ -6322,6 +6322,38 @@ function addReferenceGlowPlane(name, position, rotationX, scale){
   return addReferenceMesh(mesh, name, 'glassGlow');
 }
 
+// Debug-only regression probe for the repeated full-screen translucent-panel bug.
+// Water, dust and short-lived effects are intentionally excluded; the returned
+// names therefore identify real gallery/office meshes that can cover the view.
+function auditUnexpectedTransparentMeshes(){
+  if(!DEBUG_INPUT_ENABLED || !scene) return [];
+  const candidates=[];
+  scene.updateMatrixWorld?.(true);
+  scene.traverse(obj=>{
+    if(!obj?.isMesh || obj.visible===false) return;
+    if(isObjectDescendantOf(obj,waterGroup) || obj===galleryDustPoints || obj===atmosphereVolumeMesh) return;
+    const mats=Array.isArray(obj.material)?obj.material:[obj.material];
+    const translucent=mats.some(mat=>mat?.transparent===true && safeFinite(mat.opacity,1)>.01 && safeFinite(mat.opacity,1)<.98 && mat.colorWrite!==false);
+    if(!translucent) return;
+    if(!obj.geometry?.boundingBox) obj.geometry?.computeBoundingBox?.();
+    const box=obj.geometry?.boundingBox?.clone?.();
+    if(!box) return;
+    box.applyMatrix4(obj.matrixWorld);
+    const size=box.getSize(new THREE.Vector3());
+    if(Math.max(size.x,size.y,size.z)<1.5) return;
+    candidates.push({
+      name:obj.name || obj.uuid,
+      kind:obj.userData?.referenceMaterialKind || '',
+      artId:obj.userData?.artId || findUserDataValueInHierarchy(obj,'artId',artworkGroup) || '',
+      opacity:Number(Math.min(...mats.filter(Boolean).map(mat=>safeFinite(mat.opacity,1))).toFixed(3)),
+      size:[size.x,size.y,size.z].map(value=>Number(value.toFixed(2)))
+    });
+  });
+  const canvas=$('canvas');
+  if(canvas) canvas.dataset.transparentOccluderAudit=JSON.stringify(candidates);
+  return candidates;
+}
+
 function rebuildReferenceArchitectureMaterials(){
   buildReferenceArchitecture();
 }
@@ -6429,6 +6461,7 @@ function buildReferenceArchitecture(){
       obj.geometry?.computeBoundingSphere?.();
     }
   });
+  auditUnexpectedTransparentMeshes();
 }
 
 function buildRoom(){
