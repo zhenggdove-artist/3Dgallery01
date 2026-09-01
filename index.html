@@ -322,6 +322,9 @@ let referenceCollisionItems = [];
 let backroomsCollisionItems = [];
 const backroomsFlickerRuntime = [];
 const backroomsArtworkLightRuntime = [];
+const backroomsWallRecords = [];
+const backroomsSurfaceTextureCache = new Map();
+const backroomsScreenRuntime = {canvas:null,ctx:null,texture:null,material:null,lastFrame:-1,updates:0,lastCode:''};
 let backroomsArtworkLightLastUpdate = 0;
 let backroomsArtworkLightsWereActive = false;
 let backroomsFurnitureDrawCalls = 0;
@@ -418,7 +421,7 @@ const gallerySceneRuntime = {
   initialized:false,
   backroomsHeight:BACKROOMS_MIN_HEIGHT,
   artworkStates:{sewer:null,backrooms:null},
-  playerPoses:{sewer:null,backrooms:{x:10,y:0,z:9.5,yaw:0,pitch:deg(-18),cameraDistance:3.8}}
+  playerPoses:{sewer:null,backrooms:{x:13,y:0,z:8,yaw:0,pitch:deg(-18),cameraDistance:3.8}}
 };
 const runtimeAudio = {ready:false, unlocked:false, nodes:{}, lastPlayed:{}, fadeTimers:{}, waterWalkActive:false, backgroundMusicReady:false, backgroundMusicStarted:false, backgroundMusicAutoplayLastAt:0};
 const ARPG_INTERACTION = {range:5.2, holdDistance:1.82, holdHeight:1.38, sideOffset:.22, kickSpeed:8.4, throwSpeed:17.6/6, gravity:8.6};
@@ -1047,8 +1050,9 @@ function installGalleryDebugState(){
         lastDetailedSplash:waterRuntime.lastDetailedSplash,
         lastArtworkImpactProfile:waterRuntime.lastArtworkImpactProfile
       },
+      artworkInteraction:{heldArtworkId,physicsCount:artworkPhysics.size,floatingIds:[...artworkPhysics.entries()].filter(([,body])=>body?.floating).map(([id])=>id)},
       tuning:{throwSpeed:ARPG_INTERACTION.throwSpeed,dustCount:GALLERY_DUST_COUNT,dustDrawCalls:galleryDustPoints?.visible === false ? 0 : (galleryDustPoints ? 1 : 0),waterImpact:{...getWaterImpactTuning()}},
-      backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.filter(item=>item?.type!=='backroomsFurniture').length,furnitureColliders:backroomsCollisionItems.filter(item=>item?.type==='backroomsFurniture').length,furnitureDrawCalls:backroomsFurnitureDrawCalls,lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0,artworkLights:{total:backroomsArtworkLightRuntime.length,active:backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length,budget:IS_TOUCH_DEVICE?3:6},flickerGroups:backroomsFlickerRuntime.length,sewerGroupsHidden:[roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false)},
+      backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.filter(item=>item?.type!=='backroomsFurniture').length,wallUvRecords:backroomsWallRecords.length,furnitureColliders:backroomsCollisionItems.filter(item=>item?.type==='backroomsFurniture').length,furnitureDrawCalls:backroomsFurnitureDrawCalls,screenTextureUpdates:backroomsScreenRuntime.updates,screenCode:backroomsScreenRuntime.lastCode,lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0,artworkLights:{total:backroomsArtworkLightRuntime.length,active:backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length,budget:IS_TOUCH_DEVICE?3:6},flickerGroups:backroomsFlickerRuntime.length,sewerGroupsHidden:[roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false)},
       audio:{backgroundMusicReady:!!runtimeAudio.backgroundMusicReady, backgroundMusicStarted:!!runtimeAudio.backgroundMusicStarted, unlocked:!!runtimeAudio.unlocked},
       loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl},
       hasWrongWhiteArtwork:artworkList.some(isRemovedRequiredArtwork),
@@ -1100,6 +1104,24 @@ function installGalleryDebugState(){
       return true;
     }
     if(action.type === 'sceneToggle') return toggleGalleryScene();
+    if(action.type === 'artworkRethrowRegression'){
+      const art=(STATE.artworks || []).find(item=>item?.visible!==false && artworkMeshes?.[item.id]);
+      if(!art) return false;
+      const forward=getCameraForward();
+      const testPosition=player.position.clone().addScaledVector(forward,1.5);
+      const body=(STATE.waterBodies || []).find(item=>item && item.visible!==false && !item.isDraft);
+      const waterY=body ? waterBodyMetrics(body).surfaceY+.08 : Math.max(.08,testPosition.y);
+      makeArtworkFreeForRuntime(art);
+      art.position={x:testPosition.x,y:waterY,z:testPosition.z};placeArtwork(art);
+      artworkPhysics.set(art.id,{velocity:new THREE.Vector3(),angular:new THREE.Vector3(),splashed:true,floating:true,mode:'throw',restTime:2});
+      const picked=startTakeArtwork();
+      const pickedId=heldArtworkId;
+      const thrown=picked ? throwHeldArtwork() : false;
+      const passed=picked && pickedId===art.id && thrown && artworkPhysics.has(art.id);
+      const canvas=$('canvas');
+      if(canvas) canvas.dataset.artworkRethrowRegression=JSON.stringify({passed,picked,pickedId,thrown,physicsAfterThrow:artworkPhysics.has(art.id)});
+      return passed;
+    }
     if(action.type === 'waterSplash'){
       const body = (STATE.waterBodies || []).find(item=>item && item.visible !== false && !item.isDraft);
       if(!body) return false;
@@ -2250,16 +2272,9 @@ function createBackroomsPatternTexture(kind='wall'){
       ctx.lineWidth=THREE.MathUtils.lerp(.5,2.2,rand());
       ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x+rand()*28-14,y+20+rand()*45,x+rand()*36-18,y+52+rand()*65,x+rand()*30-15,y+74+rand()*84);ctx.stroke();
     }
-    for(const edgeY of [0,512]){
-      for(let i=0;i<48;i++){
-        const x=rand()*512,y=edgeY+(edgeY===0?1:-1)*rand()*34;
-        const r=THREE.MathUtils.lerp(4,21,rand());
-        const mold=ctx.createRadialGradient(x,y,0,x,y,r);
-        mold.addColorStop(0,`rgba(29,35,16,${THREE.MathUtils.lerp(.14,.44,rand())})`);
-        mold.addColorStop(.55,'rgba(47,48,19,.12)'); mold.addColorStop(1,'rgba(47,48,19,0)');
-        ctx.fillStyle=mold;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
-      }
-    }
+    // Localized damp/mold damage is instanced against actual wall records below.
+    // Keeping it out of this tile prevents repeated horizontal bands and preserves
+    // the wallpaper motif on every wall aspect ratio.
     const image = ctx.getImageData(0,0,512,512);
     for(let i=0;i<image.data.length;i+=4){
       const n = ((i*17)%23)-11;
@@ -2272,10 +2287,10 @@ function createBackroomsPatternTexture(kind='wall'){
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = kind === 'wall' ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
-  // One continuous floor-to-ceiling wallpaper sheet. Repeating the baked top/bottom
-  // mold vertically was the source of the three dark horizontal "stacked walls".
-  texture.repeat.set(kind === 'wall' ? 6 : 8,kind === 'wall' ? 1 : 8);
+  texture.wrapT = THREE.RepeatWrapping;
+  // Wall repetition is encoded per geometry in world units. A shared texture can
+  // therefore stay at 1x1 without being stretched by differently sized wall meshes.
+  texture.repeat.set(kind === 'wall' ? 1 : 8,kind === 'wall' ? 1 : 8);
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.anisotropy = Math.min(renderer?.capabilities?.getMaxAnisotropy?.() || 1,4);
@@ -2283,8 +2298,29 @@ function createBackroomsPatternTexture(kind='wall'){
   return texture;
 }
 
+function createBackroomsScaledWallGeometry(sourceGeometry,width,depth,height,x=0,z=0){
+  const geometry=sourceGeometry.clone();
+  const uv=geometry.getAttribute('uv');
+  const normal=geometry.getAttribute('normal');
+  if(!uv || !normal) return geometry;
+  const wallpaperWorldTile=16;
+  const horizontalOffset=((Math.abs(width)>=Math.abs(depth)?x:z)/wallpaperWorldTile)%1;
+  const verticalOffset=.0375;
+  for(let i=0;i<uv.count;i++){
+    const nx=Math.abs(normal.getX(i)),ny=Math.abs(normal.getY(i)),nz=Math.abs(normal.getZ(i));
+    let uWorld=width,vWorld=height;
+    if(nx>.5){uWorld=depth;vWorld=height;}
+    else if(ny>.5){uWorld=width;vWorld=depth;}
+    else if(nz>.5){uWorld=width;vWorld=height;}
+    uv.setXY(i,uv.getX(i)*(Math.max(.08,Math.abs(uWorld))/wallpaperWorldTile)+horizontalOffset,uv.getY(i)*(Math.max(.08,Math.abs(vWorld))/wallpaperWorldTile)+verticalOffset);
+  }
+  uv.needsUpdate=true;
+  return geometry;
+}
+
 function addBackroomsWall(wallGeometry, material, x, z, width, depth, height=gallerySceneRuntime.backroomsHeight || BACKROOMS_MIN_HEIGHT, baseY=0){
-  const mesh = new THREE.Mesh(wallGeometry,material);
+  const geometry=createBackroomsScaledWallGeometry(wallGeometry,width,depth,height,x,z);
+  const mesh = new THREE.Mesh(geometry,material);
   mesh.name = 'backrooms-office-wall';
   mesh.position.set(x,baseY+height*.5,z);
   mesh.scale.set(width,height,depth);
@@ -2293,6 +2329,7 @@ function addBackroomsWall(wallGeometry, material, x, z, width, depth, height=gal
   mesh.userData.backroomsArchitecture = true;
   backroomsGroup.add(mesh);
   backroomsCollisionItems.push({id:`backrooms-wall-${backroomsCollisionItems.length}`,mesh,type:'backrooms'});
+  backroomsWallRecords.push({mesh,x,z,width,depth,height,baseY});
   return mesh;
 }
 
@@ -2352,7 +2389,7 @@ function addBackroomsAgingDetails(wallTexture,height){
   for(let z=-12;z<=12;z+=4) gridPlacements.push([0,height-.11,z,34,.055,.035]);
   const grid=new THREE.InstancedMesh(
     new THREE.BoxGeometry(1,1,1),
-    new THREE.MeshStandardMaterial({color:'#3c392c',roughness:.62,metalness:.68}),
+    new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('metal'),color:'#5e5948',roughness:.62,metalness:.68}),
     gridPlacements.length
   );
   grid.name='backrooms-aged-drop-ceiling-t-grid';
@@ -2362,15 +2399,46 @@ function addBackroomsAgingDetails(wallTexture,height){
   grid.instanceMatrix.needsUpdate=true;grid.castShadow=false;grid.receiveShadow=true;
   backroomsGroup.add(grid);
 
+  const rand=seededRandom(58109);
+  const moldPlacements=[];
+  const peelPlacements=[];
+  const wallFaces=record=>{
+    const horizontal=Math.abs(record.width)>=Math.abs(record.depth);
+    if(horizontal) return [
+      {x:record.x,z:record.z+record.depth*.54,yaw:0,length:record.width,axis:'x'},
+      {x:record.x,z:record.z-record.depth*.54,yaw:Math.PI,length:record.width,axis:'x'}
+    ];
+    return [
+      {x:record.x+record.width*.54,z:record.z,yaw:Math.PI/2,length:record.depth,axis:'z'},
+      {x:record.x-record.width*.54,z:record.z,yaw:-Math.PI/2,length:record.depth,axis:'z'}
+    ];
+  };
+  for(const record of backroomsWallRecords){
+    if(record.baseY>.01 || record.height<2.6) continue;
+    const length=Math.max(Math.abs(record.width),Math.abs(record.depth));
+    if(length<1.15) continue;
+    for(const face of wallFaces(record)){
+      if(rand()<.34) continue;
+      const patchCount=length>7 && rand()>.42 ? 2 : 1;
+      for(let patchIndex=0;patchIndex<patchCount;patchIndex++){
+        const along=THREE.MathUtils.lerp(-length*.40,length*.40,rand());
+        const wetAtFloor=rand()<.46;
+        const y=wetAtFloor?THREE.MathUtils.lerp(.58,1.55,rand()):record.height-THREE.MathUtils.lerp(.28,.72,rand());
+        const sx=Math.min(length*.48,THREE.MathUtils.lerp(1.05,4.4,rand()));
+        const sy=THREE.MathUtils.lerp(.34,.96,rand());
+        moldPlacements.push([face.x+(face.axis==='x'?along:0),y,face.z+(face.axis==='z'?along:0),face.yaw,sx,sy]);
+      }
+      if(length>2.2 && rand()<.26){
+        const along=THREE.MathUtils.lerp(-length*.36,length*.36,rand());
+        peelPlacements.push([
+          face.x+(face.axis==='x'?along:0),record.height-THREE.MathUtils.lerp(.10,.24,rand()),face.z+(face.axis==='z'?along:0),face.yaw,
+          Math.min(length*.32,THREE.MathUtils.lerp(.62,1.42,rand())),THREE.MathUtils.lerp(.72,1.76,rand())
+        ]);
+      }
+    }
+  }
   const moldTexture=createBackroomsMoldTexture();
   const moldMaterial=new THREE.MeshStandardMaterial({map:moldTexture,color:'#89905a',roughness:1,metalness:0,transparent:true,alphaTest:.045,depthWrite:false,side:THREE.DoubleSide});
-  const moldPlacements=[
-    [-11.8,height-.34,13.76,Math.PI,4.8,.72],[-3.9,height-.28,13.76,Math.PI,3.1,.56],[5.2,height-.38,13.76,Math.PI,5.4,.82],[12.8,height-.30,13.76,Math.PI,3.2,.62],
-    [-10.4,height-.42,-13.76,0,5.2,.88],[-1.8,height-.31,-13.76,0,3.8,.65],[7.4,height-.36,-13.76,0,5.6,.76],[13.8,height-.29,-13.76,0,2.4,.56],
-    [-16.76,height-.36,8.7,Math.PI/2,4.2,.72],[-16.76,height-.31,-.5,Math.PI/2,5.1,.64],[-16.76,height-.43,-9.7,Math.PI/2,4.4,.86],
-    [16.76,height-.31,9.3,-Math.PI/2,3.8,.63],[16.76,height-.40,.4,-Math.PI/2,5.4,.82],[16.76,height-.34,-9.2,-Math.PI/2,4.1,.70],
-    [-12.8,1.15,13.76,Math.PI,2.8,.56],[2.8,1.08,13.76,Math.PI,3.7,.72],[11.6,1.22,-13.76,0,3.4,.64],[-16.76,1.18,3.1,Math.PI/2,3.0,.62]
-  ];
   const mold=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),moldMaterial,moldPlacements.length);
   mold.name='backrooms-wallpaper-edge-mold';
   moldPlacements.forEach(([x,y,z,yaw,sx,sy],i)=>{
@@ -2380,12 +2448,6 @@ function addBackroomsAgingDetails(wallTexture,height){
   mold.instanceMatrix.needsUpdate=true;mold.castShadow=false;mold.receiveShadow=false;mold.renderOrder=3;
   backroomsGroup.add(mold);
 
-  const peelPlacements=[
-    [-12.3,height-.16,13.73,Math.PI,1.25,1.48],[-3.2,height-.12,13.73,Math.PI,.82,1.12],[8.6,height-.17,13.73,Math.PI,1.48,1.72],
-    [-8.7,height-.14,-13.73,0,1.08,1.42],[4.2,height-.12,-13.73,0,.94,1.18],[13.1,height-.18,-13.73,0,1.34,1.62],
-    [-16.73,height-.14,7.2,Math.PI/2,1.12,1.54],[-16.73,height-.11,-5.4,Math.PI/2,.78,1.06],
-    [16.73,height-.16,4.8,-Math.PI/2,1.35,1.68],[16.73,height-.12,-8.8,-Math.PI/2,.92,1.22]
-  ];
   const peelMaterial=new THREE.MeshStandardMaterial({map:wallTexture,color:'#d4c070',roughness:.99,metalness:0,side:THREE.DoubleSide});
   const peels=new THREE.InstancedMesh(createBackroomsWallpaperPeelGeometry(),peelMaterial,peelPlacements.length);
   peels.name='backrooms-curled-hanging-wallpaper';
@@ -2419,26 +2481,67 @@ function addBackroomsPartitionWithDoors(wallGeometry,material,{axis='x',fixed=0,
 }
 
 function createBackroomsFurnitureTexture(kind='wood'){
+  if(backroomsSurfaceTextureCache.has(kind)) return backroomsSurfaceTextureCache.get(kind);
   const canvas=document.createElement('canvas');
   canvas.width=256;canvas.height=256;
   const ctx=canvas.getContext('2d');
-  const rand=seededRandom(kind==='wood'?47293:71933);
-  ctx.fillStyle=kind==='wood'?'#66512e':'#555443';
-  ctx.fillRect(0,0,256,256);
+  const seeds={wood:47293,metal:71933,fabric:18617,dark:92761,paper:41413,porcelain:63391,keyboard:28051,grime:53189};
+  const bases={wood:'#604925',metal:'#575746',fabric:'#50492e',dark:'#171913',paper:'#b8ad78',porcelain:'#aaa990',keyboard:'#242820',grime:'rgba(0,0,0,0)'};
+  const rand=seededRandom(seeds[kind] || 71933);
+  if(kind==='grime') ctx.clearRect(0,0,256,256);
+  else{ctx.fillStyle=bases[kind] || bases.metal;ctx.fillRect(0,0,256,256);}
   if(kind==='wood'){
-    for(let y=0;y<256;y+=9){
+    for(let y=0;y<256;y+=7){
       ctx.strokeStyle=`rgba(32,22,11,${THREE.MathUtils.lerp(.08,.24,rand())})`;
       ctx.lineWidth=THREE.MathUtils.lerp(.6,2.2,rand());
       ctx.beginPath();ctx.moveTo(0,y+rand()*5);ctx.bezierCurveTo(70,y-4+rand()*9,178,y+5-rand()*10,256,y+rand()*5);ctx.stroke();
     }
+    for(let i=0;i<16;i++){
+      const x=rand()*256,y=rand()*256,rx=THREE.MathUtils.lerp(6,25,rand()),ry=THREE.MathUtils.lerp(2,6,rand());
+      ctx.strokeStyle='rgba(25,15,7,.30)';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(x,y,rx,ry,rand()*.3,0,Math.PI*2);ctx.stroke();
+    }
+  }else if(kind==='fabric'){
+    for(let i=0;i<256;i+=4){
+      ctx.strokeStyle=i%8?'rgba(230,218,155,.055)':'rgba(17,15,8,.16)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(0,i);ctx.stroke();ctx.beginPath();ctx.moveTo(256,i);ctx.lineTo(i,256);ctx.stroke();
+    }
+    for(let i=0;i<9;i++){
+      const x=rand()*256,y=rand()*256;ctx.fillStyle='rgba(20,16,9,.32)';ctx.beginPath();ctx.ellipse(x,y,rand()*18+5,rand()*7+2,rand()*Math.PI,0,Math.PI*2);ctx.fill();
+    }
+  }else if(kind==='paper'){
+    for(let y=22;y<256;y+=18){ctx.fillStyle='rgba(48,56,45,.16)';ctx.fillRect(15,y,226,1);}
+    for(let i=0;i<18;i++){
+      ctx.fillStyle=`rgba(56,42,20,${THREE.MathUtils.lerp(.035,.16,rand())})`;ctx.beginPath();ctx.arc(rand()*256,rand()*256,rand()*13+2,0,Math.PI*2);ctx.fill();
+    }
+    ctx.font='12px monospace';ctx.fillStyle='rgba(45,48,40,.28)';
+    for(let y=38;y<242;y+=38) ctx.fillText(`FILE-${Math.floor(rand()*899+100)}  ${Math.floor(rand()*99)}:${Math.floor(rand()*99)}`,18,y);
+  }else if(kind==='porcelain'){
+    const glaze=ctx.createLinearGradient(0,0,256,256);glaze.addColorStop(0,'rgba(255,255,222,.18)');glaze.addColorStop(.55,'rgba(70,67,45,.08)');glaze.addColorStop(1,'rgba(255,255,226,.08)');ctx.fillStyle=glaze;ctx.fillRect(0,0,256,256);
+    for(let i=0;i<20;i++){
+      const x=rand()*256,y=rand()*256;ctx.strokeStyle='rgba(49,53,43,.20)';ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+rand()*28-14,y+rand()*34);ctx.lineTo(x+rand()*42-21,y+rand()*55);ctx.stroke();
+    }
+  }else if(kind==='keyboard'){
+    for(let y=12;y<248;y+=23) for(let x=10;x<250;x+=22){ctx.fillStyle=(x+y)%46?'#343a30':'#252b24';ctx.fillRect(x,y,17,16);ctx.strokeStyle='rgba(166,181,142,.18)';ctx.strokeRect(x+.5,y+.5,16,15);}
+  }else if(kind==='grime'){
+    for(let i=0;i<28;i++){
+      const x=rand()*256,y=rand()*256,rx=THREE.MathUtils.lerp(7,39,rand()),ry=THREE.MathUtils.lerp(4,18,rand());
+      const stain=ctx.createRadialGradient(x,y,0,x,y,Math.max(rx,ry));stain.addColorStop(0,`rgba(30,24,12,${THREE.MathUtils.lerp(.30,.72,rand())})`);stain.addColorStop(.58,'rgba(57,45,19,.24)');stain.addColorStop(1,'rgba(57,45,19,0)');ctx.fillStyle=stain;ctx.beginPath();ctx.ellipse(x,y,rx,ry,rand()*Math.PI,0,Math.PI*2);ctx.fill();
+    }
+    for(let i=0;i<9;i++){const x=rand()*256,y=rand()*256,r=rand()*20+7;ctx.strokeStyle='rgba(16,13,7,.48)';ctx.lineWidth=rand()*3+1;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();}
+  }else if(kind==='dark'){
+    for(let y=0;y<256;y+=4){ctx.fillStyle=y%8?'rgba(255,255,225,.018)':'rgba(0,0,0,.065)';ctx.fillRect(0,y,256,1);}
+    for(let i=0;i<46;i++){ctx.fillStyle=`rgba(170,176,129,${THREE.MathUtils.lerp(.018,.08,rand())})`;ctx.fillRect(rand()*256,rand()*256,rand()*14+1,1);}
   }else{
     for(let i=0;i<110;i++){
       const x=rand()*256,y=rand()*256,r=THREE.MathUtils.lerp(1,8,rand());
       ctx.fillStyle=`rgba(${rand()>.5?'35,31,19':'130,113,65'},${THREE.MathUtils.lerp(.035,.18,rand())})`;
       ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
     }
+    for(let i=0;i<34;i++){
+      const x=rand()*256,y=rand()*256,r=THREE.MathUtils.lerp(2,9,rand());ctx.strokeStyle='rgba(94,48,18,.34)';ctx.lineWidth=THREE.MathUtils.lerp(.5,2,rand());ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();
+    }
   }
-  for(let i=0;i<52;i++){
+  for(let i=0;i<52 && kind!=='keyboard' && kind!=='grime';i++){
     const x=rand()*256,y=rand()*256,len=THREE.MathUtils.lerp(8,58,rand());
     ctx.strokeStyle=`rgba(218,203,145,${THREE.MathUtils.lerp(.025,.14,rand())})`;
     ctx.lineWidth=THREE.MathUtils.lerp(.35,1.4,rand());
@@ -2450,7 +2553,50 @@ function createBackroomsFurnitureTexture(kind='wood'){
   texture.repeat.set(2,2);
   texture.anisotropy=Math.min(renderer?.capabilities?.getMaxAnisotropy?.() || 1,4);
   texture.needsUpdate=true;
+  backroomsSurfaceTextureCache.set(kind,texture);
   return texture;
+}
+
+function createBackroomsGlitchScreenTexture(){
+  if(backroomsScreenRuntime.texture) return backroomsScreenRuntime.texture;
+  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=144;
+  const ctx=canvas.getContext('2d');
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.colorSpace=THREE.SRGBColorSpace;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.magFilter=THREE.LinearFilter;texture.needsUpdate=true;
+  backroomsScreenRuntime.canvas=canvas;backroomsScreenRuntime.ctx=ctx;backroomsScreenRuntime.texture=texture;
+  updateBackroomsGlitchScreens(0,true);
+  return texture;
+}
+
+function updateBackroomsGlitchScreens(timeSeconds,force=false){
+  const runtime=backroomsScreenRuntime;
+  if(!runtime.ctx || !runtime.texture) return;
+  const frame=Math.floor(Math.max(0,timeSeconds)*9);
+  if(!force && frame===runtime.lastFrame) return;
+  runtime.lastFrame=frame;runtime.updates++;
+  const ctx=runtime.ctx,rand=seededRandom(90431+frame*97),w=runtime.canvas.width,h=runtime.canvas.height;
+  ctx.fillStyle=rand()<.13?'#182627':'#061813';ctx.fillRect(0,0,w,h);
+  ctx.font='bold 11px monospace';ctx.textBaseline='top';
+  const alphabet='0123456789ABCDEF#$%!?/\\[]';
+  const makeCode=length=>{let value='';for(let i=0;i<length;i++) value+=alphabet[Math.floor(rand()*alphabet.length)];return value;};
+  runtime.lastCode=makeCode(10);
+  for(let row=0;row<9;row++){
+    const y=7+row*14+(rand()<.18?Math.floor(rand()*5):0);
+    ctx.fillStyle=row===2?'#d7ffbd':(row%3===0?'#63ffb0':'#41b98a');
+    ctx.globalAlpha=THREE.MathUtils.lerp(.42,.94,rand());
+    ctx.fillText(`${row===2?'SYSTEM HALT ':''}${makeCode(14+Math.floor(rand()*12))}`,7+Math.floor(rand()*18),y);
+  }
+  ctx.globalAlpha=1;
+  const tears=2+Math.floor(rand()*4);
+  for(let i=0;i<tears;i++){
+    const y=Math.floor(rand()*h),height=Math.floor(rand()*6+2),offset=Math.floor(rand()*42-21);
+    ctx.drawImage(runtime.canvas,0,y,w,height,offset,y,w,height);
+    ctx.fillStyle=rand()>.5?'rgba(109,255,201,.28)':'rgba(193,229,255,.24)';ctx.fillRect(0,y,w,height);
+  }
+  for(let y=1;y<h;y+=3){ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(0,y,w,1);}
+  if(rand()<.22){ctx.fillStyle='rgba(226,255,237,.82)';ctx.fillRect(rand()*210,rand()*118,rand()*45+16,rand()*8+2);}
+  runtime.texture.needsUpdate=true;
+  if(runtime.material) runtime.material.emissiveIntensity=THREE.MathUtils.lerp(.55,1.38,rand());
 }
 
 function addBackroomsFurnitureCollision(x,z,width,depth,yaw=0){
@@ -2466,17 +2612,19 @@ function addBackroomsFurnitureCollision(x,z,width,depth,yaw=0){
 
 function buildBackroomsOfficeFurniture(){
   const unitGeometry=new THREE.BoxGeometry(1,1,1);
-  const woodTexture=createBackroomsFurnitureTexture('wood');
-  const metalTexture=createBackroomsFurnitureTexture('metal');
+  const screenTexture=createBackroomsGlitchScreenTexture();
   const materials={
-    wood:new THREE.MeshStandardMaterial({map:woodTexture,color:'#8b7040',roughness:.86,metalness:.03}),
-    metal:new THREE.MeshStandardMaterial({map:metalTexture,color:'#6c6b55',roughness:.72,metalness:.42}),
-    fabric:new THREE.MeshStandardMaterial({color:'#514b32',roughness:.98,metalness:0}),
-    dark:new THREE.MeshStandardMaterial({color:'#171812',roughness:.68,metalness:.24}),
-    screen:new THREE.MeshStandardMaterial({color:'#263f37',emissive:'#406f61',emissiveIntensity:.62,roughness:.48,metalness:.08}),
-    paper:new THREE.MeshStandardMaterial({color:'#c4b987',roughness:.96,metalness:0}),
-    porcelain:new THREE.MeshStandardMaterial({color:'#b9b69b',roughness:.78,metalness:.02})
+    wood:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('wood'),color:'#e2d4ae',roughness:.86,metalness:.03}),
+    metal:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('metal'),color:'#b7b8aa',roughness:.72,metalness:.42}),
+    fabric:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('fabric'),color:'#c1b795',roughness:.98,metalness:0}),
+    dark:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('dark'),color:'#9aa08e',roughness:.68,metalness:.24}),
+    screen:new THREE.MeshStandardMaterial({map:screenTexture,emissiveMap:screenTexture,color:'#d4fff0',emissive:'#c2ffdf',emissiveIntensity:.9,roughness:.38,metalness:.06}),
+    paper:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('paper'),color:'#dfd39a',roughness:.96,metalness:0}),
+    porcelain:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('porcelain'),color:'#d2d0b5',roughness:.78,metalness:.02}),
+    keyboard:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('keyboard'),color:'#bec7b2',roughness:.76,metalness:.08}),
+    grime:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('grime'),color:'#8f7d4a',roughness:1,metalness:0,transparent:true,alphaTest:.08,depthWrite:false})
   };
+  backroomsScreenRuntime.material=materials.screen;
   const placements=Object.fromEntries(Object.keys(materials).map(key=>[key,[]]));
   const add=(kind,x,y,z,sx,sy,sz,yaw=0,pitch=0,roll=0)=>placements[kind].push({x,y,z,sx,sy,sz,yaw,pitch,roll});
   const local=(x,z,dx,dz,yaw)=>({x:x+dx*Math.cos(yaw)+dz*Math.sin(yaw),z:z-dx*Math.sin(yaw)+dz*Math.cos(yaw)});
@@ -2492,12 +2640,20 @@ function buildBackroomsOfficeFurniture(){
       const openDrawer=local(x,z,-.88,.72,yaw);add('metal',openDrawer.x,.73,openDrawer.z,.55,.18,.68,yaw,0,.05);
     }
     if(monitor){
-      const m=local(x,z,.34,-.15,yaw);add('dark',m.x,1.57,m.z,1.08,.72,.10,yaw);const s=local(x,z,.34,-.208,yaw);add('screen',s.x,1.57,s.z,.91,.55,.025,yaw);
+      const m=local(x,z,.34,-.15,yaw);add('dark',m.x,1.57,m.z,1.08,.72,.10,yaw);const s=local(x,z,.34,-.092,yaw);add('screen',s.x,1.57,s.z,.91,.55,.025,yaw);
       const stand=local(x,z,.34,-.02,yaw);add('dark',stand.x,1.22,stand.z,.12,.32,.12,yaw);
+      const keyboard=local(x,z,.28,.33,yaw);add('keyboard',keyboard.x,1.205,keyboard.z,.78,.045,.28,yaw);
+      const mouse=local(x,z,.85,.34,yaw);add('dark',mouse.x,1.215,mouse.z,.14,.055,.19,yaw);
+      const tower=local(x,z,1.02,.02,yaw);add('dark',tower.x,.67,tower.z,.36,.78,.66,yaw);
+      const towerVent=local(x,z,1.02,-.318,yaw);add('keyboard',towerVent.x,.72,towerVent.z,.24,.34,.018,yaw);
+      const cableA=local(x,z,.62,.07,yaw),cableB=local(x,z,.78,.13,yaw);
+      add('dark',cableA.x,1.185,cableA.z,.46,.018,.025,yaw+.22);add('dark',cableB.x,1.185,cableB.z,.32,.018,.022,yaw-.34);
     }
     for(let i=0;i<3;i++){
       const p=local(x,z,-.18+i*.34,.30+(i%2)*.06,yaw);add('paper',p.x,1.19+i*.006,p.z,.46,.012,.31,yaw+(i-1)*.13,0,i*.02);
     }
+    const stainA=local(x,z,-.58,-.17,yaw),stainB=local(x,z,.76,.18,yaw);
+    add('grime',stainA.x,1.184,stainA.z,.72,.008,.42,yaw+.18);add('grime',stainB.x,1.185,stainB.z,.38,.008,.28,yaw-.26);
     addBackroomsFurnitureCollision(x,z,2.75,1.26,yaw);
   };
   const addChair=(x,z,yaw=0,broken=false)=>{
@@ -2524,8 +2680,12 @@ function buildBackroomsOfficeFurniture(){
   };
 
   addDesk(-11.4,-8.4,0,{damaged:true});addChair(-11.4,-10.1,0);addCabinet(-15.4,-8.6,1.4,2.8,0,true);
-  add('wood',-2.3,1.05,-9.1,4.5,1.95,.82,0);add('wood',-.45,1.05,-7.45,.82,1.95,3.3,0);addChair(-3.1,-10.35,0);addCabinet(-5.55,-10.7,1.15,2.6,0,false);
-  add('metal',11.1,1.04,-12.6,8.7,1.95,.72,0);add('porcelain',14.3,.68,-4.55,1.05,1.22,1.48,0);add('porcelain',9.4,.68,-4.55,1.05,1.22,1.48,0);
+  // Reception uses a normal side-positioned desk; the former 1.95 m solid L-block
+  // obscured the north-wall artwork and read as an unexplained black monolith.
+  addDesk(-4.85,-7.8,Math.PI/2,{damaged:true});addChair(-3.55,-7.8,-Math.PI/2,true);addCabinet(-5.55,-10.7,1.15,2.6,0,false);
+  // Keep the pantry counter on the east wall and below eye level so it cannot cover art.
+  add('metal',15.85,.54,-10.3,.68,.96,5.5,0);add('wood',15.46,1.06,-10.3,.12,.14,5.58,0);addBackroomsFurnitureCollision(15.82,-10.3,.72,5.45,0);
+  add('porcelain',14.3,.68,-4.55,1.05,1.22,1.48,0);add('porcelain',9.4,.68,-4.55,1.05,1.22,1.48,0);
   addMeetingTable(-13.1,8.1);
   addDesk(-6.65,5.25,0,{damaged:false});addChair(-6.65,6.45,Math.PI);addDesk(-6.65,10.2,Math.PI,{damaged:true});addChair(-6.65,8.95,0,true);
   addDesk(-.15,5.3,0,{damaged:false});addChair(-.15,6.55,Math.PI);addDesk(-.15,10.2,Math.PI,{damaged:false});addChair(-.15,8.95,0);
@@ -2628,6 +2788,7 @@ function buildBackroomsEnvironment(){
   if(!backroomsGroup || backroomsGroup.userData.built) return;
   backroomsGroup.userData.built = true;
   backroomsCollisionItems = [];
+  backroomsWallRecords.length = 0;
   backroomsFlickerRuntime.length = 0;
   const height = Math.max(BACKROOMS_MIN_HEIGHT,safeFinite(gallerySceneRuntime.backroomsHeight,BACKROOMS_MIN_HEIGHT));
   const wallTexture = createBackroomsPatternTexture('wall');
@@ -2677,7 +2838,7 @@ function buildBackroomsEnvironment(){
   ];
   const housingGeometry = new THREE.BoxGeometry(3.8,.13,.82);
   const tubeGeometry = new THREE.BoxGeometry(3.25,.045,.10);
-  const housingMaterial = new THREE.MeshStandardMaterial({color:'#292614',roughness:.88,metalness:.15});
+  const housingMaterial = new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('metal'),color:'#59523b',roughness:.88,metalness:.15});
   const housings = new THREE.InstancedMesh(housingGeometry,housingMaterial,fixturePositions.length);
   housings.name = 'backrooms-fluorescent-housings';
   housings.castShadow = false;
@@ -2697,6 +2858,7 @@ function buildBackroomsEnvironment(){
   ];
   for(const set of tubeSets){
     const material = new THREE.MeshStandardMaterial({
+      map:createBackroomsFurnitureTexture('porcelain'),
       color:set.speed ? '#c2b77a' : '#fff0a9',
       emissive:set.speed ? '#e4bd45' : '#ffd45e',
       emissiveIntensity:set.speed ? 2.2 : 3.4,
@@ -2737,6 +2899,7 @@ function buildBackroomsEnvironment(){
 
 function updateBackroomsFlicker(timeSeconds){
   if(gallerySceneRuntime.mode !== 'backrooms' || !backroomsLightGroup?.visible){updateBackroomsArtworkLights();return;}
+  updateBackroomsGlitchScreens(timeSeconds);
   for(const item of backroomsFlickerRuntime){
     const t = timeSeconds*item.speed+item.phase;
     const sample = Math.sin(t*12.9898)*43758.5453;
@@ -9829,6 +9992,7 @@ function handleExportedViewerKeyDown(e){
   if(e.code==='KeyT' || e.code==='KeyL'){ e.preventDefault(); startTakeArtwork(); }
   if(e.code==='KeyK'){ e.preventDefault(); attackArtwork(); }
   if(e.code==='KeyB'){ e.preventDefault(); toggleGalleryScene(); }
+  if(DEBUG_INPUT_ENABLED && e.code==='KeyR'){ e.preventDefault(); window.__galleryDebugInput?.({type:'artworkRethrowRegression'}); }
 }
 
 
@@ -11391,7 +11555,7 @@ function clearChiselHolesForCurrentTarget(){
 
 function resetPlayer(){
   if(gallerySceneRuntime.mode === 'backrooms'){
-    gallerySceneRuntime.playerPoses.backrooms = {x:10,y:0,z:9.5,yaw:0,pitch:deg(-18),cameraDistance:3.8};
+    gallerySceneRuntime.playerPoses.backrooms = {x:13,y:0,z:8,yaw:0,pitch:deg(-18),cameraDistance:3.8};
     applyGalleryPlayerPose('backrooms');
     return;
   }
@@ -11589,6 +11753,15 @@ function getArtworkRuntimeCenter(artId){
   return box.getCenter(new THREE.Vector3());
 }
 
+function canInteractWithArtworkPhysics(artId){
+  const body=artworkPhysics.get(artId);
+  if(!body) return true;
+  // Airborne objects remain protected from accidental grabs, but a floating or
+  // settled artwork is an ordinary interactable again. startTakeArtwork removes
+  // the body atomically before the held transform is applied.
+  return body.floating===true || (body.restTime>.28 && body.velocity?.lengthSq?.()<.16);
+}
+
 function findInteractableArtwork(maxDistance=ARPG_INTERACTION.range){
   if(!artworkGroup || !(STATE.artworks || []).length) return null;
   const origin = player.position.clone().add(new THREE.Vector3(0,1.08,0));
@@ -11599,14 +11772,14 @@ function findInteractableArtwork(maxDistance=ARPG_INTERACTION.range){
   const hits = raycaster.intersectObjects(artworkGroup.children, true);
   for(const hit of hits){
     const artId = findUserDataValueInHierarchy(hit.object, 'artId', artworkGroup);
-    if(!artId || artId === heldArtworkId || artworkPhysics.has(artId)) continue;
+    if(!artId || artId === heldArtworkId || !canInteractWithArtworkPhysics(artId)) continue;
     const art = (STATE.artworks || []).find(a=>a.id === artId && a.visible !== false);
     if(art) return art;
   }
   let best = null;
   for(const art of (STATE.artworks || [])){
     if(!art || art.visible === false || !artworkMeshes?.[art.id]) continue;
-    if(art.id === heldArtworkId || artworkPhysics.has(art.id)) continue;
+    if(art.id === heldArtworkId || !canInteractWithArtworkPhysics(art.id)) continue;
     const center = getArtworkRuntimeCenter(art.id);
     if(!center) continue;
     const delta = center.clone().sub(origin);
@@ -12513,8 +12686,10 @@ function makeCameraFadeMaterial(mesh){
   const material = cloneCameraFadeMaterial(mesh.material);
   forEachMaterial(material, mat=>{
     mat.transparent = true;
-    // A camera-blocking wall should read as absent, not as a large ghost cube.
-    mat.opacity = Math.min(safeFinite(mat.opacity, 1), .035);
+    // Camera blockers must disappear completely. Even 3.5% opacity exposes the
+    // full cuboid against bright water and was the translucent box in the report.
+    mat.opacity = 0;
+    mat.colorWrite = false;
     mat.depthWrite = false;
     mat.needsUpdate = true;
   });
@@ -14133,6 +14308,11 @@ function recordGalleryFramePerformance(frameStart){
   canvas.dataset.perfBackroomsFlickerGroups = String(backroomsFlickerRuntime.length);
   canvas.dataset.perfBackroomsFlickerPowers = JSON.stringify(backroomsFlickerRuntime.map(item=>+(item.lastPower||0).toFixed(3)));
   canvas.dataset.perfBackroomsFurnitureDrawCalls = String(backroomsFurnitureDrawCalls);
+  canvas.dataset.perfBackroomsWallRecords = String(backroomsWallRecords.length);
+  canvas.dataset.perfBackroomsMoldInstances = String(backroomsGroup?.getObjectByName?.('backrooms-wallpaper-edge-mold')?.count || 0);
+  canvas.dataset.perfBackroomsPeelInstances = String(backroomsGroup?.getObjectByName?.('backrooms-curled-hanging-wallpaper')?.count || 0);
+  canvas.dataset.perfBackroomsScreenUpdates = String(backroomsScreenRuntime.updates);
+  canvas.dataset.perfBackroomsScreenCode = backroomsScreenRuntime.lastCode || '';
   canvas.dataset.perfBackroomsArtworkLights = `${backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length}/${backroomsArtworkLightRuntime.length}`;
   canvas.dataset.perfSewerGroupsHidden = String([roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false));
   canvas.dataset.perfDustCount = String(GALLERY_DUST_COUNT);

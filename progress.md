@@ -595,3 +595,31 @@ Final verification:
 
 Current TODO:
 - None. Changes remain uncommitted/unpushed because this request did not ask for a push.
+
+## 2026-09-01 textured office, world-space wallpaper, and repeatable throws
+
+Latest request:
+- Give office desks, computers, and every visible furniture material readable texture/detail/dirt; animate monitor screens with flickering crash-code visuals.
+- Fix missing/stretched wallpaper motifs and distribute mold/dirt/peeled wallpaper naturally.
+- Remove the oversized furniture blocking artwork and the remaining translucent sewer cuboid.
+- Let artwork floating after a water impact be picked up and thrown again without adding lag.
+
+Root causes and implementation:
+- Wallpaper reused a fixed `repeat(6,1)` on differently scaled wall boxes. Every wall now receives cloned, world-dimension UVs while sharing one 512 px seamless wallpaper texture. Thirty real wall records drive deterministic randomized aging instead of fixed outer-wall coordinates.
+- Only wood/metal previously had maps. Wood, rusted metal, fabric, aged paper, stained porcelain, plastic, keyboard, and grime now use shared procedural textures. Keyboards, mice, towers, vents, cables, papers, drawers, broken chair parts, scratches, stains, and cup rings remain grouped into nine static furniture batches.
+- All monitors share one 256x144 emissive crash-screen canvas, updated at 9 Hz. The screen panel was moved from behind the monitor shell to its visible front face.
+- Removed the two 1.95-unit reception monoliths and the 8.7-unit-wide pantry block. Reception now uses a normal damaged desk; the low pantry counter sits on the east wall outside artwork sightlines.
+- Camera blockers now use `opacity=0`, `colorWrite=false`, and `depthWrite=false`, so a necessary third-person obstruction fade cannot appear as a translucent cuboid.
+- `findInteractableArtwork()` now permits floating or settled physics bodies while still rejecting airborne art. Taking the item atomically removes its physics body; throwing it creates a fresh one.
+- Adjusted only the office player entry pose so the third-person camera does not spawn inside the preserved full-size 3D artwork.
+
+Verification:
+- Module syntax, all static regression assertions, and `git diff --check` pass.
+- The required standard web-game client was attempted for 50 seconds and hit the project's documented SwiftShader/38 MB GLB stall; hardware WebGL supplied the final interaction and visual tests.
+- Clean sewer screenshot shows no translucent box. Clean office screenshots show continuous wallpaper motifs, visible crash-code monitors, textured/scuffed furniture, and no blocking monolithic counter.
+- Debug interaction regression passed the complete floating -> pick up -> throw -> new physics body sequence.
+- Office telemetry reports 30 world-UV wall records, 43 mold instances, 9 hanging wallpaper instances, 9 furniture draw calls, and one shared screen texture whose update count advances continuously. Broken-light powers changed independently during sampling.
+- Stable warm sample before the interaction stress was `1.95 ms` average CPU work / `2.60 ms` p95. The clean rethrow sample stayed at `4.69 ms` average / `7.50 ms` p95 with 70 draw calls, below a 16.67 ms 60 Hz frame budget. No application or WebGL errors were logged in the clean final tab.
+
+Current TODO:
+- None. Changes remain uncommitted/unpushed because this request did not ask for a push.
