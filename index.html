@@ -324,7 +324,7 @@ const backroomsFlickerRuntime = [];
 const backroomsArtworkLightRuntime = [];
 const backroomsWallRecords = [];
 const backroomsSurfaceTextureCache = new Map();
-const backroomsScreenRuntime = {canvas:null,ctx:null,texture:null,material:null,lastFrame:-1,updates:0,lastCode:''};
+const backroomsScreenRuntime = {variants:[],materials:[],lastFrame:-1,updates:0,lastCodes:[]};
 let backroomsArtworkLightLastUpdate = 0;
 let backroomsArtworkLightsWereActive = false;
 let backroomsFurnitureDrawCalls = 0;
@@ -1052,7 +1052,7 @@ function installGalleryDebugState(){
       },
       artworkInteraction:{heldArtworkId,physicsCount:artworkPhysics.size,floatingIds:[...artworkPhysics.entries()].filter(([,body])=>body?.floating).map(([id])=>id)},
       tuning:{throwSpeed:ARPG_INTERACTION.throwSpeed,dustCount:GALLERY_DUST_COUNT,dustDrawCalls:galleryDustPoints?.visible === false ? 0 : (galleryDustPoints ? 1 : 0),waterImpact:{...getWaterImpactTuning()}},
-      backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.filter(item=>item?.type!=='backroomsFurniture').length,wallUvRecords:backroomsWallRecords.length,furnitureColliders:backroomsCollisionItems.filter(item=>item?.type==='backroomsFurniture').length,furnitureDrawCalls:backroomsFurnitureDrawCalls,screenTextureUpdates:backroomsScreenRuntime.updates,screenCode:backroomsScreenRuntime.lastCode,lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0,artworkLights:{total:backroomsArtworkLightRuntime.length,active:backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length,budget:IS_TOUCH_DEVICE?3:6},flickerGroups:backroomsFlickerRuntime.length,sewerGroupsHidden:[roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false)},
+      backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.filter(item=>item?.type!=='backroomsFurniture').length,wallUvRecords:backroomsWallRecords.length,furnitureColliders:backroomsCollisionItems.filter(item=>item?.type==='backroomsFurniture').length,furnitureDrawCalls:backroomsFurnitureDrawCalls,screenTextureUpdates:backroomsScreenRuntime.updates,screenCodes:[...backroomsScreenRuntime.lastCodes],lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0,artworkLights:{total:backroomsArtworkLightRuntime.length,active:backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length,budget:IS_TOUCH_DEVICE?4:8},artworkSeries:[...new Set(Object.values(gallerySceneRuntime.artworkStates.backrooms || {}).map(state=>state.seriesId).filter(Boolean))].length,flickerGroups:backroomsFlickerRuntime.length,sewerGroupsHidden:[roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false)},
       audio:{backgroundMusicReady:!!runtimeAudio.backgroundMusicReady, backgroundMusicStarted:!!runtimeAudio.backgroundMusicStarted, unlocked:!!runtimeAudio.unlocked},
       loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl},
       hasWrongWhiteArtwork:artworkList.some(isRemovedRequiredArtwork),
@@ -1104,6 +1104,11 @@ function installGalleryDebugState(){
       return true;
     }
     if(action.type === 'sceneToggle') return toggleGalleryScene();
+    if(action.type === 'backroomsArtworkAuditView'){
+      if(gallerySceneRuntime.mode!=='backrooms') setGallerySceneMode('backrooms',{preserveCurrent:true,restorePlayer:false});
+      player.position.set(7.0,.08,3.5);camYaw=-2.03;camPitch=-.04;cameraDistance=4.2;updateCamera();
+      return true;
+    }
     if(action.type === 'artworkRethrowRegression'){
       const art=(STATE.artworks || []).find(item=>item?.visible!==false && artworkMeshes?.[item.id]);
       if(!art) return false;
@@ -2557,46 +2562,87 @@ function createBackroomsFurnitureTexture(kind='wood'){
   return texture;
 }
 
-function createBackroomsGlitchScreenTexture(){
-  if(backroomsScreenRuntime.texture) return backroomsScreenRuntime.texture;
+function createBackroomsGlitchScreenTexture(variantIndex=0){
+  const runtime=backroomsScreenRuntime;
+  if(runtime.variants[variantIndex]?.texture) return runtime.variants[variantIndex].texture;
   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=144;
   const ctx=canvas.getContext('2d');
   const texture=new THREE.CanvasTexture(canvas);
-  texture.colorSpace=THREE.SRGBColorSpace;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.magFilter=THREE.LinearFilter;texture.needsUpdate=true;
-  backroomsScreenRuntime.canvas=canvas;backroomsScreenRuntime.ctx=ctx;backroomsScreenRuntime.texture=texture;
+  texture.colorSpace=THREE.SRGBColorSpace;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.magFilter=THREE.LinearFilter;texture.generateMipmaps=false;texture.needsUpdate=true;
+  runtime.variants[variantIndex]={index:variantIndex,canvas,ctx,texture,material:null};
   updateBackroomsGlitchScreens(0,true);
   return texture;
 }
 
+function drawBackroomsBrokenGlass(ctx,variantIndex,rand,w,h){
+  const impacts=[[53,42],[192,47],[137,102],[221,108]];
+  const [cx,cy]=impacts[variantIndex%impacts.length];
+  ctx.save();
+  ctx.strokeStyle='rgba(220,236,224,.76)';ctx.lineWidth=.8;
+  for(let spoke=0;spoke<7+variantIndex;spoke++){
+    const angle=spoke*Math.PI*2/(7+variantIndex)+rand()*.22;
+    ctx.beginPath();ctx.moveTo(cx,cy);
+    let px=cx,py=cy;
+    for(let step=1;step<=3;step++){
+      const radius=step*(14+variantIndex*2)+rand()*8;
+      px=cx+Math.cos(angle+rand()*.12-.06)*radius;
+      py=cy+Math.sin(angle+rand()*.12-.06)*radius;
+      ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+  }
+  ctx.beginPath();ctx.arc(cx,cy,7+variantIndex*1.6,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='rgba(0,0,0,.88)';
+  if(variantIndex%2===0){ctx.beginPath();ctx.moveTo(0,h);ctx.lineTo(0,h-24-variantIndex*4);ctx.lineTo(31+variantIndex*5,h);ctx.fill();}
+  else{ctx.beginPath();ctx.moveTo(w,0);ctx.lineTo(w-35-variantIndex*3,0);ctx.lineTo(w,29+variantIndex*5);ctx.fill();}
+  ctx.restore();
+}
+
 function updateBackroomsGlitchScreens(timeSeconds,force=false){
   const runtime=backroomsScreenRuntime;
-  if(!runtime.ctx || !runtime.texture) return;
-  const frame=Math.floor(Math.max(0,timeSeconds)*9);
+  if(!runtime.variants.some(Boolean)) return;
+  const frame=Math.floor(Math.max(0,timeSeconds)*7);
   if(!force && frame===runtime.lastFrame) return;
   runtime.lastFrame=frame;runtime.updates++;
-  const ctx=runtime.ctx,rand=seededRandom(90431+frame*97),w=runtime.canvas.width,h=runtime.canvas.height;
-  ctx.fillStyle=rand()<.13?'#182627':'#061813';ctx.fillRect(0,0,w,h);
-  ctx.font='bold 11px monospace';ctx.textBaseline='top';
   const alphabet='0123456789ABCDEF#$%!?/\\[]';
-  const makeCode=length=>{let value='';for(let i=0;i<length;i++) value+=alphabet[Math.floor(rand()*alphabet.length)];return value;};
-  runtime.lastCode=makeCode(10);
-  for(let row=0;row<9;row++){
-    const y=7+row*14+(rand()<.18?Math.floor(rand()*5):0);
-    ctx.fillStyle=row===2?'#d7ffbd':(row%3===0?'#63ffb0':'#41b98a');
-    ctx.globalAlpha=THREE.MathUtils.lerp(.42,.94,rand());
-    ctx.fillText(`${row===2?'SYSTEM HALT ':''}${makeCode(14+Math.floor(rand()*12))}`,7+Math.floor(rand()*18),y);
+  for(const variant of runtime.variants){
+    if(!variant) continue;
+    const {ctx,canvas,texture,index}=variant,w=canvas.width,h=canvas.height;
+    const rand=seededRandom(90431+frame*97+index*811);
+    const makeCode=length=>{let value='';for(let i=0;i<length;i++) value+=alphabet[Math.floor(rand()*alphabet.length)];return value;};
+    runtime.lastCodes[index]=makeCode(10);
+    ctx.globalAlpha=1;ctx.textBaseline='top';ctx.font='bold 11px monospace';
+    if(index===0){
+      ctx.fillStyle=rand()<.13?'#182627':'#061813';ctx.fillRect(0,0,w,h);
+      for(let row=0;row<9;row++){
+        ctx.fillStyle=row===2?'#d7ffbd':(row%3===0?'#63ffb0':'#41b98a');ctx.globalAlpha=THREE.MathUtils.lerp(.42,.94,rand());
+        ctx.fillText(`${row===2?'SYSTEM HALT ':''}${makeCode(14+Math.floor(rand()*12))}`,7+Math.floor(rand()*18),7+row*14);
+      }
+    }else if(index===1){
+      ctx.fillStyle='#08080a';ctx.fillRect(0,0,w,h);
+      const bands=['#ff1838','#18ff57','#225dff'];
+      for(let band=0;band<9;band++){ctx.globalAlpha=.52+rand()*.45;ctx.fillStyle=bands[(band+frame)%3];ctx.fillRect(Math.floor(rand()*28)-14,band*17-4,w+28,11+rand()*8);}
+      ctx.globalAlpha=.9;ctx.fillStyle='#ffffff';ctx.font='bold 13px monospace';ctx.fillText(`RGB SYNC LOST ${makeCode(8)}`,11,61);
+    }else if(index===2){
+      ctx.fillStyle='#071d51';ctx.fillRect(0,0,w,h);ctx.fillStyle='#d6e6ff';ctx.globalAlpha=.9;
+      ctx.fillText('FATAL_EXCEPTION 0x0000007B',8,8);
+      for(let row=1;row<9;row++){ctx.globalAlpha=.45+rand()*.5;ctx.fillText(`${makeCode(8)} ${makeCode(12)} ${makeCode(6)}`,8,row*15);}
+    }else{
+      ctx.fillStyle='#160515';ctx.fillRect(0,0,w,h);ctx.font='bold 12px monospace';
+      for(let row=0;row<10;row++){ctx.fillStyle=row%2?'#ff2eaa':'#16e7e0';ctx.globalAlpha=.48+rand()*.48;ctx.fillText(`${makeCode(7)} NULL ${makeCode(13)}`,Math.floor(rand()*22)-8,row*14);}
+    }
+    ctx.globalAlpha=1;
+    const tears=2+Math.floor(rand()*4);
+    for(let i=0;i<tears;i++){
+      const y=Math.floor(rand()*h),height=Math.floor(rand()*6+2),offset=Math.floor(rand()*42-21);
+      ctx.drawImage(canvas,0,y,w,height,offset,y,w,height);
+      ctx.fillStyle=['rgba(109,255,201,.28)','rgba(255,43,60,.25)','rgba(55,111,255,.26)'][(i+index)%3];ctx.fillRect(0,y,w,height);
+    }
+    for(let y=1;y<h;y+=3){ctx.fillStyle='rgba(0,0,0,.24)';ctx.fillRect(0,y,w,1);}
+    drawBackroomsBrokenGlass(ctx,index,rand,w,h);
+    texture.needsUpdate=true;
+    if(variant.material) variant.material.emissiveIntensity=THREE.MathUtils.lerp(.58,1.34,rand());
   }
-  ctx.globalAlpha=1;
-  const tears=2+Math.floor(rand()*4);
-  for(let i=0;i<tears;i++){
-    const y=Math.floor(rand()*h),height=Math.floor(rand()*6+2),offset=Math.floor(rand()*42-21);
-    ctx.drawImage(runtime.canvas,0,y,w,height,offset,y,w,height);
-    ctx.fillStyle=rand()>.5?'rgba(109,255,201,.28)':'rgba(193,229,255,.24)';ctx.fillRect(0,y,w,height);
-  }
-  for(let y=1;y<h;y+=3){ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(0,y,w,1);}
-  if(rand()<.22){ctx.fillStyle='rgba(226,255,237,.82)';ctx.fillRect(rand()*210,rand()*118,rand()*45+16,rand()*8+2);}
-  runtime.texture.needsUpdate=true;
-  if(runtime.material) runtime.material.emissiveIntensity=THREE.MathUtils.lerp(.55,1.38,rand());
 }
 
 function addBackroomsFurnitureCollision(x,z,width,depth,yaw=0){
@@ -2612,22 +2658,24 @@ function addBackroomsFurnitureCollision(x,z,width,depth,yaw=0){
 
 function buildBackroomsOfficeFurniture(){
   const unitGeometry=new THREE.BoxGeometry(1,1,1);
-  const screenTexture=createBackroomsGlitchScreenTexture();
+  const screenTextures=[0,1,2,3].map(createBackroomsGlitchScreenTexture);
   const materials={
     wood:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('wood'),color:'#e2d4ae',roughness:.86,metalness:.03}),
     metal:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('metal'),color:'#b7b8aa',roughness:.72,metalness:.42}),
     fabric:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('fabric'),color:'#c1b795',roughness:.98,metalness:0}),
     dark:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('dark'),color:'#9aa08e',roughness:.68,metalness:.24}),
-    screen:new THREE.MeshStandardMaterial({map:screenTexture,emissiveMap:screenTexture,color:'#d4fff0',emissive:'#c2ffdf',emissiveIntensity:.9,roughness:.38,metalness:.06}),
+    ...Object.fromEntries(screenTextures.map((texture,index)=>[`screen${index}`,new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,color:'#ffffff',emissive:'#ffffff',emissiveIntensity:.9,roughness:.34,metalness:.08})])),
     paper:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('paper'),color:'#dfd39a',roughness:.96,metalness:0}),
     porcelain:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('porcelain'),color:'#d2d0b5',roughness:.78,metalness:.02}),
     keyboard:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('keyboard'),color:'#bec7b2',roughness:.76,metalness:.08}),
     grime:new THREE.MeshStandardMaterial({map:createBackroomsFurnitureTexture('grime'),color:'#8f7d4a',roughness:1,metalness:0,transparent:true,alphaTest:.08,depthWrite:false})
   };
-  backroomsScreenRuntime.material=materials.screen;
+  backroomsScreenRuntime.materials=screenTextures.map((texture,index)=>materials[`screen${index}`]);
+  backroomsScreenRuntime.variants.forEach((variant,index)=>{if(variant) variant.material=materials[`screen${index}`];});
   const placements=Object.fromEntries(Object.keys(materials).map(key=>[key,[]]));
   const add=(kind,x,y,z,sx,sy,sz,yaw=0,pitch=0,roll=0)=>placements[kind].push({x,y,z,sx,sy,sz,yaw,pitch,roll});
   const local=(x,z,dx,dz,yaw)=>({x:x+dx*Math.cos(yaw)+dz*Math.sin(yaw),z:z-dx*Math.sin(yaw)+dz*Math.cos(yaw)});
+  let monitorIndex=0;
   const addDesk=(x,z,yaw=0,{damaged=false,monitor=true}={})=>{
     add('wood',x,1.08,z,2.8,.18,1.32,yaw,damaged ? .04 : 0,damaged ? .075 : 0);
     const legs=[[-1.13,-.46],[1.13,-.46],[-1.13,.46],[1.13,.46]];
@@ -2640,7 +2688,8 @@ function buildBackroomsOfficeFurniture(){
       const openDrawer=local(x,z,-.88,.72,yaw);add('metal',openDrawer.x,.73,openDrawer.z,.55,.18,.68,yaw,0,.05);
     }
     if(monitor){
-      const m=local(x,z,.34,-.15,yaw);add('dark',m.x,1.57,m.z,1.08,.72,.10,yaw);const s=local(x,z,.34,-.092,yaw);add('screen',s.x,1.57,s.z,.91,.55,.025,yaw);
+      const variant=`screen${monitorIndex++%screenTextures.length}`;
+      const m=local(x,z,.34,-.15,yaw);add('dark',m.x,1.57,m.z,1.08,.72,.10,yaw);const s=local(x,z,.34,-.092,yaw);add(variant,s.x,1.57,s.z,.91,.55,.025,yaw);
       const stand=local(x,z,.34,-.02,yaw);add('dark',stand.x,1.22,stand.z,.12,.32,.12,yaw);
       const keyboard=local(x,z,.28,.33,yaw);add('keyboard',keyboard.x,1.205,keyboard.z,.78,.045,.28,yaw);
       const mouse=local(x,z,.85,.34,yaw);add('dark',mouse.x,1.215,mouse.z,.14,.055,.19,yaw);
@@ -2679,18 +2728,37 @@ function buildBackroomsOfficeFurniture(){
     for(const dz of [-2.35,-.8,.8,2.35]){addChair(x-1.55,z+dz,-Math.PI/2,dz===2.35);addChair(x+1.55,z+dz,Math.PI/2,false);}
   };
 
-  addDesk(-11.4,-8.4,0,{damaged:true});addChair(-11.4,-10.1,0);addCabinet(-15.4,-8.6,1.4,2.8,0,true);
-  // Reception uses a normal side-positioned desk; the former 1.95 m solid L-block
-  // obscured the north-wall artwork and read as an unexplained black monolith.
-  addDesk(-4.85,-7.8,Math.PI/2,{damaged:true});addChair(-3.55,-7.8,-Math.PI/2,true);addCabinet(-5.55,-10.7,1.15,2.6,0,false);
-  // Keep the pantry counter on the east wall and below eye level so it cannot cover art.
-  add('metal',15.85,.54,-10.3,.68,.96,5.5,0);add('wood',15.46,1.06,-10.3,.12,.14,5.58,0);addBackroomsFurnitureCollision(15.82,-10.3,.72,5.45,0);
-  add('porcelain',14.3,.68,-4.55,1.05,1.22,1.48,0);add('porcelain',9.4,.68,-4.55,1.05,1.22,1.48,0);
-  addMeetingTable(-13.1,8.1);
-  addDesk(-6.65,5.25,0,{damaged:false});addChair(-6.65,6.45,Math.PI);addDesk(-6.65,10.2,Math.PI,{damaged:true});addChair(-6.65,8.95,0,true);
-  addDesk(-.15,5.3,0,{damaged:false});addChair(-.15,6.55,Math.PI);addDesk(-.15,10.2,Math.PI,{damaged:false});addChair(-.15,8.95,0);
-  addDesk(7.3,5.4,0,{damaged:true});addChair(7.3,6.7,Math.PI,true);addDesk(11.3,5.4,0,{damaged:false});addChair(11.3,6.7,Math.PI);
-  addCabinet(15.25,8.4,1.35,3.05,0,true);addCabinet(15.25,11.65,1.35,3.05,0,false);addCabinet(11.8,12.9,1.45,2.45,Math.PI/2,true);
+  const addSubmergedComputer=(x,z,yaw,pitch,roll,variantIndex)=>{
+    const y=.30+(variantIndex%3)*.07;
+    const euler=new THREE.Euler(pitch,yaw,roll);
+    const frontOffset=new THREE.Vector3(0,0,.081).applyEuler(euler);
+    add('dark',x,y,z,1.12,.72,.15,yaw,pitch,roll);
+    add(`screen${variantIndex%screenTextures.length}`,x+frontOffset.x,y+frontOffset.y,z+frontOffset.z,.93,.54,.024,yaw,pitch,roll);
+    const towerOffset=new THREE.Vector3(.86,-.13,.16).applyEuler(new THREE.Euler(0,yaw,0));
+    add('dark',x+towerOffset.x,.24,z+towerOffset.z,.72,.34,.92,yaw,0,variantIndex%2?.18:-.12);
+    const keysOffset=new THREE.Vector3(-.78,-.17,.18).applyEuler(new THREE.Euler(0,yaw,0));
+    add('keyboard',x+keysOffset.x,.16,z+keysOffset.z,.78,.055,.31,yaw+variantIndex*.13,variantIndex%2?.14:-.09,.08);
+  };
+
+  // Four merged rooms. Keep a 3 m-deep exhibition strip completely clear in
+  // front of every artwork wall; cabinets are placed on interior/service walls.
+  addDesk(-11.4,-7.7,0,{damaged:true});addChair(-11.4,-9.25,0,true);
+  addDesk(-2.1,-7.4,Math.PI/2,{damaged:true});addChair(-.8,-7.4,-Math.PI/2,true);addCabinet(4.15,-8.7,1.25,2.7,0,true);
+  addDesk(10.2,-7.4,0,{damaged:false});addChair(10.2,-8.9,0);addCabinet(15.55,-5.0,1.2,2.75,0,true);
+  add('metal',15.8,.54,-9.4,.68,.96,4.1,0);add('wood',15.42,1.06,-9.4,.12,.14,4.18,0);addBackroomsFurnitureCollision(15.78,-9.4,.72,4.05,0);
+  addMeetingTable(-11.2,6.4);addCabinet(-4.35,5.25,1.15,2.55,0,false);
+  addDesk(-7.0,5.15,0,{damaged:true});addChair(-7.0,6.45,Math.PI,true);
+  addDesk(2.0,5.0,0,{damaged:false});addChair(2.0,6.3,Math.PI);addCabinet(-2.85,5.0,1.15,2.65,0,true);
+
+  // Distinct failed computers: each has independent animated content and a
+  // different glass impact. Low placement and varied rotations make them read
+  // as tipped, partly submerged office debris without blocking wall art.
+  [
+    [-14.2,-5.0,.35,.16,1.18,0],[-7.0,-10.6,-.65,-.18,-1.28,1],[-1.8,-4.6,1.1,.22,.92,2],
+    [7.2,-10.4,-.25,-.14,1.34,3],[13.4,-4.2,.8,.20,-1.12,1],[14.0,-10.2,-1.2,-.17,.82,2],
+    [-14.5,3.7,.2,.18,-1.31,3],[-6.2,9.1,-.8,-.21,1.05,0],
+    [1.0,9.0,.55,.17,-1.24,1],[8.8,4.0,-.4,-.18,.96,2],[14.2,9.0,1.15,.21,1.22,3]
+  ].forEach(args=>addSubmergedComputer(...args));
 
   const rand=seededRandom(33491);
   for(let i=0;i<38;i++){
@@ -2724,7 +2792,9 @@ function buildBackroomsArtworkLights(){
     if(rec.target) backroomsLightGroup?.remove(rec.target);
   }
   backroomsArtworkLightRuntime.length=0;
-  const sources=(STATE?.lightSystem?.lights || []).filter(light=>light?.visible!==false && safeFinite(light?.intensity,0)>.01);
+  // Directional light is global and cannot be transplanted per artwork. Reuse
+  // the authored point/spot fixtures with their original color and power.
+  const sources=(STATE?.lightSystem?.lights || []).filter(light=>light?.visible!==false && safeFinite(light?.intensity,0)>.01 && (light.type==='point' || light.type==='spot'));
   const sewer=gallerySceneRuntime.artworkStates.sewer || {};
   const office=gallerySceneRuntime.artworkStates.backrooms || {};
   if(!sources.length) return;
@@ -2745,21 +2815,33 @@ function buildBackroomsArtworkLights(){
     const sourceFocus=source.type==='point' ? oldCenter : new THREE.Vector3(safeFinite(source.target?.x,0),safeFinite(source.target?.y,0),safeFinite(source.target?.z,0));
     const offset=sourcePosition.clone().sub(sourceFocus).applyAxisAngle(yAxis,deg(safeFinite(to.rotation?.y,0)-safeFinite(from.rotation?.y,0)));
     if(offset.length()<1.2) offset.set(0,2.8,3.2);
-    if(offset.length()>10) offset.setLength(10);
+    if(offset.length()>7.5) offset.setLength(7.5);
     sourcePosition.copy(newCenter).add(offset);
+    const roomBounds={
+      0:{minX:-16.1,maxX:4.4,minZ:-13.2,maxZ:-2.6},1:{minX:5.8,maxX:16.1,minZ:-13.2,maxZ:-2.6},
+      2:{minX:-16.1,maxX:-4.2,minZ:2.4,maxZ:13.2},3:{minX:-3.0,maxX:16.1,minZ:2.4,maxZ:13.2}
+    }[to.roomId];
+    if(roomBounds){sourcePosition.x=clamp(sourcePosition.x,roomBounds.minX,roomBounds.maxX);sourcePosition.z=clamp(sourcePosition.z,roomBounds.minZ,roomBounds.maxZ);}
+    sourcePosition.y=clamp(sourcePosition.y,2.25,Math.max(2.5,safeFinite(gallerySceneRuntime.backroomsHeight,8)-.55));
     let light,target=null;
     if(source.type==='point'){
-      light=new THREE.PointLight(source.color,Math.max(1.4,safeFinite(source.intensity,2)*.88),clamp(safeFinite(source.distance,22),8,30),clamp(safeFinite(source.decay,2),.5,3));
+      light=new THREE.PointLight(source.color,Math.max(1.4,safeFinite(source.intensity,2)),clamp(safeFinite(source.distance,22),8,60),clamp(safeFinite(source.decay,2),.5,4));
     }else{
-      light=new THREE.SpotLight(source.color,Math.max(1.8,safeFinite(source.intensity,3)*.92),clamp(safeFinite(source.distance,26),10,36),clamp(safeFinite(source.angle,.72),.28,1.15),clamp(safeFinite(source.penumbra,.25),.12,.86),clamp(safeFinite(source.decay,2),.5,3));
+      light=new THREE.SpotLight(source.color,Math.max(1.8,safeFinite(source.intensity,3)),clamp(safeFinite(source.distance,26),10,60),clamp(safeFinite(source.angle,.72),.28,1.55),clamp(safeFinite(source.penumbra,.25),.12,.86),clamp(safeFinite(source.decay,2),.5,4));
       target=new THREE.Object3D();target.position.copy(newCenter);target.name=`office-art-light-target-${art.id}`;backroomsLightGroup.add(target);light.target=target;
     }
     light.name=`office-art-light-${art.id}`;
     light.position.copy(sourcePosition);light.castShadow=false;light.visible=false;
     light.userData.officeArtworkLight=true;light.userData.artId=art.id;light.userData.sourceLightId=source.id;
     backroomsLightGroup.add(light);
-    backroomsArtworkLightRuntime.push({light,target,artId:art.id,sourceId:source.id,distanceSq:Infinity});
+    backroomsArtworkLightRuntime.push({light,target,artId:art.id,sourceId:source.id,roomId:to.roomId ?? null,distanceSq:Infinity,roomPriority:1});
   }
+}
+
+function backroomsRoomIdAtPosition(position){
+  if(!position || position.z>=-2.05 && position.z<=1.85) return null;
+  if(position.z<-2.05) return position.x<5.2 ? 0 : 1;
+  return position.x<-3.6 ? 2 : 3;
 }
 
 function updateBackroomsArtworkLights(force=false){
@@ -2773,12 +2855,14 @@ function updateBackroomsArtworkLights(force=false){
   const now=performance.now?.() || Date.now();
   if(!force && now-backroomsArtworkLightLastUpdate<220) return;
   backroomsArtworkLightLastUpdate=now;
+  const playerRoomId=backroomsRoomIdAtPosition(player.position);
   for(const rec of backroomsArtworkLightRuntime){
     const group=artworkMeshes?.[rec.artId];
     rec.distanceSq=group ? player.position.distanceToSquared(group.position) : Infinity;
+    rec.roomPriority=playerRoomId===null || rec.roomId===playerRoomId ? 0 : 1;
   }
-  backroomsArtworkLightRuntime.sort((a,b)=>a.distanceSq-b.distanceSq);
-  const budget=IS_TOUCH_DEVICE?3:6;
+  backroomsArtworkLightRuntime.sort((a,b)=>a.roomPriority-b.roomPriority || a.distanceSq-b.distanceSq);
+  const budget=IS_TOUCH_DEVICE?4:8;
   for(let i=0;i<backroomsArtworkLightRuntime.length;i++) backroomsArtworkLightRuntime[i].light.visible=i<budget;
   const canvas=$('canvas');
   if(canvas) canvas.dataset.backroomsArtworkLights=`${Math.min(budget,backroomsArtworkLightRuntime.length)}/${backroomsArtworkLightRuntime.length}`;
@@ -2818,16 +2902,13 @@ function buildBackroomsEnvironment(){
   addBackroomsWall(wallGeometry,wallMaterial,16.9,0,.22,28,height);
   addBackroomsWall(wallGeometry,wallMaterial,0,-13.9,34,.22,height);
   addBackroomsWall(wallGeometry,wallMaterial,0,13.9,34,.22,height);
-  // Floor-plan topology: management/reception/service rooms to the north, a
-  // continuous central corridor, and four departments along the south edge.
-  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'x',fixed:-2,min:-16.9,max:16.9,doors:[-11.5,-2.0,10.7],height});
-  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'x',fixed:1.8,min:-16.9,max:16.9,doors:[-13.2,-6.6,-.15,9.7],height});
-  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:-6.4,min:-13.9,max:-2,doors:[],height});
-  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:5.2,min:-13.9,max:-2,doors:[-10.2],height});
-  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'x',fixed:-7.35,min:5.2,max:16.9,doors:[14.2],height});
-  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:-9.6,min:1.8,max:13.9,doors:[],height});
+  // Merge every pair of small offices into one exhibition room. The central
+  // corridor remains continuous, but only one north and one south divider are
+  // retained (four large rooms instead of the former seven cramped rooms).
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'x',fixed:-2,min:-16.9,max:16.9,doors:[-8.0,10.6],height});
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'x',fixed:1.8,min:-16.9,max:16.9,doors:[-10.0,6.6],height});
+  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:5.2,min:-13.9,max:-2,doors:[],height});
   addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:-3.6,min:1.8,max:13.9,doors:[],height});
-  addBackroomsPartitionWithDoors(wallGeometry,wallMaterial,{axis:'z',fixed:3.6,min:1.8,max:13.9,doors:[],height});
   addBackroomsAgingDetails(wallTexture,height);
   buildBackroomsOfficeFurniture();
 
@@ -2931,38 +3012,83 @@ function captureArtworkSceneState(mode){
   return snapshot;
 }
 
-function createBackroomsArtworkState(){
-  const sewer = gallerySceneRuntime.artworkStates.sewer || captureArtworkSceneState('sewer');
-  const slots = [
-    {x:-12.2,z:-13.72,yaw:0},{x:-2.1,z:-13.72,yaw:0},{x:10.6,z:-13.72,yaw:0},
-    {x:-13.2,z:13.72,yaw:180},{x:-6.5,z:13.72,yaw:180},{x:-.1,z:13.72,yaw:180},{x:9.7,z:13.72,yaw:180},
-    {x:-16.72,z:-8.5,yaw:90},{x:-16.72,z:7.7,yaw:90},
-    {x:16.72,z:-9.2,yaw:-90},{x:16.72,z:8.2,yaw:-90}
-  ];
-  const snapshot = {};
-  let slotIndex = 0;
-  let tallestArtwork = 0;
-  for(const art of STATE?.artworks || []){
-    const base = sewer[art.id];
-    if(!base) continue;
-    tallestArtwork = Math.max(tallestArtwork,safeFinite(base.size.h,0));
-    if(art.type === 'model'){
-      snapshot[art.id] = {
-        position:{x:5.25,y:.08,z:10.7},
-        rotation:{x:base.rotation.x,y:base.rotation.y+26,z:base.rotation.z},
-        size:{...base.size},
-        visible:true
-      };
-      continue;
+function clusterSewerArtworkSeries(sewer){
+  const items=(STATE?.artworks || []).filter(art=>sewer[art.id]).map(art=>({art,state:sewer[art.id]}));
+  const distance=(a,b)=>Math.hypot(a.state.position.x-b.state.position.x,a.state.position.z-b.state.position.z);
+  const clusters=items.map(item=>[item]);
+  const maxMergeDistance=8.25;
+  while(true){
+    let bestI=-1,bestJ=-1,bestDistance=Infinity;
+    for(let i=0;i<clusters.length;i++) for(let j=i+1;j<clusters.length;j++){
+      let completeLink=0;
+      for(const a of clusters[i]) for(const b of clusters[j]) completeLink=Math.max(completeLink,distance(a,b));
+      if(completeLink<=maxMergeDistance && completeLink<bestDistance){bestDistance=completeLink;bestI=i;bestJ=j;}
     }
-    const slot = slots[slotIndex++ % slots.length];
-    snapshot[art.id] = {
-      position:{x:slot.x,y:1+base.size.h*.5,z:slot.z},
-      rotation:{x:0,y:slot.yaw,z:0},
-      size:{...base.size},
-      visible:true
+    if(bestI<0) break;
+    clusters[bestI].push(...clusters[bestJ]);clusters.splice(bestJ,1);
+  }
+  return clusters.map((members,index)=>({
+    id:`sewer-series-${index+1}`,
+    members,
+    cx:members.reduce((sum,item)=>sum+item.state.position.x,0)/members.length,
+    cz:members.reduce((sum,item)=>sum+item.state.position.z,0)/members.length
+  }));
+}
+
+function placeBackroomsSeriesOnWall(series,snapshot,wall){
+  const images=series.members.filter(item=>item.art.type!=='model');
+  if(!images.length) return;
+  const span=Math.max(.1,wall.max-wall.min),gap=.82;
+  const total=images.reduce((sum,item)=>sum+safeFinite(item.state.size.w,3),0)+gap*Math.max(0,images.length-1);
+  let cursor=wall.min+Math.max(0,(span-total)*.5);
+  for(const item of images){
+    const width=safeFinite(item.state.size.w,3);
+    const along=cursor+width*.5;cursor+=width+gap;
+    snapshot[item.art.id]={
+      position:wall.axis==='x'
+        ? {x:along,y:1+item.state.size.h*.5,z:wall.fixed}
+        : {x:wall.fixed,y:1+item.state.size.h*.5,z:along},
+      rotation:{x:0,y:wall.yaw,z:0},
+      size:{...item.state.size},visible:true,seriesId:series.id,roomId:wall.roomId
     };
   }
+}
+
+function createBackroomsArtworkState(){
+  const sewer = gallerySceneRuntime.artworkStates.sewer || captureArtworkSceneState('sewer');
+  const snapshot = {};
+  let tallestArtwork = 0;
+  for(const state of Object.values(sewer)) tallestArtwork=Math.max(tallestArtwork,safeFinite(state?.size?.h,0));
+  const series=clusterSewerArtworkSeries(sewer);
+  const roomSeries={0:[],1:[],2:[],3:[]};
+  for(const group of series){
+    let roomId=1;
+    if(group.members.some(item=>item.art.type==='model')) roomId=3;
+    else if(group.members.length>=3) roomId=0;
+    else if(group.cx<-12) roomId=2;
+    roomSeries[roomId].push(group);
+  }
+  roomSeries[1].sort((a,b)=>b.members.length-a.members.length);
+  const walls={
+    0:[{axis:'x',min:-15.7,max:4.0,fixed:-13.72,yaw:0,roomId:0}],
+    1:[{axis:'x',min:6.2,max:15.9,fixed:-13.72,yaw:0,roomId:1},{axis:'z',min:-12.7,max:-3.1,fixed:5.38,yaw:90,roomId:1}],
+    2:[{axis:'x',min:-15.8,max:-4.7,fixed:13.72,yaw:180,roomId:2}],
+    // The model occupies the room center, so its two related images use the
+    // east wall instead of sitting directly behind (and being hidden by) it.
+    3:[{axis:'z',min:3.1,max:12.7,fixed:16.72,yaw:-90,roomId:3}]
+  };
+  for(const [roomKey,groups] of Object.entries(roomSeries)) groups.forEach((group,index)=>{
+    const wall=walls[roomKey][Math.min(index,walls[roomKey].length-1)];
+    placeBackroomsSeriesOnWall(group,snapshot,wall);
+    const modelItem=group.members.find(item=>item.art.type==='model');
+    if(modelItem){
+      snapshot[modelItem.art.id]={
+        position:{x:7.1,y:.08,z:7.5},
+        rotation:{x:modelItem.state.rotation.x,y:modelItem.state.rotation.y+26,z:modelItem.state.rotation.z},
+        size:{...modelItem.state.size},visible:true,seriesId:group.id,roomId:Number(roomKey)
+      };
+    }
+  });
   gallerySceneRuntime.backroomsHeight = Math.max(BACKROOMS_MIN_HEIGHT,Math.ceil((tallestArtwork+2.2)*2)/2);
   gallerySceneRuntime.artworkStates.backrooms = snapshot;
 }
@@ -2978,6 +3104,8 @@ function applyArtworkSceneState(mode){
     art.size = {...state.size};
     art.visible = state.visible !== false;
     placeArtwork(art);
+    const group=artworkMeshes?.[art.id];
+    if(group){group.userData.backroomsSeriesId=state.seriesId || '';group.userData.backroomsRoomId=state.roomId ?? null;}
   }
 }
 
@@ -5409,7 +5537,10 @@ function refreshWallSelectionVisuals(){
 
 function referenceArchitectureMaterial(kind='wall'){
   if(kind === 'glassGlow'){
-    return new THREE.MeshBasicMaterial({color:0xeafff6, transparent:true, opacity:.44, depthWrite:false, side:THREE.DoubleSide, toneMapped:false});
+    // Fake light cards must never write pixels: a camera can cross their plane
+    // and turn them into an enormous translucent rectangle. Kept as an inert
+    // compatibility material for old saved states; new scenes use real lights.
+    return new THREE.MeshBasicMaterial({color:0xeafff6,transparent:true,opacity:0,colorWrite:false,depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
   }
   const cfg = sanitizeReferenceArchitectureMaterial(STATE?.referenceArchitecture?.material);
   const tintBase = kind === 'shadow' ? new THREE.Color(0xb9cdc5) : (kind === 'soffit' ? new THREE.Color(0xdce9e1) : new THREE.Color(0xe2eee6));
@@ -6452,8 +6583,10 @@ function buildReferenceArchitecture(){
   addReferenceBox('參考圖｜近景橫樑', {x:0,y:6.92,z:10.2}, {x:28.5,y:.58,z:.88}, 'soffit');
   addReferenceCeilingRuinPanel(W, D, H);
 
-  addReferenceGlowPlane('參考圖｜右側水底亮斑', {x:7.2,y:.032,z:4.75}, -Math.PI/2, {x:11.0,y:7.1});
-  addReferenceGlowPlane('參考圖｜遠端拱門透光', {x:6.8,y:2.4,z:zBack+.23}, 0, {x:4.4,y:4.7});
+  // Do not use translucent geometry as fake lighting. These two 44%-opaque
+  // planes were the exact full-screen gray rectangle / tan slab reported by
+  // viewers whenever the camera crossed them. Real authored lights and the
+  // bright underwater shelf already provide the intended illumination.
 
   referenceArchitectureGroup.traverse(obj=>{
     if(obj.isMesh){
@@ -8967,6 +9100,9 @@ function makeArtworkBackMaterial(sourceTex, art){
     polygonOffsetFactor:0,
     polygonOffsetUnits:0
   });
+  // Until the PNG alpha has loaded there is no silhouette to draw. Hiding the
+  // placeholder back prevents a full rectangular card from flashing on screen.
+  mat.colorWrite = !!solidTex;
   const backReliefMaterial = artworkBackReliefMaterialConfig(art);
   const cfg = getReliefConfigForMaterial(backReliefMaterial);
   const preset = GROUND_RELIEF_PRESETS[cfg.preset] || GROUND_RELIEF_PRESETS.flat;
@@ -10026,6 +10162,7 @@ function handleExportedViewerKeyDown(e){
   if(e.code==='KeyK'){ e.preventDefault(); attackArtwork(); }
   if(e.code==='KeyB'){ e.preventDefault(); toggleGalleryScene(); }
   if(DEBUG_INPUT_ENABLED && e.code==='KeyR'){ e.preventDefault(); window.__galleryDebugInput?.({type:'artworkRethrowRegression'}); }
+  if(DEBUG_INPUT_ENABLED && e.code==='KeyV'){ e.preventDefault(); window.__galleryDebugInput?.({type:'backroomsArtworkAuditView'}); }
 }
 
 
@@ -14345,8 +14482,16 @@ function recordGalleryFramePerformance(frameStart){
   canvas.dataset.perfBackroomsMoldInstances = String(backroomsGroup?.getObjectByName?.('backrooms-wallpaper-edge-mold')?.count || 0);
   canvas.dataset.perfBackroomsPeelInstances = String(backroomsGroup?.getObjectByName?.('backrooms-curled-hanging-wallpaper')?.count || 0);
   canvas.dataset.perfBackroomsScreenUpdates = String(backroomsScreenRuntime.updates);
-  canvas.dataset.perfBackroomsScreenCode = backroomsScreenRuntime.lastCode || '';
+  canvas.dataset.perfBackroomsScreenCode = backroomsScreenRuntime.lastCodes.join('|');
   canvas.dataset.perfBackroomsArtworkLights = `${backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length}/${backroomsArtworkLightRuntime.length}`;
+  const seriesAudit={};
+  for(const [artId,state] of Object.entries(gallerySceneRuntime.artworkStates.backrooms || {})){
+    if(!state.seriesId) continue;
+    if(!seriesAudit[state.seriesId]) seriesAudit[state.seriesId]={roomId:state.roomId,titles:[]};
+    seriesAudit[state.seriesId].titles.push((STATE.artworks || []).find(art=>art.id===artId)?.title || artId);
+  }
+  canvas.dataset.perfBackroomsArtworkSeries=JSON.stringify(seriesAudit);
+  canvas.dataset.perfBackroomsMergedRoomCount='4';
   canvas.dataset.perfSewerGroupsHidden = String([roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false));
   canvas.dataset.perfDustCount = String(GALLERY_DUST_COUNT);
   canvas.dataset.perfThrowSpeed = String(ARPG_INTERACTION.throwSpeed);

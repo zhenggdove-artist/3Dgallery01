@@ -596,6 +596,31 @@ Final verification:
 Current TODO:
 - None. Changes remain uncommitted/unpushed because this request did not ask for a push.
 
+## 2026-09-02 translucent-plane root fix and merged series rooms
+
+Latest request:
+- Permanently remove the repeatedly reported sewer translucent rectangle.
+- Keep sewer-neighboring artwork series together in the same office room, clear furniture from artwork sightlines, and transplant the authored artwork lighting.
+- Merge pairs of cramped office partitions and add more tipped/submerged computers with distinct code/RGB failures and differently broken glass without adding lag.
+
+Root cause and implementation:
+- A runtime mesh audit identified both offenders exactly: `參考圖｜右側水底亮斑` (11 x 7.1, opacity 0.44) and `參考圖｜遠端拱門透光` (4.4 x 4.7, opacity 0.44). Both fake-light cards were removed, and the legacy `glassGlow` material is now pixel-inert (`opacity=0`, `colorWrite=false`). The audit remains available in debug mode as `data-transparent-occluder-audit`.
+- PNG artwork backs no longer draw a rectangular placeholder before their alpha silhouette is available.
+- Complete-link clustering at the original sewer positions produces five stable series. The groups are assigned to four enlarged office rooms, retain exact source dimensions, and expose series/room IDs in performance telemetry.
+- Seven former office compartments are reduced to four rooms by keeping one north and one south divider. Art walls reserve a 3 m furniture-free strip; cabinets moved to service/interior walls, and the model series uses a separate east wall so its related images are not hidden behind the model.
+- Artwork point/spot fixtures retain the sewer source color, intensity, distance, cone, penumbra and decay. Runtime prioritizes all lights in the occupied room, then nearest off-room lights, under an 8 desktop / 4 touch non-shadow budget.
+- Eleven low, tipped/submerged computer arrangements reuse static instanced batches. Four 256 x 144 non-mipmapped canvases animate at 7 Hz: green terminal halt, RGB sync loss, blue fatal exception, and magenta/cyan memory corruption. Each variant has a distinct crack impact and missing-glass corner.
+
+Verification:
+- Runtime audit returns `[]`: no large visible non-water translucent mesh remains.
+- Telemetry reports four merged rooms and five series: `[2,1,22,03]`, `[01,P1090144]`, `[完整]`, `[S__82264084,S__79716365]`, and `[7,ABCA...,SinTower]`; every member of each series shares one room ID.
+- Fixed audit view shows the model and related east-wall images with a clear sightline; visible RGB and blue-crash submerged monitors have different cracked-glass patterns.
+- Clean hardware-WebGL page: 11 furniture draw calls, 67 total draw calls, about 1.9-2.0 ms average CPU work, 32-36 browser-reported FPS, and no application/WebGL errors. The standard SwiftShader client was attempted for 50 seconds and hit the known 38 MB GLB stall.
+- Floating artwork rethrow regression passed (`picked=true`, `thrown=true`, fresh physics body present). Module syntax and `git diff --check` pass.
+
+Current TODO:
+- None after this verified update is committed and pushed to `main`.
+
 ## 2026-09-01 textured office, world-space wallpaper, and repeatable throws
 
 Latest request:
