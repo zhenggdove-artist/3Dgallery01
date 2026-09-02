@@ -322,6 +322,7 @@ let referenceCollisionItems = [];
 let backroomsCollisionItems = [];
 const backroomsFlickerRuntime = [];
 const backroomsArtworkLightRuntime = [];
+const sewerArtworkLightBlueprints = new Map();
 const backroomsWallRecords = [];
 const backroomsSurfaceTextureCache = new Map();
 const backroomsScreenRuntime = {variants:[],materials:[],lastFrame:-1,updates:0,lastCodes:[]};
@@ -1052,7 +1053,7 @@ function installGalleryDebugState(){
       },
       artworkInteraction:{heldArtworkId,physicsCount:artworkPhysics.size,floatingIds:[...artworkPhysics.entries()].filter(([,body])=>body?.floating).map(([id])=>id)},
       tuning:{throwSpeed:ARPG_INTERACTION.throwSpeed,dustCount:GALLERY_DUST_COUNT,dustDrawCalls:galleryDustPoints?.visible === false ? 0 : (galleryDustPoints ? 1 : 0),waterImpact:{...getWaterImpactTuning()}},
-      backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.filter(item=>item?.type!=='backroomsFurniture').length,wallUvRecords:backroomsWallRecords.length,furnitureColliders:backroomsCollisionItems.filter(item=>item?.type==='backroomsFurniture').length,furnitureDrawCalls:backroomsFurnitureDrawCalls,screenTextureUpdates:backroomsScreenRuntime.updates,screenCodes:[...backroomsScreenRuntime.lastCodes],lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0,artworkLights:{total:backroomsArtworkLightRuntime.length,active:backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length,budget:IS_TOUCH_DEVICE?4:8},artworkSeries:[...new Set(Object.values(gallerySceneRuntime.artworkStates.backrooms || {}).map(state=>state.seriesId).filter(Boolean))].length,flickerGroups:backroomsFlickerRuntime.length,sewerGroupsHidden:[roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false)},
+      backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.filter(item=>item?.type!=='backroomsFurniture').length,wallUvRecords:backroomsWallRecords.length,furnitureColliders:backroomsCollisionItems.filter(item=>item?.type==='backroomsFurniture').length,furnitureDrawCalls:backroomsFurnitureDrawCalls,screenTextureUpdates:backroomsScreenRuntime.updates,screenCodes:[...backroomsScreenRuntime.lastCodes],lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0,artworkLights:{total:backroomsArtworkLightRuntime.length,active:backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length,strategy:'occupied-room',corridorBudget:IS_TOUCH_DEVICE?3:6},artworkSeries:[...new Set(Object.values(gallerySceneRuntime.artworkStates.backrooms || {}).map(state=>state.seriesId).filter(Boolean))].length,flickerGroups:backroomsFlickerRuntime.length,sewerGroupsHidden:[roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false)},
       audio:{backgroundMusicReady:!!runtimeAudio.backgroundMusicReady, backgroundMusicStarted:!!runtimeAudio.backgroundMusicStarted, unlocked:!!runtimeAudio.unlocked},
       loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl},
       hasWrongWhiteArtwork:artworkList.some(isRemovedRequiredArtwork),
@@ -1104,6 +1105,7 @@ function installGalleryDebugState(){
       return true;
     }
     if(action.type === 'sceneToggle') return toggleGalleryScene();
+    if(action.type === 'lightingRoundTripRegression') return runGalleryLightingRoundTripRegression();
     if(action.type === 'backroomsArtworkAuditView'){
       if(gallerySceneRuntime.mode!=='backrooms') setGallerySceneMode('backrooms',{preserveCurrent:true,restorePlayer:false});
       player.position.set(7.0,.08,3.5);camYaw=-2.03;camPitch=-.04;cameraDistance=4.2;updateCamera();
@@ -2189,6 +2191,38 @@ function rebuildLightSystem(){
   if(selectedLightObjectActive && selectedLightId) attachLightTranslateControls(selectedLightId);
 }
 
+function restoreSewerLightRigFromState(){
+  if(!lightRigGroup) return;
+  const cfg=sanitizeLightSystem(STATE?.lightSystem);
+  STATE.lightSystem=cfg;
+  const items=cfg.enabled===false?[]:(cfg.lights || []);
+  const needsRebuild=items.some(item=>{
+    const light=runtimeSewerLightById(item.id);
+    return !light || (item.type==='spot'&&!light.isSpotLight) || (item.type==='point'&&!light.isPointLight) || (item.type==='directional'&&!light.isDirectionalLight);
+  }) || Object.keys(lightControlObjects || {}).length!==items.length;
+  if(needsRebuild) rebuildLightSystem();
+  for(const item of items){
+    const holder=lightControlObjects?.[item.id];
+    const light=runtimeSewerLightById(item.id);
+    if(!holder || !light) continue;
+    holder.position.set(safeFinite(item.position?.x,0),safeFinite(item.position?.y,4),safeFinite(item.position?.z,0));
+    alignLightControlToTarget(holder,item);
+    holder.visible=item.visible!==false;light.visible=item.visible!==false;
+    light.color.set(item.color);light.intensity=safeFinite(item.intensity,0);light.castShadow=!!item.castShadow;
+    if(item.type==='point' || item.type==='spot'){
+      light.distance=safeFinite(item.distance,0);light.decay=safeFinite(item.decay,2);
+    }
+    if(item.type==='spot'){
+      light.angle=safeFinite(item.angle,.72);light.penumbra=safeFinite(item.penumbra,.25);
+    }
+    const target=lightTargetObjects?.[item.id];
+    if(target) target.position.set(safeFinite(item.target?.x,0),safeFinite(item.target?.y,0),safeFinite(item.target?.z,0));
+    if(light.shadow) light.shadow.needsUpdate=true;
+  }
+  lightRigGroup.visible=true;
+  if(renderer?.shadowMap) renderer.shadowMap.needsUpdate=true;
+}
+
 function updateLightMarkerVisibility(){
   if(!lightRigGroup) return;
   const showMarkers = !EXPORTED_GALLERY_VIEWER && !isPlayMode();
@@ -2792,9 +2826,14 @@ function buildBackroomsArtworkLights(){
     if(rec.target) backroomsLightGroup?.remove(rec.target);
   }
   backroomsArtworkLightRuntime.length=0;
-  // Directional light is global and cannot be transplanted per artwork. Reuse
-  // the authored point/spot fixtures with their original color and power.
-  const sources=(STATE?.lightSystem?.lights || []).filter(light=>light?.visible!==false && safeFinite(light?.intensity,0)>.01 && (light.type==='point' || light.type==='spot'));
+  // Office fixtures are independent blueprints. Never reparent, hide, mutate or
+  // reuse a runtime light from the sewer rig.
+  sewerArtworkLightBlueprints.clear();
+  for(const source of (STATE?.lightSystem?.lights || [])){
+    if(source?.visible===false || safeFinite(source?.intensity,0)<=.01 || (source.type!=='point' && source.type!=='spot')) continue;
+    sewerArtworkLightBlueprints.set(source.id,JSON.parse(JSON.stringify(source)));
+  }
+  const sources=[...sewerArtworkLightBlueprints.values()];
   const sewer=gallerySceneRuntime.artworkStates.sewer || {};
   const office=gallerySceneRuntime.artworkStates.backrooms || {};
   if(!sources.length) return;
@@ -2825,14 +2864,18 @@ function buildBackroomsArtworkLights(){
     sourcePosition.y=clamp(sourcePosition.y,2.25,Math.max(2.5,safeFinite(gallerySceneRuntime.backroomsHeight,8)-.55));
     let light,target=null;
     if(source.type==='point'){
-      light=new THREE.PointLight(source.color,Math.max(1.4,safeFinite(source.intensity,2)),clamp(safeFinite(source.distance,22),8,60),clamp(safeFinite(source.decay,2),.5,4));
+      light=new THREE.PointLight(source.color,safeFinite(source.intensity,2),safeFinite(source.distance,22),safeFinite(source.decay,2));
+      light.shadow.mapSize.width=1024;light.shadow.mapSize.height=1024;
     }else{
-      light=new THREE.SpotLight(source.color,Math.max(1.8,safeFinite(source.intensity,3)),clamp(safeFinite(source.distance,26),10,60),clamp(safeFinite(source.angle,.72),.28,1.55),clamp(safeFinite(source.penumbra,.25),.12,.86),clamp(safeFinite(source.decay,2),.5,4));
+      light=new THREE.SpotLight(source.color,safeFinite(source.intensity,3),safeFinite(source.distance,26),safeFinite(source.angle,.72),safeFinite(source.penumbra,.25),safeFinite(source.decay,2));
+      light.shadow.mapSize.width=2048;light.shadow.mapSize.height=2048;
       target=new THREE.Object3D();target.position.copy(newCenter);target.name=`office-art-light-target-${art.id}`;backroomsLightGroup.add(target);light.target=target;
     }
     light.name=`office-art-light-${art.id}`;
-    light.position.copy(sourcePosition);light.castShadow=false;light.visible=false;
+    light.position.copy(sourcePosition);light.castShadow=!!source.castShadow;light.visible=false;
+    if(light.shadow){light.shadow.autoUpdate=false;light.shadow.needsUpdate=true;}
     light.userData.officeArtworkLight=true;light.userData.artId=art.id;light.userData.sourceLightId=source.id;
+    light.userData.sourceParameters=lightParameterSignature(source);
     backroomsLightGroup.add(light);
     backroomsArtworkLightRuntime.push({light,target,artId:art.id,sourceId:source.id,roomId:to.roomId ?? null,distanceSq:Infinity,roomPriority:1});
   }
@@ -2862,10 +2905,66 @@ function updateBackroomsArtworkLights(force=false){
     rec.roomPriority=playerRoomId===null || rec.roomId===playerRoomId ? 0 : 1;
   }
   backroomsArtworkLightRuntime.sort((a,b)=>a.roomPriority-b.roomPriority || a.distanceSq-b.distanceSq);
-  const budget=IS_TOUCH_DEVICE?4:8;
-  for(let i=0;i<backroomsArtworkLightRuntime.length;i++) backroomsArtworkLightRuntime[i].light.visible=i<budget;
+  const corridorBudget=IS_TOUCH_DEVICE?3:6;
+  for(let i=0;i<backroomsArtworkLightRuntime.length;i++){
+    const rec=backroomsArtworkLightRuntime[i];
+    const shouldShow=playerRoomId===null ? i<corridorBudget : rec.roomId===playerRoomId;
+    if(shouldShow && rec.light.visible===false && rec.light.shadow) rec.light.shadow.needsUpdate=true;
+    rec.light.visible=shouldShow;
+  }
   const canvas=$('canvas');
-  if(canvas) canvas.dataset.backroomsArtworkLights=`${Math.min(budget,backroomsArtworkLightRuntime.length)}/${backroomsArtworkLightRuntime.length}`;
+  if(canvas) canvas.dataset.backroomsArtworkLights=`${backroomsArtworkLightRuntime.filter(rec=>rec.light.visible).length}/${backroomsArtworkLightRuntime.length}`;
+}
+
+function lightParameterSignature(source){
+  if(!source) return null;
+  const rawType=String(source.type || '').toLowerCase();
+  const normalizedType=source.isSpotLight || rawType.includes('spot') ? 'spot' : source.isPointLight || rawType.includes('point') ? 'point' : source.isDirectionalLight || rawType.includes('directional') ? 'directional' : rawType;
+  return {
+    type:normalizedType,
+    color:source.color?.isColor ? `#${source.color.getHexString()}` : String(source.color || '').toLowerCase(),
+    intensity:Number(safeFinite(source.intensity,0).toFixed(4)),
+    distance:Number(safeFinite(source.distance,0).toFixed(4)),
+    decay:Number(safeFinite(source.decay,0).toFixed(4)),
+    angle:Number(safeFinite(source.angle,0).toFixed(4)),
+    penumbra:Number(safeFinite(source.penumbra,0).toFixed(4)),
+    castShadow:!!source.castShadow
+  };
+}
+
+function runtimeSewerLightById(lightId){
+  const holder=lightControlObjects?.[lightId];
+  return holder?.children?.find?.(child=>child?.isLight) || null;
+}
+
+function lightSignaturesMatch(expected,actual){
+  if(!expected || !actual || expected.type!==actual.type) return false;
+  const keys=['type','color','intensity','castShadow'];
+  if(expected.type==='point') keys.push('distance','decay');
+  if(expected.type==='spot') keys.push('distance','decay','angle','penumbra');
+  return keys.every(key=>actual[key]===expected[key]);
+}
+
+function runGalleryLightingRoundTripRegression(){
+  if(!DEBUG_INPUT_ENABLED) return false;
+  const sources=(STATE?.lightSystem?.lights || []).filter(item=>item?.visible!==false);
+  const sourceBefore=Object.fromEntries(sources.map(item=>[item.id,lightParameterSignature(item)]));
+  setGallerySceneMode('backrooms',{preserveCurrent:true,restorePlayer:false});
+  const originalsStillPresent=sources.every(item=>!!runtimeSewerLightById(item.id));
+  const officeExact=backroomsArtworkLightRuntime.every(rec=>{
+    const expected=sourceBefore[rec.sourceId],actual=lightParameterSignature(rec.light);
+    return lightSignaturesMatch(expected,actual);
+  });
+  setGallerySceneMode('sewer',{preserveCurrent:true,restorePlayer:false});
+  const sewerExact=sources.every(item=>{
+    const runtime=runtimeSewerLightById(item.id);
+    const actual=lightParameterSignature(runtime);
+    const expected=sourceBefore[item.id];
+    return !!runtime && lightSignaturesMatch(expected,actual);
+  });
+  const result={passed:originalsStillPresent&&officeExact&&sewerExact&&lightRigGroup?.visible===true,originalsStillPresent,officeExact,sewerExact,sewerRigVisible:lightRigGroup?.visible===true,sourceCount:sources.length,officeCloneCount:backroomsArtworkLightRuntime.length};
+  const canvas=$('canvas');if(canvas) canvas.dataset.lightingRoundTripRegression=JSON.stringify(result);
+  return result.passed;
 }
 
 function buildBackroomsEnvironment(){
@@ -2998,6 +3097,7 @@ function updateBackroomsFlicker(timeSeconds){
 function captureArtworkSceneState(mode){
   const snapshot = {};
   for(const art of STATE?.artworks || []){
+    const previous=gallerySceneRuntime.artworkStates?.[mode]?.[art.id] || {};
     const group = artworkMeshes?.[art.id];
     const rotation = art.rotation || (group ? {x:radToDeg(group.rotation.x),y:radToDeg(group.rotation.y),z:radToDeg(group.rotation.z)} : {x:0,y:0,z:0});
     const position = art.position || (group ? {x:group.position.x,y:group.position.y,z:group.position.z} : {x:0,y:2.2,z:0});
@@ -3005,7 +3105,9 @@ function captureArtworkSceneState(mode){
       position:{x:safeFinite(position.x,0),y:safeFinite(position.y,2.2),z:safeFinite(position.z,0)},
       rotation:{x:safeFinite(rotation.x,0),y:safeFinite(rotation.y,0),z:safeFinite(rotation.z,0)},
       size:{w:safeFinite(art.size?.w,3),h:safeFinite(art.size?.h,3),d:safeFinite(art.size?.d,1)},
-      visible:art.visible !== false
+      visible:art.visible !== false,
+      ...(previous.seriesId?{seriesId:previous.seriesId}:{}),
+      ...(previous.roomId!==undefined?{roomId:previous.roomId}:{})
     };
   }
   gallerySceneRuntime.artworkStates[mode] = snapshot;
@@ -3160,6 +3262,7 @@ function setGallerySceneMode(mode,{preserveCurrent=true,restorePlayer=true}={}){
   applyArtworkSceneState(next);
   if(restorePlayer) applyGalleryPlayerPose(next);
   const isBackrooms = next === 'backrooms';
+  if(!isBackrooms) restoreSewerLightRigFromState();
   applyGallerySceneVisibilityMask();
   updateBackroomsArtworkLights(true);
   if(statue) statue.visible = !isBackrooms;
@@ -10163,6 +10266,7 @@ function handleExportedViewerKeyDown(e){
   if(e.code==='KeyB'){ e.preventDefault(); toggleGalleryScene(); }
   if(DEBUG_INPUT_ENABLED && e.code==='KeyR'){ e.preventDefault(); window.__galleryDebugInput?.({type:'artworkRethrowRegression'}); }
   if(DEBUG_INPUT_ENABLED && e.code==='KeyV'){ e.preventDefault(); window.__galleryDebugInput?.({type:'backroomsArtworkAuditView'}); }
+  if(DEBUG_INPUT_ENABLED && e.code==='KeyQ'){ e.preventDefault(); window.__galleryDebugInput?.({type:'lightingRoundTripRegression'}); }
 }
 
 
