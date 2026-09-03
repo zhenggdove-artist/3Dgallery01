@@ -616,7 +616,10 @@ Verification:
 - Hardware WebGL office sample: 40.6 FPS reported by the browser, 2.12 ms average CPU work, 3.20 ms p95, 50 draw calls, and only the three lights in the occupied room active. The required standard client was retried for 50 seconds and encountered the known SwiftShader/38 MB GLB stall.
 
 Current TODO:
-- Commit, push, wait for Pages, and verify the real online warning URL plus automatic gate release.
+- Completed and pushed as `420f4ae`. GitHub Pages deployment run 52 succeeded.
+- Public warning-path integration passed: the intentional missing optional asset is recorded, the gate is hidden, `gallery-loading` is removed, and the scene stays interactive.
+- Public lighting round-trip passed exactly; the office reports `backrooms-only`, the sewer groups are hidden there, three nearby artwork lights are active, and the translucent-occluder audit remains empty.
+- Online steady sample: 50 draw calls, 3.09 ms average CPU work, 5.30 ms p95. The lower reported FPS belongs to the throttled embedded test tab rather than a saturated main loop.
 
 ## 2026-09-02 translucent-plane root fix and merged series rooms
 
