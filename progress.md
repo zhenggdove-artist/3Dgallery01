@@ -596,6 +596,28 @@ Final verification:
 Current TODO:
 - None. Changes remain uncommitted/unpushed because this request did not ask for a push.
 
+## 2026-09-03 online 100% loading-gate deadlock
+
+Latest continuation:
+- Preserve the web-edited lighting commit `bd3f480`, finish the interrupted work, and make the deployed gallery actually become interactive instead of remaining behind a 100% loading overlay.
+
+Root cause and implementation:
+- The deployed `57cd64c` page reproducibly reached `24 / 24`, rendered the sewer behind the overlay, but kept `gallery-loading` on the body. The gate exposed `aria-busy=false`, proving `galleryLoading.errors` was non-empty.
+- `maybeReleaseGalleryLoadingGate()` returned forever whenever any loader error existed. LoadingManager already treats failed requests as terminal, so one optional/fallback asset made a fully rendered scene unusable.
+- Release eligibility is now a pure decision used at the real call site. Completed scenes release with `ready-with-warnings`; active manager/core assets still block. Failed model requests are terminal (not pending forever), while delayed optional background audio stops blocking after 12 seconds and may still start later.
+- The released canvas records warning URLs and audio timeout state. A debug-only `simulateLoadWarning` fixture exercises the actual `THREE.DefaultLoadingManager.onError` path, not only a shallow helper.
+- The unpushed `bd3f480` lighting work was retained: sewer lights are cloned from immutable blueprints, the occupied office room alone activates its exact authored fixtures, and returning to the sewer restores the original rig.
+
+Verification:
+- Pre-fix regression failed exactly as expected: a complete 24/24 state with one warning returned `asset-error` and did not release.
+- Post-fix pure regression passes: completed-with-warning releases, while manager-active/core-pending remains blocked.
+- Real integration fixture returns `warningCount=1`, records `assets/__debug_optional_missing__.bin`, removes `gallery-loading`, hides the gate, and leaves the sewer interactive with no console/WebGL errors.
+- Lighting round-trip regression passes all checks (`originalsStillPresent`, `officeExact`, `sewerExact`, `sewerRigVisible`); office clone count is 12 from 11 authored source lights.
+- Hardware WebGL office sample: 40.6 FPS reported by the browser, 2.12 ms average CPU work, 3.20 ms p95, 50 draw calls, and only the three lights in the occupied room active. The required standard client was retried for 50 seconds and encountered the known SwiftShader/38 MB GLB stall.
+
+Current TODO:
+- Commit, push, wait for Pages, and verify the real online warning URL plus automatic gate release.
+
 ## 2026-09-02 translucent-plane root fix and merged series rooms
 
 Latest request:

@@ -445,6 +445,8 @@ const galleryLoading = {
   itemsLoaded:0,
   itemsTotal:0,
   expectedTotal:0,
+  startedAt:0,
+  audioTimedOut:false,
   phase:'初始化場景...',
   currentUrl:'',
   errors:[],
@@ -484,9 +486,9 @@ function markModelArtworkFailed(art){
 }
 function modelArtworkLoadReady(){
   for(const key of modelArtworkLoadState.expected){
-    if(!modelArtworkLoadState.loaded.has(key)) return false;
+    if(!modelArtworkLoadState.loaded.has(key) && !modelArtworkLoadState.failed.has(key)) return false;
   }
-  return modelArtworkLoadState.failed.size === 0;
+  return true;
 }
 
 function isLoadableGalleryAssetUrl(src){
@@ -569,7 +571,7 @@ function updateGalleryLoadingUI(){
   }
   const pct = Math.round(clamp(ratio, 0, 1) * 100);
   galleryLoading.gate.hidden = false;
-  galleryLoading.gate.setAttribute('aria-busy', galleryLoading.errors.length ? 'false' : 'true');
+  galleryLoading.gate.setAttribute('aria-busy','true');
   galleryLoading.gate.dataset.error = galleryLoading.errors.length ? '1' : '0';
   if(galleryLoading.bar) galleryLoading.bar.style.width = `${pct}%`;
   if(galleryLoading.percent) galleryLoading.percent.textContent = `${pct}%`;
@@ -577,35 +579,51 @@ function updateGalleryLoadingUI(){
   if(galleryLoading.detail) galleryLoading.detail.textContent = assetLine;
   if(galleryLoading.item) galleryLoading.item.textContent = '';
 }
+
+function galleryLoadingReleaseDecision(snapshot){
+  if(!snapshot.sceneReady) return {release:false,reason:'scene-pending'};
+  if(!snapshot.managerIdle) return {release:false,reason:'manager-active'};
+  if(!snapshot.modelReady) return {release:false,reason:'model-pending'};
+  if(snapshot.requiredLoaded>0 && snapshot.itemsLoaded<snapshot.requiredLoaded) return {release:false,reason:'assets-pending'};
+  if(!snapshot.audioReady) return {release:false,reason:'audio-pending'};
+  if(snapshot.quietMs<700) return {release:false,reason:'quiet-period'};
+  return {release:true,reason:(snapshot.errors || []).length?'ready-with-warnings':'ready'};
+}
+
+function runGalleryLoadingGateRegression(){
+  const completeWithWarning=galleryLoadingReleaseDecision({
+    errors:['optional asset failed'],sceneReady:true,managerIdle:true,modelReady:true,
+    requiredLoaded:24,itemsLoaded:24,audioReady:true,quietMs:1200
+  });
+  const pendingCore=galleryLoadingReleaseDecision({
+    errors:[],sceneReady:true,managerIdle:false,modelReady:true,
+    requiredLoaded:24,itemsLoaded:23,audioReady:true,quietMs:1200
+  });
+  const result={passed:completeWithWarning.release===true&&pendingCore.release===false,completeWithWarning,pendingCore};
+  const canvas=$('canvas');if(canvas) canvas.dataset.loadingGateRegression=JSON.stringify(result);
+  return result;
+}
 function maybeReleaseGalleryLoadingGate(){
   if(!EXPORTED_GALLERY_VIEWER || galleryLoading.released) return;
   updateGalleryLoadingUI();
   clearTimeout(galleryLoading.quietTimer);
-  if(galleryLoading.errors.length) return;
   const now = performance.now?.() || Date.now();
   const quietMs = now - galleryLoading.lastActivityAt;
   const requiredLoaded = galleryLoading.expectedTotal || 0;
   const nearComplete = requiredLoaded
     ? galleryLoading.itemsLoaded >= Math.max(0, requiredLoaded - 1)
     : galleryLoading.itemsLoaded >= Math.max(0, galleryLoading.itemsTotal - 1);
-  if(galleryLoading.sceneReady && !galleryLoading.managerIdle && !requiredLoaded && nearComplete && quietMs > 5200){
+  if(galleryLoading.sceneReady && !galleryLoading.managerIdle && nearComplete && quietMs > 1600){
     galleryLoading.managerIdle = true;
-    galleryLoading.phase = '完成核心資源，整理大型作品...';
+    galleryLoading.phase = galleryLoading.errors.length ? '核心資源完成，略過無法使用的選用資源...' : '完成核心資源，整理大型作品...';
   }
-  if(!galleryLoading.sceneReady || !galleryLoading.managerIdle || !modelArtworkLoadReady()){
-    galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 320);
-    return;
-  }
-  if(requiredLoaded && galleryLoading.itemsLoaded < requiredLoaded){
-    galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 240);
-    return;
-  }
-  if(!runtimeAudioReadyForGalleryRelease()){
-    galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 240);
-    return;
-  }
-  if(quietMs < 700){
-    galleryLoading.quietTimer = setTimeout(maybeReleaseGalleryLoadingGate, 720 - quietMs);
+  const decision=galleryLoadingReleaseDecision({
+    errors:galleryLoading.errors,sceneReady:galleryLoading.sceneReady,managerIdle:galleryLoading.managerIdle,
+    modelReady:modelArtworkLoadReady(),requiredLoaded,itemsLoaded:galleryLoading.itemsLoaded,
+    audioReady:runtimeAudioReadyForGalleryRelease(),quietMs
+  });
+  if(!decision.release){
+    galleryLoading.quietTimer=setTimeout(maybeReleaseGalleryLoadingGate,decision.reason==='quiet-period'?Math.max(40,720-quietMs):260);
     return;
   }
   requestAnimationFrame(()=>{
@@ -633,10 +651,16 @@ function releaseGalleryLoadingGate(){
   galleryLoading.itemsLoaded = Math.max(galleryLoading.itemsLoaded, galleryLoading.itemsTotal, galleryLoading.expectedTotal);
   updateGalleryLoadingUI();
   if(ensureGalleryLoadingGate()){
+    galleryLoading.gate.dataset.warningCount=String(galleryLoading.errors.length);
     galleryLoading.gate.hidden = true;
     galleryLoading.gate.setAttribute('aria-busy','false');
   }
   document.body.classList.remove('gallery-loading');
+  const canvas=$('canvas');
+  if(canvas){
+    canvas.dataset.loadingWarnings=JSON.stringify(galleryLoading.errors);
+    canvas.dataset.loadingAudioTimedOut=String(!!galleryLoading.audioTimedOut);
+  }
 }
 
 function markGallerySceneReady(){
@@ -656,6 +680,7 @@ function configureGalleryLoadingManager(){
   if(galleryLoading.configured) return;
   galleryLoading.configured = true;
   galleryLoading.expectedTotal = collectExpectedGalleryAssets(STATE).size;
+  galleryLoading.startedAt = performance.now?.() || Date.now();
   prepareRuntimeAudio();
   bindRuntimeAudioUnlock();
   galleryLoading.lastActivityAt = performance.now?.() || Date.now();
@@ -691,6 +716,12 @@ function configureGalleryLoadingManager(){
     updateGalleryLoadingUI();
     maybeReleaseGalleryLoadingGate();
   };
+}
+
+function injectGalleryLoadingWarningFixture(){
+  if(!DEBUG_INPUT_ENABLED || !new URLSearchParams(location.search).has('simulateLoadWarning')) return;
+  // Exercises the exact DefaultLoadingManager error path used in production.
+  new THREE.FileLoader(THREE.DefaultLoadingManager).load('assets/__debug_optional_missing__.bin',()=>{},undefined,()=>{});
 }
 
 function galleryInputReady(){
@@ -901,6 +932,13 @@ function runtimeAudioReadyForGalleryRelease(){
   if(runtimeAudio.backgroundMusicReady && !runtimeAudio.backgroundMusicStarted){
     startBackgroundMusic({allowWithoutUnlock:true});
   }
+  const now=performance.now?.() || Date.now();
+  if(!runtimeAudio.backgroundMusicReady && galleryLoading.sceneReady && galleryLoading.startedAt>0 && now-galleryLoading.startedAt>12000){
+    // Music is optional and can finish buffering after interaction. A stalled
+    // media request must never keep an already rendered gallery behind 100%.
+    galleryLoading.audioTimedOut=true;
+    return true;
+  }
   // Browsers commonly block autoplay until the first user gesture. Loading is complete
   // once the file can play; actual playback begins on the normal input-unlock path.
   return !!runtimeAudio.backgroundMusicReady;
@@ -1055,7 +1093,7 @@ function installGalleryDebugState(){
       tuning:{throwSpeed:ARPG_INTERACTION.throwSpeed,dustCount:GALLERY_DUST_COUNT,dustDrawCalls:galleryDustPoints?.visible === false ? 0 : (galleryDustPoints ? 1 : 0),waterImpact:{...getWaterImpactTuning()}},
       backrooms:{built:!!backroomsGroup?.userData?.built,visible:backroomsGroup?.visible === true,walls:backroomsCollisionItems.filter(item=>item?.type!=='backroomsFurniture').length,wallUvRecords:backroomsWallRecords.length,furnitureColliders:backroomsCollisionItems.filter(item=>item?.type==='backroomsFurniture').length,furnitureDrawCalls:backroomsFurnitureDrawCalls,screenTextureUpdates:backroomsScreenRuntime.updates,screenCodes:[...backroomsScreenRuntime.lastCodes],lights:backroomsLightGroup?.children?.filter?.(obj=>obj?.isLight).length || 0,artworkLights:{total:backroomsArtworkLightRuntime.length,active:backroomsArtworkLightRuntime.filter(item=>item.light?.visible).length,strategy:'occupied-room',corridorBudget:IS_TOUCH_DEVICE?3:6},artworkSeries:[...new Set(Object.values(gallerySceneRuntime.artworkStates.backrooms || {}).map(state=>state.seriesId).filter(Boolean))].length,flickerGroups:backroomsFlickerRuntime.length,sewerGroupsHidden:[roomGroup,customWallGroup,floorTileGroup,referenceArchitectureGroup,lightRigGroup].every(group=>group?.visible===false)},
       audio:{backgroundMusicReady:!!runtimeAudio.backgroundMusicReady, backgroundMusicStarted:!!runtimeAudio.backgroundMusicStarted, unlocked:!!runtimeAudio.unlocked},
-      loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl},
+      loading:{itemsLoaded:galleryLoading.itemsLoaded, itemsTotal:galleryLoading.itemsTotal, expectedTotal:galleryLoading.expectedTotal, managerIdle:galleryLoading.managerIdle, sceneReady:galleryLoading.sceneReady, currentUrl:galleryLoading.currentUrl,errors:[...galleryLoading.errors],audioTimedOut:!!galleryLoading.audioTimedOut,released:!!galleryLoading.released},
       hasWrongWhiteArtwork:artworkList.some(isRemovedRequiredArtwork),
       targetArtworks:artworkList.filter(isRequiredReplacementArtwork).map(art=>({
         title:art.title,
@@ -1106,6 +1144,7 @@ function installGalleryDebugState(){
     }
     if(action.type === 'sceneToggle') return toggleGalleryScene();
     if(action.type === 'lightingRoundTripRegression') return runGalleryLightingRoundTripRegression();
+    if(action.type === 'loadingGateRegression') return runGalleryLoadingGateRegression().passed;
     if(action.type === 'backroomsArtworkAuditView'){
       if(gallerySceneRuntime.mode!=='backrooms') setGallerySceneMode('backrooms',{preserveCurrent:true,restorePlayer:false});
       player.position.set(7.0,.08,3.5);camYaw=-2.03;camPitch=-.04;cameraDistance=4.2;updateCamera();
@@ -1393,6 +1432,7 @@ async function main(){
   if(EXPORTED_GALLERY_VIEWER) prepareExportedViewerDom();
   installGalleryDebugState();
   configureGalleryLoadingManager();
+  injectGalleryLoadingWarningFixture();
   setGalleryLoadingPhase('初始化 WebGL 與光影...');
   pushUndoState('initial');
   initThree();
@@ -10267,6 +10307,7 @@ function handleExportedViewerKeyDown(e){
   if(DEBUG_INPUT_ENABLED && e.code==='KeyR'){ e.preventDefault(); window.__galleryDebugInput?.({type:'artworkRethrowRegression'}); }
   if(DEBUG_INPUT_ENABLED && e.code==='KeyV'){ e.preventDefault(); window.__galleryDebugInput?.({type:'backroomsArtworkAuditView'}); }
   if(DEBUG_INPUT_ENABLED && e.code==='KeyQ'){ e.preventDefault(); window.__galleryDebugInput?.({type:'lightingRoundTripRegression'}); }
+  if(DEBUG_INPUT_ENABLED && e.code==='KeyG'){ e.preventDefault(); window.__galleryDebugInput?.({type:'loadingGateRegression'}); }
 }
 
 
