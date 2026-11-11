@@ -673,3 +673,32 @@ Verification:
 
 Current TODO:
 - None. Changes remain uncommitted/unpushed because this request did not ask for a push.
+
+## 2026-11-11 Temple multiplayer rebuild
+
+Request:
+- Replace Gallery with Temple, a real six-seat online Three.js art arena built from RELETTER gameplay architecture while preserving all 13 Gallery artworks.
+- Add server-authoritative PvP/PvE, artwork throwing, platform coins, random ground weapons/equipment, persistent economy, building, fishing, chat, message plants, fusion, save codes and GM access.
+- Add Shift+Y editing, save/export the edit result for GitHub Pages, optimize performance, deploy an isolated Cloudflare backend and publish to the Gallery repository.
+
+Implemented:
+- Created the `codex/gallery-pre-temple-20261111` backup reference and developed on `codex/temple-rebuild`; original RELETTER code, Worker and data were not changed.
+- Replaced the single-file Gallery runtime with modular Three.js arena, controller, UI, network and shared authoritative rules. Vendored Three.js/GLTF/Draco dependencies for CDN-independent Pages loading.
+- Preserved 12 image works and the true SinTower model. Generated non-destructive Temple LOD derivatives for the 599k-triangle SinTower, RELETTER character, monster and original coin GLB.
+- Implemented four fighter + two spectator seating, WebSocket state interpolation, spectator free flight/follow switching, role changes, unique profile keys and reconnect cleanup.
+- Implemented atomic platform coins, balanced prices, server-spawned ground coin/material/weapon/armor drops, item resale, duplicate material catalysts, equipment, fusion receipts, XP/levels, timed monster loot and 20% PvP death drops.
+- Implemented artwork pickup/throw/30-second recovery, server-side hits, GM immunity, persistent/randomized buildings, transparent placement/rotation/validation, synchronized low-cost debris, fishing, chat, text plants and reply branches.
+- Implemented four-character save codes with secure random generation, unique database index, enumeration throttling and one active session per saved identity. GM verification uses only `TEMPLE_ADMIN_KEY`.
+- Added Shift+Y layout editor with local persistence and downloadable Pages-ready JSON.
+- Kept rendering bounded with instanced coins, drops, structures, dust and plants, pooled artwork lights, model LODs and touch-device quality reductions.
+
+Verification:
+- Static syntax checks and `git diff --check` pass.
+- 13/13 shared-rule tests pass, including atomic pickup, prices, fusion idempotency, death drops, GM immunity, safe build zones, material fusion, synchronized destruction, plant replies and monster safe-zone behavior.
+- Local and production API smoke tests pass: seats are fighter 0–3 and spectator 4–5, player seven is rejected, spectator mutations are rejected, one contested coin returns 200/400, save identity/data restore, and a spectator fills a released fighter seat.
+- Browser integration passes: all 13 artworks load, Worker WebSocket connects, no stale player remains, Shift+Y saves, build preview rotates/cancels, all 13 platform coins exist, and no browser/WebGL errors occur.
+- Near-gameplay renderer sample is 27 draw calls / about 171k triangles. The standard SwiftShader client also completed and captured the entry scene; its software-rendered FPS is not representative of hardware WebGL.
+- Deployed isolated Worker `temple-arena` at `https://temple-arena.zhenggdove-artist.workers.dev`; health reports SQLite Durable Object and WebSocket. Production six-client smoke passed. `TEMPLE_ADMIN_KEY` was uploaded as a Cloudflare secret without entering public files.
+
+Remaining release step:
+- Commit and push the verified frontend to `zhenggdove-artist/3Dgallery01`, then verify the public GitHub Pages URL and its connection to the production Worker.

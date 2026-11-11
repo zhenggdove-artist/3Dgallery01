@@ -1,3 +1,9 @@
 /galleryOUTPUT.html
 /output/
 /test-results/
+/node_modules/
+/.wrangler/
+/dist-cloudflare/
+/.dev.vars
+/.env*
+!/.env.example
