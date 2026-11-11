@@ -700,5 +700,7 @@ Verification:
 - Near-gameplay renderer sample is 27 draw calls / about 171k triangles. The standard SwiftShader client also completed and captured the entry scene; its software-rendered FPS is not representative of hardware WebGL.
 - Deployed isolated Worker `temple-arena` at `https://temple-arena.zhenggdove-artist.workers.dev`; health reports SQLite Durable Object and WebSocket. Production six-client smoke passed. `TEMPLE_ADMIN_KEY` was uploaded as a Cloudflare secret without entering public files.
 
-Remaining release step:
-- Commit and push the verified frontend to `zhenggdove-artist/3Dgallery01`, then verify the public GitHub Pages URL and its connection to the production Worker.
+Release result:
+- Committed Temple as `1f30bcb`, pushed `codex/temple-rebuild`, and fast-forwarded `main`. The original Gallery remains available on `codex/gallery-pre-temple-20261111`.
+- GitHub Pages run `43030603241` completed successfully for that commit.
+- Public `https://zhenggdove-artist.github.io/3Dgallery01/` browser verification passed: 13 artworks, 13 platform coins, production WSS, Shift+Y save and build-preview interaction all worked with no HTTP/module/WebGL errors. The public gameplay sample rendered 26 draw calls / about 154k triangles.
