@@ -1,5 +1,16 @@
 Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement confusion, invisible smoke, too-fast look controls, mobile forward movement, and performance without reducing visual quality.
 
+## 2026-11-13 sketch / Nangan correction (in progress)
+
+- Current request: exact original raised title + percentage, sketch HUD, original combat/plant visuals, grounded Nangan monsters except foreman, complete preload before entry.
+- Reproduced old bug: player 20m above enemy lost 48 HP. New authoritative original island shockwave warning/active geometry passes height, jump and one-hit regressions. 24 tests pass.
+- Source identifies foreman as 章萬安; six other Nangan base actors preloaded before entry, original height 1.575, root-motion filtering and animations. Original spell artwork, damage DOM pool, critical/headshot rules, offhand IK, insects and indexed plant growth reused.
+- Cold local Chrome baseline 8505ms; after parallel artwork/model loading and suppressing hidden render loop 7887ms including six new models. Instrumented assets 752ms, ultimate preparation 2803ms, scene shader compile 937ms. Not a production/network speed claim.
+- Verification: 25 unit tests pass, desktop/touch HUD + charge + six actor models pass, original red warning circle and grounded actor screenshots inspected. Existing camera/editor, all 23 weapon families, media/draft, mobile and four-character stress pass. Synthetic adventure test now isolates its fixture from incoming world snapshots. API six-seat/atomic pickup/save identity passes when run without overlapping browser seats.
+- Lossless delivery: 11 artworks reduced from 25,303,106 to 15,111,224 bytes; every visible RGBA pixel and alpha checked byte-for-byte, originals untouched. Existing alpha-cleaned asset_0015 delivery remains unchanged; unused generated replacement removed. Latest cold-context local loading 5369ms; complete-before-entry maintained, no lazy admission. Hardware/GPU cache and network affect results.
+- Latest 4-character stress sample: frame mean 16.65ms / p95 17ms, logic 1.04ms, submission 1.39ms; not a universal zero-lag promise.
+- Worker deployed efcbc657-f3ac-46d8-a6f2-4d039bb728bd. Remaining release gate: GitHub Pages push/build and actual live verification.
+
 ## 2026-11-12 release verification (supersedes checkpoint below)
 
 - Exact Golden Girdle binary verified against owner's original source. 49 source modules and four fonts tracked with SHA256 manifest; original repository/backend untouched.

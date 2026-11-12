@@ -10,16 +10,22 @@ const names=['equipment-catalog.js','weapon-effects.js','ultimate-effects.js','u
 const revision=await readFile(resolve(source,'.git/refs/heads/main'),'utf8').catch(()=>'working-tree');
 const copied=new Set(),manifest={source:'zhenggdove-artist/RELETTER (owner local checkout)',revision:revision.trim(),files:{},fonts:{}};
 async function vendor(name){if(copied.has(name))return;copied.add(name);const data=await readFile(resolve(source,name));await mkdir(dirname(resolve(dest,name)),{recursive:true});await copyFile(resolve(source,name),resolve(dest,name));manifest.files[name]=createHash('sha256').update(data).digest('hex');for(const match of data.toString().matchAll(/from\s+['"](\.{1,2}\/.*?\.js)['"]/g))await vendor(relative(source,resolve(source,dirname(name),match[1])).replaceAll('\\','/'));}
-for(const name of [...names,'odd-weapon-art.js','odd-weapon-effects.js','fusion-catalog.js','server/fusion-rules.js'])await vendor(name);
+for(const name of [...names,'odd-weapon-art.js','odd-weapon-effects.js','fusion-catalog.js','server/fusion-rules.js','enemy-spell-effects.js','damage-numbers.js','chimera-art.js'])await vendor(name);
 await cp(resolve(source,'art'),resolve('art'),{recursive:true});
 await mkdir(resolve(dest,'art'),{recursive:true});
 for(const name of ['guardian-points.json','guardian-run.bin','guardian-body.jpg','guardian-face-reference.png','foreman-rig.glb','foreman-reference.png'])await copyFile(resolve(source,'art',name),resolve(dest,'art',name));
 const html=(await readFile(resolve(source,'index.html'),'utf8')).replaceAll('\r\n','\n');
+const nangan=await readFile(resolve(source,'nangan-scene.js'),'utf8');
+const spells=await readFile(resolve(source,'enemy-spell-effects.js'),'utf8');
+await writeFile(resolve(dest,'temple-spell-effects.js'),'// Original spell visuals; Temple uses a flat ground surface instead of Nangan terrain.\n'+spells.replace("import {streetHeight} from './nangan-layout.js';",'const streetHeight=()=>0;'));
+const actorSource=nangan.slice(nangan.indexOf('const gltfs=new Map();'),nangan.indexOf('\n',nangan.indexOf('export function animateIslandModel')));
+await writeFile(resolve(dest,'island-actors.js'),`// Original Nangan actor loader/animation; unrelated island scene intentionally excluded.\nimport * as T from 'three';\nimport {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';\nimport {clone} from 'three/addons/utils/SkeletonUtils.js';\nimport {chimeraById} from './chimera-catalog.js';\nimport {attachChimera,animateChimera} from './chimera-art.js';\n${actorSource}\n`);
 const fonts=[...html.matchAll(/@font-face\s*\{[^}]+\}/g)].map(m=>m[0]);
 await writeFile(resolve(dest,'fonts.css'),fonts.join('\n'));
 await mkdir(resolve(dest,'FONTS'),{recursive:true});
 for(const match of fonts.join('\n').matchAll(/url\(["'](FONTS\/[^"']+)["']\)/g)){const name=match[1];const data=await readFile(resolve(source,name));await copyFile(resolve(source,name),resolve(dest,name));manifest.fonts[name]=createHash('sha256').update(data).digest('hex');}
 function section(a,b){const start=html.indexOf(a),end=html.indexOf(b,start);if(start<0||end<0)throw Error('Source markers changed: '+a);return html.slice(start,end);}
+await writeFile(resolve(dest,'plant-insects.js'),`// Original RELETTER insect paths and point rendering, with a bounded host population.\nimport * as THREE from 'three';\nexport function createPlantInsects(scene){\n${section('const BUG_COLORS=', '// Initial bugs at center')}\nlet signature='';return {update:updateBugs,sync(plants){const selected=plants.slice(-24),key=selected.map(p=>p.id).join('|');if(key===signature)return;signature=key;bugs.length=0;spawnBugsAt(0,0,30);for(const p of selected)spawnBugsAt(p.position[0],p.position[2],6);}};\n}\n`);
 const plants=section('const PASTEL_PINK','// ===== Independent RELETTER persistence')+section('// ===== Seeded Random =====','// ===== THREE.js Scene =====');
 await writeFile(resolve(dest,'plants.js'),"// Extracted verbatim from RELETTER index.html; only module boundary added.\nimport * as THREE from 'three';\nlet groundClip=null;\n"+plants+'\nexport {makePlant};\n');
 const held=section('const boneCache=new WeakMap()','let fishingHUDActive=false;');
@@ -34,6 +40,7 @@ function glowMaterial(color,opacity=1){return new THREE.MeshBasicMaterial({color
 export function setHeldTime(time){globalTime=time;}
 ${held}\n${novel}\nexport {makeHeldWeapon,makeNovelWeapon,attachHeldWeapon,rightHand};\n`);
 const additions=(await readFile(resolve(source,'game-additions.js'),'utf8')).replaceAll('\r\n','\n');
+await writeFile(resolve(dest,'offhand-pose.js'),`// Original RELETTER three-iteration offhand IK.\nimport * as THREE from 'three';\nconst cache=new WeakMap();function fishingBones(model){if(cache.has(model))return cache.get(model);const bones={};model.traverse(o=>{if(o.isBone)bones[o.name.replace(/[^a-z0-9]/gi,'').replace(/^mixamorig\\d*/i,'')]=o;});cache.set(model,bones);return bones;}\nexport ${additions.slice(additions.indexOf('function supportOffhand('),additions.indexOf('\nlet heldSignature=')).trimEnd()}\n`);
 const melee=additions.slice(additions.indexOf('const meleeEffects=[]'),additions.indexOf('const meleePositionRestore=[]'));
 const projectile=section('function showEquipmentAttack(data)','function updateEquipmentEffects(dt)');
 const projectileUpdate=section(' for(let j=equipmentFX.length-1;'," const players=[{character:selectedCharacter,root:charRoot,model:charModel}");

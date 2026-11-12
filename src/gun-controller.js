@@ -10,7 +10,9 @@ export class GunController {
     addEventListener('pointermove',e=>{if(!this.mode||e.target!==canvas)return;e.stopImmediatePropagation();const c=controller(),s=.002*(this.mode===2?.3:1);c.yaw-=e.movementX*s;c.pitch=THREE.MathUtils.clamp(c.pitch+e.movementY*s,-1.1,1.2);},true);
     for(const type of ['pointerdown','pointerup','pointercancel'])addEventListener(type,e=>{
       const button=e.target.closest?.('#attack-button');if(!weapon()?.firstPerson||!controller()?.enabled)return;
-      if(button){e.preventDefault();e.stopImmediatePropagation();if(type==='pointerup')this.cycle();return;}
+      // The sketch's attack button always charges/releases, including guns.
+      // V still selects the original shoulder/scope camera on desktop.
+      if(button)return;
       if(!this.mode||e.target!==canvas||e.button>0)return;e.preventDefault();e.stopImmediatePropagation();
       if(type==='pointerdown'){if(!document.pointerLockElement)canvas.setPointerCapture(e.pointerId);if(weapon().id==='white-cat'){this.held=true;this.nextShot=0;}else ui.emit('attack-start');}
       else{this.held=false;ui.emit(type==='pointercancel'?'attack-cancel':'attack-release');}

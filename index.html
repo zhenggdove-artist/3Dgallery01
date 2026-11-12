@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="./src/reletter/fonts.css">
   <link rel="stylesheet" href="./reletter-theme.css">
   <link rel="stylesheet" href="./gun.css">
+  <link rel="stylesheet" href="./sketch-hud.css">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
   <script src="./temple-config.js"></script>
@@ -21,7 +22,7 @@
 </head>
 <body class="booting">
   <canvas id="game" aria-label="Temple 3D game"></canvas>
-  <div id="loading" role="status"><div class="reletter-wordmark">TEMPLE</div><div class="loading-track"><i id="loading-fill"></i></div><small id="loading-detail">Preparing arena</small></div>
+  <div id="loading" role="status"><div class="reletter-wordmark">TEMPLE</div><div class="loading-track"><i id="loading-fill"></i></div><output id="loading-percent">0%</output><small id="loading-detail">Preparing arena</small></div>
 
   <main id="entry" aria-labelledby="entry-title">
     <section class="notepad-window">
@@ -37,9 +38,11 @@
 
   <section id="hud" hidden>
     <div id="identity" class="hud-block"><strong id="hud-name">—</strong><span id="hud-role">FIGHTER</span></div>
-    <div id="vitals" class="hud-block"><label>HP <progress id="hp" max="100" value="100"></progress><b id="hp-label">100</b></label><span id="wallet">0 COINS</span><span id="weapon">TIDE BLADE</span><span id="online">0 / 6</span></div>
+    <div id="vitals" class="hud-block"><span id="player-level">LV. 1</span><label>HP <progress id="hp" max="100" value="100"></progress><b id="hp-label">100/100</b></label><span id="wallet">0 COINS</span><span id="weapon">TIDE BLADE</span><span id="online">0 / 6</span></div>
     <div id="monster-hud" class="hud-block" hidden><small id="monster-name">MONSTER</small><progress id="monster-hp" max="100" value="100"></progress></div>
     <div id="crosshair"></div><div id="prompt"></div><div id="toast"></div>
+    <div id="map-cluster"><button id="function-toggle" aria-label="開啟功能選單" aria-expanded="false">☰</button><svg id="minimap" viewBox="-65 -65 130 130" role="img" aria-label="小地圖"><circle r="63" fill="#ede3e6" fill-opacity=".7" stroke="#947285"/><g id="map-static"></g><g id="map-dynamic"></g></svg></div>
+    <section id="chat-hud" aria-label="聊天"><div id="chat-messages" role="log" aria-live="polite"></div><form id="chat-form"><label for="chat-input">CHAT</label><input id="chat-input" maxlength="500" autocomplete="off" aria-label="聊天訊息"><button type="submit" aria-label="送出聊天">↵</button></form></section>
     <div id="build-mode" hidden><small>BUILD PREVIEW</small><strong id="build-kind">STRUCTURE</strong><button id="build-rotate">R · ROTATE</button><button id="build-confirm">E · PLACE</button><button id="build-cancel">ESC · CANCEL</button></div>
     <nav id="dock" aria-label="遊戲功能">
       <button id="attack-button" title="Hold Q to charge / release to attack"><b>Q</b><span>攻擊 / 蓄力</span></button>
@@ -49,7 +52,7 @@
       <button data-panel="shop"><b>I</b><span>商店</span></button>
       <button data-panel="build"><b>V</b><span>建造</span></button>
       <button data-action="fish"><b>F</b><span>釣魚</span></button>
-      <button data-panel="social"><b>C</b><span>交流</span></button>
+      <button data-panel="social"><b>C</b><span>WRITE / CHAT</span></button>
     </nav>
     <div id="mobile-stick" aria-hidden="true"><i></i></div>
   </section>

@@ -50,7 +50,13 @@
     "server/damage-events.js": "5f51dccbf3b84b83b6443f99a27ea1c25ec03df4caf04e0ff3f1ad6e92609185",
     "odd-weapon-effects.js": "ac674aacb7c89c6ed0cd79f083fe3563ddeb1f09b0a60f5c7f5597a6d4c0bdd4",
     "fusion-catalog.js": "27821b09cacc5e76131c4a7f8bba2e5a63eafe9f0f08aacf30db3f0130aa98e1",
-    "server/fusion-rules.js": "4d7c3b80b834a81cf66059651c0b8da896ff35ec823d0b1efbd69f70966e8f04"
+    "server/fusion-rules.js": "4d7c3b80b834a81cf66059651c0b8da896ff35ec823d0b1efbd69f70966e8f04",
+    "enemy-spell-effects.js": "571072c007cbe97f7b7cce2d8c23a20fd081ad19963f9dcf504560867bf01a80",
+    "advanced-enemy-spells.js": "bd47f4736021c32bcda893ea6faba0ebb1d5955ffed3c473a2e1afaefeaf01de",
+    "advanced-enemy-effects.js": "61b39522f19fa7c6e4ea8ef2a9d746b90741dd53190df58ea5922d06eac15965",
+    "enemy-spell-catalog.js": "bb55025a52622738d9b126ea9dabbf51d62293396e6ef4715043dfb23bdcc64b",
+    "damage-numbers.js": "ee98784a9964ffc436425861caa506e3cea5414e70818555802cc865bf103a68",
+    "chimera-art.js": "73c49d0a25240cb787dbeaa7d29fc20e1faade969d1f6b93f5cc8503fbabdfa9"
   },
   "fonts": {
     "FONTS/Golden Girdle.otf": "46e61e171acb970eabd7cc9918c349b851c25d448563e4613b229f1b34ffa523",
