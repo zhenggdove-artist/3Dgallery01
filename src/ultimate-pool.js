@@ -3,7 +3,7 @@ import {createUltimate,updateUltimate,disposeUltimate,prepareUltimates,ultimateN
 const pool=new Map();
 export const warmUltimates=(renderer,camera)=>prepareUltimates(THREE,renderer,camera);
 export function acquireUltimate(item,shot){
- const family=item.family in ultimateNames?item.family:'water',list=pool.get(family),f=list?.pop();if(!f)return createUltimate(THREE,item,shot);
+ const family=item.family in ultimateNames?item.family:'water',list=pool.get(family),f=list?.pop();if(!f){const created=createUltimate(THREE,item,shot);for(const m of created.materials)if(m.uniforms?.uKind&&m.side===THREE.DoubleSide)m.forceSinglePass=true;return created;}
  Object.assign(f,{age:0,originY:shot.origin[1],elevation:shot.direction[1],range:shot.range||30,radius:shot.radius||6,tier:item.tier||1});
  f.travel=Math.min(f.range,shot.impact?new THREE.Vector3(...shot.impact).distanceTo(new THREE.Vector3(...shot.origin)):f.range);
  f.root.position.fromArray(shot.origin);f.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.atan2(shot.direction[0],shot.direction[2]));

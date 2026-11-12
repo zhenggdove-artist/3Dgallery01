@@ -8,7 +8,9 @@ Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement conf
 - 22 rule/contract tests pass. Real Chrome tests pass for GM eight-handle scale/XYZ rotation/server save, gun camera and controls, media roundtrip, all 23 weapon families, four gear categories, mobile entry. API test passes four fighters/two spectators, atomic coin claim, save-code identity and spectator promotion.
 - Normal gameplay AMD hardware sample: 16.72 ms mean frame / 16.9 ms p95. Synthetic four-character rapid ultimate spam: 32.13 ms mean / 50.2 ms p95; do not describe this as guaranteed zero lag. Original visuals retained with capped pools.
 - Standard skill client was run twice; its forced SwiftShader screenshot timed out. Actual hardware Chrome screenshots and tests passed instead. Screenshots in output/controls and output/reletter-review inspected.
-- Worker deployed: version 3a91db88-287b-4918-a8ed-1810cd8f1973. GM Secret updated securely. Pages push/live verification follows this checkpoint.
+- Worker deployed: version 3a91db88-287b-4918-a8ed-1810cd8f1973. GM Secret updated securely. Pages release 3b9df55 succeeded (run 43252161208). Actual production Chrome verified exact font SHA, Win98 entrance, server GM auth, websocket, 13 artworks and editor; screenshots inspected, zero JS errors.
+- Final regression found hidden entrance input retaining keyboard focus; entrance now blurs it and players start at ground height. Live test asserts movement distance after login. Original FX thin planes now render in a single double-sided pass; latest four-character stress sample 18.32 ms mean / 33.3 ms p95, logic 2.01 ms, submission 11.09 ms. No geometry/particle detail removed.
+- Standard skill client also completed using the same script with Chrome hardware launch substituted for forced SwiftShader (output/reletter-final-standard-hardware). This captured loading; gameplay is covered separately by the full Chrome suites.
 
 ## 2026-11-12 earlier RELETTER correction checkpoint
 

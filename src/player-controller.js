@@ -6,7 +6,7 @@ export const RELETTER_MOVEMENT=Object.freeze({speed:8.64,acceleration:6,decelera
 export class PlayerController{
   constructor({camera,canvas,arena,root,role='fighter',seat=0,mobileStick}){
     Object.assign(this,{camera,canvas,arena,root,role,seat});this.enabled=false;this.keys=new Set();this.yaw=0;this.pitch=.2;this.distance=7;this.speed=0;this.velocityY=0;this.grounded=true;this.animation='idle';this.move=new THREE.Vector2();this.jumpVelocity=new THREE.Vector3();this.direction=new THREE.Vector3();this.target=new THREE.Vector3();this.drag=null;this.pointers=new Map();this.followTarget=null;this.stats={speed:1,jump:1,gravity:1};
-    root.position.fromArray(PLAYER_SPAWNS[seat]||PLAYER_SPAWNS[0]);this.bind(mobileStick);this.updateCamera(1);
+    root.position.fromArray(PLAYER_SPAWNS[seat]||PLAYER_SPAWNS[0]);root.position.y=arena.groundHeight(root.position.x,root.position.z);this.bind(mobileStick);this.updateCamera(1);
   }
   bind(stick){
     addEventListener('keydown',e=>{if(!this.enabled||/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName))return;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();this.keys.add(e.code);if(e.code==='Space'&&!e.repeat)this.jump();});
