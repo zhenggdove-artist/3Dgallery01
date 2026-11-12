@@ -9,7 +9,7 @@ Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement conf
 - Verification: 25 unit tests pass, desktop/touch HUD + charge + six actor models pass, original red warning circle and grounded actor screenshots inspected. Existing camera/editor, all 23 weapon families, media/draft, mobile and four-character stress pass. Synthetic adventure test now isolates its fixture from incoming world snapshots. API six-seat/atomic pickup/save identity passes when run without overlapping browser seats.
 - Lossless delivery: 11 artworks reduced from 25,303,106 to 15,111,224 bytes; every visible RGBA pixel and alpha checked byte-for-byte, originals untouched. Existing alpha-cleaned asset_0015 delivery remains unchanged; unused generated replacement removed. Latest cold-context local loading 5369ms; complete-before-entry maintained, no lazy admission. Hardware/GPU cache and network affect results.
 - Latest 4-character stress sample: frame mean 16.65ms / p95 17ms, logic 1.04ms, submission 1.39ms; not a universal zero-lag promise.
-- Worker deployed efcbc657-f3ac-46d8-a6f2-4d039bb728bd. Remaining release gate: GitHub Pages push/build and actual live verification.
+- Released implementation 59c48dd to main and codex/temple-rebuild. Pages job 43307244067 completed successfully. Worker efcbc657-f3ac-46d8-a6f2-4d039bb728bd healthy. Actual production Chrome verified original font hash, new sketch HUD (screenshot inspected), Win98 entry, GM server authentication, movement, 13 artworks, websocket and Shift+Y; no JavaScript errors. Tests do not establish universal zero lag or pixel-perfect equivalence of every legacy RELETTER panel.
 
 ## 2026-11-12 release verification (supersedes checkpoint below)
 
