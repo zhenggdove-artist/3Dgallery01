@@ -1,0 +1,8 @@
+#gun-overlay{position:fixed;inset:0;pointer-events:none;z-index:155}
+#gun-overlay[hidden]{display:none}
+#gun-overlay .gun-reticle{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%);border:1px solid #fff9;border-radius:50%;box-shadow:0 0 5px #0008}
+#gun-overlay.scoped{background:radial-gradient(circle at center,transparent 0 35vmin,#08070a 35.5vmin)}
+#gun-overlay .scope-lines{display:none}
+#gun-overlay.scoped .scope-lines{display:block;position:absolute;left:50%;top:50%;width:70vmin;height:70vmin;transform:translate(-50%,-50%);border-radius:50%;background:linear-gradient(transparent calc(50% - .5px),#111 50%,transparent calc(50% + .5px)),linear-gradient(90deg,transparent calc(50% - .5px),#111 50%,transparent calc(50% + .5px))}
+#gun-overlay.scoped .gun-reticle{width:5px;height:5px;background:#f34;border:none}
+#gun-overlay span{position:absolute;bottom:22%;left:50%;transform:translateX(-50%);color:white;font:12px sans-serif;text-shadow:0 1px 3px black}

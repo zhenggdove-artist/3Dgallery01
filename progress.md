@@ -1,5 +1,25 @@
 Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement confusion, invisible smoke, too-fast look controls, mobile forward movement, and performance without reducing visual quality.
 
+## 2026-11-12 release verification (supersedes checkpoint below)
+
+- Exact Golden Girdle binary verified against owner's original source. 49 source modules and four fonts tracked with SHA256 manifest; original repository/backend untouched.
+- Added original garden/fishing visuals, catch/release aquariums, loot illustrations, persistent image/drawing/audio/video media, original equipment fusion and status effects, hand-held exotic weapons, token guardians, pooled ultimate effects.
+- Corrected duplicate fusion consumption, fused shields, weapon-specific charge duration, stationary wing steering, gun shoulder/scope/automatic fire and hand IK. Shift+Y form step mismatch fixed; published temple-layout.json now loads on startup.
+- 22 rule/contract tests pass. Real Chrome tests pass for GM eight-handle scale/XYZ rotation/server save, gun camera and controls, media roundtrip, all 23 weapon families, four gear categories, mobile entry. API test passes four fighters/two spectators, atomic coin claim, save-code identity and spectator promotion.
+- Normal gameplay AMD hardware sample: 16.72 ms mean frame / 16.9 ms p95. Synthetic four-character rapid ultimate spam: 32.13 ms mean / 50.2 ms p95; do not describe this as guaranteed zero lag. Original visuals retained with capped pools.
+- Standard skill client was run twice; its forced SwiftShader screenshot timed out. Actual hardware Chrome screenshots and tests passed instead. Screenshots in output/controls and output/reletter-review inspected.
+- Worker deployed: version 3a91db88-287b-4918-a8ed-1810cd8f1973. GM Secret updated securely. Pages push/live verification follows this checkpoint.
+
+## 2026-11-12 earlier RELETTER correction checkpoint
+
+- Correct authoritative source: owner's local `RELETTER/RELETTER` working tree, not the old audit clone. Golden Girdle.otf was missing in the audit clone; fallback Saint caused the wrong title. Copied the original font and verified SHA256 46e61e171acb970eabd7cc9918c349b851c25d448563e4613b229f1b34ffa523 matches both files.
+- Added reproducible vendor script / source hashes, original held weapon functions, melee poses, projectile and ultimate effects, equipment models/icons, original movement constants, Win98 Notepad entry, server-validated GM authentication and 8-handle artwork editor with persistence/export.
+- Browser regression passed: actual font load, two entry fields, drag orbit, original rig, Q charge, 4 proportional corners / 4 nonuniform midpoints, XYZ rotation, authoritative save. Inspected entry and GM scale screenshots in output/reletter-review.
+- Hardware AMD sample: mean frame 16.93 ms; logic .75 ms, render submission 3.32 ms. Not a guarantee for every machine or full multiplayer combat stress.
+- Fixed missing guardian assets and black instance materials. Connected original equipment bonuses, shield recharge, wing flap and garden/fishing server adapters. Existing 13 tests and syntax checks pass. Added 4 further contract tests; their latest npm process was still running at this checkpoint.
+- REMAINING: finish original gardening / fishing world visuals and full interaction tests; special token guardian ultimate currently uses generic ultimate fallback; compare remaining scene/build props with original; mobile layout and multi-player FX stress; verify new tests and standard client; deploy updated GM secret and Worker, commit/push Pages, verify live. No claim that all original items/features are complete. Public site remains previous release.
+- Active local servers: static :8000 and Wrangler :8788. Latest browser script tests/reletter-browser.mjs. Standard client output target output/reletter-standard-final. Secrets stay in ignored .dev.vars; never commit/log them.
+
 ## 2026-06-04 current `index.html` correction
 
 - User explicitly requested that the primary file is `index.html`; no other HTML entry should be treated as the target for this round.

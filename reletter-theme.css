@@ -1,0 +1,26 @@
+/* RELETTER's actual GoldenGirdle title font and pastel garden palette. */
+:root{--gold:#ae4b92;--muted:#796b86;--line:#c9afce;color-scheme:light}
+body{font-family:Saint,'Trebuchet MS',sans-serif;color:#45344f;background:#f9c8e6}
+.reletter-wordmark,#entry h1{font-family:GoldenGirdle,Saint,sans-serif!important;font-weight:bold!important;letter-spacing:.12em!important;line-height:1.1}
+#loading{background:#f8dced;color:#613a66}#loading .reletter-wordmark{font-size:clamp(32px,10vw,110px)}.loading-track{background:#dcb6d9}.loading-track i{background:#92508c}
+#entry{position:fixed;inset:0;transform:none;width:100%;max-width:none;padding:24px;display:grid;place-items:center;background:#008080;color:#111;z-index:50}
+.notepad-window{width:min(540px,calc(100vw - 32px));background:#c0c0c0;padding:3px;box-shadow:inset 1px 1px #fff,inset -1px -1px #000,2px 3px 0 #004c4c;animation:desktop-open .35s ease-out}
+.win98-titlebar{display:flex;justify-content:space-between;align-items:center;padding:4px 5px;background:linear-gradient(90deg,#000080,#1084d0);color:white;font:bold 13px Tahoma,sans-serif}
+.win98-titlebar span:last-child{background:#c0c0c0;color:#111;letter-spacing:4px;border:1px outset #fff;padding-left:4px}
+.notepad-page{background:#fff;padding:34px 30px 24px;margin:3px 1px;border:2px inset #ddd}
+#entry h1{font-size:clamp(25px,7.5vw,53px);margin:0 0 35px;text-align:center;color:#181818;white-space:nowrap}
+#entry form{display:grid;grid-template-columns:1fr;gap:23px}#entry label{font:15px 'Courier New',monospace;color:#111;letter-spacing:0;display:block}
+#entry input{display:block;width:100%;padding:6px 0;margin-top:4px;color:#111;background:white;border:0;border-bottom:1px solid #b4b4b4;border-radius:0;font:18px 'Courier New',monospace;outline-offset:3px}
+#entry button{justify-self:end;min-width:90px;padding:5px 15px;min-height:30px;background:#c0c0c0;color:#111;border:2px outset white;font:13px Tahoma,sans-serif;letter-spacing:0}
+#entry button:active{border-style:inset}#entry-error{color:#a20e31;font:12px Tahoma;margin:0}#entry-error:empty{display:none}
+.win98-taskbar{position:absolute;bottom:0;left:0;right:0;height:30px;background:#c0c0c0;box-shadow:inset 0 2px white;display:flex;align-items:center;gap:6px;padding:3px;font:12px Tahoma,sans-serif}.win98-taskbar span{border:2px outset white;padding:2px 8px}.win98-taskbar span+span{border-style:inset;min-width:170px}
+.glass-card{background:#fff2fbec;border:1px solid #d6bbdc;border-radius:17px;box-shadow:0 12px 40px #60346822;color:#45344f}
+.hud-block{background:#fff0f9de;color:#503d60;border-color:#e9b8d8;border-radius:13px}#identity strong{font-family:Saint,sans-serif}#vitals progress{accent-color:#ed80b9}#dock button{background:#fff3f9ed;color:#493350;border:1px solid #dfbbda;border-radius:18px;box-shadow:0 4px 0 #ad8cab33;width:62px}#dock b{color:#904d92}#dock{gap:8px}#toast,#prompt{background:#fff1f9ed;color:#553b64;border:1px solid #d8afd4;border-radius:14px}
+#panel h2{font-family:Saint,sans-serif}.item{background:#fff8fe;border-radius:12px;color:#503b5b}.item h3{font-family:Saint,sans-serif}.item button,.panel-button,#panel select,#panel input,#panel textarea{background:#f8edf7;color:#51345e;border:1px solid #d9b7d7;border-radius:7px}.item img{height:80px;width:100%;object-fit:contain}.panel-row{flex-wrap:wrap}.item button:disabled{opacity:.5}
+#mobile-stick{background:#f4e4ee55;border-color:#b688bd88}#mobile-stick i{background:#ca9acaa0;width:30px;height:30px;left:40px;top:40px}
+#attack-button.charging{background:conic-gradient(#e9a3e9 var(--charge),#fff6fc 0);border-color:#a95db7;box-shadow:0 0 16px #dc95ee}#crosshair{border-color:#bd82d7}
+#art-editor{position:fixed;z-index:40;top:90px;left:14px;width:290px;background:#fff6fbed;color:#432e55;border:1px solid #bf8dc5;border-radius:12px;padding:14px;font:13px system-ui;box-shadow:0 8px 24px #41204722}#art-editor h3{margin:0 0 9px}#art-editor p{line-height:1.5}#art-editor button{padding:8px;margin:4px 4px 0 0;background:#ead4ed;color:#392441;border:1px solid #a978b4;border-radius:6px}#art-editor input{width:72px;background:white;color:#432e55;border:1px solid #c4a4cf;padding:4px}#art-editor .axis-row{display:flex;gap:5px;margin:7px 0}#art-editor [data-status]{color:#785090}
+#art-handles{position:fixed;inset:0;z-index:35;pointer-events:none}#art-handles svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}#art-handles polygon{fill:none;stroke:#e455ce;stroke-width:2;vector-effect:non-scaling-stroke}.art-handle{position:absolute;width:16px;height:16px;background:white;border:2px solid #b0299e;pointer-events:auto;transform:translate(-50%,-50%);cursor:nwse-resize;touch-action:none}.art-handle.midpoint{border-radius:50%;cursor:ew-resize}#art-editor[hidden],#art-handles[hidden]{display:none}
+@keyframes desktop-open{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+.ready #loading{display:none}.booting #entry{visibility:hidden}
+@media(max-width:720px){#entry{inset:0;left:0;padding:16px}.notepad-page{padding:28px 20px}#dock{grid-template-columns:repeat(2,52px)}#art-editor{top:76px;width:245px;font-size:12px}}

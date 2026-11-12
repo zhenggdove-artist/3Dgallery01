@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import {chromium} from 'playwright';
+const site='http://127.0.0.1:8000',backend='http://127.0.0.1:8788',output='output/reletter-review';await mkdir(output,{recursive:true});
+const key=(await readFile('.dev.vars','utf8')).match(/^TEMPLE_ADMIN_KEY=(.+)$/m)?.[1]?.trim();if(!key)throw Error('Local GM test secret missing');
+const browser=await chromium.launch({channel:'chrome',headless:true,args:['--ignore-gpu-blocklist']});
+const context=await browser.newContext({viewport:{width:1280,height:800}});await context.addInitScript(url=>localStorage.setItem('temple-backend-url',url),backend);
+const page=await context.newPage(),errors=[];page.on('pageerror',e=>{errors.push(e.message);console.log('pageerror',e.message);});page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});page.on('response',r=>{if(r.status()>=400)console.log('HTTP',r.status(),r.url());});page.setDefaultTimeout(45000);
+try{
+ await page.goto(site);console.log('Navigated');await page.waitForFunction(()=>document.body.classList.contains('ready'),null,{timeout:120000});
+ await page.screenshot({path:output+'/entry.png'});console.log('Entry loaded');
+ assert.equal(await page.locator('#entry input').count(),2);assert.equal(await page.locator('.temple-mark').count(),0);
+ assert.ok(await page.evaluate(()=>document.fonts.check('48px GoldenGirdle')));
+ await page.locator('#player-name').fill('Ely');await page.locator('#memory-code').fill(key);await page.locator('#entry-form').evaluate(f=>f.requestSubmit());await page.locator('#hud').waitFor({state:'visible'});
+ await page.waitForFunction(()=>window.templeTest.controller()?.enabled);console.log('GM joined');
+ await page.evaluate(async()=>{const n=templeTest.network,w=await n.world();await n.action('set-artwork-layout',{platformId:'platform-09',expectedRevision:w.world.artworkLayout['platform-09']?.revision||0,layout:{position:[4,6.4,37],rotation:[0,0,0],scale:[1,1,1]}});});
+ await page.keyboard.down('KeyW');await page.waitForTimeout(700);await page.keyboard.up('KeyW');assert.equal(await page.evaluate(()=>document.pointerLockElement),null);
+ await page.mouse.move(700,400);await page.mouse.down();await page.mouse.move(850,450,{steps:8});await page.mouse.up();
+ assert.notEqual(await page.evaluate(()=>window.templeTest.controller().yaw),0);
+ await page.evaluate(async()=>{const n=templeTest.network;await n.action('buy',{itemId:'saber-2'});await n.action('equip',{itemId:'saber-2'});});await page.waitForTimeout(400);
+ assert.ok(await page.evaluate(()=>{const root=templeTest.controller().root;return root.userData.blade&&root.userData.bones.has('RightHand');}));
+ await page.keyboard.down('KeyQ');await page.waitForTimeout(800);await page.screenshot({path:output+'/charge.png'});await page.keyboard.up('KeyQ');await page.waitForTimeout(200);await page.screenshot({path:output+'/melee.png'});
+ await page.waitForTimeout(800);await page.keyboard.down('KeyQ');await page.waitForTimeout(1700);await page.keyboard.up('KeyQ');await page.waitForTimeout(500);await page.screenshot({path:output+'/ultimate.png'});console.log('Original weapon and charge tested');
+ await page.evaluate(()=>{const target=templeTest.arena.artworks.get('platform-09');templeTest.controller().followTarget=target;templeTest.controller().yaw=0;templeTest.controller().pitch=.1;templeTest.controller().distance=12;});await page.waitForTimeout(300);
+ const point=await page.evaluate(()=>{const a=templeTest.arena.artworks.get('platform-09'),p=a.position.clone().project(templeTest.camera);return {x:(p.x+1)*innerWidth/2,y:(1-p.y)*innerHeight/2};});await page.mouse.click(point.x,point.y);await page.keyboard.press('Shift+T');await page.locator('#art-handles').waitFor({state:'visible'});assert.equal(await page.locator('.art-handle').count(),8);
+ const before=await page.evaluate(()=>templeTest.editor.selected.scale.toArray()),corner=await page.locator('[data-handle="2"]').boundingBox();await page.mouse.move(corner.x+8,corner.y+8);await page.mouse.down();await page.mouse.move(corner.x+45,corner.y-30,{steps:8});await page.mouse.up();
+ const proportional=await page.evaluate(()=>templeTest.editor.selected.scale.toArray());assert.ok(proportional[0]>before[0]);assert.ok(Math.abs(proportional[0]/before[0]-proportional[2]/before[2])<.001);
+ const mid=await page.locator('[data-handle="3"]').boundingBox();await page.mouse.move(mid.x+8,mid.y+8);await page.mouse.down();await page.mouse.move(mid.x+48,mid.y+8,{steps:8});await page.mouse.up();const nonuniform=await page.evaluate(()=>templeTest.editor.selected.scale.toArray());assert.ok(nonuniform[0]>proportional[0]);assert.ok(Math.abs(nonuniform[1]-proportional[1])<.001);
+ await page.screenshot({path:output+'/gm-scale.png'});await page.keyboard.press('Shift+R');assert.equal(await page.evaluate(()=>templeTest.editor.gizmo.mode),'rotate');await page.locator('[data-axis="rotation-1"]').fill('25');await page.locator('[data-axis="rotation-1"]').press('Tab');await page.screenshot({path:output+'/gm-rotate.png'});
+ await page.locator('#art-editor [data-action="save"]').click();await page.waitForFunction(()=>!templeTest.editor.dirty&&!templeTest.editor.saving);const saved=await page.evaluate(async()=>{const w=await templeTest.network.world();return w.world.artworkLayout['platform-09'];});assert.ok(Math.abs(saved.rotation[1]-25*Math.PI/180)<.00001);assert.ok(saved.scale[0]>saved.scale[1]);
+ await page.keyboard.press('Escape');await page.evaluate(()=>templeTest.controller().followTarget=null);await page.screenshot({path:output+'/garden.png'});
+ await page.waitForTimeout(4000);const metrics=await page.evaluate(()=>{const t=templeTest,gl=t.renderer.getContext(),ext=gl.getExtension('WEBGL_debug_renderer_info');return {gpu:ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):'unknown',...Object.fromEntries(Object.entries(t.performanceSamples).map(([k,a])=>[k,{mean:a.reduce((s,x)=>s+x,0)/a.length,p95:[...a].sort((x,y)=>x-y)[Math.floor(a.length*.95)]}]))};});
+ const state=JSON.parse(await page.evaluate(()=>render_game_to_text()));await writeFile(output+'/state.json',JSON.stringify({state,saved,metrics,errors},null,2));assert.equal(state.artworks.total,13);assert.deepEqual(errors,[]);console.log('PASS: entry, RELETTER controls, rig, charge, 8 handles, nonuniform scale, rotation and server save',JSON.stringify(metrics));
+}finally{await page.evaluate(()=>window.templeTest?.network.close()).catch(()=>{});await context.close();await browser.close();}

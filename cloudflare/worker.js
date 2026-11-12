@@ -23,6 +23,7 @@ export class TempleRoom extends DurableObject{
       CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, profile_key TEXT NOT NULL, name TEXT NOT NULL, text TEXT NOT NULL, time INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS request_receipts (session_id TEXT NOT NULL, request_id TEXT NOT NULL, response TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(session_id,request_id));
       CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS plant_media (id TEXT PRIMARY KEY, owner TEXT NOT NULL, type TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL);
     `);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
@@ -42,8 +43,13 @@ export class TempleRoom extends DurableObject{
     try{
       if(path==='/health')return withCors(request,json({ok:true,service:'TempleRoom',database:'sqlite',players:this.roster().length}),this.env);
       if(path==='/api/join'&&request.method==='POST')return withCors(request,await this.join(request),this.env);
+      if(path.startsWith('/api/media/')&&request.method==='GET'){
+        const media=this.sql.exec('SELECT type,data FROM plant_media WHERE id=?',path.slice(11)).toArray()[0];
+        return withCors(request,media?new Response(media.data,{headers:{'Content-Type':media.type,'X-Content-Type-Options':'nosniff','Cache-Control':'public,max-age=31536000,immutable'}}):json({error:'Media missing'},404),this.env);
+      }
       const token=this.token(request,url),session=this.session(token);if(!session)return withCors(request,json({error:'Session expired'},401),this.env);
       if(path==='/api/socket')return this.connect(request,session,token);
+      if(path==='/api/media'&&request.method==='POST')return withCors(request,await this.uploadMedia(request,session),this.env);
       if(path==='/api/world'&&request.method==='GET')return withCors(request,json({world:worldView(this.world(),session.profile_key),players:this.roster(),self:this.self(session)}),this.env);
       if(path==='/api/action'&&request.method==='POST')return withCors(request,await this.action(request,session),this.env);
       if(path==='/api/role'&&request.method==='POST')return withCors(request,await this.changeRole(request,session),this.env);
@@ -58,9 +64,12 @@ export class TempleRoom extends DurableObject{
   async join(request){
     const clientKey=request.headers.get('CF-Connecting-IP')||request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()||'local';if(!this.consumeRate(`join:${clientKey}`,30,60_000))return json({error:'Too many join attempts'},429);
     const body=await readBody(request,8_000);if(!validName(body.name)||!validColor(body.color))return json({error:'Choose a name and color'},400);
-    this.prune();const now=Date.now(),saveCode=normalizeCode(body.saveCode),saved=saveCode?this.sql.exec('SELECT * FROM save_codes WHERE code=?',saveCode).toArray()[0]:null;
+    const memory=String(body.memoryCode||body.saveCode||'').trim();
+    const admin=body.name.trim()==='Ely'&&memory.length>0&&constantTime(memory,String(this.env.TEMPLE_ADMIN_KEY||''));
+    if(body.name.trim()==='Ely'&&!admin)return json({error:'Invalid name or memory code'},403);
+    if(!admin&&memory&&!/^[A-Za-z0-9]{4}$/.test(memory))return json({error:'Memory code must contain four letters or numbers'},400);
+    this.prune();const now=Date.now(),saveCode=admin?'':normalizeCode(memory),saved=saveCode?this.sql.exec('SELECT * FROM save_codes WHERE code=?',saveCode).toArray()[0]:null;
     if(saveCode&&!saved){if(!this.consumeRate(`save:${clientKey}`,8,60_000))return json({error:'Too many save-code attempts'},429);return json({error:'Save code not found'},404);}
-    const admin=typeof body.adminKey==='string'&&body.adminKey.length>0&&constantTime(body.adminKey,String(this.env.TEMPLE_ADMIN_KEY||''));
     const profileKey=saved?.profile_key||`guest:${crypto.randomUUID()}`;
     // One live identity at a time. Rejoining releases the previous seat and socket.
     for(const row of this.sql.exec('SELECT id FROM sessions WHERE profile_key=?',profileKey).toArray())this.disconnectSession(row.id);
@@ -109,6 +118,7 @@ export class TempleRoom extends DurableObject{
     const receipt=this.sql.exec('SELECT response FROM request_receipts WHERE session_id=? AND request_id=?',session.id,requestId).toArray()[0];if(receipt)return json(JSON.parse(receipt.response));
     const state=session.state?JSON.parse(session.state):null;if(!state?.position)return json({error:'Connect and enter the Temple first'},409);
     const world=this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:state.position},actors=this.actors();
+    if(body.media||body.surface){const mediaId=body.media?.id||body.surface,media=this.sql.exec('SELECT id,type,owner FROM plant_media WHERE id=?',mediaId).toArray()[0];if(!media||media.owner!==session.profile_key||body.surface&&!media.type.startsWith('image/'))return json({error:'Upload your own media first'},400);if(body.media)body.media={id:media.id,type:media.type};}
     const result=applyAction(world,actor,body,{now:Date.now(),actors,seatIndex:session.seat});if(result.error)return json({error:result.error},400);
     const response={ok:true,...result,world:worldView(world,session.profile_key)};
     this.ctx.storage.transactionSync(()=>{this.save(world);this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,JSON.stringify(response),Date.now());this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);});
@@ -119,6 +129,19 @@ export class TempleRoom extends DurableObject{
     const now=Date.now();if(session.save_code)return json({ok:true,code:session.save_code});if(now-session.last_code_at<60_000)return json({error:'Wait before requesting another code'},429);
     let code;for(let attempt=0;attempt<64;attempt++){code=randomCode();if(!this.sql.exec('SELECT code FROM save_codes WHERE code=?',code).toArray().length)break;code=null;}if(!code)return json({error:'Could not allocate a save code'},503);
     this.ctx.storage.transactionSync(()=>{this.sql.exec('INSERT INTO save_codes VALUES(?,?,?,?)',code,session.profile_key,now,now);this.sql.exec('UPDATE sessions SET save_code=?,last_code_at=? WHERE id=?',code,now,session.id);});return json({ok:true,code});
+  }
+
+  async uploadMedia(request,session){
+    if(session.role!=='fighter')return json({error:'Spectators cannot upload'},403);
+    if(!this.consumeRate('media:'+session.profile_key,12,60_000))return json({error:'Upload limit reached'},429);
+    const type=(request.headers.get('Content-Type')||'').split(';')[0];
+    if(!['image/png','image/jpeg','image/webp','audio/mpeg','audio/ogg','audio/webm','video/webm','video/mp4'].includes(type))return json({error:'Unsupported media type'},400);
+    const reader=request.body?.getReader(),chunks=[];let length=0;
+    if(!reader)return json({error:'Empty upload'},400);
+    for(;;){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>1_500_000){await reader.cancel();return json({error:'Maximum file size is 1.5 MB'},413);}chunks.push(value);}
+    if(!length)return json({error:'Empty upload'},400);
+    const data=new Uint8Array(length);let offset=0;for(const chunk of chunks){data.set(chunk,offset);offset+=chunk.length;}
+    const id=crypto.randomUUID();this.sql.exec('INSERT INTO plant_media VALUES(?,?,?,?,?)',id,session.profile_key,type,data,Date.now());return json({id,type});
   }
 
   consumeRate(key,limit,windowMs){

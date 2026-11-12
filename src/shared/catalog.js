@@ -1,3 +1,4 @@
+import {EQUIPMENT,DEFAULT_WEAPON,attackStats as reletterAttackStats} from '../reletter/equipment-catalog.js';
 export const RARITIES = Object.freeze([
   {id:'common',name:'Common',color:'#d7d2c6',weight:50},
   {id:'uncommon',name:'Uncommon',color:'#76d59a',weight:28},
@@ -6,31 +7,7 @@ export const RARITIES = Object.freeze([
   {id:'relic',name:'Relic',color:'#f1cc62',weight:2}
 ]);
 
-const WEAPON_FAMILIES = [
-  ['tide','Tide Blade','water','#63dcff',14,3.8,520],
-  ['frost','Glacier Staff','ice','#a9edff',18,12,760],
-  ['ember','Ember Maul','fire','#ff9c50',23,4.2,920],
-  ['storm','Storm Lance','lightning','#c4b2ff',16,9,620],
-  ['prism','Prism Bow','beam','#ffe8a0',20,18,850],
-  ['bloom','Bloom Whip','petal','#ff9ed5',13,7,480],
-  ['nova','Nova Orb','wave','#95ffe0',27,10,1100],
-  ['saber','Starlight Saber','light','#c5a8ff',19,3.4,410]
-];
-const TIER_NAMES = ['Worn','Tempered','Radiant','Celestial','Eternal'];
 const TIER_PRICES = [240,620,1450,3300,7600];
-
-export const WEAPONS = Object.freeze(WEAPON_FAMILIES.flatMap(([family,name,element,color,baseDamage,range,cooldown],familyIndex)=>
-  TIER_NAMES.map((rank,index)=>Object.freeze({
-    id:`${family}-${index+1}`, name:`${rank} ${name}`, slot:'weapon', family, element, color,
-    tier:index+1, rarity:RARITIES[index].id,
-    price:TIER_PRICES[index]+familyIndex*35,
-    sell:Math.floor((TIER_PRICES[index]+familyIndex*35)*.25),
-    damage:+(baseDamage*(1+index*.42)).toFixed(1),
-    range:+(range*(1+index*.18)).toFixed(1),
-    cooldown:Math.max(240,cooldown-index*35),
-    knockback:+(2.4+index*.65).toFixed(2)
-  }))
-));
 
 export const ARMOR = Object.freeze([
   ['moss-guard','Moss Guard','armor','#73936c',1,310,14],
@@ -48,11 +25,19 @@ export const MATERIALS = Object.freeze([
   {id:'temple-resin',name:'Temple Resin',slot:'material',color:'#bc77bd',price:260,sell:65}
 ]);
 
-export const ITEMS = Object.freeze([...WEAPONS,...ARMOR,...MATERIALS]);
+// Original RELETTER identity, range, cadence and effects; only Temple economy/HP scale differ.
+export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].map(original=>{
+  const tier=Math.max(1,Math.min(5,original.tier||1)),price=original.notForSale||original.id==='water'?0:original.slot==='seed'?80+tier*35:TIER_PRICES[tier-1]+Math.min(180,original.price||0);
+  return Object.freeze({...original,price,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10,chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10});
+}));
+export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'));
+export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','armor','head','outfit','shield','wings','rod','tool']);
+export function attackStats(item,charge=0){const result=reletterAttackStats(item,charge);if(item.id==='water')result.damage*=10;return result;}
+export const ITEMS = Object.freeze([...RELETTER_ITEMS,...ARMOR,...MATERIALS]);
 const INDEX = new Map(ITEMS.map(item=>[item.id,item]));
 export const itemById = id => INDEX.get(id) || null;
 
-export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>item.slot!=='material'));
+export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>item.slot!=='material'&&!item.notForSale&&item.price>0));
 export const ECONOMY = Object.freeze({
   platformCoinValue:40,
   platformCoinRespawnMs:90_000,
@@ -65,11 +50,11 @@ export const ECONOMY = Object.freeze({
   monsterCoinMin:280,
   monsterCoinMax:520,
   fusionBaseCost:320,
-  buildCosts:Object.freeze({wall:80,column:110,platform:170,tree:95,house:240}),
+  buildCosts:Object.freeze({cube:80,bar:110,cylinder:110,wall:80,column:110,platform:170,tree:95,house:240}),
   fishValues:Object.freeze({minnow:35,koi:95,relic:260})
 });
 
-export const STARTER_LOADOUT = Object.freeze({weapon:'tide-1',armor:null,head:null});
+export const STARTER_LOADOUT = Object.freeze({weapon:'tide-1',armor:null,head:null,outfit:null,shield:null,wings:null,rod:null,tool:null});
 
 export function weightedChoice(entries,rng=Math.random){
   const total=entries.reduce((sum,entry)=>sum+(entry.weight||1),0);let cursor=rng()*total;
@@ -81,12 +66,12 @@ export function groundDropRoll(rng=Math.random){
   const kind=weightedChoice([{id:'coin',weight:42},{id:'material',weight:25},{id:'weapon',weight:20},{id:'equipment',weight:13}],rng).id;
   if(kind==='coin')return {kind,amount:20+Math.floor(rng()*41)};
   if(kind==='material')return {kind,itemId:MATERIALS[Math.floor(rng()*MATERIALS.length)].id};
-  const pool=kind==='weapon'?WEAPONS.filter(item=>item.tier<=3):ARMOR.filter(item=>item.tier<=3);
+  const pool=kind==='weapon'?WEAPONS.filter(item=>item.tier>0&&item.tier<=3&&!item.notForSale):RELETTER_ITEMS.filter(item=>['head','outfit','shield','wings'].includes(item.slot)&&item.tier<=3);
   const weighted=pool.map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));
   return {kind,itemId:weightedChoice(weighted,rng).id};
 }
 
 export function monsterDropRoll(rng=Math.random){
-  const pool=[...WEAPONS,...ARMOR].map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
+  const pool=RELETTER_ITEMS.filter(item=>['weapon','head','outfit','shield','wings'].includes(item.slot)&&item.tier>0).map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
   return {kind:'equipment',itemId:weightedChoice(pool,rng).id};
 }

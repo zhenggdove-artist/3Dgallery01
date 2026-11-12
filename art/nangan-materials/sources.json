@@ -1,0 +1,120 @@
+[
+  {
+    "file": "wood_textured_concrete-diff.jpg",
+    "source": "https://polyhaven.com/a/wood_textured_concrete",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_textured_concrete/wood_textured_concrete_diff_1k.jpg",
+    "license": "CC0",
+    "usage": "Generic photographic surface material; not a Nangan location photograph"
+  },
+  {
+    "file": "wood_textured_concrete-normal.jpg",
+    "source": "https://polyhaven.com/a/wood_textured_concrete",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_textured_concrete/wood_textured_concrete_nor_gl_1k.jpg",
+    "license": "CC0",
+    "usage": "Generic photographic surface material; not a Nangan location photograph"
+  },
+  {
+    "file": "asphalt_02-diff.jpg",
+    "source": "https://polyhaven.com/a/asphalt_02",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/asphalt_02/asphalt_02_diff_1k.jpg",
+    "license": "CC0",
+    "usage": "Generic photographic surface material; not a Nangan location photograph"
+  },
+  {
+    "file": "asphalt_02-normal.jpg",
+    "source": "https://polyhaven.com/a/asphalt_02",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/asphalt_02/asphalt_02_nor_gl_1k.jpg",
+    "license": "CC0",
+    "usage": "Generic photographic surface material; not a Nangan location photograph"
+  },
+  {
+    "file": "forest_ground_04-diff.jpg",
+    "source": "https://polyhaven.com/a/forest_ground_04",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_04/forest_ground_04_diff_1k.jpg",
+    "license": "CC0",
+    "usage": "Generic photographic surface material; not a Nangan location photograph"
+  },
+  {
+    "file": "forest_ground_04-normal.jpg",
+    "source": "https://polyhaven.com/a/forest_ground_04",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_04/forest_ground_04_nor_gl_1k.jpg",
+    "license": "CC0",
+    "usage": "Generic photographic surface material; not a Nangan location photograph"
+  },
+  {
+    "file": "stone_wall_02-diff.jpg",
+    "source": "https://polyhaven.com/a/stone_wall_02",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/stone_wall_02/stone_wall_02_diff_1k.jpg",
+    "license": "CC0",
+    "usage": "Generic photographic surface material; not a Nangan location photograph"
+  },
+  {
+    "file": "stone_wall_02-normal.jpg",
+    "source": "https://polyhaven.com/a/stone_wall_02",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/stone_wall_02/stone_wall_02_nor_gl_1k.jpg",
+    "license": "CC0",
+    "usage": "Generic photographic surface material; not a Nangan location photograph"
+  },
+  {
+    "file": "concrete_floor_worn_02-diff.jpg",
+    "source": "https://polyhaven.com/a/concrete_floor_worn_02",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_worn_02/concrete_floor_worn_02_diff_1k.jpg",
+    "license": "CC0",
+    "usage": "Generic photographic surface material; not a Nangan location photograph"
+  },
+  {
+    "file": "concrete_floor_worn_02-normal.jpg",
+    "source": "https://polyhaven.com/a/concrete_floor_worn_02",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_worn_02/concrete_floor_worn_02_nor_gl_1k.jpg",
+    "license": "CC0",
+    "usage": "Generic photographic surface material; not a Nangan location photograph"
+  },
+  {
+    "file": "tree-leaves_diff.png",
+    "source": "https://polyhaven.com/a/island_tree_01",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/island_tree_01/island_tree_01_leaves_diff_1k.png",
+    "license": "CC0"
+  },
+  {
+    "file": "tree-leaves_alpha.png",
+    "source": "https://polyhaven.com/a/island_tree_01",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/island_tree_01/island_tree_01_leaves_alpha_1k.png",
+    "license": "CC0"
+  },
+  {
+    "file": "concrete_layers-diff.jpg",
+    "source": "https://polyhaven.com/a/concrete_layers",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_layers/concrete_layers_diff_1k.jpg",
+    "license": "CC0"
+  },
+  {
+    "file": "concrete_layers-normal.jpg",
+    "source": "https://polyhaven.com/a/concrete_layers",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_layers/concrete_layers_nor_gl_1k.jpg",
+    "license": "CC0"
+  },
+  {
+    "file": "weathered_plank_siding-diff.jpg",
+    "source": "https://polyhaven.com/a/weathered_plank_siding",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/weathered_plank_siding/weathered_plank_siding_diff_1k.jpg",
+    "license": "CC0"
+  },
+  {
+    "file": "weathered_plank_siding-normal.jpg",
+    "source": "https://polyhaven.com/a/weathered_plank_siding",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/weathered_plank_siding/weathered_plank_siding_nor_gl_1k.jpg",
+    "license": "CC0"
+  },
+  {
+    "file": "rusty_corrugated_iron-diff.jpg",
+    "source": "https://polyhaven.com/a/rusty_corrugated_iron",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rusty_corrugated_iron/rusty_corrugated_iron_diff_1k.jpg",
+    "license": "CC0"
+  },
+  {
+    "file": "rusty_corrugated_iron-normal.jpg",
+    "source": "https://polyhaven.com/a/rusty_corrugated_iron",
+    "image": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rusty_corrugated_iron/rusty_corrugated_iron_nor_gl_1k.jpg",
+    "license": "CC0"
+  }
+]

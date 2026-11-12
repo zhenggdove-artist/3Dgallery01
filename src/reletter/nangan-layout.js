@@ -1,0 +1,24 @@
+import {islandContains} from './nangan-map.js';
+import {soldierGround,soldierHeadlandHeight,SOLDIER_COLLIDERS} from './nangan-soldier-site.js';
+// Shared street plan and collision volumes: both server enemies and rendered buildings use this data.
+export const DISTRICTS=[{id:'fuao',name:'福澳港',z:-9},{id:'qingshui',name:'清水',z:53},{id:'meishi',name:'梅石',z:112}];
+export function streetCenter(z){return 2054-Math.max(0,Math.min(130,z+9))*.46;}
+export function landscapeHeight(x,z){const site=soldierGround(x,z);if(site!==null)return site;const headland=soldierHeadlandHeight(x,z);if(headland!==null)return headland;if(x>2050&&z<40&&z>-55)return 0;const dx=Math.abs(x-streetCenter(z)),along=Math.max(-35-z,0,z-165),edge=Math.max(dx-38,along),blend=Math.min(1,Math.max(0,edge/32)),grade=Math.max(0,Math.min(16,(z-8)*.15)),hills=12+15*Math.pow(Math.sin((x-1880)*.022),2)+21*Math.pow(Math.sin((z+70)*.014),2);return grade*(1-blend)+hills*blend;}
+export function streetHeight(x,z){const base=landscapeHeight(x,z);return base+(Math.abs(x-1994.2)<7.8&&z>=132&&z<160?Math.min(4,(z-132)*.25):0);}
+export const roadWidth=z=>z<22?7:z<85?4.4:3.8;
+export const BUILDINGS=[];
+// Irregular attached frontages, alleys, rear rows and hillside terraces. The composition follows
+// credited views; unnamed infill is an interpretation, never a claim of an individually surveyed house.
+for(let row=0;row<3;row++)for(const side of [-1,1]){let i=0;for(let z=-29;z<132;){const zone=z<24?'fuao':z<85?'qingshui':'meishi',d=(zone==='meishi'?2.7:3.1)+(i%4)*.3,w=3.3+(i%3)*.55,h=zone==='meishi'&&row===0?3.4+(i%3)*.18:3.3+(i%3)*1.3;const skip=(z>46&&z<59)||([22,77,104].some(c=>Math.abs(z-c)<3));const x=streetCenter(z)+side*(roadWidth(z)/2+1.15+w/2+row*8)+(i%3-1)*.22;if(!skip&&!(zone==='fuao'&&side===1&&row>0)){const y=streetHeight(x,z);BUILDINGS.push({id:`${row}-${side}-${i}`,zone,row,i,side,x,y,z,w,d,h,face:x-side*w/2});}z+=d+(i%5===0?1.3:.22);i++;}}
+// Low-density hillside clusters fill the island without paving over the forest.
+const candidates=[];for(let z=-190;z<=220;z+=65)for(let x=1720;x<=2260;x+=70){if(!islandContains([x,0,z])||Math.abs(x-streetCenter(z))<45||x>2100&&z>-60&&z<70||x>1990&&x<2090&&z>120&&z<185)continue;const y=streetHeight(x,z);if(Math.max(...[-8,8].flatMap(dx=>[-8,8].map(dz=>Math.abs(streetHeight(x+dx,z+dz)-y))))>4)continue;candidates.push([x,y,z]);}
+export const SETTLEMENTS=candidates.filter((_,i)=>i%Math.max(1,Math.floor(candidates.length/12))===0).slice(0,12);
+for(const [cluster,c] of SETTLEMENTS.entries())for(let j=0;j<14;j++){const side=j%2?1:-1,x=c[0]+side*(9+(j%3)*2),z=c[2]+(Math.floor(j/2)-3)*8,w=4+(j%2),d=4.5,h=3.2+(j%3)*1.25;if(!islandContains([x,0,z])||BUILDINGS.some(b=>Math.abs(x-b.x)<(w+b.w)/2+1&&Math.abs(z-b.z)<(d+b.d)/2+1))continue;const y=streetHeight(x,z);if(Math.max(...[-w/2,w/2].flatMap(dx=>[-d/2,d/2].map(dz=>Math.abs(streetHeight(x+dx,z+dz)-y))))>1.5)continue;const zone=z<20?'fuao':z<90?'qingshui':'meishi';BUILDINGS.push({id:'rural-'+cluster+'-'+j,zone,row:3,i:cluster*6+j,side,x,y,z,w,d,h,face:x-side*w/2});}
+export const RUINS=[];
+for(let z=-185;z<220;z+=39)for(let x=1715;x<2290;x+=43){const xx=x+Math.sin(z*.13)*11,zz=z+Math.cos(x*.09)*9;if(RUINS.length>=32||!islandContains([xx,0,zz])||Math.abs(xx-streetCenter(zz))<45||xx>2010&&xx<2090&&zz>120&&zz<185||BUILDINGS.some(b=>Math.hypot(b.x-xx,b.z-zz)<17)||RUINS.some(b=>Math.hypot(b.x-xx,b.z-zz)<35))continue;const y=streetHeight(xx,zz);if(Math.max(...[-3,3].flatMap(dx=>[-3,3].map(dz=>Math.abs(streetHeight(xx+dx,zz+dz)-y))))>1.3)continue;RUINS.push({x:xx,y,z:zz,w:6,d:5,id:RUINS.length});}
+export const RUIN_COLLIDERS=RUINS.flatMap(r=>[{x:r.x,z:r.z,w:6,d:5,minY:r.y-1.5,h:r.y+.12},{x:r.x,z:r.z-2.3,w:6,d:.4,minY:r.y,h:r.y+2.8},{x:r.x-2.8,z:r.z-.8,w:.4,d:3.2,minY:r.y,h:r.y+2},...[0,1,2].map(i=>({x:r.x+2.7,z:r.z-2+i*2,w:.35,d:.35,minY:r.y,h:r.y+2.4+i*.2}))]);
+export const LANDMARK_COLLIDERS=[...[2066,2074].flatMap(x=>[-22,-14].map(z=>({x,z,w:.46,d:.46,minY:0,h:3.3}))),{x:2004,z:24,w:14,d:3,minY:2.4,h:14.4},{x:2030,z:-21,w:4.4,d:4.8,minY:0,h:6.4},{x:2024,z:-19,w:4.4,d:4,minY:0,h:5},{x:2077,z:-24,w:14,d:8,minY:0,h:4.6},...[-1,1].map(s=>({x:2025.48+s*2.73,z:53,w:.423,d:.65,minY:6.75,h:9.35})),{x:2025.48,z:53,w:5.98,d:.715,minY:9.155,h:9.675},...[-8,8.8].map((dx,i)=>({x:2025.48-dx*.65,z:54.3,w:(i?7:6.4)*.65,d:3.9,minY:6.75,h:6.75+(i?10:8)*.65})),{x:1994.2,z:155,w:15.6,d:6.5,minY:20,h:25.525}];
+export const buildingCollider=b=>({x:b.x,z:b.z,w:b.w,d:b.d,minY:b.y-1.65,h:b.y+b.h+1});
+export const FALLEN_POLES=SETTLEMENTS.map(c=>({x:c[0]+2,z:c[2]-4,y:streetHeight(c[0]+2,c[2]-4)}));
+export const DEBRIS_COLLIDERS=FALLEN_POLES.map(p=>({x:p.x,z:p.z,w:.6,d:4.3,minY:p.y-.3,h:p.y+.5}));
+export const STREET_COLLIDERS=[...BUILDINGS.map(buildingCollider),...RUIN_COLLIDERS,...DEBRIS_COLLIDERS,...LANDMARK_COLLIDERS,...SOLDIER_COLLIDERS];

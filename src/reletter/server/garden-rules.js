@@ -1,0 +1,29 @@
+import {streetHeight} from '../nangan-layout.js';
+import {inNangan} from '../nangan-map.js';
+import {playerStats} from '../progression.js';
+import {rollDropStats,rollRankedDrop,ownedBaseIds} from '../combat-traits.js';
+import {SEEDS,seedById,cropProgress,cropAge,cropStage} from '../garden-catalog.js';
+import {equipmentById} from '../equipment-catalog.js';
+import {WINGS} from '../wing-catalog.js';
+export const GARDEN_ACTIONS=['seed-buy','seed-plant','crop-water','crop-harvest','harvest-eat','harvest-arrange','wing-pickup'];
+export function ensureGarden(g){g.garden??={crops:[],stacks:{},buffs:{},revision:0};g.wingDrops??=[];for(const d of g.wingDrops){d.claimed??=[];if(inNangan(d.position)&&d.position[1]===0&&!d.islandHeightFixed){d.position[1]=streetHeight(d.position[0],d.position[2]);d.islandHeightFixed=true;}}return g.garden;}
+export function gardenView(g){return ensureGarden(g);}
+export function dropWings(g,now,rng=Math.random){ensureGarden(g);if(g.boss.level<30||g.wingDrops.some(d=>d.generation===g.boss.generation))return;const choices={},rolls={};for(const name of ['Ely','Rae']){const pool=WINGS.filter(w=>g.boss.level>=40?w.tier>=4:w.tier<=4),fresh=pool.filter(w=>!ownedBaseIds(g,name).includes(w.id)),list=fresh.length?fresh:pool;choices[name]=list[Math.min(list.length-1,Math.floor(rng()*list.length))].id;rolls[name]=rollRankedDrop(equipmentById(choices[name]),g.boss,rng);}g.wingDrops.push({id:crypto.randomUUID(),generation:g.boss.generation,position:[g.boss.position[0],g.boss.position[1],g.boss.position[2]],choices,rolls,claimed:[],time:now});g.wingDrops=g.wingDrops.slice(-30);}
+export function gardenAction(g,actor,body,now=Date.now(),rng=Math.random){
+ const f=ensureGarden(g),name=actor.character,p=actor.state?.position,stacks=f.stacks[name]??={};
+ const change=()=>{f.revision++;return {};},near=(q,r=5)=>p&&Math.hypot(...p.map((v,i)=>v-q[i]))<=r;
+ if(body.action==='seed-buy'){const s=seedById(body.item);if(!s)return {error:'Choose a seed'};if((g.wallets?.[name]||0)<s.price)return {error:'Not enough coins'};g.wallets[name]-=s.price;stacks[s.id]=(stacks[s.id]||0)+1;return change();}
+ if(body.action==='harvest-eat'){const item=equipmentById(body.item);if(item?.slot!=='harvest'||!(stacks[item.id]>0))return {error:'No harvest available'};g.healCooldowns??={};if(now<(g.healCooldowns[name]||0))return {error:'Wait a moment before eating again'};g.healCooldowns[name]=now+500;stacks[item.id]--;const buffs=f.buffs[name]??={};buffs[item.effect]={power:item.power,until:now+item.duration};buffs.fusion={power:Math.max(item.fusionPower||.02,buffs.fusion?.until>now?buffs.fusion.power:0),until:now+180000};g.hits??={};g.hits[name]=+Math.max(0,(g.hits[name]||0)-playerStats(g,name,now).maxHp*(item.heal||.1)).toFixed(3);return change();}
+ if(!p||!actor.state.visible||actor.state.phase!==2)return {error:'Enter the ground garden first'};
+ if(body.action==='wing-pickup'){const d=g.wingDrops.find(d=>d.id===body.id);if(!d||!near(d.position,4)||d.claimed.includes(name))return {error:'No wings nearby'};g.inventories??={};const owned=g.inventories[name]??=[];if(d.rolls?.[name]){const instance={id:'loot-'+crypto.randomUUID(),baseId:d.choices[name],...d.rolls[name],obtainedAt:now};g.weaponInstances??={};(g.weaponInstances[name]??=[]).push(instance);owned.push(instance.id);}else if(!owned.includes(d.choices[name]))owned.push(d.choices[name]);d.claimed.push(name);g.equipmentRevision=(g.equipmentRevision||0)+1;return change();}
+ if(body.action==='seed-plant'){const s=seedById(body.item),q=body.position;if(!s||!(stacks[s.id]>0))return {error:'Buy this seed first'};if(!Array.isArray(q)||q.length!==3||!q.every(Number.isFinite)||q[1]!==0||Math.abs(q[0])>480||Math.abs(q[2])>480||!near(q,5))return {error:'Plant on nearby ground'};
+ if(f.crops.length>=300)return {error:'Garden is full; harvest some plants'};
+ if(f.crops.some(c=>Math.hypot(c.position[0]-q[0],c.position[2]-q[2])<1.3)||(g.blocks||[]).some(b=>Math.abs(b.position[0]-q[0])<(b.size?.[0]||2)/2+.5&&Math.abs(b.position[2]-q[2])<(b.size?.[2]||2)/2+.5)||[...(g.fishing?.holes||[]),...(g.fishing?.ponds||[])].some(h=>Math.hypot(h.position[0]-q[0],h.position[2]-q[2])<h.radius+1))return {error:'Choose clear soil'};
+ stacks[s.id]--;f.crops.push({id:crypto.randomUUID(),species:s.species,position:[...q],owner:name,grownMs:0,updatedAt:now,wetUntil:now});return change();}
+ if(body.action==='harvest-arrange'){const item=equipmentById(body.item),b=(g.blocks||[]).find(b=>b.id===body.block);if(item?.slot!=='harvest'||!(stacks[item.id]>0)||!b||!near(b.position,8))return {error:'Bring a harvest to a built block'};b.flowers??=[];if(b.flowers.length>=12)return {error:'This arrangement is full'};stacks[item.id]--;b.flowers.push({species:item.species,id:crypto.randomUUID()});g.buildRevision=(g.buildRevision||0)+1;return change();}
+ const c=f.crops.find(c=>c.id===body.id);if(!c||!near(c.position))return {error:'Move closer to the plant'};
+ const s=seedById(c.species),progress=cropProgress(c,now);c.grownMs=Math.min(s.growMs*4.75,cropAge(c,now));c.updatedAt=now;
+ if(body.action==='crop-water'){if(now-(c.lastWater||0)<1200)return {error:'Wait for water to soak in'};if(cropStage(c,now)>=20)return {error:'Fully grown · stage 20'};c.lastWater=now;c.wetUntil=Math.min(now+s.growMs,Math.max(now,c.wetUntil)+s.growMs/s.waterNeed);return change();}
+ if(body.action==='crop-harvest'){if(progress<1)return {error:'This plant is still growing'};const quality=Math.max(1,Math.min(7,s.tier+Math.floor((cropStage(c,now)-5)/5)+(rng()<.25?1:0))),id='harvest-'+c.species+'-q'+quality;stacks[id]=(stacks[id]||0)+1;f.crops=f.crops.filter(x=>x!==c);return change();}
+ return {error:'Unknown garden action'};
+}
