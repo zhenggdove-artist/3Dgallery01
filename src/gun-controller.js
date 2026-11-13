@@ -12,7 +12,7 @@ export class GunController {
       const button=e.target.closest?.('#attack-button');if(!weapon()?.firstPerson||!controller()?.enabled)return;
       // The sketch's attack button always charges/releases, including guns.
       // V still selects the original shoulder/scope camera on desktop.
-      if(button){e.preventDefault();e.stopImmediatePropagation();if(type==='pointerup')this.cycle();return;}
+      if(button)return;
       if(!this.mode||e.target!==canvas||e.button>0)return;e.preventDefault();e.stopImmediatePropagation();
       if(type==='pointerdown'){if(!document.pointerLockElement)canvas.setPointerCapture(e.pointerId);if(weapon().id==='white-cat'){this.held=true;this.nextShot=0;}else ui.emit('attack-start');}
       else{this.held=false;ui.emit(type==='pointercancel'?'attack-cancel':'attack-release');}

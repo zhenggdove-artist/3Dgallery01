@@ -1,5 +1,32 @@
 Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement confusion, invisible smoke, too-fast look controls, mobile forward movement, and performance without reducing visual quality.
 
+## 2026-11-14 controls / equipment release
+
+- Fixed hit tint restoration at the shared-material seam. Reproduction restored
+  0xff182d instead of 0x123456; Map-based capture now restores once per material,
+  including equipped models, without tinting shared health-bar materials.
+- Gun VFX resolve an explicit local mouth socket through the held model world
+  transform. A is attack/charge; separate AIM retains touch shoulder/scope modes.
+- Independent pointer ownership for stick/charge; jump on pointerdown. Removed
+  gameplay selection/callouts and context menus while retaining text-input selection.
+- Ordinary jump uses original LoopOnce/clamp and holds jump pose through descent;
+  original fall animation is reserved for high falls (>=40), excluding wing flight.
+- Added pink overhead bars for remote players and active monster; numeric wallet
+  uses raised floating Golden Girdle styling. No new render loop for these features.
+- EQUIP uses original RELETTER left/right slot arrangement and on-demand full-body
+  render-target portrait, sharing the game renderer; no extra persistent WebGL context.
+- GM inventory includes all catalog IDs on creation and subsequent verified login.
+- Chat defaults to 68px near the bottom; + toggles expansion and header drags height.
+- Removed INTERACT button, removed vitals backdrop blur, added entry clothing color.
+- Tests: 39 unit tests; actual CDP three-finger move/charge/jump, independent releases,
+  chat drag/toggle, muzzle transform, original jump flags, GM inventory, portrait,
+  desktop/mobile scope/shop/editor regression; 48 VFX lifecycles with zero remaining.
+  Standard game skill client ran; gameplay and portrait screenshots inspected.
+- Earlier 12-item follow-up is NOT fully resolved by this release: artwork mirroring/
+  overexposure, Chinese GM editor, custom discs/per-art stairs, ground coin flights,
+  original WRITE cinematic/hover messages and lightweight audio remain outstanding.
+  Do not describe this release as completing that older list.
+
 ## 2026-11-13 sketch / Nangan correction (in progress)
 
 - Current request: exact original raised title + percentage, sketch HUD, original combat/plant visuals, grounded Nangan monsters except foreman, complete preload before entry.

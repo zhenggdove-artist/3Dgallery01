@@ -55,7 +55,7 @@ export function migrateWorld(raw,now=Date.now()){
 
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#bde8dc',admin:!!admin,
-    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT},
+    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT},
     fusion:{},fish:{minnow:0,koi:0,relic:0},createdAt:now,updatedAt:now,lastAttackAt:0,lastFishAt:0};
 }
 
@@ -65,6 +65,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.wallet=Number.isFinite(current.wallet)?Math.max(0,Math.floor(current.wallet)):0;
   current.level=Math.max(1,Math.floor(current.level||1));current.xp=Math.max(0,Math.floor(current.xp||0));
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
+  if(current.admin)current.inventory=[...new Set([...current.inventory,...ITEMS.map(item=>item.id)])];
   if(!current.inventory.includes(STARTER_LOADOUT.weapon))current.inventory.unshift(STARTER_LOADOUT.weapon);
   current.equipment??={...STARTER_LOADOUT};current.fusion??={};current.fish??={minnow:0,koi:0,relic:0};
   refreshStats(world,current,now);

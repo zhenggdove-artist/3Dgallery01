@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {weaponMuzzle} from './weapon-muzzle.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
 import smear from '../vendor/00gamedevs/weapon-smear.js';
 import plasma from '../vendor/00gamedevs/plasma-bolt.js';
@@ -50,11 +51,12 @@ export class WeaponVFX{
  }
  play(data,item,root){
   const id=effectFor(item,data.ultimate),direction=new THREE.Vector3(...(data.direction||[0,0,1])).normalize(),origin=new THREE.Vector3(...data.origin),range=Math.max(1,data.range||4),end=data.impactPoint?new THREE.Vector3(...data.impactPoint):origin.clone().addScaledVector(direction,range);
+  const muzzle=weaponMuzzle(root,item);if(muzzle){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
   const entry=this.acquire(id,{color:item.color,size:data.ultimate?1:.5,speed:data.ultimate?1:1.8}),fx=entry.fx;
   fx.group.position.copy(origin);fx.group.rotation.y=Math.atan2(direction.x,direction.z)-Math.PI/2;
   if(beams.has(id)){fx.group.position.set(0,0,0);fx.group.quaternion.identity();fx.setEndpoints(origin,end);fx.update(fx.lifecycle.start||0);entry.stopAt=data.ultimate?.65:.12;}
   else if(projectiles.has(id)){fx.setDirection(direction,0);fx.update(fx.lifecycle.start||0);entry.start=origin;entry.end=end;entry.travel=Math.min(.45,Math.max(.12,origin.distanceTo(end)/45));entry.stopAt=entry.travel;entry.hit=!!data.impactPoint;}
-  else {fx.group.position.y=Math.max(0,origin.y-1)+.06;if(id==='azure-sweep')fx.group.position.y=origin.y-.1;if(continuous.has(id))fx.update(fx.lifecycle.start||0);entry.stopAt=data.ultimate?1.1:.35;}
+  else {fx.group.position.y=item.firstPerson?origin.y:Math.max(0,origin.y-1)+.06;if(id==='azure-sweep')fx.group.position.y=origin.y-.1;if(continuous.has(id))fx.update(fx.lifecycle.start||0);entry.stopAt=data.ultimate?1.1:.35;}
   if(root?.userData.blade&&!beams.has(id)&&!projectiles.has(id)){
    let trail=this.active.find(e=>e.id==='weapon-smear'&&e.weapon===root.userData.blade&&!e.stopped);
    if(!trail){trail=this.acquire('weapon-smear',{color:item.color,size:.8});trail.fx.attachWeapon(root.userData.blade,{base:[0,0,0],tip:[0,1.1,0]});trail.weapon=root.userData.blade;}

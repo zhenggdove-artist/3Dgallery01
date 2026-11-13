@@ -19,3 +19,26 @@ body.panel-open #hud{visibility:hidden}body.panel-open #panel{visibility:visible
 #gm-help{left:90px;top:178px}
 .loading-body p{letter-spacing:normal!important}.loading-body .loading-track i{box-shadow:none!important}
 #entry .notepad-page h1{font-size:clamp(20px,3vw,36px)!important;letter-spacing:.14em!important;color:#ffc9e8!important;max-width:100%;white-space:nowrap}
+/* Gameplay gestures belong to independent pointers, never browser selection. */
+body{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable=true]{user-select:text;-webkit-user-select:text;touch-action:auto}
+#game,#mobile-stick,#dock button,#chat-resize{touch-action:none}
+#vitals,#identity{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:transparent!important}
+#dock #attack-button span{font-size:24px;font-weight:bold}
+#vitals #wallet{color:#ffe775;font-size:23px;font-weight:900;white-space:nowrap;text-shadow:0 1px #b69527,0 2px #9c741b,0 3px #705019,1px 4px 2px #000;animation:wallet-float 3s ease-in-out infinite}
+@keyframes wallet-float{50%{transform:translateY(-3px)}}
+#chat-hud{--chat-height:68px;bottom:max(3px,env(safe-area-inset-bottom));height:var(--chat-height);width:clamp(150px,32vw,430px);display:flex;flex-direction:column}
+#chat-resize{display:flex;align-items:center;height:20px;min-height:20px;cursor:ns-resize;font-size:10px}
+#chat-toggle{width:26px;height:20px;padding:0;border:0;background:#edd3e5;color:#412d44}
+#chat-messages{height:auto!important;min-height:0;flex:1;padding:2px 5px;font-size:11px}
+#chat-form{padding:2px;flex:none;font-size:10px}#chat-form input{font-size:12px}
+@media(max-width:600px){#chat-hud{width:calc(100vw - 196px);min-width:145px;left:46%}}
+@media(prefers-reduced-motion:reduce){#vitals #wallet{animation:none}}
+.equipment-layout{display:grid;grid-template-columns:minmax(70px,1fr) minmax(110px,2fr) minmax(70px,1fr);gap:5px;min-height:260px}.equip-column{display:flex;flex-direction:column;gap:8px}.equip-position{display:grid;justify-items:center;gap:2px;font-size:10px;text-align:center}.equip-position .bag-cell{width:64px;height:64px;border:1px solid #d8d6e0;border-radius:6px;background:#ffffffa8;padding:3px}.equip-position .bag-cell.equipped{border:2px solid #a47bce;background:#e9def5}.bag-cell img{width:100%;height:100%;object-fit:contain}#bag-portrait-frame{min-width:0;overflow:hidden;background:radial-gradient(ellipse,#e1dce880,transparent 72%);border-radius:20px}#bag-portrait{width:100%;height:100%;max-height:470px;object-fit:contain;filter:saturate(.48) contrast(.78) brightness(1.12) blur(.45px)}
+/* Dedicated mobile aim control leaves the A pointer free for firing. */
+#dock #aim-button{position:fixed;right:98px;bottom:98px;width:52px;height:30px;min-width:0;min-height:0;border-radius:12px;font-size:11px}
+#dock #aim-button[hidden]{display:none!important}
+#vitals #wallet{font-family:GoldenGirdle,Arial,sans-serif!important}
+body #panel .equipment-layout{height:min(500px,calc(100dvh - 190px));min-height:160px}
+body #panel .equip-column{overflow-y:auto;min-height:0}body #panel #bag-portrait-frame{height:100%;min-height:0}body #panel #bag-portrait{height:100%}
+@media(max-height:520px){body #panel .equip-position .bag-cell{width:34px;height:34px}body #panel .equip-column{gap:3px}body #panel .equip-position{font-size:9px;gap:0}}
