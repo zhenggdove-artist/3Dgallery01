@@ -18,3 +18,4 @@ body.panel-open #hud{visibility:hidden}body.panel-open #panel{visibility:visible
 #vitals{padding-left:52px;min-height:96px;top:80px}#vital-models{position:absolute;left:0;top:0;width:48px;height:96px;pointer-events:none}#vitals #player-level{position:absolute;left:0;top:-18px}#vitals label{position:absolute;top:12px;left:52px}#vitals #hp{display:none}#vitals #wallet{position:absolute;top:61px;left:52px}#gm-help{top:184px}#vitals #hp-label{font:13px Arial,sans-serif;color:#493653}
 #gm-help{left:90px;top:178px}
 .loading-body p{letter-spacing:normal!important}.loading-body .loading-track i{box-shadow:none!important}
+#entry .notepad-page h1{font-size:clamp(20px,3vw,36px)!important;letter-spacing:.14em!important;color:#ffc9e8!important;max-width:100%;white-space:nowrap}
