@@ -65,7 +65,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.wallet=Number.isFinite(current.wallet)?Math.max(0,Math.floor(current.wallet)):0;
   current.level=Math.max(1,Math.floor(current.level||1));current.xp=Math.max(0,Math.floor(current.xp||0));
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
-  if(current.admin)current.inventory=[...new Set([...current.inventory,...ITEMS.map(item=>item.id)])];
+  if(current.admin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
   if(!current.inventory.includes(STARTER_LOADOUT.weapon))current.inventory.unshift(STARTER_LOADOUT.weapon);
   current.equipment??={...STARTER_LOADOUT};current.fusion??={};current.fish??={minnow:0,koi:0,relic:0};
   refreshStats(world,current,now);
