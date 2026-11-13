@@ -17,7 +17,7 @@ export const ARMOR = Object.freeze([
   ['pilgrim-mask','Pilgrim Mask','head','#a98f72',1,260,7],
   ['glass-crown','Glass Crown','head','#89cddb',2,880,13],
   ['temple-halo','Temple Halo','head','#e4c467',4,4400,24]
-].map(([id,name,slot,color,tier,price,defense])=>Object.freeze({id,name,slot,color,tier,rarity:RARITIES[tier-1].id,price,sell:Math.floor(price*.25),defense})));
+].map(([id,name,slot,color,tier,price,defense])=>Object.freeze({id,name,slot,color,tier,design:({'pilgrim-mask':'hockey','glass-crown':'crown','temple-halo':'angel'})[id],rarity:RARITIES[tier-1].id,price,sell:Math.floor(price*.25),defense})));
 
 export const MATERIALS = Object.freeze([
   {id:'wet-stone',name:'Wet Stone',slot:'material',color:'#7695a0',price:70,sell:18},

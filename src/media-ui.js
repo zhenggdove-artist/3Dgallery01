@@ -2,7 +2,7 @@
 export async function uploadMedia(network,file){
  if(!file)return null;let blob=file;
  if(file.type.startsWith('image/')){const bitmap=await createImageBitmap(file),scale=Math.min(1,1024/Math.max(bitmap.width,bitmap.height)),c=document.createElement('canvas');c.width=Math.round(bitmap.width*scale);c.height=Math.round(bitmap.height*scale);c.getContext('2d').drawImage(bitmap,0,0,c.width,c.height);bitmap.close();blob=await new Promise(resolve=>c.toBlob(resolve,'image/webp',.8));}
- if(blob.size>1_500_000)throw Error('圖片／音訊／影片最大 1.5 MB，請先縮短或壓縮');
+ if(blob.size>1_500_000)throw Error('Image / audio / video limit: 1.5 MB. Compress or shorten the file first.');
  const response=await fetch(network.base+'/api/media',{method:'POST',headers:{Authorization:'Bearer '+network.token,'Content-Type':blob.type},body:blob});const data=await response.json();if(!response.ok)throw Error(data.error);return data;
 }
 export function attachDrawing(container){

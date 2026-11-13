@@ -1,0 +1,5 @@
+import {chromium} from 'playwright';
+const browser=await chromium.launch({channel:'chrome',headless:true});
+try{const page=await browser.newPage();await page.addInitScript(()=>localStorage.setItem('temple-backend-url','http://127.0.0.1:8788'));page.setDefaultTimeout(90000);await page.goto('http://127.0.0.1:8000');await page.waitForFunction(()=>document.body.classList.contains('ready'));
+ console.log(JSON.stringify(await page.evaluate(async()=>{const T=await import('three'),a=templeTest.arena,r=a.createPlayer();a.scene.add(r);const result=[];for(const name of ['idle','walk','jump']){r.userData.mixer.stopAllAction();r.userData.actions[name]?.reset().play();for(let i=0;i<3;i++){r.userData.mixer.update(.15);r.updateMatrixWorld(true);const box=new T.Box3().setFromObject(r.userData.model,true),bones=[];r.traverse(o=>{if(o.isBone&&/Foot$|ToeBase$/i.test(o.name))bones.push({name:o.name,y:o.getWorldPosition(new T.Vector3()).y});});result.push({name,min:box.min.y,max:box.max.y,offset:r.userData.model.position.y,bones});}}return result;})));
+}finally{await browser.close();}

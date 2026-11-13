@@ -1,0 +1,584 @@
+{
+  "origin": "https://00gamedevs.com",
+  "contentVersion": "e27df5c89f123862e204613ae4091360d70af8174351761c8e99972f06a6b7f1",
+  "sourceThree": "0.187.0",
+  "packaging": "identical runtime factored once; presets unchanged",
+  "assets": [
+    {
+      "id": "azure-sweep",
+      "url": "https://00gamedevs.com/downloads/effects/azure-sweep.js",
+      "sha256": "a1b226f05d9a4f1ec1af50f8ab2d0d345f1e05bf70283ffdf25b5d5680f47cdc",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.08,
+          "end": 0.43
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#2878ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "id": "weapon-smear",
+      "url": "https://00gamedevs.com/downloads/effects/weapon-smear.js",
+      "sha256": "c5c63bca9573c1f054f47d61628c4a0d451e584bfee3282f0748fb65245929b0",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "attachWeapon",
+          "detachWeapon"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.001,
+          "end": 0.18
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#2878ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "id": "plasma-bolt",
+      "url": "https://00gamedevs.com/downloads/effects/plasma-bolt.js",
+      "sha256": "4916c65d7467880cd3740f5424f5caea33b415a4b3620503caefd579b45307fc",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setDirection"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.35,
+          "end": 0.8
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#73e3ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "id": "ice-shard",
+      "url": "https://00gamedevs.com/downloads/effects/ice-shard.js",
+      "sha256": "335912783aeab8953f856185e8522c1d9907973536305363cd4ea25b933158c5",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setDirection"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.35,
+          "end": 0.8
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#b3dcff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "id": "arcane-missile",
+      "url": "https://00gamedevs.com/downloads/effects/arcane-missile.js",
+      "sha256": "b1f780e8c27b543381ac870288364f50c5e6b772f9b005c388820e1ac8c0b2ef",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setDirection"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.35,
+          "end": 0.8
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#c99aff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 3,
+        "spread": 1
+      }
+    },
+    {
+      "id": "pulse-beam",
+      "url": "https://00gamedevs.com/downloads/effects/pulse-beam.js",
+      "sha256": "d02f85df00c236e1e58412c0fbd4379c17b59610ff5fea301e1f7087286dae13",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setEndpoints"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.4,
+          "end": 0.6
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#71e7dc",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 4
+      }
+    },
+    {
+      "id": "charged-beam",
+      "url": "https://00gamedevs.com/downloads/effects/charged-beam.js",
+      "sha256": "7c8d4af0628b80051b79122edf0a29a92bea48d839ba2e278db10bfcdb40a26d",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setEndpoints"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 1.6,
+          "end": 0.6
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#f6c76c",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "id": "arc-ray",
+      "url": "https://00gamedevs.com/downloads/effects/arc-ray.js",
+      "sha256": "f30d04d9f73e4ef8970d3c400b03e50a34a7a1fd96c18e7c42e79299b388edd0",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setEndpoints"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.4,
+          "end": 0.6
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#2878ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 6
+      }
+    },
+    {
+      "id": "energy-burst",
+      "url": "https://00gamedevs.com/downloads/effects/energy-burst.js",
+      "sha256": "f750db92a8dd9f48cbd9c9a876d5d7c52b041333876c8e7142be3239134ecaad",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.27999999999999997,
+          "end": 1.26
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#2878ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 12
+      }
+    },
+    {
+      "id": "shockwave",
+      "url": "https://00gamedevs.com/downloads/effects/shockwave.js",
+      "sha256": "69e7ba36c42b41441b50bcedc4fccfab30c3eff6d45a5d21273214a2d57fea1c",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.27999999999999997,
+          "end": 1.26
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#f0cf9d",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "id": "ice-shatter",
+      "url": "https://00gamedevs.com/downloads/effects/ice-shatter.js",
+      "sha256": "b61bd423815e27717a178464b3f71fc8119640c182bcd71e6969f560601d6aca",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.27999999999999997,
+          "end": 1.26
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#b8e5ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 9
+      }
+    },
+    {
+      "id": "flame-surge",
+      "url": "https://00gamedevs.com/downloads/effects/flame-surge.js",
+      "sha256": "6d6467bc1880268e2bb2f015d866ac3ccef07948ff5b53b3d437e1d8c3bfd56c",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.30000000000000004,
+          "end": 1.35
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#ff823e",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 5
+      }
+    },
+    {
+      "id": "tidal-surge",
+      "url": "https://00gamedevs.com/downloads/effects/tidal-surge.js",
+      "sha256": "57694bd0c61bb47466a8545140021bcfd20ebdd0f1813d81d46b367a3b8f3c9a",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.32000000000000006,
+          "end": 1.4400000000000002
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#66cddd",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "id": "thorn-crown",
+      "url": "https://00gamedevs.com/downloads/effects/thorn-crown.js",
+      "sha256": "0c0112c1f29f165f40b8ffc7c4d122c2ff0ff810a37e0e822644a24967703af5",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.7,
+          "end": 1
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#88d49a",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 4
+      }
+    },
+    {
+      "id": "spiral-gale",
+      "url": "https://00gamedevs.com/downloads/effects/spiral-gale.js",
+      "sha256": "e51714ed5c734bfffc27792a8d63f2e7c956958953cba9bbfefa04d540233789",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setDirection"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.35,
+          "end": 0.8
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#b4e5d5",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "id": "astral-convergence",
+      "url": "https://00gamedevs.com/downloads/effects/astral-convergence.js",
+      "sha256": "dc68671f5c07a9883b39e93431662b1624c7d6b2afd3f846a1834289a46ba267",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.34,
+          "end": 1.53
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#c1b8ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 10
+      }
+    },
+    {
+      "id": "magic-barrier",
+      "url": "https://00gamedevs.com/downloads/effects/magic-barrier.js",
+      "sha256": "a01cd01ebbf171ecaa4ee4b22bc3c9d9c4a4a26fca5adb7f904ae6d47823e0ba",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.7,
+          "end": 1
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#bba3ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "id": "burning-ground",
+      "url": "https://00gamedevs.com/downloads/effects/burning-ground.js",
+      "sha256": "65e72ec75ceb95a1dd3dba63a49f48a7e2b35cf1969468a86ed0777c9042df79",
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.7,
+          "end": 1
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaults": {
+        "color": "#ff914a",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    }
+  ]
+}

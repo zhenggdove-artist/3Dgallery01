@@ -1,0 +1,20 @@
+/* RELETTER typography and original bubble control treatment. */
+body,button,input,textarea,select,.item h3,#panel h2,#panel h3{font-family:Arial,sans-serif!important}
+.reletter-wordmark{font-family:GoldenGirdle,sans-serif!important;font-weight:bold;color:#f2b7cf;letter-spacing:.35em!important;-webkit-text-stroke:.5px #ffffff40;text-shadow:0 1px 0 #f7cfe0,0 2px 0 #efbcd3,0 3px 0 #e3a6c1,0 4px 0 #d394b2,0 6px 8px #0000002e}
+#identity{max-width:calc(100vw - 220px)}#identity>.reletter-wordmark{display:block;white-space:nowrap;font-size:clamp(14px,3.1vw,32px)}#identity [hidden]{display:none}
+#gm-help{position:fixed;left:12px;top:108px;border-radius:50%;width:36px;height:36px;background:#f9efff;border:1px solid #c5b6d2;color:#705380;pointer-events:auto;font-size:24px}
+#mobile-stick{width:70px;height:70px;background:radial-gradient(circle at 30% 20%,#ffffffb3,#f6b5da80);border:2px solid #d6c1e5;box-shadow:inset 0 0 0 2px #ffffff88,0 6px 14px #6f467f33}
+#mobile-stick i{width:28px;height:28px;left:calc(50% - 14px);top:calc(50% - 14px);background:radial-gradient(circle at 30% 20%,white,#f6b5da 55%,#e9a3d6);border:2px solid #d6c1e5}
+#dock #attack-button{width:64px;height:64px;min-width:0;padding:3px;border:4px solid transparent;border-radius:50%;font:10px sans-serif;color:#543565!important;background:radial-gradient(circle at 30% 20%,#fff3fb,#e9d8f5 65%,#d8bae9) padding-box,conic-gradient(#79cce8 var(--charge,0%),#d6c1e5 0) border-box!important;box-shadow:inset 0 0 0 1px #ffffffaa,0 6px 14px #6f467f33}
+#attack-button b{display:none!important}#attack-button span{display:block!important;font-size:10px}
+#dock [data-action=jump]{width:50px;height:50px;border-radius:50%;border:2px solid #d6c1e5;background:radial-gradient(circle at 30% 20%,white,#f6b5da 55%,#e9a3d6);box-shadow:inset 0 0 0 2px #ffffff88}
+#dock [data-action=jump]>*{display:none!important}
+body.panel-open #hud{visibility:hidden}body.panel-open #panel{visibility:visible;inset:24px 24px 24px auto;max-height:calc(100dvh - 48px);width:min(640px,calc(100vw - 48px));margin:0}
+#panel-content{min-height:0;overflow:auto}#art-editor{max-height:calc(100dvh - 180px);overflow:auto}
+.gun-overlay.sniper-shoulder .gun-reticle,#gun-overlay.sniper-shoulder .gun-reticle{width:66px;height:66px;border-style:dashed}
+@media(max-width:600px){#identity{max-width:calc(100vw - 150px)}#identity>.reletter-wordmark{font-size:14px;letter-spacing:.2em!important}#vitals{top:48px}#gm-help{top:112px}body.panel-open #panel{inset:12px;width:calc(100vw - 24px);max-height:calc(100dvh - 24px)}}
+/* User-requested Windows 98 loading window replaces the raised title screen. */
+#loading{display:grid;place-items:center;background:#008080!important;color:#111!important}.loading-window{width:min(480px,calc(100vw - 36px));padding:3px;background:#c0c0c0;box-shadow:inset 1px 1px white,inset -1px -1px #000,3px 3px 0 #004c4c}.loading-body{display:grid;justify-items:center;gap:10px;padding:24px 16px;font:13px Tahoma,sans-serif}.loading-body .loading-track{width:100%;height:20px;border:2px inset #ddd;background:#ddd}.loading-body .loading-track i{background:repeating-linear-gradient(90deg,#000080 0 8px,#c0c0c0 8px 10px)}#loading-detail{overflow-wrap:anywhere;text-align:center}
+#vitals{padding-left:52px;min-height:96px;top:80px}#vital-models{position:absolute;left:0;top:0;width:48px;height:96px;pointer-events:none}#vitals #player-level{position:absolute;left:0;top:-18px}#vitals label{position:absolute;top:12px;left:52px}#vitals #hp{display:none}#vitals #wallet{position:absolute;top:61px;left:52px}#gm-help{top:184px}#vitals #hp-label{font:13px Arial,sans-serif;color:#493653}
+#gm-help{left:90px;top:178px}
+.loading-body p{letter-spacing:normal!important}.loading-body .loading-track i{box-shadow:none!important}

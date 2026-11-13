@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {createHeart} from './heart-model.js';
 import {originalWorldVisuals} from './reletter/world-visuals.js';
 import {cropStage} from './reletter/garden-catalog.js';
 import {animateFishModel,disposeFishModel} from './reletter/fish-model.js';
@@ -20,7 +21,7 @@ export class AdventureView{
    this.reconcile(this.waters,[...f.holes,...f.ponds],h=>{const o=this.original.waterFeature(h,!!h.fish);if(!h.fish)o.position.y+=.31;return o;});
    const fish=f.ponds.flatMap(pond=>pond.fish.map(fish=>({...fish,pond}))).slice(0,40);
    this.reconcile(this.fish,fish,f=>{const o=this.original.swimmingFish(f);o.userData.pond=f.pond;return o;},o=>{o.removeFromParent();disposeFishModel(o);});
-   this.reconcile(this.loot,this.world.groundDrops.filter(d=>d.kind!=='coin'&&itemById(d.itemId)),d=>{const o=this.original.createItemDrop(itemById(d.itemId));o.userData.drop=d;this.scene.add(o);return o;});
+   this.reconcile(this.loot,this.world.groundDrops.filter(d=>d.kind==='heart'||d.kind!=='coin'&&itemById(d.itemId)),d=>{const o=d.kind==='heart'?createHeart():this.original.createItemDrop(itemById(d.itemId));o.userData.drop=d;this.scene.add(o);return o;});
    // Detailed original plants are distance bounded. All entries remain persistent/readable.
    const near=[...this.world.plants].sort((a,b)=>camera.position.distanceToSquared(new THREE.Vector3(...a.position))-camera.position.distanceToSquared(new THREE.Vector3(...b.position))).slice(0,24);
    this.reconcile(this.plants,near,p=>{const o=makePlant(p.text||p.id);o.position.fromArray(p.position);o.userData.entry=p;o.userData.growDur=1500+Math.random()*800;o.userData.phase=Math.random()*Math.PI*2;this.scene.add(o);return o;});

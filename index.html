@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="./reletter-theme.css">
   <link rel="stylesheet" href="./gun.css">
   <link rel="stylesheet" href="./sketch-hud.css">
+  <link rel="stylesheet" href="./fidelity-ui.css">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
   <script src="./temple-config.js"></script>
@@ -22,45 +23,46 @@
 </head>
 <body class="booting">
   <canvas id="game" aria-label="Temple 3D game"></canvas>
-  <div id="loading" role="status"><div class="reletter-wordmark">TEMPLE</div><div class="loading-track"><i id="loading-fill"></i></div><output id="loading-percent">0%</output><small id="loading-detail">Preparing arena</small></div>
+  <div id="loading" role="status"><section class="loading-window"><header class="win98-titlebar"><span>GGTemple</span><span aria-hidden="true">▁ ▣ ×</span></header><div class="loading-body"><p>Loading GGTemple…</p><div class="loading-track"><i id="loading-fill"></i></div><output id="loading-percent">0%</output><small id="loading-detail">Preparing arena</small></div></section></div>
 
   <main id="entry" aria-labelledby="entry-title">
     <section class="notepad-window">
-    <header class="win98-titlebar"><span>▤ TEMPLE - Notepad</span><span aria-hidden="true">▁ ▣ ×</span></header>
-    <div class="notepad-page"><h1 id="entry-title" class="reletter-wordmark">TEMPLE</h1>
+    <header class="win98-titlebar"><span>▤ GGTEMPLE - Notepad</span><span aria-hidden="true">▁ ▣ ×</span></header>
+    <div class="notepad-page"><h1 id="entry-title" class="reletter-wordmark">GGTEMPLE</h1>
     <form id="entry-form">
       <label>Name:<input id="player-name" name="name" maxlength="24" autocomplete="nickname" required></label>
       <label>Memorycode(Unnecessary):<input id="memory-code" name="memoryCode" type="password" maxlength="128" autocomplete="off"></label>
       <button id="enter-button" type="submit">Enter ↵</button><p id="entry-error" role="alert"></p>
     </form>
-    </div></section><div class="win98-taskbar" aria-hidden="true"><span>▤ Start</span><span>▤ TEMPLE - Notepad</span></div>
+    </div></section><div class="win98-taskbar" aria-hidden="true"><span>▤ Start</span><span>▤ GGTEMPLE - Notepad</span></div>
   </main>
 
   <section id="hud" hidden>
-    <div id="identity" class="hud-block"><strong id="hud-name">—</strong><span id="hud-role">FIGHTER</span></div>
-    <div id="vitals" class="hud-block"><span id="player-level">LV. 1</span><label>HP <progress id="hp" max="100" value="100"></progress><b id="hp-label">100/100</b></label><span id="wallet">0 COINS</span><span id="weapon">TIDE BLADE</span><span id="online">0 / 6</span></div>
+    <button id="gm-help" hidden aria-label="GM editing shortcuts">!</button>
+    <div id="identity" class="hud-block"><strong class="reletter-wordmark">GGTEMPLE</strong><strong id="hud-name" hidden>—</strong><span id="hud-role">FIGHTER</span></div>
+    <div id="vitals" class="hud-block"><span id="player-level">LV. 1</span><label><progress id="hp" max="100" value="100"></progress><b id="hp-label">100/100</b></label><span id="wallet">0 COINS</span><span id="weapon">TIDE BLADE</span><span id="online">0 / 6</span></div>
     <div id="monster-hud" class="hud-block" hidden><small id="monster-name">MONSTER</small><progress id="monster-hp" max="100" value="100"></progress></div>
     <div id="crosshair"></div><div id="prompt"></div><div id="toast"></div>
-    <div id="map-cluster"><button id="function-toggle" aria-label="開啟功能選單" aria-expanded="false">☰</button><svg id="minimap" viewBox="-65 -65 130 130" role="img" aria-label="小地圖"><circle r="63" fill="#ede3e6" fill-opacity=".7" stroke="#947285"/><g id="map-static"></g><g id="map-dynamic"></g></svg></div>
-    <section id="chat-hud" aria-label="聊天"><div id="chat-messages" role="log" aria-live="polite"></div><form id="chat-form"><label for="chat-input">CHAT</label><input id="chat-input" maxlength="500" autocomplete="off" aria-label="聊天訊息"><button type="submit" aria-label="送出聊天">↵</button></form></section>
+    <div id="map-cluster"><button id="function-toggle" aria-label="Open functions" aria-expanded="false">☰</button><svg id="minimap" viewBox="-65 -65 130 130" role="img" aria-label="Minimap"><circle r="63" fill="#ede3e6" fill-opacity=".7" stroke="#947285"/><g id="map-static"></g><g id="map-dynamic"></g></svg></div>
+    <section id="chat-hud" aria-label="Chat"><div id="chat-messages" role="log" aria-live="polite"></div><form id="chat-form"><label for="chat-input">CHAT</label><input id="chat-input" maxlength="500" autocomplete="off" aria-label="Chat message"><button type="submit" aria-label="Send chat">↵</button></form></section>
     <div id="build-mode" hidden><small>BUILD PREVIEW</small><strong id="build-kind">STRUCTURE</strong><button id="build-rotate">R · ROTATE</button><button id="build-confirm">E · PLACE</button><button id="build-cancel">ESC · CANCEL</button></div>
-    <nav id="dock" aria-label="遊戲功能">
-      <button id="attack-button" title="Hold Q to charge / release to attack"><b>Q</b><span>攻擊 / 蓄力</span></button>
-      <button data-action="jump" title="Jump (Space)"><b>↑</b><span>跳躍</span></button>
-      <button data-action="interact" title="Interact / throw (E)"><b>E</b><span>拾取</span></button>
-      <button data-panel="bag"><b>B</b><span>背包</span></button>
-      <button data-panel="shop"><b>I</b><span>商店</span></button>
-      <button data-panel="build"><b>V</b><span>建造</span></button>
-      <button data-action="fish"><b>F</b><span>釣魚</span></button>
-      <button data-panel="social"><b>C</b><span>WRITE / CHAT</span></button>
+    <nav id="dock" aria-label="Game functions">
+      <button id="attack-button" title="Hold Q to charge / release to attack"><b>Q</b><span>ATTACK</span></button>
+      <button data-action="jump" title="Jump (Space)"><b>↑</b><span>JUMP</span></button>
+      <button data-action="interact" title="Interact / throw (E)"><b>E</b><span>INTERACT</span></button>
+      <button data-panel="bag"><b>B</b><span>BAG</span></button>
+      <button data-panel="shop"><b>I</b><span>SHOP</span></button>
+      <button data-panel="build"><b>V</b><span>BUILD</span></button>
+      <button data-action="fish"><b>F</b><span>FISH</span></button>
+      <button data-panel="social"><b>C</b><span>WRITE</span></button>
     </nav>
     <div id="mobile-stick" aria-hidden="true"><i></i></div>
   </section>
 
-  <aside id="panel" class="glass-card" hidden aria-live="polite"><header><div><small id="panel-kicker">TEMPLE</small><h2 id="panel-title">PANEL</h2></div><button id="panel-close" aria-label="關閉">×</button></header><div id="panel-content"></div></aside>
+  <aside id="panel" class="glass-card" hidden aria-live="polite"><header><div><small id="panel-kicker">GGTEMPLE</small><h2 id="panel-title">PANEL</h2></div><button id="panel-close" aria-label="Close">×</button></header><div id="panel-content"></div></aside>
   <aside id="art-editor" hidden aria-label="GM artwork editor"></aside>
   <div id="art-handles" hidden></div>
-  <div id="death" hidden><p>YOU FELL</p><strong id="respawn-count">5</strong><small>裝備保留，20% 金幣留在倒下的位置</small></div>
+  <div id="death" hidden><p>YOU FELL</p><strong id="respawn-count">5</strong><small>Equipment kept. 20% of coins dropped where you fell.</small></div>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

@@ -5,7 +5,7 @@ import {fishingAction,FISH_ACTIONS,fishingView} from '../reletter/server/fishing
 import {itemById} from './catalog.js';
 import {FISHING_POND,insideArena,insideSafeZone} from './arena.js';
 export const ORIGINAL_ACTIONS=new Set([...GARDEN_ACTIONS,...FISH_ACTIONS].filter(a=>!['seed-buy','wing-pickup','weapon-pickup','harvest-arrange'].includes(a)));
-const initialFishing=()=>({holes:[{id:'temple-pond',position:[FISHING_POND.x,0,FISHING_POND.z],radius:FISHING_POND.radius,depth:3,water:'normal',lastUsed:Date.now()}],ponds:[],sessions:{},bags:{},revision:0});
+const initialFishing=()=>({holes:[],ponds:[],sessions:{},bags:{},revision:0});
 export function originalView(world){const g=world.reletter;if(!g)return {garden:{crops:[]},fishing:initialFishing()};return {garden:g.garden,fishing:fishingView(g)};}
 export function originalAction(world,profile,actor,body,now,rng){
   const g=structuredClone(world.reletter||{}),key=profile.key;

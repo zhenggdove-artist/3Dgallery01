@@ -1,3 +1,4 @@
+import {initializeArtMedia,uploadArtMedia,getArtMedia} from './art-media.js';
 import {DurableObject} from 'cloudflare:workers';
 import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,releasePlayerWorldState,tickWorld,validateState,validColor,validName,worldView} from '../src/shared/temple-rules.js';
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
@@ -25,6 +26,7 @@ export class TempleRoom extends DurableObject{
       CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS plant_media (id TEXT PRIMARY KEY, owner TEXT NOT NULL, type TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL);
     `);
+    initializeArtMedia(this.sql);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
   }
@@ -43,11 +45,13 @@ export class TempleRoom extends DurableObject{
     try{
       if(path==='/health')return withCors(request,json({ok:true,service:'TempleRoom',database:'sqlite',players:this.roster().length}),this.env);
       if(path==='/api/join'&&request.method==='POST')return withCors(request,await this.join(request),this.env);
+      if(path.startsWith('/api/art-media/')&&request.method==='GET')return withCors(request,getArtMedia(this.sql,path.slice(15),request),this.env);
       if(path.startsWith('/api/media/')&&request.method==='GET'){
         const media=this.sql.exec('SELECT type,data FROM plant_media WHERE id=?',path.slice(11)).toArray()[0];
         return withCors(request,media?new Response(media.data,{headers:{'Content-Type':media.type,'X-Content-Type-Options':'nosniff','Cache-Control':'public,max-age=31536000,immutable'}}):json({error:'Media missing'},404),this.env);
       }
       const token=this.token(request,url),session=this.session(token);if(!session)return withCors(request,json({error:'Session expired'},401),this.env);
+      if(path==='/api/art-media'&&request.method==='POST')return withCors(request,await uploadArtMedia(request,session,this),this.env);
       if(path==='/api/socket')return this.connect(request,session,token);
       if(path==='/api/media'&&request.method==='POST')return withCors(request,await this.uploadMedia(request,session),this.env);
       if(path==='/api/world'&&request.method==='GET')return withCors(request,json({world:worldView(this.world(),session.profile_key),players:this.roster(),self:this.self(session)}),this.env);
@@ -118,6 +122,7 @@ export class TempleRoom extends DurableObject{
     const receipt=this.sql.exec('SELECT response FROM request_receipts WHERE session_id=? AND request_id=?',session.id,requestId).toArray()[0];if(receipt)return json(JSON.parse(receipt.response));
     const state=session.state?JSON.parse(session.state):null;if(!state?.position)return json({error:'Connect and enter the Temple first'},409);
     const world=this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:state.position},actors=this.actors();
+    delete body.verifiedArtMedia;if(body.action==='add-artwork'){const media=this.sql.exec('SELECT id,type,owner FROM art_media WHERE id=?',String(body.artwork?.mediaId||'')).toArray()[0];if(!actor.admin||!media||media.owner!==session.profile_key)return json({error:'Upload a validated artwork as GM first'},403);body.verifiedArtMedia={id:media.id,type:media.type};}
     if(body.media||body.surface){const mediaId=body.media?.id||body.surface,media=this.sql.exec('SELECT id,type,owner FROM plant_media WHERE id=?',mediaId).toArray()[0];if(!media||media.owner!==session.profile_key||body.surface&&!media.type.startsWith('image/'))return json({error:'Upload your own media first'},400);if(body.media)body.media={id:media.id,type:media.type};}
     const result=applyAction(world,actor,body,{now:Date.now(),actors,seatIndex:session.seat});if(result.error)return json({error:result.error},400);
     const response={ok:true,...result,world:worldView(world,session.profile_key)};

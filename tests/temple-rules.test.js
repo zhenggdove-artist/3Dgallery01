@@ -63,7 +63,7 @@ test('PvP death drops exactly twenty percent of carried coins',()=>{
 test('timed ground loot stays capped and one monster spawns for active fighters',()=>{
   const now=7_000_000,world=createInitialWorld(now);world.nextGroundDropAt=now;world.monster.nextSpawnAt=now;
   const changed=tickWorld(world,{now,activeFighters:2,actors:[actor('p1',[0,0,0])],rng:()=>0});
-  assert.equal(changed,true);assert.equal(world.groundDrops.length,1);assert.equal(world.monster.active,true);
+  assert.equal(changed,true);assert.equal(world.groundDrops.filter(d=>d.kind!=='heart').length,1);assert.ok(world.groundDrops.some(d=>d.kind==='heart'));assert.equal(world.monster.active,true);
   for(let i=0;i<20;i++){world.nextGroundDropAt=now+i+1;tickWorld(world,{now:now+i+1,activeFighters:1,rng:()=>0});}
   assert.ok(world.groundDrops.length<=ECONOMY.maxGroundDrops);
 });
@@ -80,7 +80,7 @@ test('building cannot block spawns or artwork platforms and receives a server va
   const now=10_000_000,world=createInitialWorld(now),builder=actor('builder',[10,0,0]);ensureProfile(world,'builder','builder','#abcdef',now).wallet=1_000;
   const spawnBlock=applyAction(world,{...builder,position:[-5,0,10]},{action:'build',kind:'wall',position:[-5,0,6],rotation:0},{now,rng:()=>.2});
   assert.equal(spawnBlock.error,'Invalid build position');
-  const platformBlock=applyAction(world,{...builder,position:[-28,0,-24]},{action:'build',kind:'tree',position:[-35,0,-27],rotation:0},{now,rng:()=>.2});
+  const platformBlock=applyAction(world,{...builder,position:PLATFORMS[1].position},{action:'build',kind:'tree',position:PLATFORMS[1].position,rotation:0},{now,rng:()=>.2});
   assert.equal(platformBlock.error,'Invalid build position');
   const valid=applyAction(world,builder,{action:'build',kind:'house',position:[15,0,0],rotation:.5},{now,rng:()=>.9});
   assert.equal(valid.error,undefined);assert.equal(valid.structure.variant,3);
@@ -105,5 +105,5 @@ test('plant replies form persistent branches and monsters respect the central sa
   const reply=applyAction(world,writer,{action:'plant',text:'reply',position:[2,0,0],parentId:root.plant.id},{now:now+1});
   assert.equal(reply.plant.parentId,root.plant.id);assert.notDeepEqual(reply.plant.position,root.plant.position);
   const profile=world.profiles.p1;world.monster={active:true,id:'monster',variant:'warden',position:[6.5,0,0],hp:420,maxHp:420,generation:1,nextAttackAt:now};const before=[...world.monster.position],hp=profile.hp;
-  tickWorld(world,{now:now+2,activeFighters:1,actors:[writer]});assert.deepEqual(world.monster.position,before);assert.equal(profile.hp,hp);
+  tickWorld(world,{now:now+2,activeFighters:1,actors:[writer]});assert.ok(Math.hypot(world.monster.position[0],world.monster.position[2])>=49);assert.equal(profile.hp,hp);
 });

@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+import {readFile,mkdir} from 'node:fs/promises';
+const secret=(await readFile('.dev.vars','utf8')).match(/^TEMPLE_ADMIN_KEY=(.+)$/m)[1].trim();
+await mkdir('output/fidelity',{recursive:true});const browser=await chromium.launch({channel:'chrome',headless:true});
+try{for(const mobile of [false,true]){
+ const context=await browser.newContext({viewport:mobile?{width:844,height:390}:{width:1280,height:800},hasTouch:mobile,isMobile:mobile});await context.addInitScript(()=>localStorage.setItem('temple-backend-url','http://127.0.0.1:8788'));
+ const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(45000);
+ await page.goto('http://127.0.0.1:8000');await page.waitForFunction(()=>document.body.classList.contains('ready'));await page.locator('#player-name').fill('Ely');await page.locator('#memory-code').fill(secret);await page.locator('#entry-form').evaluate(f=>f.requestSubmit());await page.locator('#hud').waitFor({state:'visible'});
+ await page.evaluate(async()=>{await templeTest.network.action('buy',{itemId:'black-cat'});await templeTest.network.action('equip',{itemId:'black-cat'});});await page.waitForTimeout(500);
+ await page.locator('#attack-button').click();await page.waitForTimeout(200);assert.equal(await page.evaluate(()=>templeTest.camera.fov),62);
+ await page.keyboard.press('KeyV');await page.waitForTimeout(200);assert.equal(await page.evaluate(()=>templeTest.camera.fov),20);await page.screenshot({path:`output/fidelity/scope-${mobile}.png`});await page.keyboard.press('Escape');
+ await page.evaluate(()=>templeTest.ui.openPanel('shop'));await page.locator('[data-shop-tab="head"]').click();await page.locator('.shop-items img').evaluateAll(images=>images.forEach(i=>i.loading='eager'));await page.waitForFunction(()=>[...document.querySelectorAll('.shop-items img')].every(i=>i.complete&&i.naturalWidth>0));
+ const broken=await page.locator('.shop-items img').evaluateAll(images=>images.filter(i=>!i.naturalWidth).length);assert.equal(broken,0);assert.equal(await page.locator('#chat-hud').isVisible(),false);await page.screenshot({path:`output/fidelity/shop-${mobile}.png`});await page.locator('#panel-close').click();
+ await page.locator('#gm-help').click();assert.match(await page.locator('#panel-content').textContent(),/Shift \+ T/);await page.locator('#panel-close').click();
+ const result=await page.evaluate(async()=>{const t=templeTest,c=t.controller();t.network.close();const {ARTWORK_DISCS}=await import('/src/shared/artwork-discs.js');const d=ARTWORK_DISCS.at(-1);c.teleport([d.position[0],d.top,d.position[2]]);c.grounded=true;c.setEnabled(true);c.stepHorizontal(-10,0);const falling=!c.grounded,start=c.root.position.y;c.update(.05);const fell=c.root.position.y<start;const art=[...t.arena.artworks.values()][0];t.editor.select(art);t.editor.panel.querySelector('[data-action="follow"]').click();const before=art.position.x;c.root.position.x+=2;t.editor.update();const followed=Math.abs(art.position.x-before-2)<.001;t.editor.close();c.teleport([0,0,0]);c.grounded=true;c.yaw=0;c.pitch=.2;c.updateCamera(1);return {falling,fell,followed,nameY:c.root.userData.label.position.y,structures:t.arena.structureGroup.children.length};});assert.ok(result.falling&&result.fell&&result.followed);assert.ok(result.nameY<0);assert.equal(result.structures,0);
+ await page.waitForTimeout(500);await page.screenshot({path:`output/fidelity/world-${mobile}.png`});assert.deepEqual(errors,[]);console.log(JSON.stringify({mobile,...result,broken,errors}));await context.close();
+}}finally{await browser.close();}

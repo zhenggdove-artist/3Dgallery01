@@ -737,3 +737,66 @@ Release result:
 - Committed Temple as `1f30bcb`, pushed `codex/temple-rebuild`, and fast-forwarded `main`. The original Gallery remains available on `codex/gallery-pre-temple-20261111`.
 - GitHub Pages run `43030603241` completed successfully for that commit.
 - Public `https://zhenggdove-artist.github.io/3Dgallery01/` browser verification passed: 13 artworks, 13 platform coins, production WSS, Shift+Y save and build-preview interaction all worked with no HTTP/module/WebGL errors. The public gameplay sample rendered 26 draw calls / about 154k triangles.
+## 2026-11-13 fidelity correction — implementation checkpoint
+
+Current request: original RELETTER shop/fusion, cat-gun shoulder/scope controls,
+smooth traversal and natural platform falls, exterior-only monsters with safe
+art viewing, healing hearts, empty-slot auto equip, charged FX heights, broken
+equipment previews, and names below avatars. Earlier requested scene cleanup,
+disc routes, coin collection animation, English UI and separate CHAT/WRITE are
+included. Do not call this an exact complete port until visual/browser tests pass.
+
+Implemented locally: server-side art sanctuary and enemy relocation, hearts,
+auto pickup/equip, three requested enemy motions, disc ground height gates,
+camera smoothing, cat attack-button mode cycling, pooled ultimate orientation
+parity, model-rendered weapon/head previews, shop categories, drag fusion,
+scene archive migration, GGTEMPLE, original VHS shader and coin spin-rise.
+Subsequently verified: desktop/mobile controls, empty thumbnails fixed, GM
+help/follow and editor persistence. Still not claimed as full original parity:
+original lift/write/fall cinematic, exact shop/fusion layout and full visual audit.
+Initial test run: 24/27 pass; remaining fixtures assumed removed preset pond,
+no heart drops, and a monster remaining inside the newly protected art area.
+
+## 2026-11-13 additional seven requests — release candidate
+
+- Hit reaction: authoritative 100 ms attack lock, local input stun and recoil,
+  250 ms red material flash restored correctly. Browser checks confirm recoil,
+  blocked jump and recovered material; rules check the exact 100 ms boundary.
+- Windows 98 loading window titled GGTemple with percentage; no lazy admission.
+- GM validated PNG/JPEG/WebP, MP4/WebM, GLB/glTF/FBX upload with bounded storage,
+  self-contained model conversion, persistent custom artwork records and byte-range
+  video streaming. Tested PNG/GLB upload → edit → save → reload; glTF/FBX conversion,
+  real VP9 decode, uploaded video seeking, missing BIN and corrupt GLB rejection.
+- Alpha-contour image thickness plus brightness/contrast/saturation/black-point/
+  tint controls, persisted in artwork layouts.
+- Floating avatar traced to bind-pose bounds: animated skinned feet were ~0.5
+  units too high. One-time animated-pose correction gives minY 0.000034 on ground.
+- HUD 3D rotating coin + numeric balance and rotating pink liquid-level heart.
+  Fixed a negative-bound GLSL syntax error; full/half-health screenshots inspected.
+- 34 rules tests pass. Desktop/mobile regression, 23 weapon families, 27 equipment
+  samples, media, draft and 4-character stress pass. Latest hardware sample:
+  mean frame 16.65 ms / p95 17 ms, logic 0.85 ms, submission 1.78 ms.
+  This is not a universal no-lag guarantee.
+- Standard game skill client completed; loading and gameplay screenshots inspected.
+- Upload constraints and operation documented in ARTWORK-UPLOAD.md. No RELETTER
+  source or backend modified. Local test library is not part of the release.
+
+## 2026-11-13 user follow-up: all weapon effects → 00GameDevs
+
+- Replaced original attack/signature/ultimate/odd/fusion VFX entry points with
+  18 MIT downloads verified against catalog SHA-256; identical runtime factored
+  once, source presets and licenses retained. All weapon IDs have both normal
+  and charged mappings. Charge and blade trails also use this library.
+- Preserved poses, aiming, physics, damage and cooldowns; server reports visual
+  impact positions without changing hit tests. Fixed early stop before library
+  startup completed. Pool bounded at 24 active entries and 2 idle per ID.
+- 36 unit tests pass; 48 normal/charged mapping lifecycle cases finish with
+  zero active entries, and 20 replay cycles create zero new instances. Six
+  representative families captured and inspected; no console/shader errors.
+- Corrected old stress harness: network roster sync was removing synthetic
+  actors. Disconnect it before four-character test. New honest sample:
+  mean frame 18.67 ms, p95 33.3 ms; logic 3.06 ms, render submission 13.92 ms.
+  Earlier four-character claims are not valid evidence of four simultaneous
+  actors. No universal zero-lag claim. Repeated weapon trails now reuse one entry.
+- ESC now closes a panel even when its textarea is focused. Render counters
+  now include both world and VHS passes instead of only the final fullscreen quad.
