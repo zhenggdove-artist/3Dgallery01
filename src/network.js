@@ -4,7 +4,7 @@ export class TempleNetwork extends EventTarget{
   }
   setBackend(url){this.base=String(url||'').trim().replace(/\/$/,'');localStorage.setItem('temple-backend-url',this.base);}
   ensureConfigured(){if(!/^https?:\/\//.test(this.base)||this.base.includes('REPLACE_WITH_ACCOUNT'))throw new Error('Temple backend URL has not been deployed yet');}
-  async join({name,color='#bde8dc',memoryCode='',saveCode=''}){
+  async join({name,color='#43b59a',memoryCode='',saveCode=''}){
     this.ensureConfigured();const data=await this.request('/api/join',{method:'POST',body:{name,color,memoryCode,saveCode},auth:false});this.token=data.token;this.joinData=data;this.closedByUser=false;sessionStorage.setItem('temple-session-token',this.token);await this.connect();return data;
   }
   async connect(){

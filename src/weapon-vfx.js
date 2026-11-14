@@ -36,7 +36,7 @@ export class WeaponVFX{
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
   for(const id of Object.keys(factories)){const fx=this.create(id);fx.update(.18);warmScene.add(fx.group);fxs.push([id,fx]);}
-  await renderer.compileAsync(warmScene,camera);
+  const sniper=createOddEffect(THREE,{charge:1,range:50,origin:[0,0,0],direction:[0,0,-1]},{pattern:'sniper',color:'#ffffff'});warmScene.add(sniper.root);await renderer.compileAsync(warmScene,camera);sniper.root.removeFromParent();sniper.root.material.dispose();
   for(const [id,fx]of fxs){fx.group.removeFromParent();fx.reset();fx.group.visible=false;this.pools.set(id,[fx]);}
   return {source:'00GameDevs',effects:fxs.length};
  }

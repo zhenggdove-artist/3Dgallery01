@@ -56,7 +56,7 @@ export class TempleArena{
       root.position.fromArray(platform.artPosition);root.rotation.y=platform.artYaw;this.scene.add(root);this.artworks.set(platform.id,root);complete++;onProgress(complete/selected.length);
     }));
   }
-  createPlayer(color='#bde8dc',admin=false,name='Pilgrim'){
+  createPlayer(color='#43b59a',admin=false,name='Pilgrim'){
     const root=new THREE.Group(),model=cloneSkeleton(this.characterAsset.scene);model.scale.setScalar(100);model.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(model);model.position.y=-bounds.min.y;tintCharacter(model,color,admin);root.add(model);
     const ring=new THREE.Mesh(new THREE.RingGeometry(.46,.53,24),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.65,side:THREE.DoubleSide,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;root.add(ring);const label=makeNameSprite(name,admin);label.position.y=-.25;root.add(label);const weaponMount=new THREE.Group();weaponMount.position.set(.48,1.05,.1);weaponMount.rotation.set(0,0,-.55);root.add(weaponMount);const mixer=new THREE.AnimationMixer(model),actions={};for(const clip of this.characterAsset.animations)actions[clip.name]=mixer.clipAction(clip);actions.idle?.play();mixer.update(.001);model.updateMatrixWorld(true);model.position.y-=new THREE.Box3().setFromObject(model,true).min.y;model.updateMatrixWorld(true);root.userData={model,mixer,actions,current:'idle',ring,label,weaponMount,weaponId:null};this.mixers.push(mixer);return root;
   }
