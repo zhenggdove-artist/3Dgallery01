@@ -1,0 +1,12 @@
+import * as THREE from 'three';
+import {artworkPosition,artworkLanding} from './shared/artwork-flight.js';
+export class ArtworkThrow{
+ constructor({scene,controller,arena,send,bursts,audio}){Object.assign(this,{scene,controller,arena,send,bursts,audio});this.started=null;this.pending=new Map();this.seen=new Set();this.marker=new THREE.Mesh(new THREE.RingGeometry(.65,.76,48),new THREE.MeshBasicMaterial({color:0xffd66f,side:THREE.DoubleSide,depthWrite:false}));this.marker.rotation.x=-Math.PI/2;this.marker.visible=false;scene.add(this.marker);this.path=new THREE.Line(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(33*3),3)),new THREE.LineBasicMaterial({color:0xffd66f,transparent:true,opacity:.6}));this.path.frustumCulled=false;this.path.visible=false;scene.add(this.path);}
+ begin(){if(this.started===null)this.started=performance.now();}
+ cancel(){this.started=null;this.path.visible=this.marker.visible=false;}
+ get progress(){return this.started===null?0:Math.min(1,(performance.now()-this.started)/1500);}
+ trajectory(){const c=this.controller();return {origin:[c.root.position.x,c.root.position.y+1.4,c.root.position.z],direction:c.aimDirection(),power:.4+this.progress};}
+ async release(){if(this.started===null)return;const event=this.trajectory();this.cancel();const result=await this.send('throw-artwork',{direction:event.direction,power:event.power});if(result?.throwEvent)this.queue(result.throwEvent);}
+ queue(event){if(this.seen.has(event.id))return;this.seen.add(event.id);if(this.seen.size>128)this.seen.delete(this.seen.values().next().value);this.pending.set(event.id,{event,landing:artworkLanding(event,(x,z,y)=>this.arena.groundHeight(x,z,y))});}
+ update(){if(this.started!==null){const event=this.trajectory(),landing=artworkLanding(event,(x,z,y)=>this.arena.groundHeight(x,z,y));this.marker.position.fromArray(landing.position);this.marker.position.y+=.04;this.marker.visible=this.path.visible=true;const attr=this.path.geometry.attributes.position;for(let i=0;i<33;i++)attr.setXYZ(i,...artworkPosition(event,landing.time*i/32));attr.needsUpdate=true;this.prediction=landing.position;}for(const [id,{event,landing}]of this.pending){if(Date.now()<event.time+landing.time*1000)continue;this.pending.delete(id);if(Date.now()-event.time-landing.time*1000<1500){this.bursts.play(landing.position,id);this.audio.play('explosion');}}}
+}

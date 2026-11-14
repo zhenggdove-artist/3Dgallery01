@@ -73,6 +73,8 @@ const VHSShader={
       col*=brightness;
 
       gl_FragColor=vec4(col,1.0);
+      #include <tonemapping_fragment>
+      // Original RELETTER VHS outputs its display palette directly (no OutputPass).
     }
   `
 };

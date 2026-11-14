@@ -104,7 +104,7 @@ export class TempleRoom extends DurableObject{
   async webSocketMessage(ws,message){
     const meta=ws.deserializeAttachment();if(!meta||this.closed.has(ws))return;const session=this.session(meta.sessionId);if(!session){this.closed.add(ws);ws.close(4001,'Session expired');return;}
     let event;try{event=JSON.parse(String(message));}catch{return;}if(event.type!=='state')return;
-    const now=Date.now();if(now-meta.lastStateAt<70)return;const previous=session.state?JSON.parse(session.state):null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat]);if(result.error){ws.send(JSON.stringify({type:'state-rejected',data:{error:result.error}}));return;}
+    const now=Date.now();if(now-meta.lastStateAt<70)return;const previous=session.state?JSON.parse(session.state):null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],this.world().profiles[session.profile_key]?.writeJourney,now);if(result.error){ws.send(JSON.stringify({type:'state-rejected',data:{error:result.error}}));return;}
     meta.lastStateAt=now;ws.serializeAttachment(meta);this.sql.exec('UPDATE sessions SET state=?,expires=? WHERE id=?',JSON.stringify(result.state),now+SESSION_MS,session.id);
     this.broadcast('state',{id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,state:result.state},ws);await this.tick(true);
   }

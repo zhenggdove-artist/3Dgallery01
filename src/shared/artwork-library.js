@@ -1,7 +1,7 @@
 import {PLATFORMS,ARENA_RADIUS} from './arena.js';
 export const APPEARANCE_DEFAULTS={depth:.1,brightness:1,contrast:1,saturation:1,blackPoint:0,tint:'#ffffff'};
 export function validateAppearance(value={}){const out={...APPEARANCE_DEFAULTS,...value};for(const [key,min,max] of [['depth',0,2],['brightness',0,3],['contrast',0,3],['saturation',0,3],['blackPoint',0,.95]])if(!Number.isFinite(out[key])||out[key]<min||out[key]>max)return null;if(!/^#[0-9a-f]{6}$/i.test(out.tint))return null;return out;}
-export function artworkDefinitions(world){return [...PLATFORMS,...(world?.customArtworks||[]).map(a=>({id:a.id,artPosition:a.position,position:[a.position[0],0,a.position[2]],artYaw:0,size:[4,4,4]}))];}
+export function artworkDefinitions(world){return [...PLATFORMS,...(world?.customArtworks||[]).map((a,index)=>({id:a.id,index:PLATFORMS.length+index,artPosition:a.position,position:[a.position[0],0,a.position[2]],artYaw:0,size:[4,4,4]}))];}
 export function addArtwork(world,profile,actor,body,now){
  if(!profile.admin)return {error:'GM only'};const record=body.artwork,media=body.verifiedArtMedia;
  if(!record||!media||!['image/png','image/jpeg','image/webp','video/mp4','video/webm','model/gltf-binary'].includes(media.type))return {error:'Validated artwork upload required'};
