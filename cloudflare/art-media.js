@@ -1,10 +1,13 @@
 const MAX=32*1024*1024,CHUNK=512*1024;
 export function initializeArtMedia(sql){sql.exec('CREATE TABLE IF NOT EXISTS art_media (id TEXT PRIMARY KEY, owner TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, created_at INTEGER NOT NULL)');sql.exec('CREATE TABLE IF NOT EXISTS art_media_chunks (id TEXT NOT NULL, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(id,part))');}
 export async function uploadArtMedia(request,session,room){
- if(!room.world().profiles[session.profile_key]?.admin)return Response.json({error:'GM only'},{status:403});
+ const world=room.world(),admin=world.profiles?.[session.profile_key]?.admin===true;
+ if(!admin&&session.role!=='fighter')return Response.json({error:'Join as a fighter to upload artwork'},{status:403});
+ if(!admin&&((world.customArtworks||[]).filter(a=>a.bomb&&a.owner===session.profile_key).length>=4))return Response.json({error:'Personal artwork bomb limit reached (4)'},{status:429});
+ if(!admin&&((world.customArtworks||[]).filter(a=>a.bomb).length>=32))return Response.json({error:'Room artwork bomb limit reached'},{status:429});
  const type=(request.headers.get('Content-Type')||'').split(';')[0];if(!['image/png','image/jpeg','image/webp','video/mp4','video/webm','model/gltf-binary'].includes(type))return Response.json({error:'Unsupported artwork format'},{status:400});
- if(!room.consumeRate('art-upload:'+session.profile_key,8,60000))return Response.json({error:'Upload limit reached'},{status:429});
- const reader=request.body?.getReader(),chunks=[];let size=0;if(!reader)return Response.json({error:'Empty file'},{status:400});for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>MAX){await reader.cancel();return Response.json({error:'Artwork exceeds 32 MB'},{status:413});}chunks.push(value);}if(!size)return Response.json({error:'Empty file'},{status:400});
+ if(!room.consumeRate('art-upload:'+session.profile_key,admin?8:3,60000))return Response.json({error:'Upload limit reached'},{status:429});
+ const reader=request.body?.getReader(),chunks=[];let size=0;if(!reader)return Response.json({error:'Empty file'},{status:400});for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>(admin?MAX:8*1024*1024)){await reader.cancel();return Response.json({error:admin?'Artwork exceeds 32 MB':'Player artwork exceeds 8 MB'},{status:413});}chunks.push(value);}if(!size)return Response.json({error:'Empty file'},{status:400});
  if((room.sql.exec('SELECT COALESCE(SUM(size),0) AS total FROM art_media').toArray()[0].total||0)+size>256*1024*1024)return Response.json({error:'Gallery upload storage limit reached (256 MB)'},{status:413});
  const data=new Uint8Array(size);let offset=0;for(const c of chunks){data.set(c,offset);offset+=c.length;}
  if(type==='model/gltf-binary'){try{const view=new DataView(data.buffer);if(view.getUint32(0,true)!==0x46546c67||view.getUint32(4,true)!==2||view.getUint32(8,true)!==size)throw Error();const length=view.getUint32(12,true),doc=JSON.parse(new TextDecoder().decode(data.subarray(20,20+length)));for(const r of [...doc.buffers||[],...doc.images||[]])if(r.uri&&!r.uri.startsWith('data:'))throw Error();}catch{return Response.json({error:'GLB must be valid and self-contained; external files are not accepted'},{status:400});}}
