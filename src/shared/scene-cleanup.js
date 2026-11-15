@@ -1,6 +1,23 @@
 // Keep removed scene records recoverable; never discard messages or artwork edits.
 export function cleanLegacyScene(world){
- if(world.sceneCleanupVersion>=3)return world;
+ if(world.sceneCleanupVersion>=4)return world;
+ if(world.sceneCleanupVersion===3){
+  const old=world.reletter?.fishing;
+  if(old){
+   world.sceneArchive??={};
+   world.sceneArchive.retiredFishing=structuredClone(old);
+   delete world.reletter.fishing;
+  }
+  // Preserve historical fishing records in the archive, but no longer equip,
+  // sell, render, or advertise rods, chisels and ponds in the active game.
+  for(const profile of Object.values(world.profiles||{})){
+   delete profile.fish;delete profile.lastFishAt;
+   if(profile.equipment){delete profile.equipment.rod;delete profile.equipment.tool;}
+   if(Array.isArray(profile.inventory))profile.inventory=profile.inventory.filter(v=>!/^rod-\\d+$|^chisel(?:-\\d+)?$|^pond-kit$/.test(v));
+  }
+  world.sceneCleanupVersion=4;
+  return world;
+ }
  if(world.sceneCleanupVersion===2){
   const fishing=world.reletter?.fishing;
   if(fishing?.holes?.length){
@@ -10,7 +27,7 @@ export function cleanLegacyScene(world){
    for(const [key,session] of Object.entries(fishing.sessions||{}))if(oldIds.has(session.hole))delete fishing.sessions[key];
    fishing.revision=(fishing.revision||0)+1;
   }
-  world.sceneCleanupVersion=3;return world;
+  world.sceneCleanupVersion=3;return cleanLegacyScene(world);
  }
  if(world.sceneCleanupVersion===1){
    // One-time archival of the GM's old excavated fishing hole(s); leave other
@@ -25,5 +42,5 @@ export function cleanLegacyScene(world){
  world.structures=(world.structures||[]).filter(s=>!removed.includes(s));
  if(fishing){fishing.holes=[];fishing.ponds=[];fishing.sessions={};}
  world.sceneCleanupVersion=3;
- return world;
+ return cleanLegacyScene(world);
 }
