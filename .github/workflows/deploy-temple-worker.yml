@@ -47,7 +47,29 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Verify production worker health
+      - name: Verify production Worker supports current artwork APIs
         run: |
-          curl --fail --show-error --silent --retry 5 --retry-delay 3 \
-            https://temple-arena.zhenggdove-artist.workers.dev/health
+          node --input-type=module <<'NODE'
+          const url = 'https://temple-arena.zhenggdove-artist.workers.dev/health';
+          const required = ['artMediaUpload', 'artBombPlace', 'gmReset'];
+          let verified = false;
+          for (let attempt = 1; attempt <= 6; attempt++) {
+            try {
+              const response = await fetch(url, {
+                headers: { Accept: 'application/json' },
+                signal: AbortSignal.timeout(10000)
+              });
+              if (!response.ok) throw new Error('Health HTTP ' + response.status);
+              const health = await response.json();
+              const missing = required.filter(feature => health.features?.[feature] !== true);
+              if (missing.length) throw new Error('Missing production features: ' + missing.join(', '));
+              console.log('Production Temple Worker verified: ' + required.join(', '));
+              verified = true;
+              break;
+            } catch (error) {
+              console.error('Health verification ' + attempt + '/6: ' + error.message);
+              if (attempt < 6) await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+          }
+          if (!verified) process.exitCode = 1;
+          NODE
