@@ -48,3 +48,33 @@ test('ballistic artwork bomb damage is 30–100% of maximum health before protec
  assert.equal(projectileHitsActor(event,[0,0,11],1.5,1),true);
  assert.equal(projectileHitsActor(event,[20,0,11],1.5,1),false);
 });
+
+test('WRITE server journey accepts begin, drink and creates a persistent plant',()=>{
+ const world=createInitialWorld(1000),writer=actor('writer',[0,0,0]);
+ const started=applyAction(world,writer,{action:'write-begin'},{now:1000});
+ assert.ok(started.journey,started.error);
+ const early=applyAction(world,writer,{action:'write-drink',duration:2},{now:2000});
+ assert.match(early.error,/Wait until/);
+ const drinking=applyAction(world,writer,{action:'write-drink',duration:2},{now:4000});
+ assert.ok(drinking.journey?.drinkAt,drinking.error);
+ const planted=applyAction(world,writer,{action:'plant',text:'my persistent installation',position:[0,0,0]},{now:9600});
+ assert.ok(planted.plant,planted.error);
+ assert.equal(world.plants.at(-1).text,'my persistent installation');
+ assert.equal(world.profiles.writer.writeJourney,null);
+});
+
+test('normal weapon attacks shake/damage player buildings and eventually destroy them',()=>{
+ const world=createInitialWorld(1000),attacker=actor('attacker',[75,0,0]);
+ world.structures=[{id:'player-cube',kind:'cube',owner:'owner',hp:20,position:[75,0,6],rotation:0,variant:1,createdAt:1000}];
+ const direction=[0,0,1];
+ const first=applyAction(world,attacker,{action:'attack',direction,charge:0},{now:5000,actors:[]});
+ assert.ok(first.structureHit,JSON.stringify(first.error||first));
+ assert.ok(first.structureHit.hp<20);
+ let destroyed=false;
+ for(let i=1;i<7;i++){
+  const result=applyAction(world,attacker,{action:'attack',direction,charge:0},{now:5000+i*1000,actors:[]});
+  if(result.structureDestroyed){destroyed=true;break;}
+ }
+ assert.ok(destroyed);
+ assert.equal(world.structures.length,0);
+});
