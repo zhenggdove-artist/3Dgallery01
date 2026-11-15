@@ -61,6 +61,32 @@ try{
   restored=await join(9,codeResponse.data.code);await connect(restored);assert.equal(restored.world.profile.wallet,80+ECONOMY.platformCoinValue);assert.ok(restored.world.profile.inventory.includes('tide-1'));assert.equal(restored.self.name,winner.self.name);assert.equal(restored.self.color,winner.self.color);
   await request('/api/disconnect',{method:'POST',token:joined[2].token,body:{}});joined[2].ws.close();const promoted=await request('/api/role',{method:'POST',token:joined[4].token,body:{role:'fighter'}});assert.equal(promoted.status,200);assert.equal(promoted.data.role,'fighter');assert.ok(promoted.data.seat<4);
 
+  // Verify the complete artwork path against actual local Wrangler + SQLite
+  // Durable Object: binary upload -> GET Range readback -> size validation ->
+  // fighter PLACEs the work -> another player sees it in the world state.
+  const artist=joined[2];
+  await walkTo(artist,[75,0,0]);
+  const image=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9kAAAAASUVORK5CYII=','base64');
+  const uploadedResponse=await fetch(base+'/api/art-media',{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+artist.token,'Content-Type':'image/png'},body:image});
+  assert.equal(uploadedResponse.status,200,'The actual Durable Object must accept player artwork bytes');
+  const uploaded=await uploadedResponse.json();
+  assert.equal(uploaded.size,image.length);
+  assert.equal(uploaded.type,'image/png');
+  const ranged=await fetch(base+'/api/art-media/'+encodeURIComponent(uploaded.id),{headers:{Origin:origin,Range:'bytes=0-31'}});
+  assert.equal(ranged.status,206,'The persisted bytes must be readable after the upload transaction');
+  assert.deepEqual(Buffer.from(await ranged.arrayBuffer()),image.subarray(0,32));
+  const artBody={artwork:{title:'API verified player art',mediaId:uploaded.id,position:[77,1.5,0]},size:3};
+  const tooLarge=await action(artist,'publish-art-bomb',{...artBody,size:3.1});
+  assert.equal(tooLarge.status,400);
+  const placed=await action(artist,'publish-art-bomb',artBody);
+  assert.equal(placed.status,200,JSON.stringify(placed.data));
+  assert.equal(placed.data.artwork.bomb,true);
+  assert.deepEqual(placed.data.world.artworkLayout[placed.data.artwork.id].scale,[3,3,3]);
+  const othersWorld=await request('/api/world',{token:joined[3].token});
+  assert.ok(othersWorld.data.world.customArtworks.some(a=>a.id===placed.data.artwork.id));
+  const nonGmReset=await request('/api/chat',{method:'POST',token:artist.token,body:{text:'/RESET'}});
+  assert.equal(nonGmReset.status,403,'Public chat must not allow non-GM to wipe artworks');
+
   console.log(JSON.stringify({ok:true,seats:joined.map(({role,seat})=>({role,seat})),atomicCoinStatuses:claims.map(result=>result.status),wallet:restored.world.profile.wallet,saveCodeRestored:true,savedIdentityRestored:true,spectatorPromoted:true},null,2));
 }finally{
   for(const client of clients){try{client.ws?.close();}catch{}try{await request('/api/disconnect',{method:'POST',token:client.token,body:{}});}catch{}}
