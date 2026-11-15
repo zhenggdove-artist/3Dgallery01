@@ -5,12 +5,12 @@ import {artworkPosition} from './artwork-flight.js';
 const inside=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
 export const MAX_ART_BOMBS_PER_PLAYER=4;
 export const MAX_ART_BOMBS_GLOBAL=32;
-export function validArtBombSize(value){const n=Number(value);return Number.isFinite(n)&&n>=.5&&n<=5?n:null;}
+export function validArtBombSize(value){const n=Number(value);return Number.isFinite(n)&&n>=1&&n<=3?n:null;}
 
 export function publishArtBomb(world,profile,actor,body,now=Date.now()){
  const record=body?.artwork,media=body?.verifiedArtMedia,size=validArtBombSize(body?.size);
  if(!media||!record||!['image/png','image/jpeg','image/webp','video/mp4','video/webm','model/gltf-binary'].includes(media.type))return {error:'Upload a validated image, video, or 3D model first'};
- if(!size)return {error:'Artwork size must be 0.5–5.0'};
+ if(!size)return {error:'Artwork size must be 1–3.0'};
  const p=record.position;
  if(!inside(p)||p[1]<0||p[1]>30||Math.hypot(p[0],p[2])>ARENA_RADIUS-2)return {error:'Invalid artwork position'};
  world.customArtworks??=[];
@@ -32,7 +32,7 @@ export function publishArtBomb(world,profile,actor,body,now=Date.now()){
 export function resizeArtBomb(world,actor,body,now=Date.now()){
  const record=(world.customArtworks||[]).find(a=>a.id===body.id&&a.bomb);
  if(!record||record.owner!==actor.key&&!actor.admin)return {error:'Only its creator or GM can resize this artwork'};
- const size=validArtBombSize(body.size);if(!size)return {error:'Artwork size must be 0.5–5.0'};
+ const size=validArtBombSize(body.size);if(!size)return {error:'Artwork size must be 1–3.0'};
  const state=world.artworks?.[record.id],layout=world.artworkLayout?.[record.id];
  if(!layout||state?.holder||state?.throwEvent||state?.availableAt>now)return {error:'Wait for artwork to return before resizing'};
  const oldSize=layout.scale?.[0]||1;layout.position=[layout.position[0],Math.max(0,Math.min(30,layout.position[1]+1.5*(size-oldSize))),layout.position[2]];layout.scale=[size,size,size];layout.revision=(layout.revision||0)+1;layout.updatedAt=now;
@@ -55,4 +55,25 @@ export function projectileHitsActor(event,target,landingTime,size=1){
 export function artBombDamage(maxHp,rng=Math.random){
  const chance=Math.max(0,Math.min(1,Number(rng())||0));
  return Math.max(1,(Number(maxHp)||100)*(.3+.7*chance));
+}
+
+// GM-only: remove ALL non-GM uploaded works, but never touch original gallery
+// works, GM records, or any of the associated RELETTER storage.
+export function resetPlayerArtworks(world,admin,now=Date.now()){
+ if(!admin)return {error:'GM only'};
+ const records=world.customArtworks||[];
+ const removed=records.filter(a=>a.owner&&!world.profiles?.[a.owner]?.admin);
+ if(!removed.length)return {notice:'No player artworks to reset',removedArtworks:0,removedArtworkMediaIds:[]};
+ const gone=new Set(removed.map(a=>a.id));
+ world.customArtworks=records.filter(a=>!gone.has(a.id));
+ for(const a of removed){delete world.artworks?.[a.id];delete world.artworkLayout?.[a.id];}
+ // Archive ownership metadata only; do not retain potentially private art bytes.
+ world.sceneArchive??={};
+ world.sceneArchive.playerArtworkResets??=[];
+ world.sceneArchive.playerArtworkResets.push({time:now,count:removed.length,ids:[...gone]});
+ world.sceneArchive.playerArtworkResets=world.sceneArchive.playerArtworkResets.slice(-20);
+ world.revision=(world.revision||0)+1;
+ const retained=new Set(world.customArtworks.map(a=>a.mediaId));
+ return {notice:removed.length+' player artworks removed',removedArtworks:removed.length,
+  removedArtworkIds:[...gone],removedArtworkMediaIds:[...new Set(removed.map(a=>a.mediaId).filter(m=>m&&!retained.has(m)))]};
 }
