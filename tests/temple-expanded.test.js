@@ -148,7 +148,10 @@ test('uploaded art stays projectile equipment, never a damageable BUILD structur
  assert.ok(hit.structureHit);
  assert.equal(world.customArtworks.length,1);
  assert.equal(world.artworks[created.artwork.id].holder,null);
- assert.equal(applyAction(world,attacker,{action:'destroy',structureId:'breakable',direction:[0,0,1]},{now:6000}).error,undefined);
+ for(let i=0;i<8&&world.structures.length;i++){
+  const result=applyAction(world,attacker,{action:'destroy',structureId:'breakable',direction:[0,0,1]},{now:6000+i*1000});
+  assert.equal(result.error,undefined);
+ }
  assert.equal(world.structures.length,0);
  assert.equal(world.customArtworks.length,1);
 });
