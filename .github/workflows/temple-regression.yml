@@ -22,3 +22,24 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+
+  durable-object-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:cloud
+      - name: Boot ephemeral local Wrangler worker
+        run: |
+          npx wrangler dev --local --port 8787 > /tmp/temple-worker-ci.log 2>&1 &
+          echo $! > /tmp/temple-worker-ci.pid
+      - name: Validate actual room API, WRITE and artwork upload
+        run: node tests/backend-smoke.mjs
+      - name: Print server diagnostics if unsuccessful
+        if: failure()
+        run: cat /tmp/temple-worker-ci.log || true
