@@ -8,3 +8,15 @@
 #build-mode{position:absolute;left:50%;bottom:92px;transform:translateX(-50%);display:flex;align-items:center;gap:7px;padding:8px;border:1px solid var(--line);background:#0b0e0be8;pointer-events:auto}#build-mode[hidden]{display:none}#build-mode small{color:var(--muted);font:9px monospace;letter-spacing:.15em}#build-mode strong{color:var(--gold);font:12px monospace}#build-mode button,.spectator-list button{min-height:32px;border:1px solid #ffffff26;background:#22271f;cursor:pointer}.spectator-list{display:grid;gap:6px;margin-bottom:16px}.plant-message{border-left:2px solid var(--gold);padding:12px;background:#ffffff06}.plant-message p{white-space:pre-wrap;line-height:1.65}
 @media(max-width:720px),(pointer:coarse){#entry{left:18px;padding:24px}#entry h1{font-size:52px}#identity{top:max(9px,env(safe-area-inset-top));left:9px}#vitals{right:9px;top:max(9px,env(safe-area-inset-top));max-width:52vw;flex-wrap:wrap;justify-content:flex-end;gap:6px}#vitals progress{width:68px}#dock{left:auto;right:10px;transform:none;display:grid;grid-template-columns:repeat(2,52px)}#dock button{width:52px;height:52px}#mobile-stick{display:block}#prompt{bottom:176px}#panel{inset:70px 8px 82px;width:auto}.item-grid{grid-template-columns:1fr}#monster-hud{top:82px;width:70vw}#build-mode{left:8px;right:8px;bottom:140px;transform:none;flex-wrap:wrap;justify-content:center}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* RELETTER-style hover/tap plant reading — never requires the E key. */
+#plant-hover{position:fixed;z-index:48;max-width:min(340px,calc(100vw - 20px));width:max-content;
+  padding:13px 16px;border:1px solid rgba(217,194,145,.62);border-radius:12px;
+  background:rgba(14,18,18,.91);color:#f5f0dd;backdrop-filter:blur(13px);
+  pointer-events:auto;box-shadow:0 10px 28px rgba(0,0,0,.32);font-size:13px;line-height:1.6}
+#plant-hover[hidden]{display:none!important}
+#plant-hover strong{display:block;color:#edd6a7;font:700 14px Georgia,serif}
+#plant-hover p{white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 8px;max-height:150px;overflow-y:auto}
+#plant-hover time{display:block;opacity:.64;font:10px monospace;margin-top:4px}
+#plant-hover img,#plant-hover video{display:block;max-width:100%;max-height:180px;object-fit:contain}
+@media(pointer:coarse){#plant-hover{font-size:15px;max-width:min(320px,calc(100vw - 20px));max-height:calc(100dvh - 190px);overflow-y:auto}}
