@@ -185,8 +185,19 @@ function throwArtwork(world,profile,actor,body,context,now){
     if(collision){const maxHp=world.profiles?.[target.key]?.maxHp||100,damage=bomb?artBombDamage(maxHp,context.rng??Math.random):34*event.power;hit=damagePlayer(world,profile,target,damage,now,bomb?'art-bomb':'artwork',actor.position);break;}
   }
   let monsterHit=null;if(world.monster?.active){const along=project(origin,direction,world.monster.position);if(along>0&&along<18*event.power&&perpendicular(origin,direction,world.monster.position,along)<2.7)monsterHit=damageMonster(world,profile,68*event.power,now,context.rng??Math.random);}
-  let structureDestroyed=null;if(!hit&&!monsterHit){for(const structure of world.structures||[]){const along=project(origin,direction,structure.position);if(along>0&&along<18*event.power&&perpendicular(origin,direction,structure.position,along)<structureRadius(structure)){structure.hp-=Math.round(70*event.power);if(structure.hp<=0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}break;}}}
-  return {throwEvent:event,hit,monsterHit,structureDestroyed,notice:monsterHit?.defeated?'Monster defeated · loot dropped':structureDestroyed?'Artwork shattered a structure':undefined};
+  let structureDestroyed=null,structureHit=null;if(!hit&&!monsterHit){for(const structure of world.structures||[]){
+    if(structure.owner==='temple')continue;
+    const along=project(origin,direction,structure.position);
+    if(along>0&&along<18*event.power&&perpendicular(origin,direction,structure.position,along)<structureRadius(structure)){
+     structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
+     const damage=Math.round(70*event.power);
+     structure.hp=Math.max(0,structure.hp-damage);
+     structureHit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
+     if(structure.hp<=0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}
+     break;
+    }
+   }}
+  return {throwEvent:event,hit,monsterHit,structureHit,structureDestroyed,notice:monsterHit?.defeated?'Monster defeated · loot dropped':structureDestroyed?'Artwork shattered a structure':undefined};
 }
 
 function buy(world,profile,body){const item=SHOP_ITEMS.find(entry=>entry.id===body.itemId);if(!item)return {error:'Item is not sold'};if(profile.inventory.includes(item.id)&&item.slot!=='seed')return {error:'Already owned'};if(profile.inventory.length>=600)return {error:'Inventory full'};if(!spend(profile,item.price,world))return {error:'Not enough coins'};profile.inventory.push(item.id);profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';return {notice:`Purchased ${item.name}`};}
