@@ -223,6 +223,7 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
   const layout=body.layout,vec=value=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);
   if(!layout||!vec(layout.position)||!vec(layout.rotation)||!vec(layout.scale))return {error:'Invalid transform'};
   if(Math.hypot(layout.position[0],layout.position[2])>ARENA_RADIUS+5||layout.position[1]<-2||layout.position[1]>60||layout.scale.some(v=>v<.05||v>20)||layout.rotation.some(v=>Math.abs(v)>Math.PI*8))return {error:'Transform exceeds bounds'};
+  if((world.customArtworks||[]).some(a=>a.id===platform.id&&a.bomb)&&layout.scale.some(v=>v<1||v>3))return {error:'Player artwork scale must remain within 1–3×, even in GM editor'};
   const appearance=validateAppearance(layout.appearance||current?.appearance);if(!appearance)return {error:'Invalid appearance settings'};
   world.artworkLayout??={};world.artworkLayout[platform.id]={position:[...layout.position],rotation:[...layout.rotation],scale:[...layout.scale],appearance,revision:(current?.revision||0)+1,updatedAt:now};world.revision++;
   return {notice:'ARTWORK DEFAULT SAVED · ALL PLAYERS',artworkLayout:clone(world.artworkLayout[platform.id])};
