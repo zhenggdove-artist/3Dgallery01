@@ -46,6 +46,7 @@ try{
  await page.locator('[data-form="plant"]').evaluate(f=>f.requestSubmit());
  await page.waitForFunction(()=>templeTest.ui.world?.plants?.some(p=>p.text==='Browser-tested eternal message'),null,{timeout:20000});
  await page.waitForFunction(()=>templeTest.writer.phase==='showcase'&&templeTest.writer.plantHalo.visible,null,{timeout:13000});
+ await page.waitForFunction(()=>!!templeTest.writer.reveal?.plantId,null,{timeout:12000});
  assert.ok(await page.evaluate(()=>templeTest.writer.reveal?.plantId),'WRITE must save a plant before orbiting it');
  assert.equal(await page.evaluate(()=>templeTest.writer.fallCameraActive),true,'The WRITE camera must track the falling avatar');
  await page.waitForFunction(()=>templeTest.arena.adventure.plants.has(templeTest.writer.reveal?.plantId),null,{timeout:5000});
