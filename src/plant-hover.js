@@ -1,9 +1,68 @@
 import * as THREE from 'three';
 import {mediaMarkup} from './media-ui.js';
-// RELETTER: nearby pointer hover, 50 ms raycast throttle, 400 ms leave grace.
+
+// Pointer/touch access to authored message plants and the central message tree.
+// The scene's plant meshes retain their full persistent entry in userData.
 export function bindPlantHover({canvas,camera,arena,controller,ui}){
- const label=document.createElement('aside');label.id='plant-hover';label.hidden=true;document.body.append(label);const ray=new THREE.Raycaster(),pointer=new THREE.Vector2();let last=0,timer,active=null;
- const hide=()=>{if(timer)return;timer=setTimeout(()=>{label.hidden=true;active=null;timer=null;},400);};label.onpointerenter=()=>{clearTimeout(timer);timer=null;};label.onpointerleave=hide;
- const move=e=>{const c=controller();if(!c||ui.panelName||e.buttons||performance.now()-last<50)return;last=performance.now();const near=[...arena.adventure.plants.values()].filter(p=>p.position.distanceTo(c.root.position)<4);const r=canvas.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,1-(e.clientY-r.top)/r.height*2);ray.setFromCamera(pointer,camera);const hit=ray.intersectObjects(near,true)[0];let root=hit?.object;while(root&&!root.userData.entry)root=root.parent;if(!root)return hide();clearTimeout(timer);timer=null;const entry=root.userData.entry;if(active!==entry.id){active=entry.id;label.replaceChildren();const author=document.createElement('strong'),text=document.createElement('p');author.textContent=entry.author;text.textContent=entry.text;label.append(author,text);if(entry.media)label.insertAdjacentHTML('beforeend',mediaMarkup(entry.media,window.TEMPLE_CONFIG.backendUrl));}label.hidden=false;label.style.left=Math.max(8,Math.min(innerWidth-label.offsetWidth-8,e.clientX+16))+'px';label.style.top=Math.max(8,Math.min(innerHeight-label.offsetHeight-8,e.clientY+20))+'px';};
- canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',move);canvas.addEventListener('pointerleave',hide);return {label,update(){if(active&&(!controller()||ui.panelName||!arena.adventure.plants.get(active)||arena.adventure.plants.get(active).position.distanceTo(controller().root.position)>=4))hide();}};
+ const label=document.createElement('aside');
+ label.id='plant-hover';label.hidden=true;document.body.append(label);
+ const ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
+ let active=null,timer=null,last=0,down=null;
+ const stopTimer=()=>{clearTimeout(timer);timer=null;};
+ const hide=()=>{if(timer)return;timer=setTimeout(()=>{label.hidden=true;active=null;timer=null;},400);};
+ const tree=()=>arena.scene.getObjectByName('RELETTER message tree');
+ function pick(e){
+  const c=controller();if(!c||ui.panelName)return null;
+  const rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return null;
+  pointer.set((e.clientX-rect.left)/rect.width*2-1,1-(e.clientY-rect.top)/rect.height*2);
+  ray.setFromCamera(pointer,camera);
+  const plants=[...arena.adventure.plants.values()].filter(p=>p.position.distanceTo(c.root.position)<5);
+  const hits=ray.intersectObjects(plants,true);
+  let node=hits[0]?.object;
+  while(node&&!node.userData.entry)node=node.parent;
+  if(node?.userData.entry)return {entry:node.userData.entry,central:false};
+  const central=tree();
+  if(central&&Math.hypot(c.root.position.x,c.root.position.z)<9&&ray.intersectObject(central,true).length)
+   return {entry:null,central:true};
+  return null;
+ }
+ function show(e,hit){
+  if(!hit)return hide();
+  stopTimer();
+  const key=hit.central?'central':hit.entry.id;
+  if(key!==active){
+   active=key;label.replaceChildren();
+   const title=document.createElement('strong'),content=document.createElement('p');
+   if(hit.central){
+    const entries=ui.world?.plants||[];
+    title.textContent='留言之樹 · '+entries.length+' 則記錄';
+    content.textContent=entries.length?entries.slice(-3).reverse().map(x=>x.author+'：'+x.text).join(' / ').slice(0,250):'目前尚無留言。點擊閱讀或寫下第一則。';
+   }else{
+    title.textContent=hit.entry.author||'Anonymous';content.textContent=hit.entry.text||'媒體留言';
+   }
+   label.append(title,content);
+   if(hit.entry?.media)label.insertAdjacentHTML('beforeend',mediaMarkup(hit.entry.media,window.TEMPLE_CONFIG.backendUrl));
+  }
+  label.hidden=false;
+  label.style.left=Math.max(8,Math.min(innerWidth-label.offsetWidth-8,e.clientX+16))+'px';
+  label.style.top=Math.max(8,Math.min(innerHeight-label.offsetHeight-8,e.clientY+20))+'px';
+ }
+ canvas.addEventListener('pointermove',e=>{if(e.buttons)return;if(performance.now()-last<45)return;last=performance.now();show(e,pick(e));});
+ canvas.addEventListener('pointerdown',e=>{down={id:e.pointerId,x:e.clientX,y:e.clientY};});
+ canvas.addEventListener('pointerup',e=>{
+  const moved=!down||down.id!==e.pointerId||Math.hypot(e.clientX-down.x,e.clientY-down.y)>12;down=null;
+  const hit=pick(e);if(hit)show(e,hit);
+  if(moved||!hit)return;
+  if(hit.central)ui.showPlantList();
+  else ui.showPlant(hit.entry);
+ });
+ canvas.addEventListener('pointercancel',()=>{down=null;hide();});
+ canvas.addEventListener('pointerleave',hide);
+ label.onpointerenter=stopTimer;label.onpointerleave=hide;
+ return {label,update(){
+  if(!active)return;
+  const c=controller();if(!c||ui.panelName)return hide();
+  if(active==='central'){if(Math.hypot(c.root.position.x,c.root.position.z)>=9)hide();return;}
+  const entry=arena.adventure.plants.get(active);if(!entry||entry.position.distanceTo(c.root.position)>=5)hide();
+ }};
 }
