@@ -35,9 +35,10 @@ test('players own their uploaded artworks; ownership, size, and limits are enfor
  const id=created.artwork.id,layout=world.artworkLayout[id];
  assert.deepEqual(layout.scale,[2,2,2]);assert.equal(created.artwork.owner,'owner');
  assert.equal(applyAction(world,other,{action:'resize-art-bomb',id,size:4},{now:2010}).error?.includes('Only'),true);
- assert.ok(applyAction(world,owner,{action:'resize-art-bomb',id,size:4},{now:2020}).artworkLayout);
- assert.deepEqual(world.artworkLayout[id].scale,[4,4,4]);
- assert.equal(applyAction(world,owner,{action:'resize-art-bomb',id,size:8},{now:2030}).error?.includes('0.5'),true);
+ assert.ok(applyAction(world,owner,{action:'resize-art-bomb',id,size:3},{now:2020}).artworkLayout);
+ assert.deepEqual(world.artworkLayout[id].scale,[3,3,3]);
+ assert.match(applyAction(world,owner,{action:'resize-art-bomb',id,size:4},{now:2030}).error,/1–3/);
+ assert.match(applyAction(world,owner,{action:'resize-art-bomb',id,size:.8},{now:2030}).error,/1–3/);
  for(let i=0;i<3;i++)assert.ok(applyAction(world,owner,original,{now:2100+i}).artwork);
  assert.match(applyAction(world,owner,original,{now:3000}).error,/four art bombs/);
 });
@@ -116,4 +117,38 @@ test('player-published artwork bomb uses ballistic collision and server damage a
  assert.equal(result.hit?.target,target.key,JSON.stringify(result));
  assert.ok(result.hit.damage>=30&&result.hit.damage<=100);
  assert.ok(world.profiles[target.key].hp<100);
+});
+
+test('GM /RESET clears all non-GM artworks, preserves GM and original works, and returns orphan media IDs',()=>{
+ const world=createInitialWorld(1000),gm={...actor('gm'),admin:true},one=actor('one'),two=actor('two');
+ ensureProfile(world,gm.key,gm.name,gm.color,1000,true);
+ const upload=(by,label,mediaId,at)=>applyAction(world,by,{action:'publish-art-bomb',artwork:{title:label,mediaId,position:[75,1.5,0]},verifiedArtMedia:{id:mediaId,type:'image/png'},size:1},{now:at});
+ const gmArt=upload(gm,'Admin remains','gm-media',2000).artwork;
+ const a=upload(one,'First bomb','user-1',2001).artwork;
+ const b=upload(two,'Second bomb','user-2',2002).artwork;
+ assert.ok(gmArt&&a&&b);
+ const denied=applyAction(world,one,{action:'reset-player-artworks'},{now:4000});
+ assert.equal(denied.error,'GM only');
+ assert.equal(world.customArtworks.length,3);
+ const result=applyAction(world,gm,{action:'reset-player-artworks'},{now:5000});
+ assert.equal(result.removedArtworks,2);
+ assert.deepEqual(new Set(result.removedArtworkMediaIds),new Set(['user-1','user-2']));
+ assert.deepEqual(world.customArtworks.map(r=>r.id),[gmArt.id]);
+ assert.ok(world.artworkLayout[gmArt.id]);
+ assert.ok(!world.artworkLayout[a.id]&&!world.artworkLayout[b.id]);
+ assert.ok(world.artworks['platform-01']);
+ assert.equal(applyAction(world,gm,{action:'reset-player-artworks'},{now:6000}).removedArtworks,0);
+});
+test('uploaded art stays projectile equipment, never a damageable BUILD structure',()=>{
+ const world=createInitialWorld(1000),owner=actor('owner'),attacker=actor('attacker');
+ const created=applyAction(world,owner,{action:'publish-art-bomb',artwork:{title:'Bomb',mediaId:'saved',position:[75,1.5,0]},verifiedArtMedia:{id:'saved',type:'image/png'},size:3},{now:2000});
+ assert.ok(created.artwork,JSON.stringify(created));
+ world.structures=[{id:'breakable',kind:'wall',owner:'owner',hp:20,position:[75,0,5],rotation:0,createdAt:1000}];
+ const hit=applyAction(world,attacker,{action:'attack',direction:[0,0,1]},{now:5000,actors:[]});
+ assert.ok(hit.structureHit);
+ assert.equal(world.customArtworks.length,1);
+ assert.equal(world.artworks[created.artwork.id].holder,null);
+ assert.equal(applyAction(world,attacker,{action:'destroy',structureId:'breakable',direction:[0,0,1]},{now:6000}).error,undefined);
+ assert.equal(world.structures.length,0);
+ assert.equal(world.customArtworks.length,1);
 });
