@@ -6,6 +6,18 @@ const PASTEL_PURPLE = ['#E6A8D7','#DDA0DD','#CDB4DB','#D7C0D0','#C08497'];
 const PASTEL_BLUE = ['#B2D8D8','#B5E2FA','#A2D2FF','#BDE0FE'];
 const PASTEL_SOFT = ['#F5D6D6','#FDFD96','#EAEAEA','#D3D3D3'];
 const ALL_PASTEL = [...PASTEL_PINK,...PASTEL_PURPLE,...PASTEL_BLUE,...PASTEL_SOFT];
+export const PLANT_SATURATION_MULTIPLIER=3;
+export function saturatedPlantColor(hex){
+ const color=new THREE.Color(hex),hsl={};
+ color.getHSL(hsl);
+ color.setHSL(hsl.h,Math.min(1,hsl.s*PLANT_SATURATION_MULTIPLIER),hsl.l);
+ return '#'+color.getHexString();
+}
+// Neutral grey and white cannot become colorful when saturation is multiplied.
+// Exclude only those neutral swatches when generating new message plants.
+const MESSAGE_PLANT_PALETTE=ALL_PASTEL.filter(hex=>{
+ const hsl={};new THREE.Color(hex).getHSL(hsl);return hsl.s>=.1;
+});
 
 // ===== Seeded Random =====
 function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h+=(h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24)}return h>>>0}
@@ -419,9 +431,9 @@ function makePlant(text){
   // 0-1:tree, 2:fern, 3:mushroom, 4:big flower, 5:vine, 6:coral, 7:cactus
 
   let segs=[],leaves=[],flowers=[],caps=[],bigPetals=[];
-  const stemCol=ALL_PASTEL[Math.floor(rng()*ALL_PASTEL.length)];
-  const leafCol=ALL_PASTEL[Math.floor(rng()*ALL_PASTEL.length)];
-  const flowerCol=ALL_PASTEL[Math.floor(rng()*ALL_PASTEL.length)];
+  const stemCol=saturatedPlantColor(MESSAGE_PLANT_PALETTE[Math.floor(rng()*MESSAGE_PLANT_PALETTE.length)]);
+  const leafCol=saturatedPlantColor(MESSAGE_PLANT_PALETTE[Math.floor(rng()*MESSAGE_PLANT_PALETTE.length)]);
+  const flowerCol=saturatedPlantColor(MESSAGE_PLANT_PALETTE[Math.floor(rng()*MESSAGE_PLANT_PALETTE.length)]);
   let plantH=3; // estimated height for stacking
 
   if(plantType<=2){ // Tree or Fern (L-System)
@@ -511,7 +523,7 @@ function makePlant(text){
   }
 
   const geo=buildPlantGeo(segs,leaves,flowers,stemCol,leafCol,flowerCol,rng,caps,bigPetals);
-  const emissiveCol=new THREE.Color(ALL_PASTEL[Math.floor(rng()*ALL_PASTEL.length)]);
+  const emissiveCol=new THREE.Color(saturatedPlantColor(MESSAGE_PLANT_PALETTE[Math.floor(rng()*MESSAGE_PLANT_PALETTE.length)]));
   const mat=new THREE.MeshStandardMaterial({
     vertexColors:true,roughness:0.6,metalness:0.05,
     // ← 植物自發光強度：越大越亮（原 0.15，現 0.35）
