@@ -15,6 +15,8 @@ try{
  await page.locator('#entry-form').evaluate(f=>f.requestSubmit());
  await page.locator('#hud').waitFor({state:'visible'});
  await page.waitForFunction(()=>window.templeTest?.controller()&&JSON.parse(window.render_game_to_text()).connected);
+ // FISH has been retired from both the dock and shop.
+ assert.equal(await page.locator('[data-action="fish"]').count(),0);
  // Inventory categories, custom 3D spell preview, readable descriptions.
  await page.evaluate(()=>templeTest.ui.openPanel('bag'));
  for(const type of ['near','mid','far'])assert.equal(await page.locator('[data-category="'+type+'"]').count(),1,type);
@@ -23,6 +25,17 @@ try{
  assert.ok(await page.locator('#bag-items [data-bag-item]').count()>0);
  await page.screenshot({path:output+'/weapons.png'});
  await page.locator('#panel-close').click();
+ // World pickups must contain the full 3D weapon mesh, never a billboard.
+ const weaponMesh=await page.evaluate(()=>{
+  const view=templeTest.arena.adventure,previous=view.world;
+  view.world={...previous,groundDrops:[...(previous?.groundDrops||[]),{id:'ci-3d-drop',kind:'weapon',itemId:'tide-1',position:[10,0,10]}]};
+  view.nextSync=0;
+  view.update(.016,performance.now()/1000,new Map(),templeTest.controller().camera);
+  const obj=view.loot.get('ci-3d-drop');
+  view.world=previous;
+  return !!obj?.userData.weaponDrop&&obj.children.some(child=>child.isGroup&&child.children.some(part=>part.isMesh));
+ });
+ assert.ok(weaponMesh,'Weapon ground pickup must render a real 3D model');
  // Only real backend-supported WRITE can initiate the cinematic.
  await page.evaluate(()=>templeTest.ui.openPanel('social'));
  await page.waitForFunction(()=>templeTest.writer.phase==='write',null,{timeout:12000});
@@ -33,7 +46,16 @@ try{
  await page.locator('[data-form="plant"]').evaluate(f=>f.requestSubmit());
  await page.waitForFunction(()=>templeTest.ui.world?.plants?.some(p=>p.text==='Browser-tested eternal message'),null,{timeout:20000});
  await page.waitForFunction(()=>templeTest.writer.phase==='showcase'&&templeTest.writer.plantHalo.visible,null,{timeout:13000});
+ await page.waitForFunction(()=>!!templeTest.writer.reveal?.plantId,null,{timeout:12000});
  assert.ok(await page.evaluate(()=>templeTest.writer.reveal?.plantId),'WRITE must save a plant before orbiting it');
+ assert.equal(await page.evaluate(()=>templeTest.writer.fallCameraActive),true,'The WRITE camera must track the falling avatar');
+ await page.waitForFunction(()=>templeTest.arena.adventure.plants.has(templeTest.writer.reveal?.plantId),null,{timeout:5000});
+ const plantGrowth=await page.evaluate(()=>{
+  const root=templeTest.arena.adventure.plants.get(templeTest.writer.reveal.plantId);
+  return {duration:root.userData.growDur,start:root.userData.growStart,full:root.userData.fullScale.x,now:root.scale.x};
+ });
+ assert.equal(plantGrowth.duration,3100);
+ assert.ok(plantGrowth.start>0&&plantGrowth.full>0&&plantGrowth.now<=plantGrowth.full,'A new plant must grow from a hidden initial state');
  await page.screenshot({path:output+'/write-and-plants.png'});
  await page.waitForFunction(()=>!templeTest.writer.active,null,{timeout:10000});
  assert.equal(await page.evaluate(()=>templeTest.controller().cameraLocked),false,'Camera must return to regular controls');

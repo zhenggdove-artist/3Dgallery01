@@ -24,7 +24,7 @@ export class TempleArena{
   constructor(scene,renderer){
     this.scene=scene;this.renderer=renderer;this.dracoLoader=new DRACOLoader();this.dracoLoader.setDecoderPath('./vendor/three/examples/jsm/libs/draco/');this.loader=new GLTFLoader().setDRACOLoader(this.dracoLoader);this.clock=0;this.world=null;this.players=[];this.dropMeshes=[];
     this.artworks=new Map();this.coinMesh=null;this.dropMesh=null;this.dropIds=[];this.dropCoinFlights=[];this.coinFlights=new Map();this.structureGroup=new THREE.Group();this.structureGroup.name='Persistent structures';scene.add(this.structureGroup);this.plantGroup=new THREE.Group();this.plantGroup.name='Permanent message plants';scene.add(this.plantGroup);
-    this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
+    this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.collapsingShells=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
   }
   async load(progress=()=>{}){
     progress(.08,'Building arena');this.buildEnvironment();
@@ -126,7 +126,38 @@ export class TempleArena{
     if(changed){mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
    }
   }
-  showStructureBreak(event){if(!event?.position||this.destroyedEffects.has(event.id))return;this.destroyedEffects.add(event.id);if(this.destroyedEffects.size>80)this.destroyedEffects.delete(this.destroyedEffects.values().next().value);const count=event.minor?(touch?3:6):(touch?12:24),geometry=new THREE.BoxGeometry(.34,.28,.32),material=new THREE.MeshStandardMaterial({color:event.kind==='tree'?'#536344':'#777064',roughness:.9,transparent:true}),mesh=new THREE.InstancedMesh(geometry,material,count),random=seededRandom(hashText(event.id)),pieces=[];for(let i=0;i<count;i++)pieces.push({position:new THREE.Vector3(event.position[0]+(random()-.5)*1.2,event.position[1]+.5+random()*2,event.position[2]+(random()-.5)*1.2),velocity:new THREE.Vector3((random()-.5)*4,2.5+random()*4,(random()-.5)*4),spin:new THREE.Vector3(random()*4,random()*4,random()*4)});mesh.userData={pieces,age:0};this.scene.add(mesh);this.debrisBursts.push(mesh);}
+  showStructureBreak(event){
+    if(!event?.position||this.destroyedEffects.has(event.id))return;
+    this.destroyedEffects.add(event.id);
+    if(this.destroyedEffects.size>80)this.destroyedEffects.delete(this.destroyedEffects.values().next().value);
+    const count=event.minor?(touch?3:6):(touch?12:24),geometry=new THREE.BoxGeometry(.34,.28,.32);
+    const material=new THREE.MeshStandardMaterial({color:event.kind==='tree'?'#536344':'#777064',roughness:.9,transparent:true});
+    const mesh=new THREE.InstancedMesh(geometry,material,count),random=seededRandom(hashText(event.id)),pieces=[];
+    for(let i=0;i<count;i++)pieces.push({
+      position:new THREE.Vector3(event.position[0]+(random()-.5)*1.2,event.position[1]+.5+random()*2,event.position[2]+(random()-.5)*1.2),
+      velocity:new THREE.Vector3((random()-.5)*4,2.5+random()*4,(random()-.5)*4),
+      spin:new THREE.Vector3(random()*4,random()*4,random()*4)
+    });
+    mesh.userData={pieces,age:0};this.scene.add(mesh);this.debrisBursts.push(mesh);
+    if(!event.minor)this.startStructureCollapse(event);
+  }
+  startStructureCollapse(event){
+    // Keep a transient shell after the authoritative structure disappears.
+    if(this.collapsingShells.length>=12)disposeVisual(this.collapsingShells.shift());
+    const shell=new THREE.Group(),base=buildMaterial(event.surface||null);
+    shell.name='Collapsing '+(event.kind||'structure');
+    for(const part of previewMeshes(event.kind,base)){
+      part.material.transparent=true;
+      part.material.depthWrite=false;
+      shell.add(part);
+    }
+    base.dispose();
+    shell.position.fromArray(event.position);
+    shell.rotation.y=event.rotation||0;
+    shell.userData.age=0;
+    shell.userData.direction=hashText(event.id)%2?1:-1;
+    this.scene.add(shell);this.collapsingShells.push(shell);
+  }
   async loadCustomArtworks(records,base){
    this.customLoads??=new Map();
    const live=new Set((records||[]).map(record=>record.id));
@@ -174,19 +205,41 @@ export class TempleArena{
    this.dropCoinFlights.push({mesh,age:0,startY:mesh.position.y,spin:Math.random()*Math.PI*2});
   }
   syncDrops(){const drops=(this.world?.groundDrops||[]).filter(d=>d.kind==='coin'),signature=drops.map(d=>`${d.id}:${d.position.join(',')}`).join('|');if(signature===this.dropSignature)return;this.dropSignature=signature;for(const mesh of this.dropMeshes){mesh.removeFromParent();mesh.geometry.dispose();mesh.material.dispose();}this.dropMeshes=[];if(!drops.length)return;const groups=new Map();for(const drop of drops){const item=itemById(drop.itemId),shape=drop.kind==='coin'?'coin':item?.slot==='weapon'?'weapon':['armor','head'].includes(item?.slot)?'armor':'material';if(!groups.has(shape))groups.set(shape,[]);groups.get(shape).push(drop);}for(const [shape,records] of groups){let geometry;if(shape==='coin')geometry=this.coinMesh.geometry.clone();else if(shape==='weapon')geometry=new THREE.BoxGeometry(.16,1.55,.12);else if(shape==='armor')geometry=new THREE.DodecahedronGeometry(.46,0);else geometry=new THREE.OctahedronGeometry(.43,1);const material=shape==='coin'?this.coinMesh.material.clone():new THREE.MeshStandardMaterial({roughness:.42,metalness:shape==='weapon'?.72:.3,vertexColors:false,emissive:'#111111'}),mesh=new THREE.InstancedMesh(geometry,material,records.length),color=new THREE.Color();mesh.userData.records=records;records.forEach((drop,i)=>{setDropMatrix(mesh,drop,i,shape,0);const item=itemById(drop.itemId);mesh.setColorAt(i,color.set(shape==='coin'?'#f2cf55':item?.color||'#a8d7cc'));});mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;mesh.name=`Ground loot · ${shape}`;this.scene.add(mesh);this.dropMeshes.push(mesh);}}
-  syncStructures(){const structures=this.world?.structures||[],signature=JSON.stringify(structures.map(s=>[s.id,s.kind,s.surface,s.variant,s.position,s.rotation]));if(signature===this.structureSignature)return;this.structureSignature=signature;while(this.structureGroup.children.length){const child=this.structureGroup.children[0];child.removeFromParent();child.geometry?.dispose();child.material?.dispose();}const kinds=new Map();for(const structure of structures){const key=structure.kind+'|'+(structure.surface||'');if(!kinds.has(key))kinds.set(key,[]);kinds.get(key).push(structure);}for(const [key,list] of kinds){const kind=list[0].kind;if(kind==='tree'){this.addTreeInstances(list);continue;}if(kind==='house'){this.addHouseInstances(list);continue;}const dimensions=originalBuildSizes[kind]||[2,2,2],mesh=new THREE.InstancedMesh(buildGeometry(kind),buildMaterial(list[0].surface),list.length);list.forEach((structure,index)=>{const variant=structure.variant||0,temp=1+(variant%3)*.08;tempPosition.set(structure.position[0],structure.position[1]+dimensions[1]*temp/2,structure.position[2]);tempQuaternion.setFromEuler(new THREE.Euler(0,structure.rotation||0,0));tempScale.set(dimensions[0]*temp,dimensions[1]*temp,dimensions[2]);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);});mesh.instanceMatrix.needsUpdate=true;mesh.userData.records=list;mesh.userData.baseMatrices=list.map((_,i)=>{const m=new THREE.Matrix4();mesh.getMatrixAt(i,m);return m;});list.forEach((_,i)=>mesh.setColorAt(i,new THREE.Color('#ffffff')));mesh.instanceColor.needsUpdate=true;mesh.name=`${kind} structures`;this.structureGroup.add(mesh);}this.registerStructureMeshes();}
+  syncStructures(){const structures=this.world?.structures||[],signature=JSON.stringify(structures.map(s=>[s.id,s.kind,s.surface,s.variant,s.position,s.rotation,s.hp,s.maxHp]));if(signature===this.structureSignature)return;this.structureSignature=signature;while(this.structureGroup.children.length){const child=this.structureGroup.children[0];child.removeFromParent();child.geometry?.dispose();child.material?.dispose();}const kinds=new Map();for(const structure of structures){const key=structure.kind+'|'+(structure.surface||'');if(!kinds.has(key))kinds.set(key,[]);kinds.get(key).push(structure);}for(const [key,list] of kinds){const kind=list[0].kind;if(kind==='tree'){this.addTreeInstances(list);continue;}if(kind==='house'){this.addHouseInstances(list);continue;}const dimensions=originalBuildSizes[kind]||[2,2,2],mesh=new THREE.InstancedMesh(buildGeometry(kind),buildMaterial(list[0].surface),list.length);list.forEach((structure,index)=>{const variant=structure.variant||0,temp=1+(variant%3)*.08;tempPosition.set(structure.position[0],structure.position[1]+dimensions[1]*temp/2,structure.position[2]);tempQuaternion.setFromEuler(new THREE.Euler(0,structure.rotation||0,0));tempScale.set(dimensions[0]*temp,dimensions[1]*temp,dimensions[2]);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);});mesh.instanceMatrix.needsUpdate=true;mesh.userData.records=list;mesh.userData.baseMatrices=list.map((_,i)=>{const m=new THREE.Matrix4();mesh.getMatrixAt(i,m);return m;});list.forEach((_,i)=>mesh.setColorAt(i,new THREE.Color('#ffffff')));mesh.instanceColor.needsUpdate=true;mesh.name=`${kind} structures`;this.structureGroup.add(mesh);}this.registerStructureMeshes();}
   registerStructureMeshes(){
-   for(const mesh of this.structureGroup.children){
-    if(!mesh.isInstancedMesh||!Array.isArray(mesh.userData.records))continue;
-    const records=mesh.userData.records;
-    mesh.userData.baseMatrices=records.map((_,i)=>{const matrix=new THREE.Matrix4();mesh.getMatrixAt(i,matrix);return matrix;});
-    mesh.userData.baseColors=records.map((_,i)=>{
-     const color=new THREE.Color('#ffffff');if(mesh.instanceColor)mesh.getColorAt(i,color);else mesh.setColorAt(i,color);
-     return color.clone();
-    });
-    mesh.instanceColor.needsUpdate=true;
+    for(const mesh of this.structureGroup.children){
+     if(!mesh.isInstancedMesh||!Array.isArray(mesh.userData.records))continue;
+     const records=mesh.userData.records;
+     mesh.userData.baseMatrices=records.map((record,i)=>{
+      const matrix=new THREE.Matrix4();mesh.getMatrixAt(i,matrix);
+      const maxHp=record.maxHp|| (record.kind==='house'?220:record.kind==='tree'?90:140);
+      const wear=THREE.MathUtils.clamp(1-(record.hp??maxHp)/maxHp,0,1);
+      if(wear){
+       matrix.decompose(tempPosition,tempQuaternion,tempScale);
+       const direction=hashText(record.id)%2?1:-1;
+       tempQuaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(wear*.11,0,wear*.28*direction)));
+       tempPosition.y-=wear*tempScale.y*.09;
+       tempScale.multiply(new THREE.Vector3(1-wear*.12,1-wear*.32,1-wear*.14));
+       matrix.compose(tempPosition,tempQuaternion,tempScale);
+       mesh.setMatrixAt(i,matrix);
+      }
+      return matrix;
+     });
+     mesh.userData.baseColors=records.map((record,i)=>{
+      const color=new THREE.Color('#ffffff');
+      if(mesh.instanceColor)mesh.getColorAt(i,color);
+      const maxHp=record.maxHp|| (record.kind==='house'?220:record.kind==='tree'?90:140);
+      const wear=THREE.MathUtils.clamp(1-(record.hp??maxHp)/maxHp,0,1);
+      // Scarred surfaces darken persistently while each hit also shakes
+      // the object and throws chips. Damage is reconstructed from world HP.
+      color.lerp(new THREE.Color('#332328'),wear*.68);
+      mesh.setColorAt(i,color);
+      return color.clone();
+     });
+     mesh.instanceMatrix.needsUpdate=true;
+     mesh.instanceColor.needsUpdate=true;
+    }
    }
-  }
   addTreeInstances(list){const trunks=new THREE.InstancedMesh(new THREE.CylinderGeometry(.28,.42,3.2,7),new THREE.MeshStandardMaterial({color:'#43382b',roughness:1}),list.length),crowns=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.4,1),new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.95,vertexColors:false}),list.length),color=new THREE.Color();list.forEach((structure,index)=>{const variant=structure.variant||0,height=1+(variant%4)*.12;tempPosition.set(structure.position[0],structure.position[1]+1.6*height,structure.position[2]);tempQuaternion.setFromEuler(new THREE.Euler(0,structure.rotation||0,0));tempScale.set(1,height,1);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);trunks.setMatrixAt(index,tempMatrix);tempPosition.y=structure.position[1]+3.65*height;tempScale.set(1+(variant%2)*.22,1.25+(variant%3)*.18,1+(variant%2)*.22);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);crowns.setMatrixAt(index,tempMatrix);crowns.setColorAt(index,color.set(['#465b3d','#596a3b','#3f6249','#66704a'][variant%4]));});trunks.instanceMatrix.needsUpdate=crowns.instanceMatrix.needsUpdate=true;if(crowns.instanceColor)crowns.instanceColor.needsUpdate=true;trunks.userData.records=list;crowns.userData.records=list;this.structureGroup.add(trunks,crowns);}
   addHouseInstances(list){const walls=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.96,vertexColors:false}),list.length),roofs=new THREE.InstancedMesh(new THREE.ConeGeometry(3.45,1.7,4),new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.9,vertexColors:false}),list.length),doors=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:'#211e19',roughness:.88}),list.length),color=new THREE.Color();list.forEach((structure,index)=>{const variant=structure.variant||0,width=4.7+(variant%2)*.65,depth=3.8+(variant%3)*.3,height=3.4+(variant%2)*.45,yaw=structure.rotation||0;tempQuaternion.setFromEuler(new THREE.Euler(0,yaw,0));tempPosition.set(structure.position[0],structure.position[1]+height/2,structure.position[2]);tempScale.set(width,height,depth);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);walls.setMatrixAt(index,tempMatrix);walls.setColorAt(index,color.set(['#c6a5dc','#edc2d6','#b5d8d1','#dcc6eb'][variant%4]));tempPosition.y=structure.position[1]+height+.8;tempQuaternion.setFromEuler(new THREE.Euler(0,yaw+Math.PI/4,0));tempScale.set(width/5.4,1,depth/5.4);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);roofs.setMatrixAt(index,tempMatrix);roofs.setColorAt(index,color.set(['#9773ad','#b87e9a','#6b9fa5','#a088ba'][variant%4]));tempQuaternion.setFromEuler(new THREE.Euler(0,yaw,0));const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));tempPosition.set(structure.position[0]+forward.x*(depth/2+.03),structure.position[1]+1.05,structure.position[2]+forward.z*(depth/2+.03));tempScale.set(.85,2.1,.12);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);doors.setMatrixAt(index,tempMatrix);});for(const mesh of [walls,roofs,doors])mesh.instanceMatrix.needsUpdate=true;if(walls.instanceColor)walls.instanceColor.needsUpdate=true;if(roofs.instanceColor)roofs.instanceColor.needsUpdate=true;for(const mesh of [walls,roofs,doors])mesh.userData.records=list;this.structureGroup.add(walls,roofs,doors);}
   syncPlants(){const plants=this.world?.plants||[],signature=plants.map(plant=>plant.id).join('|');if(signature===this.plantSignature)return;this.plantSignature=signature;while(this.plantGroup.children.length){const child=this.plantGroup.children.pop();child.geometry?.dispose();child.material?.dispose();}if(!plants.length)return;const stems=new THREE.InstancedMesh(new THREE.CylinderGeometry(.025,.05,1,6),new THREE.MeshStandardMaterial({color:'#41573a',roughness:1}),plants.length),blooms=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.18,1),new THREE.MeshStandardMaterial({roughness:.72,vertexColors:false,emissive:'#15140b'}),plants.length),color=new THREE.Color(),branches=[];plants.forEach((plant,index)=>{const seed=hashText(plant.id),height=.65+(seed%7)*.08,x=plant.position[0],z=plant.position[2];tempQuaternion.setFromEuler(new THREE.Euler(0,seed*.01,0));tempPosition.set(x,height/2,z);tempScale.set(1,height,1);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);stems.setMatrixAt(index,tempMatrix);tempPosition.set(x,height+.13,z);tempScale.setScalar(.8+(seed%4)*.09);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);blooms.setMatrixAt(index,tempMatrix);blooms.setColorAt(index,color.set(['#d1b76c','#86b88a','#b08bc0','#d38f82'][seed%4]));const parent=plant.parentId&&plants.find(entry=>entry.id===plant.parentId);if(parent)branches.push(parent.position[0],.18,parent.position[2],x,.18,z);});stems.instanceMatrix.needsUpdate=blooms.instanceMatrix.needsUpdate=true;if(blooms.instanceColor)blooms.instanceColor.needsUpdate=true;stems.userData.records=plants;blooms.userData.records=plants;this.plantGroup.add(stems,blooms);if(branches.length){const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(branches,3));this.plantGroup.add(new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({color:'#647854',transparent:true,opacity:.55})));}}
@@ -207,6 +260,16 @@ export class TempleArena{
     for(const p of artworkDefinitions(this.world)){const root=this.artworks.get(p.id),state=this.world?.artworks?.[p.id];if(!root||!state||root.userData.editing)continue;const layout=this.world?.artworkLayout?.[p.id]||this.defaultLayout[p.id]||{position:p.artPosition,rotation:[0,p.artYaw,0],scale:[1,1,1]};applyArtworkAppearance(root,layout.appearance);if(root.userData.video){const near=camera.position.distanceToSquared(root.position)<900;if(near&&!root.userData.videoPlaying){root.userData.videoPlaying=true;root.userData.video.play().catch(()=>{root.userData.videoPlaying=false;});}else if(!near&&root.userData.videoPlaying){root.userData.video.pause();root.userData.videoPlaying=false;}}const holder=state.holder&&playerRoots.get(state.holder);if(holder){root.visible=true;root.position.copy(holder.position).add(new THREE.Vector3(0,1.6,0));root.rotation.set(0,holder.rotation.y+Math.PI,Math.sin(time*2)*.05);root.scale.fromArray(layout.scale).multiplyScalar(.48);continue;}root.scale.fromArray(layout.scale);if(state.throwEvent&&root.userData.flightId!==state.throwEvent.id){root.userData.flightId=state.throwEvent.id;root.userData.flightLanding=artworkLanding(state.throwEvent,(x,z,y)=>this.groundHeight(x,z,y));}if(state.throwEvent&&Date.now()-state.throwEvent.time<root.userData.flightLanding.time*1000){const age=Math.max(0,(Date.now()-state.throwEvent.time)/1000),origin=state.throwEvent.origin,d=state.throwEvent.direction,power=state.throwEvent.power;root.visible=true;root.position.fromArray(artworkPosition(state.throwEvent,age));root.rotation.x+=dt*2.6;root.rotation.z+=dt*1.8;continue;}const available=Date.now()>=(state.availableAt||0);root.visible=available;if(available){root.position.fromArray(layout.position);root.position.y+=Math.sin(time*.72+p.index)*(this.artFloat??.17);root.rotation.set(...layout.rotation);}}
     if(this.monster?.visible&&this.world?.monster?.position){this.monster.position.lerp(tempPosition.fromArray(this.world.monster.position),1-Math.exp(-dt*8));const target=[...playerRoots.values()].sort((a,b)=>a.position.distanceToSquared(this.monster.position)-b.position.distanceToSquared(this.monster.position))[0];if(target)this.monster.rotation.y=Math.atan2(target.position.x-this.monster.position.x,target.position.z-this.monster.position.z);}
     for(let burstIndex=this.debrisBursts.length-1;burstIndex>=0;burstIndex--){const burst=this.debrisBursts[burstIndex];burst.userData.age+=dt;burst.userData.pieces.forEach((piece,index)=>{piece.velocity.y-=12*dt;piece.position.addScaledVector(piece.velocity,dt);if(piece.position.y<.12){piece.position.y=.12;piece.velocity.y*=-.28;piece.velocity.x*=.72;piece.velocity.z*=.72;}tempPosition.copy(piece.position);tempQuaternion.setFromEuler(new THREE.Euler(piece.spin.x*burst.userData.age,piece.spin.y*burst.userData.age,piece.spin.z*burst.userData.age));tempScale.setScalar(Math.max(.05,1-burst.userData.age/2.6));tempMatrix.compose(tempPosition,tempQuaternion,tempScale);burst.setMatrixAt(index,tempMatrix);});burst.instanceMatrix.needsUpdate=true;burst.material.opacity=Math.max(0,1-burst.userData.age/2.6);if(burst.userData.age>=2.6){burst.removeFromParent();burst.geometry.dispose();burst.material.dispose();this.debrisBursts.splice(burstIndex,1);}}
+    for(let i=this.collapsingShells.length-1;i>=0;i--){
+      const shell=this.collapsingShells[i],age=shell.userData.age+=dt,t=Math.min(1,age/1.6);
+      const ease=t*t*(3-2*t);
+      shell.rotation.z=shell.userData.direction*ease*.85;
+      shell.rotation.x=ease*.18;
+      shell.position.y-=dt*2.2*ease;
+      shell.scale.set(1-.18*ease,Math.max(.04,1-.92*ease),1-.18*ease);
+      shell.traverse(part=>{if(part.isMesh&&part.material)part.material.opacity=Math.max(0,1-t*t);});
+      if(t>=1){disposeVisual(shell);this.collapsingShells.splice(i,1);}
+    }
     this.animateStructureHits();
     this.islandEnemies.update(dt,Date.now(),this.renderer.domElement.height,camera);
     this.insects?.sync(this.world?.plants||[]);this.insects?.update(time);

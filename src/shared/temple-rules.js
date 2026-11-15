@@ -6,7 +6,7 @@ import {artworkLanding} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,resetPlayerArtworks,projectileHitsActor,artBombDamage} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,MATERIALS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,groundDropRoll,monsterDropRoll} from './catalog.js';
-import {ARENA_RADIUS,FISHING_POND,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
+import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive} from './combat-status.js';
@@ -63,7 +63,7 @@ export function migrateWorld(raw,now=Date.now()){
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
     wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT},
-    fusion:{},fish:{minnow:0,koi:0,relic:0},createdAt:now,updatedAt:now,lastAttackAt:0,lastFishAt:0};
+    fusion:{},createdAt:now,updatedAt:now,lastAttackAt:0};
 }
 
 export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
@@ -74,7 +74,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
   if(current.admin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
   if(!current.inventory.includes(STARTER_LOADOUT.weapon))current.inventory.unshift(STARTER_LOADOUT.weapon);
-  current.equipment??={...STARTER_LOADOUT};current.fusion??={};current.fish??={minnow:0,koi:0,relic:0};
+  current.equipment??={...STARTER_LOADOUT};delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
   refreshStats(world,current,now);
   if(current.deadUntil<=now&&current.hp<=0){current.hp=current.maxHp||100;current.deadUntil=0;}
   return current;
@@ -93,7 +93,7 @@ export function worldView(world,actorKey,now=Date.now()){
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),
-    profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fish:clone(profile.fish),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
+    profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000))};
 }
 
@@ -143,8 +143,6 @@ export function applyAction(world,actor,body,context={}){
     case 'build':result=build(world,profile,actor,body,now,rng);break;
     case 'destroy':result=destroy(world,profile,actor,body,now);break;
     case 'remove-structure':result=removeStructure(world,profile,actor,body,now);break;
-    case 'remove-water-feature':result=removeWaterFeature(world,profile,actor,body,now);break;
-    case 'fish':result=fish(world,profile,actor,now,rng);break;
     case 'plant':result=plant(world,profile,actor,body,now);break;
     case 'respawn':profile.hp=profile.maxHp;profile.deadUntil=0;result={spawn:PLAYER_SPAWNS[context.seatIndex%4]};break;
     default:return {error:'Unknown action'};
@@ -274,20 +272,23 @@ function attack(world,profile,actor,body,context,now){
   }
   for(const result of hits)if(!result.defeated&&!result.immune)applyStatus(world,profile,world.profiles[result.target],weapon,{direction,charge,damage:stats.damage},now);for(const m of monsterHits)if(!m.result.defeated)applyStatus(world,profile,m.monster,weapon,{direction,charge,damage:stats.damage},now);
   let structureHit=null,structureDestroyed=null;
-  if((!hit&&!monsterHit)||area?.mode==='area'){
-   const candidates=(world.structures||[]).filter(v=>v.owner!=='temple').map(v=>{
-    const point=[v.position[0],v.position[1]+1,v.position[2]],along=project(origin,direction,point);
-    const inside=area?.mode==='area'?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<stats.radius+structureRadius(v);
-    return {v,along,inside};
-   }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
-   if(candidates.length){const structure=candidates[0].v,damage=Math.max(8,Math.round((stats.damage+bonus)*.7));
-    structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
-    structure.hp=Math.max(0,structure.hp-damage);
-    structureHit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
-    if(structure.hp===0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}
-   }
+  const structureHits=[],structureDestroyedEvents=[];
+  // Evaluate builds regardless of hits on characters/monsters. Area attacks
+  // reach every matching structure; directional attacks hit the nearest one.
+  const candidates=(world.structures||[]).filter(v=>v.owner!=='temple').map(v=>{
+   const point=[v.position[0],v.position[1]+structureHeight(v)*.5,v.position[2]],along=project(origin,direction,point);
+   const inside=area?.mode==='area'?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<stats.radius+structureRadius(v);
+   return {v,along,inside};
+  }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
+  for(const {v:structure} of (area?.mode==='area'?candidates:candidates.slice(0,1))){
+   const damage=Math.max(8,Math.round((stats.damage+bonus)*.7));
+   structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
+   structure.hp=Math.max(0,structure.hp-damage);
+   const event={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
+   structureHit??=event;structureHits.push(event);
+   if(structure.hp===0){const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);}
   }
-  return {structureHit,structureDestroyed,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,fusionEffects:profile.fusion[weapon.id]?.effects||[],...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,fusionEffects:profile.fusion[weapon.id]?.effects||[],...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal'){
@@ -312,7 +313,7 @@ function build(world,profile,actor,body,now,rng){
   const kind=String(body.kind||''),cost=ECONOMY.buildCosts[kind];if(!cost)return {error:'Unknown structure'};if(world.structures.length>=80)return {error:'Temple build limit reached'};
   if(world.structures.filter(entry=>entry.owner===actor.key).length>=12)return {error:'Personal build limit reached'};
   const position=body.position;if(!validBuildPosition(world,actor,position))return {error:'Invalid build position'};
-  if(!spend(profile,cost,world))return {error:'Not enough coins'};const structure={id:id(),kind,surface:typeof body.surface==='string'?body.surface:null,variant:Math.floor(rng()*4),position:position.map(n=>+n.toFixed(2)),rotation:+(Number(body.rotation)||0).toFixed(3),owner:actor.key,hp:kind==='house'?220:kind==='tree'?90:140,createdAt:now};world.structures.push(structure);return {notice:`Built ${kind}`,structure};
+  if(!spend(profile,cost,world))return {error:'Not enough coins'};const structure={id:id(),kind,surface:typeof body.surface==='string'?body.surface:null,variant:Math.floor(rng()*4),position:position.map(n=>+n.toFixed(2)),rotation:+(Number(body.rotation)||0).toFixed(3),owner:actor.key,hp:kind==='house'?220:kind==='tree'?90:140,maxHp:kind==='house'?220:kind==='tree'?90:140,createdAt:now};world.structures.push(structure);return {notice:`Built ${kind}`,structure};
 }
 function destroy(world,profile,actor,body,now){const structure=world.structures.find(entry=>entry.id===body.structureId);if(!structure)return {error:'Structure is gone'};if(distance2d(actor.position,structure.position)>12)return {error:'Move closer to the structure'};const weapon=itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon);if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};profile.lastAttackAt=now;const damage=Math.max(8,weapon.damage+(profile.fusion[weapon.id]?.bonus||0));structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;structure.hp=Math.max(0,structure.hp-damage);const structureHit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};let structureDestroyed=null;if(structure.hp<=0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}return {notice:structureDestroyed?'Structure destroyed':`${Math.ceil(structure.hp)} structure HP`,structureDestroyed,structureHit,attackEvent:{id:id(),owner:actor.key,origin:actor.position,direction:normalDirection(body.direction)||[0,0,-1],weapon:weapon.id,time:now}};}
 
@@ -323,36 +324,6 @@ function removeStructure(world,profile,actor,body,now){
   world.structures.splice(world.structures.indexOf(structure),1);
   return {notice:'Structure removed',structureDestroyed:structureEvent(structure,now)};
 }
-
-function removeWaterFeature(world,profile,actor,body,now){
- const fishing=world.reletter?.fishing;
- if(!fishing)return {error:'No water features exist'};
- const id=String(body.id||'');
- let removed=null,kind=null;
- for(const collection of ['holes','ponds']){
-  const items=fishing[collection]||[],index=items.findIndex(entry=>entry.id===id);
-  if(index<0)continue;
-  const feature=items[index];
-  if(!profile.admin&&feature.owner!==actor.key)return {error:'Only the creator or GM can remove a water feature'};
-  if(collection==='ponds'){
-   fishing.bags??={};
-   // Preserve all harvested fish, including fish entrusted by other users.
-   for(const fish of feature.fish||[]){
-    const owner=fish.owner||feature.owner;
-    (fishing.bags[owner]??=[]).push(fish);
-   }
-  }
-  removed=items.splice(index,1)[0];kind=collection==='holes'?'fishing hole':'fish pond';
-  break;
- }
- if(!removed)return {error:'Water feature was already removed'};
- for(const [key,session] of Object.entries(fishing.sessions||{}))if(session.hole===id)delete fishing.sessions[key];
- fishing.revision=(fishing.revision||0)+1;
- world.sceneArchive??={};(world.sceneArchive.removedWaterFeatures??=[]).push({...removed,removedAt:now});
- return {notice:kind+' removed',waterFeatureRemoved:{id,kind,position:removed.position}};
-}
-
-function fish(world,profile,actor,now,rng){if(distance2d(actor.position,[FISHING_POND.x,0,FISHING_POND.z])>FISHING_POND.radius+2)return {error:'Fish beside the pond'};if(now-profile.lastFishAt<8_000)return {error:'The water needs time to settle'};profile.lastFishAt=now;const roll=rng(),kind=roll<.72?'minnow':roll<.96?'koi':'relic';profile.fish[kind]=(profile.fish[kind]||0)+1;earn(profile,ECONOMY.fishValues[kind],world);return {notice:`Caught ${kind} · +${ECONOMY.fishValues[kind]} coins`,fish:kind};}
 
 function plant(world,profile,actor,body,now){const text=String(body.text||'').trim();if((!text&&!body.media)||text.length>500)return {error:'Plant message must contain 1–500 characters'};if(distance2d(actor.position,[0,0,0])>SAFE_ZONE.radius+3)return {error:'Write beside the central plant'};const parent=typeof body.parentId==='string'?world.plants.find(entry=>entry.id===body.parentId):null;if(body.parentId&&!parent)return {error:'Parent plant no longer exists'};const seed=hashString(`${profile.key}:${now}`),angle=(seed%628)/100,radius=parent ? .7 : Math.min(5,Math.max(1.4,distance2d(body.position,[0,0,0]))),base=parent?.position||body.position||actor.position,position=parent?[clamp(base[0]+Math.cos(angle)*radius,-5,5),0,clamp(base[2]+Math.sin(angle)*radius,-5,5)]:[clamp(Number(base?.[0])||0,-5,5),0,clamp(Number(base?.[2])||0,-5,5)];const entry={id:id(),author:profile.name,text,media:body.media||null,position,parentId:parent?.id||null,createdAt:now};world.plants.push(entry);profile.writeJourney=null;if(world.plants.length>500)world.plants.shift();return {notice:parent?'Reply branch planted':'Message planted',plant:entry};}
 
@@ -410,7 +381,8 @@ function normalDirection(value){if(!Array.isArray(value)||value.length!==3||!val
 function project(origin,direction,point){return (point[0]-origin[0])*direction[0]+(point[1]-origin[1])*direction[1]+(point[2]-origin[2])*direction[2];}
 function perpendicular(origin,direction,point,along){return Math.hypot(point[0]-origin[0]-direction[0]*along,point[1]-origin[1]-direction[1]*along,point[2]-origin[2]-direction[2]*along);}
 function structureRadius(structure){return structure.kind==='house'?3.4:structure.kind==='tree'?1.4:['wall','bar'].includes(structure.kind)?3.3:1.7;}
-function structureEvent(structure,now){return {id:structure.id,kind:structure.kind,variant:structure.variant||0,position:[...structure.position],time:now};}
+function structureHeight(structure){return structure.kind==='house'?3.8:structure.kind==='tree'?4:structure.kind==='column'?4:structure.kind==='platform'?.7:2;}
+function structureEvent(structure,now){return {id:structure.id,kind:structure.kind,variant:structure.variant||0,position:[...structure.position],rotation:structure.rotation||0,surface:structure.surface||null,time:now};}
 function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-amount);recordTempleDamage(world,{amount,kind,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng),material=MATERIALS[Math.floor(rng()*MATERIALS.length)];world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),kind:'material',itemId:material.id,position:[monster.position[0],.4,monster.position[2]+1.4],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=3;if(profile)addXp(profile,120);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
 function moveMonster(world,monster,target,distance){const dx=target[0]-monster.position[0],dz=target[2]-monster.position[2],angle=Math.atan2(dz,dx);for(const offset of [0,.68,-.68,1.2,-1.2]){const next=[monster.position[0]+Math.cos(angle+offset)*distance,monster.position[1],monster.position[2]+Math.sin(angle+offset)*distance];if(!insideArena(next,-2)||insideArtSanctuary(next)||(world.structures||[]).some(s=>distance2d(next,s.position)<structureRadius(s)+1.1))continue;monster.position[0]=next[0];monster.position[2]=next[2];return;}}
 function hashString(value){let hash=2166136261;for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return hash>>>0;}

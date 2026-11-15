@@ -59,24 +59,13 @@ test('creator or GM can remove built structure immediately but strangers cannot'
  assert.ok(removed.structureDestroyed?.id==='wall-of-art');
  assert.equal(world.structures.length,0);
 });
-test('excavated holes and aquariums can be removed without discarding fish',()=>{
- const world=createInitialWorld(1000),owner=actor('owner'),visitor=actor('visitor');
- world.reletter={fishing:{
-  holes:[{id:'user-hole',owner:'owner',position:[70,0,3],depth:2,fish:[]}],
-  ponds:[{id:'user-pond',owner:'owner',position:[74,0,2],fish:[{id:'fish-a',owner:'visitor',species:'minnow'}]}],
-  sessions:{owner:{hole:'user-hole'}},bags:{visitor:[]},revision:0
- }};
- assert.match(applyAction(world,visitor,{action:'remove-water-feature',id:'user-hole'},{now:2000}).error,/Only/);
- assert.equal(world.reletter.fishing.holes.length,1);
- const hole=applyAction(world,owner,{action:'remove-water-feature',id:'user-hole'},{now:2000});
- assert.equal(hole.waterFeatureRemoved?.id,'user-hole');
- assert.equal(world.reletter.fishing.holes.length,0);
- assert.equal(world.reletter.fishing.sessions.owner,undefined);
- const pond=applyAction(world,owner,{action:'remove-water-feature',id:'user-pond'},{now:2001});
- assert.equal(pond.waterFeatureRemoved?.id,'user-pond');
- assert.equal(world.reletter.fishing.ponds.length,0);
- assert.equal(world.reletter.fishing.bags.visitor.length,1);
- assert.ok(world.sceneArchive.removedWaterFeatures.length===2);
+test('retired fishing cannot be used to create, modify or remove fishing features',()=>{
+ const world=createInitialWorld(1000),owner=actor('owner');
+ for(const action of ['fish','dig','cast','reel','hook','pond-build','remove-water-feature']){
+  const result=applyAction(world,owner,{action,id:'retired',position:[70,0,3]},{now:2000});
+  assert.equal(result.error,'Unknown action',action);
+ }
+ assert.equal('fishing' in worldView(world,'owner').reletter,false);
 });
 test('procedural grass distribution is deterministic, slender, and excludes central writing tree',()=>{
  const a=grassPositions(256,17456),b=grassPositions(256,17456);
@@ -102,7 +91,7 @@ test('central RELETTER message plants have threefold HSL color saturation',()=>{
   assert.ok(Math.abs(after.l-before.l)<.03,original);
  }
 });
-test('black excavated pond is archived and cleared without deleting planted aquarium fish or messages',()=>{
+test('migration retires every fishing feature while preserving history and messages',()=>{
  const w=createInitialWorld(1000);
  w.sceneCleanupVersion=2;
  w.reletter={fishing:{
@@ -110,14 +99,16 @@ test('black excavated pond is archived and cleared without deleting planted aqua
   ponds:[{id:'glass-tank',owner:'visitor',position:[60,0,0],fish:[{id:'fish-1'}]}],
   sessions:{visitor:{hole:'black-hole'}},bags:{},revision:0
  }};
+ w.profiles.visitor={inventory:['rod-1','chisel-2','pond-kit','tide-1'],equipment:{rod:'rod-1',tool:'chisel-2'},fish:{minnow:1}};
  w.plants=[{id:'protected-message'}];
  cleanLegacyScene(w);
- assert.equal(w.sceneCleanupVersion,3);
- assert.equal(w.reletter.fishing.holes.length,0);
- assert.equal(w.reletter.fishing.ponds[0].id,'glass-tank');
- assert.equal(w.reletter.fishing.ponds[0].fish[0].id,'fish-1');
- assert.equal(w.reletter.fishing.sessions.visitor,undefined);
+ assert.equal(w.sceneCleanupVersion,4);
+ assert.equal('fishing' in w.reletter,false);
  assert.equal(w.sceneArchive.removedBlackFishingHoles[0].id,'black-hole');
+ assert.equal(w.sceneArchive.retiredFishing.ponds[0].fish[0].id,'fish-1');
+ assert.deepEqual(w.profiles.visitor.inventory,['tide-1']);
+ assert.equal(w.profiles.visitor.equipment.rod,undefined);
+ assert.equal(w.profiles.visitor.equipment.tool,undefined);
  assert.equal(w.plants[0].id,'protected-message');
 });
 test('player art uses movable exhibit placement rules, not bulky building exclusion zones',()=>{
