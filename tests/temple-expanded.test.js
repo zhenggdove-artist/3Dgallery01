@@ -96,3 +96,24 @@ test('fully charged area spell damages two opponents and player-built architectu
  assert.ok(world.profiles[t1.key].hp<100&&world.profiles[t2.key].hp<100);
  assert.ok(cast.structureHit?.hp<140,JSON.stringify(cast));
 });
+
+test('thrown original gallery art without a target completes without a charge-area reference error',()=>{
+ const world=createInitialWorld(1000),thrower=actor('thrower',[75,0,0]);
+ world.artworks['platform-01'].holder=thrower.key;
+ const result=applyAction(world,thrower,{action:'throw-artwork',direction:[0,0,1],power:1},{now:5000,actors:[],rng:()=>.2});
+ assert.ok(result.throwEvent,JSON.stringify(result));
+ assert.equal(result.structureHit,null);
+});
+
+test('player-published artwork bomb uses ballistic collision and server damage against another fighter',()=>{
+ const world=createInitialWorld(1000),thrower=actor('thrower',[75,0,0]),target=actor('target',[75,0,12]);
+ ensureProfile(world,target.key,target.name,target.color,1000);
+ world.customArtworks=[{id:'bomb-test',bomb:true,owner:thrower.key,position:[75,2,0],type:'image',mediaId:'not-needed-for-throw'}];
+ world.artworks['bomb-test']={holder:thrower.key,availableAt:0,throwEvent:null};
+ world.artworkLayout['bomb-test']={position:[75,2,0],rotation:[0,0,0],scale:[1,1,1],revision:1};
+ const result=applyAction(world,thrower,{action:'throw-artwork',direction:[0,0,1],power:1},{now:5000,actors:[thrower,target],rng:()=>0});
+ assert.ok(result.throwEvent?.bomb,JSON.stringify(result));
+ assert.equal(result.hit?.target,target.key,JSON.stringify(result));
+ assert.ok(result.hit.damage>=30&&result.hit.damage<=100);
+ assert.ok(world.profiles[target.key].hp<100);
+});
