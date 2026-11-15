@@ -38,10 +38,12 @@ try{
  await page.evaluate(()=>templeTest.ui.openPanel('build'));
  const upload=page.locator('[data-form="art-bomb-upload"] input[name="artwork"]');
  assert.equal(await upload.count(),1);
- const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9kAAAAASUVORK5CYII=','base64');
+ const png=await page.screenshot({clip:{x:50,y:50,width:128,height:128}});
  await upload.setInputFiles({name:'ci-art.png',mimeType:'image/png',buffer:png});
  await page.locator('[data-form="art-bomb-upload"] [name="size"]').fill('2');
  await page.locator('[data-form="art-bomb-upload"]').evaluate(f=>f.requestSubmit());
+ await page.waitForTimeout(1200);
+ console.log('art-bomb-upload diagnostics',JSON.stringify(await page.evaluate(()=>({toast:document.querySelector('#toast')?.textContent,buildMode:!document.querySelector('#build-mode')?.hidden,preview:templeTest.arena.buildPreview?.userData.kind,network:templeTest.network.base}))));
  await page.waitForFunction(()=>templeTest.arena.buildPreview?.userData.kind==='art-bomb',{},{timeout:20000});
  const scale=await page.evaluate(()=>templeTest.arena.buildPreview.scale.x);
  assert.equal(scale,2);
