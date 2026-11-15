@@ -77,8 +77,21 @@ export class TempleArena{
      group.userData.previewTexture=texture;
     },undefined,()=>URL.revokeObjectURL(url));
    }
-   group.name='Build placement preview';this.scene.add(group);this.buildPreview=group;}this.buildPreview.position.fromArray(position);this.buildPreview.rotation.y=rotation;this.buildPreview.scale.setScalar(kind==='art-bomb'?Math.max(.5,Math.min(5,size)):1);for(const child of this.buildPreview.children){child.material.color.set(valid?'#85d9bd':'#e7776d');child.material.emissive.set(valid?'#2c705c':'#702b28');}this.buildPreview.userData.valid=valid;}
+   group.name='Build placement preview';this.scene.add(group);this.buildPreview=group;}this.buildPreview.position.fromArray(position);this.buildPreview.rotation.y=rotation;this.buildPreview.scale.setScalar(kind==='art-bomb'?Math.max(1,Math.min(3,size)):1);for(const child of this.buildPreview.children){if(this.buildPreview.userData.actualArtwork)break;child.material?.color?.set(valid?'#85d9bd':'#e7776d');child.material?.emissive?.set(valid?'#2c705c':'#702b28');}this.buildPreview.userData.valid=valid;}
   clearBuildPreview(){if(!this.buildPreview)return;this.buildPreview.userData.previewTexture?.dispose();disposeChildren(this.buildPreview);this.buildPreview.removeFromParent();this.buildPreview=null;}
+  async previewUploadedArtwork(upload,base){
+   // Read the player's actual PNG/video/GLB from the Temple Worker before PLACE.
+   if(!this.buildPreview||this.buildPreview.userData.kind!=='art-bomb')return;
+   const group=this.buildPreview,record={id:'pending-upload-'+crypto.randomUUID(),title:upload.title||'Uploaded artwork',mediaId:upload.mediaId,
+    type:upload.mediaType?.startsWith('image/')?'image':upload.mediaType?.startsWith('video/')?'video':'model',mime:upload.mediaType,position:[0,0,0]};
+   const root=await loadCustomArtwork(this,record,base);
+   if(this.buildPreview!==group){disposeArtworkRoot(root);return;}
+   group.userData.previewTexture?.dispose();delete group.userData.previewTexture;
+   disposeChildren(group);
+   root.position.set(0,1.5,0);root.rotation.set(0,0,0);
+   group.add(root);group.userData.actualArtwork=true;
+   root.userData.video?.play().catch(()=>{});
+  }
   showStructureHit(event){
    if(!event?.structureId||!Array.isArray(event.position)||this.seenStructureHits.has(event.id))return;
    this.seenStructureHits.add(event.id);
@@ -115,7 +128,28 @@ export class TempleArena{
    }
   }
   showStructureBreak(event){if(!event?.position||this.destroyedEffects.has(event.id))return;this.destroyedEffects.add(event.id);if(this.destroyedEffects.size>80)this.destroyedEffects.delete(this.destroyedEffects.values().next().value);const count=event.minor?(touch?3:6):(touch?12:24),geometry=new THREE.BoxGeometry(.34,.28,.32),material=new THREE.MeshStandardMaterial({color:event.kind==='tree'?'#536344':'#777064',roughness:.9,transparent:true}),mesh=new THREE.InstancedMesh(geometry,material,count),random=seededRandom(hashText(event.id)),pieces=[];for(let i=0;i<count;i++)pieces.push({position:new THREE.Vector3(event.position[0]+(random()-.5)*1.2,event.position[1]+.5+random()*2,event.position[2]+(random()-.5)*1.2),velocity:new THREE.Vector3((random()-.5)*4,2.5+random()*4,(random()-.5)*4),spin:new THREE.Vector3(random()*4,random()*4,random()*4)});mesh.userData={pieces,age:0};this.scene.add(mesh);this.debrisBursts.push(mesh);}
-  async loadCustomArtworks(records,base){this.customLoads??=new Map();await Promise.all((records||[]).map(record=>{if(this.artworks.has(record.id))return;if(!this.customLoads.has(record.id)){const task=loadCustomArtwork(this,record,base).then(root=>{this.scene.add(root);this.artworks.set(record.id,root);}).catch(error=>{this.customLoads.delete(record.id);throw error;});this.customLoads.set(record.id,task);}return this.customLoads.get(record.id);}));}
+  async loadCustomArtworks(records,base){
+   this.customLoads??=new Map();
+   const live=new Set((records||[]).map(record=>record.id));
+   this.expectedCustomIds=live;
+   const defaults=new Set(PLATFORMS.map(p=>p.id));
+   // RESET must remove deleted artwork immediately, including cached assets.
+   for(const [id,root] of this.artworks){
+    if(defaults.has(id)||live.has(id))continue;
+    disposeArtworkRoot(root);this.artworks.delete(id);this.customLoads.delete(id);
+   }
+   await Promise.all((records||[]).map(record=>{
+    if(this.artworks.has(record.id))return;
+    if(!this.customLoads.has(record.id)){
+     const task=loadCustomArtwork(this,record,base).then(root=>{
+      if(!this.expectedCustomIds?.has(record.id)){disposeArtworkRoot(root);return;}
+      this.scene.add(root);this.artworks.set(record.id,root);
+     }).catch(error=>{this.customLoads.delete(record.id);throw error;});
+     this.customLoads.set(record.id,task);
+    }
+    return this.customLoads.get(record.id);
+   }));
+  }
   setPlayerAnimation(root,name){const data=root?.userData;if(!data?.actions||data.current===name)return;const next=data.actions[name]||data.actions.idle,current=data.actions[data.current];current?.fadeOut(.1);if(next){next.setLoop(name==='jump'?THREE.LoopOnce:THREE.LoopRepeat);next.clampWhenFinished=name==='jump';next.reset().fadeIn(.1).play();}data.current=name;}
   sync(world,players=[]){
   // RELETTER coin collection: *every* disappearing coin, whether on a disc
@@ -191,7 +225,23 @@ function direction(name){return {east:[1,0],west:[-1,0],north:[0,-1],south:[0,1]
 function hashText(value){let hash=2166136261;for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return hash>>>0;}
 function setDropMatrix(mesh,drop,index,shape,time){tempPosition.set(...drop.position);tempPosition.y+=.55+Math.sin(time*2+index)*.12;if(shape==='weapon')tempQuaternion.setFromEuler(new THREE.Euler(0,time*.9+index,.55));else tempQuaternion.setFromEuler(new THREE.Euler(time*.25,time*.85+index,0));tempScale.setScalar(shape==='coin'?1.6:shape==='weapon'?.9:1);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);}
 function previewMeshes(kind,material){const mesh=(geometry,x=0,y=0,z=0)=>{const value=new THREE.Mesh(geometry,material.clone());value.position.set(x,y,z);return value;};if(kind==='art-bomb')return [mesh(new THREE.BoxGeometry(3,3,.16),0,1.5,0)];if(kind==='tree')return [mesh(new THREE.CylinderGeometry(.28,.42,3.2,7),0,1.6,0),mesh(new THREE.IcosahedronGeometry(1.4,1),0,3.7,0)];if(kind==='house')return [mesh(new THREE.BoxGeometry(4.8,3.4,3.8),0,1.7,0),mesh(new THREE.ConeGeometry(3.45,1.7,4),0,4.25,0)];const dimensions=originalBuildSizes[kind]||[2,2,2];return [mesh(kind==='cylinder'?new THREE.CylinderGeometry(dimensions[0]/2,dimensions[0]/2,dimensions[1],24):new THREE.BoxGeometry(...dimensions),0,dimensions[1]/2,0)];}
-function disposeChildren(group){while(group.children.length){const child=group.children.pop();child.geometry?.dispose();if(Array.isArray(child.material))child.material.forEach(material=>material.dispose());else child.material?.dispose();}}
+function disposeArtworkRoot(root){
+ if(!root)return;
+ root.userData.video?.pause();
+ const geometries=new Set(),materials=new Set(),textures=new Set();
+ root.traverse(obj=>{
+  if(obj.geometry)geometries.add(obj.geometry);
+  for(const mat of Array.isArray(obj.material)?obj.material:obj.material?[obj.material]:[]){
+   materials.add(mat);
+   for(const val of Object.values(mat))if(val?.isTexture)textures.add(val);
+  }
+ });
+ root.removeFromParent();
+ for(const g of geometries)g.dispose();
+ for(const m of materials)m.dispose();
+ for(const tex of textures)tex.dispose();
+}
+function disposeChildren(group){for(const child of [...group.children]){group.remove(child);disposeArtworkRoot(child);}}
 function seededRandom(seed){let state=seed||1;return()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};}
 function fitObject(object,height){const box=new THREE.Box3().setFromObject(object),size=box.getSize(new THREE.Vector3()),scale=height/Math.max(.001,size.y);object.scale.multiplyScalar(scale);box.setFromObject(object);const center=box.getCenter(new THREE.Vector3());object.position.x-=center.x;object.position.z-=center.z;object.position.y-=box.min.y;return object;}
 function tintCharacter(model,color,admin){
