@@ -58,6 +58,7 @@ export class WeaponVFX{
   // the caster, leaving distant spells invisible or buried in terrain.
   const impactArea=data.area||(data.ultimate?chargedArea(item,data.origin,data.direction,data):null);
   const groundEffect=!!data.ultimate&&impactArea?.mode==='area';
+  const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
   if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
   const muzzle=weaponMuzzle(root,item);if(muzzle){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
   if(item.id==='black-cat'){if(this.snipers.length>=4){const old=this.snipers.shift();old.root.removeFromParent();old.root.material.dispose();}const f=createOddEffect(THREE,{...data,origin:origin.toArray(),direction:direction.toArray(),range:origin.distanceTo(end)},{...item,pattern:'sniper'});f.root.position.addScaledVector(direction,-1.8);this.scene.add(f.root);this.snipers.push(f);return;}
@@ -66,7 +67,7 @@ export class WeaponVFX{
   if(beams.has(id)){fx.group.position.set(0,0,0);fx.group.quaternion.identity();fx.setEndpoints(origin,end);fx.update(fx.lifecycle.start||0);entry.stopAt=data.ultimate?.65:.12;}
   else if(projectiles.has(id)){fx.setDirection(direction,0);fx.update(fx.lifecycle.start||0);entry.start=origin;entry.end=end;entry.travel=Math.min(.45,Math.max(.12,origin.distanceTo(end)/45));entry.stopAt=entry.travel;entry.hit=!!data.impactPoint;}
   else {
-   if(groundEffect){fx.group.position.copy(end);fx.group.position.y=Math.max(.16,end.y);}
+   if(remoteCharged){fx.group.position.copy(end);fx.group.position.y=Math.max(.16,end.y);}
    else if(data.impactPoint){fx.group.position.copy(end);fx.group.position.y=Math.max(.16,end.y);}
    else {fx.group.position.y=Math.max(.16,origin.y-.65);}
    if(id==='azure-sweep'&&!groundEffect)fx.group.position.y=Math.max(.18,origin.y-.15);
