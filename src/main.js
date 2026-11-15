@@ -73,7 +73,7 @@ network.addEventListener('structure-hit',event=>arena.showStructureHit(event.det
 network.addEventListener('state-rejected',event=>{if(performance.now()-toastErrorAt>1200){toastErrorAt=performance.now();ui.toast(event.detail.error||'MOVEMENT REJECTED');}});
 network.addEventListener('connection',event=>{if(joined)ui.toast(event.detail.connected?'REALTIME CONNECTED':'RECONNECTING…');});
 
-ui.addEventListener('attack',()=>performAttack());ui.addEventListener('interact',()=>performInteract());ui.addEventListener('fish',()=>ui.openPanel('fishing'));
+ui.addEventListener('attack',()=>performAttack());ui.addEventListener('interact',()=>performInteract());
 ui.addEventListener('create-platform',event=>sendAction('create-platform',event.detail));
 ui.addEventListener('art-bomb-resize',event=>sendAction('resize-art-bomb',event.detail));
 ui.addEventListener('art-bomb-upload',async event=>{
@@ -96,9 +96,8 @@ ui.addEventListener('art-bomb-upload',async event=>{
  finally{artBombUploading=false;if(button)button.disabled=false;}
 });
 ui.addEventListener('upload-artwork',async event=>{if(!self?.profile?.admin)return;const button=ui.content.querySelector('[data-upload-submit]');if(button)button.disabled=true;try{ui.toast('正在驗證藝術品…');const upload=await uploadArtwork(network,event.detail,{maxBytes:32*1024*1024}),position=controller.buildPosition(4);position[1]+=2;const result=await sendAction('add-artwork',{artwork:{...upload,position,appearance:{}}});if(!result)throw Error('Artwork was not published. Retry after checking the connection.');await arena.loadCustomArtworks(world.customArtworks,network.base);ui.closePanel();artEditor.select(arena.artworks.get(result.artwork.id));ui.toast('藝術品已發布 · 可調整位置及表面');}catch(error){ui.toast(error.message);const status=ui.content.querySelector('[data-upload-status]');if(status)status.textContent=error.message;}finally{if(button)button.disabled=false;}});
-ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(!item||!controller)return;const position=controller.buildPosition(item.slot==='pond'?7:3);position[1]=0;if(item.slot==='seed'){ui.closePanel();sendAction('seed-plant',{item:item.id,position});}else if(item.slot==='harvest')sendAction('harvest-eat',{item:item.id});else if(item.slot==='pond'){ui.closePanel();sendAction('pond-build',{position,size:'small'});}else ui.toast('Use this material in BAG → FUSION');});
-ui.addEventListener('original-action',event=>{const body={...event.detail};if(body.action==='dig'){body.position=controller.buildPosition(4);body.position[1]=0;}sendAction(body.action,body);});
-let fishingPollBusy=false;setInterval(async()=>{const s=world?.reletter?.fishing?.sessions?.[self?.key];if(!s||!['waiting','fight'].includes(s.stage)||fishingPollBusy)return;fishingPollBusy=true;try{await sendAction('reel',{id:s.id,reeling:!!ui.reeling&&ui.panelName==='fishing'});}finally{fishingPollBusy=false;}},250);
+ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(!item||!controller)return;const position=controller.buildPosition(3);position[1]=0;if(item.slot==='seed'){ui.closePanel();sendAction('seed-plant',{item:item.id,position});}else if(item.slot==='harvest')sendAction('harvest-eat',{item:item.id});else ui.toast('Use this material in BAG → FUSION');});
+ui.addEventListener('original-action',event=>sendAction(event.detail.action,event.detail));
 ui.addEventListener('jump',()=>controller?.jump());
 addEventListener('keyup',e=>{if(e.code==='KeyE')artworkThrow.release();});
 ui.addEventListener('attack-start',()=>{if(!controller?.enabled||self?.role!=='fighter'||chargeStarted!==null)return;if(controller.holdingArt){artworkThrow.begin();return;}attackHeld=true;chargeStarted=performance.now();chargeRequest=sendAction('attack',{phase:'charge'});});
