@@ -44,6 +44,8 @@ try{
  await page.evaluate(()=>templeTest.ui.openPanel('build'));
  const upload=page.locator('[data-form="art-bomb-upload"] input[name="artwork"]');
  assert.equal(await upload.count(),1);
+ assert.equal(await page.locator('[data-form="art-bomb-upload"] input[name="size"]').getAttribute('min'),'1');
+ assert.equal(await page.locator('[data-form="art-bomb-upload"] input[name="size"]').getAttribute('max'),'3');
  const png=await page.screenshot({clip:{x:50,y:50,width:128,height:128}});
  await upload.setInputFiles({name:'ci-art.png',mimeType:'image/png',buffer:png});
  await page.locator('[data-form="art-bomb-upload"] [name="size"]').fill('2');
@@ -51,6 +53,12 @@ try{
  await page.waitForTimeout(1200);
  console.log('art-bomb-upload diagnostics',JSON.stringify(await page.evaluate(()=>({toast:document.querySelector('#toast')?.textContent,buildMode:!document.querySelector('#build-mode')?.hidden,preview:templeTest.arena.buildPreview?.userData.kind,network:templeTest.network.base}))));
  await page.waitForFunction(()=>templeTest.arena.buildPreview?.userData.kind==='art-bomb',{},{timeout:20000});
+ await page.waitForFunction(()=>templeTest.arena.buildPreview?.userData.actualArtwork===true,null,{timeout:30000});
+ assert.ok(await page.evaluate(()=>templeTest.arena.buildPreview.children[0]?.userData?.record?.mediaId),'The real uploaded media must be rendered instead of a placeholder');
+ const start=await page.evaluate(()=>templeTest.arena.buildPreview.position.toArray());
+ await page.keyboard.down('w');await page.waitForTimeout(1000);await page.keyboard.up('w');
+ const end=await page.evaluate(()=>templeTest.arena.buildPreview.position.toArray());
+ assert.ok(Math.hypot(end[0]-start[0],end[2]-start[2])>.25,'Uploaded art preview must follow the moving player');
  const scale=await page.evaluate(()=>templeTest.arena.buildPreview.scale.x);
  assert.equal(scale,2);
  await page.screenshot({path:output+'/art-bomb-placement.png'});
