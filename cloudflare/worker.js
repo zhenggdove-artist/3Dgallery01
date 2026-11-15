@@ -45,7 +45,7 @@ export class TempleRoom extends DurableObject{
     if(request.method==='OPTIONS')return withCors(request,new Response(null,{status:204}),this.env);
     if(!this.allowed(request))return withCors(request,json({error:'Origin is not allowed'},403),this.env);
     try{
-      if(path==='/health')return withCors(request,json({ok:true,service:'TempleRoom',database:'sqlite',players:this.roster().length}),this.env);
+      if(path==='/health')return withCors(request,json({ok:true,service:'TempleRoom',database:'sqlite',players:this.roster().length,apiVersion:3,features:{artMediaUpload:true,artBombPlace:true,gmReset:true}}),this.env);
       if(path==='/api/join'&&request.method==='POST')return withCors(request,await this.join(request),this.env);
       if(path.startsWith('/api/art-media/')&&request.method==='GET')return withCors(request,getArtMedia(this.sql,path.slice(15),request),this.env);
       if(path.startsWith('/api/media/')&&request.method==='GET'){
