@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {WeaponVFX} from './weapon-vfx.js';
+import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
 import {itemById} from './shared/catalog.js';
 import {makePlant} from './reletter/plants.js';
 import {makeHeldWeapon,attachHeldWeapon,setHeldTime} from './reletter/held-weapons.js';
@@ -32,7 +33,7 @@ export class ReletterPresentation{
   equipment(root,equipment={}){
     const d=root.userData;this.players.add(root);d.equipment=equipment;
     const weapon=itemById(equipment.weapon),signature=JSON.stringify(equipment);if(d.equipmentSignature===signature)return;d.equipmentSignature=signature;
-    if(d.blade)disposeVisual(d.blade);d.blade=null;if(weapon&&(weapon.exotic||weapon.id==='chiang-token'||meleeFamilies.includes(weapon.family))){d.blade=makeHeldWeapon(weapon);root.add(d.blade);}d.weaponId=weapon?.id;
+    if(d.blade)disposeVisual(d.blade);d.blade=null;if(weapon&&(weapon.exotic||weapon.id==='chiang-token'||meleeFamilies.includes(weapon.family)||isSpellWeapon(weapon))){d.blade=isSpellWeapon(weapon)?makeSpellEquipment(weapon):makeHeldWeapon(weapon);root.add(d.blade);}d.weaponId=weapon?.id;
     if(d.headgear)disposeHeadgear(d.headgear);d.headgear=equipment.head?attachHeadgear(THREE,d.model,itemById(equipment.head)):null;
     if(d.outfit)disposeOutfit(d.outfit);d.outfit=equipment.outfit?attachOutfit(THREE,d.model,itemById(equipment.outfit),{hood:!equipment.head}):null;
     if(d.wings)disposeGardenModel(d.wings);d.wings=equipment.wings?attachWings(THREE,d.model,itemById(equipment.wings)):null;
