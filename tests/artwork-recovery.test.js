@@ -39,3 +39,21 @@ test('recovery is idempotent and ignores malformed legacy artwork records', () =
   assert.equal(world.revision, 8);
   assert.equal(recoverArtworks(world, true).recovered, 0);
 });
+
+import {createInitialWorld,applyAction} from '../src/shared/temple-rules.js';
+
+test('authenticated game action permits GM but blocks regular players and leaves saved layouts untouched', () => {
+  const world=createInitialWorld(1000);
+  const first=Object.keys(world.artworks)[0];
+  const oldLayout=structuredClone(world.artworkLayout[first]);
+  world.artworks[first]={holder:'attacker',throwEvent:null,availableAt:0};
+  const normal={key:'normal',name:'Visitor',color:'#123456',role:'fighter',position:[0,0,0],admin:false};
+  const gm={key:'gm',name:'Ely',color:'#123456',role:'fighter',position:[0,0,0],admin:true};
+  assert.equal(applyAction(world,normal,{action:'recover-artworks'},{now:2000}).error,'GM only');
+  assert.equal(world.artworks[first].holder,'attacker');
+  const result=applyAction(world,gm,{action:'recover-artworks'},{now:2000});
+  assert.equal(result.recovered,1);
+  assert.equal(world.artworks[first].holder,null);
+  assert.equal(world.artworks[first].availableAt,0);
+  assert.deepEqual(world.artworkLayout[first],oldLayout);
+});
