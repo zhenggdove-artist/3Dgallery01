@@ -185,7 +185,7 @@ function throwArtwork(world,profile,actor,body,context,now){
     if(collision){const maxHp=world.profiles?.[target.key]?.maxHp||100,damage=bomb?artBombDamage(maxHp,context.rng??Math.random):34*event.power;hit=damagePlayer(world,profile,target,damage,now,bomb?'art-bomb':'artwork',actor.position);break;}
   }
   let monsterHit=null;if(world.monster?.active){const along=project(origin,direction,world.monster.position);if(along>0&&along<18*event.power&&perpendicular(origin,direction,world.monster.position,along)<2.7)monsterHit=damageMonster(world,profile,68*event.power,now,context.rng??Math.random);}
-  let structureDestroyed=null,structureHit=null;if(!hit&&!monsterHit){for(const structure of world.structures||[]){
+  let structureDestroyed=null,structureHit=null;if((!hit&&!monsterHit)||area?.mode==='area'){for(const structure of world.structures||[]){
     if(structure.owner==='temple')continue;
     const along=project(origin,direction,structure.position);
     if(along>0&&along<18*event.power&&perpendicular(origin,direction,structure.position,along)<structureRadius(structure)){
@@ -238,9 +238,18 @@ function attack(world,profile,actor,body,context,now){
   const stats=attackStats(weapon,charge),origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if(weapon.firstPerson&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage*=playerStats(world,profile,now).attack;profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   const area=stats.ultimate?chargedArea(weapon,origin,direction,stats,groundForSpell):null;
-  let hit=null;for(const target of context.actors||[]){if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(actor.position)||insideSafeZone(target.position))continue;const targetPosition=[target.position[0],target.position[1]+1,target.position[2]],along=project(origin,direction,targetPosition);if((area?.mode==='area'&&insideChargedArea(area,targetPosition))||(area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,targetPosition,along)<stats.radius+1)){const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{position:target.position,island:true},targetPosition,now,context.rng??Math.random);hit=damagePlayer(world,profile,target,(stats.damage+bonus)*modifiers.multiplier,now,'pvp',actor.position,modifiers.kind);break;}}
+  let hit=null,hits=[];for(const target of context.actors||[]){
+    if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(actor.position)||insideSafeZone(target.position))continue;
+    const targetPosition=[target.position[0],target.position[1]+1,target.position[2]],along=project(origin,direction,targetPosition);
+    if((area?.mode==='area'&&insideChargedArea(area,targetPosition))||(area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,targetPosition,along)<stats.radius+1)){
+     const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{position:target.position,island:true},targetPosition,now,context.rng??Math.random);
+     const result=damagePlayer(world,profile,target,(stats.damage+bonus)*modifiers.multiplier,now,'pvp',actor.position,modifiers.kind);
+     if(result){hits.push(result);hit??=result;}
+     if(area?.mode!=='area')break;
+    }
+   }
   let monsterHit=null;if(world.monster?.active&&!insideSafeZone(actor.position)){const target=[world.monster.position[0],world.monster.position[1]+ENEMY_HEIGHT*.5,world.monster.position[2]],along=project(origin,direction,target);if((area?.mode==='area'&&insideChargedArea(area,target,ENEMY_RADIUS))||(area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,target,along)<stats.radius+ENEMY_RADIUS)){const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{...world.monster,island:true},target,now,context.rng??Math.random);monsterHit=damageMonster(world,profile,(stats.damage+bonus)*modifiers.multiplier,now,context.rng??Math.random,modifiers.kind);}}
-  if(hit&&!hit.defeated&&!hit.immune)applyStatus(world,profile,world.profiles[hit.target],weapon,{direction,charge,damage:stats.damage},now);if(monsterHit&&!monsterHit.defeated)applyStatus(world,profile,world.monster,weapon,{direction,charge,damage:stats.damage},now);
+  for(const result of hits)if(!result.defeated&&!result.immune)applyStatus(world,profile,world.profiles[result.target],weapon,{direction,charge,damage:stats.damage},now);if(monsterHit&&!monsterHit.defeated)applyStatus(world,profile,world.monster,weapon,{direction,charge,damage:stats.damage},now);
   let structureHit=null,structureDestroyed=null;
   if(!hit&&!monsterHit){
    const candidates=(world.structures||[]).filter(v=>v.owner!=='temple').map(v=>{
@@ -255,7 +264,7 @@ function attack(world,profile,actor,body,context,now){
     if(structure.hp===0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}
    }
   }
-  return {structureHit,structureDestroyed,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?[world.monster.position[0],world.monster.position[1]+ENEMY_HEIGHT*.5,world.monster.position[2]]:hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null,weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,fusionEffects:profile.fusion[weapon.id]?.effects||[],...stats,time:now},hit,monsterHit};
+  return {structureHit,structureDestroyed,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?[world.monster.position[0],world.monster.position[1]+ENEMY_HEIGHT*.5,world.monster.position[2]]:hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null,weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,fusionEffects:profile.fusion[weapon.id]?.effects||[],...stats,time:now},hit,hits,monsterHit};
 }
 
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal'){
