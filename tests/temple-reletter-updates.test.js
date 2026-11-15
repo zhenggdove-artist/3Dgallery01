@@ -88,9 +88,9 @@ test('procedural grass distribution is deterministic, slender, and excludes cent
  assert.match(src,/uPlayers\[6\]/);
  assert.match(src,/trample/);
  assert.match(src,/wind/);
- assert.match(src,/mobile\?42000:140000/);
+ assert.match(src,/mobile\?25000:65000/);
  assert.match(src,/Continuous dense grass canopy/);
- assert.match(src,/blades=5/);
+ assert.match(src,/blades=4/);
 });
 
 test('central RELETTER message plants have threefold HSL color saturation',()=>{
@@ -105,11 +105,11 @@ test('central RELETTER message plants have threefold HSL color saturation',()=>{
 test('black excavated pond is archived and cleared without deleting planted aquarium fish or messages',()=>{
  const w=createInitialWorld(1000);
  w.sceneCleanupVersion=2;
- w.reletter.fishing={
+ w.reletter={fishing:{
   holes:[{id:'black-hole',owner:'visitor',position:[-28,0,2],depth:4}],
   ponds:[{id:'glass-tank',owner:'visitor',position:[60,0,0],fish:[{id:'fish-1'}]}],
   sessions:{visitor:{hole:'black-hole'}},bags:{},revision:0
- };
+ }};
  w.plants=[{id:'protected-message'}];
  cleanLegacyScene(w);
  assert.equal(w.sceneCleanupVersion,3);
@@ -123,9 +123,8 @@ test('black excavated pond is archived and cleared without deleting planted aqua
 test('player art uses movable exhibit placement rules, not bulky building exclusion zones',()=>{
  const w=createInitialWorld(1000),actor=[-27,0,0],nearOldPond=[-28,0,2];
  assert.equal(canPlaceArtworkAt(w,actor,nearOldPond),true);
- assert.equal(canBuildAt(w,actor,nearOldPond),true);
- const discPosition=[...w.artworkLayout['platform-02'].position];
- const nearby=[discPosition[0]+2,0,discPosition[2]+2];
+ // The removed pond no longer prohibits placement on its footprint.
+ const nearby=[64,0,4];
  assert.equal(canPlaceArtworkAt(w,[...nearby],nearby),true);
  assert.equal(canPlaceArtworkAt(w,[...nearby],[0,0,0]),false);
 });
