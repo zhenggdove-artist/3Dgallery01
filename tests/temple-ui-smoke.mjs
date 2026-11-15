@@ -57,9 +57,16 @@ try{
  assert.ok(await page.evaluate(()=>templeTest.arena.buildPreview.children[0]?.userData?.record?.mediaId),'The real uploaded media must be rendered instead of a placeholder');
  const start=await page.evaluate(()=>templeTest.arena.buildPreview.position.toArray());
  const stateBefore=await page.evaluate(()=>({enabled:templeTest.controller().enabled,grounded:templeTest.controller().grounded,position:templeTest.controller().root.position.toArray(),panel:templeTest.ui.panelName,buildKind:templeTest.ui.buildKind,active:templeTest.writer.active,focused:document.activeElement?.tagName}));
- await page.keyboard.down('w');await page.waitForTimeout(1500);
+ await page.keyboard.down('w');
+ try{
+  // SwiftShader in headless CI renders only a few frames per wall-clock
+  // second. Wait for actual world-space movement instead of a fixed delay.
+  await page.waitForFunction(start=>Math.hypot(
+   templeTest.controller().root.position.x-start[0],
+   templeTest.controller().root.position.z-start[2])>.35,
+   stateBefore.position,{timeout:30000,polling:150});
+ }finally{await page.keyboard.up('w');}
  const stateDuring=await page.evaluate(()=>({enabled:templeTest.controller().enabled,grounded:templeTest.controller().grounded,position:templeTest.controller().root.position.toArray(),keys:[...templeTest.controller().keys],speed:templeTest.controller().speed}));
- await page.keyboard.up('w');
  const end=await page.evaluate(()=>templeTest.arena.buildPreview.position.toArray());
  console.log('art-bomb-carry diagnostics',JSON.stringify({start,end,stateBefore,stateDuring}));
  assert.ok(Math.hypot(end[0]-start[0],end[2]-start[2])>.25,'Uploaded art preview must follow the moving player');
