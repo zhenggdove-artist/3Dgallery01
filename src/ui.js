@@ -45,6 +45,17 @@ export class TempleUI extends EventTarget{
   refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);$('weapon').textContent=(itemById(profile.equipment?.weapon)?.name||'UNARMED').toUpperCase();}$('online').textContent=`${this.players.length} / 6`;const monster=this.world?.monster,visible=false;$('monster-hud').hidden=!visible;if(visible){$('monster-name').textContent=`${String(monster.variant).toUpperCase()} · GENERATION ${monster.generation}`;$('monster-hp').max=monster.maxHp;$('monster-hp').value=monster.hp;}}
   setNear(near,holding=false){this.near=near;const prompt=$('prompt');let text='';if(this.buildKind)text='E · PLACE  R · ROTATE  ESC · CANCEL';else if(holding)text='HOLD E / A · CHARGE THROW';else if(near?.type==='coin'||near?.type==='drop')text='';else if(near?.type==='artwork')text='E · TAKE ARTWORK';else if(near?.type==='plant')text='E · READ MESSAGE';else if(near?.type==='structure')text='ATTACK · DAMAGE STRUCTURE';prompt.textContent=text;prompt.classList.toggle('visible',!!text);}
   toast(message){clearTimeout(this.toastTimer);const toast=$('toast');toast.textContent=message;toast.classList.add('visible');this.toastTimer=setTimeout(()=>toast.classList.remove('visible'),2200);}
+  fusionFeedback(success,message=''){
+    clearTimeout(this.fusionTimer);
+    this.fusionIndicator?.remove();
+    const box=document.createElement('div');box.id='fusion-outcome';
+    box.setAttribute('role','status');box.textContent=success?'FUSION SUCCESS':'FUSION FAILED';
+    box.title=String(message).slice(0,240);
+    box.style.cssText='position:fixed;left:50%;top:28%;transform:translateX(-50%);z-index:9999;pointer-events:none;padding:10px 20px;border-radius:8px;text-align:center;font:700 24px system-ui,sans-serif;letter-spacing:.12em;background:rgba(17,22,35,.64);border:1px solid '+(success?'rgba(108,255,195,.6)':'rgba(255,100,125,.65)')+';color:'+(success?'#91ffcf':'#ff8ca6')+';text-shadow:0 1px 6px #000;opacity:0.88;max-width:75vw';
+    document.body.append(box);this.fusionIndicator=box;
+    box.animate([{opacity:.9,offset:0},{opacity:.9,offset:.5},{opacity:0,offset:1}],{duration:1000,fill:'forwards'});
+    this.fusionTimer=setTimeout(()=>{box.remove();if(this.fusionIndicator===box)this.fusionIndicator=null;},1020);
+  }
   death(until){if(this.deathUntil===until)return;this.deathUntil=until;clearTimeout(this.deathTimer);const overlay=$('death');if(!until||until<=Date.now()){overlay.hidden=true;return;}overlay.hidden=false;const update=()=>{const left=Math.max(0,Math.ceil((until-Date.now())/1000));$('respawn-count').textContent=left;if(left)this.deathTimer=setTimeout(update,200);else overlay.hidden=true;};update();}
   openPanel(name,fromJourney=false){if(!this.self)return;if(name==='social'&&!fromJourney){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;document.body.classList.remove('panel-open');this.panelName='';this.emit('panel',{open:false});}
