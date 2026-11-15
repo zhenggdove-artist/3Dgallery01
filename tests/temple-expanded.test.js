@@ -179,3 +179,53 @@ test('a fully charged area hits every player-built structure in its radius',()=>
  assert.equal(strike.structureHits?.length,2,JSON.stringify(strike));
  assert.ok(world.structures.every(s=>s.hp<140));
 });
+
+test('all cat guns keep their advertised normal and charged range and deal PvP damage',()=>{
+  const guns=[
+    ['white-cat',22,28,18,25],
+    ['black-cat',80,140,65,85],
+    ['calico-cat',9,12,7,10]
+  ];
+  for(const [id,range,chargedRange,normalDistance,chargedDistance] of guns){
+    const weapon=WEAPONS.find(w=>w.id===id);
+    assert.ok(weapon?.firstPerson,id);
+    assert.equal(attackStats(weapon,0).range,range,id+' normal range');
+    assert.equal(attackStats(weapon,1).range,chargedRange,id+' charged range');
+    for(const [charge,distance] of [[0,normalDistance],[1,chargedDistance]]){
+      const world=createInitialWorld(1000),shooter=actor('shooter',[0,0,-35]),target=actor('target',[0,0,-35+distance]);
+      ensureProfile(world,target.key,target.name,target.color,1000);
+      const profile=ensureProfile(world,shooter.key,shooter.name,shooter.color,1000);
+      profile.inventory.push(id);profile.equipment.weapon=id;
+      if(charge)assert.equal(applyAction(world,shooter,{action:'attack',phase:'charge'},{now:2000}).charging,true);
+      const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1],origin:[0,1,-35],charge},
+        {now:5000,actors:[shooter,target],rng:()=>.8});
+      assert.ok(result.hit?.damage>0,id+' charge '+charge+': '+JSON.stringify(result.error||result));
+      assert.ok(world.profiles.target.hp<100,id+' charge '+charge+' must damage a fighter');
+    }
+  }
+  const spell=WEAPONS.find(w=>w.id==='tide-1');
+  assert.equal(attackStats(spell,0).range,+(spell.range/3).toFixed(3),'ordinary spells retain Temple range balancing');
+});
+
+test('cat bullets aimed at the visible upper body of a tall monster deal damage',()=>{
+  const world=createInitialWorld(1000),shooter=actor('shooter',[0,0,15]);
+  const profile=ensureProfile(world,shooter.key,shooter.name,shooter.color,1000);
+  profile.inventory.push('white-cat');profile.equipment.weapon='white-cat';
+  world.monster={id:'tall-test',active:true,position:[0,0,35],hp:500,maxHp:500,model:'auntie'};
+  const vector=[0,6,20],size=Math.hypot(...vector),direction=vector.map(v=>v/size);
+  const result=applyAction(world,shooter,{action:'attack',direction,origin:[0,1,15]},{now:5000,actors:[shooter],rng:()=>.8});
+  assert.ok(result.monsterHit?.damage>0,JSON.stringify(result.error||result));
+  assert.ok(world.monster.hp<500);
+});
+
+test('cat gun server hitbox still rejects bullets passing beside the monster',()=>{
+  const world=createInitialWorld(1000),shooter=actor('shooter',[0,0,15]);
+  const profile=ensureProfile(world,shooter.key,shooter.name,shooter.color,1000);
+  profile.inventory.push('white-cat');profile.equipment.weapon='white-cat';
+  world.monster={id:'tall-test',active:true,position:[0,0,35],hp:500,maxHp:500,model:'auntie'};
+  const vector=[6,6,20],size=Math.hypot(...vector),direction=vector.map(v=>v/size);
+  const result=applyAction(world,shooter,{action:'attack',direction,origin:[0,1,15]},{now:5000,actors:[shooter],rng:()=>.8});
+  assert.equal(result.error,undefined);
+  assert.equal(result.monsterHit,null);
+  assert.equal(world.monster.hp,500);
+});
