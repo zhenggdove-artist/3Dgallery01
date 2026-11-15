@@ -56,8 +56,12 @@ try{
  await page.waitForFunction(()=>templeTest.arena.buildPreview?.userData.actualArtwork===true,null,{timeout:30000});
  assert.ok(await page.evaluate(()=>templeTest.arena.buildPreview.children[0]?.userData?.record?.mediaId),'The real uploaded media must be rendered instead of a placeholder');
  const start=await page.evaluate(()=>templeTest.arena.buildPreview.position.toArray());
- await page.keyboard.down('w');await page.waitForTimeout(1000);await page.keyboard.up('w');
+ const stateBefore=await page.evaluate(()=>({enabled:templeTest.controller().enabled,grounded:templeTest.controller().grounded,position:templeTest.controller().root.position.toArray(),panel:templeTest.ui.panelName,buildKind:templeTest.ui.buildKind,active:templeTest.writer.active,focused:document.activeElement?.tagName}));
+ await page.keyboard.down('w');await page.waitForTimeout(1500);
+ const stateDuring=await page.evaluate(()=>({enabled:templeTest.controller().enabled,grounded:templeTest.controller().grounded,position:templeTest.controller().root.position.toArray(),keys:[...templeTest.controller().keys],speed:templeTest.controller().speed}));
+ await page.keyboard.up('w');
  const end=await page.evaluate(()=>templeTest.arena.buildPreview.position.toArray());
+ console.log('art-bomb-carry diagnostics',JSON.stringify({start,end,stateBefore,stateDuring}));
  assert.ok(Math.hypot(end[0]-start[0],end[2]-start[2])>.25,'Uploaded art preview must follow the moving player');
  const scale=await page.evaluate(()=>templeTest.arena.buildPreview.scale.x);
  assert.equal(scale,2);
