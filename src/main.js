@@ -123,7 +123,7 @@ async function sendAction(action,data={},options={}){if(!joined||!controller)ret
 function startBuildPlacement(kind,surface=null,artwork=null){if(self?.role!=='fighter')return ui.toast('SPECTATORS CANNOT BUILD');buildPlacement={kind,surface,artwork,rotation:controller?.root.rotation.y||0,position:controller?.buildPosition(5)||[0,0,0],valid:false};ui.toast('MOVE TO AIM · R ROTATE · E PLACE');}
 function rotateBuildPlacement(){if(!buildPlacement)return;buildPlacement.rotation+=Math.PI/4;}
 async function confirmBuildPlacement(){if(!buildPlacement||!controller)return;if(!buildPlacement.valid)return ui.toast('CANNOT BUILD HERE');const result=buildPlacement.kind==='art-bomb'
- ?await sendAction('publish-art-bomb',{artwork:{...buildPlacement.artwork,position:buildPlacement.position,appearance:{depth:.1}},size:buildPlacement.artwork?.size})
+ ?await sendAction('publish-art-bomb',{artwork:{...buildPlacement.artwork,position:[buildPlacement.position[0],buildPlacement.position[1]+1.5*(buildPlacement.artwork?.size||1),buildPlacement.position[2]],appearance:{depth:.1}},size:buildPlacement.artwork?.size})
  :await sendAction('build',{kind:buildPlacement.kind,surface:buildPlacement.surface,position:buildPlacement.position,rotation:buildPlacement.rotation});
  if(result)cancelBuildPlacement();}
 function cancelBuildPlacement(){buildPlacement=null;arena.clearBuildPreview();ui.clearBuildMode();}
