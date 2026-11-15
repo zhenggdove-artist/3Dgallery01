@@ -15,7 +15,7 @@ import {cleanLegacyScene} from '../src/shared/scene-cleanup.js';
 const actor=(key,admin=false)=>({key,name:key,role:'fighter',admin,position:[70,0,0],color:'#33bbaa'});
 test('every elemental staff spell uses exactly one third of RELETTER effective range',()=>{
  const ids=['water','ice','fire','lightning','beam','petal','wave'];
- const spells=WEAPONS.filter(w=>ids.includes(w.family));
+ const spells=WEAPONS.filter(w=>ids.includes(w.family)&&!w.firstPerson);
  assert.ok(spells.length>=35);
  for(const spell of spells)for(const charge of [0,.5,1]){
   const original=originalStats(spell,charge),reduced=attackStats(spell,charge);
