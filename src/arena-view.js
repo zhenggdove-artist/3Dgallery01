@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {GrassField} from './grass-field.js';
 import {DisplayPlatforms} from './display-platforms.js';
 import {artworkPosition,artworkLanding} from './shared/artwork-flight.js';
 import {artworkDefinitions} from './shared/artwork-library.js';
@@ -23,7 +24,7 @@ export class TempleArena{
   constructor(scene,renderer){
     this.scene=scene;this.renderer=renderer;this.dracoLoader=new DRACOLoader();this.dracoLoader.setDecoderPath('./vendor/three/examples/jsm/libs/draco/');this.loader=new GLTFLoader().setDRACOLoader(this.dracoLoader);this.clock=0;this.world=null;this.players=[];this.dropMeshes=[];
     this.artworks=new Map();this.coinMesh=null;this.dropMesh=null;this.dropIds=[];this.dropCoinFlights=[];this.coinFlights=new Map();this.structureGroup=new THREE.Group();this.structureGroup.name='Persistent structures';scene.add(this.structureGroup);this.plantGroup=new THREE.Group();this.plantGroup.name='Permanent message plants';scene.add(this.plantGroup);
-    this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
+    this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
   }
   async load(progress=()=>{}){
     progress(.08,'Building arena');this.buildEnvironment();
@@ -37,7 +38,7 @@ export class TempleArena{
     this.insects=createPlantInsects(this.scene);
     buildReletterEnvironment(this.scene,this.renderer);
     const rings=new THREE.Mesh(new THREE.RingGeometry(SAFE_ZONE.radius-1,SAFE_ZONE.radius,64),new THREE.MeshBasicMaterial({color:'#b9ac70',transparent:true,opacity:.34,side:THREE.DoubleSide,depthWrite:false}));rings.rotation.x=-Math.PI/2;rings.position.y=.025;this.scene.add(rings);
-    this.buildPlatforms();this.buildDust();
+    this.buildPlatforms();this.buildDust();this.grass=new GrassField(this.scene,{mobile:touch});
     for(let i=0;i<(touch?3:5);i++){const light=new THREE.PointLight('#e6d49a',i?18:24,18,2);light.visible=false;this.scene.add(light);this.lightPool.push(light);}
   }
   buildCentralPlant(){
@@ -159,7 +160,7 @@ export class TempleArena{
   syncMonster(){this.islandEnemies.sync(this.world?.monster);this.monster=this.islandEnemies.current;}
   update(dt,time,camera,playerRoots=new Map()){
     this.presentation.beforeAnimation();this.adventure.beforeAnimation();for(const root of playerRoots.values())updateHitFlash(root,performance.now());
-    this.clock=time;for(const mixer of this.mixers)mixer.update(dt);if(this.dust){this.dust.rotation.y=time*.004;const positions=this.dust.geometry.attributes.position.array;for(let i=1;i<positions.length;i+=3){positions[i]+=dt*.025;if(positions[i]>22)positions[i]=0;}this.dust.geometry.attributes.position.needsUpdate=true;}if(this.water)this.water.material.opacity=.72+Math.sin(time*1.4)*.05;
+    this.clock=time;this.grass?.update(time,playerRoots);for(const mixer of this.mixers)mixer.update(dt);if(this.dust){this.dust.rotation.y=time*.004;const positions=this.dust.geometry.attributes.position.array;for(let i=1;i<positions.length;i+=3){positions[i]+=dt*.025;if(positions[i]>22)positions[i]=0;}this.dust.geometry.attributes.position.needsUpdate=true;}if(this.water)this.water.material.opacity=.72+Math.sin(time*1.4)*.05;
     if(this.coinMesh&&this.world){PLATFORMS.forEach((p,i)=>{const available=this.world.coins?.[p.id]?.available;tempPosition.fromArray(p.coinPosition);const fly=this.coinFlights?.get(p.id);if(fly)fly.age+=dt;const t=fly?fly.age/.8:1;if(fly&&t>=1)this.coinFlights.delete(p.id);tempPosition.y=fly?fly.y+Math.min(1,t)*5:tempPosition.y+Math.sin(time*1.8+i)*.4;tempQuaternion.setFromEuler(new THREE.Euler(0,time*(fly?6:2)+i,0));tempScale.setScalar(fly?1.6*Math.max(0,1-t):available?1.6:0);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);this.coinMesh.setMatrixAt(i,tempMatrix);});this.coinMesh.instanceMatrix.needsUpdate=true;}
     for(const mesh of this.dropMeshes){const shape=mesh.name.split(' · ')[1];mesh.userData.records.forEach((drop,i)=>setDropMatrix(mesh,drop,i,shape,time));mesh.instanceMatrix.needsUpdate=true;}
     for(let i=this.dropCoinFlights.length-1;i>=0;i--){
