@@ -1,5 +1,6 @@
 import {initializeArtMedia,uploadArtMedia,getArtMedia} from './art-media.js';
 import {recoverArtworks} from '../src/shared/artwork-recovery.js';
+import {resetPlayerArtworks} from '../src/shared/art-bomb.js';
 import {DurableObject} from 'cloudflare:workers';
 import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,releasePlayerWorldState,tickWorld,validateState,validColor,validName,worldView} from '../src/shared/temple-rules.js';
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
@@ -172,6 +173,21 @@ export class TempleRoom extends DurableObject{
       if(result.error)return json({error:result.error},403);
       if(result.recovered){this.save(world);this.broadcastWorld(world);}
       return json(result);
+    }
+    if(/^\/reset$/i.test(text)){
+      const world=this.world(),result=resetPlayerArtworks(world,world.profiles?.[session.profile_key]?.admin===true);
+      if(result.error)return json({error:result.error},403);
+      if(result.removedArtworks){
+        this.ctx.storage.transactionSync(()=>{
+          this.save(world);
+          for(const mediaId of result.removedArtworkMediaIds||[]){
+            this.sql.exec('DELETE FROM art_media_chunks WHERE id=?',mediaId);
+            this.sql.exec('DELETE FROM art_media WHERE id=?',mediaId);
+          }
+        });
+        this.broadcastWorld(world);
+      }
+      return json({ok:true,notice:result.notice,removedArtworks:result.removedArtworks});
     }
     const recent=this.sql.exec('SELECT time FROM chat_messages WHERE profile_key=? ORDER BY time DESC LIMIT 1',session.profile_key).toArray()[0];if(recent&&Date.now()-recent.time<500)return json({error:'Please wait before sending again'},429);
     const message={id:crypto.randomUUID(),profileKey:session.profile_key,name:session.name,text,time:Date.now()};this.sql.exec('INSERT INTO chat_messages VALUES(?,?,?,?,?)',message.id,message.profileKey,message.name,message.text,message.time);this.sql.exec('DELETE FROM chat_messages WHERE time<?',Date.now()-30*86_400_000);this.broadcast('chat',message);return json({ok:true,message});
