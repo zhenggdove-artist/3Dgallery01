@@ -2,6 +2,8 @@ import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea} from './charge-area.js';
 import {discGroundHeight} from './artwork-discs.js';
+import {artworkLanding} from './artwork-flight.js';
+import {publishArtBomb,resizeArtBomb,projectileHitsActor,artBombDamage} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,MATERIALS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,FISHING_POND,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
@@ -125,6 +127,8 @@ export function applyAction(world,actor,body,context={}){
   switch(body.action){
     case 'pickup-coin':result=pickupCoin(world,profile,actor,body,now);break;
     case 'pickup-drop':result=pickupDrop(world,profile,actor,body,now);break;
+    case 'publish-art-bomb':if(!canBuildAt(world,actor.position,body.artwork?.position))return {error:'Choose valid ground for your artwork'};result=publishArtBomb(world,profile,actor,body,now);break;
+    case 'resize-art-bomb':result=resizeArtBomb(world,actor,body,now);break;
     case 'pickup-artwork':result=pickupArtwork(world,actor,body,now);break;
     case 'throw-artwork':result=throwArtwork(world,profile,actor,body,context,now);break;
     case 'buy':result=buy(world,profile,body);break;
@@ -170,9 +174,16 @@ function pickupArtwork(world,actor,body,now){
 function throwArtwork(world,profile,actor,body,context,now){
   const entry=Object.entries(world.artworks).find(([,art])=>art.holder===actor.key);if(!entry)return {error:'Pick up an artwork first'};
   const direction=normalDirection(body.direction);if(!direction)return {error:'Invalid throw direction'};
-  const [platformId,art]=entry,origin=[actor.position[0],actor.position[1]+1.4,actor.position[2]],event={id:id(),platformId,origin,direction,time:now,power:clamp(Number(body.power)||1,.4,1.4),owner:actor.key};
+  const [platformId,art]=entry,record=(world.customArtworks||[]).find(a=>a.id===platformId),bomb=!!record?.bomb;
+  const origin=[actor.position[0],actor.position[1]+1.4,actor.position[2]],event={id:id(),platformId,origin,direction,time:now,power:clamp(Number(body.power)||1,.4,1.4),owner:actor.key,bomb};
   art.holder=null;art.availableAt=now+ARTWORK_RESPAWN_MS;art.throwEvent=event;
-  let hit=null;for(const target of context.actors||[]){if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(target.position))continue;const along=project(origin,direction,target.position);if(along>0&&along<18*event.power&&perpendicular(origin,direction,target.position,along)<2.1){hit=damagePlayer(world,profile,target,34*event.power,now,'artwork',actor.position);break;}}
+  const ground=(x,z,y)=>{let h=discGroundHeight(x,z,y);for(const p of world.floatingPlatforms||[])if(y>=p.position[1]-.5&&Math.hypot(x-p.position[0],z-p.position[2])<p.radius*2)h=Math.max(h,p.position[1]);return h;};
+  const landing=bomb?artworkLanding(event,ground):null,bombSize=world.artworkLayout?.[platformId]?.scale?.[0]||1;
+  let hit=null;for(const target of context.actors||[]){if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(target.position))continue;
+    const along=project(origin,direction,target.position),ordinaryHit=along>0&&along<18*event.power&&perpendicular(origin,direction,target.position,along)<2.1;
+    const collision=bomb?projectileHitsActor(event,target.position,landing.time,bombSize):ordinaryHit;
+    if(collision){const maxHp=world.profiles?.[target.key]?.maxHp||100,damage=bomb?artBombDamage(maxHp,context.rng??Math.random):34*event.power;hit=damagePlayer(world,profile,target,damage,now,bomb?'art-bomb':'artwork',actor.position);break;}
+  }
   let monsterHit=null;if(world.monster?.active){const along=project(origin,direction,world.monster.position);if(along>0&&along<18*event.power&&perpendicular(origin,direction,world.monster.position,along)<2.7)monsterHit=damageMonster(world,profile,68*event.power,now,context.rng??Math.random);}
   let structureDestroyed=null;if(!hit&&!monsterHit){for(const structure of world.structures||[]){const along=project(origin,direction,structure.position);if(along>0&&along<18*event.power&&perpendicular(origin,direction,structure.position,along)<structureRadius(structure)){structure.hp-=Math.round(70*event.power);if(structure.hp<=0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}break;}}}
   return {throwEvent:event,hit,monsterHit,structureDestroyed,notice:monsterHit?.defeated?'Monster defeated · loot dropped':structureDestroyed?'Artwork shattered a structure':undefined};
