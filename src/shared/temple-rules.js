@@ -260,7 +260,7 @@ function attack(world,profile,actor,body,context,now){
   let monsterHit=null,monsterHits=[];
   if(!insideSafeZone(actor.position))for(const mob of [world.monster,...(world.monsters||[])]){
    if(!mob?.active)continue;
-   const target=[mob.position[0],mob.position[1]+ENEMY_HEIGHT*.5,mob.position[2]],along=project(origin,direction,target);
+   const target=[mob.position[0],mob.position[1]+Math.min(1.2,ENEMY_HEIGHT*.5),mob.position[2]],along=project(origin,direction,target);
    if((area?.mode==='area'&&insideChargedArea(area,target,ENEMY_RADIUS))||
       (area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,target,along)<stats.radius+ENEMY_RADIUS)){
     const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{...mob,island:true},target,now,context.rng??Math.random);
