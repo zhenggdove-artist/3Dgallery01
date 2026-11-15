@@ -43,3 +43,32 @@ jobs:
       - name: Print server diagnostics if unsuccessful
         if: failure()
         run: cat /tmp/temple-worker-ci.log || true
+
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:cloud
+      - name: Boot isolated staging services
+        run: |
+          npx wrangler dev --local --port 8787 > /tmp/temple-browser-worker.log 2>&1 &
+          npm run start > /tmp/temple-browser-static.log 2>&1 &
+      - name: Run WebGL/browser end-to-end gameplay smoke
+        run: node tests/temple-ui-smoke.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: temple-ui-smoke-screenshots
+          path: output/temple-ui-smoke
+          if-no-files-found: ignore
+      - name: Print browser server diagnostics if unsuccessful
+        if: failure()
+        run: |
+          cat /tmp/temple-browser-worker.log || true
+          cat /tmp/temple-browser-static.log || true
