@@ -2,24 +2,33 @@ import * as THREE from 'three';
 
 // Single GPU draw call for thousands of slender segmented grass blades.
 // All meshes and wind/trample rules are generated in JS; no external assets.
-export function grassPositions(count=8500,seed=17331){
+export function grassPositions(count=140000,seed=17331){
  const points=new Float32Array(count*2),heights=new Float32Array(count),angles=new Float32Array(count),phases=new Float32Array(count),shades=new Float32Array(count);
  let state=seed>>>0;const rand=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
  for(let i=0;i<count;i++){
   const r=Math.sqrt(11*11+(90*90-11*11)*rand()),a=rand()*Math.PI*2;
   points[i*2]=Math.cos(a)*r;points[i*2+1]=Math.sin(a)*r;
-  heights[i]=.32+rand()*.85;angles[i]=rand()*Math.PI*2;
+  heights[i]=.48+rand()*.82;angles[i]=rand()*Math.PI*2;
   phases[i]=rand()*100;shades[i]=rand();
  }
  return {points,heights,angles,phases,shades};
 }
+// Five crossed long leaves per instanced tuft; no one-mesh-per-blade overhead.
 function bladeGeometry(){
- const positions=[],indices=[],uvs=[],segments=5;
- for(let i=0;i<=segments;i++){
-  const t=i/segments,w=(1-t)**1.3*.035+.001;
-  positions.push(-w,t,0,w,t,0);
-  uvs.push(0,t,1,t);
-  if(i<segments){const b=i*2;indices.push(b,b+1,b+2,b+1,b+3,b+2);}
+ const positions=[],indices=[],uvs=[],segments=4,blades=5;
+ for(let j=0;j<blades;j++){
+  const phi=j*2.39996,cs=Math.cos(phi),sn=Math.sin(phi);
+  const lean=.22+.11*Math.sin(j*4.17),yScale=.77+(j%3)*.14;
+  const base=positions.length/3;
+  for(let i=0;i<=segments;i++){
+   const t=i/segments,w=(1-t)**1.22*.093+.0015,drift=lean*t*t;
+   for(const side of [-1,1]){
+    const x=side*w,z=drift;
+    positions.push(x*cs-z*sn,t*yScale,x*sn+z*cs);
+    uvs.push(side<0?0:1,t);
+   }
+   if(i<segments){const b=base+i*2;indices.push(b,b+1,b+2,b+1,b+3,b+2);}
+  }
  }
  const geo=new THREE.InstancedBufferGeometry();
  geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
@@ -42,7 +51,7 @@ varying float vWind;
 void main(){
  float t=position.y;
  float c=cos(aAngle),s=sin(aAngle);
- vec2 blade=vec2(position.x*c,position.x*s);
+ vec2 blade=vec2(position.x*c-position.z*s,position.x*s+position.z*c);
  vec2 wind=vec2(sin(uTime*1.3+aPhase+aOffset.x*.13),cos(uTime*.93+aPhase*1.3+aOffset.y*.11));
  wind*=.13+.06*sin(uTime*.3+aPhase*.4);
  vec2 trample=vec2(0.);
@@ -72,7 +81,7 @@ void main(){
 }`;
 export class GrassField{
  constructor(scene,{mobile=false,count}={}){
-  this.count=count??(mobile?2800:9500);
+  this.count=count??(mobile?42000:140000);
   const geo=bladeGeometry(),seed=grassPositions(this.count);
   geo.setAttribute('aOffset',new THREE.InstancedBufferAttribute(seed.points,2));
   geo.setAttribute('aHeight',new THREE.InstancedBufferAttribute(seed.heights,1));
@@ -85,6 +94,22 @@ export class GrassField{
    uniforms:{uTime:{value:0},uPlayers:{value:positions},uPlayerCount:{value:0}}});
   this.mesh=new THREE.Mesh(geo,material);this.mesh.name='JS procedural wind and footsteps grass';this.mesh.frustumCulled=false;
   scene.add(this.mesh);
+  // Continuous fine-blade grass canopy covers every small gap between tufts;
+  // no bare underlying meadow plane is visible while walking or looking down.
+  this.canopy=new THREE.Mesh(new THREE.CircleGeometry(91,128),new THREE.ShaderMaterial({
+   vertexShader:`varying vec2 grassPoint;void main(){grassPoint=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+   fragmentShader:`precision mediump float;varying vec2 grassPoint;
+    float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    void main(){vec2 p=grassPoint*28.;vec2 g=floor(p);vec2 f=fract(p);
+     float n=hash(g),n2=hash(g+vec2(17.,47.));
+     float stripe=sin((f.x+n*.7)*28.+sin(f.y*17.+n*6.)*1.7);
+     vec3 dark=vec3(.085,.20,.069),mid=vec3(.16,.32,.093),bright=vec3(.27,.44,.15);
+     vec3 col=mix(dark,mid,.26+.6*n);
+     col=mix(col,bright,clamp(stripe*.18+n2*.24,0.,.45));
+     gl_FragColor=vec4(col,1.);
+    }`,side:THREE.DoubleSide,depthWrite:true}));
+  this.canopy.name='Continuous dense grass canopy';
+  this.canopy.rotation.x=-Math.PI/2;this.canopy.position.y=.006;scene.add(this.canopy);
  }
  update(time,roots){
   const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;
@@ -94,5 +119,5 @@ export class GrassField{
   }
   uniform.uPlayerCount.value=i;
  }
- dispose(){this.mesh.removeFromParent();this.mesh.geometry.dispose();this.mesh.material.dispose();}
+ dispose(){this.mesh.removeFromParent();this.mesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.canopy.material.dispose();}
 }
