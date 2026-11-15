@@ -44,6 +44,15 @@ export async function prepareArtwork(files,{maxBytes=8*1024*1024}={}){
  if(!blob||blob.size>maxBytes)throw Error('Prepared artwork exceeds '+Math.round(maxBytes/1024/1024)+' MB. Use a smaller file, resolution, or model.');return {blob,title};
 }
 export async function uploadArtwork(network,files,{maxBytes=8*1024*1024}={}){
+ // Check the deployed Worker first. A successful GitHub Pages update cannot
+ // make an old Cloudflare Durable Object understand /api/art-media.
+ let health;
+ try{
+  const response=await fetch(network.base+'/health',{cache:'no-store'});
+  health=response.ok?await response.json():null;
+ }catch(error){throw Error('Cloudflare Worker 無法連線，無法上傳作品：'+error.message);}
+ if(health?.features?.artMediaUpload!==true||health?.features?.artBombPlace!==true)
+  throw Error('Cloudflare Worker 後端仍是舊版本，尚未部署作品上傳 API。請在 GitHub Actions 設定 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID，執行 Deploy Temple Worker。');
  const {blob,title}=await prepareArtwork(files,{maxBytes});
  let response;
  try{response=await fetch(network.base+'/api/art-media',{method:'POST',headers:{Authorization:'Bearer '+network.token,'Content-Type':blob.type},body:blob});}
