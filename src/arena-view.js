@@ -61,8 +61,23 @@ export class TempleArena{
     const ring=new THREE.Mesh(new THREE.RingGeometry(.46,.53,24),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.65,side:THREE.DoubleSide,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;root.add(ring);const label=makeNameSprite(name,admin);label.position.y=-.25;root.add(label);const weaponMount=new THREE.Group();weaponMount.position.set(.48,1.05,.1);weaponMount.rotation.set(0,0,-.55);root.add(weaponMount);const mixer=new THREE.AnimationMixer(model),actions={};for(const clip of this.characterAsset.animations)actions[clip.name]=mixer.clipAction(clip);actions.idle?.play();mixer.update(.001);model.updateMatrixWorld(true);model.position.y-=new THREE.Box3().setFromObject(model,true).min.y;model.updateMatrixWorld(true);root.userData={model,mixer,actions,current:'idle',ring,label,weaponMount,weaponId:null};this.mixers.push(mixer);return root;
   }
   setPlayerEquipment(root,equipment){if(root)this.presentation.equipment(root,equipment);}
-  setBuildPreview(kind,position,rotation=0,valid=true,size=1){if(!this.buildPreview||this.buildPreview.userData.kind!==kind){this.clearBuildPreview();const group=new THREE.Group();group.userData.kind=kind;const material=new THREE.MeshStandardMaterial({color:'#85d9bd',transparent:true,opacity:.34,depthWrite:false,roughness:.5,emissive:'#2c705c',emissiveIntensity:.3});for(const mesh of previewMeshes(kind,material))group.add(mesh);group.name='Build placement preview';this.scene.add(group);this.buildPreview=group;}this.buildPreview.position.fromArray(position);this.buildPreview.rotation.y=rotation;this.buildPreview.scale.setScalar(kind==='art-bomb'?Math.max(.5,Math.min(5,size)):1);for(const child of this.buildPreview.children){child.material.color.set(valid?'#85d9bd':'#e7776d');child.material.emissive.set(valid?'#2c705c':'#702b28');}this.buildPreview.userData.valid=valid;}
-  clearBuildPreview(){if(!this.buildPreview)return;disposeChildren(this.buildPreview);this.buildPreview.removeFromParent();this.buildPreview=null;}
+  setBuildPreview(kind,position,rotation=0,valid=true,size=1,previewFile=null){if(!this.buildPreview||this.buildPreview.userData.kind!==kind){this.clearBuildPreview();const group=new THREE.Group();group.userData.kind=kind;const material=new THREE.MeshStandardMaterial({color:'#85d9bd',transparent:true,opacity:.34,depthWrite:false,roughness:.5,emissive:'#2c705c',emissiveIntensity:.3});for(const mesh of previewMeshes(kind,material))group.add(mesh);
+   if(kind==='art-bomb'&&previewFile?.type?.startsWith('image/')){
+    const url=URL.createObjectURL(previewFile);
+    new THREE.TextureLoader().load(url,texture=>{
+     URL.revokeObjectURL(url);
+     if(!group.parent){texture.dispose();return;}
+     texture.colorSpace=THREE.SRGBColorSpace;
+     const face=group.children[0];
+     face.material.map=texture;
+     face.material.needsUpdate=true;
+     const aspect=texture.image?.width&&texture.image?.height?texture.image.width/texture.image.height:1;
+     face.scale.x=Math.max(.33,Math.min(3,aspect));
+     group.userData.previewTexture=texture;
+    },undefined,()=>URL.revokeObjectURL(url));
+   }
+   group.name='Build placement preview';this.scene.add(group);this.buildPreview=group;}this.buildPreview.position.fromArray(position);this.buildPreview.rotation.y=rotation;this.buildPreview.scale.setScalar(kind==='art-bomb'?Math.max(.5,Math.min(5,size)):1);for(const child of this.buildPreview.children){child.material.color.set(valid?'#85d9bd':'#e7776d');child.material.emissive.set(valid?'#2c705c':'#702b28');}this.buildPreview.userData.valid=valid;}
+  clearBuildPreview(){if(!this.buildPreview)return;this.buildPreview.userData.previewTexture?.dispose();disposeChildren(this.buildPreview);this.buildPreview.removeFromParent();this.buildPreview=null;}
   showStructureHit(event){
    if(!event?.structureId||!Array.isArray(event.position)||this.seenStructureHits.has(event.id))return;
    this.seenStructureHits.add(event.id);
