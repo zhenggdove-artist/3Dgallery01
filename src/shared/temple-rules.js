@@ -129,7 +129,7 @@ export function applyAction(world,actor,body,context={}){
   switch(body.action){
     case 'pickup-coin':result=pickupCoin(world,profile,actor,body,now);break;
     case 'pickup-drop':result=pickupDrop(world,profile,actor,body,now);break;
-    case 'publish-art-bomb':if(!canBuildAt(world,actor.position,body.artwork?.position))return {error:'Choose valid ground for your artwork'};result=publishArtBomb(world,profile,actor,body,now);break;
+    case 'publish-art-bomb':if(!canPlaceArtworkAt(world,actor.position,body.artwork?.position))return {error:'Move outside the central WRITE zone and place artwork within 12 metres'};result=publishArtBomb(world,profile,actor,body,now);break;
     case 'resize-art-bomb':result=resizeArtBomb(world,actor,body,now);break;
     case 'pickup-artwork':result=pickupArtwork(world,actor,body,now);break;
     case 'throw-artwork':result=throwArtwork(world,profile,actor,body,context,now);break;
@@ -363,9 +363,16 @@ function addXp(profile,amount){
   profile.xp=(profile.xp||0)+amount;let needed=profile.level*100;while(profile.xp>=needed){profile.xp-=needed;profile.level++;profile.maxHp=100+(profile.level-1)*4;profile.hp=Math.min(profile.maxHp,profile.hp+12);needed=profile.level*100;}
 }
 
+export function canPlaceArtworkAt(world,actorPosition,position){
+  // Unlike buildings, movable artworks can stand near art display discs.
+  if(!insideArena(position,-2)||insideSafeZone(position)||distance2d(actorPosition,position)>12)return false;
+  if((world.customArtworks||[]).some(a=>a.bomb&&distance2d(position,world.artworkLayout?.[a.id]?.position||a.position)<2.2))return false;
+  return true;
+}
+
 export function canBuildAt(world,actorPosition,position){
   if(!insideArena(position,-3)||insideSafeZone(position)||distance2d(actorPosition,position)>12)return false;
-  if(distance2d(position,[FISHING_POND.x,0,FISHING_POND.z])<FISHING_POND.radius+3)return false;
+  // The removed black pond no longer reserves a build-exclusion area.
   if(PLAYER_SPAWNS.some(spawn=>distance2d(position,spawn)<5.5))return false;
   if(PLATFORMS.some(platform=>distance2d(position,platform.position)<Math.max(platform.size[0],platform.size[2])*.5+3.2))return false;
   if((world.structures||[]).some(structure=>distance2d(position,structure.position)<(structure.kind==='house'?5.5:structure.kind==='tree'?2.4:3.5)))return false;
