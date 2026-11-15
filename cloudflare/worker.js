@@ -128,7 +128,7 @@ export class TempleRoom extends DurableObject{
     const result=applyAction(world,actor,body,{now:Date.now(),actors,seatIndex:session.seat});if(result.error)return json({error:result.error},400);
     const response={ok:true,...result,world:worldView(world,session.profile_key)};
     this.ctx.storage.transactionSync(()=>{this.save(world);this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,JSON.stringify(response),Date.now());this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);});
-    this.broadcastWorld(world);if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.structureDestroyed)this.broadcast('structure-destroyed',result.structureDestroyed);await this.armAlarm();return json(response);
+    this.broadcastWorld(world);if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.structureHit)this.broadcast('structure-hit',result.structureHit);if(result.structureDestroyed)this.broadcast('structure-destroyed',result.structureDestroyed);await this.armAlarm();return json(response);
   }
 
   async saveCode(session){
