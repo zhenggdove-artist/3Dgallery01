@@ -1,12 +1,13 @@
 // Deterministic charged attack area, used by both the authoritative server
 // and the client's blue ground rune. Coordinates use world-space metres.
-const AREAS=new Set(['ice','fire','lightning','petal','wave']);
+const AREAS=new Set(['water','ice','fire','lightning','petal','wave']);
+const EXOTIC_AREAS=new Set(['jet','score','gust','echo','jelly','shells']);
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 export function chargedArea(item,origin,direction,stats,ground=()=>0){
  const mag=Math.hypot(...direction)||1,dir=direction.map(x=>x/mag);
  const range=clamp(Number(stats?.range)||Number(item?.range)||8,2,100);
  const radius=clamp(Number(stats?.radius)||2,1,18);
- const mode=AREAS.has(item?.family)&&!item?.exotic?'area':item?.family==='saber'||['pan','planter','palm','swatter','whip'].includes(item?.family)?'melee':'corridor';
+ const mode=(AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':item?.family==='saber'||['pan','planter','palm','swatter','whip'].includes(item?.family)?'melee':'corridor';
  // Long-distance skills must actually land away from the caster. A downward
  // aim intersects the ground first; a horizontal aim travels along the arena.
  const defaultDistance=mode==='melee'?Math.min(range,3):clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
