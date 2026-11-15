@@ -155,3 +155,27 @@ test('uploaded art stays projectile equipment, never a damageable BUILD structur
  assert.equal(world.structures.length,0);
  assert.equal(world.customArtworks.length,1);
 });
+
+test('regular strikes damage every player-built structure even after hitting a fighter',()=>{
+ const world=createInitialWorld(1000),caster=actor('caster',[75,0,0]),target=actor('target',[75,0,3]);
+ ensureProfile(world,target.key,target.name,target.color,1000);
+ world.structures=[{id:'shared-cube',kind:'cube',owner:'builder',position:[75,0,5],hp:140,maxHp:140,rotation:0,createdAt:1000}];
+ const strike=applyAction(world,caster,{action:'attack',direction:[0,0,1],charge:0},{now:5000,actors:[caster,target]});
+ assert.ok(strike.hit,JSON.stringify(strike.error||strike));
+ assert.ok(strike.structureHit,JSON.stringify(strike.error||strike));
+ assert.equal(strike.structureHits.length,1);
+ assert.ok(world.structures[0].hp<140);
+});
+test('a fully charged area hits every player-built structure in its radius',()=>{
+ const world=createInitialWorld(1000),caster=actor('caster',[75,0,0]);
+ const weapon=WEAPONS.find(w=>w.id==='tide-1');
+ const area=chargedArea(weapon,[75,1,0],[0,0,1],attackStats(weapon,1));
+ world.structures=[
+  {id:'wall-one',kind:'wall',owner:'owner-a',position:[75,0,area.center[2]],hp:140,maxHp:140,createdAt:1000},
+  {id:'wall-two',kind:'wall',owner:'owner-b',position:[77,0,area.center[2]],hp:140,maxHp:140,createdAt:1000}
+ ];
+ assert.ok(applyAction(world,caster,{action:'attack',phase:'charge'},{now:1000}).charging);
+ const strike=applyAction(world,caster,{action:'attack',charge:1,direction:[0,0,1]},{now:3000,actors:[caster]});
+ assert.equal(strike.structureHits?.length,2,JSON.stringify(strike));
+ assert.ok(world.structures.every(s=>s.hp<140));
+});
