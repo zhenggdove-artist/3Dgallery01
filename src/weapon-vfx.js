@@ -52,19 +52,31 @@ export class WeaponVFX{
  }
  play(data,item,root){
   const id=effectFor(item,data.ultimate),direction=new THREE.Vector3(...(data.direction||[0,0,1])).normalize(),origin=new THREE.Vector3(...data.origin),range=Math.max(1,data.range||4),end=data.aimPoint?new THREE.Vector3(...data.aimPoint):data.impactPoint?new THREE.Vector3(...data.impactPoint):origin.clone().addScaledVector(direction,range);
+  // Charged ground spells are placed on the *server validated impact area*.
+  // Previously every non-projectile preset was spawned one metre below
+  // the caster, leaving distant spells invisible or buried in terrain.
+  const groundEffect=!!data.ultimate&&data.area?.mode==='area';
+  if(groundEffect)end.copy(new THREE.Vector3(...data.area.center));
   const muzzle=weaponMuzzle(root,item);if(muzzle){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
   if(item.id==='black-cat'){if(this.snipers.length>=4){const old=this.snipers.shift();old.root.removeFromParent();old.root.material.dispose();}const f=createOddEffect(THREE,{...data,origin:origin.toArray(),direction:direction.toArray(),range:origin.distanceTo(end)},{...item,pattern:'sniper'});f.root.position.addScaledVector(direction,-1.8);this.scene.add(f.root);this.snipers.push(f);return;}
-  const entry=this.acquire(id,{color:item.color,size:data.ultimate?1:.5,speed:data.ultimate?1:1.8}),fx=entry.fx;
+  const entry=this.acquire(id,{color:item.color,size:data.ultimate?Math.min(3.6,Math.max(1.2,(data.area?.radius||5)/3.5)):.6,speed:data.ultimate?1:1.8}),fx=entry.fx;
   fx.group.position.copy(origin);fx.group.rotation.y=Math.atan2(direction.x,direction.z)-Math.PI/2;
   if(beams.has(id)){fx.group.position.set(0,0,0);fx.group.quaternion.identity();fx.setEndpoints(origin,end);fx.update(fx.lifecycle.start||0);entry.stopAt=data.ultimate?.65:.12;}
   else if(projectiles.has(id)){fx.setDirection(direction,0);fx.update(fx.lifecycle.start||0);entry.start=origin;entry.end=end;entry.travel=Math.min(.45,Math.max(.12,origin.distanceTo(end)/45));entry.stopAt=entry.travel;entry.hit=!!data.impactPoint;}
-  else {fx.group.position.y=item.firstPerson?origin.y:Math.max(0,origin.y-1)+.06;if(id==='azure-sweep')fx.group.position.y=origin.y-.1;if(continuous.has(id))fx.update(fx.lifecycle.start||0);entry.stopAt=data.ultimate?1.1:.35;}
+  else {
+   if(groundEffect){fx.group.position.copy(end);fx.group.position.y=Math.max(.16,end.y);}
+   else if(data.impactPoint){fx.group.position.copy(end);fx.group.position.y=Math.max(.16,end.y);}
+   else {fx.group.position.y=Math.max(.16,origin.y-.65);}
+   if(id==='azure-sweep'&&!groundEffect)fx.group.position.y=Math.max(.18,origin.y-.15);
+   if(continuous.has(id))fx.update(fx.lifecycle.start||0);
+   entry.stopAt=data.ultimate?1.35:.35;
+  }
   if(root?.userData.blade&&!beams.has(id)&&!projectiles.has(id)){
    let trail=this.active.find(e=>e.id==='weapon-smear'&&e.weapon===root.userData.blade&&!e.stopped);
    if(!trail){trail=this.acquire('weapon-smear',{color:item.color,size:.8});trail.fx.attachWeapon(root.userData.blade,{base:[0,0,0],tip:[0,1.1,0]});trail.weapon=root.userData.blade;}
    trail.stopAt=trail.age+(root.userData.attack?.duration||.5);
   }
-  for(const effect of (data.fusionEffects||[]).slice(0,2)){const family=typeof effect==='string'?effect:effect.family||effect.type,id2=WEAPON_VFX[family]?.[1]||'energy-burst',echo=this.acquire(id2,{size:.35,color:item.color});echo.fx.group.position.copy(end);echo.fx.group.position.y=Math.max(.06,origin.y-1);echo.stopAt=.35;}
+  for(const effect of (data.fusionEffects||[]).slice(0,2)){const family=typeof effect==='string'?effect:effect.family||effect.type,id2=WEAPON_VFX[family]?.[1]||'energy-burst',echo=this.acquire(id2,{size:.35,color:item.color});echo.fx.group.position.copy(end);echo.fx.group.position.y=Math.max(.16,end.y);echo.stopAt=.35;}
   if(data.impactPoint&&!projectiles.has(id)){const impact=this.acquire(item.family==='ice'?'ice-shatter':'energy-burst',{size:.3,color:item.color,speed:2});impact.fx.group.position.copy(end);}
  }
  charging(root,progress,item){
