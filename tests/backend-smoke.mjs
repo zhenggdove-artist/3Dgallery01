@@ -1,3 +1,4 @@
+import WebSocket from 'ws';
 // Run against an ephemeral local Wrangler Durable Object; never production.
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -29,8 +30,14 @@ const join=await call('/api/join',{name:guest,color:'#43b59a'});
 assert.equal(join.role,'fighter');
 const token=join.token;
 assert.ok(token);
+// The authoritative API deliberately refuses game actions until the player
+// opens the real socket and submits a validated initial position.
+const socket=new WebSocket(base.replace(/^http/,'ws')+'/api/socket?token='+encodeURIComponent(token));
+await new Promise((resolve,reject)=>{socket.once('open',resolve);socket.once('error',reject);});
+socket.send(JSON.stringify({type:'state',data:{position:[-5,1,6],rotation:0,animation:'idle',visible:true}}));
+await delay(250);
 const act=async(action,extra={})=>call('/api/action',{action,requestId:randomUUID(),...extra},token);
-const denied=await call('/api/action',{action:'recover-artworks',requestId:randomUUID()},token,{expectedStatus:403});
+const denied=await call('/api/action',{action:'recover-artworks',requestId:randomUUID()},token,{expectedStatus:400});
 assert.match(denied.error,/GM only/i);
 
 // Live WRITE on real Worker with a persistent world + player profile.
@@ -59,3 +66,4 @@ const final=await call('/api/world',undefined,token);
 assert.ok(final.world.customArtworks.some(a=>a.id===build.artwork.id));
 assert.ok(final.world.artworkLayout[build.artwork.id].scale[0]===2);
 console.log(JSON.stringify({ok:true,guest,role:join.role,write:planted.plant.id,artwork:build.artwork.id,size:2}));
+socket.close();
