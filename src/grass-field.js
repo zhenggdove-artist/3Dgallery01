@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // Single GPU draw call for thousands of slender segmented grass blades.
 // All meshes and wind/trample rules are generated in JS; no external assets.
-export function grassPositions(count=140000,seed=17331){
+export function grassPositions(count=65000,seed=17331){
  const points=new Float32Array(count*2),heights=new Float32Array(count),angles=new Float32Array(count),phases=new Float32Array(count),shades=new Float32Array(count);
  let state=seed>>>0;const rand=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
  for(let i=0;i<count;i++){
@@ -15,13 +15,13 @@ export function grassPositions(count=140000,seed=17331){
 }
 // Five crossed long leaves per instanced tuft; no one-mesh-per-blade overhead.
 function bladeGeometry(){
- const positions=[],indices=[],uvs=[],segments=4,blades=5;
+ const positions=[],indices=[],uvs=[],segments=3,blades=4;
  for(let j=0;j<blades;j++){
   const phi=j*2.39996,cs=Math.cos(phi),sn=Math.sin(phi);
   const lean=.22+.11*Math.sin(j*4.17),yScale=.77+(j%3)*.14;
   const base=positions.length/3;
   for(let i=0;i<=segments;i++){
-   const t=i/segments,w=(1-t)**1.22*.093+.0015,drift=lean*t*t;
+   const t=i/segments,w=(1-t)**1.22*.14+.0015,drift=lean*t*t;
    for(const side of [-1,1]){
     const x=side*w,z=drift;
     positions.push(x*cs-z*sn,t*yScale,x*sn+z*cs);
@@ -81,7 +81,7 @@ void main(){
 }`;
 export class GrassField{
  constructor(scene,{mobile=false,count}={}){
-  this.count=count??(mobile?42000:140000);
+  this.count=count??(mobile?25000:65000);
   const geo=bladeGeometry(),seed=grassPositions(this.count);
   geo.setAttribute('aOffset',new THREE.InstancedBufferAttribute(seed.points,2));
   geo.setAttribute('aHeight',new THREE.InstancedBufferAttribute(seed.heights,1));
@@ -96,7 +96,7 @@ export class GrassField{
   scene.add(this.mesh);
   // Continuous fine-blade grass canopy covers every small gap between tufts;
   // no bare underlying meadow plane is visible while walking or looking down.
-  this.canopy=new THREE.Mesh(new THREE.CircleGeometry(91,128),new THREE.ShaderMaterial({
+  this.canopy=new THREE.Mesh(new THREE.CircleGeometry(500,128),new THREE.ShaderMaterial({
    vertexShader:`varying vec2 grassPoint;void main(){grassPoint=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
    fragmentShader:`precision mediump float;varying vec2 grassPoint;
     float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
