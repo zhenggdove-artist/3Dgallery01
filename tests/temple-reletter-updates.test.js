@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createInitialWorld,applyAction,tickWorld,ensureProfile,worldView} from '../src/shared/temple-rules.js';
+import {createInitialWorld,applyAction,tickWorld,ensureProfile,worldView,canBuildAt,canPlaceArtworkAt} from '../src/shared/temple-rules.js';
 import {attackStats,WEAPONS} from '../src/shared/catalog.js';
 import {attackStats as originalStats} from '../src/reletter/equipment-catalog.js';
 import {PNG_APPEARANCE_DEFAULTS,APPEARANCE_DEFAULTS,validateAppearance,artworkAppearanceDefaults} from '../src/shared/artwork-library.js';
 import {MONSTER_PACK_SIZE,spawnMonsterPack,monsterPosition} from '../src/shared/monster-pack.js';
 import {ENEMY_HEIGHT,ENEMY_RADIUS} from '../src/shared/island-combat.js';
 import {grassPositions} from '../src/grass-field.js';
+import {saturatedPlantColor,PLANT_SATURATION_MULTIPLIER} from '../src/reletter/plants.js';
+import * as THREE from 'three';
+import {cleanLegacyScene} from '../src/shared/scene-cleanup.js';
 
 const actor=(key,admin=false)=>({key,name:key,role:'fighter',admin,position:[70,0,0],color:'#33bbaa'});
 test('every elemental staff spell uses exactly one third of RELETTER effective range',()=>{
@@ -79,10 +82,50 @@ test('procedural grass distribution is deterministic, slender, and excludes cent
  const a=grassPositions(256,17456),b=grassPositions(256,17456);
  assert.deepEqual(a.points,b.points);
  assert.equal(a.heights.length,256);
- assert.ok(a.heights.every(h=>h>=.32&&h<=1.17));
+ assert.ok(a.heights.every(h=>h>=.48&&h<=1.30));
  for(let i=0;i<256;i++)assert.ok(Math.hypot(a.points[i*2],a.points[i*2+1])>=10.99);
  const src=readFileSync(new URL('../src/grass-field.js',import.meta.url),'utf8');
  assert.match(src,/uPlayers\[6\]/);
  assert.match(src,/trample/);
  assert.match(src,/wind/);
+ assert.match(src,/mobile\?42000:140000/);
+ assert.match(src,/Continuous dense grass canopy/);
+ assert.match(src,/blades=5/);
+});
+
+test('central RELETTER message plants have threefold HSL color saturation',()=>{
+ assert.equal(PLANT_SATURATION_MULTIPLIER,3);
+ for(const original of ['#B2D8D8','#E6A8D7','#F08080','#FDFD96']){
+  const a=new THREE.Color(original),b=new THREE.Color(saturatedPlantColor(original));
+  const before={},after={};a.getHSL(before);b.getHSL(after);
+  assert.ok(Math.abs(after.s-Math.min(1,before.s*3))<.03,original);
+  assert.ok(Math.abs(after.l-before.l)<.03,original);
+ }
+});
+test('black excavated pond is archived and cleared without deleting planted aquarium fish or messages',()=>{
+ const w=createInitialWorld(1000);
+ w.sceneCleanupVersion=2;
+ w.reletter.fishing={
+  holes:[{id:'black-hole',owner:'visitor',position:[-28,0,2],depth:4}],
+  ponds:[{id:'glass-tank',owner:'visitor',position:[60,0,0],fish:[{id:'fish-1'}]}],
+  sessions:{visitor:{hole:'black-hole'}},bags:{},revision:0
+ };
+ w.plants=[{id:'protected-message'}];
+ cleanLegacyScene(w);
+ assert.equal(w.sceneCleanupVersion,3);
+ assert.equal(w.reletter.fishing.holes.length,0);
+ assert.equal(w.reletter.fishing.ponds[0].id,'glass-tank');
+ assert.equal(w.reletter.fishing.ponds[0].fish[0].id,'fish-1');
+ assert.equal(w.reletter.fishing.sessions.visitor,undefined);
+ assert.equal(w.sceneArchive.removedBlackFishingHoles[0].id,'black-hole');
+ assert.equal(w.plants[0].id,'protected-message');
+});
+test('player art uses movable exhibit placement rules, not bulky building exclusion zones',()=>{
+ const w=createInitialWorld(1000),actor=[-27,0,0],nearOldPond=[-28,0,2];
+ assert.equal(canPlaceArtworkAt(w,actor,nearOldPond),true);
+ assert.equal(canBuildAt(w,actor,nearOldPond),true);
+ const discPosition=[...w.artworkLayout['platform-02'].position];
+ const nearby=[discPosition[0]+2,0,discPosition[2]+2];
+ assert.equal(canPlaceArtworkAt(w,[...nearby],nearby),true);
+ assert.equal(canPlaceArtworkAt(w,[...nearby],[0,0,0]),false);
 });
