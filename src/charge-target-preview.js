@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {attackStats} from './shared/catalog.js';
-import {chargedArea} from './shared/charge-area.js';
+import {chargedArea,spellGroundHeight} from './shared/charge-area.js';
 
 // Blue rune projection shown while charging, derived from the same target-area
 // calculation used by server-side full-charge hit testing.
@@ -28,7 +28,7 @@ export class ChargeTargetPreview{
  update(root,item,charge,direction,arena){
   if(!root||!item||charge<.1||!Array.isArray(direction)){this.hide();return;}
   const origin=[root.position.x,root.position.y+1,root.position.z];
-  const area=chargedArea(item,origin,direction,attackStats(item,1),(x,z,y)=>arena.groundHeight(x,z,y));
+  const area=chargedArea(item,origin,direction,attackStats(item,1),(x,z,y)=>spellGroundHeight(arena.world,x,z,y));
   this.group.visible=this.path.visible=true;
   const p=area.center,r=area.radius;
   this.group.position.set(p[0],Math.max(.15,p[1])+.06,p[2]);
