@@ -93,7 +93,14 @@ export function makeSpellEquipment(item){
     const fin=mesh(new THREE.TorusGeometry(.12+i*.03,.028,6,20,Math.PI*1.2),i%2?body:metal,0,.75+i*.11,0);
     fin.rotation.y=i*.65;fin.rotation.z=.3;
    }
-   sphere(.12+tier*.01,0,h+.23,0,bright);break;
+   sphere(.12+tier*.01,0,h+.23,0,bright);
+   // Distinct suspended foam droplets improve the low-rank silhouette.
+   for(let i=0;i<4+tier;i++){
+    const angle=i*Math.PI*2/(4+tier)+pick(i)*.2;
+    const foam=sphere(.03+.012*pick(i+16),Math.sin(angle)*(.22+tier*.025),h+.11+Math.cos(angle)*.29,Math.cos(angle*.7)*.09,i%2?body:bright);
+    foam.scale.y=1.3+pick(i+22)*.5;
+   }
+   break;
   }
  }
  // Every rank changes its silhouette and has an extra distinctive orbit crown.
