@@ -13,7 +13,7 @@ export function cleanLegacyScene(world){
   for(const profile of Object.values(world.profiles||{})){
    delete profile.fish;delete profile.lastFishAt;
    if(profile.equipment){delete profile.equipment.rod;delete profile.equipment.tool;}
-   if(Array.isArray(profile.inventory))profile.inventory=profile.inventory.filter(v=>!/^rod-\\d+$|^chisel(?:-\\d+)?$|^pond-kit$/.test(v));
+   if(Array.isArray(profile.inventory))profile.inventory=profile.inventory.filter(v=>!/^rod-[0-9]+$|^chisel(?:-[0-9]+)?$|^pond-kit$/.test(v));
   }
   world.sceneCleanupVersion=4;
   return world;
