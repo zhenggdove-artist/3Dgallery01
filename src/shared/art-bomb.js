@@ -44,7 +44,7 @@ export function resizeArtBomb(world,actor,body,now=Date.now()){
 // within a long, ground-level straight ray. The server owns this calculation.
 export function projectileHitsActor(event,target,landingTime,size=1){
  if(!inside(target))return false;
- const tEnd=Math.max(0,Math.min(12,Number(landingTime)||1.5)),radius=Math.min(3.8,1.15+size*.4);
+ const tEnd=Math.max(0,Math.min(12,Number(landingTime)||1.5)),radius=Math.min(4.2,2.1+size*.45);
  const centre=[target[0],target[1]+1,target[2]],step=Math.min(.045,tEnd/24||.045);
  for(let t=0;t<=tEnd+step*.5;t+=step){
   const p=artworkPosition(event,Math.min(t,tEnd));
