@@ -25,6 +25,10 @@ async function waitForWorker(){
  throw Error('Ephemeral Worker did not start on '+base);
 }
 await waitForWorker();
+const health=await call('/health');
+assert.equal(health.features?.artMediaUpload,true,'The public /health must advertise artwork upload compatibility');
+assert.equal(health.features?.artBombPlace,true);
+assert.equal(health.features?.gmReset,true);
 const guest='Smoke-'+randomUUID().slice(0,8);
 const join=await call('/api/join',{name:guest,color:'#43b59a'});
 assert.equal(join.role,'fighter');
