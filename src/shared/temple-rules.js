@@ -142,6 +142,7 @@ export function applyAction(world,actor,body,context={}){
     case 'build':result=build(world,profile,actor,body,now,rng);break;
     case 'destroy':result=destroy(world,profile,actor,body,now);break;
     case 'remove-structure':result=removeStructure(world,profile,actor,body,now);break;
+    case 'remove-water-feature':result=removeWaterFeature(world,profile,actor,body,now);break;
     case 'fish':result=fish(world,profile,actor,now,rng);break;
     case 'plant':result=plant(world,profile,actor,body,now);break;
     case 'respawn':profile.hp=profile.maxHp;profile.deadUntil=0;result={spawn:PLAYER_SPAWNS[context.seatIndex%4]};break;
@@ -319,6 +320,34 @@ function removeStructure(world,profile,actor,body,now){
   if(structure.owner!==actor.key&&!profile.admin)return {error:'Only the creator or GM can remove this structure'};
   world.structures.splice(world.structures.indexOf(structure),1);
   return {notice:'Structure removed',structureDestroyed:structureEvent(structure,now)};
+}
+
+function removeWaterFeature(world,profile,actor,body,now){
+ const fishing=world.reletter?.fishing;
+ if(!fishing)return {error:'No water features exist'};
+ const id=String(body.id||'');
+ let removed=null,kind=null;
+ for(const collection of ['holes','ponds']){
+  const items=fishing[collection]||[],index=items.findIndex(entry=>entry.id===id);
+  if(index<0)continue;
+  const feature=items[index];
+  if(!profile.admin&&feature.owner!==actor.key)return {error:'Only the creator or GM can remove a water feature'};
+  if(collection==='ponds'){
+   fishing.bags??={};
+   // Preserve all harvested fish, including fish entrusted by other users.
+   for(const fish of feature.fish||[]){
+    const owner=fish.owner||feature.owner;
+    (fishing.bags[owner]??=[]).push(fish);
+   }
+  }
+  removed=items.splice(index,1)[0];kind=collection==='holes'?'fishing hole':'fish pond';
+  break;
+ }
+ if(!removed)return {error:'Water feature was already removed'};
+ for(const [key,session] of Object.entries(fishing.sessions||{}))if(session.hole===id)delete fishing.sessions[key];
+ fishing.revision=(fishing.revision||0)+1;
+ world.sceneArchive??={};(world.sceneArchive.removedWaterFeatures??=[]).push({...removed,removedAt:now});
+ return {notice:kind+' removed',waterFeatureRemoved:{id,kind,position:removed.position}};
 }
 
 function fish(world,profile,actor,now,rng){if(distance2d(actor.position,[FISHING_POND.x,0,FISHING_POND.z])>FISHING_POND.radius+2)return {error:'Fish beside the pond'};if(now-profile.lastFishAt<8_000)return {error:'The water needs time to settle'};profile.lastFishAt=now;const roll=rng(),kind=roll<.72?'minnow':roll<.96?'koi':'relic';profile.fish[kind]=(profile.fish[kind]||0)+1;earn(profile,ECONOMY.fishValues[kind],world);return {notice:`Caught ${kind} · +${ECONOMY.fishValues[kind]} coins`,fish:kind};}
