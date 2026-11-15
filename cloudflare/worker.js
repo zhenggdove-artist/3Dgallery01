@@ -127,7 +127,17 @@ export class TempleRoom extends DurableObject{
     if(body.media||body.surface){const mediaId=body.media?.id||body.surface,media=this.sql.exec('SELECT id,type,owner FROM plant_media WHERE id=?',mediaId).toArray()[0];if(!media||media.owner!==session.profile_key||body.surface&&!media.type.startsWith('image/'))return json({error:'Upload your own media first'},400);if(body.media)body.media={id:media.id,type:media.type};}
     const result=applyAction(world,actor,body,{now:Date.now(),actors,seatIndex:session.seat});if(result.error)return json({error:result.error},400);
     const response={ok:true,...result,world:worldView(world,session.profile_key)};
-    this.ctx.storage.transactionSync(()=>{this.save(world);this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,JSON.stringify(response),Date.now());this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);});
+    this.ctx.storage.transactionSync(()=>{
+      this.save(world);
+      if(body.action==='reset-player-artworks'&&Array.isArray(result.removedArtworkMediaIds)){
+        for(const mediaId of result.removedArtworkMediaIds){
+          this.sql.exec('DELETE FROM art_media_chunks WHERE id=?',mediaId);
+          this.sql.exec('DELETE FROM art_media WHERE id=?',mediaId);
+        }
+      }
+      this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,JSON.stringify(response),Date.now());
+      this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);
+    });
     this.broadcastWorld(world);if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.structureHit)this.broadcast('structure-hit',result.structureHit);if(result.structureDestroyed)this.broadcast('structure-destroyed',result.structureDestroyed);await this.armAlarm();return json(response);
   }
 
