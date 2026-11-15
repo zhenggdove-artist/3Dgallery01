@@ -367,7 +367,6 @@ function addXp(profile,amount){
 export function canPlaceArtworkAt(world,actorPosition,position){
   // Unlike buildings, movable artworks can stand near art display discs.
   if(!insideArena(position,-2)||insideSafeZone(position)||distance2d(actorPosition,position)>12)return false;
-  if((world.customArtworks||[]).some(a=>a.bomb&&distance2d(position,world.artworkLayout?.[a.id]?.position||a.position)<2.2))return false;
   return true;
 }
 
