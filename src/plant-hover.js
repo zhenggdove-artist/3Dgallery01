@@ -16,14 +16,24 @@ export function bindPlantHover({canvas,camera,arena,controller,ui}){
   const rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return null;
   pointer.set((e.clientX-rect.left)/rect.width*2-1,1-(e.clientY-rect.top)/rect.height*2);
   ray.setFromCamera(pointer,camera);
-  const plants=[...arena.adventure.plants.values()].filter(p=>p.position.distanceTo(c.root.position)<5);
+  const plants=[...arena.adventure.plants.values()].filter(p=>p.position.distanceTo(c.root.position)<5.5);
   const hits=ray.intersectObjects(plants,true);
   let node=hits[0]?.object;
   while(node&&!node.userData.entry)node=node.parent;
   if(node?.userData.entry)return {entry:node.userData.entry,central:false};
   const central=tree();
-  if(central&&Math.hypot(c.root.position.x,c.root.position.z)<9&&ray.intersectObject(central,true).length)
+  if(central&&Math.hypot(c.root.position.x,c.root.position.z)<11&&ray.intersectObject(central,true).length)
    return {entry:null,central:true};
+  // RELETTER-style tap targeting: on mobile, a small plant can be too thin
+  // for an exact ray hit. Select its nearest screen-space silhouette.
+  if(e.pointerType==='touch'&&Math.hypot(c.root.position.x,c.root.position.z)<11){
+   let best=null,score=68**2;
+   for(const o of plants){const point=o.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,.65,0)).project(camera);
+    if(point.z<0||point.z>1)continue;
+    const px=rect.left+(point.x+1)*rect.width/2,py=rect.top+(1-point.y)*rect.height/2;
+    const d=(e.clientX-px)**2+(e.clientY-py)**2;if(d<score){score=d;best=o.userData.entry;}}
+   if(best)return {entry:best,central:false};
+  }
   return null;
  }
  function show(e,hit){
@@ -42,6 +52,7 @@ export function bindPlantHover({canvas,camera,arena,controller,ui}){
    }
    label.append(title,content);
    if(hit.entry?.media)label.insertAdjacentHTML('beforeend',mediaMarkup(hit.entry.media,window.TEMPLE_CONFIG.backendUrl));
+   if(hit.entry?.createdAt){const stamp=document.createElement('time');stamp.dateTime=new Date(hit.entry.createdAt).toISOString();stamp.textContent=new Date(hit.entry.createdAt).toLocaleString('zh-TW');label.append(stamp);}
   }
   label.hidden=false;
   label.style.left=Math.max(8,Math.min(innerWidth-label.offsetWidth-8,e.clientX+16))+'px';
