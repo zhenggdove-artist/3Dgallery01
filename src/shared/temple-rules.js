@@ -140,6 +140,7 @@ export function applyAction(world,actor,body,context={}){
     case 'monster-hit':return {error:'Use a directional weapon attack'};
     case 'build':result=build(world,profile,actor,body,now,rng);break;
     case 'destroy':result=destroy(world,profile,actor,body,now);break;
+    case 'remove-structure':result=removeStructure(world,profile,actor,body,now);break;
     case 'fish':result=fish(world,profile,actor,now,rng);break;
     case 'plant':result=plant(world,profile,actor,body,now);break;
     case 'respawn':profile.hp=profile.maxHp;profile.deadUntil=0;result={spawn:PLAYER_SPAWNS[context.seatIndex%4]};break;
@@ -292,6 +293,14 @@ function build(world,profile,actor,body,now,rng){
   if(!spend(profile,cost,world))return {error:'Not enough coins'};const structure={id:id(),kind,surface:typeof body.surface==='string'?body.surface:null,variant:Math.floor(rng()*4),position:position.map(n=>+n.toFixed(2)),rotation:+(Number(body.rotation)||0).toFixed(3),owner:actor.key,hp:kind==='house'?220:kind==='tree'?90:140,createdAt:now};world.structures.push(structure);return {notice:`Built ${kind}`,structure};
 }
 function destroy(world,profile,actor,body,now){const structure=world.structures.find(entry=>entry.id===body.structureId);if(!structure)return {error:'Structure is gone'};if(distance2d(actor.position,structure.position)>12)return {error:'Move closer to the structure'};const weapon=itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon);if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};profile.lastAttackAt=now;const damage=Math.max(8,weapon.damage+(profile.fusion[weapon.id]?.bonus||0));structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;structure.hp=Math.max(0,structure.hp-damage);const structureHit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};let structureDestroyed=null;if(structure.hp<=0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}return {notice:structureDestroyed?'Structure destroyed':`${Math.ceil(structure.hp)} structure HP`,structureDestroyed,structureHit,attackEvent:{id:id(),owner:actor.key,origin:actor.position,direction:normalDirection(body.direction)||[0,0,-1],weapon:weapon.id,time:now}};}
+
+function removeStructure(world,profile,actor,body,now){
+  const structure=(world.structures||[]).find(s=>s.id===body.structureId);
+  if(!structure)return {error:'Structure is gone'};
+  if(structure.owner!==actor.key&&!profile.admin)return {error:'Only the creator or GM can remove this structure'};
+  world.structures.splice(world.structures.indexOf(structure),1);
+  return {notice:'Structure removed',structureDestroyed:structureEvent(structure,now)};
+}
 
 function fish(world,profile,actor,now,rng){if(distance2d(actor.position,[FISHING_POND.x,0,FISHING_POND.z])>FISHING_POND.radius+2)return {error:'Fish beside the pond'};if(now-profile.lastFishAt<8_000)return {error:'The water needs time to settle'};profile.lastFishAt=now;const roll=rng(),kind=roll<.72?'minnow':roll<.96?'koi':'relic';profile.fish[kind]=(profile.fish[kind]||0)+1;earn(profile,ECONOMY.fishValues[kind],world);return {notice:`Caught ${kind} · +${ECONOMY.fishValues[kind]} coins`,fish:kind};}
 
