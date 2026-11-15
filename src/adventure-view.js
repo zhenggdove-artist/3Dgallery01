@@ -18,7 +18,7 @@ export class AdventureView{
   if(time>=this.nextSync){this.nextSync=time+.5;
    const crops=(this.world.reletter?.garden?.crops||[]).slice(0,40);for(const c of crops){const stage=cropStage(c);if(this.crops.get(c.id)?.userData.stage!==stage){disposeGardenModel(this.crops.get(c.id));this.crops.delete(c.id);}}
    this.reconcile(this.crops,crops,c=>{const o=this.original.makeCropModel(c.species,cropStage(c));o.position.fromArray(c.position);o.userData.stage=cropStage(c);this.scene.add(o);return o;});
-   this.reconcile(this.waters,[...f.holes,...f.ponds],h=>{const o=this.original.waterFeature(h,!!h.fish);if(!h.fish)o.position.y+=.31;return o;});
+   this.reconcile(this.waters,[...f.ponds],h=>this.original.waterFeature(h,true));
    const fish=f.ponds.flatMap(pond=>pond.fish.map(fish=>({...fish,pond}))).slice(0,40);
    this.reconcile(this.fish,fish,f=>{const o=this.original.swimmingFish(f);o.userData.pond=f.pond;return o;},o=>{o.removeFromParent();disposeFishModel(o);});
    this.reconcile(this.loot,this.world.groundDrops.filter(d=>d.kind==='heart'||d.kind!=='coin'&&itemById(d.itemId)),d=>{const o=d.kind==='heart'?createHeart():this.original.createItemDrop(itemById(d.itemId));o.userData.drop=d;this.scene.add(o);return o;});
