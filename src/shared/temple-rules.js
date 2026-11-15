@@ -1,6 +1,6 @@
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks} from './artwork-recovery.js';
-import {chargedArea,insideChargedArea} from './charge-area.js';
+import {chargedArea,insideChargedArea,spellGroundHeight} from './charge-area.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {artworkLanding} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,projectileHitsActor,artBombDamage} from './art-bomb.js';
@@ -225,7 +225,7 @@ function attack(world,profile,actor,body,context,now){
   if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};const direction=normalDirection(body.direction);if(!direction)return {error:'Invalid attack direction'};profile.lastAttackAt=now;
   const charge=Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);profile.chargeStartedAt=0;
   const stats=attackStats(weapon,charge),origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if(weapon.firstPerson&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage*=playerStats(world,profile,now).attack;profile.combo=combo;profile.lastComboAt=now;
-  const groundForSpell=(x,z,y)=>{let height=discGroundHeight(x,z,y);for(const d of world.floatingPlatforms||[])if(y>=d.position[1]-.5&&Math.hypot(x-d.position[0],z-d.position[2])<d.radius*2)height=Math.max(height,d.position[1]);return height;};
+  const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   const area=stats.ultimate?chargedArea(weapon,origin,direction,stats,groundForSpell):null;
   let hit=null;for(const target of context.actors||[]){if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(actor.position)||insideSafeZone(target.position))continue;const targetPosition=[target.position[0],target.position[1]+1,target.position[2]],along=project(origin,direction,targetPosition);if((area?.mode==='area'&&insideChargedArea(area,targetPosition))||(area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,targetPosition,along)<stats.radius+1)){const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{position:target.position,island:true},targetPosition,now,context.rng??Math.random);hit=damagePlayer(world,profile,target,(stats.damage+bonus)*modifiers.multiplier,now,'pvp',actor.position,modifiers.kind);break;}}
   let monsterHit=null;if(world.monster?.active&&!insideSafeZone(actor.position)){const target=[world.monster.position[0],world.monster.position[1]+ENEMY_HEIGHT*.5,world.monster.position[2]],along=project(origin,direction,target);if((area?.mode==='area'&&insideChargedArea(area,target,ENEMY_RADIUS))||(area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,target,along)<stats.radius+ENEMY_RADIUS)){const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{...world.monster,island:true},target,now,context.rng??Math.random);monsterHit=damageMonster(world,profile,(stats.damage+bonus)*modifiers.multiplier,now,context.rng??Math.random,modifiers.kind);}}
