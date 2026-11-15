@@ -31,7 +31,7 @@ export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].map(orig
   return Object.freeze({...original,price,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10,chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10});
 }));
 export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'));
-export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','armor','head','outfit','shield','wings','rod','tool']);
+export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','armor','head','outfit','shield','wings']);
 export const SPELL_FAMILIES=Object.freeze(['water','ice','fire','lightning','beam','petal','wave']);
 export function attackStats(item,charge=0){const result=reletterAttackStats(item,charge);if(item.id==='water')result.damage*=10;if(SPELL_FAMILIES.includes(item.family))result.range=+(result.range/3).toFixed(3);return result;}
 export const ITEMS = Object.freeze([...RELETTER_ITEMS,...ARMOR,...MATERIALS]);
@@ -51,11 +51,10 @@ export const ECONOMY = Object.freeze({
   monsterCoinMin:280,
   monsterCoinMax:520,
   fusionBaseCost:320,
-  buildCosts:Object.freeze({cube:80,bar:110,cylinder:110,wall:80,column:110,platform:170,tree:95,house:240}),
-  fishValues:Object.freeze({minnow:35,koi:95,relic:260})
+  buildCosts:Object.freeze({cube:80,bar:110,cylinder:110,wall:80,column:110,platform:170,tree:95,house:240})
 });
 
-export const STARTER_LOADOUT = Object.freeze({weapon:'tide-1',armor:null,head:null,outfit:null,shield:null,wings:null,rod:null,tool:null});
+export const STARTER_LOADOUT = Object.freeze({weapon:'tide-1',armor:null,head:null,outfit:null,shield:null,wings:null});
 
 export function weightedChoice(entries,rng=Math.random){
   const total=entries.reduce((sum,entry)=>sum+(entry.weight||1),0);let cursor=rng()*total;
