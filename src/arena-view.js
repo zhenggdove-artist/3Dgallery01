@@ -24,7 +24,7 @@ export class TempleArena{
   constructor(scene,renderer){
     this.scene=scene;this.renderer=renderer;this.dracoLoader=new DRACOLoader();this.dracoLoader.setDecoderPath('./vendor/three/examples/jsm/libs/draco/');this.loader=new GLTFLoader().setDRACOLoader(this.dracoLoader);this.clock=0;this.world=null;this.players=[];this.dropMeshes=[];
     this.artworks=new Map();this.coinMesh=null;this.dropMesh=null;this.dropIds=[];this.dropCoinFlights=[];this.coinFlights=new Map();this.structureGroup=new THREE.Group();this.structureGroup.name='Persistent structures';scene.add(this.structureGroup);this.plantGroup=new THREE.Group();this.plantGroup.name='Permanent message plants';scene.add(this.plantGroup);
-    this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
+    this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.collapsingShells=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
   }
   async load(progress=()=>{}){
     progress(.08,'Building arena');this.buildEnvironment();
@@ -126,7 +126,38 @@ export class TempleArena{
     if(changed){mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
    }
   }
-  showStructureBreak(event){if(!event?.position||this.destroyedEffects.has(event.id))return;this.destroyedEffects.add(event.id);if(this.destroyedEffects.size>80)this.destroyedEffects.delete(this.destroyedEffects.values().next().value);const count=event.minor?(touch?3:6):(touch?12:24),geometry=new THREE.BoxGeometry(.34,.28,.32),material=new THREE.MeshStandardMaterial({color:event.kind==='tree'?'#536344':'#777064',roughness:.9,transparent:true}),mesh=new THREE.InstancedMesh(geometry,material,count),random=seededRandom(hashText(event.id)),pieces=[];for(let i=0;i<count;i++)pieces.push({position:new THREE.Vector3(event.position[0]+(random()-.5)*1.2,event.position[1]+.5+random()*2,event.position[2]+(random()-.5)*1.2),velocity:new THREE.Vector3((random()-.5)*4,2.5+random()*4,(random()-.5)*4),spin:new THREE.Vector3(random()*4,random()*4,random()*4)});mesh.userData={pieces,age:0};this.scene.add(mesh);this.debrisBursts.push(mesh);}
+  showStructureBreak(event){
+    if(!event?.position||this.destroyedEffects.has(event.id))return;
+    this.destroyedEffects.add(event.id);
+    if(this.destroyedEffects.size>80)this.destroyedEffects.delete(this.destroyedEffects.values().next().value);
+    const count=event.minor?(touch?3:6):(touch?12:24),geometry=new THREE.BoxGeometry(.34,.28,.32);
+    const material=new THREE.MeshStandardMaterial({color:event.kind==='tree'?'#536344':'#777064',roughness:.9,transparent:true});
+    const mesh=new THREE.InstancedMesh(geometry,material,count),random=seededRandom(hashText(event.id)),pieces=[];
+    for(let i=0;i<count;i++)pieces.push({
+      position:new THREE.Vector3(event.position[0]+(random()-.5)*1.2,event.position[1]+.5+random()*2,event.position[2]+(random()-.5)*1.2),
+      velocity:new THREE.Vector3((random()-.5)*4,2.5+random()*4,(random()-.5)*4),
+      spin:new THREE.Vector3(random()*4,random()*4,random()*4)
+    });
+    mesh.userData={pieces,age:0};this.scene.add(mesh);this.debrisBursts.push(mesh);
+    if(!event.minor)this.startStructureCollapse(event);
+  }
+  startStructureCollapse(event){
+    // Keep a transient shell after the authoritative structure disappears.
+    if(this.collapsingShells.length>=12)disposeVisual(this.collapsingShells.shift());
+    const shell=new THREE.Group(),base=buildMaterial(event.surface||null);
+    shell.name='Collapsing '+(event.kind||'structure');
+    for(const part of previewMeshes(event.kind,base)){
+      part.material.transparent=true;
+      part.material.depthWrite=false;
+      shell.add(part);
+    }
+    base.dispose();
+    shell.position.fromArray(event.position);
+    shell.rotation.y=event.rotation||0;
+    shell.userData.age=0;
+    shell.userData.direction=hashText(event.id)%2?1:-1;
+    this.scene.add(shell);this.collapsingShells.push(shell);
+  }
   async loadCustomArtworks(records,base){
    this.customLoads??=new Map();
    const live=new Set((records||[]).map(record=>record.id));
@@ -229,6 +260,16 @@ export class TempleArena{
     for(const p of artworkDefinitions(this.world)){const root=this.artworks.get(p.id),state=this.world?.artworks?.[p.id];if(!root||!state||root.userData.editing)continue;const layout=this.world?.artworkLayout?.[p.id]||this.defaultLayout[p.id]||{position:p.artPosition,rotation:[0,p.artYaw,0],scale:[1,1,1]};applyArtworkAppearance(root,layout.appearance);if(root.userData.video){const near=camera.position.distanceToSquared(root.position)<900;if(near&&!root.userData.videoPlaying){root.userData.videoPlaying=true;root.userData.video.play().catch(()=>{root.userData.videoPlaying=false;});}else if(!near&&root.userData.videoPlaying){root.userData.video.pause();root.userData.videoPlaying=false;}}const holder=state.holder&&playerRoots.get(state.holder);if(holder){root.visible=true;root.position.copy(holder.position).add(new THREE.Vector3(0,1.6,0));root.rotation.set(0,holder.rotation.y+Math.PI,Math.sin(time*2)*.05);root.scale.fromArray(layout.scale).multiplyScalar(.48);continue;}root.scale.fromArray(layout.scale);if(state.throwEvent&&root.userData.flightId!==state.throwEvent.id){root.userData.flightId=state.throwEvent.id;root.userData.flightLanding=artworkLanding(state.throwEvent,(x,z,y)=>this.groundHeight(x,z,y));}if(state.throwEvent&&Date.now()-state.throwEvent.time<root.userData.flightLanding.time*1000){const age=Math.max(0,(Date.now()-state.throwEvent.time)/1000),origin=state.throwEvent.origin,d=state.throwEvent.direction,power=state.throwEvent.power;root.visible=true;root.position.fromArray(artworkPosition(state.throwEvent,age));root.rotation.x+=dt*2.6;root.rotation.z+=dt*1.8;continue;}const available=Date.now()>=(state.availableAt||0);root.visible=available;if(available){root.position.fromArray(layout.position);root.position.y+=Math.sin(time*.72+p.index)*(this.artFloat??.17);root.rotation.set(...layout.rotation);}}
     if(this.monster?.visible&&this.world?.monster?.position){this.monster.position.lerp(tempPosition.fromArray(this.world.monster.position),1-Math.exp(-dt*8));const target=[...playerRoots.values()].sort((a,b)=>a.position.distanceToSquared(this.monster.position)-b.position.distanceToSquared(this.monster.position))[0];if(target)this.monster.rotation.y=Math.atan2(target.position.x-this.monster.position.x,target.position.z-this.monster.position.z);}
     for(let burstIndex=this.debrisBursts.length-1;burstIndex>=0;burstIndex--){const burst=this.debrisBursts[burstIndex];burst.userData.age+=dt;burst.userData.pieces.forEach((piece,index)=>{piece.velocity.y-=12*dt;piece.position.addScaledVector(piece.velocity,dt);if(piece.position.y<.12){piece.position.y=.12;piece.velocity.y*=-.28;piece.velocity.x*=.72;piece.velocity.z*=.72;}tempPosition.copy(piece.position);tempQuaternion.setFromEuler(new THREE.Euler(piece.spin.x*burst.userData.age,piece.spin.y*burst.userData.age,piece.spin.z*burst.userData.age));tempScale.setScalar(Math.max(.05,1-burst.userData.age/2.6));tempMatrix.compose(tempPosition,tempQuaternion,tempScale);burst.setMatrixAt(index,tempMatrix);});burst.instanceMatrix.needsUpdate=true;burst.material.opacity=Math.max(0,1-burst.userData.age/2.6);if(burst.userData.age>=2.6){burst.removeFromParent();burst.geometry.dispose();burst.material.dispose();this.debrisBursts.splice(burstIndex,1);}}
+    for(let i=this.collapsingShells.length-1;i>=0;i--){
+      const shell=this.collapsingShells[i],age=shell.userData.age+=dt,t=Math.min(1,age/1.6);
+      const ease=t*t*(3-2*t);
+      shell.rotation.z=shell.userData.direction*ease*.85;
+      shell.rotation.x=ease*.18;
+      shell.position.y-=dt*2.2*ease;
+      shell.scale.set(1-.18*ease,Math.max(.04,1-.92*ease),1-.18*ease);
+      shell.traverse(part=>{if(part.isMesh&&part.material)part.material.opacity=Math.max(0,1-t*t);});
+      if(t>=1){disposeVisual(shell);this.collapsingShells.splice(i,1);}
+    }
     this.animateStructureHits();
     this.islandEnemies.update(dt,Date.now(),this.renderer.domElement.height,camera);
     this.insects?.sync(this.world?.plants||[]);this.insects?.update(time);
