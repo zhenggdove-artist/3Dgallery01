@@ -26,11 +26,17 @@ try{
  // Only real backend-supported WRITE can initiate the cinematic.
  await page.evaluate(()=>templeTest.ui.openPanel('social'));
  await page.waitForFunction(()=>templeTest.writer.phase==='write',null,{timeout:12000});
+ const ascent=await page.evaluate(()=>({height:templeTest.controller().root.position.y,disc:templeTest.writer.disc.visible}));
+ assert.ok(ascent.disc&&ascent.height>190,'WRITE must lift the character to the high disc');
  assert.equal(await page.locator('[data-form="plant"]').count(),1);
  await page.locator('[data-form="plant"] textarea[name="text"]').fill('Browser-tested eternal message');
  await page.locator('[data-form="plant"]').evaluate(f=>f.requestSubmit());
  await page.waitForFunction(()=>templeTest.ui.world?.plants?.some(p=>p.text==='Browser-tested eternal message'),null,{timeout:20000});
+ await page.waitForFunction(()=>templeTest.writer.phase==='showcase'&&templeTest.writer.plantHalo.visible,null,{timeout:13000});
+ assert.ok(await page.evaluate(()=>templeTest.writer.reveal?.plantId),'WRITE must save a plant before orbiting it');
  await page.screenshot({path:output+'/write-and-plants.png'});
+ await page.waitForFunction(()=>!templeTest.writer.active,null,{timeout:10000});
+ assert.equal(await page.evaluate(()=>templeTest.controller().cameraLocked),false,'Camera must return to regular controls');
  await page.evaluate(()=>templeTest.ui.showPlantList());
  assert.ok((await page.locator('#panel-content').textContent()).includes('Browser-tested eternal message'));
  await page.locator('#panel-close').click();
