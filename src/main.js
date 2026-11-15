@@ -89,6 +89,7 @@ ui.addEventListener('art-bomb-upload',async event=>{
   const upload=await uploadArtwork(network,files,{maxBytes:8*1024*1024});
   ui.closePanel();
   startBuildPlacement('art-bomb',null,{...upload,size,previewFile:files.find(f=>f.type.startsWith('image/'))||null});
+  arena.setBuildPreview('art-bomb',controller.buildPosition(3.2),controller.root.rotation.y,true,size,files.find(f=>f.type.startsWith('image/'))||null);
   arena.previewUploadedArtwork({...upload,size},network.base).catch(error=>ui.toast('預覽讀取失敗：'+error.message));
   ui.toast('Cloudflare 已儲存 · 移動角色攜帶作品，再按 PLACE');
  }catch(error){ui.toast(error.message);}
