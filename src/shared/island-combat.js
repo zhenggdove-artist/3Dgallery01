@@ -3,8 +3,9 @@ import {spellContains} from '../reletter/enemy-spell-catalog.js';
 // RELETTER Nangan normal-enemy scale and shockwave timing. Foreman is
 // intentionally excluded: server/milk-encounter.js identifies it as 章萬安.
 export const ISLAND_ENEMIES=['auntie','uncle','flower','cow','deer','fox'];
-export const ENEMY_HEIGHT=1.575;
-export const ENEMY_RADIUS=.32;
+// Six times RELETTER's original character proportions, including hit zones.
+export const ENEMY_HEIGHT=1.575*6;
+export const ENEMY_RADIUS=.32*6;
 
 export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,slow=0}){
  const dt=Math.min(.5,Math.max(0,(now-(monster.updatedAt??now-500))/1000));
