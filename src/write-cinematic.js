@@ -19,7 +19,7 @@ export class WriteCinematic{
   this.mouthLayer=document.createElement('div');this.mouthLayer.id='write-mouth-layer';
   this.mouthLayer.style.cssText='position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:26';
   document.body.append(this.mouthLayer);
-  this.active=false;this.legacy=false;this.phase='';this.busy=false;this.journey=null;
+  this.active=false;this.legacy=false;this.phase='';this.busy=false;this.journey=null;this.fallCameraActive=false;
   this.pending=null;this.reveal=null;this.letters=[];this.textStarted=0;
  }
  async begin(){
@@ -39,7 +39,7 @@ export class WriteCinematic{
   this.legacy=legacy;this.journey=result?.journey||{
    origin:c.root.position.toArray(),start:Date.now(),expires:Date.now()+900000
   };
-  this.active=true;this.phase='ascend';this.pending=null;this.reveal=null;
+  this.active=true;this.phase='ascend';this.pending=null;this.reveal=null;this.fallCameraActive=false;
   this.disc.visible=true;this.drinkLight.intensity=0;
   c.setEnabled(false);c.cameraLocked=false;c.yaw=0;c.pitch=.2;c.distance=7;
  }
@@ -137,7 +137,7 @@ export class WriteCinematic{
   }).catch(error=>this.ui.toast('WRITE 植物儲存失敗：'+error.message));
  }
  finish(){
-  const c=this.controller();this.active=false;this.legacy=false;this.phase='';
+  const c=this.controller();this.active=false;this.legacy=false;this.phase='';this.fallCameraActive=false;
   this.disc.visible=false;this.plantHalo.visible=false;this.drinkLight.intensity=0;
   this.clearMouthText();this.mouthBone=null;this.reveal=null;
   c?.root&&(c.root.userData.plantHiddenUntil=0);
@@ -185,6 +185,20 @@ export class WriteCinematic{
    light.position.copy(this.mouthPosition());light.intensity=pose.phase==='drink'?3.5+Math.sin(performance.now()*.009):1;
    this.updateMouthText();
   }else this.drinkLight.intensity=0;
-  c.updateCamera(.016);
+  if(pose.phase==='fall'){
+   // Ordinary third-person damping lags far behind a 200m fall. Lock the
+   // gameplay camera to the actual falling avatar, not its last target.
+   c.cameraLocked=true;
+   const focus=c.root.position;
+   const yaw=c.root.rotation.y;
+   const desired=new THREE.Vector3(focus.x-Math.sin(yaw)*8,focus.y+3.8,focus.z-Math.cos(yaw)*8);
+   c.camera.position.lerp(desired,this.fallCameraActive?.88:.55);
+   c.camera.lookAt(focus.x,focus.y+1.25,focus.z);
+   c.target.set(focus.x,focus.y+1.5,focus.z);
+   this.fallCameraActive=true;
+  }else{
+   c.cameraLocked=false;
+   c.updateCamera(.016);
+  }
  }
 }
