@@ -1,3 +1,4 @@
+import {discGroundHeight} from './artwork-discs.js';
 // Deterministic charged attack area, used by both the authoritative server
 // and the client's blue ground rune. Coordinates use world-space metres.
 const AREAS=new Set(['water','ice','fire','lightning','petal','wave']);
@@ -22,4 +23,16 @@ export function insideChargedArea(area,target,actorRadius=1){
  if(!area||area.mode!=='area')return false;
  return Math.hypot(target[0]-area.center[0],target[2]-area.center[2])<=area.radius+actorRadius&&
         Math.abs(target[1]-area.center[1])<=Math.max(3,area.radius*.7);
+}
+
+// Both browser preview and server authority must agree on ground and
+// player-created GM floating platform elevations.
+export function spellGroundHeight(world,x,z,y=0){
+ let height=discGroundHeight(x,z,y);
+ for(const p of world?.floatingPlatforms||[]){
+  if(!Array.isArray(p.position)||p.position.length!==3)continue;
+  if(y>=p.position[1]-.5&&Math.hypot(x-p.position[0],z-p.position[2])<(Number(p.radius)||0)*2)
+   height=Math.max(height,p.position[1]);
+ }
+ return height;
 }
