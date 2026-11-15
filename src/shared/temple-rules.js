@@ -6,7 +6,7 @@ import {artworkLanding} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,resetPlayerArtworks,projectileHitsActor,artBombDamage} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,MATERIALS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,groundDropRoll,monsterDropRoll} from './catalog.js';
-import {ARENA_RADIUS,FISHING_POND,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
+import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive} from './combat-status.js';
@@ -63,7 +63,7 @@ export function migrateWorld(raw,now=Date.now()){
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
     wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT},
-    fusion:{},fish:{minnow:0,koi:0,relic:0},createdAt:now,updatedAt:now,lastAttackAt:0,lastFishAt:0};
+    fusion:{},createdAt:now,updatedAt:now,lastAttackAt:0};
 }
 
 export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
@@ -74,7 +74,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
   if(current.admin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
   if(!current.inventory.includes(STARTER_LOADOUT.weapon))current.inventory.unshift(STARTER_LOADOUT.weapon);
-  current.equipment??={...STARTER_LOADOUT};current.fusion??={};current.fish??={minnow:0,koi:0,relic:0};
+  current.equipment??={...STARTER_LOADOUT};delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
   refreshStats(world,current,now);
   if(current.deadUntil<=now&&current.hp<=0){current.hp=current.maxHp||100;current.deadUntil=0;}
   return current;
@@ -93,7 +93,7 @@ export function worldView(world,actorKey,now=Date.now()){
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),
-    profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fish:clone(profile.fish),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
+    profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000))};
 }
 
@@ -143,8 +143,6 @@ export function applyAction(world,actor,body,context={}){
     case 'build':result=build(world,profile,actor,body,now,rng);break;
     case 'destroy':result=destroy(world,profile,actor,body,now);break;
     case 'remove-structure':result=removeStructure(world,profile,actor,body,now);break;
-    case 'remove-water-feature':result=removeWaterFeature(world,profile,actor,body,now);break;
-    case 'fish':result=fish(world,profile,actor,now,rng);break;
     case 'plant':result=plant(world,profile,actor,body,now);break;
     case 'respawn':profile.hp=profile.maxHp;profile.deadUntil=0;result={spawn:PLAYER_SPAWNS[context.seatIndex%4]};break;
     default:return {error:'Unknown action'};
@@ -326,36 +324,6 @@ function removeStructure(world,profile,actor,body,now){
   world.structures.splice(world.structures.indexOf(structure),1);
   return {notice:'Structure removed',structureDestroyed:structureEvent(structure,now)};
 }
-
-function removeWaterFeature(world,profile,actor,body,now){
- const fishing=world.reletter?.fishing;
- if(!fishing)return {error:'No water features exist'};
- const id=String(body.id||'');
- let removed=null,kind=null;
- for(const collection of ['holes','ponds']){
-  const items=fishing[collection]||[],index=items.findIndex(entry=>entry.id===id);
-  if(index<0)continue;
-  const feature=items[index];
-  if(!profile.admin&&feature.owner!==actor.key)return {error:'Only the creator or GM can remove a water feature'};
-  if(collection==='ponds'){
-   fishing.bags??={};
-   // Preserve all harvested fish, including fish entrusted by other users.
-   for(const fish of feature.fish||[]){
-    const owner=fish.owner||feature.owner;
-    (fishing.bags[owner]??=[]).push(fish);
-   }
-  }
-  removed=items.splice(index,1)[0];kind=collection==='holes'?'fishing hole':'fish pond';
-  break;
- }
- if(!removed)return {error:'Water feature was already removed'};
- for(const [key,session] of Object.entries(fishing.sessions||{}))if(session.hole===id)delete fishing.sessions[key];
- fishing.revision=(fishing.revision||0)+1;
- world.sceneArchive??={};(world.sceneArchive.removedWaterFeatures??=[]).push({...removed,removedAt:now});
- return {notice:kind+' removed',waterFeatureRemoved:{id,kind,position:removed.position}};
-}
-
-function fish(world,profile,actor,now,rng){if(distance2d(actor.position,[FISHING_POND.x,0,FISHING_POND.z])>FISHING_POND.radius+2)return {error:'Fish beside the pond'};if(now-profile.lastFishAt<8_000)return {error:'The water needs time to settle'};profile.lastFishAt=now;const roll=rng(),kind=roll<.72?'minnow':roll<.96?'koi':'relic';profile.fish[kind]=(profile.fish[kind]||0)+1;earn(profile,ECONOMY.fishValues[kind],world);return {notice:`Caught ${kind} · +${ECONOMY.fishValues[kind]} coins`,fish:kind};}
 
 function plant(world,profile,actor,body,now){const text=String(body.text||'').trim();if((!text&&!body.media)||text.length>500)return {error:'Plant message must contain 1–500 characters'};if(distance2d(actor.position,[0,0,0])>SAFE_ZONE.radius+3)return {error:'Write beside the central plant'};const parent=typeof body.parentId==='string'?world.plants.find(entry=>entry.id===body.parentId):null;if(body.parentId&&!parent)return {error:'Parent plant no longer exists'};const seed=hashString(`${profile.key}:${now}`),angle=(seed%628)/100,radius=parent ? .7 : Math.min(5,Math.max(1.4,distance2d(body.position,[0,0,0]))),base=parent?.position||body.position||actor.position,position=parent?[clamp(base[0]+Math.cos(angle)*radius,-5,5),0,clamp(base[2]+Math.sin(angle)*radius,-5,5)]:[clamp(Number(base?.[0])||0,-5,5),0,clamp(Number(base?.[2])||0,-5,5)];const entry={id:id(),author:profile.name,text,media:body.media||null,position,parentId:parent?.id||null,createdAt:now};world.plants.push(entry);profile.writeJourney=null;if(world.plants.length>500)world.plants.shift();return {notice:parent?'Reply branch planted':'Message planted',plant:entry};}
 
