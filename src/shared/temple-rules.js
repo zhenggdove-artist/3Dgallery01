@@ -261,10 +261,10 @@ function attack(world,profile,actor,body,context,now){
   let monsterHit=null,monsterHits=[];
   if(!insideSafeZone(actor.position))for(const mob of [world.monster,...(world.monsters||[])]){
    if(!mob?.active)continue;
-   const target=[mob.position[0],mob.position[1]+Math.min(1.2,ENEMY_HEIGHT*.5),mob.position[2]],along=project(origin,direction,target);
+   const target=[mob.position[0],mob.position[1]+Math.min(1.2,ENEMY_HEIGHT*.5),mob.position[2]];
    if((area?.mode==='area'&&insideChargedArea(area,target,ENEMY_RADIUS))||
-      (area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,target,along)<stats.radius+ENEMY_RADIUS)){
-    const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{...mob,island:true},target,now,context.rng??Math.random);
+      (area?.mode!=='area'&&rayHitsMonster(origin,direction,stats.range,mob,stats.radius+ENEMY_RADIUS))){
+    const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{...mob,island:true,visualScale:ENEMY_HEIGHT/1.575},target,now,context.rng??Math.random);
     const result=damageMonster(world,profile,(stats.damage+bonus)*modifiers.multiplier,now,context.rng??Math.random,modifiers.kind,mob);
     if(result){monsterHits.push({monster:mob,result});monsterHit??=result;}
     if(area?.mode!=='area')break;
@@ -377,6 +377,22 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   if(changed)world.revision=(world.revision||0)+1;return changed;
 }
 
+// Full-height hit shape: the six-times-scaled monsters are not a foot-level point.
+function rayHitsMonster(origin,direction,range,monster,radius){
+  const dx=origin[0]-monster.position[0],dz=origin[2]-monster.position[2];
+  const a=direction[0]**2+direction[2]**2,b=2*(dx*direction[0]+dz*direction[2]),c=dx*dx+dz*dz-radius*radius;
+  let enter=0,exit=range;
+  if(a>1e-8){
+    const discriminant=b*b-4*a*c;
+    if(discriminant<0)return false;
+    const root=Math.sqrt(discriminant);
+    enter=Math.max(0,(-b-root)/(2*a));
+    exit=Math.min(range,(-b+root)/(2*a));
+    if(enter>exit)return false;
+  }else if(c>0)return false;
+  const y0=origin[1]+direction[1]*enter,y1=origin[1]+direction[1]*exit,base=monster.position[1];
+  return Math.max(Math.min(y0,y1),base)<=Math.min(Math.max(y0,y1),base+ENEMY_HEIGHT);
+}
 function normalDirection(value){if(!Array.isArray(value)||value.length!==3||!value.every(Number.isFinite))return null;const length=Math.hypot(...value);if(length<.5||length>1.5)return null;return value.map(n=>n/length);}
 function project(origin,direction,point){return (point[0]-origin[0])*direction[0]+(point[1]-origin[1])*direction[1]+(point[2]-origin[2])*direction[2];}
 function perpendicular(origin,direction,point,along){return Math.hypot(point[0]-origin[0]-direction[0]*along,point[1]-origin[1]-direction[1]*along,point[2]-origin[2]-direction[2]*along);}
