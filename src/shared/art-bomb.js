@@ -35,7 +35,7 @@ export function resizeArtBomb(world,actor,body,now=Date.now()){
  const size=validArtBombSize(body.size);if(!size)return {error:'Artwork size must be 0.5–5.0'};
  const state=world.artworks?.[record.id],layout=world.artworkLayout?.[record.id];
  if(!layout||state?.holder||state?.throwEvent||state?.availableAt>now)return {error:'Wait for artwork to return before resizing'};
- layout.scale=[size,size,size];layout.revision=(layout.revision||0)+1;layout.updatedAt=now;
+ const oldSize=layout.scale?.[0]||1;layout.position=[layout.position[0],Math.max(0,Math.min(30,layout.position[1]+1.5*(size-oldSize))),layout.position[2]];layout.scale=[size,size,size];layout.revision=(layout.revision||0)+1;layout.updatedAt=now;
  world.revision=(world.revision||0)+1;
  return {notice:'Artwork bomb size saved',artworkLayout:structuredClone(layout)};
 }
