@@ -125,7 +125,7 @@ export class WriteCinematic{
   c.root.userData.plantHiddenUntil=performance.now()+duration+450;
   this.audio.play('explosion');
   this.bursts.play(pose.position,'write-'+this.journey.start);
-  if(!this.pending){this.finish();return;}
+  if(!this.pending){if(!this.legacy)this.send('write-finish').catch(error=>this.ui.toast(error.message));this.finish();return;}
   const payload={...this.pending,position:pose.position};
   this.pending=null;this.reveal={started:performance.now(),position:[...pose.position],plantId:null};
   this.plantHalo.position.set(pose.position[0],.12,pose.position[2]);
