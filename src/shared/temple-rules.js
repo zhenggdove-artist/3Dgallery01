@@ -185,7 +185,7 @@ function throwArtwork(world,profile,actor,body,context,now){
     if(collision){const maxHp=world.profiles?.[target.key]?.maxHp||100,damage=bomb?artBombDamage(maxHp,context.rng??Math.random):34*event.power;hit=damagePlayer(world,profile,target,damage,now,bomb?'art-bomb':'artwork',actor.position);break;}
   }
   let monsterHit=null;if(world.monster?.active){const along=project(origin,direction,world.monster.position);if(along>0&&along<18*event.power&&perpendicular(origin,direction,world.monster.position,along)<2.7)monsterHit=damageMonster(world,profile,68*event.power,now,context.rng??Math.random);}
-  let structureDestroyed=null,structureHit=null;if((!hit&&!monsterHit)||area?.mode==='area'){for(const structure of world.structures||[]){
+  let structureDestroyed=null,structureHit=null;if(!hit&&!monsterHit){for(const structure of world.structures||[]){
     if(structure.owner==='temple')continue;
     const along=project(origin,direction,structure.position);
     if(along>0&&along<18*event.power&&perpendicular(origin,direction,structure.position,along)<structureRadius(structure)){
@@ -251,7 +251,7 @@ function attack(world,profile,actor,body,context,now){
   let monsterHit=null;if(world.monster?.active&&!insideSafeZone(actor.position)){const target=[world.monster.position[0],world.monster.position[1]+ENEMY_HEIGHT*.5,world.monster.position[2]],along=project(origin,direction,target);if((area?.mode==='area'&&insideChargedArea(area,target,ENEMY_RADIUS))||(area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,target,along)<stats.radius+ENEMY_RADIUS)){const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{...world.monster,island:true},target,now,context.rng??Math.random);monsterHit=damageMonster(world,profile,(stats.damage+bonus)*modifiers.multiplier,now,context.rng??Math.random,modifiers.kind);}}
   for(const result of hits)if(!result.defeated&&!result.immune)applyStatus(world,profile,world.profiles[result.target],weapon,{direction,charge,damage:stats.damage},now);if(monsterHit&&!monsterHit.defeated)applyStatus(world,profile,world.monster,weapon,{direction,charge,damage:stats.damage},now);
   let structureHit=null,structureDestroyed=null;
-  if(!hit&&!monsterHit){
+  if((!hit&&!monsterHit)||area?.mode==='area'){
    const candidates=(world.structures||[]).filter(v=>v.owner!=='temple').map(v=>{
     const point=[v.position[0],v.position[1]+1,v.position[2]],along=project(origin,direction,point);
     const inside=area?.mode==='area'?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<stats.radius+structureRadius(v);
