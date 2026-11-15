@@ -1,4 +1,5 @@
 import {journeyPose,journeyAction} from './write-journey.js';
+import {recoverArtworks} from './artwork-recovery.js';
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,MATERIALS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,FISHING_POND,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
@@ -110,6 +111,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
 
 export function applyAction(world,actor,body,context={}){
   const now=context.now??Date.now(),rng=context.rng??Math.random,profile=ensureProfile(world,actor.key,actor.name,actor.color,now,actor.admin);
+  if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
   if(body.action==='create-platform'){if(!profile.admin)return {error:'僅限 GM'};const p=body.position,r=Number(body.radius);if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)||Math.hypot(p[0],p[2])>88||p[1]<0||p[1]>30||!Number.isFinite(r)||r<.6||r>8)return {error:'圓盤位置或半徑無效'};world.floatingPlatforms??=[];if(world.floatingPlatforms.length>=128)return {error:'已達 128 個圓盤上限'};const platform={id:id(),position:[...p],radius:r};world.floatingPlatforms.push(platform);world.revision++;return {platform,notice:'已建立漂浮圓盤，所有玩家皆可使用'};}
   if(body.action==='add-artwork')return addArtwork(world,profile,actor,body,now);
   if(body.action==='set-artwork-layout')return setArtworkLayout(world,profile,body,now);
