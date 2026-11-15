@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {createOddEffect,updateOddEffect} from './reletter/odd-weapon-effects.js';
 import {weaponMuzzle} from './weapon-muzzle.js';
+import {chargedArea} from './shared/charge-area.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
 import smear from '../vendor/00gamedevs/weapon-smear.js';
 import plasma from '../vendor/00gamedevs/plasma-bolt.js';
@@ -55,11 +56,12 @@ export class WeaponVFX{
   // Charged ground spells are placed on the *server validated impact area*.
   // Previously every non-projectile preset was spawned one metre below
   // the caster, leaving distant spells invisible or buried in terrain.
-  const groundEffect=!!data.ultimate&&data.area?.mode==='area';
-  if(groundEffect)end.copy(new THREE.Vector3(...data.area.center));
+  const impactArea=data.area||(data.ultimate?chargedArea(item,data.origin,data.direction,data):null);
+  const groundEffect=!!data.ultimate&&impactArea?.mode==='area';
+  if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
   const muzzle=weaponMuzzle(root,item);if(muzzle){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
   if(item.id==='black-cat'){if(this.snipers.length>=4){const old=this.snipers.shift();old.root.removeFromParent();old.root.material.dispose();}const f=createOddEffect(THREE,{...data,origin:origin.toArray(),direction:direction.toArray(),range:origin.distanceTo(end)},{...item,pattern:'sniper'});f.root.position.addScaledVector(direction,-1.8);this.scene.add(f.root);this.snipers.push(f);return;}
-  const entry=this.acquire(id,{color:item.color,size:data.ultimate?Math.min(3.6,Math.max(1.2,(data.area?.radius||5)/3.5)):.6,speed:data.ultimate?1:1.8}),fx=entry.fx;
+  const entry=this.acquire(id,{color:item.color,size:data.ultimate?Math.min(3.6,Math.max(1.2,(impactArea?.radius||5)/3.5)):.6,speed:data.ultimate?1:1.8}),fx=entry.fx;
   fx.group.position.copy(origin);fx.group.rotation.y=Math.atan2(direction.x,direction.z)-Math.PI/2;
   if(beams.has(id)){fx.group.position.set(0,0,0);fx.group.quaternion.identity();fx.setEndpoints(origin,end);fx.update(fx.lifecycle.start||0);entry.stopAt=data.ultimate?.65:.12;}
   else if(projectiles.has(id)){fx.setDirection(direction,0);fx.update(fx.lifecycle.start||0);entry.start=origin;entry.end=end;entry.travel=Math.min(.45,Math.max(.12,origin.distanceTo(end)/45));entry.stopAt=entry.travel;entry.hit=!!data.impactPoint;}
