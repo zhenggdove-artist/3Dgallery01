@@ -71,6 +71,14 @@ export class WeaponVFX{
    else {fx.group.position.y=Math.max(.16,origin.y-.65);}
    if(id==='azure-sweep'&&!groundEffect)fx.group.position.y=Math.max(.18,origin.y-.15);
    if(continuous.has(id))fx.update(fx.lifecycle.start||0);
+   if(groundEffect){
+    // Prefab local geometry sometimes extends below its origin. Raise the
+    // visible effect instead of allowing a frozen half-buried animation.
+    fx.group.updateMatrixWorld(true);
+    const bounds=new THREE.Box3().setFromObject(fx.group);
+    if(Number.isFinite(bounds.min.y)&&Number.isFinite(bounds.max.y))
+     fx.group.position.y+=Math.max(0,Math.min(3.5,end.y+.12-bounds.min.y));
+   }
    entry.stopAt=data.ultimate?1.35:.35;
   }
   if(root?.userData.blade&&!beams.has(id)&&!projectiles.has(id)){
