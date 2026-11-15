@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createInitialWorld,applyAction} from '../src/shared/temple-rules.js';
+import {createInitialWorld,applyAction,ensureProfile} from '../src/shared/temple-rules.js';
 import {chargedArea,insideChargedArea} from '../src/shared/charge-area.js';
 import {artBombDamage,projectileHitsActor} from '../src/shared/art-bomb.js';
 import {WEAPONS,attackStats} from '../src/shared/catalog.js';
@@ -77,4 +77,22 @@ test('normal weapon attacks shake/damage player buildings and eventually destroy
  }
  assert.ok(destroyed);
  assert.equal(world.structures.length,0);
+});
+
+test('fully charged area spell damages two opponents and player-built architecture at one target',()=>{
+ const world=createInitialWorld(1000),caster=actor('caster',[75,0,0]);
+ const weapon=WEAPONS.find(w=>w.id==='tide-1');
+ const a=chargedArea(weapon,[75,1,0],[0,0,1],attackStats(weapon,1));
+ assert.equal(a.mode,'area');
+ const t1=actor('target-one',[75,0,a.center[2]]);
+ const t2=actor('target-two',[77,0,a.center[2]+.5]);
+ ensureProfile(world,t1.key,t1.name,t1.color,1000);
+ ensureProfile(world,t2.key,t2.name,t2.color,1000);
+ world.structures=[{id:'art-wall',kind:'wall',position:[76,0,a.center[2]],hp:140,owner:'builder',rotation:0,createdAt:1000}];
+ assert.ok(applyAction(world,caster,{action:'attack',phase:'charge'},{now:1000}).charging);
+ const cast=applyAction(world,caster,{action:'attack',direction:[0,0,1],charge:1},{now:3000,actors:[caster,t1,t2],rng:()=>.4});
+ assert.equal(cast.attackEvent?.ultimate,true,JSON.stringify(cast.error));
+ assert.equal(cast.hits?.length,2,JSON.stringify(cast));
+ assert.ok(world.profiles[t1.key].hp<100&&world.profiles[t2.key].hp<100);
+ assert.ok(cast.structureHit?.hp<140,JSON.stringify(cast));
 });
