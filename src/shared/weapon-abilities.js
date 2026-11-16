@@ -20,7 +20,9 @@ export function channelVisualRadius(item,quality=weaponQuality(item),range=Numbe
  const base={water:1.6,ice:1.05,lightning:.9,beam:1.05,petal:1.3,wave:1.4};
  return +((base[item?.family]||1.1)*quality.visual).toFixed(3);
 }
-export const STAFF_TAP_MAX_MS=750;
+// Shared range contract: ice channel #70 advances twice as far as before.
+export const channelReachMultiplier=item=>item?.family==='ice'?2:1;
+export const STAFF_TAP_MAX_MS=500;
 export const CAST_MOVE_FACTOR=.05;
 export const MONSTER_WEAPON_DAMAGE_FACTOR=.1;
 export function chargeProgress(heldMs,weaponChargeMs){return Math.max(0,Math.min(1,((Number(heldMs)||0)-STAFF_TAP_MAX_MS)/Math.max(1,Number(weaponChargeMs)||1500)));}

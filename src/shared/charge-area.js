@@ -74,7 +74,7 @@ export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
   return {shape:'sector',position:[origin[0],at(origin[0],origin[2]),origin[2]],
    yaw,radius:range,angleDeg:CLAM_SECTOR_ANGLE,range,width};
  }
- if(isChannelStaff(item)||item?.family==='saber'||item?.pattern==='scatter'||item?.id==='goldfish'){
+ if(isChannelStaff(item)||item?.family==='saber'||item?.family==='palm'||item?.pattern==='scatter'||item?.id==='goldfish'){
   const x=origin[0]+dx*range*.5,z=origin[2]+dz*range*.5;
   return {shape:'rectangle',position:[x,at(x,z),z],yaw,length:range,width,range};
  }

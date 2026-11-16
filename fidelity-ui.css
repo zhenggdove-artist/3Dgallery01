@@ -142,13 +142,12 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
 
 /* Mobile combat HUD: separate ATTACK, JUMP and INTERACT; chat never overlaps
    a touch target. Safe-area offsets account for iOS Safari's bottom toolbar. */
-#dock [data-action=interact]{display:none;}
 @media(max-width:720px),(pointer:coarse){
  #dock #attack-button{right:max(86px,env(safe-area-inset-right) + 82px);
    bottom:max(26px,env(safe-area-inset-bottom) + 12px);z-index:24;}
  #dock [data-action=jump]{right:max(16px,env(safe-area-inset-right) + 8px);
    bottom:max(84px,env(safe-area-inset-bottom) + 74px);z-index:24;}
- #dock [data-action=interact]{display:grid;position:fixed;
+ #dock [data-action=interact]{display:none!important;position:fixed;
    left:auto;top:auto;right:max(17px,env(safe-area-inset-right) + 8px);
    bottom:max(163px,env(safe-area-inset-bottom) + 154px);
    width:45px;height:45px;border-radius:50%;place-items:center;z-index:24;

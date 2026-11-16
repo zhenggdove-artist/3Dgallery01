@@ -6,17 +6,17 @@ export class GunController {
   constructor({canvas,camera,controller,weapon,ui,attack}) {
     Object.assign(this,{canvas,camera,controller,weapon,ui,attack});this.mode=0;this.held=false;this.nextShot=0;
     this.overlay=document.createElement('div');this.overlay.id='gun-overlay';this.overlay.hidden=true;
-    this.overlay.innerHTML='<div class="gun-reticle"></div><div class="scope-lines"></div><span>V · CAMERA / ESC · EXIT</span>';document.body.append(this.overlay);
+    this.overlay.innerHTML='<div class="gun-reticle"></div><div class="scope-lines"></div><span>A/Q · CAMERA / TAP SCENE · FIRE</span>';document.body.append(this.overlay);
     addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)||ui.panelName)return;if(e.code==='KeyV'&&weapon()?.firstPerson&&!e.repeat){e.preventDefault();e.stopImmediatePropagation();this.cycle();}if(e.code==='Escape'&&this.mode){this.end();}},true);
     addEventListener('pointermove',e=>{if(!this.mode||e.target!==canvas)return;e.stopImmediatePropagation();const c=controller(),s=.002*(this.mode===2?.3:1);const previous=this.lookPointer?.id===e.pointerId?this.lookPointer:null,dx=e.pointerType==='touch'?(previous?e.clientX-previous.x:0):e.movementX,dy=e.pointerType==='touch'?(previous?e.clientY-previous.y:0):e.movementY;if(e.pointerType==='touch')this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};c.yaw-=dx*s;c.pitch=THREE.MathUtils.clamp(c.pitch+dy*s,-1.1,1.2);},true);
     for(const type of ['pointerdown','pointerup','pointercancel'])addEventListener(type,e=>{
       const button=e.target.closest?.('#attack-button');if(!weapon()?.firstPerson||!controller()?.enabled||controller()?.holdingArt)return;
-      // A/Q is handled by TempleUI and main: the FIRST pointerdown opens
-      // over-shoulder aim; subsequent presses fire. Never intercept it here.
+      // A/Q cycles CAMERA only. Direct canvas taps shoot while aiming;
+      // neither the first nor subsequent A presses may trigger gunfire.
       if(button)return;
       if(!this.mode||e.target!==canvas||e.button>0)return;e.preventDefault();e.stopImmediatePropagation();
-      if(type==='pointerdown'){this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};if(!document.pointerLockElement)canvas.setPointerCapture(e.pointerId);if(weapon().id==='white-cat'){this.held=true;this.nextShot=0;}else ui.emit('attack-start');}
-      else{this.lookPointer=null;this.held=false;ui.emit(type==='pointercancel'?'attack-cancel':'attack-release');}
+      if(type==='pointerdown'){this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};if(!document.pointerLockElement)canvas.setPointerCapture(e.pointerId);if(weapon().id==='white-cat'){this.held=true;this.nextShot=0;}else ui.emit('gun-fire');}
+      else{this.lookPointer=null;this.held=false;}
     },true);
     addEventListener('blur',()=>this.end());document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement){this.held=false;ui.emit('attack-cancel');}});
   }

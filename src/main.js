@@ -98,6 +98,7 @@ network.addEventListener('state-rejected',event=>{
 network.addEventListener('connection',event=>{if(joined)ui.toast(event.detail.connected?'REALTIME CONNECTED':'RECONNECTING…');});
 
 ui.addEventListener('attack',()=>performAttack());ui.addEventListener('interact',()=>performInteract());
+ui.addEventListener('gun-fire',()=>{if(gun.mode)void performAttack(0);});
 ui.addEventListener('create-platform',event=>sendAction('create-platform',event.detail));
 ui.addEventListener('art-bomb-resize',event=>sendAction('resize-art-bomb',event.detail));
 ui.addEventListener('art-bomb-appearance',event=>sendAction('update-art-bomb-appearance',event.detail));
@@ -125,19 +126,21 @@ ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(item
 ui.addEventListener('original-action',event=>sendAction(event.detail.action,event.detail));
 ui.addEventListener('jump',()=>controller?.jump());
 addEventListener('keyup',e=>{if(e.code==='KeyE')artworkThrow.release();});
-// ATTACK is NEVER a contextual interact button. Short taps must execute a
-// normal melee swing or a single elemental orb; holding is solely charging.
+// On mobile A doubles as contextual E. For firearms A ONLY switches
+// camera: standard > shoulder > sniper scope > standard; canvas tap fires.
 ui.addEventListener('attack-start',()=>{
- if(!controller?.enabled||self?.role!=='fighter'||chargeStarted!==null||staffChannel)return;
+ if(!controller?.enabled||self?.role!=='fighter')return;
  if(coarse&&buildPlacement){confirmBuildPlacement();return;}
  if(controller.holdingArt){artworkThrow.begin();return;}
  const weapon=itemById(world?.profile?.equipment?.weapon);
- if(weapon?.firstPerson){
-  if(!gun.mode)gun.cycle(); // immediate over-shoulder view on pointer DOWN / Q
-  else if(weapon.id==='white-cat'){gun.held=true;gun.nextShot=0;}
-  else void performAttack(0);
-  return;
+ if(weapon?.firstPerson){gun.cycle();return;}
+ if(coarse&&!artworkThrow.started){
+  const near=arena.nearest(controller.root.position.toArray());
+  const canUse=near&&['artwork','coin','drop','plant'].includes(near.type);
+  const byPlant=!near&&Math.hypot(controller.root.position.x,controller.root.position.z)<7;
+  if(canUse||byPlant){performInteract();return;}
  }
+ if(chargeStarted!==null||staffChannel)return;
  attackHeld=true;
  attackHoldStarted=performance.now();
  chargeStarted=null;
@@ -240,7 +243,7 @@ function update(dt,time){
    audio.play('charge',.62);
   }
   const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
-  // First 750ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
+  // First 500ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
   // the charging window; the very first sustained pulse is the ultimate.
   if(attackHeld&&charge>=1&&isChannelStaff(heldItem)&&!staffChannel&&
      performance.now()-(window._templeLastChannelAttempt||0)>170){

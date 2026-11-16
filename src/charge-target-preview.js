@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {attackStats} from './shared/catalog.js';
 import {chargedArea,spellGroundHeight,spellFootprint} from './shared/charge-area.js';
-import {weaponQuality,isChannelStaff,channelVisualRadius} from './shared/weapon-abilities.js';
+import {weaponQuality,isChannelStaff,channelVisualRadius,channelReachMultiplier} from './shared/weapon-abilities.js';
 // These are the ORIGINAL source downloads from 00GameDevs; do not redraw them.
 import createSector from '../vendor/00gamedevs/source/spell-indicator-sector.js';
 import createRectangle from '../vendor/00gamedevs/source/spell-indicator-rectangle.js';
@@ -59,7 +59,7 @@ export class ChargeTargetPreview {
   if(!root||!item||charge<.1||!Array.isArray(direction)){this.hide();return;}
   const equipped=fusion?.original?.stats?{...item,...fusion.original.stats}:item;
   const stats=attackStats(equipped,1),quality=weaponQuality(equipped,fusion);
-  if(isChannelStaff(equipped))stats.range=Math.max(stats.range,equipped.id==='clam'?10:Math.min(18,equipped.range));
+  if(isChannelStaff(equipped))stats.range=Math.max(stats.range,equipped.id==='clam'?10:Math.min(18,equipped.range))*channelReachMultiplier(equipped);
   stats.range=+(stats.range*quality.range).toFixed(2);
   // Use the same thin hit tube as server-owned continuous casting, rather
   // than the giant charged blast radius.

@@ -37,11 +37,12 @@ export function attackStats(item,charge=0){
  const result=reletterAttackStats(item,charge);
  if(item.id==='water')result.damage*=10;
  if(SPELL_FAMILIES.includes(item.family)&&!item.exotic)result.range=+(result.range/3).toFixed(3);
- // Authoritative straight-line #38 sword fissure shares the doubled reach
- // and hitbox radius with the blue #59 ground telegraph and client VFX.
+ // Keep the narrower #59 preview equal to the real server hit tube.
+ // The sword fissure now travels twice as far as the previous 2x version.
+ // The width contracts to one third of the previous hitbox and warning.
  if(item.family==='saber'&&result.ultimate){
-  result.range=+(result.range*2).toFixed(3);
-  result.radius=+(result.radius*2).toFixed(3);
+  result.range=+(result.range*4).toFixed(3);
+  result.radius=+(result.radius*2/3).toFixed(3);
  }
  return result;
 }

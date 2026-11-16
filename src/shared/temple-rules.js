@@ -17,7 +17,7 @@ import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs} from './combat-balance.js';
-import {isChannelStaff,weaponQuality,channelVisualRadius,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
@@ -331,7 +331,7 @@ function attack(world,profile,actor,body,context,now){
   stats.damage=+(stats.damage*quality.damage).toFixed(2);
   // A held staff actually projects forward. Its visual spray and authoritative
   // collision must use exactly the same range; no 11m decorative overshoot.
-  if(channel)stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range));
+  if(channel)stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range))*channelReachMultiplier(weapon);
   stats.range=+(stats.range*quality.range).toFixed(2);
   // The narrow server collision tube must agree with the visible spray and
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
