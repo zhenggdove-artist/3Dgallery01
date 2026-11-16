@@ -19,7 +19,7 @@ export class GunController {
   constructor({canvas,camera,controller,weapon,ui,attack}) {
     Object.assign(this,{canvas,camera,controller,weapon,ui,attack});this.mode=0;this.held=false;this.nextShot=0;this.recoilOffset=0;this.recoilAmount=0;this.lastKick=-Infinity;
     this.overlay=document.createElement('div');this.overlay.id='gun-overlay';this.overlay.hidden=true;
-    this.overlay.innerHTML='<div class="gun-reticle"></div><div class="scope-lines"></div><button type="button" class="sniper-fire-button" aria-label="Fire sniper rifle">FIRE</button><span>A/Q · CAMERA / DESKTOP CLICK · FIRE</span>';document.body.append(this.overlay);
+    this.overlay.innerHTML='<div class="gun-reticle"></div><div class="scope-lines"></div><button type="button" class="sniper-fire-button" aria-label="Fire sniper rifle">A</button><span>A/Q · CAMERA / DESKTOP CLICK · FIRE</span>';document.body.append(this.overlay);
     this.fireButton=this.overlay.querySelector('.sniper-fire-button');
     this.fireButton.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();if(this.mode===2&&this.weapon()?.id==='black-cat'&&this.controller()?.enabled&&!this.controller()?.status?.freeze)this.ui.emit('gun-fire');});
     this.fireButton.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();});

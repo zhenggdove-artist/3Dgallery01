@@ -41,9 +41,9 @@
   <section id="hud" hidden>
     <button id="gm-help" hidden aria-label="GM editing shortcuts">!</button>
     <div id="identity" class="hud-block"><strong class="reletter-wordmark">GGTEMPLE</strong><strong id="hud-name" hidden>—</strong><span id="hud-role">FIGHTER</span></div>
-    <div id="vitals" class="hud-block"><span id="player-level">LV. 1</span><label><progress id="hp" max="100" value="100"></progress><b id="hp-label">100/100</b></label><span id="wallet">0 COINS</span><span id="weapon">TIDE BLADE</span><span id="online">0 / 6</span></div>
+    <div id="vitals" class="hud-block"><span id="player-level">LV. 1</span><label><progress id="hp" max="100" value="100"></progress><b id="hp-label">100/100</b></label><span id="wallet">0 COINS</span><span id="weapon">TIDE BLADE</span><span id="online">0 / 6</span><section id="player-roster" aria-label="Online players and health"></section></div>
     <div id="monster-hud" class="hud-block" hidden><small id="monster-name">MONSTER</small><progress id="monster-hp" max="100" value="100"></progress></div>
-    <div id="crosshair"></div><div id="prompt"></div><div id="toast"></div>
+    <div id="crosshair"></div><div id="prompt"></div><div id="toast"></div><div id="kill-notice" role="status" hidden></div>
     <div id="map-cluster"><button id="function-toggle" aria-label="Open functions" aria-expanded="false">☰</button><svg id="minimap" viewBox="-65 -65 130 130" role="img" aria-label="Minimap"><circle r="63" fill="#ede3e6" fill-opacity=".7" stroke="#947285"/><g id="map-static"></g><g id="map-dynamic"></g></svg></div>
     <section id="chat-hud" aria-label="Chat"><header id="chat-resize"><button id="chat-toggle" type="button" aria-label="Expand chat" aria-expanded="false">＋</button><span>CHAT · ↕</span></header><div id="chat-messages" role="log" aria-live="polite"></div><form id="chat-form"><label for="chat-input">CHAT</label><input id="chat-input" maxlength="500" autocomplete="off" aria-label="Chat message"><button type="submit" aria-label="Send chat">↵</button></form></section>
     <div id="build-mode" hidden><small>BUILD PREVIEW</small><strong id="build-kind">STRUCTURE</strong><button id="build-rotate">R · ROTATE</button><button id="build-confirm">E · PLACE</button><button id="build-cancel">ESC · CANCEL</button></div>
@@ -63,7 +63,7 @@
   <aside id="panel" class="glass-card" hidden aria-live="polite"><header><div><small id="panel-kicker">GGTEMPLE</small><h2 id="panel-title">PANEL</h2></div><button id="panel-close" aria-label="Close">×</button></header><div id="panel-content"></div></aside>
   <aside id="art-editor" hidden aria-label="GM artwork editor"></aside>
   <div id="art-handles" hidden></div>
-  <div id="death" hidden><p>YOU FELL</p><strong id="respawn-count">5</strong><small>Equipment kept. 20% of coins dropped where you fell.</small></div>
+  <div id="death" hidden><p>YOU FELL</p><p id="death-killer"></p><strong id="respawn-count">5</strong><small>Equipment kept. 20% of coins dropped where you fell.</small></div>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

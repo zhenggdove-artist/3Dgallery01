@@ -91,7 +91,7 @@ export function validName(value){return typeof value==='string'&&value.trim().le
 
 export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
-    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,effects:clone(profile.effects||{}),admin:profile.admin};
+    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,effects:clone(profile.effects||{}),admin:profile.admin};
 }
 
 export function worldView(world,actorKey,now=Date.now()){
@@ -100,7 +100,7 @@ export function worldView(world,actorKey,now=Date.now()){
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
-    reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000))};
+    reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000))};
 }
 
 function requireFighter(actor){return actor.role==='fighter'?null:{error:'Spectators cannot perform this action'};}
@@ -414,16 +414,19 @@ function attack(world,profile,actor,body,context,now){
   return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
-function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false){
+function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false){
   const target=world.profiles[targetActor.key];if(!target||target.hp<=0||target.deadUntil>now)return null;
   const stats=refreshStats(world,target,now);if(target.admin){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
   const armor=itemById(target.equipment.armor),reduction=Math.min(.65,(armor?.defense||0)/100);let damage=Math.max(1,+((amount)*(forceKill?1:1-reduction)*(forceKill?1:stats.defense)*(1+(effectActive(target,'soaked',now)?.power||0))).toFixed(1));
   if(forceKill)damage=Math.max(damage,target.hp); // A verified sniper headshot ignores armour and shields.
+  if(shotgunPellet)damage=+Math.max(5,Math.min(20,damage)).toFixed(1); // Per pellet after armour; shields still absorb.
    if(target.shield&&!forceKill){const absorbed=Math.min(target.shield.hp,damage);target.shield.hp-=absorbed;target.shield.lastHit=now;damage-=absorbed;}
   const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
   if(target.hp>0)return {target:targetActor.key,damage,defeated:false};
-  target.deadUntil=now+5_000;releasePlayerWorldState(world,targetActor.key,now);if(sourceProfile)addXp(sourceProfile,60);const lost=Math.floor(target.wallet*ECONOMY.deathCoinFraction);target.wallet-=lost;
+  target.deadUntil=now+5_000;target.lastKilledBy={key:sourceProfile?.key||null,name:sourceProfile?.name||'ENVIRONMENT',time:now};
+  world.killEvents??=[];world.killEvents.push({id:id(),time:now,killerKey:sourceProfile?.key||null,killerName:target.lastKilledBy.name,victimKey:target.key,victimName:target.name||targetActor.name||'PLAYER',cause});if(world.killEvents.length>24)world.killEvents.splice(0,world.killEvents.length-24);
+  releasePlayerWorldState(world,targetActor.key,now);if(sourceProfile)addXp(sourceProfile,60);const lost=Math.floor(target.wallet*ECONOMY.deathCoinFraction);target.wallet-=lost;
   if(lost>0)world.groundDrops.push({id:id(),kind:'coin',amount:lost,position:[...dropPosition],owner:targetActor.key,ownerLockedUntil:now+2_000,createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});
   return {target:targetActor.key,damage,defeated:true,lostCoins:lost,cause};
 }
@@ -615,12 +618,13 @@ function tickPersistentAttacks(world,actors,now,rng){
     // damaging, with a full 5x+ per-pellet random damage window.
     const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?150:96):
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
-    const damage=isPlayer?Math.min(rawDamage,pvpCap):rawDamage;
+    const shotgunPellet=isPlayer&&weapon.pattern==='scatter'&&pellet!==null;
+    const damage=shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage;
     const lethalHeadshot=isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
      fx.origin,fx.direction,fx.range,enemy.position);
     const hitKind=lethalHeadshot?(modifiers.critical?'critical-headshot':'headshot'):modifiers.kind;
     let applied;
-    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,hitKind,position,lethalHeadshot);
+    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,hitKind,position,lethalHeadshot,shotgunPellet);
     else applied=damageMonster(world,owner,damage,now,rng,modifiers.kind,enemy,position);
     if(applied&&!applied.immune){
      if(fx.channel){
@@ -629,7 +633,8 @@ function tickPersistentAttacks(world,actors,now,rng){
      if(pellet===null&&!alreadyHit.has(key)){alreadyHit.add(key);fx.hits.push(key);}
      else if(pellet!==null){const history=fx.pelletHits[pellet]??=[];if(!history.includes(key))history.push(key);}
     }
-    if(applied&&!applied.immune&&!applied.defeated){
+    if(applied&&!applied.immune&&!applied.defeated&&fx.charge>=1){
+     // Elemental debuffs and elemental damage occur only on charged impact.
      const statusKey=enemy.id||enemy.key;
      if(!(fx.statusHits||[]).includes(statusKey)){
       fx.statusHits??=[];fx.statusHits.push(statusKey);

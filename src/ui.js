@@ -38,11 +38,42 @@ export class TempleUI extends EventTarget{
   ready(){document.body.classList.add('ready');document.body.classList.remove('booting');}
   joinBusy(value){$('enter-button').disabled=value;$('enter-button').textContent=value?'Connecting…':'Enter ↵';}
   joinError(message){$('entry-error').textContent=message;this.joinBusy(false);}
-  enter(data){document.activeElement?.blur();this.self=data.self;this.world=data.world;this.players=data.players||[];this.entry.hidden=true;$('memory-code').value='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;this.refreshHUD();this.joinBusy(false);}
+  enter(data){document.activeElement?.blur();this.self=data.self;this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;$('memory-code').value='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;this.refreshHUD();if(this.panelName)this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
   setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop'].includes(this.panelName)&&this.panelSignature!==JSON.stringify([world.profile.inventory,world.profile.equipment,world.profile.wallet,world.profile.fusion])&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
-  refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);$('weapon').textContent=(itemById(profile.equipment?.weapon)?.name||'UNARMED').toUpperCase();}$('online').textContent=`${this.players.length} / 6`;const monster=this.world?.monster,visible=false;$('monster-hud').hidden=!visible;if(visible){$('monster-name').textContent=`${String(monster.variant).toUpperCase()} · GENERATION ${monster.generation}`;$('monster-hp').max=monster.maxHp;$('monster-hp').value=monster.hp;}}
+  refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);$('weapon').textContent=(itemById(profile.equipment?.weapon)?.name||'UNARMED').toUpperCase();}$('online').textContent=`${this.players.length} / 6`;this.renderRoster();const monster=this.world?.monster,visible=false;$('monster-hud').hidden=!visible;if(visible){$('monster-name').textContent=`${String(monster.variant).toUpperCase()} · GENERATION ${monster.generation}`;$('monster-hp').max=monster.maxHp;$('monster-hp').value=monster.hp;}}
+  renderRoster(){
+    const box=$('player-roster');if(!box)return;
+    const signature=JSON.stringify(this.players.map(p=>[p.key,p.name,p.role,p.profile?.hp,p.profile?.maxHp]));
+    if(this.rosterSignature===signature)return;this.rosterSignature=signature;
+    box.replaceChildren();
+    for(const p of this.players.slice(0,6)){
+      const max=Math.max(1,Number(p.profile?.maxHp)||100),hp=Math.max(0,Number(p.profile?.hp)||0);
+      const row=document.createElement('div');row.className='roster-player'+(p.key===this.self?.key?' roster-self':'');
+      const label=document.createElement('div');label.className='roster-title';
+      const name=document.createElement('span');name.className='roster-name';name.textContent=p.name||'PLAYER';
+      const score=document.createElement('small');score.textContent=p.role==='spectator'?'SPECTATOR':Math.ceil(hp)+' / '+max;
+      label.append(name,score);
+      const track=document.createElement('div');track.className='roster-track';
+      track.setAttribute('role','progressbar');track.setAttribute('aria-label',(p.name||'PLAYER')+' health');
+      track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax',String(max));track.setAttribute('aria-valuenow',String(hp));
+      const fill=document.createElement('i');fill.style.width=(p.role==='spectator'?0:Math.min(100,hp/max*100))+'%';
+      if(hp/max<.25)fill.className='critical';track.append(fill);row.append(label,track);box.append(row);
+    }
+  }
+  showKillEvents(events=[]){
+    if(!this.self)return;
+    this.seenKillEvents??=new Set();
+    for(const e of events){
+      if(!e?.id||this.seenKillEvents.has(e.id))continue;
+      this.seenKillEvents.add(e.id);
+      if(e.killerKey!==this.self.key||e.victimKey===this.self.key||e.time<(this.joinedAt||0)-500||Date.now()-e.time>5500)continue;
+      const notice=$('kill-notice');notice.textContent='YOU ELIMINATED '+(e.victimName||'PLAYER');
+      notice.hidden=false;clearTimeout(this.killNoticeTimer);this.killNoticeTimer=setTimeout(()=>{notice.hidden=true},3000);
+    }
+    if(this.seenKillEvents.size>128)this.seenKillEvents.clear();
+  }
   setNear(near,holding=false){this.near=near;const prompt=$('prompt');let text='';const touch=matchMedia('(pointer:coarse)').matches;if(this.platformDeleteMode)text='GM DELETE · CLICK A DISC → BLUE · DELETE · ESC';else if(this.buildKind)text=touch?'A · PLACE':'E · PLACE  R · ROTATE  ESC · CANCEL';else if(holding)text=touch?'HOLD A · CHARGE THROW':'HOLD E / A · CHARGE THROW';else if(near?.type==='coin'||near?.type==='drop')text='';else if(near?.type==='artwork')text=touch?'A · TAKE ARTWORK':'E · TAKE ARTWORK';else if(near?.type==='plant')text='';else if(near?.type==='structure')text='ATTACK · DAMAGE STRUCTURE';prompt.textContent=text;prompt.classList.toggle('visible',!!text);}
   toast(message){clearTimeout(this.toastTimer);const toast=$('toast');toast.textContent=message;toast.classList.add('visible');this.toastTimer=setTimeout(()=>toast.classList.remove('visible'),2200);}
   fusionFeedback(success,message=''){
@@ -56,7 +87,7 @@ export class TempleUI extends EventTarget{
     box.animate([{opacity:.9,offset:0},{opacity:.9,offset:.5},{opacity:0,offset:1}],{duration:1000,fill:'forwards'});
     this.fusionTimer=setTimeout(()=>{box.remove();if(this.fusionIndicator===box)this.fusionIndicator=null;},1020);
   }
-  death(until){if(this.deathUntil===until)return;this.deathUntil=until;clearTimeout(this.deathTimer);const overlay=$('death');if(!until||until<=Date.now()){overlay.hidden=true;return;}overlay.hidden=false;const update=()=>{const left=Math.max(0,Math.ceil((until-Date.now())/1000));$('respawn-count').textContent=left;if(left)this.deathTimer=setTimeout(update,200);else overlay.hidden=true;};update();}
+  death(until,killer=''){if(this.deathUntil===until&&this.deathKiller===killer)return;this.deathUntil=until;this.deathKiller=killer;clearTimeout(this.deathTimer);const overlay=$('death');$('death-killer').textContent=killer?'KILLED BY '+killer:'';if(!until||until<=Date.now()){overlay.hidden=true;return;}overlay.hidden=false;const update=()=>{const left=Math.max(0,Math.ceil((until-Date.now())/1000));$('respawn-count').textContent=left;if(left)this.deathTimer=setTimeout(update,200);else overlay.hidden=true;};update();}
   openPanel(name,fromJourney=false){if(!this.self)return;if(name==='social'&&!fromJourney){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;document.body.classList.remove('panel-open');this.panelName='';this.emit('panel',{open:false});}
   renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
