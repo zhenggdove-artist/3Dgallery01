@@ -102,3 +102,18 @@ test('model-only 30% filters and fire sprites restore original materials on expi
  assert.equal(mesh.material,original);
  visuals.dispose();mesh.geometry.dispose();original.dispose();
 });
+
+
+test('official #01 burn VFX matches the exact downloaded 00GameDevs source bytes',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const {createHash}=await import('node:crypto');
+ const manifest=JSON.parse(await readFile(new URL('../vendor/00gamedevs/fireball-source.json',import.meta.url)));
+ const original=await readFile(new URL('../vendor/00gamedevs/source/fireball.js',import.meta.url));
+ const header=Buffer.from('blob '+original.length+'\0');
+ const blobSha=createHash('sha1').update(header).update(original).digest('hex');
+ assert.equal(manifest.number,1);
+ assert.equal(manifest.slug,'fireball');
+ assert.equal(manifest.modified_original,false);
+ assert.equal(blobSha,manifest.source_git_blob_sha1);
+ assert.equal(original.toString('utf8').includes('00GameDevs exported assets — original code only'),true);
+});
