@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createInitialWorld,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
 import {itemById} from '../src/shared/catalog.js';
-import {isChannelStaff} from '../src/shared/weapon-abilities.js';
+import {isChannelStaff,isStaffTap,STAFF_TAP_MAX_MS} from '../src/shared/weapon-abilities.js';
 const NOW=1200000;
 const caster={key:'tap-player',name:'Tap',role:'fighter',position:[75,0,0],color:'#fff'};
 function create(id){const world=createInitialWorld(NOW),p=ensureProfile(world,caster.key,caster.name,caster.color,NOW);p.inventory.push(id);p.equipment.weapon=id;return {world,p};}
@@ -45,4 +45,15 @@ test('hold cannot cast before 100%, starts at completion, and stops when release
   assert.equal(applyAction(world,caster,{action:'attack',phase:'channel-stop'},{now:NOW+1000+ms+100}).channeling,false);
   assert.match(applyAction(world,caster,{action:'attack',phase:'channel',direction:[0,0,1]},{now:NOW+1000+ms+200}).error,/channel/,id);
  }
+});
+
+test('only short taps create single spells; a partially charged long hold must stay silent',()=>{
+ for(const id of ['clam','water','tide-1','ember-1','frost-1','nova-1']){
+  const w=itemById(id);
+  assert.equal(isStaffTap(w,95),true,id);
+  assert.equal(isStaffTap(w,STAFF_TAP_MAX_MS),true,id);
+  assert.equal(isStaffTap(w,STAFF_TAP_MAX_MS+1),false,id);
+  assert.equal(isStaffTap(w,w.chargeMs-1),false,id);
+ }
+ assert.equal(isStaffTap(itemById('calico-cat'),100),false);
 });

@@ -10,6 +10,10 @@ export function weaponQuality(item,fusion){
  return {tier,visual:1+d*.19,damage:1+d*.13,range:1+d*.065,
   radius:1+d*.16,duration:1+d*.22};
 }
+export const STAFF_TAP_MAX_MS=280;
+export function isStaffTap(item,heldMs){
+ return isChannelStaff(item)&&Number.isFinite(heldMs)&&heldMs>=0&&heldMs<=STAFF_TAP_MAX_MS;
+}
 export function channelInterval(item){return Math.max(260,Number(item?.cooldown)||700);}
 // One shared duration/radius for the visible giant fish and server-owned swept hitbox.
 export const GOLDFISH_SWIM_MS=1600;

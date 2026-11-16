@@ -9,7 +9,7 @@ import {ArtworkThrow} from './artwork-throw.js';
 import {equipmentPortrait} from './equipment-portrait.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {attackDirection} from './aiming.js';
-import {isChannelStaff,channelInterval} from './shared/weapon-abilities.js';
+import {isChannelStaff,isStaffTap,channelInterval} from './shared/weapon-abilities.js';
 import {uploadArtwork} from './artwork-upload.js';
 import {VitalModels} from './vital-models.js';
 import {createVHS} from './reletter-vhs.js';
@@ -149,13 +149,14 @@ ui.addEventListener('attack-release',async()=>{
  }
  if(chargeStarted===null)return;
  const weapon=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
- const charge=Math.min(1,(performance.now()-chargeStarted)/(weapon?.chargeMs||1500));
+ const heldMs=performance.now()-chargeStarted;
+ const charge=Math.min(1,heldMs/(weapon?.chargeMs||1500));
  chargeStarted=null;
  await chargeRequest;
- // Staffs/clam ONLY emit ordinary shots on short taps. A completed staff
- // hold is the end of a continuous cast, never an extra release projectile.
+ // A short tap casts one projectile (or clam melee). Releasing a partly
+ // charged LONG hold casts nothing; a fully charged hold stops the channel.
  if(isChannelStaff(weapon)){
-  if(charge<1)performAttack(0);
+  if(isStaffTap(weapon,heldMs))performAttack(0);
  }else{
   performAttack(charge);
  }
