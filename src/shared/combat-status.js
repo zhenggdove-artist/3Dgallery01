@@ -1,6 +1,5 @@
 import {applyWeaponTraits,effectActive} from '../reletter/server/combat-effects.js';
 import {originalEquipmentGame} from './fusion-adapter.js';
-import {equipmentById} from '../reletter/equipment-catalog.js';
 export {effectActive};
 export function applyStatus(world,source,target,weapon,shot,now){
  if(!target||target.admin||target.hp<=0)return;
@@ -22,7 +21,9 @@ export function applyStatus(world,source,target,weapon,shot,now){
   if(['freeze','root','confuse','dazzle','soaked'].includes(key)||effect.owner!==source.key||effect.until<=(previous[key]||0))continue;
   effect.until+=Math.round((effect.until-now)*(durationScale-1));
  }
- for(const id of source.fusion?.[weapon.id]?.effects||[]){const item=equipmentById(id);if(item)applyWeaponTraits(game,item,{...shot,shooter:source.key},now);}
+ // Fusion echoes are separate server-owned projectiles. Their actual contact
+ // calls applyElementalHit(..., 0.2); never proc the ingredient's full-strength
+ // legacy traits here on the primary weapon's hit.
  source.hp=Math.min(source.maxHp,source.maxHp-game.hits[source.key]*10);
  if(resolved.knockback)target.impulse={id:now,vector:resolved.knockback};
 }
