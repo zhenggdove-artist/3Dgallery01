@@ -17,7 +17,7 @@ import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs} from './combat-balance.js';
-import {isChannelStaff,weaponQuality,channelVisualRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
@@ -335,8 +335,7 @@ function attack(world,profile,actor,body,context,now){
   stats.range=+(stats.range*quality.range).toFixed(2);
   // The narrow server collision tube must agree with the visible spray and
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
-  stats.radius=channel?channelVisualRadius(weapon,quality,stats.range):
-   +(stats.radius*quality.radius).toFixed(2);
+  stats.radius=forwardCastRadius(weapon,quality,stats.radius,channel);
   const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
@@ -564,8 +563,8 @@ function tickPersistentAttacks(world,actors,now,rng){
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
     const damage=isPlayer?Math.min(rawDamage,pvpCap):rawDamage;
     let applied;
-    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,modifiers.kind,impact);
-    else applied=damageMonster(world,owner,damage,now,rng,modifiers.kind,enemy,impact);
+    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,modifiers.kind,position);
+    else applied=damageMonster(world,owner,damage,now,rng,modifiers.kind,enemy,position);
     if(applied&&!applied.immune&&!applied.defeated){
      const statusKey=enemy.id||enemy.key;
      if(!(fx.statusHits||[]).includes(statusKey)){
@@ -603,7 +602,10 @@ function tickPersistentAttacks(world,actors,now,rng){
    }
    // Ground-targeted charged area explosions are evaluated only once their
    // visible travel has completed; targets that have moved away evade damage.
-   if((fx.area?.mode==='area'||fx.area?.mode==='sector')&&!fx.areaResolved&&next>=.70){
+   if(fx.area?.mode==='area'&&!fx.areaResolved&&next>=1){
+     // No invisible early area damage at 70% travel. The server-owned
+     // collision sweep still handles the path, while remote AoE waits
+     // until the travelling spell reaches its endpoint.
     fx.areaResolved=true;
     for(const target of targets){
      const enemy=target.value,key=enemy.id||enemy.key;

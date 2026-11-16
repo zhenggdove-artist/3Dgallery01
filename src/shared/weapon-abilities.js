@@ -14,13 +14,16 @@ export function weaponQuality(item,fusion){
 // explosion. Shared by the authoritative hit tube and warning #59.
 export function channelVisualRadius(item,quality=weaponQuality(item),range=Number(item?.range)||10){
  if(item?.id==='clam')return +(1.45*quality.visual).toFixed(3);
- // Anime Flame Flow #73 travels ~10 local units. The renderer expands its
- // scene uniformly for upgraded staffs with longer real hit ranges.
- if(item?.family==='fire')return +(1.65*Math.max(.8,range/10)).toFixed(3);
- const base={water:1.6,ice:1.05,lightning:.9,beam:1.05,petal:1.3,wave:1.4};
- return +((base[item?.family]||1.1)*quality.visual).toFixed(3);
+ // Match thin visible streams: previous fire warning grew wider with range.
+ const base={water:1.05,ice:.80,fire:1.05,lightning:.65,beam:.65,petal:.95,wave:1.0};
+ return +((base[item?.family]||1)*quality.visual).toFixed(3);
 }
-// Shared range contract: ice channel #70 advances twice as far as before.
+export function forwardCastRadius(item,quality=weaponQuality(item),statsRadius=1,channel=false){
+ if(channel)return channelVisualRadius(item,quality);
+ // #31 is a slender forward-travelling three-crown projectile, not an AoE.
+ if(item?.family==='palm')return +(1.35*quality.visual).toFixed(3);
+ return +(statsRadius*quality.radius).toFixed(2);
+}
 export const channelReachMultiplier=item=>item?.family==='ice'?2:1;
 export const STAFF_TAP_MAX_MS=500;
 export const CAST_MOVE_FACTOR=.05;

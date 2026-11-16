@@ -42,7 +42,7 @@ export function attackStats(item,charge=0){
  // The width contracts to one third of the previous hitbox and warning.
  if(item.family==='saber'&&result.ultimate){
   result.range=+(result.range*4).toFixed(3);
-  result.radius=+(result.radius*2/3).toFixed(3);
+  result.radius=+(result.radius*2/9).toFixed(3);
  }
  return result;
 }

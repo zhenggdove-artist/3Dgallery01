@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {attackStats} from './shared/catalog.js';
 import {chargedArea,spellGroundHeight,spellFootprint} from './shared/charge-area.js';
-import {weaponQuality,isChannelStaff,channelVisualRadius,channelReachMultiplier} from './shared/weapon-abilities.js';
+import {weaponQuality,isChannelStaff,forwardCastRadius,channelReachMultiplier} from './shared/weapon-abilities.js';
 // These are the ORIGINAL source downloads from 00GameDevs; do not redraw them.
 import createSector from '../vendor/00gamedevs/source/spell-indicator-sector.js';
 import createRectangle from '../vendor/00gamedevs/source/spell-indicator-rectangle.js';
@@ -63,8 +63,7 @@ export class ChargeTargetPreview {
   stats.range=+(stats.range*quality.range).toFixed(2);
   // Use the same thin hit tube as server-owned continuous casting, rather
   // than the giant charged blast radius.
-  stats.radius=isChannelStaff(equipped)?channelVisualRadius(equipped,quality,stats.range):
-   +(stats.radius*quality.radius).toFixed(2);
+  stats.radius=forwardCastRadius(equipped,quality,stats.radius,isChannelStaff(equipped));
   const ground=(x,z,y)=>spellGroundHeight(arena?.world,x,z,y);
   const origin=Array.isArray(muzzle)&&muzzle.length===3&&muzzle.every(Number.isFinite)
    ?[...muzzle]:[root.position.x,root.position.y+1,root.position.z];
