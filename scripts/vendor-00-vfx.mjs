@@ -43,4 +43,31 @@ await writeFile('vendor/00gamedevs/numbered-manifest.json',JSON.stringify({
  packaging:'byte-identical original JavaScript, no imitation or generated particles',
  assets
 },null,2)+'\n');
+
+ // Spell indicators #58/#59 are also installed byte-for-byte from the official
+ // catalogue. They are not weapon attacks, so retain the twelve-attack manifest.
+const warningIds={58:'spell-indicator-sector',59:'spell-indicator-rectangle'};
+const warnings=[];
+for(const [num,id] of Object.entries(warningIds)){
+ const a=catalog.assets.find(v=>v.id===id&&v.kind==='effect');
+ if(!a||a.license!=='MIT'||a.integration?.type!=='scene-object'||!a.download?.url||!a.download?.sha256)
+  throw Error('Missing original indicator #'+num+': '+id);
+ const url=new URL(a.download.url,origin);
+ if(url.origin!==origin)throw Error('Unexpected warning source: '+url.href);
+ const response=await fetch(url);
+ if(!response.ok)throw Error('Original warning download failed: '+response.status);
+ const bytes=Buffer.from(await response.arrayBuffer());
+ const sha256=createHash('sha256').update(bytes).digest('hex');
+ if(sha256!==a.download.sha256)throw Error('Wrong original indicator checksum #'+num);
+ const code=bytes.toString('utf8');
+ if(!code.includes('00GameDevs')||!code.includes('The MIT License'))throw Error('Missing original warning license #'+num);
+ await writeFile(dir+'/'+id+'.js',bytes);
+ warnings.push({number:Number(num),id,url:url.href,sha256,byteLength:bytes.length,license:a.license,
+   integration:a.integration,defaultOptions:a.defaultOptions});
+ console.log('Verified original warning #'+num+' '+id+' '+sha256);
+}
+await writeFile('vendor/00gamedevs/warning-manifest.json',JSON.stringify({
+ origin,contentVersion:catalog.contentVersion,downloadedFrom:'official AI catalog v2',
+ packaging:'byte-identical original JavaScript, no imitation',assets:warnings
+},null,2)+'\n');
 console.log('Validated '+assets.length+' of '+Object.keys(numberedIds).length+' exact originals.');
