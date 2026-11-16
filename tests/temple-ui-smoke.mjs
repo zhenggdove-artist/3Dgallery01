@@ -63,11 +63,16 @@ try{
  await page.waitForFunction(()=>!!templeTest.writer.reveal?.plantId,null,{timeout:12000});
  assert.ok(await page.evaluate(()=>templeTest.writer.reveal?.plantId),'WRITE must save a plant before orbiting it');
  assert.equal(await page.evaluate(()=>templeTest.writer.fallCameraActive),true,'The WRITE camera must track the falling avatar');
- await page.waitForFunction(()=>templeTest.arena.adventure.plants.has(templeTest.writer.reveal?.plantId),null,{timeout:5000});
- const plantGrowth=await page.evaluate(()=>{
-  const root=templeTest.arena.adventure.plants.get(templeTest.writer.reveal.plantId);
+ // The cinematic clears writer.reveal asynchronously. Pin the durable
+ // backend plant ID instead of dereferencing an already-retired frame.
+ const plantedId=await page.evaluate(()=>templeTest.ui.world?.plants?.find(p=>p.text==='Browser-tested eternal message')?.id);
+ assert.ok(plantedId,'WRITE must persist the message plant');
+ await page.waitForFunction(id=>templeTest.arena.adventure.plants.has(id),plantedId,{timeout:5000});
+ const plantGrowth=await page.evaluate(id=>{
+  const root=templeTest.arena.adventure.plants.get(id);
+  if(!root)throw Error('Persisted plant disappeared before visual inspection: '+id);
   return {duration:root.userData.growDur,start:root.userData.growStart,full:root.userData.fullScale.x,now:root.scale.x};
- });
+ },plantedId);
  assert.equal(plantGrowth.duration,3100);
  assert.ok(plantGrowth.start>0&&plantGrowth.full>0&&plantGrowth.now<=plantGrowth.full,'A new plant must grow from a hidden initial state');
  await page.screenshot({path:output+'/write-and-plants.png'});
