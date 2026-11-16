@@ -1,5 +1,49 @@
 import * as THREE from 'three';
 import {clone} from 'three/addons/utils/SkeletonUtils.js';
+// The character's GLB can have a nonstandard standing axis and authored
+// root yaw. Build a *front-facing anatomical frame* instead of guessing 90°
+ // turns from its imported Euler rotation. Only the EQUIP clone is changed.
+export function orientPortraitModel(model){
+ model.updateMatrixWorld(true);
+ const bones=[];
+ model.traverse(o=>{if(o.isBone)bones.push({bone:o,name:o.name.toLowerCase().replace(/[^a-z]/g,'')});});
+ const find=patterns=>patterns.map(re=>bones.find(b=>re.test(b.name))?.bone).find(Boolean);
+ const head=find([/head$/,/neck$/]);
+ const hip=find([/hips$/,/pelvis$/,/spine$/]);
+ const left=find([/leftshoulder$/,/leftupperarm$/,/leftarm$/]);
+ const right=find([/rightshoulder$/,/rightupperarm$/,/rightarm$/]);
+ if(head&&hip&&left&&right){
+  const at=b=>b.getWorldPosition(new THREE.Vector3());
+  const up=at(head).sub(at(hip));
+  const horizontal=at(left).sub(at(right));
+  if(up.lengthSq()>1e-6&&horizontal.lengthSq()>1e-6){
+   up.normalize();
+   horizontal.addScaledVector(up,-horizontal.dot(up));
+   if(horizontal.lengthSq()>1e-6){
+    horizontal.normalize();
+    const front=horizontal.clone().cross(up).normalize();
+    const rightAxis=up.clone().cross(front).normalize();
+    const basis=new THREE.Matrix4().makeBasis(rightAxis,up,front);
+    // Inverse of the anatomical basis brings HEAD to screen +Y, left /
+    // right shoulders to horizontal ±X and FACE directly toward +Z camera.
+    const correction=new THREE.Quaternion().setFromRotationMatrix(basis).invert();
+    model.quaternion.premultiply(correction);
+    model.updateMatrixWorld(true);
+    return 'anatomical';
+   }
+  }
+ }
+ // Fallback for models without Mixamo bone names: an upright silhouette
+ // is mandatory, even if the imported scene lies horizontally.
+ const bounds=new THREE.Box3().setFromObject(model,true);
+ const size=bounds.getSize(new THREE.Vector3());
+ const axis=size.x>=size.y&&size.x>=size.z?new THREE.Vector3(1,0,0):
+  size.z>size.y?new THREE.Vector3(0,0,1):new THREE.Vector3(0,1,0);
+ model.quaternion.premultiply(new THREE.Quaternion().setFromUnitVectors(axis,new THREE.Vector3(0,1,0)));
+ model.updateMatrixWorld(true);
+ return 'bounds';
+}
+
 // RELETTER's render-target portrait approach: one on-demand snapshot, no extra canvas loop.
 export function equipmentPortrait(renderer,root){
   if(!root)return '';
@@ -14,12 +58,12 @@ export function equipmentPortrait(renderer,root){
     if(/leftarm$/.test(name))bone.rotation.z+=.24;
     if(/rightarm$/.test(name))bone.rotation.z-=.24;
   });
-  // The former bone-aligned overhead camera showed the avatar lying
-  // sideways in EQUIP on mobile. Raise the camera to eye level (90 degrees)
-  // and turn only the detached display model clockwise by 90 degrees.
+  // The correct orientation depends on the imported Mixamo skeleton.
+  // It is not necessarily a 90° Euler turn. Align its head/hip/shoulder
+  // landmarks to the viewer, independently of current combat animation.
   model.position.set(0,0,0);
-  model.rotation.y-=Math.PI/2;
   model.visible=true;
+  orientPortraitModel(model);
   scene.add(model);
   scene.add(new THREE.HemisphereLight(0xffffff,0x756280,2.5));
   const light=new THREE.DirectionalLight(0xffffff,3);
