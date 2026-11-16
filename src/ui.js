@@ -4,7 +4,9 @@ import {ART_ACCEPT} from './artwork-upload.js';
 import {bindBagDrag} from './bag-drag.js';
 import {PLATFORMS} from './shared/arena.js';
 import {playerArtworkAppearanceMarkup} from './art-editor-panel.js';
-import {ECONOMY,RARITIES,SHOP_ITEMS,EQUIPPABLE_SLOTS,itemById} from './shared/catalog.js';
+import {ECONOMY,RARITIES,SHOP_ITEMS,EQUIPPABLE_SLOTS,itemById,attackStats} from './shared/catalog.js';
+import {pvpShotDamage} from './shared/combat-balance.js';
+import {weaponQuality} from './shared/weapon-abilities.js';
 import {itemPreview as itemIcon} from './item-preview.js';
 import {drawingForm,attachDrawing,mediaMarkup} from './media-ui.js';
 
@@ -84,5 +86,5 @@ export class TempleUI extends EventTarget{
 
 function option(item){return `<option value="${item.id}">${escape(item.name)}</option>`;}
 const icons=new Map();
-function itemCard(item,action){if(!icons.has(item.id))icons.set(item.id,itemIcon(item));const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`${item.damage} DMG · ${item.range}m · ${item.cooldown}ms`:item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88"><img src="${icons.get(item.id)}" alt="" loading="lazy"><small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><h3>${escape(item.name)}</h3><small>${escape(stats)}</small>${action}</article>`;}
+function itemCard(item,action){if(!icons.has(item.id))icons.set(item.id,itemIcon(item));const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${pvpShotDamage(item,attackStats(item,0),weaponQuality(item))} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88"><img src="${icons.get(item.id)}" alt="" loading="lazy"><small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><h3>${escape(item.name)}</h3><small>${escape(stats)}</small>${action}</article>`;}
 import {bindChatLayout} from './chat-layout.js';

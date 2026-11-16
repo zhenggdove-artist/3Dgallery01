@@ -1,5 +1,7 @@
 import {attackStats} from './catalog.js';
 import {weaponRangeClass} from '../reletter/odd-weapons.js';
+import {pvpShotDamage} from './combat-balance.js';
+import {weaponQuality} from './weapon-abilities.js';
 
 // Readable descriptions follow the authoritative combat catalog, not icon art.
 const families={
@@ -21,12 +23,16 @@ export function weaponClass(item){return weaponRangeClass(item);}
 export function explainWeapon(item,fusion=null){
  if(!item)return '';
  if(item.slot!=='weapon')return item.description||'可裝備物品';
- const cls=weaponClass(item),grade={near:'近距離',mid:'中距離',far:'遠距離'}[cls],normal=attackStats(item,0),charged=attackStats(item,1);
+ const cls=weaponClass(item),grade={near:'近距離',mid:'中距離',far:'遠距離'}[cls],
+  normal=attackStats(item,0),charged=attackStats(item,1),
+  quality=weaponQuality(item,fusion);
  return [
   grade+'武器',
   item.description||families[item.family]||'特殊武器。按住攻擊鍵集氣，完整蓄力後釋放強力攻擊。',
-  '基本射程 '+normal.range.toFixed(1)+'m，滿集氣射程 '+charged.range.toFixed(1)+'m',
-  '基本傷害 '+Math.round(normal.damage+(fusion?.bonus||0))+'，滿集氣傷害 '+Math.round(charged.damage+(fusion?.bonus||0)),
+  '普通射程 '+normal.range.toFixed(1)+'m，滿集氣射程 '+charged.range.toFixed(1)+'m',
+  'PvP 每次命中約 '+pvpShotDamage(item,normal,quality)+' 傷害；滿集氣約 '+pvpShotDamage(item,charged,quality)+'（命中、暴擊、抗性及散彈命中數會影響結果）',
+  '怪物基礎傷害 '+Math.round(normal.damage+(fusion?.bonus||0))+'，大絕 '+Math.round(charged.damage+(fusion?.bonus||0)),
+  '集氣 '+((item.chargeMs||1500)/1000).toFixed(2)+'秒，CD '+(item.cooldown/1000).toFixed(2)+'秒',
   '滿集氣影響半徑約 '+charged.radius.toFixed(1)+'m'
  ].join(' · ');
 }
