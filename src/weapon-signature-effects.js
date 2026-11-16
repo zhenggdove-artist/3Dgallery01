@@ -80,39 +80,83 @@ export class WeaponSignatureEffects {
   });
  }
  goldfish(event){
-  const origin=vec(event.origin),direction=vec(event.direction).normalize(),quality=event.qualityScale||1;
-  const group=new THREE.Group();group.name='Giant swimming goldfish ultimate';
-  const bodyGroup=new THREE.Group();group.add(bodyGroup);
-  // A complete giant fish silhouette: round belly, raised head, two eyes,
-  // paired fins, forked tail and moving gills. No shared water-jet ultimate.
-  const add=(parent,geometry,color,position,scale,rot=null)=>{
-   const mesh=new THREE.Mesh(geometry,material(color));mesh.position.set(...position);
-   mesh.scale.set(...scale);if(rot)mesh.rotation.set(...rot);parent.add(mesh);return mesh;
+  const origin=vec(event.origin),direction=vec(event.direction).normalize();
+  const quality=event.qualityScale||1,duration=GOLDFISH_SWIM_MS/1000*(event.qualityDuration||1);
+  const group=new THREE.Group(),fish=new THREE.Group();
+  group.name='Translucent spectral goldfish swimming forward';
+  group.add(fish);
+  // A glasslike moving fish image rather than a solid stack of toy primitives.
+  const bodyGeo=new THREE.SphereGeometry(1,48,32);
+  const glow=(color,opacity)=>new THREE.MeshPhysicalMaterial({
+   color,emissive:color,emissiveIntensity:.17,metalness:.08,roughness:.3,
+   clearcoat:1,clearcoatRoughness:.18,transparent:true,opacity,
+   depthWrite:false,side:THREE.DoubleSide,transmission:.10,thickness:.12
+  });
+  const amber=glow('#ff9f4e',.37),pearl=glow('#ffe8af',.29),
+   finMat=glow('#ffb467',.24),rim=glow('#fff2d9',.55),eye=glow('#162b40',.8);
+  const add=(parent,geo,mat,pos,scale)=>{
+   const mesh=new THREE.Mesh(geo,mat);mesh.position.set(...pos);mesh.scale.set(...scale);
+   parent.add(mesh);return mesh;
   };
-  add(bodyGroup,sphere,'#ff8c22',[0,0,0],[.86,.63,1.35]);
-  add(bodyGroup,sphere,'#ffb949',[0,-.20,.49],[.77,.42,.91]);
-  add(bodyGroup,sphere,'#ff7d12',[0,.1,1.01],[.68,.57,.66]);
-  add(bodyGroup,sphere,'#ffeac0',[0,-.20,1.52],[.24,.15,.13]);
+  add(fish,bodyGeo,amber,[0,0,0],[.86,.66,1.36]);
+  add(fish,bodyGeo,pearl,[0,-.21,.43],[.77,.43,.9]);
+  add(fish,bodyGeo,amber,[0,.09,1.03],[.67,.57,.67]);
+  add(fish,bodyGeo,rim,[0,-.21,1.54],[.24,.14,.12]);
   for(const side of [-1,1]){
-   add(bodyGroup,sphere,'#fff7eb',[side*.59,.21,1.22],[.22,.23,.13]);
-   add(bodyGroup,sphere,'#14233a',[side*.67,.21,1.33],[.11,.14,.07]);
-   add(bodyGroup,geomCone,'#ffbb39',[side*.79,-.14,-.10],[.33,.85,.14],[0,0,side*.85]);
-   add(bodyGroup,sphere,'#da6421',[side*.56,-.03,1.08],[.05,.18,.13]);
+   add(fish,bodyGeo,rim,[side*.59,.21,1.2],[.21,.22,.10]);
+   add(fish,bodyGeo,eye,[side*.65,.21,1.31],[.11,.13,.055]);
+   add(fish,bodyGeo,finMat,[side*.79,-.12,-.13],[.24,.76,.09]).rotation.z=side*.48;
+   // Curved gill filaments and light-catching seams define the facial profile.
+   for(let i=0;i<3;i++){
+    const curve=new THREE.CatmullRomCurve3([
+     new THREE.Vector3(side*(.56+i*.06),.33,1.04-i*.12),
+     new THREE.Vector3(side*(.73+i*.04),0,.94-i*.12),
+     new THREE.Vector3(side*(.56+i*.06),-.27,.99-i*.12)]);
+    fish.add(new THREE.Mesh(new THREE.TubeGeometry(curve,18,.009,5,false),rim));
+   }
   }
-  add(bodyGroup,geomCone,'#ffbf38',[0,.73,-.23],[.42,.72,.17],[Math.PI/2,0,0]);
-  const tail=new THREE.Group();tail.position.z=-1.29;bodyGroup.add(tail);
-  add(tail,geomCone,'#ff9e32',[-.38,0,-.61],[.60,1.2,.24],[Math.PI/2,0,-.55]);
-  add(tail,geomCone,'#ffbb42',[.38,0,-.61],[.60,1.2,.24],[Math.PI/2,0,.55]);
-  bodyGroup.scale.setScalar(2.5*quality);
-  const orientation=qdir(direction),duration=GOLDFISH_SWIM_MS/1000*(event.qualityDuration||1);
+  add(fish,bodyGeo,finMat,[0,.73,-.23],[.20,.62,.44]);
+  const tail=new THREE.Group();tail.position.z=-1.3;fish.add(tail);
+  for(const side of [-1,1]){
+   const blade=add(tail,bodyGeo,finMat,[side*.35,.03,-.55],[.55,.83,.11]);
+   blade.rotation.z=side*.35;
+   for(let i=0;i<5;i++){
+    const line=new THREE.CatmullRomCurve3([
+     new THREE.Vector3(0,0,-.05),
+     new THREE.Vector3(side*(.22+i*.065),.05+(i-2)*.16,-.48),
+     new THREE.Vector3(side*(.36+i*.075),.05+(i-2)*.28,-.91)]);
+    tail.add(new THREE.Mesh(new THREE.TubeGeometry(line,14,.006,4,false),rim));
+   }
+  }
+  // Four semi-transparent temporal silhouettes supply a depth-bearing motion blur.
+  const ghosts=[];
+  for(let i=0;i<4;i++){
+   const echo=fish.clone(true);
+   echo.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.material.opacity*=.34/(i+1);o.material.depthWrite=false;}});
+   group.add(echo);ghosts.push(echo);
+  }
+  const orientation=qdir(direction);
+  fish.scale.setScalar(2.5*quality);
   this.add(group,duration,age=>{
    const progress=Math.min(1,age/duration);
-   group.position.copy(origin).addScaledVector(direction,(event.range||32)*progress);
+   const travel=(event.range||32)*progress;
+   group.position.copy(origin).addScaledVector(direction,travel);
    group.quaternion.copy(orientation);
-   bodyGroup.rotation.y=Math.sin(age*13)*.08;
-   tail.rotation.y=Math.sin(age*19)*.42;
-   bodyGroup.rotation.z=Math.sin(age*8)*.04;
-   group.scale.setScalar(Math.min(1,age*6)*Math.min(1,(duration-age)*7));
+   // Turn the animal 90 degrees to its RIGHT within the travel frame.
+   const yaw=Math.PI/2+Math.sin(age*8)*.065;
+   fish.rotation.y=yaw;
+   fish.rotation.z=Math.sin(age*7)*.035;
+   tail.rotation.y=Math.sin(age*16)*.44;
+   for(let i=0;i<ghosts.length;i++){
+    const echo=ghosts[i],lag=(i+1)*.41;
+    echo.position.set(0,0,-lag);
+    echo.rotation.y=yaw-Math.sin(age*5-i)*.045;
+    echo.rotation.z=fish.rotation.z;
+    echo.scale.setScalar(2.5*quality*(1-.07*(i+1)));
+    echo.visible=progress>(i+1)*.006;
+   }
+   const fade=Math.min(1,age*6,(duration-age)*7);
+   group.scale.setScalar(Math.max(0,fade));
   });
  }
  flower(event){
