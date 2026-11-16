@@ -4,7 +4,11 @@ import {artworkDefinitions} from './shared/artwork-library.js';
 export class DisplayPlatforms{
  constructor(arena){this.arena=arena;this.discs=[];this.geometry=new THREE.CylinderGeometry(1,1.06,.4,32);this.material=new THREE.MeshPhysicalMaterial({color:'#E84887',roughness:.25,metalness:.1,clearcoat:.8,iridescence:.6,emissive:'#E84887',emissiveIntensity:.06});}
  sync(){const a=this.arena,defs=artworkDefinitions(a.world),signature=JSON.stringify([a.world?.artworkLayout||a.defaultLayout,a.world?.floatingPlatforms,defs.map(d=>d.id),a.artworks.size]);if(signature===this.signature)return;this.signature=signature;const discs=[],pedestals=[],matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),scale=new THREE.Vector3();
- for(const d of defs){const root=a.artworks.get(d.id);if(!root)continue;let box=root.userData.displayBounds;if(!box){root.updateMatrixWorld(true);const inverse=root.matrixWorld.clone().invert();box=new THREE.Box3();root.traverse(o=>{if(!o.geometry)return;o.geometry.computeBoundingBox();box.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse,o.matrixWorld)));});root.userData.displayBounds=box;}
+ for(const d of defs){
+  // Uploaded/placed player artwork stands on the terrain without a pedestal,
+  // pink display disc or spiral staircase. The original 13 exhibits keep theirs.
+  if((a.world?.customArtworks||[]).some(record=>record.id===d.id&&record.bomb))continue;
+  const root=a.artworks.get(d.id);if(!root)continue;let box=root.userData.displayBounds;if(!box){root.updateMatrixWorld(true);const inverse=root.matrixWorld.clone().invert();box=new THREE.Box3();root.traverse(o=>{if(!o.geometry)return;o.geometry.computeBoundingBox();box.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse,o.matrixWorld)));});root.userData.displayBounds=box;}
  const l=a.world?.artworkLayout?.[d.id]||a.defaultLayout[d.id]||{position:d.artPosition,rotation:[0,d.artYaw,0],scale:[1,1,1]},b=box.clone().applyMatrix4(matrix.compose(new THREE.Vector3(),q.setFromEuler(new THREE.Euler(...l.rotation)),scale.fromArray(l.scale))),top=Math.max(0,l.position[1]+b.min.y-.1),radius=2*Math.max(2.3,Math.min(7,Math.max(b.max.x-b.min.x,b.max.z-b.min.z)/2+.8)),position=[l.position[0],top-.2,l.position[2]];
  discs.push({position,radius,top,artwork:d.id,display:true});pedestals.push({position:[position[0],top-.65,position[2]],radius:radius*.35});
  // Max 1.7 rise remains below the original jump's 2-unit apex.
