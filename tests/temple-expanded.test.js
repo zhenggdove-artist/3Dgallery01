@@ -188,7 +188,7 @@ test('all cat guns keep their advertised normal and charged range and deal PvP d
   ];
   for(const [id,range,chargedRange,normalDistance,chargedDistance] of guns){
     const weapon=WEAPONS.find(w=>w.id===id);
-    assert.ok(weapon?.firstPerson,id);
+    assert.equal(!!weapon?.firstPerson,id!=='calico-cat',id+' only calico fires without shoulder camera');
     assert.equal(attackStats(weapon,0).range,range,id+' normal range');
     assert.equal(attackStats(weapon,1).range,chargedRange,id+' charged range');
     for(const [charge,distance] of [[0,normalDistance],[1,chargedDistance]]){
