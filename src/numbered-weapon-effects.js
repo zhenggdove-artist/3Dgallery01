@@ -159,7 +159,7 @@ export class NumberedWeaponEffects {
   if(!options.color)delete options.color;
   const cached=this.prewarmed.get(spec.asset);
    const fx=cached||this.create(spec,options);
-   if(cached){this.prewarmed.delete(spec.asset);this.scene.add(fx.group);fx.group.visible=true;fx.reset?.();fx.setOptions?.(options);}
+   if(cached){this.prewarmed.delete(spec.asset);this.scene.add(fx.group);fx.reset?.();fx.setOptions?.(options);fx.group.visible=true;}
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
   // #29 is a forward beam: even its charged shot starts at the weapon, not
   // at an unrelated remote ground-circle centre.
