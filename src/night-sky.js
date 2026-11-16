@@ -6,34 +6,48 @@ import * as THREE from 'three';
 // testing enabled, so scene geometry always occludes it.
 const random=seed=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
 function makeCloudTexture(seed){
-  const rand=random(seed),canvas=document.createElement('canvas');
+  const rnd=random(seed),canvas=document.createElement('canvas');
   canvas.width=640;canvas.height=256;
   const ctx=canvas.getContext('2d');
-  // Large overlapping lobes give silhouettes and weight, not film-grain dots.
+  const mask=document.createElement('canvas');mask.width=640;mask.height=256;
+  const outline=mask.getContext('2d');outline.fillStyle='#ffffff';
+  // Build one continuous cloud mass from unequal silhouette lobes.
   const lobes=[];
-  for(let i=0;i<27;i++){
-    const x=90+rand()*455,base=142+rand()*37;
-    const r=25+rand()*55;
-    lobes.push({x,y:base-(rand()*.76)*r,r,light:.35+rand()*.27});
+  for(let i=0;i<23;i++){
+    const x=72+rnd()*495,y=150+(rnd()-.5)*35-(rnd()<.65?rnd()*37:0);
+    const rx=28+rnd()*61,ry=23+rnd()*39;
+    lobes.push({x,y,rx,ry});
+    outline.beginPath();outline.ellipse(x,y,rx,ry,-.25+rnd()*.5,0,Math.PI*2);outline.fill();
   }
-  lobes.sort((a,b)=>a.y-b.y);
+  outline.beginPath();outline.ellipse(320,181,265,31,0,0,Math.PI*2);outline.fill();
+  // Blurred outline stays an aerial cloud with broad, definite contours;
+  // it never becomes a peppered point overlay attached to the camera.
+  ctx.filter='blur(5px)';ctx.drawImage(mask,0,0);ctx.filter='none';
+  ctx.globalCompositeOperation='source-in';
+  const body=ctx.createLinearGradient(0,70,0,238);
+  body.addColorStop(0,'rgba(162,177,215,.92)');
+  body.addColorStop(.37,'rgba(113,137,182,.90)');
+  body.addColorStop(.72,'rgba(63,84,135,.92)');
+  body.addColorStop(1,'rgba(24,35,78,.89)');
+  ctx.fillStyle=body;ctx.fillRect(0,0,640,256);
+  // World-facing warm upper rims and cool deep undersides.
+  ctx.globalCompositeOperation='source-atop';
   for(const l of lobes){
-    const g=ctx.createRadialGradient(l.x,l.y,l.r*.13,l.x,l.y,l.r);
-    g.addColorStop(0,'rgba(199,210,232,.66)');
-    g.addColorStop(.36,'rgba(148,165,202,.51)');
-    g.addColorStop(.70,'rgba(101,125,170,.26)');
-    g.addColorStop(1,'rgba(84,107,148,0)');
-    ctx.fillStyle=g;ctx.fillRect(l.x-l.r,l.y-l.r,2*l.r,2*l.r);
+    const g=ctx.createRadialGradient(l.x-l.rx*.18,l.y-l.ry*.5,l.ry*.06,l.x,l.y,l.rx*1.2);
+    g.addColorStop(0,'rgba(198,210,229,.35)');
+    g.addColorStop(.5,'rgba(139,157,194,.12)');
+    g.addColorStop(1,'rgba(17,28,63,0)');
+    ctx.fillStyle=g;ctx.beginPath();
+    ctx.ellipse(l.x,l.y,l.rx,l.ry,0,0,Math.PI*2);ctx.fill();
   }
-  // A dark, shallow underside visually anchors the layered cloud banks.
-  const under=ctx.createLinearGradient(0,150,0,230);
-  under.addColorStop(0,'rgba(23,35,74,0)');
-  under.addColorStop(.6,'rgba(24,35,73,.10)');
-  under.addColorStop(1,'rgba(24,35,73,0)');
-  ctx.fillStyle=under;ctx.fillRect(38,135,566,96);
+  const shade=ctx.createLinearGradient(0,130,0,240);
+  shade.addColorStop(0,'rgba(31,45,87,0)');
+  shade.addColorStop(.63,'rgba(31,45,87,.10)');
+  shade.addColorStop(1,'rgba(15,21,55,.32)');
+  ctx.fillStyle=shade;ctx.fillRect(0,105,640,151);
+  ctx.globalCompositeOperation='source-over';
   const texture=new THREE.CanvasTexture(canvas);
-  texture.colorSpace=THREE.SRGBColorSpace;
-  texture.anisotropy=2;
+  texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=2;
   return texture;
 }
 function cloudBank(root,index,rand,touch){
