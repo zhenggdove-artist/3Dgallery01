@@ -129,6 +129,42 @@ try{
  assert.equal(vfxState.sky,'World-oriented distant cloud sky (no moon)');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});
+ // Exercise every exact source inside a real WebGL renderer (not merely in
+ // Node). The magic-circle center and native group origin are inspected from
+ // the same server-authoritative event data; shader errors are collected above.
+ const numberedInspection=await page.evaluate(async()=>{
+  const t=templeTest,v=t.arena.presentation.vfx,check=[
+   ['clam',33,'channel'],['saber-1',38,'ultimate'],['bloom-1',43,'channel'],
+   ['swatter-1',53,'ultimate'],['ember-1',73,'channel'],['pan-1',68,'ultimate'],
+   ['frost-1',70,'channel'],['storm-1',8,'channel'],['nova-1',20,'channel'],
+   ['saber-4',47,'combo'],['jellybrella',26,'ultimate'],['whip-1',48,'ultimate']
+  ],records=[];
+  for(const [id,num,kind] of check){
+   v.numberedEffects.dispose();
+   const item=t.items.find(x=>x.id===id);
+   const event={origin:[-22,1,-22],direction:[0,0,1],range:17,qualityScale:1,
+    qualityTier:kind==='combo'?4:1,combo:kind==='combo'?5:0,
+    channel:kind==='channel',ultimate:kind!=='combo',
+    area:{mode:'area',center:[-22,.12,-8],visualCenter:[-22,.16,-8],radius:4,travel:14}};
+   v.play(event,item,null);
+   const fx=v.numberedEffects.active[0];
+   records.push({id,num,source:fx?.group?.userData?.vfxSource,
+    actual:fx?.spec?.number,group:fx?.group?.name,
+    aligned:kind!=='ultimate'||Math.hypot(
+     fx.group.position.x+22,fx.group.position.y-.16,fx.group.position.z+8)<.0001});
+   // Allow at least one real frame with each source material. #70 / #73
+   // also exercise their mandatory authored render pipeline through VHS.
+   await new Promise(resolve=>setTimeout(resolve,220));
+  }
+  v.numberedEffects.dispose();
+  return records;
+ });
+ assert.equal(numberedInspection.length,12);
+ for(const result of numberedInspection){
+  assert.equal(result.actual,result.num,JSON.stringify(result));
+  assert.equal(result.source,'00GameDevs',JSON.stringify(result));
+  assert.equal(result.aligned,true,JSON.stringify(result));
+ }
  // CSS must keep field labels left and numeric controls right, even on a narrow
  // mobile portrait screen; no hidden second row or horizontal overflow.
  await page.setViewportSize({width:360,height:740});
