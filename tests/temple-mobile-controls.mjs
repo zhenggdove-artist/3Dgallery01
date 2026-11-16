@@ -79,7 +79,7 @@ try {
  await page.waitForFunction(()=>templeTest.gun.mode===0);
  assert.equal(await page.evaluate(()=>window.mobileTestShots),1,'third A exits scope without firing');
  const setup=await page.evaluate(()=>{
-  const t=templeTest,plant={id:'ci-touch-plant',author:'CI',text:'Mobile E equivalence',createdAt:Date.now()};
+  const t=templeTest,plant={id:'ci-touch-plant',author:'CI',text:'Mobile E equivalence',position:[0,0,0],media:null,parentId:null,createdAt:Date.now()};
   window.mobileForcePlant=plant;
   window.mobileForceGun=false;
   t.ui.world.plants.push(plant);
