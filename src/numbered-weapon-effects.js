@@ -155,7 +155,7 @@ export class NumberedWeaponEffects {
   if(spec.number===31)size=Math.max(.25,Math.min(3.5,quality));
   if(event.ultimate&&!event.channel&&Number.isFinite(event.area?.radius)&&![26,29,31,38,70].includes(spec.number))
    size=Math.max(.25,Math.min(3.5,event.area.radius/4.5));
-  const options={size,quality,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
+  const options={size,quality,detail:event.fusionEcho?.55:1,density:event.fusionEcho?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
   if(!options.color)delete options.color;
   const cached=this.prewarmed.get(spec.asset);
    const fx=cached||this.create(spec,options);
