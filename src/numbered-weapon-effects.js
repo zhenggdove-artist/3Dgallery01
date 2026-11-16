@@ -57,9 +57,9 @@ const FIRE_FREE_RAY=new THREE.Vector3(1,0,.42).normalize();
 const CHANNEL_GRACE_MS=3100;
 const CLAM_WAVE_INTERVAL=.38;
 const CLAM_WAVE_LIFETIME=2.18;
-const CYCLE_INTERVAL=Object.freeze({20:1.35,43:1.08,70:1.25});
-const TRAVELLING_NATIVE=new Set([20,43]);
-const travelLifetime=number=>number===43?2.2:4.2;
+const CYCLE_INTERVAL=Object.freeze({20:1.35,43:1.08,70:.76});
+const TRAVELLING_NATIVE=new Set([20,43,70]);
+const travelLifetime=number=>number===70?1.26:number===43?2.2:4.2;
 const vector=(value,fallback)=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite)?
  new THREE.Vector3(...value):fallback.clone();
 const channelColors=Object.freeze({
@@ -211,16 +211,25 @@ export class NumberedWeaponEffects {
   }
   fx.group.position.copy(origin);
   if(spec.number===38){
-   // The original fissure's long axis is +X, not the camera/sword +Z.
-   // Forward travel grows 2x again, lateral appearance stays unchanged.
-   fx.group.scale.set(4,2,2);
+   // The exact original #38 has an authored local +X crack spanning
+   // -2.25..+2.43. Its former position at the muzzle put half the crack
+   // behind the player. Move its LEFT tip to the hand, not the centre.
+   // Its local Z is lateral: reduce that scale to one-third of the old 2.
+   const horizontal=dir.clone().setY(0);
+   if(horizontal.lengthSq()<.001)horizontal.set(0,0,1);
+   horizontal.normalize();
+   const authoredLength=4.68;
+   fx.group.scale.set(range/authoredLength,2,2/3);
+   fx.group.position.copy(origin).addScaledVector(horizontal,range*(2.25/authoredLength));
    fx.group.position.y=Math.max(.12,origin.y-1.15);
+   fx.group.quaternion.setFromUnitVectors(X_FORWARD,horizontal);
+   fx.group.userData.fissureRange=range;
+   fx.group.userData.fissureLateralScale=2/3;
+   return;
   }
-  if(spec.number===70){
-   // #70 is authored along +X. Preserve the previous half-size ice
-   // pillars on Y/Z while doubling their forward travel distance.
-   fx.group.scale.x=fx.group.scale.y*4;
-  }
+  // Original ice #70 resets group.scale in every update(), which silently
+  // cancelled the previous attempt at a longer ice-shard journey.
+  // #70 copies now move from the staff tip to the FULL hit range instead.
   if(entry.areaLocked){
    fx.group.quaternion.setFromAxisAngle(UP,Math.atan2(dir.x,dir.z));
   }else{
@@ -298,7 +307,7 @@ export class NumberedWeaponEffects {
    // The original #43 bloom and #20 conch vortex copy detaches from the
    // muzzle and moves independently. New copies start at the CURRENT tip.
    fx.group.position.copy(start);
-   fx.group.quaternion.setFromUnitVectors(FORWARD,direction);
+   fx.group.quaternion.setFromUnitVectors(entry.spec.number===70?X_FORWARD:FORWARD,direction);
   }else this.align(entry,fx);
   return {fx,age:0,start,direction,stopping:false};
  }
@@ -322,7 +331,7 @@ export class NumberedWeaponEffects {
     const duration=travelLifetime(number);
     const t=Math.min(1,copy.age/duration);
     const progress=t*t*(3-2*t);
-    const advance=Math.min(entry.range,Math.max(4,entry.range*.72))*progress;
+    const advance=number===70?entry.range*progress:Math.min(entry.range,Math.max(4,entry.range*.72))*progress;
     copy.fx.group.position.copy(copy.start).addScaledVector(copy.direction,advance);
     if(number===20&&copy.age>=duration-.9&&!copy.stopping){
      copy.stopping=true;
@@ -330,6 +339,12 @@ export class NumberedWeaponEffects {
     }
    }else this.align(entry,copy.fx);
    copy.fx.update(dt);
+   if(number===70&&moving){
+    // Position after the source update as well: its internal animation must
+    // never rewind the world-space forward travel of the ice fragments.
+    copy.fx.group.position.copy(copy.start).addScaledVector(copy.direction,
+      entry.range*Math.min(1,copy.age/travelLifetime(number)));
+   }
    if(copy.fx.finished||(moving&&copy.age>travelLifetime(number)+.55))
     this.discardCycle(entry,copy);
   }
