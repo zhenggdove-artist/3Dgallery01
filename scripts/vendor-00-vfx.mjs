@@ -5,7 +5,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 
 const origin='https://00gamedevs.com';
 const numberedIds={
-  8:'arc-ray',20:'energy-vortex',26:'frost-wheel',29:'radiant-beam',33:'tidal-surge',
+  8:'arc-ray',20:'energy-vortex',26:'frost-wheel',29:'radiant-beam',31:'thorn-crown',33:'tidal-surge',
   38:'magma-fissure',43:'revival-bloom',47:'dimensional-rend',48:'black-hole',
   53:'darkchain-detonation',68:'rolling-fireburst',70:'ice-lance-study',
   73:'anime-flame-shield'
