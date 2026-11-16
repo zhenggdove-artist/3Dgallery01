@@ -257,7 +257,7 @@ function update(dt,time){
   }
   arena.presentation.charging(localRoot,charge);
   const chargedWeapon=itemById(world?.profile?.equipment?.weapon);
-  if(charge>.08&&chargedWeapon&&controller){
+  if(charge>.08&&!staffChannel&&chargedWeapon&&controller){
    const direction=chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1);
    chargePreview.update(localRoot,chargedWeapon,charge,direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null);
   }else chargePreview.hide();
