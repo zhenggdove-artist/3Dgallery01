@@ -91,19 +91,25 @@ export class ChargeTargetPreview {
    this.symbols.material.opacity=.85+.14*charge;
    return;
   }
-  // The official exported shape dimensions are capped at 20 LOCAL metres.
-  // A uniform scale retains exact world length/width/angle for larger skills.
+  // Official #59 enforces a MINIMUM local width (.75m). A uniform
+  // world scale for an 80m sniper beam expands that minimum to 3m and
+  // silently makes the warning much wider than the *true* hit cylinder.
+  // Scale X (longitudinal) and Z (lateral) INDEPENDENTLY to exact server
+  // dimensions, while preserving every pixel of the original effect.
   const factor=type==='sector'?Math.max(1,footprint.radius/20):
-   Math.max(1,footprint.length/20,footprint.width/20);
+   Math.max(1,footprint.length/20);
   const fx=type==='sector'?this.sector:this.rectangle;
+  const localWidth=type==='rectangle'?Math.max(.75,footprint.width/factor):0;
   const params=type==='sector'
    ?{color:BLUE,size:footprint.radius/factor,angleDeg:footprint.angleDeg}
-   :{color:BLUE,length:footprint.length/factor,width:footprint.width/factor,fillMode:'forward'};
+   :{color:BLUE,length:footprint.length/factor,width:localWidth,fillMode:'forward'};
   const key=JSON.stringify(params);
   if(this.lastParams!==key){fx.setOptions(params);this.lastParams=key;}
   fx.group.position.fromArray(footprint.position);
   fx.group.rotation.set(0,footprint.yaw,0);
-  fx.group.scale.setScalar(factor);
+  if(type==='rectangle')
+   fx.group.scale.set(factor,factor,footprint.width/localWidth);
+  else fx.group.scale.setScalar(factor);
   fx.setProgress(Math.max(0,Math.min(.995,charge)));
   fx.update(Math.max(0,Math.min(.05,Number(dt)||1/60)));
  }
