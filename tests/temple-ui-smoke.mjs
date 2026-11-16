@@ -70,30 +70,45 @@ try{
  // BOTH an ordinary mouse click and a mask-area click must fire, not exit.
  const setupDesk=await page.evaluate(()=>{
   const t=templeTest,gun=t.gun;
-  const originalWeapon=gun.weapon,originalEmit=t.ui.emit;
+  // Exactly like real online game updates, old snapshots can restore "clam".
+  // Force the authoritative local snapshot to carry the actual sniper so
+  // GunController's CLOSED-OVER weapon() callback also sees black-cat.
+  const originalSetWorld=t.ui.setWorld.bind(t.ui);
+  const originalAction=t.network.action.bind(t.network);
   window.desktopScopeShots=0;
   window.desktopScopeLog=[];
+  window.desktopForceGun=true;
+  t.ui.setWorld=w=>{
+   if(window.desktopForceGun&&w?.profile?.equipment)w.profile.equipment.weapon='black-cat';
+   return originalSetWorld(w);
+  };
+  t.ui.world.profile.equipment.weapon='black-cat';
+  t.network.action=async function(action,...args){
+   if(action==='attack'){window.desktopScopeShots++;return {};}
+   return originalAction(action,...args);
+  };
   addEventListener('pointerdown',e=>window.desktopScopeLog.push({
    target:e.target?.id||e.target?.tagName,
    type:e.pointerType,x:e.clientX,y:e.clientY,locked:!!document.pointerLockElement
   }),true);
-  gun.weapon=()=>({id:'black-cat',firstPerson:true,range:90,cooldown:800});
-  t.ui.emit=function(type,...args){
-   if(type==='gun-fire'){window.desktopScopeShots++;return;}
-   return originalEmit.call(this,type,...args);
-  };
   window.restoreDesktopScope=()=>{
-   gun.end();gun.weapon=originalWeapon;t.ui.emit=originalEmit;
+   gun.end();window.desktopForceGun=false;
+   t.ui.setWorld=originalSetWorld;t.network.action=originalAction;
+   t.ui.world.profile.equipment.weapon='clam';
   };
   t.controller().setEnabled(true);
   gun.cycle();gun.cycle();
-  return {mode:gun.mode,scopeVisible:!gun.overlay.hidden};
+  return {mode:gun.mode,scopeVisible:!gun.overlay.hidden,weapon:gun.weapon()?.id};
  });
  assert.equal(setupDesk.mode,2,'desktop sniper CAMERA enters full scope');
  await page.mouse.click(640,400);
  await page.waitForTimeout(200);
  const firstScope=await page.evaluate(()=>({
   shots:window.desktopScopeShots,mode:templeTest.gun.mode,
+  gunWeapon:templeTest.gun.weapon()?.id,
+  worldWeapon:templeTest.ui.world?.profile?.equipment?.weapon,
+  controllerEnabled:templeTest.controller()?.enabled,
+  holdingArt:templeTest.controller()?.holdingArt,
   panel:templeTest.ui.panelName,events:window.desktopScopeLog,
   locked:document.pointerLockElement?.id,
   canvas:document.elementFromPoint(640,400)?.id||document.elementFromPoint(640,400)?.tagName
