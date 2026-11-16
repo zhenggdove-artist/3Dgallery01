@@ -83,8 +83,8 @@ export class NumberedWeaponEffects {
  constructor(scene,muzzle=()=>null) {
   this.scene=scene;
   this.muzzle=muzzle;
-  this.active=[];
- }
+  this.active=[];this.prewarmed=new Map();
+  }
  create(spec,options) {
   const factory=FACTORIES[spec.asset];
   if(!factory)throw Error('Missing exact 00GameDevs factory #'+spec.number);
@@ -106,7 +106,31 @@ export class NumberedWeaponEffects {
   this.scene.add(fx.group);
   return fx;
  }
- play(event,item,root) {
+  async warm(renderer,camera) {
+    // Compile every original #00GameDevs shader while the loading window is
+    // open, and retain one expensive module for immediate first-use playback.
+    const unique=new Map(Object.values(REQUESTED_VFX).map(spec=>[spec.asset,spec]));
+    const retain=new Set([26,31,38,43,70,73]);
+    let warmed=0;
+    for(const spec of unique.values()){
+      let fx=null;
+      try{
+        fx=this.create(spec,{size:.7,detail:.35,density:.28});
+        const stage=new THREE.Scene();stage.add(fx.group);fx.group.visible=true;
+        fx.update(.016);
+        await renderer.compileAsync(stage,camera);
+        fx.group.removeFromParent();
+        if(retain.has(spec.number)){fx.group.visible=false;this.prewarmed.set(spec.asset,fx);}
+        else fx.dispose();
+        warmed++;
+      }catch(error){
+        if(fx){fx.group.removeFromParent();fx.dispose();}
+        console.warn('Cannot prewarm 00GameDevs #'+spec.number,error);
+      }
+    }
+    return warmed;
+  }
+  play(event,item,root) {
   const spec=requestedEffect(item,event);
   if(!spec)return false;
   const key=event.channel&&root?root.uuid+':'+spec.number:null;
@@ -120,7 +144,7 @@ export class NumberedWeaponEffects {
    if(!live.waves&&!live.cycles)this.align(live);
    return true;
   }
-  const quality=Math.max(.5,Math.min(2.5,Number(event.qualityScale)||1));
+  const quality=Math.max(.25,Math.min(4,Number(event.qualityScale)||1));
   const normalSize=(spec.number===26?84:spec.number===38?2:spec.number===48?2:1.2)*quality;
   // The Ice Lance / erupting pillar #70 must be exactly half the previous
   // display dimensions, irrespective of rarity/fusion quality.
@@ -128,12 +152,14 @@ export class NumberedWeaponEffects {
   // The nozzle and authored free flame have a 10-local-metre reach.
   // Scale its world container to the server's range, not its actual props.
   if(spec.number===73)size=1;
-  if(spec.number===31)size=Math.max(.75,Math.min(1.3,quality));
+  if(spec.number===31)size=Math.max(.25,Math.min(3.5,quality));
   if(event.ultimate&&!event.channel&&Number.isFinite(event.area?.radius)&&![26,29,31,38,70].includes(spec.number))
    size=Math.max(.25,Math.min(3.5,event.area.radius/4.5));
-  const options={size,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
+  const options={size,quality,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
   if(!options.color)delete options.color;
-  const fx=this.create(spec,options);
+  const cached=this.prewarmed.get(spec.asset);
+   const fx=cached||this.create(spec,options);
+   if(cached){this.prewarmed.delete(spec.asset);this.scene.add(fx.group);fx.group.visible=true;fx.reset?.();fx.setOptions?.(options);}
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
   // #29 is a forward beam: even its charged shot starts at the weapon, not
   // at an unrelated remote ground-circle centre.
@@ -156,7 +182,7 @@ export class NumberedWeaponEffects {
   if(this.active.length>24)this.remove(this.active[0]);
   this.align(entry);
   // The vendor clamps 'size' at 2. Double the physical world-space group.
-  if(spec.number===26)fx.group.scale.setScalar(2);
+  if(spec.number===26)fx.group.scale.setScalar(2*quality);
   if(spec.number===31){
    // Three independently authored ORIGINAL #31 crown instances, not a
    // synthetic thorn mesh; aligned vertically and moved as one projectile.
@@ -221,7 +247,7 @@ export class NumberedWeaponEffects {
    if(horizontal.lengthSq()<.001)horizontal.set(0,0,1);
    horizontal.normalize();
    const authoredLength=4.68;
-   fx.group.scale.set(range/authoredLength,2,2/3);
+   fx.group.scale.set(range/authoredLength,2*(entry.options.quality||1),(2/3)*(entry.options.quality||1));
    fx.group.position.copy(origin).addScaledVector(horizontal,range*(2.25/authoredLength));
    fx.group.position.y=Math.max(.12,origin.y-1.15);
    fx.group.quaternion.setFromUnitVectors(X_FORWARD,horizontal);
@@ -401,7 +427,7 @@ export class NumberedWeaponEffects {
     e.stopping=true;e.fx.stop();
    }
    e.fx.update(dt);
-   if(e.spec.number===26)e.fx.group.scale.setScalar(2);
+   if(e.spec.number===26)e.fx.group.scale.setScalar(2*Math.max(.25,Math.min(4,Number(e.options.quality)||1)));
    if((!e.key&&e.fx.finished)||e.age>=e.duration){
     this.remove(e);continue;
    }
@@ -441,5 +467,5 @@ export class NumberedWeaponEffects {
   e.fx.group.removeFromParent();
   e.fx.dispose();
  }
- dispose(){for(const e of [...this.active])this.remove(e);}
+ dispose(){for(const e of [...this.active])this.remove(e);for(const fx of this.prewarmed.values()){fx.group.removeFromParent();fx.dispose();}this.prewarmed.clear();}
 }
