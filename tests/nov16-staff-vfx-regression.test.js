@@ -33,10 +33,10 @@ test('full-charge fire and water staff streams point straight along server aim; 
   const numbered=vfx.numberedEffects.active.at(-1);
   const stream=numbered||vfx.particleSkills.active[0];
   assert.ok(stream,id);
-  // Official #33/#70 face +X; #73 is an oblique local free-fire ray.
-  // Their scene root position can differ from the authored weapon socket.
+  // Official #70 faces +X, #33 faces +Z. #73 uses its oblique
+  // free-fire ray, with its nozzle separate from the native group centre.
   const authoredForward=id==='ember-1'?new THREE.Vector3(1,0,.42).normalize():
-   ['frost-1','clam'].includes(id)?new THREE.Vector3(1,0,0):
+   id==='frost-1'?new THREE.Vector3(1,0,0):
    new THREE.Vector3(0,0,1);
   const forward=authoredForward.applyQuaternion((numbered?numbered.group:stream.root).quaternion);
   assert.ok(forward.distanceTo(new THREE.Vector3(0,0,1))<.001,'the '+id+' stream must move forward');

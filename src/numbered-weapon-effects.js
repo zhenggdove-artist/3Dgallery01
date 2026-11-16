@@ -51,7 +51,7 @@ const FIRE_FREE_RAY=new THREE.Vector3(1,0,.42).normalize();
 const CHANNEL_GRACE_MS=3100;
 const CLAM_WAVE_INTERVAL=.38;
 const CLAM_WAVE_LIFETIME=2.18;
-const CYCLE_INTERVAL=Object.freeze({20:1.35,43:1.08,70:2.8});
+const CYCLE_INTERVAL=Object.freeze({20:1.35,43:1.08,70:1.25});
 const TRAVELLING_NATIVE=new Set([20,43]);
 const travelLifetime=number=>number===43?2.2:4.2;
 const vector=(value,fallback)=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite)?

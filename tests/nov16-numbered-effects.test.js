@@ -54,7 +54,14 @@ test('every numbered attack instantiates an actual source module, never a partic
   assert.equal(entry.group.userData.vfxSource,'00GameDevs');
   assert.equal(entry.group.userData.vfxNumber,num);
   assert.equal(scene.children.includes(entry.group),true);
-  if(kind==='ultimate')assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,.16,8))<1e-8,weapon);
+  if(kind==='ultimate'){
+   if(num===38){
+    assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,.12,0))<1e-8,weapon);
+    const axis=new THREE.Vector3(1,0,0).applyQuaternion(entry.group.quaternion);
+    assert.ok(axis.distanceTo(new THREE.Vector3(0,0,1))<1e-8,'crack must point along the sword ray');
+    assert.equal(entry.group.scale.x,2,'#38 overall effect is twice its old size');
+   }else assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,.16,8))<1e-8,weapon);
+  }
   effects.update(.01);
   effects.dispose();
   assert.equal(scene.children.length,0,weapon);
@@ -176,7 +183,9 @@ test('the original #70 ice pillar is scaled to exactly half the previous size',(
  const scene=new THREE.Scene(),fx=new NumberedWeaponEffects(scene);
  fx.play(evt('channel'),itemById('frost-1'));
  assert.equal(fx.active[0].spec.number,70);
- assert.ok(Math.abs(fx.active[0].fx.group.scale.x-.6)<1e-7);
+ assert.ok(Math.abs(fx.active[0].fx.group.scale.x-1.2)<1e-7,'ice forward distance is doubled');
+ assert.ok(Math.abs(fx.active[0].fx.group.scale.y-.6)<1e-7,'ice width stays half size');
+ assert.ok(Math.abs(fx.active[0].fx.settings.speed-2)<1e-7,'ice advance speed is doubled');
  fx.dispose();
  assert.equal(scene.children.length,0);
 });
@@ -205,4 +214,60 @@ test('clam held channel layers original #33 waves that ease forward and overlap 
  assert.equal(effects.active.length,0);
  assert.equal(scene.children.length,1,'all wave copies disposed');
  root.removeFromParent();
+});
+
+
+test('flowers and conch launch forward-progressing native copies instead of floating at the muzzle',()=>{
+ for(const id of ['bloom-1','nova-1']){
+  const item=itemById(id),scene=new THREE.Scene(),root=new THREE.Group();
+  scene.add(root);
+  const muzzle=host=>host.position.clone().add(new THREE.Vector3(.1,1.3,.2));
+  const effects=new NumberedWeaponEffects(scene,muzzle);
+  const event={...evt('channel'),range:16};
+  assert.ok(effects.play(event,item,root));
+  const entry=effects.active[0];
+  assert.ok(entry.cycles,id+' must maintain overlapping true native copies');
+  const first=entry.cycles[0],z=first.fx.group.position.z;
+  effects.update(.6);
+  assert.ok(first.fx.group.position.z>z+.2,id+' travels gradually forward');
+  root.position.x=5;
+  effects.update(.8);
+  assert.ok(entry.cycles.length>=2,id+' spawns a new offset copy');
+  assert.ok(entry.cycles.some(x=>Math.abs(x.start.x-5.1)<1e-7),id+' new copy starts at moving staff');
+  assert.ok(entry.cycles.some(x=>Math.abs(x.start.x-.1)<1e-7),id+' existing copy remains on its old route');
+  const z2=first.fx.group.position.z;
+  effects.update(.15);
+  assert.ok(first.fx.group.position.z>z2,id+' first copy must continue its forward path');
+  effects.stop(root);
+  root.removeFromParent();
+  assert.equal(scene.children.length,0);
+ }
+});
+
+test('doubling the ice timeline retains overlapping channels without a zero-visible interval',()=>{
+ const item=itemById('frost-1'),scene=new THREE.Scene(),root=new THREE.Group();
+ scene.add(root);
+ const effects=new NumberedWeaponEffects(scene,()=>new THREE.Vector3(0,1,0));
+ effects.play({...evt('channel'),range:20},item,root);
+ const entry=effects.active[0],first=entry.cycles[0];
+ effects.update(1.30);
+ assert.ok(entry.cycles.length>=2,'the next ice pillar enters before the first 2x-speed clip finishes');
+ assert.ok(!first.fx.finished);
+ effects.stop(root);root.removeFromParent();
+ assert.equal(scene.children.length,0);
+});
+
+test('charged sword server reach and radius are both doubled and the #59 preview uses the same values',()=>{
+ const item=itemById('saber-1'),stats=attackStats(item,1),normal=attackStats(item,.99);
+ assert.ok(stats.range>=2*normal.range,'ultimate range uses 2x reach');
+ assert.ok(stats.radius>normal.radius*2,'ultimate area radius expands');
+ const scene=new THREE.Scene(),fx=new ChargeTargetPreview(scene);
+ const root=new THREE.Group(),muzzle=[2,1.1,3],direction=[0,0,1];
+ fx.update(root,item,.95,direction,{world:{floatingPlatforms:[]}},null,muzzle);
+ assert.equal(fx.rectangle.group.userData.vfxNumber,59);
+ assert.equal(fx.footprint.shape,'rectangle');
+ assert.ok(Math.abs(fx.footprint.length-stats.range)<1e-8);
+ assert.ok(Math.abs(fx.footprint.width-stats.radius*2)<1e-8);
+ assert.ok(Math.abs(fx.footprint.position.z-(muzzle[2]+stats.range/2))<1e-8);
+ fx.dispose();
 });
