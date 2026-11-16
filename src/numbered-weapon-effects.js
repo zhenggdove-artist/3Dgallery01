@@ -154,6 +154,7 @@ export class NumberedWeaponEffects{
  // Feed it the same world/camera/renderer and render target as the VHS input,
  // rather than replacing it with a visually similar custom effect. Only one
  // full-scene compositor can own a pass; the flame pass wins when both are live.
+ hasFullScreenPostprocess(){return this.active.some(e=>(e.spec.number===70||e.spec.number===73)&&typeof e.fx.render==='function');}
  render(renderer,world,camera){
   const post=this.active.find(e=>e.spec.number===73&&typeof e.fx.render==='function')||
    this.active.find(e=>e.spec.number===70&&typeof e.fx.render==='function');
