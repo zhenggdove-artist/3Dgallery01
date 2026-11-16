@@ -373,13 +373,14 @@ test('500ms A hold threshold is shared by tap vs charge and client and server ic
  assert.equal(scene.children.length,0);
 });
 
-test('jellyfish ultimate preserves a full tenfold source-asset scale independently of area',()=>{
+test('jellyfish ultimate doubles the previous oversized wheel and uses a real group 2x scale',()=>{
  const scene=new THREE.Scene(),effects=new NumberedWeaponEffects(scene);
  const item=itemById('jellybrella');
  const event={...evt('ultimate'),qualityScale:1,area:{mode:'area',radius:2,visualCenter:[0,0,5]}};
  assert.equal(effects.play(event,item,null),true);
  assert.equal(effects.active[0].spec.number,26);
- assert.equal(effects.active[0].options.size,42);
+ assert.equal(effects.active[0].options.size,84);
+ assert.equal(effects.active[0].fx.group.scale.x,2);
  effects.dispose();
  assert.equal(scene.children.length,0);
 });
