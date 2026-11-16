@@ -58,6 +58,8 @@ export function migrateWorld(raw,now=Date.now()){
   world.profiles??={};world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.groundDrops??=[];world.structures??=[];world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
+  // Old RELETTER farming data must not survive the removal of the Garden game mode.
+  if(world.reletter?.garden)delete world.reletter.garden;
   world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];
   world.nextGroundDropAt??=now+ECONOMY.groundSpawnMinMs;
   return cleanLegacyScene(world);
@@ -107,12 +109,30 @@ function spend(profile,amount,world){if(profile.admin)return true;if(profile.wal
 function earn(profile,amount,world){if(!profile.admin)profile.wallet+=amount;world.activity.coinMinted+=amount;}
 function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>=600)return false;profile.inventory.push(itemId);return true;}
 
-export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,journey=null,now=Date.now()){const pose=journeyPose(journey,now);if(pose&&role==='fighter'){return {state:{position:pose.position,rotation:Math.PI,animation:pose.animation,visible:true}};}
-  if(!next||!insideArena(next.position,role==='spectator'?28:2)||!Number.isFinite(next.rotation))return {error:'Invalid position'};
-  if(!previous&&spawn&&Math.hypot(next.position[0]-spawn[0],next.position[1]-spawn[1],next.position[2]-spawn[2])>6)return {error:'Spawn position rejected'};
+export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,journey=null,now=Date.now(),mobility=null){
+  const pose=journeyPose(journey,now);
+  if(pose&&role==='fighter')return {state:{position:pose.position,rotation:Math.PI,animation:pose.animation,visible:true}};
+  if(!next||!Array.isArray(next.position)||next.position.length!==3||!next.position.every(Number.isFinite)||
+     !insideArena(next.position,role==='spectator'?28:2)||!Number.isFinite(next.rotation))
+    return {error:'Invalid position',state:previous||null};
+  const distanceTo=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+  const nearSpawn=spawn&&distanceTo(next.position,spawn)<=6;
+  if(!previous&&spawn&&!nearSpawn)return {error:'Spawn position rejected',state:{position:spawn,rotation:0,animation:'idle',visible:true}};
   if(previous&&role==='fighter'){
-    const elapsed=clamp(elapsedMs/1000,.05,2),distance=Math.hypot(next.position[0]-previous.position[0],next.position[1]-previous.position[1],next.position[2]-previous.position[2]);
-    if(distance>14*elapsed+4)return {error:'Movement rejected'};
+    const elapsed=clamp(elapsedMs/1000,.05,12),distance=distanceTo(next.position,previous.position);
+    const boostedSpeed=clamp(Number(mobility?.stats?.speed)||1,.5,6);
+    const hasWings=!!mobility?.stats?.impulse;
+    const recentHit=now-(mobility?.hitReaction?.time||0)<1800;
+    const recentImpulse=now-(mobility?.impulse?.time||0)<1800;
+    const justRespawned=now-(mobility?.lastRespawnAt||0)<5000&&nearSpawn;
+    const landedFromWrite=now-(mobility?.lastWriteLandingAt||0)<5000&&
+      Array.isArray(mobility?.lastWriteLanding)&&distanceTo(next.position,mobility.lastWriteLanding)<=9;
+    // Normal run speed is 8.64m/s; airborne wings, delayed packets, and
+    // server-authorized knockback need more headroom without allowing teleports.
+    const maxSpeed=(hasWings?28:14)*boostedSpeed+(recentHit?18:0)+(recentImpulse?18:0);
+    const allowance=maxSpeed*elapsed+5.5+(recentHit?6:0);
+    if(distance>allowance&&!justRespawned&&!landedFromWrite)
+      return {error:'Movement rejected',state:previous};
   }
   return {state:{position:next.position.map(n=>+n.toFixed(3)),rotation:+next.rotation.toFixed(4),animation:String(next.animation||'idle').slice(0,12),visible:next.visible!==false}};
 }
@@ -178,7 +198,7 @@ export function applyAction(world,actor,body,context={}){
     case 'destroy':result=destroy(world,profile,actor,body,now);break;
     case 'remove-structure':result=removeStructure(world,profile,actor,body,now);break;
     case 'plant':result=plant(world,profile,actor,body,now);break;
-    case 'respawn':profile.hp=profile.maxHp;profile.deadUntil=0;result={spawn:PLAYER_SPAWNS[context.seatIndex%4]};break;
+    case 'respawn':profile.hp=profile.maxHp;profile.deadUntil=0;profile.lastRespawnAt=now;result={spawn:PLAYER_SPAWNS[context.seatIndex%4]};break;
     default:return {error:'Unknown action'};
   }
   if(result?.error)return result;refreshStats(world,profile,now);profile.updatedAt=now;world.revision=(world.revision||0)+1;return {...result,profile:publicProfile(profile)};
@@ -448,7 +468,7 @@ function removeStructure(world,profile,actor,body,now){
   return {notice:'Structure removed',structureDestroyed:structureEvent(structure,now)};
 }
 
-function plant(world,profile,actor,body,now){const text=String(body.text||'').trim();if((!text&&!body.media)||text.length>500)return {error:'Plant message must contain 1–500 characters'};if(distance2d(actor.position,[0,0,0])>SAFE_ZONE.radius+3)return {error:'Write beside the central plant'};const parent=typeof body.parentId==='string'?world.plants.find(entry=>entry.id===body.parentId):null;if(body.parentId&&!parent)return {error:'Parent plant no longer exists'};const seed=hashString(`${profile.key}:${now}`),angle=(seed%628)/100,radius=parent ? .7 : Math.min(5,Math.max(1.4,distance2d(body.position,[0,0,0]))),base=parent?.position||body.position||actor.position,position=parent?[clamp(base[0]+Math.cos(angle)*radius,-5,5),0,clamp(base[2]+Math.sin(angle)*radius,-5,5)]:[clamp(Number(base?.[0])||0,-5,5),0,clamp(Number(base?.[2])||0,-5,5)];const entry={id:id(),author:profile.name,text,media:body.media||null,position,parentId:parent?.id||null,createdAt:now};world.plants.push(entry);profile.writeJourney=null;if(world.plants.length>500)world.plants.shift();return {notice:parent?'Reply branch planted':'Message planted',plant:entry};}
+function plant(world,profile,actor,body,now){const text=String(body.text||'').trim();if((!text&&!body.media)||text.length>500)return {error:'Plant message must contain 1–500 characters'};if(distance2d(actor.position,[0,0,0])>SAFE_ZONE.radius+3)return {error:'Write beside the central plant'};const parent=typeof body.parentId==='string'?world.plants.find(entry=>entry.id===body.parentId):null;if(body.parentId&&!parent)return {error:'Parent plant no longer exists'};const seed=hashString(`${profile.key}:${now}`),angle=(seed%628)/100,radius=parent ? .7 : Math.min(5,Math.max(1.4,distance2d(body.position,[0,0,0]))),base=parent?.position||body.position||actor.position,position=parent?[clamp(base[0]+Math.cos(angle)*radius,-5,5),0,clamp(base[2]+Math.sin(angle)*radius,-5,5)]:[clamp(Number(base?.[0])||0,-5,5),0,clamp(Number(base?.[2])||0,-5,5)];const entry={id:id(),author:profile.name,text,media:body.media||null,position,parentId:parent?.id||null,createdAt:now};world.plants.push(entry);if(Array.isArray(profile.writeJourney?.landing)){profile.lastWriteLanding=[...profile.writeJourney.landing];profile.lastWriteLandingAt=now;}profile.writeJourney=null;if(world.plants.length>500)world.plants.shift();return {notice:parent?'Reply branch planted':'Message planted',plant:entry};}
 
 export function releasePlayerWorldState(world,playerKey,now=Date.now()){
   let changed=false;if(world.profiles?.[playerKey]?.writeJourney){world.profiles[playerKey].writeJourney=null;changed=true;}for(const art of Object.values(world.artworks||{}))if(art.holder===playerKey){art.holder=null;art.throwEvent=null;art.availableAt=now+ARTWORK_RESPAWN_MS;changed=true;}return changed;
@@ -498,7 +518,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
     changed=true;
    }
   }
-  for(const profile of Object.values(world.profiles))if(profile.hp<=0&&profile.deadUntil<=now){profile.hp=profile.maxHp;profile.deadUntil=0;changed=true;}
+  for(const profile of Object.values(world.profiles))if(profile.hp<=0&&profile.deadUntil<=now){profile.hp=profile.maxHp;profile.deadUntil=0;profile.lastRespawnAt=now;changed=true;}
   if(changed)world.revision=(world.revision||0)+1;return changed;
 }
 

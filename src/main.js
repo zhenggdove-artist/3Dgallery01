@@ -29,6 +29,16 @@ import {Minimap} from './minimap.js';
 import {createDamageNumbers} from './reletter/damage-numbers.js';
 
 const canvas=document.getElementById('game'),coarse=matchMedia('(pointer:coarse)').matches,settings=loadEditorSettings();
+// Prevent iOS Safari gesture zoom, long-press selection, and browser callouts
+// on game controls. Editable chat and form fields retain native text entry.
+if(coarse){
+  const editable=target=>!!target?.closest?.('input,textarea,select,[contenteditable="true"]');
+  for(const type of ['gesturestart','gesturechange','gestureend'])
+    document.addEventListener(type,event=>event.preventDefault(),{passive:false});
+  document.addEventListener('touchmove',event=>{if(event.touches.length>1&&!editable(event.target))event.preventDefault();},{passive:false});
+  for(const type of ['selectstart','contextmenu','dblclick'])
+    document.addEventListener(type,event=>{if(!editable(event.target))event.preventDefault();},{passive:false});
+}
 const renderer=new THREE.WebGLRenderer({canvas,antialias:!coarse,powerPreference:'high-performance',alpha:false});
 renderer.setPixelRatio(Math.min(devicePixelRatio,settings.pixelRatio|| (coarse?1:1.35)));renderer.setSize(innerWidth,innerHeight,false);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.82;
 const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,1000),arena=new TempleArena(scene,renderer),ui=new TempleUI(),network=new TempleNetwork();
@@ -74,7 +84,17 @@ network.addEventListener('artwork-throw',event=>showThrowPulse(event.detail));
 network.addEventListener('attack',event=>showAttack(event.detail));
 network.addEventListener('structure-destroyed',event=>arena.showStructureBreak(event.detail));
 network.addEventListener('structure-hit',event=>arena.showStructureHit(event.detail));
-network.addEventListener('state-rejected',event=>{if(performance.now()-toastErrorAt>1200){toastErrorAt=performance.now();ui.toast(event.detail.error||'MOVEMENT REJECTED');}});
+network.addEventListener('state-rejected',event=>{
+  const rejection=event.detail||{};
+  if(rejection.state?.position&&controller){
+    const accepted=rejection.state.position,delta=controller.root.position.distanceTo(new THREE.Vector3(...accepted));
+    if(delta>.6){controller.teleport(accepted);controller.grounded=Math.abs(accepted[1]-arena.groundHeight(accepted[0],accepted[2],accepted[1]))<.5;}
+    // Server is the source of truth. Rebase subsequent predictions instead
+    // of repeatedly sending the same impossible displacement.
+    network.lastStateAt=0;
+  }
+  if(rejection.error!=='Movement rejected'&&performance.now()-toastErrorAt>1200){toastErrorAt=performance.now();ui.toast(rejection.error||'STATE REJECTED');}
+});
 network.addEventListener('connection',event=>{if(joined)ui.toast(event.detail.connected?'REALTIME CONNECTED':'RECONNECTING…');});
 
 ui.addEventListener('attack',()=>performAttack());ui.addEventListener('interact',()=>performInteract());
@@ -101,7 +121,7 @@ ui.addEventListener('art-bomb-upload',async event=>{
  finally{artBombUploading=false;if(button)button.disabled=false;}
 });
 ui.addEventListener('upload-artwork',async event=>{if(!self?.profile?.admin)return;const button=ui.content.querySelector('[data-upload-submit]');if(button)button.disabled=true;try{ui.toast('正在驗證藝術品…');const upload=await uploadArtwork(network,event.detail,{maxBytes:32*1024*1024}),position=controller.buildPosition(4);position[1]+=2;const result=await sendAction('add-artwork',{artwork:{...upload,position,appearance:{}}});if(!result)throw Error('Artwork was not published. Retry after checking the connection.');await arena.loadCustomArtworks(world.customArtworks,network.base);ui.closePanel();artEditor.select(arena.artworks.get(result.artwork.id));ui.toast('藝術品已發布 · 可調整位置及表面');}catch(error){ui.toast(error.message);const status=ui.content.querySelector('[data-upload-status]');if(status)status.textContent=error.message;}finally{if(button)button.disabled=false;}});
-ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(!item||!controller)return;const position=controller.buildPosition(3);position[1]=0;if(item.slot==='seed'){ui.closePanel();sendAction('seed-plant',{item:item.id,position});}else if(item.slot==='harvest')sendAction('harvest-eat',{item:item.id});else ui.toast('Use this material in BAG → FUSION');});
+ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(item&&controller)ui.toast('Use this material in BAG → FUSION');});
 ui.addEventListener('original-action',event=>sendAction(event.detail.action,event.detail));
 ui.addEventListener('jump',()=>controller?.jump());
 addEventListener('keyup',e=>{if(e.code==='KeyE')artworkThrow.release();});
@@ -152,7 +172,7 @@ function syncPlayers(){
   for(const player of players){const root=roots.get(player.key);if(root){arena.setPlayerEquipment(root,player.profile?.equipment);if(root!==localRoot)setHealthBar(root,player.profile?.hp,player.profile?.maxHp);root.userData.deadUntil=player.profile?.deadUntil||0;applyHitReaction(root,player.profile);}}
   for(const [key,root] of roots)if(key!==self.key&&!live.has(key)){root.removeFromParent();roots.delete(key);remoteTargets.delete(key);}ui.setPlayers(players);
 }
-function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root||!hit||root.userData.lastHitReaction===hit.id||Date.now()-hit.time>2500)return;root.userData.lastHitReaction=hit.id;audio.play('hit',root===localRoot?1:.35);root.userData.hitFlashUntil=performance.now()+250;if(root===localRoot){controller.stunUntil=performance.now()+100;controller.knockback=new THREE.Vector3(...hit.vector).multiplyScalar(4);}}
+function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root||!hit||root.userData.lastHitReaction===hit.id||Date.now()-hit.time>2500)return;root.userData.lastHitReaction=hit.id;audio.play('hit',root===localRoot?1:.35);root.userData.hitFlashUntil=performance.now()+250;if(root===localRoot){controller.stunUntil=performance.now()+100;controller.knockback=new THREE.Vector3(...hit.vector).multiplyScalar(hit.knockback||4);}}
 function syncWorld(){if(!world)return;arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));damageNumbers.receive(world.damageEvents);arena.sync(world,players);ui.setWorld(world);const profile=world.profile,dead=profile?.deadUntil>Date.now();if(localRoot&&profile){arena.setPlayerEquipment(localRoot,profile.equipment);localRoot.userData.deadUntil=profile.deadUntil||0;applyHitReaction(localRoot,profile);controller.stats=profile.stats||{speed:1,jump:1,gravity:1};if(profile.impulse&&controller.lastImpulse!==profile.impulse.id){controller.lastImpulse=profile.impulse.id;controller.knockback=new THREE.Vector3(...profile.impulse.vector).multiplyScalar(5);}}if(dead){if(!wasDead&&localRoot){bursts.play(localRoot.position,'death-'+self.key+'-'+profile.deadUntil);audio.play('explosion');}wasDead=true;controller?.setEnabled(false);ui.death(profile.deadUntil);}else if(joined){if(wasDead&&controller){controller.teleport(PLAYER_SPAWNS[self.seat]||PLAYER_SPAWNS[0]);wasDead=false;ui.toast('RESPAWNED');}if(!ui.panelName&&!artEditor.mode&&!writer.active&&!platformDelete.active)controller?.setEnabled(true);ui.death(0);}if(profile&&self)self.profile=profile;}
 
 async function sendAction(action,data={},options={}){if(!joined||!controller)return null;try{const result=await network.action(action,data);if(result.world){world=result.world;syncWorld();}if(result.notice)ui.toast(result.notice);if(action==='fuse'&&result.fusion){ui.fusionFeedback(!!result.fusion.success,result.notice);audio.play(result.fusion.success?'fusion-success':'fusion-fail',1);}if(result.attackEvent)showAttack(result.attackEvent);if(result.throwEvent)showThrowPulse(result.throwEvent);if(action==='pickup-coin'||action==='pickup-drop')audio.play('coin');for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))arena.showStructureHit(hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))arena.showStructureBreak(broken);if(result.hit?.defeated)ui.toast(`DEFEATED · ${result.hit.lostCoins} COINS DROPPED`);return result;}catch(error){if(options.throwOnError)throw error;if(action==='fuse')ui.fusionFeedback(false,error.message);if(performance.now()-toastErrorAt>400){toastErrorAt=performance.now();ui.toast(error.message);}return null;}}
