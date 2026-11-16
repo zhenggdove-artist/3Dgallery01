@@ -105,5 +105,5 @@ test('plant replies form persistent branches and monsters respect the central sa
   const reply=applyAction(world,writer,{action:'plant',text:'reply',position:[2,0,0],parentId:root.plant.id},{now:now+1});
   assert.equal(reply.plant.parentId,root.plant.id);assert.notDeepEqual(reply.plant.position,root.plant.position);
   const profile=world.profiles.p1;world.monster={active:true,id:'monster',variant:'warden',position:[6.5,0,0],hp:420,maxHp:420,generation:1,nextAttackAt:now};const before=[...world.monster.position],hp=profile.hp;
-  tickWorld(world,{now:now+2,activeFighters:1,actors:[writer]});assert.ok(Math.hypot(world.monster.position[0],world.monster.position[2])>=49);assert.equal(profile.hp,hp);
+  tickWorld(world,{now:now+2,activeFighters:1,actors:[writer]});assert.ok(Math.hypot(world.monster.position[0],world.monster.position[2])>=9);assert.ok(Math.hypot(world.monster.position[0],world.monster.position[2])<20);assert.equal(profile.hp,hp);
 });

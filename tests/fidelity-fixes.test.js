@@ -18,12 +18,12 @@ test('hearts clamp health; full-health players cannot consume them; empty gear s
  p.equipment.weapon=null;drop('g','equipment','frost-1');assert.ok(!applyAction(w,a,{action:'pickup-drop',dropId:'g'},{now}).error);assert.equal(p.equipment.weapon,'frost-1');
  drop('g2','equipment','tide-1');applyAction(w,a,{action:'pickup-drop',dropId:'g2'},{now});assert.equal(p.equipment.weapon,'frost-1');
 });
-test('monsters spawn outside art perimeter, relocate legacy enemies, and cancel casts for viewers',()=>{
+test('monsters spawn outside the art perimeter but may patrol inward, while airborne viewers are safe',()=>{
  assert.ok(MONSTER_SPAWNS.every(p=>!insideArtSanctuary(p)));const now=10000,w=createInitialWorld(now),a={key:'p',role:'fighter',position:[35,4,0]},p=ensureProfile(w,'p','Test',null,now);
- w.monster={id:'m',active:true,hp:100,position:[35,0,0],generation:1,skills:[]};tickWorld(w,{now,actors:[a],activeFighters:1});assert.ok(!insideArtSanctuary(w.monster.position));assert.equal(p.hp,p.maxHp);assert.equal(w.monster.skills.length,0);
+ w.monster={id:'m',active:true,hp:100,position:[35,0,0],generation:1,skills:[]};tickWorld(w,{now,actors:[a],activeFighters:1});assert.ok(Math.hypot(w.monster.position[0],w.monster.position[2])>=9);assert.ok(Math.hypot(w.monster.position[0],w.monster.position[2])<50);assert.equal(p.hp,p.maxHp);assert.equal(w.monster.skills.length,0);
 });
 test('requested attack cycle uses swipe, roar and charge and never kicks',()=>{
  const m={position:[60,0,0],attackStyles:true},target={key:'p',position:[61,0,0]},moves=[];
  for(const [i,motion]of ['swipe','roar','charge'].entries()){m.skills=[];m.nextAttackAt=0;advanceIslandEnemy(m,[target],10000+i*6000,{move:(p,d)=>moves.push(d),hit:()=>{}});assert.equal(m.skills[0].motion,motion);}
- advanceIslandEnemy(m,[],30000,{move:()=>assert.fail(),hit:()=>assert.fail()});assert.deepEqual(m.skills,[]);
+ advanceIslandEnemy(m,[],30000,{move:(p,d)=>moves.push(d),hit:()=>assert.fail(),rng:()=>.5});assert.deepEqual(m.skills,[]);assert.ok(moves.length>0);
 });
