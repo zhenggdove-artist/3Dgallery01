@@ -72,7 +72,16 @@ try {
   !document.querySelector('#gun-overlay').hidden);
  assert.equal(await page.evaluate(()=>window.mobileTestShots),0,'second A opens sniper scope, never fires');
  await page.screenshot({path:output+'/mobile-sniper-scoped.png'});
- await page.touchscreen.tap(335,390);
+ // 35vmin radius: the black region is an exit button on touch devices.
+ await page.touchscreen.tap(8,422);
+ await page.waitForFunction(()=>templeTest.gun.mode===0);
+ assert.equal(await page.evaluate(()=>window.mobileTestShots),0,'black-region tap must not fire');
+ await button.tap();
+ await page.waitForFunction(()=>templeTest.gun.mode===1);
+ await button.tap();
+ await page.waitForFunction(()=>templeTest.gun.mode===2);
+ // Shoot INSIDE the transparent 35vmin scope aperture (not the mask).
+ await page.touchscreen.tap(275,390);
  await page.waitForFunction(()=>window.mobileTestShots===1,null,{timeout:8000});
  assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,'tap scene fires, stays scoped');
  await button.tap();
