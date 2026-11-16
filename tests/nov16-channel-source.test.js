@@ -12,11 +12,11 @@ test('moving the caster moves an existing channel emitter to the held weapon tip
  fx.play(event,item,root);
  assert.equal(fx.numberedEffects.active.length,1);
  const first=fx.numberedEffects.active[0];
- const before=first.root.position.clone();
+ const before=first.group.position.clone();
  root.position.set(0,0,6);
  fx.update(.08);
- assert.ok(first.root.position.z>before.z+5,'moving caster must move live emitter source');
- assert.ok(first.root.position.distanceTo(fx.channelMuzzle(root,item))<.01);
+ assert.ok(first.group.position.z>before.z+5,'moving caster must move live emitter source');
+ assert.ok(first.group.position.distanceTo(fx.channelMuzzle(root,item))<.01);
  fx.play({...event,origin:[0,1,6],time:1100},item,root);
  assert.equal(fx.numberedEffects.active.length,1,'repeated pulses reuse a single moving emitter');
  fx.stopChannel(root);assert.equal(fx.numberedEffects.active.length,0);
