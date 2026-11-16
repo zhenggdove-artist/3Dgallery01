@@ -20,7 +20,7 @@ export class ElementalCharge{
   const n=160,this.position=new Float32Array(n*3),colors=new Float32Array(n*3);
   this.geometry=new THREE.BufferGeometry();
   this.geometry.setAttribute('position',new THREE.BufferAttribute(this.position,3).setUsage(THREE.DynamicDrawUsage));
-  this.color=this.geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
+  this.color=new THREE.BufferAttribute(colors,3);this.geometry.setAttribute('color',this.color);
   this.material=new THREE.PointsMaterial({vertexColors:true,size:.095,sizeAttenuation:true,transparent:true,
    opacity:.83,depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending});
   this.root=new THREE.Points(this.geometry,this.material);
