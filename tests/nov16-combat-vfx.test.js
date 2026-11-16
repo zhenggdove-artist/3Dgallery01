@@ -80,7 +80,7 @@ test('flower staff, planter, giraffe and giant clam use distinct soft particle r
  assert.equal(recipeFor(itemById('giraffe')),'boomerang');
  const scene=new THREE.Scene(),vfx=new WeaponParticleEffects(scene);
  const origin=new THREE.Vector3(0,1,0),end=new THREE.Vector3(0,1,22);
- for(const id of ['petal-1','planter-1','giraffe','clam']){
+ for(const id of ['bloom-1','planter-1','giraffe','clam']){
   const item=itemById(id);
   vfx.play({ultimate:true,charge:1,direction:[0,0,1],range:22},item,origin,end);
  }
