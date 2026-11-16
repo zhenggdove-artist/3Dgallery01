@@ -32,6 +32,12 @@ test('giant goldfish creates a visible swimming fish and swept damage/knockback 
  assert.ok(mesh.children[0].children.length>12);
  effects.update(.4);
  assert.ok(mesh.position.z>0,'the visible fish must swim forward');
+ mesh.updateMatrixWorld(true);
+ const fish=mesh.children[0];
+ const nose=fish.localToWorld(new THREE.Vector3(0,0,1));
+ const tail=fish.localToWorld(new THREE.Vector3(0,0,-1));
+ assert.ok(nose.clone().sub(tail).normalize().dot(new THREE.Vector3(0,0,1))>.95,
+  'fish face points along its swim path, not 90 degrees to the left');
  const hp=world.monster.hp,originalZ=world.monster.position[2];
  tickWorld(world,{now:NOW+3500,actors:[actor],rng:()=>.5,activeFighters:0});
  assert.ok(world.monster.hp<hp,'server fish collides and damages');

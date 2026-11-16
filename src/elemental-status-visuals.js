@@ -14,8 +14,8 @@ const FILTER_ALPHA=.30;
 // Source: exact, unmodified 00GameDevs #01 "Blazing Fireball" JavaScript.
 const tailUp=new THREE.Quaternion().setFromUnitVectors(
  new THREE.Vector3(1,0,0),new THREE.Vector3(0,-1,0));
-const MAX_FIREBALLS_PER_TARGET=3;
-const BURN_SPAWN_INTERVAL=.46;
+const MAX_FIREBALLS_PER_TARGET=8;
+const BURN_SPAWN_INTERVAL=.115;
 
 function luminousFlames(root){
  const group=new THREE.Group();
@@ -23,14 +23,26 @@ function luminousFlames(root){
  group.userData.vfxSource='00GameDevs';
  group.userData.vfxNumber=1;
  group.userData.vfxId='fireball';
+ root.updateMatrixWorld(true);
+ const model=root.userData?.model||root;
+ const bounds=new THREE.Box3().setFromObject(model,true),size=bounds.getSize(new THREE.Vector3());
+ const valid=Number.isFinite(size.y)&&size.y>.01;
+ const height=valid?THREE.MathUtils.clamp(size.y,1,4):2;
+ const center=valid?root.worldToLocal(bounds.getCenter(new THREE.Vector3())):new THREE.Vector3();
+ const foot=valid?root.worldToLocal(new THREE.Vector3(
+  (bounds.min.x+bounds.max.x)*.5,bounds.min.y,(bounds.min.z+bounds.max.z)*.5
+ )):new THREE.Vector3();
  root.add(group);
+ // Distribute flame origins across the TARGET'S BODY, never at ground level.
  // All emitters use the original factory; no custom particle recreation.
- return {group,pulses:[],elapsed:0,nextSpawn:0,serial:0};
+ return {group,pulses:[],elapsed:0,nextSpawn:0,serial:0,height,center,
+  footY:foot.y,radiusX:THREE.MathUtils.clamp(size.x*.3,.16,.52),
+  radiusZ:THREE.MathUtils.clamp(size.z*.3,.16,.46)};
 }
 function addFireball(root,flames){
  const n=flames.serial++;
  const fx=createFireball({
-  size:.25,speed:1.15,density:.125,detail:.65,color:'#ff823e'
+  size:.17,speed:1.1,density:.125,detail:.6,color:'#ff823e'
  });
  fx.group.name='Official 00GameDevs #01 small flame '+n;
  fx.group.userData.vfxSource='00GameDevs';
@@ -39,10 +51,17 @@ function addFireball(root,flames){
  // The fireball's local +X is its nose: rotate it to -Y so its thin
  // trailing flame (local -X) always points upwards, exactly as requested.
  fx.group.quaternion.copy(tailUp);
- const radius=.25+Math.min(.35,(n%5)*.06),a=n*2.3999632297;
- const height=Math.max(1.4,Math.min(6,root.userData?.burnBodyHeight||2));
- const y=.36+height*(.18+.46*((n*7%11)/11));
- fx.group.position.set(Math.cos(a)*radius,y,Math.sin(a)*radius);
+ // The vendor scene contains long projectile geometry. Scale the ENTIRE
+ // original group, not just its internal "size" control, so no tall column
+ // can emerge from a victim's feet. Each small fire uses its own body point.
+ const size=.035*(flames.height/2);
+ fx.group.scale.setScalar(THREE.MathUtils.clamp(size,.019,.055));
+ const a=n*2.3999632297;
+ const level=.26+.57*((n*7%17)/16);
+ const y=flames.footY+flames.height*level;
+ const x=flames.center.x+Math.cos(a)*flames.radiusX;
+ const z=flames.center.z+Math.sin(a)*flames.radiusZ;
+ fx.group.position.set(x,y,z);
  const startY=y;
  // Fireball has a 0.35s charge-up, but contact burns should be visible
  // immediately. Advance its ORIGINAL animation to the first active frame.
@@ -54,10 +73,10 @@ function advanceFlames(root,flames,dt){
  flames.elapsed+=dt;flames.nextSpawn-=dt;
  for(let i=flames.pulses.length-1;i>=0;i--){
   const pulse=flames.pulses[i];pulse.age+=dt;
-  if(pulse.age>=.34&&!pulse.stopped){pulse.fx.stop();pulse.stopped=true;}
-  pulse.fx.group.position.y=pulse.startY+pulse.age*.48;
+  if(pulse.age>=.20&&!pulse.stopped){pulse.fx.stop();pulse.stopped=true;}
+  pulse.fx.group.position.y=pulse.startY+pulse.age*.14;
   pulse.fx.update(dt);
-  if(pulse.fx.finished||pulse.age>1.25){
+  if(pulse.fx.finished||pulse.age>.90){
    pulse.fx.dispose();flames.pulses.splice(i,1);
   }
  }

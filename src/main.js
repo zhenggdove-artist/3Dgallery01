@@ -6,7 +6,7 @@ import {ENEMY_HEIGHT} from './shared/island-combat.js';
 import {GoldenBursts} from './golden-burst.js';
 import {GameAudio} from './game-audio.js';
 import {ArtworkThrow} from './artwork-throw.js';
-import {equipmentPortrait} from './equipment-portrait.js';
+import {EquipmentPortraitViewport} from './equipment-portrait-view.js';
 import {ElementalStatusVisuals} from './elemental-status-visuals.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {attackDirection} from './aiming.js';
@@ -62,22 +62,24 @@ const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>
 const artEditor=new ArtworkEditor({scene,camera,canvas,arena,player:()=>localRoot,isGM:()=>!!self?.profile?.admin,send:sendAction,control:enabled=>{if(controller){controller.setEnabled(enabled&&!ui.panelName&&!wasDead);controller.cameraLocked=!!artEditor.mode&&artEditor.mode!=='follow';}},toast:text=>ui.toast(text)});
 const platformDelete=new PlatformDeleteEditor({canvas,camera,arena,ui,editor:artEditor,isGM:()=>!!self?.profile?.admin,send:sendAction,controller:()=>controller,cancelBuild:cancelBuildPlacement});
 
-let portraitSignature='',portraitURL='';
+const portraitViewport=new EquipmentPortraitViewport();
 function refreshEquipmentPortrait(){
- const image=document.getElementById('bag-portrait');
- if(!image||!localRoot?.userData?.model||!assetsReady)return;
- const signature=JSON.stringify([world?.profile?.equipment,self?.color]);
- if(signature!==portraitSignature||!portraitURL){
-  try{
-   const snapshot=equipmentPortrait(renderer,localRoot);
-   if(!snapshot||snapshot.length<100)throw Error('Empty EQUIP portrait');
-   portraitURL=snapshot;portraitSignature=signature;
-  }catch(error){
-   portraitSignature='';console.warn('EQUIP portrait retry required',error);
-   image.removeAttribute('src');return;
-  }
+ const canvas=document.getElementById('bag-portrait');
+ if(ui.panelName!=='bag'||ui.bagCategory!=='equipment'||!canvas?.isConnected){
+  if(portraitViewport.canvas)portraitViewport.close();
+  return;
  }
- image.src=portraitURL;
+ if(!assetsReady||!localRoot?.userData?.model)return;
+ const signature=JSON.stringify([self?.key,self?.color,world?.profile?.equipment,
+  localRoot?.userData?.equipmentSignature]);
+ try{
+  portraitViewport.sync(canvas,localRoot,signature);
+  canvas.removeAttribute('data-render-error');
+ }catch(error){
+  console.warn('EQUIP paper doll retry',error);
+  canvas.setAttribute('data-render-error',error.message);
+  // No cached failed <img>: retry on the next frame, including after DOM replacement.
+ }
 }
 ui.addEventListener('equipment-portrait',()=>requestAnimationFrame(refreshEquipmentPortrait));
 boot();
@@ -315,7 +317,7 @@ function update(dt,time){
   const attackButton=document.getElementById('attack-button');attackButton.classList.toggle('charging',charge>0||!!staffChannel||artworkThrow.started!==null);attackButton.style.setProperty('--charge',`${(artworkThrow.started!==null?artworkThrow.progress:charge)*100}%`);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}
 }
 
-function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.05,elapsed/1000);last=now;if(!assetsReady)return;const started=performance.now();if(now>externalUntil)update(dt,now/1000);const updated=performance.now();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view),arena.presentation.vfx.numberedEffects.hasFullScreenPostprocess());const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}}
+function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.05,elapsed/1000);last=now;if(!assetsReady)return;const started=performance.now();if(now>externalUntil)update(dt,now/1000);const updated=performance.now();refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view),arena.presentation.vfx.numberedEffects.hasFullScreenPostprocess());const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}}
 requestAnimationFrame(frame);
 
 const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),kind=item?.id==='calico-cat'?'scatter':item?.id==='accordion'?'accordion':item?.family||'shot',gain=event.owner===self?.key?1:.38;audio.play(kind,gain);if(event.owner===self?.key&&item?.firstPerson)gun.kick(item);if(event.ultimate)audio.play('ultimate',gain*.85);}arena.presentation.play(event,roots.get(event.owner));}
@@ -330,5 +332,5 @@ addEventListener('pagehide',()=>network.close());
 
 window.render_game_to_text=()=>JSON.stringify({mode:joined?'play':'entry',name:self?.name||null,role:self?.role||null,connected:network.socket?.readyState===WebSocket.OPEN,position:controller?.root.position.toArray().map(n=>+n.toFixed(2))||null,players:players.map(p=>({name:p.name,role:p.role,seat:p.seat})),economy:{wallet:world?.profile?.wallet??null,inventory:world?.profile?.inventory?.length||0,groundDrops:world?.groundDrops?.length||0,platformCoins:Object.values(world?.coins||{}).filter(c=>c.available).length,platformCoinTotal:Object.keys(world?.coins||{}).length},artworks:{total:arena.artworks.size,available:Object.values(world?.artworks||{}).filter(a=>!a.holder&&Date.now()>=(a.availableAt||0)).length},monster:world?.monster?.active?{variant:world.monster.variant,hp:world.monster.hp}:null,render:{fps:+fps.toFixed(1),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,pixelRatio:renderer.getPixelRatio(),gunMode:gun.mode,frameMs:+(frameSamples.reduce((a,b)=>a+b,0)/Math.max(1,frameSamples.length)).toFixed(2)},editorShortcut:'Shift+Y'});
 window.advanceTime=milliseconds=>{externalUntil=performance.now()+120;const steps=Math.ceil(milliseconds/16.6667);for(let i=0;i<steps;i++)update(Math.min(.05,milliseconds/steps/1000),(performance.now()+i*milliseconds/steps)/1000);vhs.render(scene,camera,performance.now()/1000);};
-if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.templeTest={writer,plantHover,audio,bursts,artworkThrow,arena,camera,renderer,ui,gun,editor:artEditor,platformDelete,controller:()=>controller,network,roots,items:ITEMS,slots:EQUIPPABLE_SLOTS,performanceSamples,vitals:()=>vitalModels,hit:applyHitReaction};
+if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.templeTest={writer,plantHover,audio,bursts,artworkThrow,arena,camera,renderer,ui,gun,editor:artEditor,platformDelete,portraitViewport,controller:()=>controller,network,roots,items:ITEMS,slots:EQUIPPABLE_SLOTS,performanceSamples,vitals:()=>vitalModels,hit:applyHitReaction};
 import {PLATFORMS} from './shared/arena.js';
