@@ -550,7 +550,9 @@ function tickPersistentAttacks(world,actors,now,rng){
     // No uncharged weapon may bypass the 8-hit baseline through a lucky
     // crit or a ten-ball shotgun burst. The pellets remain individually
     // damaging, with a full 5x+ per-pellet random damage window.
-    const damage=isPlayer?Math.min(rawDamage,fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39)):rawDamage;
+    const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?50:32):
+      fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
+    const damage=isPlayer?Math.min(rawDamage,pvpCap):rawDamage;
     let applied;
     if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,modifiers.kind,impact);
     else applied=damageMonster(world,owner,damage,now,rng,modifiers.kind,enemy,impact);
