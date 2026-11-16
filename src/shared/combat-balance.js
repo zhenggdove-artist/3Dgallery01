@@ -4,7 +4,7 @@ export const SNIPER_RANGE=256; // Entire 184m-diameter arena from either edge, w
 export function sniperHitsHead(origin,direction,range,position){
  if(![origin,direction,position].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite)))return false;
  if(!Number.isFinite(range)||range<=0)return false;
- const head=[position[0],position[1]+2.02,position[2]];
+ const head=[position[0],position[1]+1.70,position[2]]; // Covers actual avatar face and top of the 2.35m capsule.
  const delta=head.map((v,i)=>v-origin[i]);
  const along=delta.reduce((n,v,i)=>n+v*direction[i],0);
  if(along<0||along>range)return false;
