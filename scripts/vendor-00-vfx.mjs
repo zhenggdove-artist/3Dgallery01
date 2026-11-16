@@ -5,7 +5,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 
 const origin='https://00gamedevs.com';
 const numberedIds={
-  8:'arc-ray',20:'energy-vortex',26:'frost-wheel',33:'tidal-surge',
+  8:'arc-ray',20:'energy-vortex',26:'frost-wheel',29:'radiant-beam',33:'tidal-surge',
   38:'magma-fissure',43:'revival-bloom',47:'dimensional-rend',48:'black-hole',
   53:'darkchain-detonation',68:'rolling-fireburst',70:'ice-lance-study',
   73:'anime-flame-shield'
@@ -45,7 +45,7 @@ await writeFile('vendor/00gamedevs/numbered-manifest.json',JSON.stringify({
 },null,2)+'\n');
 
  // Spell indicators #58/#59 are also installed byte-for-byte from the official
- // catalogue. They are not weapon attacks, so retain the twelve-attack manifest.
+ // catalogue. They are not weapon attacks; maintain their own manifest.
 const warningIds={58:'spell-indicator-sector',59:'spell-indicator-rectangle'};
 const warnings=[];
 for(const [num,id] of Object.entries(warningIds)){
