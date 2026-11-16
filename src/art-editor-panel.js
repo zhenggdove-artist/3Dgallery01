@@ -1,0 +1,32 @@
+// Shared control layout: fixed labels on the left, numeric inputs on the
+// right at all screen widths. All fields remain keyboard and touch accessible.
+const axisLabels={position:'位置',rotation:'旋轉（度）',scale:'縮放'};
+export const appearanceRows=[
+ ['depth','厚度',0,2],['brightness','亮度',0,3],
+ ['contrast','對比',0,3],['saturation','飽和度',0,3],
+ ['blackPoint','黑點',0,.95]
+];
+export function editorPanelMarkup(appearance,platformRadius,originalArtwork){
+ const axes=['position','rotation','scale'].map(prop=>
+  `<label class="art-editor-field"><span class="art-field-name">${axisLabels[prop]} XYZ</span><span class="art-editor-values art-xyz">
+   ${[0,1,2].map(i=>`<input type="number" step="${prop==='rotation'?'1':'.05'}" data-axis="${prop}-${i}" aria-label="${axisLabels[prop]} ${'XYZ'[i]}">`).join('')}
+  </span></label>`
+ ).join('');
+ const numbers=appearanceRows.map(([key,label,min,max])=>
+  `<label class="art-editor-field"><span class="art-field-name">${label}</span>
+    <span class="art-editor-values"><input data-appearance="${key}" type="number" min="${min}" max="${max}" step=".01" value="${appearance[key]}"></span>
+   </label>`).join('');
+ const radius=originalArtwork?`<label class="art-editor-field"><span class="art-field-name">展示圓盤半徑</span>
+   <span class="art-editor-values"><input data-platform-radius type="number" min="1.5" max="14" step=".1" value="${Number(platformRadius||3).toFixed(2)}"></span></label>`:'';
+ return `<h3>GM · 藝術品配置</h3><p data-art-name></p>
+  <p class="art-editor-help">Shift+T 縮放／Shift+R 旋轉／Shift+G 移動；Esc 取消</p>
+  <div class="art-editor-toolbar"><button data-action="scale">尺寸</button><button data-action="rotate">旋轉</button><button data-action="translate">位置</button></div>
+  <div class="art-editor-fields">${axes}${radius}
+   <h4>表面屬性</h4>${numbers}
+   <label class="art-editor-field"><span class="art-field-name">色彩</span><span class="art-editor-values"><input data-appearance="tint" type="color" value="${appearance.tint}"></span></label>
+  </div>
+  <p data-status>已選取 · 尚無修改</p>
+  <div class="art-editor-actions"><button data-action="follow">跟隨 GM</button>
+   <button data-action="save">儲存預設值</button><button data-action="cancel">取消／關閉</button>
+   <button data-action="export">匯出配置</button></div>`;
+}
