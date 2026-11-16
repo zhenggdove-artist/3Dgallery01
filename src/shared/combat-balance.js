@@ -29,6 +29,7 @@ export function projectileFlightMs(weapon,charged=false){
  // Synchronize authoritative swept-hit travel with the visible, moving
  // 00GameDevs source. Doubling reach without flight time would silently
  // double speed and make strikes hit before the graphics reach targets.
+ if(charged&&weapon.id==='clam')return 2180; // original #33 crest full eased path
  if(charged&&weapon.family==='palm')return 1650; // triple #31 tower
  if(charged&&weapon.family==='saber')return 1100; // extended #38 fissure
  if(charged&&weapon.family==='ice')return 1260;  // doubled #70 reach
