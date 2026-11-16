@@ -52,6 +52,7 @@ assert.match(premature.error,/Wait until/);
 await delay(3100);
 const drank=await act('write-drink',{duration:.2});
 assert.ok(drank.journey?.drinkAt);
+await delay(3950); // The server-authoritative WRITE journey must reach the ground before planting.
 const planted=await act('plant',{text:'Local integration smoke '+guest,position:[0,0,0]});
 assert.ok(planted.plant?.id,JSON.stringify(planted));
 const worldAfterPlant=await call('/api/world',undefined,token);
