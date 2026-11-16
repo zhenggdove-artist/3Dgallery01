@@ -51,7 +51,9 @@ const FIRE_FREE_RAY=new THREE.Vector3(1,0,.42).normalize();
 const CHANNEL_GRACE_MS=3100;
 const CLAM_WAVE_INTERVAL=.38;
 const CLAM_WAVE_LIFETIME=2.18;
-const CYCLE_INTERVAL=Object.freeze({43:1.35,70:2.8});
+const CYCLE_INTERVAL=Object.freeze({20:1.35,43:1.08,70:2.8});
+const TRAVELLING_NATIVE=new Set([20,43]);
+const travelLifetime=number=>number===43?2.2:4.2;
 const vector=(value,fallback)=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite)?
  new THREE.Vector3(...value):fallback.clone();
 const channelColors=Object.freeze({
@@ -109,7 +111,7 @@ export class NumberedWeaponEffects {
    live.range=Math.max(.5,Number(event.range)||live.range);
    live.heading=root?.rotation.y||0;
    live.lastPulse=performance.now();
-   if(!live.waves)this.align(live);
+   if(!live.waves&&!live.cycles)this.align(live);
    return true;
   }
   const quality=Math.max(.5,Math.min(2.5,Number(event.qualityScale)||1));
@@ -122,13 +124,14 @@ export class NumberedWeaponEffects {
   if(spec.number===73)size=1;
   if(event.ultimate&&!event.channel&&Number.isFinite(event.area?.radius)&&spec.number!==29&&spec.number!==70)
    size=Math.max(.25,Math.min(3.5,event.area.radius/4.5));
-  const options={size,speed:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
+  const options={size,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
   if(!options.color)delete options.color;
   const fx=this.create(spec,options);
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
   // #29 is a forward beam: even its charged shot starts at the weapon, not
   // at an unrelated remote ground-circle centre.
-  const areaLocked=!!event.ultimate&&!event.channel&&spec.number!==29&&Array.isArray(event.area?.visualCenter);
+  // Sword cracks begin from the hand, not a distant ground-target position.
+  const areaLocked=!!event.ultimate&&!event.channel&&![29,38].includes(spec.number)&&Array.isArray(event.area?.visualCenter);
   const target=areaLocked?vector(event.area.visualCenter,origin):origin.clone();
   const entry={
    spec,fx,group:fx.group,root,item,direction,origin,target,options,
@@ -150,13 +153,13 @@ export class NumberedWeaponEffects {
    entry.waves=[];
    this.spawnClamWave(entry,fx);
   }else if(key&&CYCLE_INTERVAL[spec.number]) {
-   entry.cycles=[{fx,age:0}];
+   entry.cycles=[this.makeCycle(entry,fx)];
   }
   // Only the server's projectile/sector collision applies any damage.
   return true;
  }
  muzzleAt(entry) {
-  if(entry.channel&&entry.root) {
+  if(entry.root&&(entry.channel||entry.spec.number===38)) {
    const m=this.muzzle(entry.root,entry.item,entry.origin.clone());
    if(m?.isVector3)return m;
   }
@@ -192,13 +195,24 @@ export class NumberedWeaponEffects {
    return;
   }
   fx.group.position.copy(origin);
+  if(spec.number===38){
+   // The original fissure's long axis is +X, not the camera/sword +Z.
+   // Uniform 2x scales both its ground length and overall footprint.
+   fx.group.scale.setScalar(2);
+   fx.group.position.y=Math.max(.12,origin.y-1.15);
+  }
+  if(spec.number===70){
+   // #70 is authored along +X. Preserve the previous half-size ice
+   // pillars on Y/Z while doubling their forward travel distance.
+   fx.group.scale.x=fx.group.scale.y*2;
+  }
   if(entry.areaLocked){
    fx.group.quaternion.setFromAxisAngle(UP,Math.atan2(dir.x,dir.z));
   }else{
    // Original #33 and #70 are authored facing +X; rotating from +Z
    // made the released wave and ice spear travel sideways.
    fx.group.quaternion.setFromUnitVectors(
-    spec.number===70||spec.number===33?X_FORWARD:FORWARD,dir);
+    spec.number===70||spec.number===38?X_FORWARD:FORWARD,dir);
   }
   if(typeof fx.setDirection==='function')fx.setDirection(dir,0);
   if(typeof fx.setAim==='function'){
@@ -214,7 +228,9 @@ export class NumberedWeaponEffects {
   const start=this.muzzleAt(entry);
   const wave={fx,age:0,start,direction:dir,reach:entry.range};
   fx.group.position.copy(start);
-  fx.group.quaternion.setFromUnitVectors(X_FORWARD,dir);
+  // #33 wave is authored facing +Z. Rotating local +X to the player's
+  // +Z made it erupt at the player's RIGHT instead of travelling forward.
+  fx.group.quaternion.setFromUnitVectors(FORWARD,dir);
   fx.group.scale.setScalar(.001);
   entry.waves.push(wave);
   if(entry.waves.length>6)this.disposeWave(entry.waves.shift());
@@ -254,31 +270,58 @@ export class NumberedWeaponEffects {
   }
   if(!entry.waves.length)this.spawnClamWave(entry);
  }
+ currentDirection(entry){
+  const dir=entry.direction.clone();
+  if(entry.channel&&entry.root)
+   dir.applyAxisAngle(UP,entry.root.rotation.y-entry.heading);
+  return dir.normalize();
+ }
+ makeCycle(entry,fx){
+  const moving=TRAVELLING_NATIVE.has(entry.spec.number);
+  const start=this.muzzleAt(entry),direction=this.currentDirection(entry);
+  if(moving){
+   // The original #43 bloom and #20 conch vortex copy detaches from the
+   // muzzle and moves independently. New copies start at the CURRENT tip.
+   fx.group.position.copy(start);
+   fx.group.quaternion.setFromUnitVectors(FORWARD,direction);
+  }else this.align(entry,fx);
+  return {fx,age:0,start,direction,stopping:false};
+ }
+ discardCycle(entry,copy){
+  const index=entry.cycles.indexOf(copy);
+  if(index>=0)entry.cycles.splice(index,1);
+  copy.fx.group.removeFromParent();
+  copy.fx.dispose();
+ }
  updateNativeCycles(entry,dt){
+  const number=entry.spec.number,moving=TRAVELLING_NATIVE.has(number);
   entry.cycleTimer+=dt;
-  if(entry.cycleTimer>=CYCLE_INTERVAL[entry.spec.number]){
-   entry.cycleTimer-=CYCLE_INTERVAL[entry.spec.number];
+  while(entry.cycleTimer>=CYCLE_INTERVAL[number]){
+   entry.cycleTimer-=CYCLE_INTERVAL[number];
    const fx=this.create(entry.spec,entry.options);
-   entry.cycles.push({fx,age:0});
+   entry.cycles.push(this.makeCycle(entry,fx));
   }
   for(const copy of [...entry.cycles]){
    copy.age+=dt;
-   this.align(entry,copy.fx);
+   if(moving){
+    const duration=travelLifetime(number);
+    const t=Math.min(1,copy.age/duration);
+    const progress=t*t*(3-2*t);
+    const advance=Math.min(entry.range,Math.max(4,entry.range*.72))*progress;
+    copy.fx.group.position.copy(copy.start).addScaledVector(copy.direction,advance);
+    if(number===20&&copy.age>=duration-.9&&!copy.stopping){
+     copy.stopping=true;
+     copy.fx.stop?.();
+    }
+   }else this.align(entry,copy.fx);
    copy.fx.update(dt);
-   if(copy.fx.finished){
-    entry.cycles.splice(entry.cycles.indexOf(copy),1);
-    copy.fx.group.removeFromParent();
-    copy.fx.dispose();
-   }
+   if(copy.fx.finished||(moving&&copy.age>travelLifetime(number)+.55))
+    this.discardCycle(entry,copy);
   }
-  if(entry.cycles.length>3){
-   const old=entry.cycles.shift();
-   old.fx.group.removeFromParent();
-   old.fx.dispose();
-  }
+  while(entry.cycles.length>(moving?4:3))this.discardCycle(entry,entry.cycles[0]);
   if(!entry.cycles.length){
    const fx=this.create(entry.spec,entry.options);
-   entry.cycles.push({fx,age:0});
+   entry.cycles.push(this.makeCycle(entry,fx));
   }
   entry.fx=entry.cycles[0].fx;
  }
