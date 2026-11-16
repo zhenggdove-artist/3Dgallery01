@@ -582,7 +582,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    // all travelled segments, so no damage can occur before contact.
    const lanes=fx.pellets||[{direction:fx.direction,radius:fx.radius}];
    const segmentLength=Math.max(0,(next-prev)*fx.range);
-   if(segmentLength>.00001){
+   if(segmentLength>.00001&&fx.area?.mode!=='sector'){
     lanes.forEach((pellet,index)=>{
      const start=fx.origin.map((v,j)=>v+pellet.direction[j]*prev*fx.range);
      for(const target of targets){
@@ -599,6 +599,31 @@ function tickPersistentAttacks(world,actors,now,rng){
       if(outcome(target,pos,impact,fx.pellets?index:null,prev*fx.range+t))changed=true;
      }
     });
+   }
+   // The original tidal wave #33 takes 200ms to grow and 2.18s to advance.
+   // Sweep the warned 90-degree sector only when its crest reaches each
+   // enemy's physical body. Never grant an instantaneous cone-wide hit.
+   if(fx.area?.mode==='sector'){
+    const crest=f=>{
+     const t=clamp((f*2.18-.2)/1.98,0,1);
+     return t*t*(3-2*t)*fx.range;
+    };
+    const from=crest(prev),to=crest(next);
+    if(to>from+.00001){
+     for(const target of targets){
+      const enemy=target.value,key=enemy.id||enemy.key;
+      if(enemy.key===fx.owner||alreadyHit.has(key))continue;
+      const radius=target.kind==='player'?1.02:ENEMY_RADIUS;
+      const center=target.kind==='player'
+       ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]
+       :[enemy.position[0],enemy.position[1]+ENEMY_HEIGHT*.5,enemy.position[2]];
+      if(!insideChargedArea(fx.area,center,radius))continue;
+      const along=(center[0]-fx.area.apex[0])*fx.area.forward[0]+
+       (center[2]-fx.area.apex[2])*fx.area.forward[1];
+      if(along+radius<from||along-radius>to)continue;
+      if(outcome(target,center,center,null,along))changed=true;
+     }
+    }
    }
    // Ground-targeted charged area explosions are evaluated only once their
    // visible travel has completed; targets that have moved away evade damage.
@@ -634,9 +659,9 @@ function tickPersistentAttacks(world,actors,now,rng){
       rayCylinderDistance(a,direction,length,value.position,1+fx.radius,2.35);
      if(contact===null)continue;
      seen.push(value.id||value.key);
-     const hit=a.map((v,j)=>v+direction[j]*contact);
-     if(target.kind==='monster')damageMonster(world,owner,fx.damage*.53,now,rng,leg==='out'?'boomerang-out':'boomerang-return',value,hit);
-     else damagePlayer(world,owner,value,(fx.pvpDamage||12)*.62,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',hit);
+     const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
+     if(target.kind==='monster')damageMonster(world,owner,fx.damage*.53,now,rng,leg==='out'?'boomerang-out':'boomerang-return',value,center);
+     else damagePlayer(world,owner,value,(fx.pvpDamage||12)*.62,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',center);
      changed=true;
     }
    }
@@ -655,16 +680,16 @@ function tickPersistentAttacks(world,actors,now,rng){
       :rayCylinderDistance(origin,fx.direction,length,value.position,1.02+fx.radius,2.35);
      if(contact===null)continue;
      fx.fishHits.push(key);
-     const impact=origin.map((v,j)=>v+fx.direction[j]*contact);
+     const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
      if(target.kind==='monster'){
-      const result=damageMonster(world,owner,fx.damage*1.25,now,rng,'giant-goldfish',value,impact);
+      const result=damageMonster(world,owner,fx.damage*1.25,now,rng,'giant-goldfish',value,center);
       if(result&&!result.defeated){
        const moved=[value.position[0]+fx.direction[0]*(3+fx.tier*.7),value.position[1],value.position[2]+fx.direction[2]*(3+fx.tier*.7)];
        if(insideArena(moved,-2)&&!insideArtSanctuary(moved))value.position=moved;
        value.effects??={};value.effects.stun={owner:fx.owner,power:1,until:now+800,next:now+1000};
       }
      }else{
-      const hit=damagePlayer(world,owner,value,(fx.pvpDamage||12)*1.08,now,'goldfish',fx.origin,'giant-goldfish',impact);
+      const hit=damagePlayer(world,owner,value,(fx.pvpDamage||12)*1.08,now,'goldfish',fx.origin,'giant-goldfish',center);
       if(hit&&!hit.immune){const profile=world.profiles[value.key];if(profile?.hitReaction){profile.hitReaction.stunMs=300;profile.hitReaction.knockback=14;}}
      }
      changed=true;
@@ -690,8 +715,9 @@ function tickPersistentAttacks(world,actors,now,rng){
      if(pos[1]>tornadoTop||pos[1]+victimHeight<p[1]-1)continue;
      if(dist>2.4+fx.radius*.48||now-(fx.fanHits[key]||0)<900)continue;
      fx.fanHits[key]=now;
-     if(target.kind==='monster')damageMonster(world,owner,fx.damage*.18,now,rng,'tornado',value,p);
-     else damagePlayer(world,owner,value,(fx.pvpDamage||10)*.10,now,'tornado',fx.origin,'tornado',p);
+     const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
+     if(target.kind==='monster')damageMonster(world,owner,fx.damage*.18,now,rng,'tornado',value,center);
+     else damagePlayer(world,owner,value,(fx.pvpDamage||10)*.10,now,'tornado',fx.origin,'tornado',center);
      const victim=target.kind==='monster'?value:world.profiles[value.key];
      if(victim){
       victim.effects??={};
