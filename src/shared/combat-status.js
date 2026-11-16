@@ -14,15 +14,10 @@ export function applyStatus(world,source,target,weapon,shot,now){
  applyElementalHit(target,source,weapon,now);
  const durationScale=Math.max(1,Math.min(2.4,Number(shot.qualityDuration)||1));
  for(const [key,effect] of Object.entries(target.effects||{})){
-  if(effect.owner!==source.key||effect.until<=(previous[key]||0))continue;
+  if(['freeze','root','confuse','dazzle','soaked'].includes(key)||effect.owner!==source.key||effect.until<=(previous[key]||0))continue;
   effect.until+=Math.round((effect.until-now)*(durationScale-1));
  }
  for(const id of source.fusion?.[weapon.id]?.effects||[]){const item=equipmentById(id);if(item)applyWeaponTraits(game,item,{...shot,shooter:source.key},now);}
- if(weapon.family==='planter'&&!weapon.exotic){
-  target.effects??={};
-  const until=now+(shot.charge>=1?5000:2800),old=target.effects.root;
-  target.effects.root={owner:source.key,power:1,until:Math.max(old?.until||0,until),next:now+1000};
- }
  source.hp=Math.min(source.maxHp,source.maxHp-game.hits[source.key]*10);
  if(resolved.knockback)target.impulse={id:now,vector:resolved.knockback};
 }
@@ -48,7 +43,7 @@ export function applyElementalHit(target,source,weapon,now){
  // restrain locomotion, leaving look and attacks available.
  const family=weapon.family;
  if(family==='ice'){delete e.slow;return put('freeze',1000,0,5000);}
- if(['planter','petal','palm','whip'].includes(family)&&!weapon.exotic)return put('root',1000,0,5000);
+ if(['planter','petal','palm','whip'].includes(family)&&!weapon.exotic){delete e.root;return put('root',1000,0,5000);}
  if(family==='fire'||weapon.element==='fire'){
   if(!e.burn||e.burn.until<=now)return put('burn',5000,1);
   return 'burn';
