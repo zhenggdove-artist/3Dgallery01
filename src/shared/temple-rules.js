@@ -396,18 +396,26 @@ function attack(world,profile,actor,body,context,now){
       if(echoArea?.mode==='area'&&area?.visualCenter){
         echoArea.center=[...area.center];echoArea.visualCenter=[...area.visualCenter];
       }
-      const flight=projectileFlightMs(source,true),duration=Math.max(flight,visibleCollisionLifetimeMs(source,true));
+      const exotic=source.id==='fan'?'fan':source.id==='giraffe'?'giraffe':source.id==='goldfish'?'goldfish':null;
+      const flight=projectileFlightMs(source,true);
+      const duration=exotic==='goldfish'?Math.round(GOLDFISH_SWIM_MS*sourceQuality.duration):
+        exotic==='giraffe'?2300:exotic==='fan'?Math.round((1400+sourceQuality.tier*850)*sourceQuality.duration):
+        Math.max(flight,visibleCollisionLifetimeMs(source,true));
       const echoId=id(),echoDamage=+(full.damage*.2).toFixed(3);
       const echoPvP=+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
-      world.persistentAttacks.push({id:echoId,kind:'projectile',echo:true,owner:actor.key,weapon:source.id,
+      const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
+      world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],range,radius,area:echoArea,
         damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*.2,
-        flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
+        tier:sourceQuality.tier,flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
+        pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
+        outHits:[],backHits:[],fanHits:{},fishHits:[],
         createdAt:now,lastAt:now,expiresAt:now+duration});
       fusionEchoes.push({id:echoId,owner:actor.key,origin:[...origin],direction:[...direction],
         weapon:source.id,family:source.family,color:source.color,charge:1,ultimate:true,
         range,radius,area:echoArea,qualityTier:sourceQuality.tier,
         qualityScale:sourceQuality.visual*.5,qualityDuration:sourceQuality.duration,
+        pellets:secondaryPellets?.map(v=>v.direction)||null,
         fusionEcho:true,echoPower:.2,time:now});
     }
     if(world.persistentAttacks.length>44)world.persistentAttacks.splice(0,world.persistentAttacks.length-44);
@@ -637,7 +645,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     // damaging, with a full 5x+ per-pellet random damage window.
     const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?150:96):
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
-    const shotgunPellet=isPlayer&&weapon.pattern==='scatter'&&pellet!==null;
+    const shotgunPellet=!fx.echo&&isPlayer&&weapon.pattern==='scatter'&&pellet!==null;
     const damage=shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage;
     const lethalHeadshot=!fx.echo&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
      fx.origin,fx.direction,fx.range,enemy.position);
@@ -780,7 +788,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       :damagePlayer(world,owner,value,(fx.pvpDamage||12)*.62,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',center);
      if(hit&&!hit.immune&&!hit.defeated)applyElementalHit(
       target.kind==='monster'?value:world.profiles[value.key],owner,
-      {family:'lightning',element:'electric'},now);
+      {family:'lightning',element:'electric'},now,fx.echo?.2:1);
      changed=true;
     }
    }
@@ -803,20 +811,24 @@ function tickPersistentAttacks(world,actors,now,rng){
      if(target.kind==='monster'){
       const result=damageMonster(world,owner,fx.damage*1.25,now,rng,'giant-goldfish',value,center);
       if(result&&!result.defeated){
-       applyStatus(world,owner,value,itemById('goldfish'),{
+       if(fx.echo)applyElementalHit(value,owner,itemById('goldfish'),now,.2);
+       else applyStatus(world,owner,value,itemById('goldfish'),{
         direction:fx.direction,charge:1,damage:fx.damage,qualityDuration:1
        },now);
-       const moved=[value.position[0]+fx.direction[0]*(3+fx.tier*.7),value.position[1],value.position[2]+fx.direction[2]*(3+fx.tier*.7)];
+       const moved=[value.position[0]+fx.direction[0]*(3+fx.tier*.7)*(fx.echo?.2:1),value.position[1],value.position[2]+fx.direction[2]*(3+fx.tier*.7)*(fx.echo?.2:1)];
        if(insideArena(moved,-2)&&!insideArtSanctuary(moved))value.position=moved;
-       value.effects??={};value.effects.stun={owner:fx.owner,power:1,until:now+800,next:now+1000};
+       value.effects??={};value.effects.stun={owner:fx.owner,power:fx.echo?.2:1,until:now+(fx.echo?160:800),next:now+1000};
       }
      }else{
       const hit=damagePlayer(world,owner,value,(fx.pvpDamage||12)*1.08,now,'goldfish',fx.origin,'giant-goldfish',center);
       if(hit&&!hit.immune){const profile=world.profiles[value.key];
-       if(profile?.hp>0)applyStatus(world,owner,profile,itemById('goldfish'),{
-        direction:fx.direction,charge:1,damage:fx.pvpDamage,qualityDuration:1
-       },now);
-       if(profile?.hitReaction){profile.hitReaction.stunMs=300;profile.hitReaction.knockback=14;}}
+       if(profile?.hp>0){
+        if(fx.echo)applyElementalHit(profile,owner,itemById('goldfish'),now,.2);
+        else applyStatus(world,owner,profile,itemById('goldfish'),{
+         direction:fx.direction,charge:1,damage:fx.pvpDamage,qualityDuration:1
+        },now);
+       }
+       if(profile?.hitReaction){profile.hitReaction.stunMs=fx.echo?100:300;profile.hitReaction.knockback=fx.echo?2.8:14;}}
      }
      changed=true;
     }
@@ -839,7 +851,7 @@ function tickPersistentAttacks(world,actors,now,rng){
      // hazard: a fighter flying above the visible vortex cannot be struck.
      const tornadoTop=p[1]+10*(1+(fx.tier-1)*.19),victimHeight=target.kind==='monster'?(value.bodyHeight||ENEMY_HEIGHT):2.35;
      if(pos[1]>tornadoTop||pos[1]+victimHeight<p[1]-1)continue;
-     if(dist>2.4+fx.radius*.48||now-(fx.fanHits[key]||0)<contactDamageIntervalMs({id:'fan'}))continue;
+     if(dist>(fx.echo?1.2:2.4)+fx.radius*.48||now-(fx.fanHits[key]||0)<contactDamageIntervalMs({id:'fan'}))continue;
      fx.fanHits[key]=now;
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
      if(target.kind==='monster')damageMonster(world,owner,fx.damage*.18,now,rng,'tornado',value,center);
@@ -847,7 +859,7 @@ function tickPersistentAttacks(world,actors,now,rng){
      const victim=target.kind==='monster'?value:world.profiles[value.key];
      if(victim){
       victim.effects??={};
-      victim.effects.slow={owner:fx.owner,power:.4,until:now+Math.round(1300*(1+(fx.tier-1)*.3)),next:now+1000};
+      victim.effects.slow={owner:fx.owner,power:fx.echo?.08:.4,until:now+Math.round(1300*(1+(fx.tier-1)*.3)*(fx.echo?.2:1)),next:now+1000};
      }
      changed=true;
     }
