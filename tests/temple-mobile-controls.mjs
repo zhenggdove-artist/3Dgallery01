@@ -36,6 +36,10 @@ try {
   window.mobileForceGun=true;
   t.ui.setWorld=w=>{
    if(window.mobileForceGun&&w?.profile?.equipment)w.profile.equipment.weapon='black-cat';
+   if(window.mobileForcePlant&&w?.plants){
+    if(!w.plants.some(p=>p.id===window.mobileForcePlant.id))w.plants.push(window.mobileForcePlant);
+    if(w.profile?.equipment)w.profile.equipment.weapon='clam';
+   }
    return setWorld(w);
   };
   t.ui.world.profile.equipment.weapon='black-cat';
@@ -76,15 +80,25 @@ try {
  assert.equal(await page.evaluate(()=>window.mobileTestShots),1,'third A exits scope without firing');
  const setup=await page.evaluate(()=>{
   const t=templeTest,plant={id:'ci-touch-plant',author:'CI',text:'Mobile E equivalence',createdAt:Date.now()};
-  t.ui.world.plants.push(plant);
+  window.mobileForcePlant=plant;
   window.mobileForceGun=false;
+  t.ui.world.plants.push(plant);
   t.ui.world.profile.equipment.weapon='clam';
   t.arena.nearest=()=>({type:'plant',id:plant.id});
   return t.controller().enabled;
  });
  assert.equal(setup,true);
  await button.tap();
- await page.waitForFunction(()=>templeTest.ui.panelName==='plant');
+ try {await page.waitForFunction(()=>templeTest.ui.panelName==='plant',null,{timeout:8000});}
+ catch(error){
+  const trace=await page.evaluate(()=>({panel:templeTest.ui.panelName,
+   weapon:templeTest.ui.world?.profile?.equipment?.weapon,
+   near:templeTest.arena.nearest(templeTest.controller().root.position.toArray()),
+   plantExists:templeTest.ui.world?.plants?.some(p=>p.id==='ci-touch-plant'),
+   enabled:templeTest.controller()?.enabled,holdingArt:templeTest.controller()?.holdingArt,
+   aEvents:window.mobileAEvents,gunMode:templeTest.gun.mode}));
+  throw new Error('Contextual touch A did not trigger E: '+JSON.stringify(trace),{cause:error});
+ }
  assert.equal(await page.locator('#panel').isVisible(),true,'mobile A performs E near an interactable');
  assert.equal(await page.locator('#panel-title').innerText(),'MESSAGE PLANT');
  assert.equal(await page.evaluate(()=>window.mobileTestShots),1,'contextual A never fires a gun');
