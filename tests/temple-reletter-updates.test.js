@@ -42,7 +42,7 @@ test('five outer-arena monster spawns avoid the art sanctuary and are sixfold la
  assert.equal(world.monsters.length,5);
  assert.ok(world.monsters.every(m=>m.active&&m.hp>0&&Math.hypot(m.position[0],m.position[2])>=60));
  assert.equal(ENEMY_HEIGHT,1.575*6);
- assert.equal(ENEMY_RADIUS,.32*6);
+ assert.equal(ENEMY_RADIUS,.42*6);
  assert.equal(new Set(world.monsters.map(m=>m.id)).size,5);
  assert.equal(spawnMonsterPack(world,2001,rng),false);
  world.monsters[3].active=false;

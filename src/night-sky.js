@@ -5,52 +5,84 @@ import * as THREE from 'three';
 // Every cloud is a translucent object hundreds of metres away with depth
 // testing enabled, so scene geometry always occludes it.
 const random=seed=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
-function makeCloudTexture(seed,kind){
- const rnd=random(seed),canvas=document.createElement('canvas');
- canvas.width=640;canvas.height=256;
- const mask=document.createElement('canvas');mask.width=640;mask.height=256;
- const m=mask.getContext('2d');m.fillStyle='#fff';
- const broad=kind==='broad',wispy=kind==='wispy',broken=kind==='broken';
- const count=broad?34:wispy?14:23;
- for(let i=0;i<count;i++){
-  const x=38+rnd()*560,y=(broad?158:wispy?150:157)+(rnd()-.5)*(wispy?96:broken?84:56);
-  const rx=broad?37+rnd()*85:wispy?25+rnd()*90:17+rnd()*49;
-  const ry=broad?21+rnd()*44:wispy?5+rnd()*14:11+rnd()*33;
-  m.beginPath();m.ellipse(x,y,rx,ry,(rnd()-.5)*(wispy ? .43 : .28),0,Math.PI*2);m.fill();
- }
- if(broad){m.beginPath();m.ellipse(314,190,275,19,0,0,Math.PI*2);m.fill();}
- const ctx=canvas.getContext('2d');
- ctx.filter='blur('+(wispy?9:broken?7:5)+'px)';ctx.drawImage(mask,0,0);ctx.filter='none';
- ctx.globalCompositeOperation='source-in';
- const grad=ctx.createLinearGradient(0,67,0,252);
- grad.addColorStop(0,'rgba(208,222,245,.56)');
- grad.addColorStop(.36,'rgba(164,188,223,.60)');
- grad.addColorStop(.76,'rgba(101,132,185,.55)');
- grad.addColorStop(1,'rgba(55,76,125,.25)');
- ctx.fillStyle=grad;ctx.fillRect(0,0,640,256);
- ctx.globalCompositeOperation='source-over';
- const texture=new THREE.CanvasTexture(canvas);
- texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=2;
- return texture;
-}
+// Batched camera-facing layers at REAL 3D positions. A cloud is a volume
+// of overlapping translucent vapour puffs, never an opaque clipped paper card.
+// Soft fragment masks are zero along ALL quad edges; shader noise breaks any
+// artificial rectangular silhouette without canvas mask truncation.
+const cloudVertex=`
+attribute float aSeed;
+varying vec2 vUv;varying float vSeed;varying vec3 vEye;
+uniform float uTime;
+void main(){
+ vUv=uv;vSeed=aSeed;
+ vec4 center=modelViewMatrix*instanceMatrix*vec4(0.,0.,0.,1.);
+ float sx=length(instanceMatrix[0].xyz),sy=length(instanceMatrix[1].xyz);
+ // In view space, translating XY makes each puff billboard to the camera;
+ // the instance center (including its Z) retains full depth and perspective.
+ vec2 drift=vec2(sin(uTime*.08+aSeed*31.),cos(uTime*.055+aSeed*17.))*vec2(1.,.45);
+ center.xy+=(position.xy+drift*.013)*vec2(sx,sy);
+ vEye=center.xyz;
+ gl_Position=projectionMatrix*center;
+}`;
+const cloudFragment=`
+precision highp float;
+varying vec2 vUv;varying float vSeed;varying vec3 vEye;
+uniform float uTime,uOpacity;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
+void main(){
+ vec2 p=vUv*2.-1.;float wobble=uTime*.014;
+ float n=noise(p*vec2(3.7,4.2)+vec2(vSeed*13.1,wobble));
+ n=n*.54+noise(p*8.3+vec2(vSeed*27.,-wobble))*.29+noise(p*17.5+vSeed*37.)*.17;
+ float contour=length(vec2(p.x,p.y*1.2));
+ float cloud=(1.-smoothstep(.25,1.14,contour+(n-.5)*.42));
+ // Reject all fragments along the physical quad boundaries: never a hard
+ // vertical edge even when an ellipse expands beyond the cloud bank.
+ float feather=(1.-smoothstep(.73,1.,abs(p.x)))*(1.-smoothstep(.70,1.,abs(p.y)));
+ float alpha=cloud*feather*(.5+n*.5)*uOpacity;
+ if(alpha<.007)discard;
+ vec3 top=vec3(.85,.9,1.),bottom=vec3(.48,.62,.82);
+ vec3 light=mix(bottom,top,clamp(vUv.y*.8+n*.25,0.,1.));
+ gl_FragColor=vec4(light,alpha);
+ #include <tonemapping_fragment>
+ #include <colorspace_fragment>
+}`;
 function cloudBank(root,index,touch){
  const kinds=['broad','wispy','broken','broad','broken','wispy','broad','wispy','broken','broad','broken','wispy'];
- const kind=kinds[index],angle=index*Math.PI*2/kinds.length+(index%2)*.12;
- const distance=256+(index%3)*25,altitude=77+(index%5)*26;
- const width=(kind==='broad'?227:kind==='wispy'?143:178)*(touch ? .77 : 1);
- const height=(kind==='broad'?78:kind==='wispy'?45:65)*(touch ? .85 : 1);
- const group=new THREE.Group();group.name='Translucent '+kind+' drifting cloud '+index;
+ const kind=kinds[index],rnd=random(0xc0124+index*2997);
+ const angle=index*Math.PI*2/kinds.length+(index%2)*.12;
+ const distance=252+(index%3)*26,altitude=80+(index%5)*23;
+ const count=(kind==='broad'?32:kind==='wispy'?16:23)*(touch ? .65 : 1);
+ const width=(kind==='broad'?220:kind==='wispy'?152:183)*(touch ? .83 : 1);
+ const group=new THREE.Group();group.name='Translucent volumetric '+kind+' cloud '+index;
  group.position.set(Math.cos(angle)*distance,altitude,Math.sin(angle)*distance);
- group.lookAt(0,70,0);
- const texture=makeCloudTexture(0xc0124+index*2997,kind);
- const material=new THREE.MeshBasicMaterial({
-  map:texture,transparent:true,opacity:kind==='wispy' ? .55 : kind==='broken' ? .60 : .68,
-  depthTest:true,depthWrite:false,side:THREE.DoubleSide,
-  alphaTest:.008,blending:THREE.NormalBlending,fog:false,toneMapped:false
+ group.lookAt(0,altitude,0);
+ const geometry=new THREE.PlaneGeometry(1,1);
+ const seeds=new Float32Array(Math.round(count));
+ const material=new THREE.ShaderMaterial({
+  vertexShader:cloudVertex,fragmentShader:cloudFragment,
+  uniforms:{uTime:{value:0},uOpacity:{value:kind==='wispy' ? .24 : kind==='broken' ? .34 : .29}},
+  transparent:true,depthTest:true,depthWrite:false,
+  side:THREE.DoubleSide,blending:THREE.NormalBlending,fog:false,toneMapped:false
  });
- const plane=new THREE.Mesh(new THREE.PlaneGeometry(width,height),material);
- plane.renderOrder=-120;group.add(plane);root.add(group);
- return {group,base:angle,distance,altitude,phase:index*1.17,wind:.0018+(index%3)*.0006,kind};
+ const mist=new THREE.InstancedMesh(geometry,material,seeds.length);
+ const dummy=new THREE.Object3D();
+ for(let i=0;i<seeds.length;i++){
+  const spread=(rnd()-.5)*width,cluster=Math.cos(spread/width*Math.PI);
+  const cloudY=(rnd()-.5)*(kind==='wispy'?23:kind==='broken'?49:48);
+  const x=spread+(rnd()-.5)*12,y=cloudY+cluster*9;
+  const depth=(rnd()-.5)*(kind==='wispy'?21:44);
+  const sx=(kind==='broad'?33:kind==='wispy'?32:26)*(0.6+rnd()*.8);
+  const sy=(kind==='broad'?23:kind==='wispy'?8:18)*(0.6+rnd()*.7);
+  dummy.position.set(x,y,depth);dummy.rotation.set(0,0,0);
+  dummy.scale.set(sx,sy,1);dummy.updateMatrix();mist.setMatrixAt(i,dummy.matrix);
+  seeds[i]=rnd();
+ }
+ geometry.setAttribute('aSeed',new THREE.InstancedBufferAttribute(seeds,1));
+ mist.instanceMatrix.needsUpdate=true;
+ mist.frustumCulled=false;mist.renderOrder=-120;
+ group.add(mist);root.add(group);
+ return {group,base:angle,distance,altitude,phase:index*1.17,wind:.0018+(index%3)*.0006,kind,material};
 }
 export function createMoonlitSky(scene){
   const touch=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
@@ -80,6 +112,7 @@ export function createMoonlitSky(scene){
     for(const cloud of clouds){
       const theta=cloud.base+time*cloud.wind+Math.sin(time*.07+cloud.phase)*.018;
       cloud.group.position.set(Math.cos(theta)*cloud.distance,cloud.altitude+Math.sin(time*.22+cloud.phase)*1.8,Math.sin(theta)*cloud.distance);
+      cloud.material.uniforms.uTime.value=time;
     }
   }};
 }

@@ -29,7 +29,7 @@ const projectiles=new Set(['plasma-bolt','ice-shard','arcane-missile']);
 const beams=new Set(['pulse-beam','charged-beam','arc-ray']);
 const continuous=new Set([...projectiles,...beams,'magic-barrier','burning-ground','flame-surge','tidal-surge','thorn-crown','spiral-gale']);
 export const WEAPON_VFX=Object.freeze({
- water:['tidal-surge','tidal-surge'],ice:['ice-shard','ice-shatter'],fire:['flame-surge','flame-surge'],lightning:['arc-ray','energy-burst'],beam:['pulse-beam','charged-beam'],petal:['arcane-missile','thorn-crown'],wave:['tidal-surge','spiral-gale'],
+ water:['tidal-surge','tidal-surge'],ice:['ice-shard','ice-shatter'],fire:['flame-surge','flame-surge'],lightning:['arc-ray','energy-burst'],beam:['pulse-beam','charged-beam'],petal:['arcane-missile','arcane-missile'],wave:['tidal-surge','spiral-gale'],
  saber:['azure-sweep','azure-sweep'],whip:['azure-sweep','arc-ray'],swatter:['azure-sweep','spiral-gale'],pan:['shockwave','energy-burst'],planter:['thorn-crown','thorn-crown'],palm:['shockwave','astral-convergence'],
  'white-cat':['plasma-bolt','pulse-beam'],'black-cat':['pulse-beam','charged-beam'],'calico-cat':['plasma-bolt','energy-burst'],giraffe:['azure-sweep','arc-ray'],goldfish:['tidal-surge','tidal-surge'],clam:['shockwave','tidal-surge'],accordion:['shockwave','spiral-gale'],fan:['azure-sweep','spiral-gale'],telephone:['arc-ray','energy-burst'],jellybrella:['arcane-missile','magic-barrier'],'chiang-token':['arcane-missile','astral-convergence']
 });
@@ -63,19 +63,22 @@ export class WeaponVFX{
   const groundEffect=!!data.ultimate&&impactArea?.mode==='area';
   const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
   if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
-  const muzzle=weaponMuzzle(root,item);if(muzzle){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
+  const muzzle=weaponMuzzle(root,item);if(muzzle&&item.id!=='calico-cat'){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
   this.particleSkills.play(data,item,origin,end);
+  // Dedicated point-cloud ultimates: do not summon a shared physical object.
+  if(data.ultimate&&(item.family==='petal'||item.id==='giraffe'))return;
   // Orient actual 00GameDevs flame/tidal presets along the weapon muzzle.
   // The companion GPU streams travel from the player toward the target.
   const spray=item.family==='fire'||item.family==='water'||item.family==='wave'||item.id==='goldfish'||(item.id==='clam'&&data.ultimate);
   if(spray&&!['white-cat','black-cat','calico-cat'].includes(item.id)){
    const fireJet=item.family==='fire',effect=fireJet?'flame-surge':'tidal-surge';
-   for(let i=0;i<(data.ultimate?2:1);i++){
+   for(let i=0;i<(item.id==='clam'&&data.ultimate?10:data.ultimate?2:1);i++){
     const jet=this.acquire(effect,{color:fireJet?'#ff6d2d':'#70e5ff',size:data.ultimate?3.8:2.6,speed:2.6,density:1,quantity:10});
-    jet.fx.group.position.copy(origin).addScaledVector(direction,.4+i*2.4);
+    jet.fx.group.position.copy(origin).addScaledVector(direction,.4+i*(item.id==='clam'?1.1:2.4));
+    if(item.id==='clam'&&data.ultimate){const side=new THREE.Vector3(direction.z,0,-direction.x).normalize();jet.fx.group.position.addScaledVector(side,((i%5)-2)*.92);}
     jet.fx.group.quaternion.setFromUnitVectors(fireJet?new THREE.Vector3(0,1,0):new THREE.Vector3(0,0,1),direction);
     jet.fx.update(jet.fx.lifecycle.start||0);
-    jet.stopAt=data.ultimate?1.4:.75;
+    jet.stopAt=item.id==='clam'?2.25:data.ultimate?1.4:.75;
    }
    return;
   }

@@ -99,7 +99,7 @@ try{
  // tests cannot catch browser shader compilation or alpha/blend regressions).
  const vfxState=await page.evaluate(()=>{
   const t=templeTest,items=t.items,v=t.arena.presentation.vfx,recipes={};
-  for(const family of ['swatter','pan','saber']){
+  for(const family of ['swatter','pan','saber','petal','planter']){
    const item=items.find(w=>w.slot==='weapon'&&w.family===family&&!w.exotic);
    v.play({origin:[-20,1,-20],direction:[0,0,-1],range:24,charge:1,ultimate:true,area:{mode:'corridor',center:[-20,1,-40],radius:7}},item,null);
    recipes[family]=v.particleSkills.active.at(-1)?.recipe;
@@ -107,9 +107,10 @@ try{
   const gun=items.find(w=>w.id==='calico-cat');
   v.play({origin:[-20,1,-20],direction:[0,0,-1],range:8,charge:1,ultimate:true},gun,null);
   recipes.shotgun=v.particleSkills.active.at(-1)?.recipe;
+  const giraffe=items.find(w=>w.id==='giraffe');v.play({origin:[-20,1,-20],direction:[0,0,-1],range:28,charge:1,ultimate:true},giraffe,null);recipes.giraffe=v.particleSkills.active.at(-1)?.recipe;
   return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
  });
- assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',shotgun:'rainbow-scatter'});
+ assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',petal:'lotus-veil',planter:'thorn-tower',shotgun:'rainbow-scatter',giraffe:'boomerang'});
  assert.equal(vfxState.sky,'World-oriented distant cloud sky (no moon)');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});
