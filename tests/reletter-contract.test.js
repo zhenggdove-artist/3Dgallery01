@@ -10,7 +10,15 @@ test('Golden Girdle is the exact original font binary',()=>{
  const hash=createHash('sha256').update(readFileSync(new URL('../src/reletter/FONTS/Golden Girdle.otf',import.meta.url))).digest('hex');
  assert.equal(hash,'46e61e171acb970eabd7cc9918c349b851c25d448563e4613b229f1b34ffa523');
 });
-test('Every original equipment ID is available without a renamed substitute',()=>{for(const item of EQUIPMENT.filter(item=>item.id!=='chiang-token')){assert.equal(itemById(item.id)?.name,item.name);assert.equal(itemById(item.id)?.family,item.family);}assert.equal(itemById('chiang-token'),null);});
+test('Original combat equipment IDs survive; the Temple-only farming catalog is retired',()=>{
+ for(const item of EQUIPMENT.filter(item=>item.id!=='chiang-token'&&!['seed','harvest'].includes(item.slot))){
+  assert.equal(itemById(item.id)?.name,item.name);
+  assert.equal(itemById(item.id)?.family,item.family);
+ }
+ assert.equal(itemById('chiang-token'),null);
+ assert.equal(itemById('seed-1'),null);
+ assert.equal(itemById('harvest-1'),null);
+});
 test('GM layout validates permission, revision and finite transforms and survives serialization',()=>{
  const w=createInitialWorld(),p=createProfile('gm','Ely',null,Date.now(),true),body={platformId:'platform-01',expectedRevision:0,layout:{position:[2,3,4],rotation:[0,.2,0],scale:[2,1,1]}};
  assert.ok(setArtworkLayout(w,{...p,admin:false},body).error);

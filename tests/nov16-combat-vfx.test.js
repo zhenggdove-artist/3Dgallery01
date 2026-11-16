@@ -46,7 +46,10 @@ test('all ten overlapping shotgun pellets hit a sixfold uncle as TEN damage numb
 test('ten pellet collisions can individually damage another fighter',()=>{
  const {world,shooter}=worldWithCat();world.monster.active=false;
  const target=fighter('victim',75,6);
- ensureProfile(world,target.key,target.name,target.color,start);
+ const victim=ensureProfile(world,target.key,target.name,target.color,start);
+ // Ten independently travelling pellets must remain observable even after
+ // the shotgun buff; a normal 100 HP victim dies before all ten land.
+ victim.level=300;victim.maxHp=1296;victim.hp=1296;
  const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1]},{now:start+2000,rng:()=>.5,actors:[shooter,target]});
  assert.equal(result.hits.length,10);
  assert.equal(worldView(world,target.key,start+2002).damageEvents.filter(e=>e.target===target.key).length,10);
