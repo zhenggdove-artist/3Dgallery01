@@ -13,7 +13,7 @@ export class DisplayPlatforms{
  }
  sync(){
   const a=this.arena,defs=artworkDefinitions(a.world);
-  const signature=JSON.stringify([a.world?.artworkLayout||a.defaultLayout,a.world?.floatingPlatforms,defs.map(d=>d.id),a.artworks.size]);
+  const signature=JSON.stringify([a.world?.artworkLayout||a.defaultLayout,a.world?.floatingPlatforms,defs.map(d=>d.id),a.artworks.size,defs.map(d=>a.artworks.get(d.id)?.userData.previewPlatformRadius??null)]);
   if(signature===this.signature)return;this.signature=signature;
   const discs=[],cones=[],matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),scale=new THREE.Vector3();
   const customIds=new Set((a.world?.customArtworks||[]).map(d=>d.id));
@@ -34,7 +34,8 @@ export class DisplayPlatforms{
    const top=Math.max(0,l.position[1]+transformed.min.y-.1);
    // Radius is a standalone GM-editable property, never hard-locked to art scale.
    const automatic=Math.max(2.4,Math.min(8,Math.max(transformed.max.x-transformed.min.x,transformed.max.z-transformed.min.z)*.54+.75));
-   const radius=Number.isFinite(l.platformRadius)?THREE.MathUtils.clamp(l.platformRadius,1.5,14):automatic;
+   const chosenRadius=root.userData.previewPlatformRadius??l.platformRadius;
+   const radius=Number.isFinite(chosenRadius)?THREE.MathUtils.clamp(chosenRadius,1.5,14):automatic;
    const position=[l.position[0],top-.2,l.position[2]];
    discs.push({position,radius,top,artwork:d.id,display:true});
    const coneHeight=Math.max(1.2,top);
