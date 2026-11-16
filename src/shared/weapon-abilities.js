@@ -10,6 +10,16 @@ export function weaponQuality(item,fusion){
  return {tier,visual:1+d*.19,damage:1+d*.13,range:1+d*.065,
   radius:1+d*.16,duration:1+d*.22};
 }
+// A continuous spray's visible width is not the radial AoE of a charged
+// explosion. Shared by the authoritative hit tube and warning #59.
+export function channelVisualRadius(item,quality=weaponQuality(item),range=Number(item?.range)||10){
+ if(item?.id==='clam')return +(1.45*quality.visual).toFixed(3);
+ // Anime Flame Flow #73 travels ~10 local units. The renderer expands its
+ // scene uniformly for upgraded staffs with longer real hit ranges.
+ if(item?.family==='fire')return +(1.45*Math.max(.8,range/10)).toFixed(3);
+ const base={water:1.25,ice:1.05,lightning:.9,beam:1.05,petal:1.3,wave:1.4};
+ return +((base[item?.family]||1.1)*quality.visual).toFixed(3);
+}
 export const STAFF_TAP_MAX_MS=750;
 export const CAST_MOVE_FACTOR=.05;
 export const MONSTER_WEAPON_DAMAGE_FACTOR=.1;

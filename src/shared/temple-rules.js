@@ -17,7 +17,7 @@ import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs} from './combat-balance.js';
-import {isChannelStaff,weaponQuality,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
@@ -333,7 +333,10 @@ function attack(world,profile,actor,body,context,now){
   // collision must use exactly the same range; no 11m decorative overshoot.
   if(channel)stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range));
   stats.range=+(stats.range*quality.range).toFixed(2);
-  stats.radius=+(stats.radius*quality.radius).toFixed(2);
+  // The narrow server collision tube must agree with the visible spray and
+  // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
+  stats.radius=channel?channelVisualRadius(weapon,quality,stats.range):
+   +(stats.radius*quality.radius).toFixed(2);
   const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||isChannelStaff(weapon))&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.

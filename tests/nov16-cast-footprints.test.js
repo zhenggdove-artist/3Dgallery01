@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {ChargeTargetPreview} from '../src/charge-target-preview.js';
 import {chargedArea,spellFootprint,insideChargedArea} from '../src/shared/charge-area.js';
 import {WEAPONS,itemById,attackStats} from '../src/shared/catalog.js';
-import {isChannelStaff,weaponQuality} from '../src/shared/weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius} from '../src/shared/weapon-abilities.js';
 
 const nearly=(a,b,what)=>assert.ok(Math.abs(a-b)<1e-6,what+': '+a+' vs '+b);
 const scene=()=>new THREE.Scene();
@@ -36,7 +36,7 @@ test('original #58 points its apex from the actual clam muzzle and exactly spans
  assert.equal(fx.sector.settings.color.toLowerCase(),'#24aaff');
  const stats=attackStats(item,1),q=weaponQuality(item);
  stats.range=+(Math.max(stats.range,10)*q.range).toFixed(2);
- stats.radius=+(stats.radius*q.radius).toFixed(2);
+ stats.radius=channelVisualRadius(item,q,stats.range);
  const area=chargedArea(item,muzzle,direction,stats,()=>0,true);
  assert.equal(area.mode,'sector');
  assert.equal(insideChargedArea(area,[3.6,1,4.7+area.range*.8]),true);
@@ -54,7 +54,7 @@ test('original #59 is a full-length blue forward strip with exact server range a
  assert.equal(fx.footprint.shape,'rectangle');
  const q=weaponQuality(item),stats=attackStats(item,1);
  stats.range=+(Math.max(stats.range,Math.min(18,item.range))*q.range).toFixed(2);
- stats.radius=+(stats.radius*q.radius).toFixed(2);
+ stats.radius=channelVisualRadius(item,q,stats.range);
  nearly(fx.rectangle.settings.length*fx.rectangle.group.scale.x,stats.range,'full rectangle length');
  nearly(fx.rectangle.settings.width*fx.rectangle.group.scale.z,stats.radius*2,'full rectangle width');
  nearly(fx.rectangle.group.position.z,muzzle[2]+stats.range/2,'forward center');
@@ -72,7 +72,7 @@ test('all weapons have dimensional warning contracts derived from identical atta
   const stats=attackStats(item,1),quality=weaponQuality(item);
   if(isChannelStaff(item))stats.range=Math.max(stats.range,item.id==='clam'?10:Math.min(18,item.range));
   stats.range=+(stats.range*quality.range).toFixed(2);
-  stats.radius=+(stats.radius*quality.radius).toFixed(2);
+  stats.radius=isChannelStaff(item)?channelVisualRadius(item,quality,stats.range):+(stats.radius*quality.radius).toFixed(2);
   if(item.id==='clam'){
    assert.equal(a.shape,'sector',item.id);
    nearly(preview.sector.settings.size*preview.sector.group.scale.x,stats.range,item.id);
@@ -97,4 +97,23 @@ test('cat A down opens shoulder aim; first press never starts charge',async()=>{
  assert.match(main,/if\(weapon\?\.firstPerson\)\s*\{\s*if\(!gun\.mode\)gun\.cycle\(\)/);
  assert.match(main,/if\(itemById\(world\?\.profile\?\.equipment\?\.weapon\)\?\.firstPerson\)\{gun\.held=false;return;\}/);
  assert.match(gun,/if\(button\)return;/);
+});
+
+
+test('the blue #59 strip is narrower than old charged AoE and matches each staff-tier hit tube',()=>{
+ const s=new THREE.Scene(),r=new THREE.Group(),v=new ChargeTargetPreview(s);
+ for(const family of ['water','fire','ice','lightning','beam','petal','wave']){
+  for(const item of WEAPONS.filter(w=>w.family===family&&!w.exotic)){
+   v.update(r,item,.8,[0,0,1],{world});
+   const q=weaponQuality(item);
+   const stat=attackStats(item,1);
+   stat.range=Math.max(stat.range,Math.min(18,item.range));
+   stat.range=+(stat.range*q.range).toFixed(2);
+   const width=2*channelVisualRadius(item,q,stat.range);
+   nearly(v.footprint.width,width,item.id+' width');
+   assert.ok(width<2*attackStats(item,1).radius*q.radius,item.id+' must shrink versus old blast');
+  }
+ }
+ v.dispose();
+ assert.equal(s.children.length,0);
 });
