@@ -9,10 +9,11 @@ export const ISLAND_ENEMIES=['uncle','flower'];
 export const ENEMY_HEIGHT=1.575*6;
 export const ENEMY_RADIUS=.42*6; // Includes the sixfold humanoid's shoulders and arms.
 
-export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,slow=0}){
+export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,silenced=false,slow=0}){
  const dt=Math.min(.5,Math.max(0,(now-(monster.updatedAt??now-500))/1000));
  monster.updatedAt=now;monster.moving=false;monster.skills??=[];
  // A suspended/stunned caster cannot finish its warning or damage anybody.
+ if(silenced)monster.skills=[]; // Electric paralysis silences, but allows walking.
  if(disabled||!targets.length){monster.skills=[];if(!targets.length){monster.aggroTarget=null;monster.aggroUntil=0;}return;}
  for(const s of monster.skills){
   if(s.phase==='warning'&&now>=s.end){s.phase='active';s.start=now;s.end=now+1200;}
@@ -42,7 +43,7 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
  const target=aggro?{a:aggro,d:Math.hypot(aggro.position[0]-monster.position[0],aggro.position[2]-monster.position[2])}:targets.map(a=>({a,d:Math.hypot(a.position[0]-monster.position[0],a.position[2]-monster.position[2])})).filter(t=>t.d<18).sort((a,b)=>a.d-b.d)[0];
  if(!target||monster.skills.length)return;
  const motion=monster.attackStyles?['swipe','roar','charge'][(monster.attackCount||0)%3]:null;
- if(target.d<=(motion==='charge'?9:motion==='roar'?4:monster.attackRadius||2.2)&&now>=(monster.nextAttackAt||0)){
+ if(!silenced&&target.d<=(motion==='charge'?9:motion==='roar'?4:monster.attackRadius||2.2)&&now>=(monster.nextAttackAt||0)){
   monster.attackCount=(monster.attackCount||0)+1;
   monster.skills.push({id:crypto.randomUUID(),type:'shockwave',motion,origin:[...monster.position],aim:[...target.a.position],phase:'warning',start:now,end:now+1200,hit:[],radius:motion==='roar'?4:monster.attackRadius||2.2,height:1.2,damage:monster.damage||18,island:true});
   monster.nextAttackAt=now+5000;return;
