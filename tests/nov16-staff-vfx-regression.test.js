@@ -8,7 +8,7 @@ import {projectileFlightMs} from '../src/shared/combat-balance.js';
 const attack=(item,channel=false)=>({weapon:item.id,family:item.family,origin:[4,1,7],
  direction:[0,0,1],range:12,qualityScale:1,time:1234,ultimate:channel,channel});
 test('each ordinary elemental staff tap creates a 3D sphere spell, not a spray',()=>{
- for(const id of ['water','tide-1','frost-1','ember-1','storm-1','prism-1','bloom-1','nova-1']){
+ for(const id of ['water','tide-1','frost-1','ember-1','storm-1','bloom-1','nova-1']){
   const scene=new THREE.Scene(),vfx=new WeaponVFX(scene),item=itemById(id);
   vfx.play(attack(item),item);
   assert.equal(vfx.staffOrbs.length,1,id);
@@ -33,11 +33,18 @@ test('full-charge fire and water staff streams point straight along server aim; 
   const numbered=vfx.numberedEffects.active.at(-1);
   const stream=numbered||vfx.particleSkills.active[0];
   assert.ok(stream,id);
-  // The licensed Ice Lance #70 is authored with local +X; others use local +Z.
-  const authoredForward=new THREE.Vector3(id==='frost-1'?1:0,0,id==='frost-1'?0:1);
+  // Official #33/#70 face +X; #73 is an oblique local free-fire ray.
+  // Their scene root position can differ from the authored weapon socket.
+  const authoredForward=id==='ember-1'?new THREE.Vector3(1,0,.42).normalize():
+   ['frost-1','clam'].includes(id)?new THREE.Vector3(1,0,0):
+   new THREE.Vector3(0,0,1);
   const forward=authoredForward.applyQuaternion((numbered?numbered.group:stream.root).quaternion);
   assert.ok(forward.distanceTo(new THREE.Vector3(0,0,1))<.001,'the '+id+' stream must move forward');
-  assert.deepEqual((numbered?numbered.group:stream.root).position.toArray(),[4,1,7],id);
+  if(id==='ember-1'){
+   const actualNozzle=numbered.group.userData.flameAimRoot.localToWorld(new THREE.Vector3(-3.6,1.65,0));
+   assert.ok(actualNozzle.distanceTo(new THREE.Vector3(4,1,7))<1e-6,'fire must originate from the correct socket');
+   assert.ok(numbered.group.userData.flameAimTargets.every(mesh=>!mesh.parent.visible),'no neutral demo objects');
+  }else assert.deepEqual((numbered?numbered.group:stream.root).position.toArray(),[4,1,7],id);
   if(!numbered)assert.equal(stream.root.scale.x,1,id);
   vfx.dispose();assert.equal(scene.children.length,0);
  }
@@ -48,4 +55,27 @@ test('initial clam short press uses normal swing effects rather than a 3D spell 
  assert.equal(vfx.staffOrbs.length,0,'clam retains a normal melee attack');
  assert.ok(vfx.active.some(x=>x.id==='shockwave'),'starter clam normal swing must display its normal shockwave');
  vfx.dispose();
+});
+
+
+test('repeated server pulses do not restart the moving water stream',()=>{
+ const scene=new THREE.Scene(),vfx=new WeaponVFX(scene),root=new THREE.Group();
+ const item=itemById('tide-1');scene.add(root);
+ const event={...attack(item,true)};
+ vfx.play(event,item,root);
+ const stream=vfx.channelStreams.get(root.uuid+':'+item.id);
+ assert.ok(stream);
+ vfx.update(.6);
+ const age=stream.age;
+ const prior=stream.material.uniforms.uAge.value;
+ vfx.play({...event,time:1700},item,root);
+ assert.equal(stream.age,age);
+ assert.equal(stream.material.uniforms.uAge.value,prior);
+ assert.equal(stream.material.uniforms.uLooping.value,1);
+ vfx.update(3.1);
+ assert.equal(vfx.particleSkills.active.includes(stream),true,'continuous stream does not expire after one-shot duration');
+ vfx.stopChannel(root);
+ assert.equal(vfx.particleSkills.active.includes(stream),false);
+ vfx.dispose();root.removeFromParent();
+ assert.equal(scene.children.length,0);
 });

@@ -144,9 +144,11 @@ export class WeaponVFX{
    const forwardEnd=source.clone().addScaledVector(direction,range);
    const key=root?root.uuid+':'+item.id:null,existing=key?this.channelStreams.get(key):null;
    if(data.channel&&existing&&this.particleSkills.active.includes(existing)){
-    existing.age=0;existing.material.uniforms.uAge.value=0;
+    // Damage pulse renews the hitbox only, never restart the visual clock.
     existing.direction.copy(direction);
     existing.range=range;
+    existing.heading=root?.rotation.y||0;
+    existing.material.uniforms.uReach.value=range;
     existing.lastPulseAt=performance.now();
    }else{
     const entry=this.particleSkills.play(data,item,source,forwardEnd);
@@ -221,7 +223,7 @@ export class WeaponVFX{
     this.channelStreams.delete(key);continue;
    }
    const now=performance.now();
-   if(now-entry.lastPulseAt>Math.max(1350,entry.weapon.cooldown+480)){
+   if(now-entry.lastPulseAt>Math.max(3100,entry.weapon.cooldown*2+650)){
     this.particleSkills.remove(entry);this.channelStreams.delete(key);continue;
    }
    entry.root.position.copy(this.channelMuzzle(entry.host,entry.weapon,entry.root.position));

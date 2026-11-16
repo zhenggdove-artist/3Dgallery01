@@ -57,12 +57,13 @@ function styleFor(recipe){const index=styleIds.indexOf(recipe);return index<0?4:
 const vertex=`
 attribute vec3 seed;
 attribute vec3 pigment;
-uniform float uAge,uDuration,uReach,uMode,uRadius,uCharge,uStyle;
+uniform float uAge,uDuration,uReach,uMode,uRadius,uCharge,uStyle,uLooping;
 varying vec3 vColor;
 varying float vAlpha;
 const float TAU=6.283185307;
 void main(){
- float t=clamp(uAge/uDuration,0.,1.);
+ // Damage pulses are not VFX restarts: let water/fire streams flow forever.
+ float t=uLooping>.5?.52:clamp(uAge/uDuration,0.,1.);
  float u=seed.x,v=seed.y,w=seed.z;
  float phase=u*TAU,spin=uAge*(2.+v*3.);
  vec3 p=position;
@@ -327,7 +328,7 @@ export class WeaponParticleEffects{
   geometry.setAttribute('seed',new THREE.BufferAttribute(data.seed,3));
   geometry.setAttribute('pigment',new THREE.BufferAttribute(data.colors,3));
   const material=new THREE.ShaderMaterial({
-    uniforms:{uAge:{value:0},uDuration:{value:duration},uReach:{value:range},uMode:{value:modeFor(recipe)},uRadius:{value:2},uCharge:{value:charge},uStyle:{value:styleFor(recipe)}},
+    uniforms:{uAge:{value:0},uDuration:{value:duration},uReach:{value:range},uMode:{value:modeFor(recipe)},uRadius:{value:2},uCharge:{value:charge},uStyle:{value:styleFor(recipe)},uLooping:{value:0}},
     vertexShader:vertex,fragmentShader:fragment,
     transparent:true,depthTest:true,depthWrite:false,blending:THREE.AdditiveBlending
   });
@@ -352,6 +353,7 @@ export class WeaponParticleEffects{
   const duration=charged?chosen==='fissure'?3:chosen==='rainbow-scatter'?1.65:2.45:elementalJet?1.05:.65;
   const entry=this.make(chosen,item,{range,duration,amount,charge:charged?1:.75});
   entry.root.position.copy(source);
+  if(data.channel){entry.channeling=true;entry.material.uniforms.uLooping.value=1;}
   // Server-approved firing direction; charged-area centres are not an aiming
   // substitute for ongoing straight sprays.
   const direction=(data.channel&&Array.isArray(data.direction))?new THREE.Vector3(...data.direction).normalize():end.clone().sub(source);
@@ -406,7 +408,7 @@ export class WeaponParticleEffects{
         entry.root.quaternion.slerp(aiming,Math.min(1,dt*5));
       }
     }
-    if(entry.age>=entry.duration)this.remove(entry);
+    if(!entry.channeling&&entry.age>=entry.duration)this.remove(entry);
   }
  }
  remove(entry){const i=this.active.indexOf(entry);if(i>=0)this.active.splice(i,1);entry.root.removeFromParent();entry.geometry.dispose();entry.material.dispose();if(this.charger===entry)this.charger=null;}

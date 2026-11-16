@@ -233,7 +233,10 @@ export class NumberedWeaponEffects {
   }
   for(const wave of [...entry.waves]){
    wave.age+=dt;
-   const t=Math.min(1,wave.age/CLAM_WAVE_LIFETIME);
+   // The emerging crest follows the real moving shell for 0.2s. After
+   // detaching it travels independently instead of snapping to the avatar.
+   if(wave.age<=.2&&entry.root)wave.start.copy(this.muzzleAt(entry));
+   const t=Math.min(1,Math.max(0,wave.age-.2)/(CLAM_WAVE_LIFETIME-.2));
    // Move the old crest gently outwards and let the next crest grow behind.
    // Reserve ~5 original scene metres for the source module's own front.
    const travel=Math.max(0,wave.reach-5*entry.options.size);
