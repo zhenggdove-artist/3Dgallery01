@@ -1,0 +1,35 @@
+name: Vendor exact 00GameDevs source effects
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/vendor-00-vfx.mjs'
+      - '.github/workflows/vendor-exact-00gamedevs.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: vendor-00gamedevs
+  cancel-in-progress: false
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download source from official site and verify all SHA-256 checksums
+        run: node scripts/vendor-00-vfx.mjs
+      - name: Commit downloaded source modules and current official manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor/00gamedevs
+          if ! git diff --cached --quiet; then
+            git commit -m "Vendor verified original 00GameDevs numbered VFX"
+            git push origin HEAD:main
+          fi
