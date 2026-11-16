@@ -48,7 +48,8 @@ test('sniper has full-map 256m range and exactly triple the previous 27 PvP base
 test('server kills with a real sniper head ray even through armour/shield',()=>{
  const r=room('black-cat');
  r.victim.equipment.armor='relic-shell';
- r.victim.shield={hp:500,lastHit:0};
+ r.victim.equipment.shield='shield-10';
+ r.victim.shield={item:'shield-10',hp:500,lastHit:NOW+2000};
  const dy=1.02/Math.hypot(30,1.02),dz=30/Math.hypot(30,1.02),at=NOW+2000;
  const result=shoot(r,at,{direction:[0,dy,dz],origin:[75,1,0]});
  assert.equal(result.attackEvent.range,256);
