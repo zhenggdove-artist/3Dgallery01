@@ -276,6 +276,11 @@ try{
   return {mode:gun.mode,scopeVisible:!gun.overlay.hidden,weapon:gun.weapon()?.id};
  });
  assert.equal(setupDesk.mode,2,'desktop sniper CAMERA enters full scope');
+ // Headless Chrome can swallow Playwright mouse events during native pointer lock.
+ // Release the test browser's lock without ending the sniper scope, then
+ // exercise real DOM pointerdown with Playwright's ordinary mouse input.
+ await page.evaluate(()=>{if(document.pointerLockElement)document.exitPointerLock();});
+ await page.waitForFunction(()=>document.pointerLockElement===null);
  await page.mouse.click(640,400);
  await page.waitForTimeout(200);
  const firstScope=await page.evaluate(()=>({

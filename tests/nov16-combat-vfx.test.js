@@ -70,18 +70,21 @@ test('plant weapon roots a hit enemy and being hit triggers persistent pursuit',
  const profile=ensureProfile(world,shooter.key,shooter.name,shooter.color,start);
  profile.inventory.push('planter-1');profile.equipment.weapon='planter-1';
  world.monster={id:'plant-target',active:true,variant:'uncle',model:'uncle',position:[75,0,4],hp:200,maxHp:200,skills:[],attackStyles:true,nextAttackAt:start+10000};
- const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1]},{now:start+2000,rng:()=>.5,actors:[shooter]});
- assert.equal(result.monsterHit,null,'damage waits for contact');
- tickWorld(world,{now:start+2250,rng:()=>.5,activeFighters:0,actors:[shooter]});
- assert.ok(world.monster.effects?.root?.until>start+2000);
+ const charge=applyAction(world,shooter,{action:'attack',phase:'charge'},{now:start+2000,rng:()=>.5,actors:[shooter]});
+ assert.equal(charge.charging,true);
+ const result=applyAction(world,shooter,{action:'attack',charge:1,direction:[0,0,1]},{now:start+6000,rng:()=>.5,actors:[shooter]});
+ assert.equal(result.attackEvent?.ultimate,true);
+ assert.equal(result.monsterHit,null,'damage waits for charged contact');
+ tickWorld(world,{now:start+6250,rng:()=>.5,activeFighters:0,actors:[shooter]});
+ assert.ok(world.monster.effects?.root?.until>start+6000,'only the charged planter roots');
  assert.equal(world.monster.aggroTarget,shooter.key);
  const before=world.monster.position.slice();
- tickWorld(world,{now:start+2500,rng:()=>.5,activeFighters:1,actors:[shooter]});
+ tickWorld(world,{now:start+6500,rng:()=>.5,activeFighters:1,actors:[shooter]});
  assert.deepEqual(world.monster.position,before,'rooted enemy may not move');
- tickWorld(world,{now:start+6000,rng:()=>.5,activeFighters:1,actors:[shooter]});
+ tickWorld(world,{now:start+10000,rng:()=>.5,activeFighters:1,actors:[shooter]});
  assert.ok(world.monster.position[2]<before[2],'after root, monster follows its attacker');
  shooter.position=[45,0,0]; // Inside the art appreciation sanctuary (< 60m)
- tickWorld(world,{now:start+6600,rng:()=>.5,activeFighters:1,actors:[shooter]});
+ tickWorld(world,{now:start+10600,rng:()=>.5,activeFighters:1,actors:[shooter]});
  assert.equal(world.monster.aggroTarget,null,'art sanctuary cancels aggro');
 });
 test('flower staff, planter, giraffe and giant clam use distinct soft particle recipes',()=>{

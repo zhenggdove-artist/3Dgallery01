@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createInitialWorld,ensureProfile,applyAction,tickWorld} from '../src/shared/temple-rules.js';
 import {itemById,attackStats} from '../src/shared/catalog.js';
 import {weaponQuality,forwardCastRadius} from '../src/shared/weapon-abilities.js';
+import {applyStatus,applyElementalHit} from '../src/shared/combat-status.js';
 
 const NOW=41_000_000;
 const person=(key,position=[75,0,0])=>({key,name:key,role:'fighter',color:'#abcdef',position});
@@ -53,4 +54,17 @@ test('ordinary hits may damage but do not inflict charged elemental statuses',()
  tickWorld(world,{now:NOW+2220,rng:()=>.6,actors:[a,b],activeFighters:0});
  assert.equal(victim.effects?.freeze,undefined);
  assert.equal(victim.effects?.paralysis,undefined);
+});
+
+test('fusion echo status requires its own impact and is 20% strength, never a full primary proc',()=>{
+ const world=createInitialWorld(NOW),source=ensureProfile(world,'caster','caster','#abcdef',NOW);
+ source.fusion['ember-1']={effects:['frost-1']};
+ const target={hp:1000,maxHp:1000,effects:{},effectLocks:{}};
+ applyStatus(world,source,target,itemById('ember-1'),
+  {damage:35,charge:1,direction:[0,0,1],qualityDuration:1},NOW+1000);
+ assert.ok(target.effects.burn,'primary fire ultimate applies its own burn');
+ assert.equal(target.effects.slow,undefined,'full-strength legacy ice slow must never proc on primary contact');
+ assert.equal(target.effects.freeze,undefined,'fused ice cannot freeze before its own projectile hits');
+ applyElementalHit(target,source,itemById('frost-1'),NOW+1020,.2);
+ assert.equal(target.effects.freeze.until-(NOW+1020),200,'fused ice duration is 20% of full 1000ms');
 });

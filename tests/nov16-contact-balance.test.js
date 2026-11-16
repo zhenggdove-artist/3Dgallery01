@@ -46,7 +46,7 @@ test('PvP power is weighted by range, radius, cooldown and charging duration',()
    w.id+' must never two-shot via critical or headshot multipliers');
  }
 });
-test('starter water clam uses the new 1.5x soak debuff after the first confirmed strike',()=>{
+test('ordinary water clam needs 8–10 strikes and never inflicts charged-only soak',()=>{
  const {w,caster,victim,b}=scenario('clam',[75,0,2.2]);
  let hits=0;
  for(let i=0;i<14&&b.hp>0;i++){
@@ -58,7 +58,8 @@ test('starter water clam uses the new 1.5x soak debuff after the first confirmed
   if(worldView(w,'caster',at+421).damageEvents.some(e=>e.target==='victim'))hits++;
  }
  assert.ok(b.hp<=0,'victim eventually dies');
- assert.ok(hits>=5&&hits<=7,'expected 5–7 hits with water vulnerability, got '+hits);
+ assert.ok(hits>=8&&hits<=10,'expected 8–10 ordinary hits without charged water vulnerability, got '+hits);
+ assert.equal(b.effects?.soaked,undefined,'normal clam impacts may not inflict elemental status');
 });
 test('damage is absent on firing and while the sphere has not yet reached the avatar',()=>{
  const {w,caster,victim,b}=scenario('calico-cat',[75,0,8]);
