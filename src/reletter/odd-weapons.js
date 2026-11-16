@@ -1,7 +1,7 @@
 // Authored toy weapons. Statistics are authoritative; category describes the charged reach.
 export const ODD_WEAPONS=[
  ['giraffe','長頸鹿迴旋棒','whip','far','#e6b95d',4,3.6,28,650,16,'boomerang',2,'握長頸甩動四肢；蓄力放出往返兩段的長頸鹿光粒迴旋鏢。'],
- ['goldfish','金魚水砲','pan','far','#ff963c',4,3.2,32,700,22,'jet',5,'握尾甩魚、眼睛變 X；蓄力噴出連續水柱。'],
+ ['goldfish','金魚水砲','pan','far','#ff963c',4,3.2,32,700,22,'jet',5,'握尾甩魚；滿蓄力召喚巨大金魚向前游動，碰撞敵人造成傷害及擊退。'],
  ['clam','大花蛤','pan','near','#e7a9c7',5,3,8,750,18,'shells',6,'貝殼隨揮擊開闔；滿蓄力自動發射六枚旋轉貝殼，持續按住循環釋放。'],
  ['white-cat','貓貓衝鋒槍','water','mid','#f4f2e6',2,22,28,220,18,'rainbow',7,'白貓雙手持握；第一人稱瞄準；蓄力七發七彩連射。'],
  ['black-cat','黑貓狙擊槍','beam','far','#343347',10,80,140,2000,48,'sniper',1,'黑貓重型狙擊姿態；第一人稱縮放；滿蓄力穿行極遠的強力光彈。'],

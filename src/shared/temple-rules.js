@@ -16,7 +16,7 @@ import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './isl
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
-import {isChannelStaff,weaponQuality} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
@@ -308,27 +308,32 @@ function attack(world,profile,actor,body,context,now){
   stats.radius=+(stats.radius*quality.radius).toFixed(2);
   const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if(weapon.firstPerson&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage*=playerStats(world,profile,now).attack;profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
-  const area=stats.ultimate?chargedArea(weapon,origin,direction,stats,groundForSpell):null;
+  // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
+  const area=stats.ultimate&&weapon.id!=='goldfish'?chargedArea(weapon,origin,direction,stats,groundForSpell):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate):null;
   const returningGiraffe=weapon.id==='giraffe'&&stats.ultimate;
   const roamingFan=weapon.id==='fan'&&stats.ultimate;
-  if(returningGiraffe||roamingFan){
+  const swimmingFish=weapon.id==='goldfish'&&stats.ultimate;
+  if(returningGiraffe||roamingFan||swimmingFish){
     world.persistentAttacks??=[];
-    const duration=returningGiraffe?2300:Math.round((1400+quality.tier*850)*quality.duration);
+    const duration=swimmingFish?Math.round(GOLDFISH_SWIM_MS*quality.duration):returningGiraffe?2300:Math.round((1400+quality.tier*850)*quality.duration);
     world.persistentAttacks.push({
-      id:id(),kind:returningGiraffe?'giraffe':'fan',owner:actor.key,
+      id:id(),kind:swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
       origin:[...origin],direction:[...direction],range:stats.range,
-      damage:stats.damage+bonus,radius:Math.max(2,stats.radius)*quality.radius,tier:quality.tier,
+      damage:stats.damage+bonus,radius:swimmingFish?GOLDFISH_SWIM_RADIUS*quality.visual:Math.max(2,stats.radius)*quality.radius,tier:quality.tier,
       createdAt:now,lastAt:now,expiresAt:now+duration,
-      outHits:[],backHits:[],fanHits:{}
+      outHits:[],backHits:[],fanHits:{},fishHits:[]
     });
     if(world.persistentAttacks.length>32)world.persistentAttacks.splice(0,world.persistentAttacks.length-32);
   }
-  const persistentOnly=returningGiraffe||roamingFan;
+  const persistentOnly=returningGiraffe||roamingFan||swimmingFish;
   let hit=null,hits=[];if(!pellets&&!persistentOnly)for(const target of context.actors||[]){
     if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(actor.position)||insideSafeZone(target.position))continue;
-    const targetPosition=[target.position[0],target.position[1]+1,target.position[2]],along=project(origin,direction,targetPosition),scatter=weapon.pattern==='scatter';
-    if((area?.mode==='area'&&insideChargedArea(area,targetPosition))||(area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,targetPosition,along)<(scatter?.65+along*(stats.ultimate?.56:.32):stats.radius)+1)){
+    const targetPosition=[target.position[0],target.position[1]+1,target.position[2]];
+    // Full-height swept cylinder: a beam/jet/sword trail touching the rendered
+    // character counts, even when its centre point is above or below the aim ray.
+    const collision=rayCylinderDistance(origin,direction,stats.range,target.position,1.02+stats.radius,2.35)!==null;
+    if(collision||(area?.mode==='area'&&insideChargedArea(area,targetPosition,1.02))){
      const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{position:target.position,island:true},targetPosition,now,context.rng??Math.random);
      const result=damagePlayer(world,profile,target,(stats.damage+bonus)*modifiers.multiplier,now,'pvp',actor.position,modifiers.kind);
      if(result){hits.push(result);hit??=result;}
@@ -339,8 +344,10 @@ function attack(world,profile,actor,body,context,now){
   if(!pellets&&!persistentOnly&&!insideSafeZone(actor.position))for(const mob of [world.monster,...(world.monsters||[])]){
    if(!mob?.active)continue;
    const target=[mob.position[0],mob.position[1]+Math.min(1.2,ENEMY_HEIGHT*.5),mob.position[2]];
-   if((area?.mode==='area'&&insideChargedArea(area,target,ENEMY_RADIUS))||
-      (area?.mode!=='area'&&(weapon.pattern==='scatter'?(()=>{const point=[mob.position[0],mob.position[1]+ENEMY_HEIGHT*.5,mob.position[2]],along=project(origin,direction,point);return along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<ENEMY_RADIUS+.65+along*(stats.ultimate?.56:.32);})():rayHitsMonster(origin,direction,stats.range,mob,stats.radius+ENEMY_RADIUS)))){
+   // Tall monsters use their complete visible body volume. The moving VFX
+   // corridor remains hittable even when a charged area also lands farther out.
+   if(monsterRayDistance(origin,direction,stats.range,mob,stats.radius)!==null||
+      (area?.mode==='area'&&insideChargedArea(area,target,ENEMY_RADIUS))){
     const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{...mob,island:true,visualScale:ENEMY_HEIGHT/1.575},target,now,context.rng??Math.random);
     const result=damageMonster(world,profile,(stats.damage+bonus)*modifiers.multiplier,now,context.rng??Math.random,modifiers.kind,mob);
     if(result){monsterHits.push({monster:mob,result});monsterHit??=result;}
@@ -366,7 +373,11 @@ function attack(world,profile,actor,body,context,now){
     const target=first.target,modifiers=directHitModifiers(weapon,{origin,direction:pellet.direction,range:stats.range},
      {...target,island:true,visualScale:first.type==='monster'?ENEMY_HEIGHT/1.575:1},
      first.type==='monster'?[target.position[0],target.position[1]+ENEMY_HEIGHT*.5,target.position[2]]:[target.position[0],target.position[1]+1,target.position[2]],now,context.rng??Math.random);
-    const power=((stats.damage+bonus)/pellets.length)*modifiers.multiplier;
+    // Shotgun: threefold random damage swing, plus unmistakable point-blank
+    // falloff. Each of the ten visible balls remains a separate damage event.
+    const proximity=Math.max(0,1-first.t/Math.max(1,stats.range));
+    const variance=.55+2.45*(context.rng??Math.random)();
+    const power=((stats.damage+bonus)/pellets.length)*modifiers.multiplier*1.35*(1+1.7*proximity)*variance;
     if(first.type==='player'){
      const result=damagePlayer(world,profile,target,power,now,'pvp',actor.position,modifiers.kind,impact);
      if(result){hits.push(result);hit??=result;}
@@ -565,6 +576,36 @@ function tickPersistentAttacks(world,actors,now,rng){
      const hit=a.map((v,j)=>v+direction[j]*contact);
      if(target.kind==='monster')damageMonster(world,owner,fx.damage*.53,now,rng,leg==='out'?'boomerang-out':'boomerang-return',value,hit);
      else damagePlayer(world,owner,value,fx.damage*.53,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',hit);
+     changed=true;
+    }
+   }
+  }else if(fx.kind==='goldfish'){
+   // The fish's swept server collider follows precisely the same straight
+   // route, scale, and duration as its visible Three.js body.
+   const length=(next-prev)*fx.range;
+   if(length>.001){
+    const origin=fx.origin.map((v,j)=>v+fx.direction[j]*prev*fx.range);
+    for(const target of targets){
+     const value=target.value,key=value.id||value.key;
+     if(key===fx.owner||fx.fishHits.includes(key))continue;
+     if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
+     const contact=target.kind==='monster'
+      ?monsterRayDistance(origin,fx.direction,length,value,fx.radius)
+      :rayCylinderDistance(origin,fx.direction,length,value.position,1.02+fx.radius,2.35);
+     if(contact===null)continue;
+     fx.fishHits.push(key);
+     const impact=origin.map((v,j)=>v+fx.direction[j]*contact);
+     if(target.kind==='monster'){
+      const result=damageMonster(world,owner,fx.damage*1.25,now,rng,'giant-goldfish',value,impact);
+      if(result&&!result.defeated){
+       const moved=[value.position[0]+fx.direction[0]*(3+fx.tier*.7),value.position[1],value.position[2]+fx.direction[2]*(3+fx.tier*.7)];
+       if(insideArena(moved,-2)&&!insideArtSanctuary(moved))value.position=moved;
+       value.effects??={};value.effects.stun={owner:fx.owner,power:1,until:now+800,next:now+1000};
+      }
+     }else{
+      const hit=damagePlayer(world,owner,value,fx.damage*1.25,now,'goldfish',fx.origin,'giant-goldfish',impact);
+      if(hit&&!hit.immune){const profile=world.profiles[value.key];if(profile?.hitReaction){profile.hitReaction.stunMs=300;profile.hitReaction.knockback=14;}}
+     }
      changed=true;
     }
    }

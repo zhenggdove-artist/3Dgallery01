@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {oddParts} from './reletter/odd-weapon-art.js';
 import {calicoPellets} from './shared/calico-pellets.js';
+import {GOLDFISH_SWIM_MS} from './shared/weapon-abilities.js';
 
 const TAU=Math.PI*2;
 const sphere=new THREE.SphereGeometry(1,16,12);
@@ -47,6 +48,42 @@ export class WeaponSignatureEffects {
     b.halo.material.opacity=.28*(1-t*.7);
     b.core.material.opacity=1-t*.62;b.core.material.transparent=true;b.core.material.depthWrite=false;
    }
+  });
+ }
+ goldfish(event){
+  const origin=vec(event.origin),direction=vec(event.direction).normalize(),quality=event.qualityScale||1;
+  const group=new THREE.Group();group.name='Giant swimming goldfish ultimate';
+  const bodyGroup=new THREE.Group();group.add(bodyGroup);
+  // A complete giant fish silhouette: round belly, raised head, two eyes,
+  // paired fins, forked tail and moving gills. No shared water-jet ultimate.
+  const add=(parent,geometry,color,position,scale,rot=null)=>{
+   const mesh=new THREE.Mesh(geometry,material(color));mesh.position.set(...position);
+   mesh.scale.set(...scale);if(rot)mesh.rotation.set(...rot);parent.add(mesh);return mesh;
+  };
+  add(bodyGroup,sphere,'#ff8c22',[0,0,0],[.86,.63,1.35]);
+  add(bodyGroup,sphere,'#ffb949',[0,-.20,.49],[.77,.42,.91]);
+  add(bodyGroup,sphere,'#ff7d12',[0,.1,1.01],[.68,.57,.66]);
+  add(bodyGroup,sphere,'#ffeac0',[0,-.20,1.52],[.24,.15,.13]);
+  for(const side of [-1,1]){
+   add(bodyGroup,sphere,'#fff7eb',[side*.59,.21,1.22],[.22,.23,.13]);
+   add(bodyGroup,sphere,'#14233a',[side*.67,.21,1.33],[.11,.14,.07]);
+   add(bodyGroup,geomCone,'#ffbb39',[side*.79,-.14,-.10],[.33,.85,.14],[0,0,side*.85]);
+   add(bodyGroup,sphere,'#da6421',[side*.56,-.03,1.08],[.05,.18,.13]);
+  }
+  add(bodyGroup,geomCone,'#ffbf38',[0,.73,-.23],[.42,.72,.17],[Math.PI/2,0,0]);
+  const tail=new THREE.Group();tail.position.z=-1.29;bodyGroup.add(tail);
+  add(tail,geomCone,'#ff9e32',[-.38,0,-.61],[.60,1.2,.24],[Math.PI/2,0,-.55]);
+  add(tail,geomCone,'#ffbb42',[.38,0,-.61],[.60,1.2,.24],[Math.PI/2,0,.55]);
+  bodyGroup.scale.setScalar(2.5*quality);
+  const orientation=qdir(direction),duration=GOLDFISH_SWIM_MS/1000*(event.qualityDuration||1);
+  this.add(group,duration,age=>{
+   const progress=Math.min(1,age/duration);
+   group.position.copy(origin).addScaledVector(direction,(event.range||32)*progress);
+   group.quaternion.copy(orientation);
+   bodyGroup.rotation.y=Math.sin(age*13)*.08;
+   tail.rotation.y=Math.sin(age*19)*.42;
+   bodyGroup.rotation.z=Math.sin(age*8)*.04;
+   group.scale.setScalar(Math.min(1,age*6)*Math.min(1,(duration-age)*7));
   });
  }
  flower(event){
@@ -176,6 +213,7 @@ export class WeaponSignatureEffects {
   if(item.id==='calico-cat')return this.shotgun(event),true;
   if(!event.ultimate)return false;
   if(item.id==='giraffe')return this.giraffe(event,ownerRoot),true;
+  if(item.id==='goldfish')return this.goldfish(event),true;
   if(item.id==='fan')return this.tornado(event),true;
   if(item.family==='petal')return this.flower(event),true;
   if(item.family==='planter'&&!item.exotic)return this.thorns(event),true;
