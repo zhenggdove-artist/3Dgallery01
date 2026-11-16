@@ -62,8 +62,11 @@ export function insideChargedArea(area,target,actorRadius=1){
 // geometry. #58 starts at the staff/clam mouth; #59 is centered midway along
 // the full server ray, never on the remote area.visualCenter marker.
 export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
- const range=clamp(Number(stats?.range)||Number(item?.range)||8,2,100);
- const width=clamp((Number(stats?.radius)||1)*2,.5,36);
+ // Collision sweeps use the full quality-adjusted projectile range/radius.
+ // Unlike chargedArea's bounded ground-explosion area, a channel has NO
+ // 100m / 18m cosmetic clamp. Its #59 width must cover the entire hit tube.
+ const range=Math.max(2,Number(stats?.range)||Number(item?.range)||8);
+ const width=Math.max(.5,(Number(stats?.radius)||1)*2);
  const [dx,dz]=flatDirection(direction);
  const yaw=Math.atan2(-dz,dx); // official effects face local +X
  const at=(x,z)=>Math.max(0,ground(x,z,origin[1]))+.16;
