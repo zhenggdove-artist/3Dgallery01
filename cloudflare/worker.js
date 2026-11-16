@@ -140,7 +140,7 @@ export class TempleRoom extends DurableObject{
       this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,JSON.stringify(response),Date.now());
       this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);
     });
-    this.broadcastWorld(world);if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))this.broadcast('structure-hit',hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))this.broadcast('structure-destroyed',broken);await this.armAlarm();return json(response);
+    this.broadcastWorld(world);if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))this.broadcast('structure-hit',hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))this.broadcast('structure-destroyed',broken);await this.armAlarm();return json(response);
   }
 
   async saveCode(session){
