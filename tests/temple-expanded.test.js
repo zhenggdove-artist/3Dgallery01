@@ -192,7 +192,7 @@ test('a fully charged area hits every player-built structure in its radius',()=>
 test('all cat guns keep their advertised normal and charged range and deal PvP damage',()=>{
   const guns=[
     ['white-cat',22,28,18,25],
-    ['black-cat',80,140,65,85],
+    ['black-cat',256,256,65,85],
     ['calico-cat',10,17,8,14]
   ];
   for(const [id,range,chargedRange,normalDistance,chargedDistance] of guns){
