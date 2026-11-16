@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {oddParts} from './reletter/odd-weapon-art.js';
-import {calicoPellets} from './shared/calico-pellets.js';
+import {calicoPellets,CALICO_PELLET_COUNT} from './shared/calico-pellets.js';
 import {GOLDFISH_SWIM_MS} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
 
@@ -28,9 +28,9 @@ export class WeaponSignatureEffects {
  }
  shotgun(event){
   const source=vec(event.origin),full=!!event.ultimate,scale=event.qualityScale||1,
-   rays=event.pellets?.length===10?event.pellets:calicoPellets(event.direction,full,event.time).map(p=>p.direction),
+   rays=event.pellets?.length===CALICO_PELLET_COUNT?event.pellets:calicoPellets(event.direction,full,event.time).map(p=>p.direction),
    group=new THREE.Group(),balls=[];
-  group.name='Ten independent irregular multicolour volumetric shotgun spheres';
+  group.name='Twenty independent glowing rainbow shotgun spheres';
   const palette=['#ff326d','#ffbd39','#fcff63','#29e8ac','#41beff','#9e69ff','#ff82dd','#ffffff'];
   const textureColors=palette.map(hex=>new THREE.Color(hex));
   rays.forEach((ray,i)=>{
@@ -52,13 +52,20 @@ export class WeaponSignatureEffects {
     colors.set([color.r*bright,color.g*bright,color.b*bright],n*3);
    }
    geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
-   const surface=new THREE.MeshPhysicalMaterial({vertexColors:true,roughness:.21,metalness:.23,
-    clearcoat:1,clearcoatRoughness:.12,emissive:'#19131e',toneMapped:false});
+   const surface=new THREE.MeshPhysicalMaterial({vertexColors:true,roughness:.12,metalness:.06,
+    clearcoat:1,clearcoatRoughness:.04,emissive:palette[i%palette.length],
+    emissiveIntensity:.38,toneMapped:false});
    const ball=new THREE.Mesh(geometry,surface);
    ball.name='Multicolour sphere '+(i+1);
-   ball.scale.setScalar((full?.58:.42)*scale);
+   ball.scale.setScalar((full?.29:.21)*scale);
    ball.position.copy(source);
    ball.rotation.set(i*.41,i*.69,i*.23);
+   // Additive halo stays attached to its real raycasted 3D projectile.
+   const halo=new THREE.Mesh(new THREE.SphereGeometry(1.16,12,8),
+    new THREE.MeshBasicMaterial({color:palette[i%palette.length],transparent:true,opacity:.30,
+      depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
+   halo.scale.setScalar(1.45);halo.name='Prismatic glow '+(i+1);
+   ball.add(halo);
    group.add(ball);
    balls.push({ball,dir:vec(ray).normalize(),spin:i*.5});
   });

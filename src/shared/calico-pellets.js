@@ -1,6 +1,6 @@
-// Server/client shared deterministic NON-GRID spread of exactly ten 3-D
+// Server/client shared deterministic NON-GRID spread of twenty 3-D
 // sphere trajectories. The original 2x5 arrangement was visually synthetic.
-export const CALICO_PELLET_COUNT=10;
+export const CALICO_PELLET_COUNT=20;
 export function calicoPellets(direction,charged=false,seed=0){
  const length=Math.hypot(...direction)||1,forward=direction.map(v=>v/length);
  let right=[forward[2],0,-forward[0]],rLength=Math.hypot(...right);
@@ -18,6 +18,6 @@ export function calicoPellets(direction,charged=false,seed=0){
   const jitterY=Math.sin(theta)*distance*(charged?.18:.105);
   const vector=forward.map((v,j)=>v+right[j]*jitterX+up[j]*jitterY);
   const n=Math.hypot(...vector);
-  return {index,direction:vector.map(v=>v/n),radius:charged?.58:.42};
+  return {index,direction:vector.map(v=>v/n),radius:charged?.29:.21};
  });
 }
