@@ -121,7 +121,7 @@ export class NumberedWeaponEffects {
    return true;
   }
   const quality=Math.max(.5,Math.min(2.5,Number(event.qualityScale)||1));
-  const normalSize=(spec.number===26?42:spec.number===38?2:spec.number===48?2:1.2)*quality;
+  const normalSize=(spec.number===26?84:spec.number===38?2:spec.number===48?2:1.2)*quality;
   // The Ice Lance / erupting pillar #70 must be exactly half the previous
   // display dimensions, irrespective of rarity/fusion quality.
   let size=spec.number===70?normalSize*.5:normalSize;
