@@ -7,6 +7,7 @@ import createSector from '../vendor/00gamedevs/source/spell-indicator-sector.js'
 import createRectangle from '../vendor/00gamedevs/source/spell-indicator-rectangle.js';
 
 const BLUE='#24aaff';
+export const runeColorFor=()=>BLUE;
 function circle(radius,width){
  const mesh=new THREE.Mesh(new THREE.RingGeometry(radius-width/2,radius+width/2,96),
   new THREE.MeshBasicMaterial({color:BLUE,transparent:true,opacity:.84,depthTest:true,
@@ -64,15 +65,15 @@ export class ChargeTargetPreview {
   const ground=(x,z,y)=>spellGroundHeight(arena?.world,x,z,y);
   const origin=Array.isArray(muzzle)&&muzzle.length===3&&muzzle.every(Number.isFinite)
    ?[...muzzle]:[root.position.x,root.position.y+1,root.position.z];
-  const area=chargedArea(equipped,origin,direction,stats,ground);
+  const area=chargedArea(equipped,origin,direction,stats,ground,isChannelStaff(equipped));
   const footprint=spellFootprint(equipped,origin,direction,stats,area,ground);
-  this.footprint=footprint;
   const type=footprint.shape;
   if(this.activeShape!==type){
    this.hide();this.activeShape=type;this.lastParams=null;
    if(type==='sector')this.sector.reset();
    if(type==='rectangle')this.rectangle.reset();
   }
+  this.footprint=footprint;
   this.group.visible=type==='circle';
   this.sector.group.visible=type==='sector';
   this.rectangle.group.visible=type==='rectangle';

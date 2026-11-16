@@ -17,13 +17,13 @@ const flatDirection=direction=>{
 };
 export const CLAM_SECTOR_ANGLE=90;
 
-export function chargedArea(item,origin,direction,stats,ground=()=>0){
+export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=false){
  const dir=safeDirection(direction);
  const range=clamp(Number(stats?.range)||Number(item?.range)||8,2,100);
  const radius=clamp(Number(stats?.radius)||2,1,18);
  // Staff/clam streams are fired from the weapon, not an unrelated distant
  // round explosion. Other spell families retain their target-centred circles.
- const mode=item?.id==='clam'?'sector':isChannelStaff(item)?'corridor':
+ const mode=item?.id==='clam'?'sector':channel&&isChannelStaff(item)?'corridor':
   (AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
  const defaultDistance=clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
  const floorAtDistance=ground(origin[0]+dir[0]*defaultDistance,origin[2]+dir[2]*defaultDistance,origin[1]);
