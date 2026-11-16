@@ -19,11 +19,13 @@ test('charged marker uses coloured magic rune circles, not rectangle guides',()=
  preview.update(parent,{family:'ice',range:10,radius:2,damage:4,chargeDamage:8,chargeRange:12,cooldown:500},.7,[0,0,1],arena);
  assert.equal(preview.group.visible,true);
  assert.ok(preview.guides.every(g=>!g.visible),'area spells use one destination circle');
- assert.equal(preview.outer.material.color.getHexString(),'98eaff');
+ assert.equal(preview.outer.material.color.getHexString(),'24aaff');
+ assert.ok(preview.outer.geometry.parameters.outerRadius-preview.outer.geometry.parameters.innerRadius>=.07);
+ assert.equal(preview.glows.length,2);
  preview.update(parent,{family:'saber',range:5,radius:1,damage:5,chargeDamage:10,chargeRange:12,cooldown:300},.7,[0,0,1],arena);
  assert.ok(preview.guides.some(g=>g.visible),'forward sword spells use a runic path');
  assert.equal(preview.outer.geometry.type,'RingGeometry');
- assert.equal(preview.outer.material.color.getHexString(),'ffc879');
+ assert.equal(preview.outer.material.color.getHexString(),'24aaff');
  preview.dispose();assert.equal(scene.children.length,0);
 });
 test('charging aura is anchored, cleanable and uses fire/ice palettes',()=>{

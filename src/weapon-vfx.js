@@ -5,6 +5,7 @@ import {ElementalCharge} from './elemental-charge.js';
 import {SaberImpact} from './saber-impact.js';
 import {WeaponParticleEffects} from './weapon-particle-effects.js';
 import {WeaponSignatureEffects} from './weapon-signature-effects.js';
+import {NumberedWeaponEffects,requestedEffect} from './numbered-weapon-effects.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
@@ -37,7 +38,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -55,6 +56,24 @@ export class WeaponVFX{
  }
  release(entry){const i=this.active.indexOf(entry);if(i<0)return;this.active.splice(i,1);const {id,fx}=entry;fx.detachWeapon?.();fx.group.removeFromParent();fx.group.visible=false;
   const pool=this.pools.get(id)||[];if(pool.length<2){pool.push(fx);this.pools.set(id,pool);}else fx.dispose();if(this.charger===entry)this.charger=null;
+ }
+ // The local geometry origin of a real held staff (or clam). Unlike
+ // a fixed server event origin, this socket follows walking and hand poses.
+ channelMuzzle(root,item,fallback=new THREE.Vector3()){
+  if(!root)return fallback;
+  const blade=root.userData?.blade;
+  if(blade){
+   const tip=item?.id==='clam'?new THREE.Vector3(0,.55,.28):new THREE.Vector3(0,1.05,0);
+   blade.updateWorldMatrix(true,false);
+   return blade.localToWorld(tip);
+  }
+  return root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,1.1,0));
+ }
+ stopChannel(root){
+  this.numberedEffects.stop(root);
+  for(const [key,entry] of [...this.channelStreams])if(entry.host===root){
+   this.particleSkills.remove(entry);this.channelStreams.delete(key);
+  }
  }
  // Each ordinary tap launches ONE volumetric elemental orb, visibly flying
  // on exactly the same server-owned ray and duration as the damage hitbox.
@@ -108,6 +127,13 @@ export class WeaponVFX{
   const groundEffect=!!data.ultimate&&impactArea?.mode==='area';
   const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
   if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
+  // Special combos and user-assigned numbered effects supersede generic
+  // monochrome particles. Original source files exist for #08 / #33; the
+  // remaining bespoke variants are visually distinct local reconstructions.
+  if(this.numberedEffects.play(data,item,root)){
+   if(requestedEffect(item,data)?.number===38)this.saberImpact.play(data,origin,direction);
+   return;
+  }
   // Never re-aim or translate a server-approved trajectory to a cosmetic muzzle;
   // rendered bullets must occupy the same world-space volume as damage rays.
   if(isChannelStaff(item)&&item.id!=='clam'&&!data.ultimate&&!data.channel){
@@ -116,11 +142,24 @@ export class WeaponVFX{
   }
   if(this.signatureEffects.play({...data,origin:origin.toArray(),direction:direction.toArray()},item,root))return;
   if(isChannelStaff(item)&&(data.channel||data.ultimate&&['water','fire','wave'].includes(item.family))){
-   // Staff channels are local +Z GPU streams, quaternion-aligned to the
-   // server's aim direction. Do not layer prefab jets whose local forward
-   // axis is offset (the old wave bent left / fire travelled down-right).
-   const forwardEnd=origin.clone().addScaledVector(direction,range);
-   this.particleSkills.play(data,item,origin,forwardEnd);
+   // Reuse ONE continuously moving emitter per owner. The weapon tip, not
+   // the first network attack position, is the live emission source.
+   const source=data.channel?this.channelMuzzle(root,item,origin.clone()):origin;
+   const forwardEnd=source.clone().addScaledVector(direction,range);
+   const key=root?root.uuid+':'+item.id:null,existing=key?this.channelStreams.get(key):null;
+   if(data.channel&&existing&&this.particleSkills.active.includes(existing)){
+    existing.age=0;existing.material.uniforms.uAge.value=0;
+    existing.direction.copy(direction);
+    existing.range=range;
+    existing.lastPulseAt=performance.now();
+   }else{
+    const entry=this.particleSkills.play(data,item,source,forwardEnd);
+    if(data.channel&&root&&entry){
+     entry.host=root;entry.weapon=item;entry.direction=direction.clone();entry.heading=root.rotation.y;
+     entry.range=range;entry.lastPulseAt=performance.now();entry.channelKey=key;
+     this.channelStreams.set(key,entry);
+    }
+   }
    return;
   }
   this.particleSkills.play(data,item,origin,end);
@@ -180,7 +219,22 @@ export class WeaponVFX{
   this.aura.charging(root,progress,item);
  }
 
- update(dt){this.saberImpact.update(dt);this.particleSkills.update(dt);this.signatureEffects.update(dt);
+ update(dt){
+  for(const [key,entry] of [...this.channelStreams]){
+   if(!this.particleSkills.active.includes(entry)||!entry.host?.parent){
+    this.channelStreams.delete(key);continue;
+   }
+   const now=performance.now();
+   if(now-entry.lastPulseAt>Math.max(1350,entry.weapon.cooldown+480)){
+    this.particleSkills.remove(entry);this.channelStreams.delete(key);continue;
+   }
+   entry.root.position.copy(this.channelMuzzle(entry.host,entry.weapon,entry.root.position));
+   const delta=entry.host.rotation.y-entry.heading,axis=new THREE.Vector3(0,1,0);
+   const aim=entry.direction.clone().applyAxisAngle(axis,delta).normalize();
+   entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),aim);
+   // No stale detached beam: the currently drawn particles remain weapon-bound.
+  }
+  this.saberImpact.update(dt);this.particleSkills.update(dt);this.signatureEffects.update(dt);this.numberedEffects.update(dt);
   for(const orb of [...this.staffOrbs]){
    orb.age+=dt;
    const t=Math.min(1,orb.age/orb.duration);
@@ -193,5 +247,5 @@ export class WeaponVFX{
    if(!e.stopped&&e.age>=e.stopAt){if(e.hit)e.fx.hit(e.end);else if(continuous.has(e.id)||e.id==='weapon-smear')e.fx.stop();e.stopped=true;}
    e.fx.update(dt);if(e.fx.finished||e.age>12)this.release(e);
   }}
- dispose(){for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
+ dispose(){this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }

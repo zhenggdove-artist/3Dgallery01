@@ -9,7 +9,7 @@ import {ArtworkThrow} from './artwork-throw.js';
 import {equipmentPortrait} from './equipment-portrait.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {attackDirection} from './aiming.js';
-import {isChannelStaff,isStaffTap,channelInterval} from './shared/weapon-abilities.js';
+import {isChannelStaff,isStaffTap,channelInterval,chargeProgress,STAFF_TAP_MAX_MS,CAST_MOVE_FACTOR} from './shared/weapon-abilities.js';
 import {uploadArtwork} from './artwork-upload.js';
 import {VitalModels} from './vital-models.js';
 import {createVHS} from './reletter-vhs.js';
@@ -52,7 +52,7 @@ const roots=new Map(),remoteTargets=new Map(),effects=[];
 const minimap=new Minimap();
 const damageNumbers=createDamageNumbers(THREE);
 const performanceSamples={logic:[],submit:[],frame:[]};
-let chargeStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
+let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
 let staffChannel=null,staffChannelPromise=null,staffChannelBusy=false,staffChannelShotAt=0,staffChannelSerial=0;
 const writer=new WriteCinematic({scene,controller:()=>controller,arena,ui,send:sendAction,audio,bursts,upload:file=>uploadMedia(network,file)});
 const plantHover=bindPlantHover({canvas,camera,arena,controller:()=>controller,ui});
@@ -132,9 +132,9 @@ ui.addEventListener('attack-start',()=>{
  if(coarse&&buildPlacement){confirmBuildPlacement();return;}
  if(controller.holdingArt){artworkThrow.begin();return;}
  attackHeld=true;
- chargeStarted=performance.now();
- audio.play('charge',.46);
- chargeRequest=sendAction('attack',{phase:'charge'});
+ attackHoldStarted=performance.now();
+ chargeStarted=null;
+ chargeRequest=null;
 });
 ui.addEventListener('attack-release',async()=>{
  attackHeld=false;
@@ -142,30 +142,33 @@ ui.addEventListener('attack-release',async()=>{
  if(staffChannel){
   const pending=staffChannelPromise;
   staffChannel=null;++staffChannelSerial;
-  chargeStarted=null;
+  arena.presentation.vfx.stopChannel(localRoot);
+  chargeStarted=null;attackHoldStarted=null;chargeRequest=null;
   await Promise.resolve(pending);
   await sendAction('attack',{phase:'channel-stop'});
   return;
  }
- if(chargeStarted===null)return;
+ if(attackHoldStarted===null)return;
  const weapon=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
- const heldMs=performance.now()-chargeStarted;
- const charge=Math.min(1,heldMs/(weapon?.chargeMs||1500));
- chargeStarted=null;
- await chargeRequest;
+ const heldMs=performance.now()-attackHoldStarted;
+ const charge=chargeProgress(heldMs,weapon?.chargeMs||1500);
+ attackHoldStarted=null;chargeStarted=null;
+ const pending=chargeRequest;chargeRequest=null;
+ if(heldMs>=STAFF_TAP_MAX_MS)await pending;
  // A short tap casts one projectile (or clam melee). Releasing a partly
  // charged LONG hold casts nothing; a fully charged hold stops the channel.
  if(isChannelStaff(weapon)){
   if(isStaffTap(weapon,heldMs))performAttack(0);
  }else{
-  performAttack(charge);
+  performAttack(heldMs<STAFF_TAP_MAX_MS?0:charge);
  }
 });
 ui.addEventListener('attack-cancel',()=>{
- attackHeld=false;chargeStarted=null;artworkThrow.cancel();
+ attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;artworkThrow.cancel();
  if(staffChannel){
   const pending=staffChannelPromise;
   staffChannel=null;++staffChannelSerial;
+  arena.presentation.vfx.stopChannel(localRoot);
   void Promise.resolve(pending).then(()=>sendAction('attack',{phase:'channel-stop'}));
  }
 });
@@ -177,7 +180,7 @@ ui.addEventListener('plant',event=>writer.submit(event.detail));
 ui.addEventListener('save-code',async()=>{try{const data=await network.createSaveCode();self.saveCode=data.code;ui.self=self;ui.showSaveCode(data.code);ui.toast('存檔代碼已產生 · 請保存');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
-ui.addEventListener('panel',event=>{chargeStarted=null;if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void Promise.resolve(pending).then(()=>sendAction('attack',{phase:'channel-stop'}));}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
+ui.addEventListener('panel',event=>{chargeStarted=null;attackHoldStarted=null;chargeRequest=null;if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void Promise.resolve(pending).then(()=>sendAction('attack',{phase:'channel-stop'}));}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
 ui.addEventListener('editor-settings',event=>applyEditorSettings(event.detail));
 
 function createLocalPlayer(data){
@@ -210,11 +213,16 @@ function performInteract(){if(!controller||self?.role!=='fighter')return;const h
 function update(dt,time){
   damageNumbers.update(camera,innerWidth,innerHeight);vitalModels?.update(time,world?.profile?.hp||0,world?.profile?.maxHp||100);
   if(joined)minimap.update(time,roots,self?.key,world?.monster,world?.monsters||[]);
-  if(joined&&controller){writer.update();plantHover.update();const wasGrounded=controller.grounded;const state=controller.update(dt);if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy))network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil);}
+  if(joined&&controller){writer.update();plantHover.update();controller.castMoveFactor=staffChannel?CAST_MOVE_FACTOR:1;const wasGrounded=controller.grounded;const state=controller.update(dt);if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy))network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil);}
   arena.update(dt,time,camera,roots);arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
   const heldItem=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
+  if(attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&performance.now()-attackHoldStarted>=STAFF_TAP_MAX_MS){
+   chargeStarted=performance.now();
+   chargeRequest=sendAction('attack',{phase:'charge'});
+   audio.play('charge',.62);
+  }
   const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
-  // The first 100% of a hold is SILENT. No staff may continuously cast during
+  // First 750ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
   // the charging window; the very first sustained pulse is the ultimate.
   if(attackHeld&&charge>=1&&isChannelStaff(heldItem)&&!staffChannel&&
      performance.now()-(window._templeLastChannelAttempt||0)>170){

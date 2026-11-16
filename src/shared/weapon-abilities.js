@@ -10,7 +10,10 @@ export function weaponQuality(item,fusion){
  return {tier,visual:1+d*.19,damage:1+d*.13,range:1+d*.065,
   radius:1+d*.16,duration:1+d*.22};
 }
-export const STAFF_TAP_MAX_MS=280;
+export const STAFF_TAP_MAX_MS=750;
+export const CAST_MOVE_FACTOR=.05;
+export const MONSTER_WEAPON_DAMAGE_FACTOR=.1;
+export function chargeProgress(heldMs,weaponChargeMs){return Math.max(0,Math.min(1,((Number(heldMs)||0)-STAFF_TAP_MAX_MS)/Math.max(1,Number(weaponChargeMs)||1500)));}
 export function isStaffTap(item,heldMs){
  return isChannelStaff(item)&&Number.isFinite(heldMs)&&heldMs>=0&&heldMs<=STAFF_TAP_MAX_MS;
 }

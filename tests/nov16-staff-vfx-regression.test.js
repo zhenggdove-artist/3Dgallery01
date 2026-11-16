@@ -30,12 +30,13 @@ test('full-charge fire and water staff streams point straight along server aim; 
   vfx.play(event,item);
   assert.equal(vfx.staffOrbs.length,0);
   assert.equal(vfx.active.length,0,'no prefab with incorrect local axis for '+id);
-  assert.equal(vfx.particleSkills.active.length,1,id);
-  const stream=vfx.particleSkills.active[0];
-  const forward=new THREE.Vector3(0,0,1).applyQuaternion(stream.root.quaternion);
+  const numbered=vfx.numberedEffects.active.at(-1);
+  const stream=numbered||vfx.particleSkills.active[0];
+  assert.ok(stream,id);
+  const forward=new THREE.Vector3(0,0,1).applyQuaternion((numbered?numbered.group:stream.root).quaternion);
   assert.ok(forward.distanceTo(new THREE.Vector3(0,0,1))<.001,'the '+id+' stream must move forward');
-  assert.deepEqual(stream.root.position.toArray(),[4,1,7],id);
-  assert.equal(stream.root.scale.x,1,id);
+  assert.deepEqual((numbered?numbered.group:stream.root).position.toArray(),[4,1,7],id);
+  if(!numbered)assert.equal(stream.root.scale.x,1,id);
   vfx.dispose();assert.equal(scene.children.length,0);
  }
 });

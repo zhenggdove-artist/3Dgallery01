@@ -159,7 +159,7 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
  #chat-hud{position:fixed;left:max(12px,env(safe-area-inset-left) + 8px);
    right:auto;top:auto;transform:none;min-width:0;
    width:min(258px,calc(100vw - 32px));max-width:calc(100vw - 32px);
-   bottom:max(172px,env(safe-area-inset-bottom) + 158px);z-index:21;}
+   bottom:max(140px,env(safe-area-inset-bottom) + 126px);z-index:21;}
  #chat-form{min-width:0}
  #chat-form input{min-width:0;max-width:100%;font-size:16px}
  #chat-resize,#chat-form{touch-action:manipulation}

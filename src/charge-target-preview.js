@@ -40,13 +40,16 @@ function runes(color){
 export class ChargeTargetPreview{
  constructor(scene){
   this.scene=scene;this.group=new THREE.Group();this.group.name='Charged magic target circle';
-  this.outer=circle(.96,.022,'#ffffff');this.inner=circle(.58,.014,'#ffffff');
-  this.middle=circle(.77,.011,'#ffffff');this.symbols=runes('#ffffff');
-  this.group.add(this.outer,this.inner,this.middle,this.symbols);
+  this.outer=circle(.96,.075,'#24aaff');this.inner=circle(.58,.055,'#24aaff');
+  this.middle=circle(.77,.045,'#24aaff');this.symbols=runes('#24aaff');
+  this.glows=[circle(.96,.25,'#1486ff'),circle(.58,.17,'#25bbff')];
+  for(const glow of this.glows){glow.material.opacity=.32;glow.material.depthWrite=false;glow.renderOrder=17;}
+  this.group.add(...this.glows,this.outer,this.inner,this.middle,this.symbols);
+  for(const part of [this.outer,this.inner,this.middle,this.symbols]){part.material.toneMapped=false;part.renderOrder=18;}
   scene.add(this.group);this.group.visible=false;
   this.guides=Array.from({length:6},(_,i)=>{
    const g=new THREE.Group();g.name='Forward magic rune '+i;
-   const ring=circle(.9,.035,'#ffffff'),glyph=runes('#ffffff');
+   const ring=circle(.9,.09,'#24aaff'),glyph=runes('#24aaff');
    g.add(ring,glyph);scene.add(g);g.visible=false;return g;
   });
   this.t=0;
@@ -62,17 +65,18 @@ export class ChargeTargetPreview{
   const z=area.mode==='area'?area.center[2]:origin[2]+dir.z*travel;
   const y=Math.max(.14,spellGroundHeight(arena.world,x,z,origin[1])+.16);
   const radius=area.mode==='area'?Math.max(1.7,area.radius):Math.max(1.7,Math.min(7,stats.radius+1));
-  const tint=new THREE.Color(runeColorFor(item));
+  const tint=new THREE.Color('#24aaff');
   const parts=[this.outer,this.inner,this.middle,this.symbols];
   for(const p of parts)p.material.color.copy(tint);
   this.group.visible=true;this.group.position.set(x,y,z);
   this.group.scale.setScalar(radius);
   this.t+=.033;
   this.group.rotation.y+=.005;
-  this.outer.material.opacity=.5+.34*charge+.12*Math.sin(this.t*3);
-  this.inner.material.opacity=.45+.36*charge;
-  this.middle.material.opacity=.3+.2*charge;
-  this.symbols.material.opacity=.55+.42*charge;
+  for(const glow of this.glows){glow.material.color.copy(tint);glow.material.opacity=.24+.16*charge+.06*Math.sin(this.t*3);}
+  this.outer.material.opacity=.85+.1*charge+.045*Math.sin(this.t*3);
+  this.inner.material.opacity=.84+.14*charge;
+  this.middle.material.opacity=.78+.16*charge;
+  this.symbols.material.opacity=.85+.14*charge;
   // Non-area attacks show forward reach with smaller symbols at intervals.
   // There are no rectangle corners/edges or screen-space geometry.
   for(let i=0;i<this.guides.length;i++){
@@ -83,7 +87,7 @@ export class ChargeTargetPreview{
    const gy=Math.max(.14,spellGroundHeight(arena.world,gx,gz,origin[1])+.17);
    g.position.set(gx,gy,gz);g.scale.setScalar(.62+Math.min(1.2,stats.radius*.22));
    g.rotation.y=this.t*.2+i*.37;
-   for(const child of g.children){child.material.color.copy(tint);child.material.opacity=.3+.42*charge;}
+   for(const child of g.children){child.material.color.copy(tint);child.material.opacity=.68+.3*charge;}
   }
  }
  hide(){this.group.visible=false;for(const g of this.guides)g.visible=false;}

@@ -130,8 +130,8 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
       Array.isArray(mobility?.lastWriteLanding)&&distanceTo(next.position,mobility.lastWriteLanding)<=9;
     // Normal run speed is 8.64m/s; airborne wings, delayed packets, and
     // server-authorized knockback need more headroom without allowing teleports.
-    const maxSpeed=(hasWings?28:14)*boostedSpeed+(recentHit?18:0)+(recentImpulse?18:0);
-    const allowance=maxSpeed*elapsed+5.5+(recentHit?6:0);
+    const maxSpeed=(hasWings?28:14)*boostedSpeed*(mobility?.channeling ? .05 : 1)+(recentHit?18:0)+(recentImpulse?18:0);
+    const allowance=maxSpeed*elapsed+(mobility?.channeling ? 1.5 : 5.5)+(recentHit?6:0);
     if(distance>allowance&&!justRespawned&&!landedFromWrite)
       return {error:'Movement rejected',state:previous};
   }
@@ -334,7 +334,7 @@ function attack(world,profile,actor,body,context,now){
   if(channel)stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range));
   stats.range=+(stats.range*quality.range).toFixed(2);
   stats.radius=+(stats.radius*quality.radius).toFixed(2);
-  const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if(weapon.firstPerson&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage*=playerStats(world,profile,now).attack;profile.combo=combo;profile.lastComboAt=now;
+  const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if(weapon.firstPerson&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
   const area=stats.ultimate&&weapon.id!=='goldfish'?chargedArea(weapon,origin,direction,stats,groundForSpell):null;
@@ -349,7 +349,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:id(),kind:swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
       origin:[...origin],direction:[...direction],range:stats.range,
-      damage:stats.damage+bonus,pvpDamage,radius:swimmingFish?GOLDFISH_SWIM_RADIUS*quality.visual:Math.max(2,stats.radius)*quality.radius,tier:quality.tier,
+      damage:stats.damage+bonus*.1,pvpDamage,radius:swimmingFish?GOLDFISH_SWIM_RADIUS*quality.visual:Math.max(2,stats.radius)*quality.radius,tier:quality.tier,
       createdAt:now,lastAt:now,expiresAt:now+duration,
       outHits:[],backHits:[],fanHits:{},fishHits:[]
     });
@@ -365,7 +365,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
-      radius:stats.radius,area,damage:stats.damage+bonus,pvpDamage,charge,
+      radius:stats.radius,area,damage:stats.damage+bonus*.1,pvpDamage,charge,
       qualityDuration:quality.duration,qualityScale:quality.visual,
       pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
       hits:[],pelletHits:{},areaResolved:false,
@@ -384,7 +384,7 @@ function attack(world,profile,actor,body,context,now){
    return {v,along,inside};
   }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
   for(const {v:structure} of (area?.mode==='area'?candidates:candidates.slice(0,1))){
-   const damage=Math.max(8,Math.round((stats.damage+bonus)*.7));
+   const damage=Math.max(8,Math.round((stats.damage+bonus*.1)*.7));
    structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
    structure.hp=Math.max(0,structure.hp-damage);
    const event={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
