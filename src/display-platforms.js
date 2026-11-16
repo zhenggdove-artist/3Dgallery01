@@ -7,7 +7,7 @@ export class DisplayPlatforms{
  constructor(arena){
   this.arena=arena;this.discs=[];
   this.geometry=new THREE.CylinderGeometry(1,1.06,.4,48);
-  this.coneGeometry=new THREE.ConeGeometry(1,1,4,1);
+  this.coneGeometry=new THREE.ConeGeometry(1,1,3,1);
   this.material=new THREE.MeshPhysicalMaterial({color:'#E84887',roughness:.25,metalness:.1,clearcoat:.8,iridescence:.6,emissive:'#E84887',emissiveIntensity:.06});
   this.coneMaterial=new THREE.MeshStandardMaterial({color:'#777d85',roughness:.89,metalness:.06,flatShading:true});
  }
