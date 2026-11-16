@@ -371,7 +371,16 @@ export class WeaponParticleEffects{
   }else{
     entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),direction.normalize());
     if(chosen!=='rainbow')entry.root.position.y=Math.max(.7,entry.root.position.y);
-    if(elementalJet)entry.root.scale.setScalar(data.channel?1:charged?1.7:1.35);
+    if(elementalJet){
+     if(data.channel&&chosen==='tidal'){
+      // Local authored tidal jet reaches ~4.9m to either side at full
+      // charge. Scale only its lateral axes to the server's actual tube
+      // radius, preserving 100% of the real forward travel distance.
+      const halfWidth=Math.max(.35,Number(data.radius)||1.6);
+      const lateral=halfWidth/4.9;
+      entry.root.scale.set(lateral,lateral,1);
+     }else entry.root.scale.setScalar(data.channel?1:charged?1.7:1.35);
+    }
   }
   if(chosen==='flies'&&Array.isArray(data.impactPoint)&&data.impactPoint.length===3){
     // Only for the first metre or so of its apparent pursuit: steer the cloud

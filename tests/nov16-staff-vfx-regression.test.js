@@ -45,7 +45,7 @@ test('full-charge fire and water staff streams point straight along server aim; 
    assert.ok(actualNozzle.distanceTo(new THREE.Vector3(4,1,7))<1e-6,'fire must originate from the correct socket');
    assert.ok(numbered.group.userData.flameAimTargets.every(mesh=>!mesh.parent.visible),'no neutral demo objects');
   }else assert.deepEqual((numbered?numbered.group:stream.root).position.toArray(),[4,1,7],id);
-  if(!numbered)assert.equal(stream.root.scale.x,1,id);
+  if(!numbered)assert.ok(Math.abs(stream.root.scale.x-1.6/4.9)<1e-6,id+' lateral hitbox/particle width');
   vfx.dispose();assert.equal(scene.children.length,0);
  }
 });
