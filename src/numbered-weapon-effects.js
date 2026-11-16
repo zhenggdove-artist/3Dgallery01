@@ -124,7 +124,7 @@ export class NumberedWeaponEffects{
     // Ground-space originals stand upright; only rotate their horizontal yaw.
     fx.group.quaternion.setFromAxisAngle(UP,Math.atan2(direction.x,direction.z));
    }else{
-    fx.group.quaternion.setFromUnitVectors(FORWARD,direction);
+    fx.group.quaternion.setFromUnitVectors(spec.number===70?new THREE.Vector3(1,0,0):FORWARD,direction);
    }
    if(typeof fx.setDirection==='function')fx.setDirection(direction,0);
    if(typeof fx.setAim==='function'){
