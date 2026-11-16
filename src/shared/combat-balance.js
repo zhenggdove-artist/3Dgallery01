@@ -26,6 +26,12 @@ export function pvpShotDamage(weapon,stats,quality={tier:1}){
 // These durations describe the actual visible moving volumes, not an
 // arbitrary instant-hit timer. Damage cannot precede projectile intersection.
 export function projectileFlightMs(weapon,charged=false){
+ // Synchronize authoritative swept-hit travel with the visible, moving
+ // 00GameDevs source. Doubling reach without flight time would silently
+ // double speed and make strikes hit before the graphics reach targets.
+ if(charged&&weapon.family==='palm')return 1650; // triple #31 tower
+ if(charged&&weapon.family==='saber')return 1100; // extended #38 fissure
+ if(charged&&weapon.family==='ice')return 1260;  // doubled #70 reach
  if(weapon.pattern==='scatter')return charged?530:360;
  if(weapon.id==='black-cat')return charged?450:310;
  if(weapon.firstPerson)return charged?460:330;

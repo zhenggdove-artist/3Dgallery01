@@ -307,6 +307,14 @@ test('fully charged release also uses original wave/flower/conch sources, never 
 });
 
 
+test('native ice / sword / coconut travel durations agree with their extended visual paths',async()=>{
+ const {projectileFlightMs}=await import('../src/shared/combat-balance.js');
+ assert.equal(projectileFlightMs(itemById('frost-1'),true),1260);
+ assert.equal(projectileFlightMs(itemById('saber-1'),true),1100);
+ assert.equal(projectileFlightMs(itemById('palm-1'),true),1650);
+ assert.equal(projectileFlightMs(itemById('palm-1'),false),245);
+});
+
 test('official #31 coconut tree ultimate stacks three real crowns and rotates rapidly as it travels forward',()=>{
  const scene=new THREE.Scene(),effects=new NumberedWeaponEffects(scene);
  const item=itemById('palm-3'),event={...evt('ultimate'),range:32,origin:[2,1,4],direction:[0,0,1],
