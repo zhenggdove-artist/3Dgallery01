@@ -380,6 +380,7 @@ export class WeaponParticleEffects{
     if(target&&target.position.distanceTo(impact)<12)entry.homingTarget=target;
   }
   this.add(entry);
+  return entry;
  }
  charging(root,progress,item){
   if(!root||!item||progress<=.02){if(this.charger){this.remove(this.charger);this.charger=null;}return;}
