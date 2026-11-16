@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {attackStats} from './shared/catalog.js';
 import {chargedArea,spellGroundHeight} from './shared/charge-area.js';
-import {weaponQuality} from './shared/weapon-abilities.js';
+import {weaponQuality,isChannelStaff} from './shared/weapon-abilities.js';
 
 export const runeColorFor=item=>({
  fire:'#ff712b',ice:'#98eaff',water:'#48d6ff',wave:'#5aeece',
@@ -57,7 +57,12 @@ export class ChargeTargetPreview{
  }
  update(root,item,charge,direction,arena,fusion=null){
   if(!root||!item||charge<.1||!Array.isArray(direction)){this.hide();return;}
-  const stats=attackStats(item,1),quality=weaponQuality(item,fusion);
+  // Reproduce equippedItem() before estimating the server impact area:
+  // fusion original.stats may override the catalogue range/radius directly.
+  const equipped=fusion?.original?.stats?{...item,...fusion.original.stats}:item;
+  const stats=attackStats(equipped,1),quality=weaponQuality(equipped,fusion);
+  // Authoritative channel attacks extend minimum casting reach before quality.
+  if(isChannelStaff(equipped))stats.range=Math.max(stats.range,equipped.id==='clam'?10:Math.min(18,equipped.range));
   stats.range=+(stats.range*quality.range).toFixed(2);
   stats.radius=+(stats.radius*quality.radius).toFixed(2);
   const origin=[root.position.x,root.position.y+1,root.position.z];
