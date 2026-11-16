@@ -306,11 +306,18 @@ function attack(world,profile,actor,body,context,now){
   const weapon=equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon)),bonus=profile.fusion[weapon.id]?.bonus||0;
   if(body.phase==='channel-start'){
     if(!isChannelStaff(weapon))return {error:'Only staffs support continuous casting'};
-    profile.channelWeapon=weapon.id;profile.channelStartedAt=now;profile.lastChannelPulseAt=now;
+    // A staff is silent during a hold. Continuous magic only becomes legal
+    // once the ORIGINAL charge request has reached the weapon's full time.
+    if(!profile.chargeStartedAt||now-profile.chargeStartedAt<(weapon.chargeMs||1500))
+      return {error:'Charge must reach 100% before channeling'};
+    profile.channelWeapon=weapon.id;
+    profile.channelStartedAt=profile.chargeStartedAt;
+    profile.lastChannelPulseAt=now;
     return {channeling:true};
   }
   if(body.phase==='channel-stop'){
-    profile.channelWeapon=null;profile.channelStartedAt=0;profile.lastChannelPulseAt=0;return {channeling:false};
+    profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;
+    profile.lastChannelPulseAt=0;return {channeling:false};
   }
   const channel=body.phase==='channel';
   if(channel&&(!isChannelStaff(weapon)||profile.channelWeapon!==weapon.id||
@@ -318,7 +325,7 @@ function attack(world,profile,actor,body,context,now){
     return {error:'Staff channel is not active'};
   if(body.phase==='charge'){profile.chargeStartedAt=now;return {charging:true};}
   if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};const direction=normalDirection(body.direction);if(!direction)return {error:'Invalid attack direction'};profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
-  const charge=channel?((now-profile.channelStartedAt)>=(weapon.chargeMs||1500)?1:0):Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
+  const charge=channel?1:Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
   if(!channel)profile.chargeStartedAt=0;
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
   stats.damage=+(stats.damage*quality.damage).toFixed(2);
