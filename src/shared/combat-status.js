@@ -48,7 +48,7 @@ export function applyElementalHit(target,source,weapon,now){
   if(!e.burn||e.burn.until<=now)return put('burn',5000,1);
   return 'burn';
  }
- if(weapon.element==='water'||family==='water'||family==='wave') {
+ if(weapon.element==='water'||family==='water') {
   e.soaked={owner,power:.5,until:now+5000,next:now+1000};
   return 'soaked';
  }

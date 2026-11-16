@@ -472,7 +472,19 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
   if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
   if(activeFighters>0&&!world.monster.active&&now>=world.monster.nextSpawnAt){const spawn=MONSTER_SPAWNS[Math.floor(rng()*MONSTER_SPAWNS.length)],variant=['warden','drowned','signal'][Math.floor(rng()*3)],maxHp={warden:420,drowned:520,signal:360}[variant];world.monster={active:true,id:id(),variant,position:[...spawn],hp:maxHp,maxHp,generation:(world.monster.generation||0)+1,spawnedAt:now,nextAttackAt:now+2_000,nextSpawnAt:now+ECONOMY.monsterIntervalMs};changed=true;}
-  if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>moveMonster(world,monster,target,distance),hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position)});if(!monster.aggroTarget&&!fighters.some(a=>distance2d(a.position,monster.position)<18))patrolMonster(monster,now,rng,(target,distance)=>moveMonster(world,monster,target,distance));changed=true;}
+  if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
+ const confused=effectActive(monster,'confuse',now);
+ if(confused){
+  const angle=(now/210+(monster.generation||0)*2.4)%(Math.PI*2);
+  return moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],distance);
+ }
+ return moveMonster(world,monster,target,distance);
+},hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position)});if(effectActive(monster,'confuse',now)){
+ const angle=(now/217+(monster.generation||0)*1.73)%(Math.PI*2);
+ moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],.21);
+}else if(!effectActive(monster,'root',now)&&!effectActive(monster,'freeze',now)&&
+ !monster.aggroTarget&&!fighters.some(a=>distance2d(a.position,monster.position)<18))
+ patrolMonster(monster,now,rng,(target,distance)=>moveMonster(world,monster,target,distance));changed=true;}
   if(activeFighters>0){
    for(const mob of world.monsters||[]){
     if(!mob?.active)continue;
@@ -488,7 +500,12 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
        }
        return moveMonster(world,mob,target,distance);
       },hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position)});
-    if(!mob.aggroTarget&&!fighters.some(a=>distance2d(a.position,mob.position)<18))patrolMonster(mob,now,rng,(target,distance)=>moveMonster(world,mob,target,distance));
+    if(effectActive(mob,'confuse',now)){
+ const angle=(now/217+(mob.slot||0)*1.73)%(Math.PI*2);
+ moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],.21);
+}else if(!effectActive(mob,'root',now)&&!effectActive(mob,'freeze',now)&&
+ !mob.aggroTarget&&!fighters.some(a=>distance2d(a.position,mob.position)<18))
+ patrolMonster(mob,now,rng,(target,distance)=>moveMonster(world,mob,target,distance));
     changed=true;
    }
   }
@@ -704,13 +721,20 @@ function tickPersistentAttacks(world,actors,now,rng){
      if(target.kind==='monster'){
       const result=damageMonster(world,owner,fx.damage*1.25,now,rng,'giant-goldfish',value,center);
       if(result&&!result.defeated){
+       applyStatus(world,owner,value,itemById('goldfish'),{
+        direction:fx.direction,charge:1,damage:fx.damage,qualityDuration:1
+       },now);
        const moved=[value.position[0]+fx.direction[0]*(3+fx.tier*.7),value.position[1],value.position[2]+fx.direction[2]*(3+fx.tier*.7)];
        if(insideArena(moved,-2)&&!insideArtSanctuary(moved))value.position=moved;
        value.effects??={};value.effects.stun={owner:fx.owner,power:1,until:now+800,next:now+1000};
       }
      }else{
       const hit=damagePlayer(world,owner,value,(fx.pvpDamage||12)*1.08,now,'goldfish',fx.origin,'giant-goldfish',center);
-      if(hit&&!hit.immune){const profile=world.profiles[value.key];if(profile?.hitReaction){profile.hitReaction.stunMs=300;profile.hitReaction.knockback=14;}}
+      if(hit&&!hit.immune){const profile=world.profiles[value.key];
+       if(profile?.hp>0)applyStatus(world,owner,profile,itemById('goldfish'),{
+        direction:fx.direction,charge:1,damage:fx.pvpDamage,qualityDuration:1
+       },now);
+       if(profile?.hitReaction){profile.hitReaction.stunMs=300;profile.hitReaction.knockback=14;}}
      }
      changed=true;
     }

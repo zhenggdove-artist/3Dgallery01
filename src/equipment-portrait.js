@@ -21,7 +21,7 @@ export function orientPortraitModel(model){
    horizontal.addScaledVector(up,-horizontal.dot(up));
    if(horizontal.lengthSq()>1e-6){
     horizontal.normalize();
-    const front=up.clone().cross(horizontal).normalize();
+    const front=horizontal.clone().cross(up).normalize();
     const rightAxis=up.clone().cross(front).normalize();
     const basis=new THREE.Matrix4().makeBasis(rightAxis,up,front);
     // Inverse of the anatomical basis brings HEAD to screen +Y, left /

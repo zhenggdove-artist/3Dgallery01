@@ -276,9 +276,9 @@ test('doubling the ice timeline retains overlapping channels without a zero-visi
  assert.equal(scene.children.length,0);
 });
 
-test('charged sword has 2x additional reach and one-third previous width, consistent with #59',()=>{
+test('charged sword uses 60% of preceding reach and unchanged thin width, consistent with #59',()=>{
  const item=itemById('saber-1'),stats=attackStats(item,1),normal=attackStats(item,.99);
- assert.ok(stats.range>=4*normal.range,'ultimate range uses 4x base = 2x previous reach');
+ assert.ok(stats.range>=2.39*normal.range&&stats.range<=2.41*normal.range,'ultimate range is 60% of the old 4x baseline');
  assert.ok(stats.radius>0,'server-authoritative sword collision radius must stay positive');
  const scene=new THREE.Scene(),fx=new ChargeTargetPreview(scene);
  const root=new THREE.Group(),muzzle=[2,1.1,3],direction=[0,0,1];
