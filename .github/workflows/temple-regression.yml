@@ -67,8 +67,6 @@ jobs:
         run: |
           npx wrangler dev --local --port 8787 > /tmp/temple-browser-worker.log 2>&1 &
           npm run start > /tmp/temple-browser-static.log 2>&1 &
-      - name: Verify iPhone-size touch controls and actual sniper scope
-        run: node tests/temple-mobile-controls.mjs
       - name: Run WebGL/browser end-to-end gameplay smoke
         run: node tests/temple-ui-smoke.mjs
       - if: always()
@@ -82,3 +80,34 @@ jobs:
         run: |
           cat /tmp/temple-browser-worker.log || true
           cat /tmp/temple-browser-static.log || true
+
+  mobile-touch-smoke:
+    # Isolated worker/database for mobile A/E/scope; must not contaminate
+    # the independent WRITE cinematic/browser game integration smoke.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:cloud
+      - name: Boot isolated mobile staging services
+        run: |
+          npx wrangler dev --local --port 8787 > /tmp/temple-mobile-worker.log 2>&1 &
+          npm run start > /tmp/temple-mobile-static.log 2>&1 &
+      - name: Verify iPhone-size touch controls and actual sniper scope
+        run: node tests/temple-mobile-controls.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: temple-mobile-scope-and-use
+          path: output/temple-ui-smoke
+          if-no-files-found: ignore
+      - name: Print isolated mobile server diagnostics if unsuccessful
+        if: failure()
+        run: |
+          cat /tmp/temple-mobile-worker.log || true
+          cat /tmp/temple-mobile-static.log || true
