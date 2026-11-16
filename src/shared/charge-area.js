@@ -8,7 +8,9 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0){
  const mag=Math.hypot(...direction)||1,dir=direction.map(x=>x/mag);
  const range=clamp(Number(stats?.range)||Number(item?.range)||8,2,100);
  const radius=clamp(Number(stats?.radius)||2,1,18);
- const mode=(AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':item?.family==='saber'||['pan','planter','palm','swatter','whip'].includes(item?.family)?'melee':'corridor';
+ // Ranged charged melee ultimates advance toward their targets rather than
+ // rendering a meaningless circle at the caster's feet.
+ const mode=(AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
  // Long-distance skills must actually land away from the caster. A downward
  // aim intersects the ground first; a horizontal aim travels along the arena.
  const defaultDistance=mode==='melee'?Math.min(range,3):clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
