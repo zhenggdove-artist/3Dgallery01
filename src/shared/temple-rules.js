@@ -603,7 +603,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    for(const [leg,lo,hi] of [['out',0,.5],['back',.5,1]]){
     const from=Math.max(prev,lo),to=Math.min(next,hi);
     if(to<=from)continue;
-    const travel=p=>(p<=.5?p*2:(1-p)*2)*fx.range;
+    const travel=p=>Math.sin(Math.PI*p)*fx.range; // same continuous path as the displayed giraffe
     const a=fx.origin.map((v,j)=>v+fx.direction[j]*travel(from));
     const b=fx.origin.map((v,j)=>v+fx.direction[j]*travel(to));
     const ray=b.map((v,j)=>v-a[j]),length=Math.hypot(...ray);
@@ -666,6 +666,10 @@ function tickPersistentAttacks(world,actors,now,rng){
      const value=target.value;if(value.key===fx.owner)continue;
      if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
      const pos=value.position,dist=Math.hypot(pos[0]-p[0],pos[2]-p[2]),id2=value.id||value.key,key=i+':'+id2;
+     // The rendered tornado is a finite 3-D column, not an infinite 2-D
+     // hazard: a fighter flying above the visible vortex cannot be struck.
+     const tornadoTop=p[1]+10*(1+(fx.tier-1)*.19),victimHeight=target.kind==='monster'?(value.bodyHeight||ENEMY_HEIGHT):2.35;
+     if(pos[1]>tornadoTop||pos[1]+victimHeight<p[1]-1)continue;
      if(dist>2.4+fx.radius*.48||now-(fx.fanHits[key]||0)<900)continue;
      fx.fanHits[key]=now;
      if(target.kind==='monster')damageMonster(world,owner,fx.damage*.18,now,rng,'tornado',value,p);

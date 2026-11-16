@@ -223,9 +223,7 @@ export class WeaponSignatureEffects {
   const orientation=qdir(dir),duration=2.3;
   this.add(group,duration,age=>{
    const t=Math.min(1,age/duration),distance=Math.sin(t*Math.PI)*(event.range||28);
-   const home=(ownerRoot?.position||origin),last=Math.max(0,(t-.82)/.18);
-   group.position.copy(origin).addScaledVector(dir,distance);
-   if(last>0)group.position.lerp(home.clone?home.clone().add(new THREE.Vector3(0,1,0)):origin,last);
+   group.position.copy(origin).addScaledVector(dir,distance); // identical server-owned sin(πt) route
    group.quaternion.copy(orientation);
    model.rotation.z=age*15.5;
    model.rotation.x=Math.sin(age*13)*.25;
