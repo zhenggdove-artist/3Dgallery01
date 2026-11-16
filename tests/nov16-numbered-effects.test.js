@@ -191,8 +191,9 @@ test('authored #73 demonstration sphere and cube are hidden; the fire nozzle is 
 });
 
 test('the original #70 ice shards detach from the staff and travel the full doubled distance',()=>{
- const scene=new THREE.Scene(),fx=new NumberedWeaponEffects(scene);
- fx.play(evt('channel'),itemById('frost-1'));
+ const scene=new THREE.Scene(),root=new THREE.Group(),fx=new NumberedWeaponEffects(scene);
+ scene.add(root);
+ fx.play(evt('channel'),itemById('frost-1'),root);
  assert.equal(fx.active[0].spec.number,70);
  const entry=fx.active[0];
  assert.ok(entry.cycles?.length===1);
@@ -204,7 +205,7 @@ test('the original #70 ice shards detach from the staff and travel the full doub
  assert.ok(entry.cycles[0].fx.group.position.z>origin.z+entry.range*.45,'ice shards travel world-space');
  fx.update(.65);
  assert.ok(entry.cycles[0].fx.group.position.z>origin.z+entry.range*.95,'ice reaches entire server ray');
- fx.dispose();
+ fx.dispose();root.removeFromParent();
  assert.equal(scene.children.length,0);
 });
 

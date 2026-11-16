@@ -36,7 +36,7 @@ test('all twenty overlapping shotgun pellets hit a sixfold uncle as twenty damag
  const {world,shooter}=worldWithCat();
  const before=world.monster.hp;
  const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1],charge:0},{now:start+2000,rng:()=>.5,actors:[shooter]});
- assert.equal(result.attackEvent?.pellets?.length,10);
+ assert.equal(result.attackEvent?.pellets?.length,20);
  assert.equal(result.monsterHits?.length,0,'no immediate impact on release');
  assert.equal(world.monster.hp,before);
  tickWorld(world,{now:start+2390,rng:()=>.5,actors:[shooter],activeFighters:0});
