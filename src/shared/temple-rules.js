@@ -306,7 +306,7 @@ function fuse(world,profile,body,rng){
 }
 
 function attack(world,profile,actor,body,context,now){
-  if(effectActive(profile,'freeze',now))return {error:'Frozen: cannot attack'};
+  if(effectActive(profile,'freeze',now)&&body.phase!=='channel-stop')return {error:'Frozen: cannot attack'};
   if(profile.hitReaction&&now-profile.hitReaction.time<profile.hitReaction.stunMs)return {error:'Recovering from hit'};
   const weapon=equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon)),bonus=profile.fusion[weapon.id]?.bonus||0;
   if(body.phase==='channel-start'){

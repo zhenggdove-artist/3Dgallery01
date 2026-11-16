@@ -74,3 +74,25 @@ test('charged saber authoritative range is 60% of previous four-times multiplier
  const former=Math.max(30,item.range*2,(item.range+item.chargeRange)*1.8)*4;
  assert.ok(Math.abs(charged.range-former*.60)<.01);
 });
+
+test('model-only 30% filters and fire sprites restore original materials on expiry',async()=>{
+ const THREE=await import('three');
+ const {ElementalStatusVisuals}=await import('../src/elemental-status-visuals.js');
+ const root=new THREE.Group(),scene=new THREE.Scene();
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,2,.5),new THREE.MeshStandardMaterial({color:'#dddddd'}));
+ root.add(mesh);root.userData.model=mesh;scene.add(root);
+ const original=mesh.material,visuals=new ElementalStatusVisuals();
+ visuals.sync(root,{soaked:{until:T+5000} },T);
+ assert.notEqual(mesh.material,original);
+ assert.equal(visuals.entries.get(root).uniforms.alpha.value,.30);
+ assert.equal(visuals.entries.get(root).uniforms.color.value.getHexString(),'328dfb');
+ visuals.sync(root,{burn:{until:T+3000},root:{until:T+1000}},T);
+ assert.equal(visuals.entries.get(root).uniforms.alpha.value,.30);
+ assert.ok(visuals.entries.get(root).flames);
+ assert.equal(visuals.entries.get(root).uniforms.color.value.getHexString(),'69bf49');
+ visuals.update(.25,T+1200);
+ assert.equal(visuals.entries.get(root).uniforms.alpha.value,0);
+ visuals.update(.25,T+3000);
+ assert.equal(mesh.material,original);
+ visuals.dispose();mesh.geometry.dispose();original.dispose();
+});
