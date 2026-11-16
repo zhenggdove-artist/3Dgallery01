@@ -286,7 +286,7 @@ test('charged sword has 2x additional reach and one-third previous width, consis
  assert.equal(fx.rectangle.group.userData.vfxNumber,59);
  assert.equal(fx.footprint.shape,'rectangle');
  assert.ok(Math.abs(fx.footprint.length-stats.range)<1e-8);
- assert.ok(Math.abs(fx.footprint.width-Math.max(.5,stats.radius*2))<1e-8);
+ assert.ok(Math.abs(fx.footprint.width-Math.max(.5,Number((stats.radius*weaponQuality(item).radius).toFixed(2))*2))<1e-8);
  assert.ok(Math.abs(fx.footprint.position[2]-(muzzle[2]+stats.range/2))<1e-8);
  fx.dispose();
 });
