@@ -617,7 +617,11 @@ function tickPersistentAttacks(world,actors,now,rng){
       const center=target.kind==='player'
        ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]
        :[enemy.position[0],enemy.position[1]+ENEMY_HEIGHT*.5,enemy.position[2]];
-      if(!insideChargedArea(fx.area,center,radius))continue;
+      // A 6x human enemy is ~9.45m tall. An on-ground wave strikes
+      // its legs first; checking the model's centre (4.7m above ground)
+      // would incorrectly make a visibly touching crest miss entirely.
+      const contactY=enemy.position[1]+(target.kind==='monster'?1.25:1);
+      if(!insideChargedArea(fx.area,[center[0],contactY,center[2]],radius))continue;
       const along=(center[0]-fx.area.apex[0])*fx.area.forward[0]+
        (center[2]-fx.area.apex[2])*fx.area.forward[1];
       if(along+radius<from||along-radius>to)continue;
