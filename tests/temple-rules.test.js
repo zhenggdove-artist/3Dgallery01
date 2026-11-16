@@ -87,7 +87,7 @@ test('building cannot block spawns or artwork platforms and receives a server va
 });
 
 test('ground materials keep duplicate value and can strengthen a weapon',()=>{
-  const now=11_000_000,world=createInitialWorld(now),profile=ensureProfile(world,'p1','p1','#abcdef',now);profile.wallet=2_000;profile.inventory.push('temple-resin','temple-resin');
+  const now=11_000_000,world=createInitialWorld(now),profile=ensureProfile(world,'p1','p1','#abcdef',now);profile.wallet=2_000;profile.inventory.push('temple-resin','temple-resin','saber-1');
   ensureProfile(world,'p1',null,null,now+1);assert.equal(profile.inventory.filter(id=>id==='temple-resin').length,2);
   const result=applyAction(world,actor('p1',[10,0,0]),{action:'fuse',sourceId:'temple-resin',targetId:'saber-1',requestId:'material-fusion-1'},{now:now+2,rng:()=>0});
   assert.equal(result.fusion.success,true);assert.equal(profile.fusion['saber-1'].bonus,10);assert.equal(profile.inventory.filter(id=>id==='temple-resin').length,1);

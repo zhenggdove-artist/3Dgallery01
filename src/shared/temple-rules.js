@@ -43,7 +43,7 @@ export function createInitialWorld(now=Date.now()){
     profiles:{},
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
-    artworkLayout:clone(layoutDefaults.artworkLayout||{}),groundDrops:[],structures:[],plants:[],sceneCleanupVersion:1,
+    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],groundDrops:[],structures:[],plants:[],sceneCleanupVersion:1,
     monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
     activity:{coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0}
@@ -53,7 +53,7 @@ export function createInitialWorld(now=Date.now()){
 export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
-  world.profiles??={};world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.groundDrops??=[];world.structures??=[];world.plants??=[];
+  world.profiles??={};world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.groundDrops??=[];world.structures??=[];world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
   world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];
@@ -93,7 +93,7 @@ export function worldView(world,actorKey,now=Date.now()){
   const profile=world.profiles[actorKey];
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
-    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),
+    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000))};
 }
@@ -120,6 +120,24 @@ export function applyAction(world,actor,body,context={}){
   if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
   if(body.action==='reset-player-artworks')return resetPlayerArtworks(world,profile.admin,now);
   if(body.action==='create-platform'){if(!profile.admin)return {error:'僅限 GM'};const p=body.position,r=Number(body.radius);if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)||Math.hypot(p[0],p[2])>88||p[1]<0||p[1]>30||!Number.isFinite(r)||r<.6||r>8)return {error:'圓盤位置或半徑無效'};world.floatingPlatforms??=[];if(world.floatingPlatforms.length>=128)return {error:'已達 128 個圓盤上限'};const platform={id:id(),position:[...p],radius:r};world.floatingPlatforms.push(platform);world.revision++;return {platform,notice:'已建立漂浮圓盤，所有玩家皆可使用'};}
+  if(body.action==='delete-platform'){
+    if(!profile.admin)return {error:'僅限 GM 刪除圓盤'};
+    const key=String(body.platformId||'');
+    if(key.startsWith('floating:')){
+      const uid=key.slice(9),index=(world.floatingPlatforms||[]).findIndex(p=>p.id===uid);
+      if(index<0)return {error:'圓盤不存在或已遭刪除'};
+      world.floatingPlatforms.splice(index,1);
+    }else{
+      const match=/^(display|stair):(platform-\d{2})(?::(\d{1,2}))?$/.exec(key);
+      const valid=match&&PLATFORMS.some(p=>p.id===match[2])&&(match[1]==='stair'?match[3]!==undefined&&+match[3]<=63:match[3]===undefined);
+      if(!valid)return {error:'無效的作品展示圓盤'};
+      world.removedPlatformIds??=[];
+      if(world.removedPlatformIds.includes(key))return {error:'圓盤已被刪除'};
+      world.removedPlatformIds.push(key);
+    }
+    world.revision++;
+    return {notice:'圓盤已刪除 · 所有玩家同步',platformId:key};
+  }
   if(body.action==='add-artwork')return addArtwork(world,profile,actor,body,now);
   if(body.action==='set-artwork-layout')return setArtworkLayout(world,profile,body,now);
   const denied=requireFighter(actor);if(denied)return denied;const dead=requireAlive(profile,now);if(dead&&!['respawn'].includes(body.action))return dead;

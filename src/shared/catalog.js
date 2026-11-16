@@ -54,7 +54,7 @@ export const ECONOMY = Object.freeze({
   buildCosts:Object.freeze({cube:80,bar:110,cylinder:110,wall:80,column:110,platform:170,tree:95,house:240})
 });
 
-export const STARTER_LOADOUT = Object.freeze({weapon:'saber-1',armor:null,head:null,outfit:null,shield:null,wings:null});
+export const STARTER_LOADOUT = Object.freeze({weapon:'clam',armor:null,head:null,outfit:null,shield:null,wings:null});
 
 export function weightedChoice(entries,rng=Math.random){
   const total=entries.reduce((sum,entry)=>sum+(entry.weight||1),0);let cursor=rng()*total;

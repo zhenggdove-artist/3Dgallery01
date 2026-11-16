@@ -1,0 +1,63 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import * as THREE from 'three';
+import {createInitialWorld,createProfile,applyAction,migrateWorld,worldView} from '../src/shared/temple-rules.js';
+import {STARTER_LOADOUT,itemById} from '../src/shared/catalog.js';
+import {WeaponParticleEffects} from '../src/weapon-particle-effects.js';
+import {effectFor} from '../src/weapon-vfx.js';
+
+const gm={key:'gm',name:'GM',color:'#ffffff',role:'fighter',position:[2,0,2],admin:true};
+const guest={key:'guest',name:'Guest',color:'#ffffff',role:'fighter',position:[2,0,2],admin:false};
+test('new players begin with the giant clam, not the saber',()=>{
+ const w=createInitialWorld(1000),p=createProfile('guest','Guest','#ffffff',1000);
+ assert.equal(STARTER_LOADOUT.weapon,'clam');
+ assert.equal(p.equipment.weapon,'clam');
+ assert.ok(p.inventory.includes('clam'));
+ assert.equal(itemById('clam').name,'大花蛤');
+});
+test('GM deletes floating disks and selected original exhibit disks, but not artwork',()=>{
+ const w=createInitialWorld(1000);
+ let r=applyAction(w,guest,{action:'delete-platform',platformId:'display:platform-01'},{now:1001});
+ assert.match(r.error,/GM/);
+ r=applyAction(w,gm,{action:'create-platform',position:[31,2,12],radius:3},{now:1002});
+ assert.ok(r.platform?.id);
+ const key='floating:'+r.platform.id;
+ r=applyAction(w,gm,{action:'delete-platform',platformId:key},{now:1003});
+ assert.equal(r.platformId,key);
+ assert.equal(w.floatingPlatforms.length,0);
+ r=applyAction(w,gm,{action:'delete-platform',platformId:'display:platform-02'},{now:1004});
+ assert.equal(r.platformId,'display:platform-02');
+ const artCount=Object.keys(w.artworks).length;
+ r=applyAction(w,gm,{action:'delete-platform',platformId:'stair:platform-02:2'},{now:1005});
+ assert.equal(r.platformId,'stair:platform-02:2');
+ assert.equal(Object.keys(w.artworks).length,artCount);
+ assert.ok(worldView(w,'gm',1006).removedPlatformIds.includes('display:platform-02'));
+ assert.deepEqual(migrateWorld(structuredClone(w),1007).removedPlatformIds,w.removedPlatformIds);
+ const duplicate=applyAction(w,gm,{action:'delete-platform',platformId:'display:platform-02'},{now:1008});
+ assert.ok(duplicate.error);
+ const forged=applyAction(w,gm,{action:'delete-platform',platformId:'display:unknown'},{now:1009});
+ assert.ok(forged.error);
+});
+test('normal fire and water attacks emit forward spray particles and library effects',()=>{
+ const fire=itemById('ember-1'),water=itemById('tide-1'),clam=itemById('clam');
+ assert.equal(effectFor(fire,false),'flame-surge');
+ assert.equal(effectFor(water,false),'tidal-surge');
+ assert.equal(effectFor(clam,true),'tidal-surge');
+ const scene=new THREE.Scene(),particles=new WeaponParticleEffects(scene);
+ const source=new THREE.Vector3(0,1,0),end=new THREE.Vector3(0,1,12);
+ particles.play({ultimate:false},fire,source,end);
+ particles.play({ultimate:false},water,source,end);
+ assert.equal(particles.active.length,2);
+ assert.equal(particles.active[0].recipe,'inferno');
+ assert.equal(particles.active[1].recipe,'tidal');
+ particles.dispose();assert.equal(scene.children.length,0);
+});
+test('SAVE appears between BUILD and WRITE and clouds are varied translucent banks',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ assert.match(html,/data-panel="build"[\s\S]*data-action="save-code"[\s\S]*data-panel="social"/);
+ const sky=readFileSync(new URL('../src/night-sky.js',import.meta.url),'utf8');
+ for(const variant of ['broad','broken','wispy'])assert.ok(sky.includes(variant));
+ assert.ok(sky.includes('length:12'));
+ assert.ok(sky.includes('time*cloud.wind'));
+});
