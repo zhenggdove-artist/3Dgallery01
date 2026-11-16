@@ -109,7 +109,7 @@ try{
   recipes.shotgun=v.particleSkills.active.at(-1)?.recipe;
   return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
  });
- assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',shotgun:'rainbow-falls'});
+ assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',shotgun:'rainbow-scatter'});
  assert.equal(vfxState.sky,'Moonlit particle sky');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});
