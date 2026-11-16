@@ -16,7 +16,7 @@ import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './isl
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
-import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs} from './combat-balance.js';
+import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE} from './combat-balance.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
@@ -346,6 +346,7 @@ function attack(world,profile,actor,body,context,now){
   // collision must use exactly the same range; no 11m decorative overshoot.
   if(channel)stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range))*channelReachMultiplier(weapon);
   stats.range=+(stats.range*quality.range).toFixed(2);
+  if(weapon.id==='black-cat')stats.range=SNIPER_RANGE; // Match the centre-camera ray at every rarity.
   // The narrow server collision tube must agree with the visible spray and
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
   stats.radius=forwardCastRadius(weapon,quality,stats.radius,channel);
@@ -578,6 +579,12 @@ function tickPersistentAttacks(world,actors,now,rng){
   ...(world.monsters||[]).filter(v=>v.active).map(value=>({kind:'monster',value})),
   ...actors.filter(v=>v.role==='fighter'&&!insideSafeZone(v.position)).map(value=>({kind:'player',value}))];
  for(const fx of attacks){
+  // Persistent hazards must not cause a final phantom hit AFTER the visual
+  // has vanished. Ordinary short projectiles still sweep on a late tick.
+  if(fx.kind==='projectile'&&fx.flightMs&&
+     fx.expiresAt>fx.createdAt+fx.flightMs&&now>=fx.expiresAt){
+    fx.lastAt=now;continue;
+  }
   const flight=fx.kind==='projectile'&&(Number(fx.flightMs)||0)>0?fx.flightMs:fx.expiresAt-fx.createdAt;
   const prev=Math.max(0,Math.min(1,(fx.lastAt-fx.createdAt)/flight));
   const next=Math.max(0,Math.min(1,(now-fx.createdAt)/flight));
