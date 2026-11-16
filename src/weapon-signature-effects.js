@@ -30,7 +30,7 @@ export class WeaponSignatureEffects {
    group=new THREE.Group(),balls=[];
   group.name='Ten actual coloured pellet spheres (server aligned)';
   rays.forEach((ray,i)=>{
-   const core=new THREE.Mesh(sphere,material(COLORS[i]));
+   const core=new THREE.Mesh(sphere,material(COLORS[i],.995));
    core.scale.setScalar((full?.57:.30)*scale);
    const halo=new THREE.Mesh(sphere,lineMat(COLORS[i],.24));
    halo.scale.setScalar((full?.88:.51)*scale);
@@ -159,7 +159,7 @@ export class WeaponSignatureEffects {
   }
   // It must read as ONE recognizable yellow giraffe, not a V-shaped dust trail.
   const model=new THREE.Group();model.add(giraffe);
-  const group=new THREE.Group();group.add(model);
+  const group=new THREE.Group();group.name='Visible spinning yellow giraffe model, outbound and returning';group.add(model);
   giraffe.scale.setScalar(5.4*quality);
   const orientation=qdir(dir),duration=2.3;
   this.add(group,duration,age=>{

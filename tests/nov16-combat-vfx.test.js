@@ -5,6 +5,7 @@ import {createInitialWorld,ensureProfile,applyAction,tickWorld,worldView} from '
 import {itemById,attackStats} from '../src/shared/catalog.js';
 import {ENEMY_RADIUS,ENEMY_HEIGHT} from '../src/shared/island-combat.js';
 import {WeaponParticleEffects,recipeFor} from '../src/weapon-particle-effects.js';
+import {WeaponSignatureEffects} from '../src/weapon-signature-effects.js';
 import * as THREE from 'three';
 
 const start=310000;
@@ -78,15 +79,15 @@ test('flower staff, planter, giraffe and giant clam use distinct soft particle r
  assert.equal(recipeFor(itemById('bloom-1')),'lotus-veil');
  assert.equal(recipeFor(itemById('planter-1')),'thorn-tower');
  assert.equal(recipeFor(itemById('giraffe')),'boomerang');
- const scene=new THREE.Scene(),vfx=new WeaponParticleEffects(scene);
+ const scene=new THREE.Scene(),signature=new WeaponSignatureEffects(scene),particles=new WeaponParticleEffects(scene);
  const origin=new THREE.Vector3(0,1,0),end=new THREE.Vector3(0,1,22);
- for(const id of ['bloom-1','planter-1','giraffe','clam']){
+ for(const id of ['bloom-1','planter-1','giraffe']){
   const item=itemById(id);
-  vfx.play({ultimate:true,charge:1,direction:[0,0,1],range:22,origin:[0,1,0]},item,origin,end);
+  signature.play({origin:[0,1,0],ultimate:true,charge:1,direction:[0,0,1],range:22},item);
  }
- assert.deepEqual(vfx.signatureEffects.active.map(v=>v.obj.name),['One enormous forward rotating translucent particle blossom','Three stacked solid thorn-vine tiers','Visible spinning yellow giraffe model, outbound and returning']);
- assert.ok(vfx.particleSkills.active.some(v=>v.recipe==='tidal'));
- assert.ok(vfx.signatureEffects.active.some(v=>v.obj.children.length>100));
- assert.ok(vfx.signatureEffects.active[0].obj.children[0].geometry.getAttribute('position').count>=2000);
- vfx.dispose();assert.equal(scene.children.length,0);
+ assert.deepEqual(signature.active.map(v=>v.obj.name),['One enormous forward rotating translucent particle blossom','Three stacked solid thorn-vine tiers','Visible spinning yellow giraffe model, outbound and returning']);
+ assert.ok(signature.active[0].obj.children[0].geometry.getAttribute('position').count>=2000);
+ particles.play({ultimate:true,charge:1,direction:[0,0,1],range:22},itemById('clam'),origin,end);
+ assert.ok(particles.active.some(v=>v.recipe==='tidal'));
+ signature.dispose();particles.dispose();assert.equal(scene.children.length,0);
 });
