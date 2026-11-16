@@ -38,8 +38,9 @@ test('the exact 90-degree clam cone cannot damage a monster before the original 
  assert.ok(world.monster.hp<before,'swept 90-degree wave intersects the body off centreline');
  const hits=worldView(world,caster.key,at+1801).damageEvents.filter(e=>e.target==='enemy');
  assert.equal(hits.length,1,'wave hit is not duplicated by invisible early AoE');
- assert.deepEqual(hits[0].position,[77,ENEMY_HEIGHT*.5,9],
-  'critical/damage numbers are anchored to the monster model');
+ assert.deepEqual(hits[0].position,
+  [world.monster.position[0],world.monster.position[1]+ENEMY_HEIGHT*.5,world.monster.position[2]],
+  'critical/damage numbers are anchored to the moving monster model, not the caster');
 });
 test('the warned clam cone must never damage actors beyond its 45-degree half-angle',()=>{
  const world=worldWith('clam',[89,0,7]),at=T+3000;
