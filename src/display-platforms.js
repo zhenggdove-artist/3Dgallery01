@@ -8,15 +8,17 @@ export class DisplayPlatforms{
   this.arena=arena;this.discs=[];
   this.geometry=new THREE.CylinderGeometry(1,1.06,.4,48);
   this.coneGeometry=new THREE.ConeGeometry(1,1,3,1);
+  this.highlight=new THREE.Mesh(new THREE.CylinderGeometry(1.015,1.07,.45,48),new THREE.MeshBasicMaterial({color:'#1676ff',transparent:true,opacity:.88,depthTest:true,depthWrite:false,toneMapped:false}));
+  this.highlight.name='GM selected disc (delete mode)';this.highlight.visible=false;arena.scene.add(this.highlight);this.selectedKey=null;
   this.material=new THREE.MeshPhysicalMaterial({color:'#E84887',roughness:.25,metalness:.1,clearcoat:.8,iridescence:.6,emissive:'#E84887',emissiveIntensity:.06});
   this.coneMaterial=new THREE.MeshStandardMaterial({color:'#777d85',roughness:.89,metalness:.06,flatShading:true});
  }
  sync(){
   const a=this.arena,defs=artworkDefinitions(a.world);
-  const signature=JSON.stringify([a.world?.artworkLayout||a.defaultLayout,a.world?.floatingPlatforms,defs.map(d=>d.id),a.artworks.size,defs.map(d=>a.artworks.get(d.id)?.userData.previewPlatformRadius??null)]);
+  const signature=JSON.stringify([a.world?.artworkLayout||a.defaultLayout,a.world?.floatingPlatforms,defs.map(d=>d.id),a.artworks.size,a.world?.removedPlatformIds,defs.map(d=>a.artworks.get(d.id)?.userData.previewPlatformRadius??null)]);
   if(signature===this.signature)return;this.signature=signature;
   const discs=[],cones=[],matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),scale=new THREE.Vector3();
-  const customIds=new Set((a.world?.customArtworks||[]).map(d=>d.id));
+  const customIds=new Set((a.world?.customArtworks||[]).map(d=>d.id)),removed=new Set(a.world?.removedPlatformIds||[]);
   for(const d of defs){
    if(customIds.has(d.id))continue;
    const root=a.artworks.get(d.id);if(!root)continue;
@@ -38,20 +40,23 @@ export class DisplayPlatforms{
    const chosenRadius=root.userData.previewPlatformRadius??l.platformRadius;
    const radius=Number.isFinite(chosenRadius)?THREE.MathUtils.clamp(chosenRadius,1.5,14):automatic;
    const position=[d.position[0],top-.2,d.position[2]];
-   discs.push({position,radius,top,artwork:d.id,display:true});
-   // The support belongs to the top disc, not the artwork or the ground.
-   const coneHeight=.62;
-   cones.push({position:[position[0],top+coneHeight*.5+.015,position[2]],radius:Math.min(.72,Math.max(.3,radius*.13)),height:coneHeight,artwork:d.id});
+   if(!removed.has('display:'+d.id)){
+    discs.push({position,radius,top,artwork:d.id,display:true,key:'display:'+d.id});
+    // Deleting the disc removes its support, never the artwork.
+    const coneHeight=.62;
+    cones.push({position:[position[0],top+coneHeight*.5+.015,position[2]],radius:Math.min(.72,Math.max(.3,radius*.13)),height:coneHeight,artwork:d.id});
+   }
    // Narrow jumpable access steps remain independent of artwork dimensions.
    const steps=Math.max(10,Math.ceil(top/1.7));
    const angle=Math.atan2(position[2],position[0]);
    for(let i=0;i<steps;i++){
     const t=(i+1)/(steps+1),dist=radius+1.2+(1-t)*4;
     const turn=angle+(1-t)*Math.PI*1.6,x=position[0]+Math.cos(turn)*dist,z=position[2]+Math.sin(turn)*dist,stepTop=Math.max(.15,top*t);
-    discs.push({position:[x,stepTop-.2,z],top:stepTop,radius:2.7,artwork:d.id,stair:true});
+    const key='stair:'+d.id+':'+i;
+    if(!removed.has(key))discs.push({position:[x,stepTop-.2,z],top:stepTop,radius:2.7,artwork:d.id,stair:true,key});
    }
   }
-  for(const d of a.world?.floatingPlatforms||[])discs.push({position:[d.position[0],d.position[1]-.2,d.position[2]],top:d.position[1],radius:d.radius*2,id:d.id});
+  for(const d of a.world?.floatingPlatforms||[])discs.push({position:[d.position[0],d.position[1]-.2,d.position[2]],top:d.position[1],radius:d.radius*2,id:d.id,key:'floating:'+d.id});
   for(const mesh of [this.mesh,this.pedestals]){mesh?.removeFromParent();mesh?.dispose();}
   const draw=(list,name,geometry,material)=>{
    if(!list.length)return null;
@@ -63,7 +68,18 @@ export class DisplayPlatforms{
   };
   this.mesh=draw(discs,'Original artwork platforms and access stairs',this.geometry,this.material);
   this.pedestals=draw(cones,'Gray triangular-cone artwork pedestals',this.coneGeometry,this.coneMaterial);
-  this.discs=discs;
+  this.discs=discs;this.select(this.selectedKey);
+ }
+ select(key){
+  const disc=this.discs.find(d=>d.key===key);
+  this.selectedKey=disc?.key||null;this.highlight.visible=!!disc;
+  if(disc){this.highlight.position.set(...disc.position);this.highlight.scale.set(disc.radius,1,disc.radius);}
+  return disc||null;
+ }
+ pick(ray){
+  if(!this.mesh)return null;
+  const hit=ray.intersectObject(this.mesh,false).find(h=>Number.isInteger(h.instanceId));
+  return hit?this.discs[hit.instanceId]||null:null;
  }
  ground(x,z,y){
   let h=0;

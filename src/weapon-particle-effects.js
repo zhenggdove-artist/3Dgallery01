@@ -126,17 +126,27 @@ void main(){
    // all formed from small independent points rather than solid summoned meshes.
    float a=atan(position.y,position.x)+spin*1.8+position.z*.27;
    float radius=length(position.xy),advance=uReach*smoothstep(.06,.78,t)*.35;
-   if(uStyle<.5){ // water: a travelling translucent tidal crest
-     p=vec3(position.x*1.8+sin(spin+v*12.)*.9,
-       1.1+abs(sin(position.x*.37+spin*1.6))*4.+v*3.,
-       position.z+advance); 
+   if(uStyle<.5){ // wide forward water nozzle with rolling wave-fronts
+     float stream=fract(v+uAge*(1.4+w*.8));
+     float front=stream*uReach*min(1.,uAge*2.9);
+     float spread=(.2+stream*(2.4+uCharge*1.8))*sqrt(w);
+     p=vec3(cos(a+sin(spin)*.6)*spread,
+       sin(a+spin*.28)*spread*.53+sin(front*.55+uAge*9.)*(.25+stream*.35),
+       front+position.z*.12);
+     alpha*=smoothstep(0.,.12,stream)*(1.-smoothstep(.78,1.,stream));
+ 
    }else if(uStyle<1.5){ // ice: tall swirls of icy shatter
      p=vec3(position.x*.8+sin(spin*.9)*.4,
        1.3+abs(position.y)*1.9+u*5.*t,
        position.z+advance+sin(v*TAU)*1.2);
-   }else if(uStyle<2.5){ // fire: ascending braided flame plumes
-     p=vec3(cos(a)*radius*.95,1.4+abs(position.y)*1.5+t*7.,
-       position.z+advance+sin(uAge*9.+u*23.)*.4);
+   }else if(uStyle<2.5){ // high-volume forward flamethrower
+     float jet=fract(v+uAge*(1.9+w*1.2));
+     float plume=(.28+jet*(2.5+uCharge*1.7))*sqrt(w);
+     p=vec3(cos(a+sin(spin)*.65)*plume+sin(jet*16.+uAge*13.)*.28,
+       sin(a+cos(spin)*.5)*plume*.75+sin(jet*19.+uAge*16.)*.32,
+       jet*uReach*min(1.,uAge*3.6)+position.z*.15);
+     alpha*=smoothstep(0.,.09,jet)*(1.-smoothstep(.72,1.,jet));
+
    }else if(uStyle<3.5){ // lightning: branching irregular bolts
      float zig=floor(position.z*3.+t*14.);
      p=vec3(position.x*.65+sin(zig*5.5+v*11.)*1.7,
@@ -200,7 +210,7 @@ void main(){
  // All point sprites stay fine; bright density comes from many particles.
  vec4 mv=modelViewMatrix*vec4(p,1.);
  gl_Position=projectionMatrix*mv;
- gl_PointSize=clamp((1.1+w*1.65)*30./max(2.,-mv.z),1.25,4.6);
+ gl_PointSize=clamp((uStyle<.5||(uStyle>1.5&&uStyle<2.5)?3.7+w*3.1:1.1+w*1.65)*34./max(2.,-mv.z),1.25,11.5);
  vColor=color*(.85+.23*sin(uAge*16.+v*31.));
  vAlpha=alpha*(.65+.3*uCharge);
 }
@@ -311,11 +321,12 @@ export class WeaponParticleEffects{
   const charged=!!data.ultimate,recipe=recipeFor(item);
   // Ordinary shots for all three cats are always rainbow and shotgun charged
   // produces a nearby, very wide waterfall instead of a distant beam.
-  if(!charged&&!['white-cat','black-cat','calico-cat'].includes(item.id))return;
-  const chosen=item.id==='calico-cat'?'rainbow-scatter':item.id?.includes('cat')?'rainbow':recipe;
-  const range=Math.max(3,Math.min(charged?48:160,source.distanceTo(end)));
-  const amount=charged?chosen==='fissure'?4500:chosen==='rainbow-scatter'?4500:chosen==='music'||chosen==='flies'||chosen==='food'?3900:3200:chosen==='rainbow-scatter'?2300:1200;
-  const duration=charged?chosen==='fissure'?3:chosen==='rainbow-scatter'?1.65:2.45:.65;
+  const elementalJet=['fire','water','wave'].includes(item.family)||item.id==='goldfish';
+  if(!charged&&!elementalJet&&!['white-cat','black-cat','calico-cat'].includes(item.id))return;
+  const chosen=item.id==='calico-cat'?'rainbow-scatter':item.id?.includes('cat')?'rainbow':item.id==='goldfish'?'tidal':recipe;
+  const range=Math.max(elementalJet?11:3,Math.min(charged?48:160,source.distanceTo(end)));
+  const amount=charged?chosen==='fissure'?4500:chosen==='rainbow-scatter'?4500:chosen==='music'||chosen==='flies'||chosen==='food'?3900:3200:elementalJet?2400:chosen==='rainbow-scatter'?2300:1200;
+  const duration=charged?chosen==='fissure'?3:chosen==='rainbow-scatter'?1.65:2.45:elementalJet?1.05:.65;
   const entry=this.make(chosen,item,{range,duration,amount,charge:charged?1:.75});
   entry.root.position.copy(source);
   const direction=end.clone().sub(source);
@@ -331,6 +342,7 @@ export class WeaponParticleEffects{
   }else{
     entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),direction.normalize());
     if(chosen!=='rainbow')entry.root.position.y=Math.max(.7,entry.root.position.y);
+    if(elementalJet)entry.root.scale.setScalar(charged?1.7:1.35);
   }
   if(chosen==='flies'&&Array.isArray(data.impactPoint)&&data.impactPoint.length===3){
     // Only for the first metre or so of its apparent pursuit: steer the cloud

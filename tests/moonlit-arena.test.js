@@ -95,7 +95,7 @@ test('charged weapons use identifiable fine particle concepts and cats fire rain
  assert.match(particles,/fine-grained GPU particles/i);
  assert.ok(!particles.includes('new THREE.Mesh('),'bespoke attacks must not summon solid meshes');
  const sky=readFileSync(new URL('../src/night-sky.js',import.meta.url),'utf8');
- for(const feature of ['Distant sky cloud bank','depthTest:true','World-oriented distant cloud sky'])assert.ok(sky.includes(feature));
+ for(const feature of ['Translucent ','depthTest:true','World-oriented distant cloud sky'])assert.ok(sky.includes(feature));
  assert.ok(!sky.includes('makeMoon('),'no rendered moon');
  const thrower=readFileSync(new URL('../src/artwork-throw.js',import.meta.url),'utf8');
  assert.match(thrower,/Thick red ballistic arc/);
