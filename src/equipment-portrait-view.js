@@ -60,9 +60,14 @@ export class EquipmentPortraitViewport{
   this.camera.aspect=width/height;
   this.camera.updateProjectionMatrix();
   const fov=THREE.MathUtils.degToRad(this.camera.fov);
-  const fitH=Math.max(.4,size.y)*.5/Math.tan(fov*.5);
-  const fitW=Math.max(.3,size.x)*.5/(Math.tan(fov*.5)*(width/height));
-  const depth=Math.max(fitH,fitW)*1.28+Math.max(0,size.z*.4);
+  // Temple's Mixamo bind-pose is extremely small (~0.01 scene units).
+  // Never impose a human-height world-unit minimum: it caused 6-pixel dolls.
+  const fitH=Math.max(.00001,size.y)*.5/Math.tan(fov*.5);
+  const fitW=Math.max(.00001,size.x)*.5/(Math.tan(fov*.5)*(width/height));
+  const depth=Math.max(fitH,fitW)*1.33+Math.max(0,size.z*.5);
+  this.camera.near=Math.max(.0000001,depth*.002);
+  this.camera.far=Math.max(2,depth*100);
+  this.camera.updateProjectionMatrix();
   this.camera.position.set(center.x,center.y+size.y*.015,center.z+depth);
   this.camera.lookAt(center);
   this.renderer.render(this.scene,this.camera);
