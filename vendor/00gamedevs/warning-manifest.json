@@ -1,0 +1,135 @@
+{
+  "origin": "https://00gamedevs.com",
+  "contentVersion": "e27df5c89f123862e204613ae4091360d70af8174351761c8e99972f06a6b7f1",
+  "downloadedFrom": "official AI catalog v2",
+  "packaging": "byte-identical original JavaScript, no imitation",
+  "assets": [
+    {
+      "number": 58,
+      "id": "spell-indicator-sector",
+      "url": "https://00gamedevs.com/downloads/effects/spell-indicator-sector.js",
+      "sha256": "aa0f1fe63d5c62986837583f5909b7bc153b7797accccc4352a0b772cd91a7fa",
+      "byteLength": 16295,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setProgress"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0,
+          "end": 0.15
+        },
+        "notes": "Fixed boundary; size is a radius, not a multiplier. Use an unscaled parent. Auto mode advances using update(dt) seconds, with speed fixed to 1. Manual mode advances fill only through setProgress(0..1); update still drives flow and the ending. Reaching 1 completes once; stop cancels without flashing. reset replays at the current transform. Changing warningDuration or progressMode restarts. finished means fully invisible, never an attack trigger. Flat or tilted planes only; no terrain fitting, collision, damage, external textures, particles, postprocessing or demo scheduling. See the bilingual integration guide.",
+        "properties": [
+          "group",
+          "settings",
+          "phase",
+          "finished",
+          "elapsed",
+          "duration",
+          "progress"
+        ],
+        "progressModes": [
+          "auto",
+          "manual"
+        ],
+        "timeUnit": "seconds",
+        "units": "local-scene-units",
+        "plane": "XZ",
+        "up": "+Y",
+        "origin": "sector-apex",
+        "forward": "+X",
+        "groundOffset": 0.01,
+        "completion": {
+          "flash": 0.06,
+          "fade": 0.09
+        },
+        "cancelFade": 0.12
+      },
+      "defaultOptions": {
+        "color": "#ff303e",
+        "size": 3,
+        "detail": 1,
+        "angleDeg": 90,
+        "warningDuration": 2,
+        "progressMode": "auto",
+        "speed": 1,
+        "density": 0.5
+      }
+    },
+    {
+      "number": 59,
+      "id": "spell-indicator-rectangle",
+      "url": "https://00gamedevs.com/downloads/effects/spell-indicator-rectangle.js",
+      "sha256": "96a957c4d4b4253f42c6411044563098b9a0115c804c17d2506088ccd4921c8a",
+      "byteLength": 16533,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setProgress"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0,
+          "end": 0.15
+        },
+        "notes": "Fixed rectangular boundary. length and width are full dimensions, not radii or multipliers. setOptions changes length, width and fillMode live without restarting or moving the center; switching fillMode preserves progress, including during the ending. Only warningDuration or progressMode changes restart. Auto uses update(dt) seconds; manual uses setProgress(0..1), with update driving flow and ending. Completion: 0.06s edge flash then 0.09s fade; cancel: 0.12s fade without flash. reset retains transform/settings. finished means fully invisible, never an attack trigger. Use an unscaled parent; flat or tilted planes only. No terrain fitting, collision, damage, external textures, particles, postprocessing or demo scheduling. User-approved simple-family exception to the 14-layer rule.",
+        "properties": [
+          "group",
+          "settings",
+          "phase",
+          "finished",
+          "elapsed",
+          "duration",
+          "progress"
+        ],
+        "progressModes": [
+          "auto",
+          "manual"
+        ],
+        "timeUnit": "seconds",
+        "units": "local-scene-units",
+        "plane": "XZ",
+        "up": "+Y",
+        "origin": "rectangle-center",
+        "groundOffset": 0.01,
+        "completion": {
+          "flash": 0.06,
+          "fade": 0.09
+        },
+        "cancelFade": 0.12,
+        "forward": "+X",
+        "lengthAxis": "X",
+        "widthAxis": "Z",
+        "fillModes": {
+          "forward": "From -X to +X across the full width",
+          "center-out": "From Z=0 toward both Z edges across the full length"
+        }
+      },
+      "defaultOptions": {
+        "color": "#ff303e",
+        "length": 6,
+        "width": 3,
+        "fillMode": "forward",
+        "detail": 1,
+        "warningDuration": 2,
+        "progressMode": "auto"
+      }
+    }
+  ]
+}
