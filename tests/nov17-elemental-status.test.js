@@ -89,10 +89,31 @@ test('model-only 30% filters and fire sprites restore original materials on expi
  visuals.sync(root,{burn:{until:T+3000},root:{until:T+1000}},T);
  assert.equal(visuals.entries.get(root).uniforms.alpha.value,.30);
  assert.ok(visuals.entries.get(root).flames);
+ const burnFX=visuals.entries.get(root).flames.pulses[0].fx;
+ assert.equal(burnFX.group.userData.vfxNumber,1);
+ assert.equal(burnFX.group.userData.vfxSource,'00GameDevs');
+ visuals.update(.5,T+500);
+ assert.ok(visuals.entries.get(root).flames.pulses.length<=3);
+ assert.ok(visuals.entries.get(root).flames.group.parent===root);
  assert.equal(visuals.entries.get(root).uniforms.color.value.getHexString(),'69bf49');
  visuals.update(.25,T+1200);
  assert.equal(visuals.entries.get(root).uniforms.alpha.value,0);
  visuals.update(.25,T+3000);
  assert.equal(mesh.material,original);
  visuals.dispose();mesh.geometry.dispose();original.dispose();
+});
+
+
+test('official #01 burn VFX matches the exact downloaded 00GameDevs source bytes',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const {createHash}=await import('node:crypto');
+ const manifest=JSON.parse(await readFile(new URL('../vendor/00gamedevs/fireball-source.json',import.meta.url)));
+ const original=await readFile(new URL('../vendor/00gamedevs/source/fireball.js',import.meta.url));
+ const header=Buffer.from('blob '+original.length+'\0');
+ const blobSha=createHash('sha1').update(header).update(original).digest('hex');
+ assert.equal(manifest.number,1);
+ assert.equal(manifest.slug,'fireball');
+ assert.equal(manifest.modified_original,false);
+ assert.equal(blobSha,manifest.source_git_blob_sha1);
+ assert.equal(original.toString('utf8').includes('00GameDevs exported assets — original code only'),true);
 });
