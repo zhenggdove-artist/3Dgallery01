@@ -110,7 +110,7 @@ export class WeaponVFX{
   if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
   // Never re-aim or translate a server-approved trajectory to a cosmetic muzzle;
   // rendered bullets must occupy the same world-space volume as damage rays.
-  if(isChannelStaff(item)&&!data.ultimate&&!data.channel){
+  if(isChannelStaff(item)&&item.id!=='clam'&&!data.ultimate&&!data.channel){
    this.staffOrb(data,item,origin,direction);
    return;
   }
@@ -128,7 +128,7 @@ export class WeaponVFX{
   if(data.ultimate&&(item.family==='petal'||item.id==='giraffe'))return;
   // Orient actual 00GameDevs flame/tidal presets along the weapon muzzle.
   // The companion GPU streams travel from the player toward the target.
-  const spray=item.family==='fire'||item.family==='water'||item.family==='wave'||item.id==='goldfish'||item.id==='clam';
+  const spray=item.family==='fire'||item.family==='water'||item.family==='wave'||item.id==='goldfish'||item.id==='clam'&&data.ultimate;
   if(spray&&!['white-cat','black-cat','calico-cat'].includes(item.id)){
    const fireJet=item.family==='fire',effect=fireJet?'flame-surge':'tidal-surge';
    for(let i=0;i<(item.id==='clam'&&data.ultimate?10:data.ultimate?2:1);i++){

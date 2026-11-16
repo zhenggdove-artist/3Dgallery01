@@ -42,6 +42,7 @@ test('full-charge fire and water staff streams point straight along server aim; 
 test('initial clam short press uses normal swing effects rather than a 3D spell orb',()=>{
  const scene=new THREE.Scene(),vfx=new WeaponVFX(scene),item=itemById('clam');
  vfx.play(attack(item),item);
- assert.equal(vfx.staffOrbs.length,1===0?1:0,'clam retains its melee normal attack');
+ assert.equal(vfx.staffOrbs.length,0,'clam retains a normal melee attack');
+ assert.ok(vfx.active.some(x=>x.id==='shockwave'),'starter clam normal swing must display its normal shockwave');
  vfx.dispose();
 });
