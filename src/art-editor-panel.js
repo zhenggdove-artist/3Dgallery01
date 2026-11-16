@@ -30,3 +30,20 @@ export function editorPanelMarkup(appearance,platformRadius,originalArtwork){
    <button data-action="save">儲存預設值</button><button data-action="cancel">取消／關閉</button>
    <button data-action="export">匯出配置</button></div>`;
 }
+
+export function playerArtworkAppearanceMarkup(record,layout,escape){
+ const appearance={depth:0,brightness:1,contrast:1,saturation:1,blackPoint:0,tint:'#ffffff',...layout?.appearance};
+ const fields=appearanceRows.map(([key,label,min,max])=>
+  `<label class="art-editor-field"><span class="art-field-name">${label}</span>
+   <span class="art-editor-values"><input type="number" name="${key}" min="${min}" max="${max}" step=".01" value="${appearance[key]}" required></span>
+  </label>`).join('');
+ return `<form class="item art-bomb-appearance" data-form="art-bomb-appearance">
+   <h3>${escape(record.title)} · 作品調色</h3>
+   <input type="hidden" name="id" value="${escape(record.id)}">
+   <input type="hidden" name="revision" value="${layout?.revision||1}">
+   <div class="art-editor-fields">${fields}
+    <label class="art-editor-field"><span class="art-field-name">色調</span><span class="art-editor-values"><input type="color" name="tint" value="${appearance.tint}"></span></label>
+   </div>
+   <button class="panel-button" type="submit">儲存作品外觀</button>
+  </form>`;
+}
