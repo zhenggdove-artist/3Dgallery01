@@ -3,8 +3,8 @@ import * as THREE from 'three';
 // Explicit GM-only mode: select an instanced circular platform, highlight blue,
 // DELETE on the authoritative server, ESC to restore normal game interaction.
 export class PlatformDeleteEditor {
- constructor({canvas,camera,arena,ui,editor,isGM,send,controller}){
-  Object.assign(this,{canvas,camera,arena,ui,editor,isGM,send,controller});
+ constructor({canvas,camera,arena,ui,editor,isGM,send,controller,cancelBuild}){
+  Object.assign(this,{canvas,camera,arena,ui,editor,isGM,send,controller,cancelBuild});
   this.active=false;this.selectedKey=null;this.deleting=false;
   this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();
   const typing=e=>/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName)||e.target?.isContentEditable;
@@ -43,6 +43,7 @@ export class PlatformDeleteEditor {
  begin(){
   if(this.editor.dirty){this.ui.toast('請先儲存或取消作品編輯');return;}
   if(this.editor.selected)this.editor.close();
+  if(this.ui.buildKind)this.cancelBuild?.();
   if(this.ui.panelName)this.ui.closePanel();
   this.active=true;this.selectedKey=null;this.ui.platformDeleteMode=true;
   this.controller()?.setEnabled(false);
