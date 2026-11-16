@@ -51,7 +51,16 @@ test('higher quality increases strike volume, damage and debuff lifespan',()=>{
  assert.ok(high.attackEvent.radius>low.attackEvent.radius);
  tickWorld(a.world,{now:start+3000,actors:[actor],activeFighters:0,rng:()=>.5});
  tickWorld(b.world,{now:start+3000,actors:[actor],activeFighters:0,rng:()=>.5});
- assert.ok(b.world.monster.effects?.burn?.until>a.world.monster.effects?.burn?.until);
+ assert.equal(a.world.monster.effects?.burn,undefined,'normal attacks must not burn');
+ assert.equal(b.world.monster.effects?.burn,undefined,'higher-tier normals must not burn either');
+ assert.ok(attack(a.world,start+4000,{phase:'charge'}).charging);
+ assert.ok(attack(b.world,start+4000,{phase:'charge'}).charging);
+ assert.equal(attack(a.world,start+9000,{charge:1}).attackEvent?.ultimate,true);
+ assert.equal(attack(b.world,start+9000,{charge:1}).attackEvent?.ultimate,true);
+ tickWorld(a.world,{now:start+9400,actors:[actor],activeFighters:0,rng:()=>.5});
+ tickWorld(b.world,{now:start+9400,actors:[actor],activeFighters:0,rng:()=>.5});
+ assert.ok(a.world.monster.effects?.burn?.until>start+9400,'charged lower rarity applies burn on contact');
+ assert.ok(b.world.monster.effects?.burn?.until>a.world.monster.effects?.burn?.until,'rarity lengthens charged burn');
 });
 test('giraffe boomerang damages monster on both outbound and return independently',()=>{
  const {world}=game('giraffe');
