@@ -189,7 +189,7 @@ test('all cat guns keep their advertised normal and charged range and deal PvP d
   const guns=[
     ['white-cat',22,28,18,25],
     ['black-cat',80,140,65,85],
-    ['calico-cat',9,12,7,10]
+    ['calico-cat',10,17,8,14]
   ];
   for(const [id,range,chargedRange,normalDistance,chargedDistance] of guns){
     const weapon=WEAPONS.find(w=>w.id===id);

@@ -7,11 +7,11 @@ export const PARTICLE_RECIPES=Object.freeze({
   'accordion':'music','giraffe':'boomerang','goldfish':'jet',
   'clam':'shells','fan':'gust','telephone':'echo','jellybrella':'jelly',
   water:'tidal',ice:'glacier',fire:'inferno',lightning:'storm',beam:'prism',
-  petal:'petals',wave:'singularity',saber:'fissure',whip:'thorn',
-  swatter:'flies',pan:'food',planter:'worldtree',palm:'monsoon'
+  petal:'lotus-veil',wave:'singularity',saber:'fissure',whip:'thorn',
+  swatter:'flies',pan:'food',planter:'thorn-tower',palm:'monsoon'
 });
 export const recipeFor=item=>PARTICLE_RECIPES[item?.id]||PARTICLE_RECIPES[item?.family]||'prism';
-const MAX_PARTICLES_DESKTOP=4600,MAX_PARTICLES_TOUCH=1900;
+const MAX_PARTICLES_DESKTOP=5800,MAX_PARTICLES_TOUCH=2400;
 function rand(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
 function recipePalette(recipe,item){
  const palettes={
@@ -36,6 +36,8 @@ function recipePalette(recipe,item){
  jelly:['#a3eaff','#c2acff','#eaffff','#f6a3ff'],
  ghost:['#cfdafa','#ffdd87','#afa5ff','#f1f6ff'],
  boomerang:['#ffe4ab','#db954b','#f0f6ad','#ecb27b'],
+ 'lotus-veil':['#ff9fd7','#ffd4ed','#f4bbff','#ffe1fa','#b8e9ff'],
+ 'thorn-tower':['#84ffab','#3be49b','#bdfc73','#e8fff1'],
  jet:['#94eaff','#f7c85f','#eaf9ff','#45a9f9'],
  shells:['#ffd6ed','#f3bfe1','#a7d7ff','#f7f1d7']
  };
@@ -50,7 +52,7 @@ function modeFor(recipe){
  if(recipe==='rainbow-scatter')return 6;
  return 7;
 }
-const styleIds=['tidal','glacier','inferno','storm','prism','petals','singularity','thorn','worldtree','monsoon','gust','echo','jelly','ghost','boomerang','jet','shells'];
+const styleIds=['tidal','glacier','inferno','storm','prism','petals','singularity','thorn','worldtree','monsoon','gust','echo','jelly','ghost','boomerang','jet','shells','lotus-veil','thorn-tower'];
 function styleFor(recipe){const index=styleIds.indexOf(recipe);return index<0?4:index;}
 const vertex=`
 attribute vec3 seed;
@@ -110,17 +112,19 @@ void main(){
      alpha*=smoothstep(.1,.3,t)*(1.-smoothstep(.6,.88,t));
    }
  }else if(uMode<6.5){
-   // Calico shotgun pellets diverge into volumetric 3D cones, not flat sheets.
+   // Exactly ten coloured bullets, arranged in the same 5x2 lanes as
+   // authoritative calicoPellets(). Each is a dense, distinct glowing core.
    float charged=step(.9,uCharge);
-   float lanes=mix(5.,8.,charged),pellet=floor(u*lanes);
-   float a=((pellet+.5)/lanes-.5)*mix(1.02,1.45,charged);
-   float front=uReach*min(1.,t*1.85);
-   float radius=(.2+front*mix(.09,.16,charged))*sqrt(w);
-   float ph=v*TAU+spin*.7+pellet*.67;
-   p=vec3(sin(a)*front+cos(ph)*radius,
-     1.45+sin(ph)*radius+(v-.5)*front*.17,
-     max(.1,front-1.6*w+position.z*.45));
-   alpha*=1.-smoothstep(.72,1.,t);
+   float pellet=floor(u*10.),col=mod(pellet,5.)-2.,row=floor(pellet/5.)*2.-1.;
+   float front=uReach*min(1.,t*2.4);
+   float spreadX=mix(.12,.16,charged),spreadY=mix(.055,.10,charged);
+   float normalization=inversesqrt(1.+pow(col*spreadX,2.)+pow(row*spreadY,2.));
+   float theta=v*TAU;
+   float bulletRadius=(.055+w*.17)*mix(1.,1.9,charged);
+   p=vec3((col*spreadX*front+cos(theta)*bulletRadius)*normalization,
+     (row*spreadY*front+sin(theta)*bulletRadius)*normalization,
+     front*normalization-w*mix(.24,.5,charged));
+   alpha*=1.-smoothstep(.82,1.,t);
  }else{
    // Individual weapon families have different silhouette, path and movement,
    // all formed from small independent points rather than solid summoned meshes.
@@ -190,27 +194,46 @@ void main(){
      p=vec3(position.x*.8+sin(spin+v*15.)*.4,
        2.2+abs(position.y)*.75+sin(uAge*4.+w*10.)*.8,
        position.z*.8+advance);
-   }else if(uStyle<14.5){ // giraffe-shaped boomerang in a wide return arc
+   }else if(uStyle<14.5){ // giant returning V-shaped light-particle boomerang
      float travel=sin(t*3.141593)*uReach;
-     p=vec3(sin(t*6.283+position.z*.25)*4.+position.x*.4,
-       3.+position.y*.45+abs(sin(spin))*2.,travel+position.z*.22);
+     float arm=u<.5?-1.:1.,along=v*7.5;
+     vec2 blade=vec2(arm*along,2.2-along*.72);
+     float rotation=uAge*5.7;
+     vec2 spinning=mat2(cos(rotation),-sin(rotation),sin(rotation),cos(rotation))*blade;
+     p=vec3(spinning.x+(w-.5)*.36,3.2+spinning.y+(w-.5)*.4,
+       travel+along*.7+sin(v*TAU+spin)*.2);
    }else if(uStyle<15.5){ // goldfish: dense streaming water nozzle
      p=vec3(position.x*.48+sin(spin*2.)*.45,
        2.6+position.y*.32+sin(spin+position.z)*.3,
        position.z+advance*1.8);
-   }else{ // rotating giant clam shells, released in rippling groups
+   }else if(uStyle<16.5){ // giant clam shells
      float shell=floor(u*6.);
      p=vec3(cos(a+shell*1.047)*radius*1.5,
        2.4+sin(a+shell*1.047)*radius*.9,
        position.z*.65+advance*1.4);
+   }else if(uStyle<17.5){ // airy, slowly revolving nine-petal flower, no solid mesh
+     float blade=floor(u*9.),angle=blade*(TAU/9.)+uAge*.67;
+     float depth=sqrt(v),spread=(w-.5)*(1.25+1.45*sin(depth*3.141593));
+     vec2 local=vec2(.35+depth*4.4,spread);
+     p=vec3(cos(angle)*local.x-sin(angle)*local.y,
+       sin(angle)*local.x+cos(angle)*local.y,
+       uReach*.46*smoothstep(0.,.8,t)+sin(v*TAU+uAge)*.35);
+     alpha*=.64*(1.-smoothstep(.85,1.,depth));
+   }else{ // three rising braided thorn tiers
+     float level=floor(u*3.),turn=fract(u*3.);
+     float angle=turn*TAU*2.6+uAge*2.5+level*1.65;
+     float r=1.8+.5*sin(turn*TAU)+w*.65;
+     p=vec3(cos(angle)*r,1.1+level*3.1+turn*3.+t*2.2,
+       sin(angle)*r+uReach*.1);
+     alpha*=.86;
    }
-   p.y=max(.35,p.y);
+   if(uStyle<16.5)p.y=max(.35,p.y);
    alpha*=.95;
  }
  // All point sprites stay fine; bright density comes from many particles.
  vec4 mv=modelViewMatrix*vec4(p,1.);
  gl_Position=projectionMatrix*mv;
- gl_PointSize=clamp((uStyle<.5||(uStyle>1.5&&uStyle<2.5)?3.7+w*3.1:1.1+w*1.65)*34./max(2.,-mv.z),1.25,11.5);
+ gl_PointSize=clamp((uMode>5.5&&uMode<6.5?3.8+w*3.7:uStyle<.5||(uStyle>1.5&&uStyle<2.5)?3.7+w*3.1:1.1+w*1.65)*34./max(2.,-mv.z),1.25,12.5);
  vColor=color*(.85+.23*sin(uAge*16.+v*31.));
  vAlpha=alpha*(.65+.3*uCharge);
 }
@@ -277,7 +300,7 @@ function populate(recipe,amount,range,palette){
      }
    }else if(mode===6){
      // Each pellet owns a full XYZ cloud, rather than a flat waterfall.
-     x=(v-.5)*1.8;y=(w-.5)*1.8;z=(random()-.5)*1.4;ci=Math.floor(u*7);
+     x=0;y=0;z=0;ci=Math.floor(u*10)%palette.length;
    }else{
      const swirl=recipe==='storm'?5:recipe==='inferno'?3:recipe==='glacier'?8:recipe==='tidal'?3:6;
      const segment=Math.floor(u*swirl);
@@ -323,9 +346,9 @@ export class WeaponParticleEffects{
   // produces a nearby, very wide waterfall instead of a distant beam.
   const elementalJet=['fire','water','wave'].includes(item.family)||item.id==='goldfish';
   if(!charged&&!elementalJet&&!['white-cat','black-cat','calico-cat'].includes(item.id))return;
-  const chosen=item.id==='calico-cat'?'rainbow-scatter':item.id?.includes('cat')?'rainbow':item.id==='goldfish'?'tidal':recipe;
-  const range=Math.max(elementalJet?11:3,Math.min(charged?48:160,source.distanceTo(end)));
-  const amount=charged?chosen==='fissure'?4500:chosen==='rainbow-scatter'?4500:chosen==='music'||chosen==='flies'||chosen==='food'?3900:3200:elementalJet?2400:chosen==='rainbow-scatter'?2300:1200;
+  const chosen=item.id==='calico-cat'?'rainbow-scatter':item.id?.includes('cat')?'rainbow':item.id==='goldfish'?'tidal':item.id==='clam'&&charged?'tidal':recipe;
+  const range=chosen==='rainbow-scatter'?Math.max(2,Number(data.range)||10):Math.max(elementalJet?11:3,Math.min(charged?48:160,source.distanceTo(end)));
+  const amount=charged?['fissure','rainbow-scatter','boomerang','lotus-veil','thorn-tower'].includes(chosen)?5600:chosen==='music'||chosen==='flies'||chosen==='food'?3900:3200:elementalJet?2400:chosen==='rainbow-scatter'?3200:1200;
   const duration=charged?chosen==='fissure'?3:chosen==='rainbow-scatter'?1.65:2.45:elementalJet?1.05:.65;
   const entry=this.make(chosen,item,{range,duration,amount,charge:charged?1:.75});
   entry.root.position.copy(source);
@@ -335,10 +358,12 @@ export class WeaponParticleEffects{
     direction.y=0;direction.normalize();
     entry.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.atan2(direction.x,direction.z));
   }else if(chosen==='rainbow-scatter'){
-    entry.root.position.y=Math.max(.25,source.y);
-    direction.y=0;direction.normalize();
-    entry.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.atan2(direction.x,direction.z));
-    // A forward 3D scatter cloud, never a flat waterfall.
+    // Forward and elevation are EXACTLY server-owned; the visible bullets
+    // cannot point at a monster the authoritative rays did not approach.
+    entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),new THREE.Vector3(...data.direction).normalize());
+  }else if(chosen==='thorn-tower'){
+    entry.root.position.copy(end);entry.root.position.y=Math.max(.15,end.y);
+    entry.root.quaternion.identity();
   }else{
     entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),direction.normalize());
     if(chosen!=='rainbow')entry.root.position.y=Math.max(.7,entry.root.position.y);

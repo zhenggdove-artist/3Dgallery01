@@ -8,6 +8,11 @@ export function applyStatus(world,source,target,weapon,shot,now){
  const resolved={...shot,shooter:source.key,damage:shot.damage/10};
  applyWeaponTraits(game,{...weapon,damage:weapon.damage/10},resolved,now);
  for(const id of source.fusion?.[weapon.id]?.effects||[]){const item=equipmentById(id);if(item)applyWeaponTraits(game,item,{...shot,shooter:source.key},now);}
+ if(weapon.family==='planter'&&!weapon.exotic){
+  target.effects??={};
+  const until=now+(shot.charge>=1?5000:2800),old=target.effects.root;
+  target.effects.root={owner:source.key,power:1,until:Math.max(old?.until||0,until),next:now+1000};
+ }
  source.hp=Math.min(source.maxHp,source.maxHp-game.hits[source.key]*10);
  if(resolved.knockback)target.impulse={id:now,vector:resolved.knockback};
 }

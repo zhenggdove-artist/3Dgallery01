@@ -88,8 +88,8 @@ test('charged weapons use identifiable fine particle concepts and cats fire rain
  }
  const shotgun=WEAPONS.find(w=>w.id==='calico-cat');
  assert.equal(shotgun.firstPerson,false);
- assert.equal(attackStats(shotgun,0).range,9);
- assert.equal(attackStats(shotgun,1).range,12);
+ assert.equal(attackStats(shotgun,0).range,10);
+ assert.equal(attackStats(shotgun,1).range,17);
  const particles=readFileSync(new URL('../src/weapon-particle-effects.js',import.meta.url),'utf8');
  assert.match(particles,/THREE\.Points\(/);
  assert.match(particles,/fine-grained GPU particles/i);
