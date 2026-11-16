@@ -306,6 +306,15 @@ function fuse(world,profile,body,rng){
 }
 
 function attack(world,profile,actor,body,context,now){
+  // A release must clear server collision objects even while stunned, frozen,
+  // or inside the previous hit-reaction recovery window.
+  if(body.phase==='channel-stop'){
+   profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;
+   profile.lastChannelPulseAt=0;
+   world.persistentAttacks=(world.persistentAttacks||[]).filter(
+    fx=>!(fx.owner===actor.key&&fx.channel));
+   return {channeling:false,channelStopped:{owner:actor.key,time:now}};
+  }
   if(body.phase!=='channel-stop'&&(effectActive(profile,'freeze',now)||effectActive(profile,'paralysis',now)))
    return {error:'Paralysed: attacks disabled'};
 
@@ -322,10 +331,7 @@ function attack(world,profile,actor,body,context,now){
     profile.lastChannelPulseAt=now;
     return {channeling:true};
   }
-  if(body.phase==='channel-stop'){
-    profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;
-    profile.lastChannelPulseAt=0;return {channeling:false};
-  }
+
   const channel=body.phase==='channel';
   if(channel&&(!isChannelStaff(weapon)||profile.channelWeapon!==weapon.id||
      !profile.channelStartedAt||now-(profile.lastChannelPulseAt||profile.channelStartedAt)>6000))
@@ -375,7 +381,7 @@ function attack(world,profile,actor,body,context,now){
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
       radius:stats.radius,area,damage:stats.damage+bonus*.1,pvpDamage,charge,
-      qualityDuration:quality.duration,qualityScale:quality.visual,
+      qualityDuration:quality.duration,qualityScale:quality.visual,channel,
       pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
       hits:[],pelletHits:{},areaResolved:false,
       createdAt:now,lastAt:now,expiresAt:now+duration
@@ -475,7 +481,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
   if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
   if(activeFighters>0&&!world.monster.active&&now>=world.monster.nextSpawnAt){const spawn=MONSTER_SPAWNS[Math.floor(rng()*MONSTER_SPAWNS.length)],variant=['warden','drowned','signal'][Math.floor(rng()*3)],maxHp={warden:420,drowned:520,signal:360}[variant];world.monster={active:true,id:id(),variant,position:[...spawn],hp:maxHp,maxHp,generation:(world.monster.generation||0)+1,spawnedAt:now,nextAttackAt:now+2_000,nextSpawnAt:now+ECONOMY.monsterIntervalMs};changed=true;}
-  if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!effectActive(monster,'stun',now)||!!effectActive(monster,'paralysis',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
+  if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),silenced:!!effectActive(monster,'paralysis',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
  const confused=effectActive(monster,'confuse',now);
  if(confused){
   const angle=(now/210+(monster.generation||0)*2.4)%(Math.PI*2);
@@ -494,7 +500,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
     if(insideArtSanctuary(mob.position)){mob.position=[...MONSTER_SPAWNS[(mob.slot||0)%MONSTER_SPAWNS.length]];}
     mob.bodyHeight=ENEMY_HEIGHT;mob.bodyRadius=ENEMY_RADIUS;
     const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));
-    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!effectActive(mob,'stun',now)||!!effectActive(mob,'paralysis',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
+    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),silenced:!!effectActive(mob,'paralysis',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
      move:(target,distance)=>{
        const confused=effectActive(mob,'confuse',now);
        if(confused){
