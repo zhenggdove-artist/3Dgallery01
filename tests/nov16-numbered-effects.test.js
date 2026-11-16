@@ -268,6 +268,6 @@ test('charged sword server reach and radius are both doubled and the #59 preview
  assert.equal(fx.footprint.shape,'rectangle');
  assert.ok(Math.abs(fx.footprint.length-stats.range)<1e-8);
  assert.ok(Math.abs(fx.footprint.width-stats.radius*2)<1e-8);
- assert.ok(Math.abs(fx.footprint.position.z-(muzzle[2]+stats.range/2))<1e-8, JSON.stringify({footprint:fx.footprint,expected:muzzle[2]+stats.range/2,range:stats.range}));
+ assert.ok(Math.abs(fx.footprint.position[2]-(muzzle[2]+stats.range/2))<1e-8);
  fx.dispose();
 });
