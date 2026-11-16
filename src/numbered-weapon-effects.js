@@ -121,7 +121,7 @@ export class NumberedWeaponEffects {
    return true;
   }
   const quality=Math.max(.5,Math.min(2.5,Number(event.qualityScale)||1));
-  const normalSize=(spec.number===26?84:spec.number===38?2:spec.number===48?2:1.2)*quality;
+  const normalSize=(spec.number===26?2:spec.number===38?2:spec.number===48?2:1.2)*quality;
   // The Ice Lance / erupting pillar #70 must be exactly half the previous
   // display dimensions, irrespective of rarity/fusion quality.
   let size=spec.number===70?normalSize*.5:normalSize;
@@ -155,6 +155,8 @@ export class NumberedWeaponEffects {
   this.active.push(entry);
   if(this.active.length>24)this.remove(this.active[0]);
   this.align(entry);
+  // The vendor clamps 'size' at 2. Double the physical world-space group.
+  if(spec.number===26)fx.group.scale.setScalar(2);
   if(spec.number===31){
    // Three independently authored ORIGINAL #31 crown instances, not a
    // synthetic thorn mesh; aligned vertically and moved as one projectile.
@@ -399,6 +401,7 @@ export class NumberedWeaponEffects {
     e.stopping=true;e.fx.stop();
    }
    e.fx.update(dt);
+   if(e.spec.number===26)e.fx.group.scale.setScalar(2);
    if((!e.key&&e.fx.finished)||e.age>=e.duration){
     this.remove(e);continue;
    }
