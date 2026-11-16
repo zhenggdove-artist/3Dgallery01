@@ -80,7 +80,7 @@ test('creator can edit uploaded artwork colour, while another player cannot',()=
 });
 
 test('charged weapons use identifiable fine particle concepts and cats fire rainbows',()=>{
- const idToRecipe={accordion:'music','white-cat':'rainbow','black-cat':'rainbow','calico-cat':'rainbow-falls',giraffe:'boomerang',goldfish:'jet'};
+ const idToRecipe={accordion:'music','white-cat':'rainbow','black-cat':'rainbow','calico-cat':'rainbow-scatter',giraffe:'boomerang',goldfish:'jet'};
  for(const [id,expected] of Object.entries(idToRecipe))assert.equal(recipeFor(WEAPONS.find(w=>w.id===id)),expected);
  for(const [family,expected] of Object.entries({saber:'fissure',swatter:'flies',pan:'food',wave:'singularity'})){
   const w=WEAPONS.find(w=>w.family===family&&!w.exotic);

@@ -66,6 +66,7 @@ test('WRITE server journey accepts begin, drink and creates a persistent plant',
 
 test('normal weapon attacks shake/damage player buildings and eventually destroy them',()=>{
  const world=createInitialWorld(1000),attacker=actor('attacker',[75,0,0]);
+ ensureProfile(world,attacker.key,attacker.name,attacker.color,1000).equipment.weapon='tide-1';
  world.structures=[{id:'player-cube',kind:'cube',owner:'owner',hp:20,position:[75,0,6],rotation:0,variant:1,createdAt:1000}];
  const direction=[0,0,1];
  const first=applyAction(world,attacker,{action:'attack',direction,charge:0},{now:5000,actors:[]});
@@ -82,6 +83,7 @@ test('normal weapon attacks shake/damage player buildings and eventually destroy
 
 test('fully charged area spell damages two opponents and player-built architecture at one target',()=>{
  const world=createInitialWorld(1000),caster=actor('caster',[75,0,0]);
+ ensureProfile(world,caster.key,caster.name,caster.color,1000).equipment.weapon='tide-1';
  const weapon=WEAPONS.find(w=>w.id==='tide-1');
  const a=chargedArea(weapon,[75,1,0],[0,0,1],attackStats(weapon,1));
  assert.equal(a.mode,'area');
@@ -141,6 +143,7 @@ test('GM /RESET clears all non-GM artworks, preserves GM and original works, and
 });
 test('uploaded art stays projectile equipment, never a damageable BUILD structure',()=>{
  const world=createInitialWorld(1000),owner=actor('owner'),attacker=actor('attacker');
+ ensureProfile(world,attacker.key,attacker.name,attacker.color,1000).equipment.weapon='tide-1';
  const created=applyAction(world,owner,{action:'publish-art-bomb',artwork:{title:'Bomb',mediaId:'saved',position:[75,1.5,0]},verifiedArtMedia:{id:'saved',type:'image/png'},size:3},{now:2000});
  assert.ok(created.artwork,JSON.stringify(created));
  world.structures=[{id:'breakable',kind:'wall',owner:'owner',hp:20,position:[75,0,5],rotation:0,createdAt:1000}];
@@ -158,6 +161,7 @@ test('uploaded art stays projectile equipment, never a damageable BUILD structur
 
 test('regular strikes damage every player-built structure even after hitting a fighter',()=>{
  const world=createInitialWorld(1000),caster=actor('caster',[75,0,0]),target=actor('target',[75,0,3]);
+ ensureProfile(world,caster.key,caster.name,caster.color,1000).equipment.weapon='tide-1';
  ensureProfile(world,target.key,target.name,target.color,1000);
  world.structures=[{id:'shared-cube',kind:'cube',owner:'builder',position:[75,0,5],hp:140,maxHp:140,rotation:0,createdAt:1000}];
  const strike=applyAction(world,caster,{action:'attack',direction:[0,0,1],charge:0},{now:5000,actors:[caster,target]});
@@ -168,6 +172,7 @@ test('regular strikes damage every player-built structure even after hitting a f
 });
 test('a fully charged area hits every player-built structure in its radius',()=>{
  const world=createInitialWorld(1000),caster=actor('caster',[75,0,0]);
+ ensureProfile(world,caster.key,caster.name,caster.color,1000).equipment.weapon='tide-1';
  const weapon=WEAPONS.find(w=>w.id==='tide-1');
  const area=chargedArea(weapon,[75,1,0],[0,0,1],attackStats(weapon,1));
  world.structures=[

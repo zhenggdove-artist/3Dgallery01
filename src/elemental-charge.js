@@ -17,7 +17,7 @@ export function chargePalette(item){
 export class ElementalCharge{
  constructor(scene){
   this.scene=scene;this.active=false;this.kind='';
-  const n=160,this.position=new Float32Array(n*3),colors=new Float32Array(n*3);
+  const n=160;this.position=new Float32Array(n*3);const colors=new Float32Array(n*3);
   this.geometry=new THREE.BufferGeometry();
   this.geometry.setAttribute('position',new THREE.BufferAttribute(this.position,3).setUsage(THREE.DynamicDrawUsage));
   this.color=new THREE.BufferAttribute(colors,3);this.geometry.setAttribute('color',this.color);
