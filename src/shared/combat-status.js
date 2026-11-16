@@ -34,11 +34,11 @@ export function tickStatus(target,now,deal){let changed=false;for(const [key,e]o
 
 // Independent of the legacy RELETTER traits, so the same status rules apply
 // to both human fighters and enemy actors on server-authorised contact.
-export function applyElementalHit(target,source,weapon,now){
+export function applyElementalHit(target,source,weapon,now,scale=1){
  if(!target||target.admin||target.hp<=0||!weapon)return null;
  target.effects??={};target.effectLocks??={};
- const e=target.effects,locks=target.effectLocks,owner=source?.key||'environment';
- const put=(key,duration,power=0,cooldown=0)=>{
+ const e=target.effects,locks=target.effectLocks,owner=source?.key||'environment',strength=Math.max(.05,Math.min(1,Number(scale)||1));
+ const put=(key,duration,power=0,cooldown=0)=>{duration=Math.max(150,Math.round(duration*strength));power*=strength;
   if(cooldown&&(locks[key]||0)>now)return null;
   e[key]={owner,power,until:now+duration,next:now+1000};
   if(cooldown)locks[key]=now+cooldown;
@@ -56,7 +56,7 @@ export function applyElementalHit(target,source,weapon,now){
   return 'burn';
  }
  if(weapon.element==='water'||family==='water') {
-  e.soaked={owner,power:.5,until:now+5000,next:now+1000};
+  e.soaked={owner,power:.5*strength,until:now+Math.round(5000*strength),next:now+1000};
   return 'soaked';
  }
  if(weapon.element==='dark')return put('confuse',3000,0,10000);

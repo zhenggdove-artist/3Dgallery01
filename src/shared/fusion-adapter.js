@@ -14,6 +14,6 @@ export function fuseOriginal(world,profile,body,rng){
  return result;
 }
 export function equippedItem(profile,item){
- const raw=profile.fusion?.[item.id]?.original?.stats;if(!raw)return item;
+ const record=profile.fusion?.[item.id];if(record?.templeStats)return {...item,...record.templeStats};const raw=record?.original?.stats;if(!raw)return item;
  const original=profile.fusion?.[item.id]?.original||{};return {...item,...raw,affixId:original.affixId,affixIds:[...new Set([...(original.affixIds||[]),original.affixId].filter(Boolean))],damage:raw.damage===undefined?item.damage:raw.damage*10,chargeDamage:raw.chargeDamage===undefined?item.chargeDamage:raw.chargeDamage*10};
 }

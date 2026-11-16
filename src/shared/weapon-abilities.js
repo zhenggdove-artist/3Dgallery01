@@ -7,8 +7,7 @@ export function isChannelStaff(item){
 export function weaponQuality(item,fusion){
  const tier=Math.max(1,Math.min(5,Math.max(Number(item?.tier)||1,(Number(fusion?.layer)||0)+1)));
  const d=tier-1;
- return {tier,visual:1+d*.19,damage:1+d*.13,range:1+d*.065,
-  radius:1+d*.16,duration:1+d*.22};
+ return {tier,visual:[1,1.4,1.85,2.4,3.05][d],damage:1+d*.13,range:[1,1.14,1.32,1.54,1.8][d],radius:[1,1.45,2.05,2.8,3.7][d],duration:1+d*.22};
 }
 // A continuous spray's visible width is not the radial AoE of a charged
 // explosion. Shared by the authoritative hit tube and warning #59.

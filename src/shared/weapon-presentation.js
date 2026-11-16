@@ -26,7 +26,7 @@ const affixDescriptions={
  exultant:'移動速度 +55%'
 };
 export function weaponPresentation(item,record={}){
- const origin=record?.original||{},stats=origin.stats||{},count=Number.isFinite(origin.fusionCount)?origin.fusionCount:(Number.isFinite(record.layer)?record.layer:0);
+ const origin=record?.original||{},stats=record?.templeStats||origin.stats||{},count=Number.isFinite(origin.fusionCount)?origin.fusionCount:(Number.isFinite(record.layer)?record.layer:0);
  const level=Math.max(0,Math.min(99,Math.floor(count)));
  const title=item.name+(level?' +'+level:'');
  const affixIds=[...new Set([...(origin.affixIds||[]),origin.affixId].filter(Boolean))];
@@ -42,11 +42,11 @@ export function weaponPresentation(item,record={}){
  const bonuses=[];
  if(Number.isFinite(record.bonus)&&record.bonus>0)bonuses.push('合成增傷 +'+round(record.bonus));
  if(Number.isFinite(stats.damage)&&Number.isFinite(item.damage)){
-  const difference=stats.damage*10-item.damage;
+  const difference=(record.templeStats?stats.damage:stats.damage*10)-item.damage;
   if(difference>0.05)bonuses.push('傷害 +'+round(difference));
  }
  if(Number.isFinite(stats.chargeDamage)&&Number.isFinite(item.chargeDamage)){
-  const difference=stats.chargeDamage*10-item.chargeDamage;
+  const difference=(record.templeStats?stats.chargeDamage:stats.chargeDamage*10)-item.chargeDamage;
   if(difference>0.05)bonuses.push('蓄力傷害 +'+round(difference));
  }
  if(Number.isFinite(stats.cooldown)&&Number.isFinite(item.cooldown)&&stats.cooldown<item.cooldown)
@@ -55,6 +55,7 @@ export function weaponPresentation(item,record={}){
   bonuses.push('射程 +'+round(stats.range-item.range)+'m');
  if(Number.isFinite(stats.radius)&&Number.isFinite(item.radius)&&stats.radius>item.radius+.01)
   bonuses.push('範圍半徑 +'+round(stats.radius-item.radius)+'m');
+ for(const id of (record.effects||[]).slice(0,2))bonuses.push('附加大絕 '+id+' · 20% 傷害 / 50% 範圍');
  if(level&&!bonuses.length)bonuses.push('強化次數 '+level);
  return {title,level,traits,bonuses};
 }
