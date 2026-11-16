@@ -268,7 +268,7 @@ export class WeaponParticleEffects{
   const recipe=recipeFor(item);
   if(this.charger&&this.charger.recipe!==recipe){this.remove(this.charger);this.charger=null;}
   if(!this.charger){
-    const fx=this.make(recipe==='fissure'?'prism':recipe,item,{range:8,duration:10000,amount:1100,charge:1});
+    const fx=this.make(recipe==='fissure'?'prism':recipe,item,{range:8,duration:2.6,amount:1600,charge:1});
     fx.charging=true;this.charger=this.add(fx);
   }
   this.charger.root.position.copy(root.position).add(new THREE.Vector3(0,1.2,0));
