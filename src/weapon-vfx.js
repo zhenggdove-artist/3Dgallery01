@@ -182,7 +182,17 @@ export class WeaponVFX{
   // the former plasma bolt or electrical burst on top of the shotgun pellets.
   if(item.id==='calico-cat')return;
   if(data.ultimate&&item.family==='saber')this.saberImpact.play(data,origin,direction);
-  if(item.id==='black-cat'){if(this.snipers.length>=4){const old=this.snipers.shift();old.root.removeFromParent();old.root.material.dispose();}const f=createOddEffect(THREE,{...data,origin:origin.toArray(),direction:direction.toArray(),range:origin.distanceTo(end)},{...item,pattern:'sniper'});f.root.position.addScaledVector(direction,-1.8);this.scene.add(f.root);this.snipers.push(f);return;}
+  if(item.id==='black-cat'){
+   if(this.snipers.length>=4){
+    const old=this.snipers.shift();
+    old.root.removeFromParent();
+    old.root.material.dispose();
+   }
+   // Project exactly from the server-owned muzzle, not the old -1.8m
+   // camera-relative offset which caused premature / detached bullet traces.
+   const f=createOddEffect(THREE,{...data,origin:origin.toArray(),direction:direction.toArray(),range},{...item,pattern:'sniper'});
+   this.scene.add(f.root);this.snipers.push(f);return;
+  }
   const entry=this.acquire(id,{color:item.color,size:(data.ultimate?Math.min(3.6,Math.max(1.2,(impactArea?.radius||5)/3.5)):.6)*(data.qualityScale||1),speed:data.ultimate?1:1.8}),fx=entry.fx;
   fx.group.position.copy(origin);fx.group.rotation.y=Math.atan2(direction.x,direction.z)-Math.PI/2;
   if(beams.has(id)){fx.group.position.set(0,0,0);fx.group.quaternion.identity();fx.setEndpoints(origin,end);fx.update(fx.lifecycle.start||0);entry.stopAt=data.channel?1.1:data.ultimate?.65:.12;}
