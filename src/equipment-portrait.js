@@ -41,7 +41,7 @@ export function equipmentPortrait(renderer,root){
   anatomicalRight.normalize();
   let front=anatomicalRight.clone().cross(up).normalize();
   // Facial markers, when a rig contains them, resolve front/back ambiguity.
-  const nose=point(find(/nose$|facefront$/|jawtip$/));
+  const nose=point(find(/nose$|facefront$|jawtip$/));
   if(nose&&hp){
    const face=nose.clone().sub(hp).addScaledVector(up,-nose.clone().sub(hp).dot(up));
    if(face.lengthSq()>.004&&front.dot(face)<0)front.negate();
