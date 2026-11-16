@@ -150,7 +150,7 @@ void main(){
 function populate(recipe,amount,range,palette){
  const random=rand(0x421eab+recipe.length*1931),mode=modeFor(recipe);
  const positions=new Float32Array(amount*3),seed=new Float32Array(amount*3),colors=new Float32Array(amount*3);
- const set=(i,x,y,z,c)=>{positions.set([x,y,z],i*3);seed.set([random(),random(),random()],i*3);colors.set(palette[c%palette.length].toArray(),i*3);};
+ const set=(i,x,y,z,c,u,v,w)=>{positions.set([x,y,z],i*3);seed.set([u,v,w],i*3);colors.set(palette[c%palette.length].toArray(),i*3);};
  for(let i=0;i<amount;i++){
    const u=random(),v=random(),w=random(),a=v*Math.PI*2;
    let x=0,y=0,z=0,ci=Math.floor(u*palette.length);
@@ -208,7 +208,7 @@ function populate(recipe,amount,range,palette){
      if(recipe==='gust'||recipe==='monsoon'){x*=1.6;y*=1.1;}
      if(recipe==='ghost'){y=Math.abs(y)+v*5;}
    }
-   set(i,x,y,z,ci);
+   set(i,x,y,z,ci,u,v,w);
  }
  return {positions,seed,colors};
 }
@@ -274,7 +274,7 @@ export class WeaponParticleEffects{
   this.charger.root.position.copy(root.position).add(new THREE.Vector3(0,1.2,0));
   this.charger.root.scale.setScalar(.4+progress*.9);
   this.charger.material.uniforms.uCharge.value=progress;
-  this.charger.material.uniforms.uAge.value=(performance.now()/1000)%3;
+  this.charger.material.uniforms.uAge.value=.22+progress*.78;
  }
  update(dt){
   for(const entry of [...this.active]){
