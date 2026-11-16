@@ -113,10 +113,10 @@ try{
  // tests cannot catch browser shader compilation or alpha/blend regressions).
  const vfxState=await page.evaluate(()=>{
   const t=templeTest,items=t.items,v=t.arena.presentation.vfx,recipes={};
-  for(const family of ['swatter','pan','saber','petal','planter']){
+  for(const family of ['swatter','pan','saber','petal','planter','palm']){
    const item=items.find(w=>w.slot==='weapon'&&w.family===family&&!w.exotic);
    v.play({origin:[-20,1,-20],direction:[0,0,-1],range:24,charge:1,ultimate:true,area:{mode:'corridor',center:[-20,1,-40],radius:7}},item,null);
-   recipes[family]=['swatter','pan','saber','petal'].includes(family)?v.numberedEffects.active.at(-1)?.group?.name:
+   recipes[family]=['swatter','pan','saber','petal','palm'].includes(family)?v.numberedEffects.active.at(-1)?.group?.name:
     ['petal','planter'].includes(family)?v.signatureEffects.active.at(-1)?.obj?.name:v.particleSkills.active.at(-1)?.recipe;
   }
   const gun=items.find(w=>w.id==='calico-cat');
@@ -125,7 +125,7 @@ try{
   const giraffe=items.find(w=>w.id==='giraffe');v.play({origin:[-20,1,-20],direction:[0,0,-1],range:28,charge:1,ultimate:true},giraffe,null);recipes.giraffe=v.signatureEffects.active.at(-1)?.obj?.name;
   return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
  });
- assert.deepEqual(vfxState.recipes,{swatter:'00GameDevs original VFX #53 darkchain-detonation',pan:'00GameDevs original VFX #68 rolling-fireburst',saber:'00GameDevs original VFX #38 magma-fissure',petal:'00GameDevs original VFX #43 revival-bloom',planter:'Three stacked solid thorn-vine tiers',shotgun:'Ten independent irregular multicolour volumetric shotgun spheres',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
+ assert.deepEqual(vfxState.recipes,{swatter:'00GameDevs original VFX #53 darkchain-detonation',pan:'00GameDevs original VFX #68 rolling-fireburst',saber:'00GameDevs original VFX #38 magma-fissure',petal:'00GameDevs original VFX #43 revival-bloom',planter:'Three stacked solid thorn-vine tiers',palm:'00GameDevs original VFX #31 thorn-crown',shotgun:'Ten independent irregular multicolour volumetric shotgun spheres',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
  assert.equal(vfxState.sky,'World-oriented distant cloud sky (no moon)');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});
@@ -134,7 +134,7 @@ try{
  // the same server-authoritative event data; shader errors are collected above.
  const numberedInspection=await page.evaluate(async()=>{
   const t=templeTest,v=t.arena.presentation.vfx,check=[
-   ['clam',33,'channel'],['clam',33,'ultimate'],['saber-1',38,'ultimate'],['bloom-1',43,'channel'],['bloom-1',43,'ultimate'],
+   ['clam',33,'channel'],['clam',33,'ultimate'],['saber-1',38,'ultimate'],['palm-1',31,'ultimate'],['bloom-1',43,'channel'],['bloom-1',43,'ultimate'],
    ['swatter-1',53,'ultimate'],['ember-1',73,'channel'],['pan-1',68,'ultimate'],
    ['frost-1',70,'channel'],['storm-1',8,'channel'],['nova-1',20,'channel'],['nova-1',20,'ultimate'],
    ['saber-4',47,'combo'],['jellybrella',26,'ultimate'],['whip-1',48,'ultimate']
@@ -152,7 +152,7 @@ try{
     actual:fx?.spec?.number,group:fx?.group?.name,
     // Native cone/beam/wave/sword skills begin at the real nozzle; only
     // remote blast spells should be located at the ground AoE centre.
-    aligned:kind!=='ultimate'||[20,33,38,43].includes(num)
+    aligned:kind!=='ultimate'||[20,31,33,38,43].includes(num)
       ?kind!=='ultimate'||Math.hypot(
        fx.group.position.x+22,fx.group.position.y-(num===38?.12:1),fx.group.position.z+22)<.0001
       :Math.hypot(
@@ -164,7 +164,7 @@ try{
   v.numberedEffects.dispose();
   return records;
  });
- assert.equal(numberedInspection.length,15);
+ assert.equal(numberedInspection.length,16);
  for(const result of numberedInspection){
   assert.equal(result.actual,result.num,JSON.stringify(result));
   assert.equal(result.source,'00GameDevs',JSON.stringify(result));
@@ -193,15 +193,16 @@ try{
  const mobileControls=await page.evaluate(()=>{
   const get=id=>{const r=document.querySelector(id).getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height}};
   const chat=get('#chat-hud'),attack=get('#attack-button'),jump=get('[data-action=jump]'),
-   interact=get('[data-action=interact]'),stick=get('#mobile-stick');
+   stick=get('#mobile-stick'),interactButton=document.querySelector('[data-action=interact]');
   const overlaps=(a,b)=>a.left<b.right-2&&a.right>b.left+2&&a.top<b.bottom-2&&a.bottom>b.top+2;
-  const controls={chat,attack,jump,interact,stick};
+  const controls={chat,attack,jump,stick};
   return {controls,collisions:Object.entries(controls).flatMap(([id,rect],i)=>Object.entries(controls).slice(i+1).filter(([,r])=>overlaps(rect,r)).map(([key])=>id+' / '+key)),
-   interactVisible:getComputedStyle(document.querySelector('[data-action=interact]')).display!=='none',
+   interactVisible:getComputedStyle(interactButton).display!=='none',
    chatInside:chat.left>=0&&chat.right<=innerWidth+1&&chat.top>=0&&chat.bottom<=innerHeight+1};
  });
- assert.ok(mobileControls.interactVisible&&mobileControls.chatInside,JSON.stringify(mobileControls));
- assert.deepEqual(mobileControls.collisions,[],'mobile chat, joystick, attack, jump and E must never overlap');
+ assert.equal(mobileControls.interactVisible,false,'mobile E must be removed (A handles context)');
+ assert.ok(mobileControls.chatInside,JSON.stringify(mobileControls));
+ assert.deepEqual(mobileControls.collisions,[],'mobile chat, joystick, A and jump must never overlap');
  await page.screenshot({path:output+'/mobile-responsive.png'});
  assert.deepEqual(errors,[],errors.join('\n'));
  console.log(JSON.stringify({ok:true,write:true,artBombPreview:scale,errors}));

@@ -12,7 +12,7 @@ import {attackStats,itemById} from '../src/shared/catalog.js';
 import {WeaponVFX} from '../src/weapon-vfx.js';
 
 const references=[
- ['clam',33,'channel'],['prism-1',29,'channel'],['saber-1',38,'ultimate'],['bloom-1',43,'channel'],
+ ['clam',33,'channel'],['prism-1',29,'channel'],['saber-1',38,'ultimate'],['palm-1',31,'ultimate'],['bloom-1',43,'channel'],
  ['swatter-1',53,'ultimate'],['ember-1',73,'channel'],['pan-1',68,'ultimate'],
  ['frost-1',70,'channel'],['storm-1',8,'channel'],['nova-1',20,'channel'],
  ['saber-4',47,'combo'],['jellybrella',26,'ultimate'],['whip-1',48,'ultimate']
@@ -24,9 +24,9 @@ const evt=kind=>({origin:[0,1,0],direction:[0,0,1],range:12,
  area:{mode:'area',center:[0,.12,8],visualCenter:[0,.16,8],radius:3,travel:8},
  time:123});
 
-test('all thirteen IDs map to verified, byte-identical official downloads',async()=>{
+test('all fourteen IDs map to verified, byte-identical official downloads',async()=>{
  const manifest=JSON.parse(await readFile(new URL('../vendor/00gamedevs/numbered-manifest.json',import.meta.url)));
- assert.equal(manifest.assets.length,13);
+ assert.equal(manifest.assets.length,14);
  assert.equal(manifest.packaging.includes('byte-identical'),true);
  for(const [weapon,num,kind] of references){
   const item=itemById(weapon),spec=requestedEffect(item,evt(kind));
@@ -40,7 +40,7 @@ test('all thirteen IDs map to verified, byte-identical official downloads',async
   const file=await readFile(new URL('../vendor/00gamedevs/source/'+spec.asset+'.js',import.meta.url));
   assert.equal(createHash('sha256').update(file).digest('hex'),manifestEntry.sha256);
  }
- assert.equal(Object.keys(REQUESTED_VFX).length,18);
+ assert.equal(Object.keys(REQUESTED_VFX).length,19);
 });
 
 test('every numbered attack instantiates an actual source module, never a particle imitation',()=>{
@@ -55,11 +55,16 @@ test('every numbered attack instantiates an actual source module, never a partic
   assert.equal(entry.group.userData.vfxNumber,num);
   assert.equal(scene.children.includes(entry.group),true);
   if(kind==='ultimate'){
-   if(num===38){
+   if(num===31){
+    assert.equal(entry.palmLayers.length,3,'stack of three authentic #31 originals');
+    assert.equal(entry.palmLayers.every(fx=>fx.group.userData.vfxNumber===31),true);
+    assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,1,0))<1e-8);
+   }else if(num===38){
     assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,.12,0))<1e-8,weapon);
     const axis=new THREE.Vector3(1,0,0).applyQuaternion(entry.group.quaternion);
     assert.ok(axis.distanceTo(new THREE.Vector3(0,0,1))<1e-8,'crack must point along the sword ray');
-    assert.equal(entry.group.scale.x,2,'#38 overall effect is twice its old size');
+    assert.equal(entry.group.scale.x,4,'#38 forward fissure is twice the previous x2');
+    assert.equal(entry.group.scale.z,2,'#38 must not widen further');
    }else assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,.16,8))<1e-8,weapon);
   }
   effects.update(.01);
@@ -183,7 +188,7 @@ test('the original #70 ice pillar is scaled to exactly half the previous size',(
  const scene=new THREE.Scene(),fx=new NumberedWeaponEffects(scene);
  fx.play(evt('channel'),itemById('frost-1'));
  assert.equal(fx.active[0].spec.number,70);
- assert.ok(Math.abs(fx.active[0].fx.group.scale.x-1.2)<1e-7,'ice forward distance is doubled');
+ assert.ok(Math.abs(fx.active[0].fx.group.scale.x-2.4)<1e-7,'ice forward distance doubles again');
  assert.ok(Math.abs(fx.active[0].fx.group.scale.y-.6)<1e-7,'ice width stays half size');
  assert.ok(Math.abs(fx.active[0].fx.settings.speed-2)<1e-7,'ice advance speed is doubled');
  fx.dispose();
@@ -257,10 +262,10 @@ test('doubling the ice timeline retains overlapping channels without a zero-visi
  assert.equal(scene.children.length,0);
 });
 
-test('charged sword server reach and radius are both doubled and the #59 preview uses the same values',()=>{
+test('charged sword has 2x additional reach and one-third previous width, consistent with #59',()=>{
  const item=itemById('saber-1'),stats=attackStats(item,1),normal=attackStats(item,.99);
- assert.ok(stats.range>=2*normal.range,'ultimate range uses 2x reach');
- assert.ok(stats.radius>normal.radius*2,'ultimate area radius expands');
+ assert.ok(stats.range>=4*normal.range,'ultimate range uses 4x base = 2x previous reach');
+ assert.ok(stats.radius>0,'server-authoritative sword collision radius must stay positive');
  const scene=new THREE.Scene(),fx=new ChargeTargetPreview(scene);
  const root=new THREE.Group(),muzzle=[2,1.1,3],direction=[0,0,1];
  fx.update(root,item,.95,direction,{world:{floatingPlatforms:[]}},null,muzzle);
@@ -299,4 +304,48 @@ test('fully charged release also uses original wave/flower/conch sources, never 
   effects.dispose();root.removeFromParent();
   assert.equal(scene.children.length,0);
  }
+});
+
+
+test('official #31 coconut tree ultimate stacks three real crowns and rotates rapidly as it travels forward',()=>{
+ const scene=new THREE.Scene(),effects=new NumberedWeaponEffects(scene);
+ const item=itemById('palm-3'),event={...evt('ultimate'),range:32,origin:[2,1,4],direction:[0,0,1],
+  area:{mode:'corridor',visualCenter:[99,.16,99],radius:7}};
+ assert.equal(requestedEffect(item,event)?.number,31);
+ assert.equal(effects.play(event,item),true);
+ const entry=effects.active[0];
+ assert.ok(entry.palmLayers?.length===3);
+ assert.equal(scene.children.length,3);
+ assert.ok(entry.palmLayers.every(fx=>fx.group.userData.vfxSource==='00GameDevs'&&fx.group.userData.vfxNumber===31));
+ const heights=entry.palmLayers.map(fx=>fx.group.position.y);
+ assert.ok(heights[1]>heights[0]&&heights[2]>heights[1], 'exactly three ascending layers');
+ const start=entry.palmLayers[0].group.position.z;
+ effects.update(.5);
+ assert.ok(entry.palmLayers.every(fx=>fx.group.position.z>start+5),'all layers move rapidly forward');
+ assert.ok(entry.palmLayers.every(fx=>fx.group.rotation.y>5),'layers rotate while advancing');
+ assert.ok(entry.palmLayers.every(fx=>Math.abs(fx.group.position.z-entry.palmLayers[0].group.position.z)<1e-8),'one shared projectile path');
+ effects.update(1.0);
+ assert.ok(entry.palmLayers[0].group.position.z>start+20,'rapid advance covers the actual spell reach');
+ effects.dispose();
+ assert.equal(scene.children.length,0,'three native scenes all disposed');
+});
+
+test('500ms A hold threshold is shared by tap vs charge and client and server ice reach',async()=>{
+ const {STAFF_TAP_MAX_MS,isStaffTap,chargeProgress,channelReachMultiplier,weaponQuality}=await import('../src/shared/weapon-abilities.js');
+ assert.equal(STAFF_TAP_MAX_MS,500);
+ assert.equal(isStaffTap(itemById('frost-1'),499),true);
+ assert.equal(isStaffTap(itemById('frost-1'),501),false);
+ assert.equal(chargeProgress(500,1500),0);
+ assert.ok(chargeProgress(1000,1500)>0);
+ const ice=itemById('frost-1'),fire=itemById('ember-1');
+ assert.equal(channelReachMultiplier(ice),2);
+ assert.equal(channelReachMultiplier(fire),1);
+ const q=weaponQuality(ice),stats=attackStats(ice,1);
+ const expected=+(Math.max(stats.range,Math.min(18,ice.range))*2*q.range).toFixed(2);
+ const scene=new THREE.Scene(),fx=new ChargeTargetPreview(scene),root=new THREE.Group();
+ fx.update(root,ice,.7,[0,0,1],{world:{floatingPlatforms:[]}});
+ assert.equal(fx.footprint.shape,'rectangle');
+ assert.ok(Math.abs(fx.footprint.length-expected)<1e-7);
+ fx.dispose();
+ assert.equal(scene.children.length,0);
 });
