@@ -30,7 +30,7 @@ export const SOUND_PROFILES=Object.freeze({
 });
 export class GameAudio{
  constructor(){
-  this.voices=0;this.played={};this.muted=false;
+  this.voices=0;this.played={};this.muted=false; // Sound is ON by default; WebAudio starts at first user gesture.
   for(const type of ['pointerdown','keydown'])addEventListener(type,()=>this.unlock(),{passive:true});
  }
  unlock(){

@@ -49,6 +49,7 @@ export function equipmentPortrait(renderer,root){
   if(!root)return '';
   // userData contains live mixer/material references: clone only the model hierarchy.
   const model=clone(root.userData.model),scene=new THREE.Scene();
+  model.traverse(part=>{if(part.isMesh||part.isSkinnedMesh)part.visible=true;});
   // Drop every animated pose before capturing inventory art.
   model.traverse(part=>{if(part.isSkinnedMesh)part.skeleton.pose();});
   // The bind pose is close to A-pose; restore lowered upper arms if a rig
@@ -73,14 +74,14 @@ export function equipmentPortrait(renderer,root){
   const box=new THREE.Box3().setFromObject(model,true);
   const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
   // Screen UP must be fixed to world +Y, never inferred from animated bones.
-  const camera=new THREE.PerspectiveCamera(30,192/280,.001,1000);
+  const camera=new THREE.PerspectiveCamera(30,256/384,.001,1000);
   const height=Math.max(.5,size.y),width=Math.max(.3,size.x);
-  const distance=Math.max(height,width/(192/280))*.5/Math.tan(Math.PI/12)*1.33;
+  const distance=Math.max(height,width/(256/384))*.5/Math.tan(Math.PI/12)*1.33;
   camera.up.set(0,1,0);
   camera.position.copy(center).add(new THREE.Vector3(0,height*.015,distance));
   camera.lookAt(center);
   camera.updateMatrixWorld(true);
-  const target=new THREE.WebGLRenderTarget(192,280),previous=renderer.getRenderTarget(),clear=renderer.getClearColor(new THREE.Color()),alpha=renderer.getClearAlpha();
-  try{renderer.setRenderTarget(target);renderer.setClearColor(0,0);renderer.clear();renderer.render(scene,camera);const pixels=new Uint8Array(192*280*4);renderer.readRenderTargetPixels(target,0,0,192,280,pixels);const canvas=document.createElement('canvas');canvas.width=192;canvas.height=280;const ctx=canvas.getContext('2d'),data=ctx.createImageData(192,280);for(let y=0;y<280;y++)data.data.set(pixels.subarray((279-y)*192*4,(280-y)*192*4),y*192*4);ctx.putImageData(data,0,0);return canvas.toDataURL();}
+  const target=new THREE.WebGLRenderTarget(256,384),previous=renderer.getRenderTarget(),clear=renderer.getClearColor(new THREE.Color()),alpha=renderer.getClearAlpha();
+  try{renderer.setRenderTarget(target);renderer.setClearColor(0,0);renderer.clear();renderer.render(scene,camera);const pixels=new Uint8Array(256*384*4);renderer.readRenderTargetPixels(target,0,0,256,384,pixels);const canvas=document.createElement('canvas');canvas.width=256;canvas.height=384;const ctx=canvas.getContext('2d'),data=ctx.createImageData(256,384);for(let y=0;y<384;y++)data.data.set(pixels.subarray((383-y)*256*4,(384-y)*256*4),y*256*4);ctx.putImageData(data,0,0);let occupied=0;for(let i=0;i<pixels.length;i+=16){if(pixels[i]+pixels[i+1]+pixels[i+2]>18)occupied++;}if(occupied<64)throw Error('EQUIP snapshot has no visible character pixels');return canvas.toDataURL();}
   finally{renderer.setRenderTarget(previous);renderer.setClearColor(clear,alpha);target.dispose();model.traverse(o=>{if(o.isSkinnedMesh)o.skeleton.dispose();});}
 }

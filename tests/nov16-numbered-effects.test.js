@@ -276,9 +276,10 @@ test('doubling the ice timeline retains overlapping channels without a zero-visi
  assert.equal(scene.children.length,0);
 });
 
-test('charged sword has 2x additional reach and one-third previous width, consistent with #59',()=>{
- const item=itemById('saber-1'),stats=attackStats(item,1),normal=attackStats(item,.99);
- assert.ok(stats.range>=4*normal.range,'ultimate range uses 4x base = 2x previous reach');
+test('charged sword uses 60% of preceding reach and unchanged thin width, consistent with #59',()=>{
+ const item=itemById('saber-1'),stats=attackStats(item,1);
+ const oldReach=Math.max(30,item.range*2,(item.range+item.chargeRange)*1.8)*4;
+ assert.ok(Math.abs(stats.range-oldReach*.60)<.01,'ultimate reach must equal 60% of the former 4x baseline');
  assert.ok(stats.radius>0,'server-authoritative sword collision radius must stay positive');
  const scene=new THREE.Scene(),fx=new ChargeTargetPreview(scene);
  const root=new THREE.Group(),muzzle=[2,1.1,3],direction=[0,0,1];
@@ -369,5 +370,16 @@ test('500ms A hold threshold is shared by tap vs charge and client and server ic
  assert.equal(fx.footprint.shape,'rectangle');
  assert.ok(Math.abs(fx.footprint.length-expected)<1e-7);
  fx.dispose();
+ assert.equal(scene.children.length,0);
+});
+
+test('jellyfish ultimate preserves a full tenfold source-asset scale independently of area',()=>{
+ const scene=new THREE.Scene(),effects=new NumberedWeaponEffects(scene);
+ const item=itemById('jellybrella');
+ const event={...evt('ultimate'),qualityScale:1,area:{mode:'area',radius:2,visualCenter:[0,0,5]}};
+ assert.equal(effects.play(event,item,null),true);
+ assert.equal(effects.active[0].spec.number,26);
+ assert.equal(effects.active[0].options.size,42);
+ effects.dispose();
  assert.equal(scene.children.length,0);
 });

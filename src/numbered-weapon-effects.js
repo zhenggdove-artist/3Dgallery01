@@ -121,7 +121,7 @@ export class NumberedWeaponEffects {
    return true;
   }
   const quality=Math.max(.5,Math.min(2.5,Number(event.qualityScale)||1));
-  const normalSize=(spec.number===26?4.2:spec.number===38?2:spec.number===48?2:1.2)*quality;
+  const normalSize=(spec.number===26?42:spec.number===38?2:spec.number===48?2:1.2)*quality;
   // The Ice Lance / erupting pillar #70 must be exactly half the previous
   // display dimensions, irrespective of rarity/fusion quality.
   let size=spec.number===70?normalSize*.5:normalSize;
@@ -129,7 +129,7 @@ export class NumberedWeaponEffects {
   // Scale its world container to the server's range, not its actual props.
   if(spec.number===73)size=1;
   if(spec.number===31)size=Math.max(.75,Math.min(1.3,quality));
-  if(event.ultimate&&!event.channel&&Number.isFinite(event.area?.radius)&&![29,31,38,70].includes(spec.number))
+  if(event.ultimate&&!event.channel&&Number.isFinite(event.area?.radius)&&![26,29,31,38,70].includes(spec.number))
    size=Math.max(.25,Math.min(3.5,event.area.radius/4.5));
   const options={size,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
   if(!options.color)delete options.color;
