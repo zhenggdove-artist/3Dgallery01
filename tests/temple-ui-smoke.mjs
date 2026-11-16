@@ -32,7 +32,26 @@ try{
  // FISH has been retired from both the dock and shop.
  assert.equal(await page.locator('[data-action="fish"]').count(),0);
  // Inventory categories, custom 3D spell preview, readable descriptions.
- await page.evaluate(()=>templeTest.ui.openPanel('bag'));
+ await page.evaluate(()=>{
+  templeTest.ui.bagCategory='equipment';templeTest.ui.openPanel('bag');
+ });
+ await page.waitForFunction(()=>{
+  const view=templeTest.portraitViewport,canvas=document.querySelector('#bag-portrait');
+  return !!view?.model&&view.drawCount>0&&canvas?.width>=128&&!canvas.dataset.renderError;
+ },null,{timeout:20000});
+ const equipPixels=await page.evaluate(()=>{
+  const canvas=document.querySelector('#bag-portrait');
+  const gl=canvas?.getContext('webgl2');
+  if(!gl)return {error:'missing independent WebGL2 canvas'};
+  const pixels=new Uint8Array(canvas.width*canvas.height*4);
+  gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+  let visible=0;
+  for(let i=3;i<pixels.length;i+=4)if(pixels[i]>10)visible++;
+  return {visible,width:canvas.width,height:canvas.height,error:gl.getError()};
+ });
+ assert.ok(equipPixels.visible>100,
+  'EQUIP must render an actual 3D A-pose model, not blank alt-text: '+JSON.stringify(equipPixels));
+ await page.screenshot({path:output+'/equip-3d-paper-doll.png'});
  for(const type of ['near','mid','far'])assert.equal(await page.locator('[data-category="'+type+'"]').count(),1,type);
  await page.locator('[data-category="near"]').click();
  await page.waitForTimeout(400);
