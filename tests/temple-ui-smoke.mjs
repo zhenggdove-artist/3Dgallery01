@@ -7,7 +7,7 @@ await mkdir(output,{recursive:true});
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--disable-dev-shm-usage','--enable-webgl']});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:800}});page.setDefaultTimeout(45000);
- const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&/Shader Error|WebGLProgram|shader compilation|ERROR: 0:/i.test(m.text()))errors.push(m.text());});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('requestfailed',req=>errors.push('REQUEST '+req.url()+' '+req.failure()?.errorText));page.on('console',m=>{if(m.type()==='error'&&/Shader Error|WebGLProgram|shader compilation|ERROR: 0:/i.test(m.text()))errors.push(m.text());});
  await page.addInitScript(()=>localStorage.setItem('temple-backend-url','http://127.0.0.1:8787'));
  await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});
  try{await page.waitForFunction(()=>document.body.classList.contains('ready'),null,{timeout:65000});}
@@ -18,7 +18,10 @@ try{
    entryError:document.querySelector('#entry-error')?.textContent,
    status:document.querySelector('#loading-status')?.textContent,
    templeTest:!!window.templeTest,
-   readyState:document.readyState
+   readyState:document.readyState,
+   loadTimings:window.templeLoadTimings,
+   resources:performance.getEntriesByType('resource').slice(-16).map(r=>({name:r.name.split('/').slice(-3).join('/'),ms:Math.round(r.duration),size:r.transferSize})),
+   pendingAssets:document.querySelectorAll('script[type="module"]').length
   }));
   throw new Error('Temple never loaded: '+JSON.stringify(debug)+'; PAGEERRORS='+errors.join('; ').slice(0,2400),{cause:error});
  }
