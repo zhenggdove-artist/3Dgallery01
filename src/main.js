@@ -73,7 +73,7 @@ network.addEventListener('structure-hit',event=>arena.showStructureHit(event.det
 network.addEventListener('state-rejected',event=>{if(performance.now()-toastErrorAt>1200){toastErrorAt=performance.now();ui.toast(event.detail.error||'MOVEMENT REJECTED');}});
 network.addEventListener('connection',event=>{if(joined)ui.toast(event.detail.connected?'REALTIME CONNECTED':'RECONNECTING…');});
 
-ui.addEventListener('attack',()=>performAttack());ui.addEventListener('interact',()=>performInteract());
+ui.addEventListener('attack',()=>performAttack());ui.addEventListener('interact',()=>{if(buildPlacement)confirmBuildPlacement();else performInteract();});ui.addEventListener('interact-release',()=>artworkThrow.release());
 ui.addEventListener('create-platform',event=>sendAction('create-platform',event.detail));
 ui.addEventListener('art-bomb-resize',event=>sendAction('resize-art-bomb',event.detail));
 ui.addEventListener('art-bomb-upload',async event=>{
