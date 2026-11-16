@@ -12,7 +12,7 @@ import {attackStats,itemById} from '../src/shared/catalog.js';
 import {WeaponVFX} from '../src/weapon-vfx.js';
 
 const references=[
- ['clam',33,'channel'],['saber-1',38,'ultimate'],['bloom-1',43,'channel'],
+ ['clam',33,'channel'],['prism-1',29,'channel'],['saber-1',38,'ultimate'],['bloom-1',43,'channel'],
  ['swatter-1',53,'ultimate'],['ember-1',73,'channel'],['pan-1',68,'ultimate'],
  ['frost-1',70,'channel'],['storm-1',8,'channel'],['nova-1',20,'channel'],
  ['saber-4',47,'combo'],['jellybrella',26,'ultimate'],['whip-1',48,'ultimate']
@@ -24,9 +24,9 @@ const evt=kind=>({origin:[0,1,0],direction:[0,0,1],range:12,
  area:{mode:'area',center:[0,.12,8],visualCenter:[0,.16,8],radius:3,travel:8},
  time:123});
 
-test('all twelve IDs map to verified, byte-identical official downloads',async()=>{
+test('all thirteen IDs map to verified, byte-identical official downloads',async()=>{
  const manifest=JSON.parse(await readFile(new URL('../vendor/00gamedevs/numbered-manifest.json',import.meta.url)));
- assert.equal(manifest.assets.length,12);
+ assert.equal(manifest.assets.length,13);
  assert.equal(manifest.packaging.includes('byte-identical'),true);
  for(const [weapon,num,kind] of references){
   const item=itemById(weapon),spec=requestedEffect(item,evt(kind));
@@ -40,7 +40,7 @@ test('all twelve IDs map to verified, byte-identical official downloads',async()
   const file=await readFile(new URL('../vendor/00gamedevs/source/'+spec.asset+'.js',import.meta.url));
   assert.equal(createHash('sha256').update(file).digest('hex'),manifestEntry.sha256);
  }
- assert.equal(Object.keys(REQUESTED_VFX).length,12);
+ assert.equal(Object.keys(REQUESTED_VFX).length,15);
 });
 
 test('every numbered attack instantiates an actual source module, never a particle imitation',()=>{
@@ -125,4 +125,82 @@ test('custom exotic ultimates are not stolen by ordinary family mappings',()=>{
  for(const id of ['giraffe','goldfish','fan','accordion','telephone']){
   assert.equal(requestedEffect(itemById(id),evt('ultimate')),null,id);
  }
+});
+
+
+test('prism focuser #29 is the actual Solar Halo Beam on tap, full charge, and held cast',()=>{
+ const item=itemById('prism-2');
+ for(const event of [
+  {...evt('normal'),channel:false,ultimate:false},
+  {...evt('ultimate'),channel:false,ultimate:true},
+  {...evt('channel'),channel:true,ultimate:true}
+ ]){
+  assert.equal(requestedEffect(item,event)?.number,29);
+  const scene=new THREE.Scene(),effects=new NumberedWeaponEffects(scene);
+  assert.equal(effects.play(event,item),true);
+  const active=effects.active[0];
+  assert.equal(active.spec.number,29);
+  // Source setEndpoints() puts its center at the real midway ray position.
+  assert.ok(active.fx.group.position.distanceTo(new THREE.Vector3(0,1,6))<1e-7);
+  assert.equal(active.fx.group.userData.vfxSource,'00GameDevs');
+  effects.dispose();
+  assert.equal(scene.children.length,0);
+ }
+});
+
+test('authored #73 demonstration sphere and cube are hidden; the fire nozzle is weapon-anchored',()=>{
+ const item=itemById('ember-1'),scene=new THREE.Scene(),root=new THREE.Group();
+ scene.add(root);
+ const muzzle=(host)=>host.position.clone().add(new THREE.Vector3(.25,1.4,.15));
+ const effects=new NumberedWeaponEffects(scene,muzzle);
+ const event={...evt('channel'),range:10.8};
+ assert.equal(effects.play(event,item,root),true);
+ const fx=effects.active[0].fx;
+ assert.equal(fx.group.userData.vfxNumber,73);
+ const demoProps=fx.group.userData.flameAimTargets;
+ assert.equal(demoProps?.length,2);
+ for(const prop of demoProps)assert.equal(prop.parent.visible,false,'no visible grey demo prop');
+ const source=fx.group.userData.flameAimRoot.localToWorld(new THREE.Vector3(-3.6,1.65,0));
+ assert.ok(source.distanceTo(muzzle(root))<1e-6,'visible flame starts at the staff nozzle');
+ root.position.set(3,0,4);
+ effects.update(.01);
+ const moved=fx.group.userData.flameAimRoot.localToWorld(new THREE.Vector3(-3.6,1.65,0));
+ assert.ok(moved.distanceTo(muzzle(root))<1e-6,'no detached flame origin after moving');
+ effects.stop(root);root.removeFromParent();
+ assert.equal(scene.children.length,0);
+});
+
+test('the original #70 ice pillar is scaled to exactly half the previous size',()=>{
+ const scene=new THREE.Scene(),fx=new NumberedWeaponEffects(scene);
+ fx.play(evt('channel'),itemById('frost-1'));
+ assert.equal(fx.active[0].spec.number,70);
+ assert.ok(Math.abs(fx.active[0].fx.group.scale.x-.6)<1e-7);
+ fx.dispose();
+ assert.equal(scene.children.length,0);
+});
+
+test('clam held channel layers original #33 waves that ease forward and overlap instead of snapping',()=>{
+ const item=itemById('clam'),scene=new THREE.Scene(),root=new THREE.Group();
+ scene.add(root);
+ const effects=new NumberedWeaponEffects(scene,(r)=>r.position.clone().add(new THREE.Vector3(0,1.3,0)));
+ const event={...evt('channel'),range:18};
+ assert.equal(effects.play(event,item,root),true);
+ const entry=effects.active[0];
+ assert.equal(entry.waves.length,1);
+ const first=entry.waves[0];
+ effects.update(.41);
+ assert.ok(entry.waves.length>=2,'several original #33 copies overlap');
+ assert.equal(entry.waves.every(w=>w.fx.group.userData.vfxNumber===33),true);
+ const z=first.fx.group.position.z;
+ effects.update(.35);
+ assert.ok(first.fx.group.position.z>z,'wave crest moves gradually outward');
+ assert.ok(entry.waves.length>=2,'there is never a frame with no crest');
+ root.position.set(4,0,1);
+ effects.play({...event,origin:[4,1,1]},item,root);
+ effects.update(.40);
+ assert.ok(entry.waves.some(w=>w.start.x===4),'new crest starts at current weapon, not a stale position');
+ effects.stop(root);
+ assert.equal(effects.active.length,0);
+ assert.equal(scene.children.length,1,'all wave copies disposed');
+ root.removeFromParent();
 });
