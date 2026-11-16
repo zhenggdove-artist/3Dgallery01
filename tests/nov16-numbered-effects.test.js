@@ -7,6 +7,7 @@ import {NumberedWeaponEffects,REQUESTED_VFX,requestedEffect} from '../src/number
 import {ChargeTargetPreview} from '../src/charge-target-preview.js';
 import {chargedArea,spellGroundHeight} from '../src/shared/charge-area.js';
 import {weaponQuality} from '../src/shared/weapon-abilities.js';
+import {equippedItem} from '../src/shared/fusion-adapter.js';
 import {attackStats,itemById} from '../src/shared/catalog.js';
 import {WeaponVFX} from '../src/weapon-vfx.js';
 
@@ -94,6 +95,22 @@ test('the server area and the warning circle share exactly the same ground-space
  assert.equal(preview.guides.some(g=>g.visible),false);
  preview.dispose();
  assert.equal(scene.children.length,0);
+});
+
+test('warning circle includes fused original range/radius and authoritative channel reach',()=>{
+ const item=itemById('ember-1'),fusion={layer:3,original:{stats:{range:37,radius:6.5}}};
+ const actual=equippedItem({fusion:{[item.id]:fusion}},item);
+ const stats=attackStats(actual,1),quality=weaponQuality(actual,fusion);
+ stats.range=Math.max(stats.range,Math.min(18,actual.range));
+ stats.range=+(stats.range*quality.range).toFixed(2);
+ stats.radius=+(stats.radius*quality.radius).toFixed(2);
+ const world={floatingPlatforms:[]},direction=[0,-.12,1];
+ const area=chargedArea(actual,[3,1,4],direction,stats,(x,z,y)=>spellGroundHeight(world,x,z,y));
+ const scene=new THREE.Scene(),preview=new ChargeTargetPreview(scene),root=new THREE.Group();
+ root.position.set(3,0,4);preview.update(root,item,1,direction,{world},fusion);
+ assert.ok(preview.group.position.distanceTo(new THREE.Vector3(...area.visualCenter))<1e-8);
+ assert.ok(Math.abs(preview.group.scale.x-Math.max(1.7,area.radius))<1e-8);
+ preview.dispose();
 });
 
 test('the native numbered effect overrides generic VFX in the integrated weapon renderer',()=>{
