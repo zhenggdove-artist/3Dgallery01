@@ -143,6 +143,20 @@ try{
   return result;
  });
  assert.ok(mobileFields.count>=9&&mobileFields.aligned&&!mobileFields.overflows,JSON.stringify(mobileFields));
+ // A mobile screenshot exposed ATTACK physically covering the chat input.
+ // Keep these interactive rectangles disjoint in the actual viewport.
+ const mobileControls=await page.evaluate(()=>{
+  const get=id=>{const r=document.querySelector(id).getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height}};
+  const chat=get('#chat-hud'),attack=get('#attack-button'),jump=get('[data-action=jump]'),
+   interact=get('[data-action=interact]'),stick=get('#mobile-stick');
+  const overlaps=(a,b)=>a.left<b.right-2&&a.right>b.left+2&&a.top<b.bottom-2&&a.bottom>b.top+2;
+  const controls={chat,attack,jump,interact,stick};
+  return {controls,collisions:Object.entries(controls).flatMap(([id,rect],i)=>Object.entries(controls).slice(i+1).filter(([,r])=>overlaps(rect,r)).map(([key])=>id+' / '+key)),
+   interactVisible:getComputedStyle(document.querySelector('[data-action=interact]')).display!=='none',
+   chatInside:chat.left>=0&&chat.right<=innerWidth+1&&chat.top>=0&&chat.bottom<=innerHeight+1};
+ });
+ assert.ok(mobileControls.interactVisible&&mobileControls.chatInside,JSON.stringify(mobileControls));
+ assert.deepEqual(mobileControls.collisions,[],'mobile chat, joystick, attack, jump and E must never overlap');
  await page.screenshot({path:output+'/mobile-responsive.png'});
  assert.deepEqual(errors,[],errors.join('\n'));
  console.log(JSON.stringify({ok:true,write:true,artBombPreview:scale,errors}));

@@ -352,7 +352,9 @@ export class WeaponParticleEffects{
   const duration=charged?chosen==='fissure'?3:chosen==='rainbow-scatter'?1.65:2.45:elementalJet?1.05:.65;
   const entry=this.make(chosen,item,{range,duration,amount,charge:charged?1:.75});
   entry.root.position.copy(source);
-  const direction=end.clone().sub(source);
+  // Server-approved firing direction; charged-area centres are not an aiming
+  // substitute for ongoing straight sprays.
+  const direction=(data.channel&&Array.isArray(data.direction))?new THREE.Vector3(...data.direction).normalize():end.clone().sub(source);
   if(chosen==='fissure'){
     entry.root.position.y=Math.max(.12,source.y-1);
     direction.y=0;direction.normalize();
@@ -367,7 +369,7 @@ export class WeaponParticleEffects{
   }else{
     entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),direction.normalize());
     if(chosen!=='rainbow')entry.root.position.y=Math.max(.7,entry.root.position.y);
-    if(elementalJet)entry.root.scale.setScalar(charged?1.7:1.35);
+    if(elementalJet)entry.root.scale.setScalar(data.channel?1:charged?1.7:1.35);
   }
   if(chosen==='flies'&&Array.isArray(data.impactPoint)&&data.impactPoint.length===3){
     // Only for the first metre or so of its apparent pursuit: steer the cloud
