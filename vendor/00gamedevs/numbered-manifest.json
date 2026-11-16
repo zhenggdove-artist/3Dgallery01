@@ -1,0 +1,451 @@
+{
+  "origin": "https://00gamedevs.com",
+  "contentVersion": "e27df5c89f123862e204613ae4091360d70af8174351761c8e99972f06a6b7f1",
+  "downloadedFrom": "official AI catalog v2",
+  "packaging": "byte-identical original JavaScript, no imitation or generated particles",
+  "assets": [
+    {
+      "number": 8,
+      "id": "arc-ray",
+      "url": "https://00gamedevs.com/downloads/effects/arc-ray.js",
+      "sha256": "f30d04d9f73e4ef8970d3c400b03e50a34a7a1fd96c18e7c42e79299b388edd0",
+      "byteLength": 585250,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setEndpoints"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.4,
+          "end": 0.6
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaultOptions": {
+        "color": "#2878ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 6
+      }
+    },
+    {
+      "number": 20,
+      "id": "energy-vortex",
+      "url": "https://00gamedevs.com/downloads/effects/energy-vortex.js",
+      "sha256": "43312e5c20cfb76f4dccd5b6aab7457625362ed9862f4b52749167163f0a3523",
+      "byteLength": 585086,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 1.7,
+          "end": 1.4
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaultOptions": {
+        "color": "#bba5ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "number": 26,
+      "id": "frost-wheel",
+      "url": "https://00gamedevs.com/downloads/effects/frost-wheel.js",
+      "sha256": "cb89d2aa3e8290be27ba8b249cc672b8bd58ffe0137df1336558ff7e87af0709",
+      "byteLength": 585089,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setDirection"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.35,
+          "end": 0.8
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaultOptions": {
+        "color": "#a9dfff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "number": 33,
+      "id": "tidal-surge",
+      "url": "https://00gamedevs.com/downloads/effects/tidal-surge.js",
+      "sha256": "57694bd0c61bb47466a8545140021bcfd20ebdd0f1813d81d46b367a3b8f3c9a",
+      "byteLength": 585126,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.32000000000000006,
+          "end": 1.4400000000000002
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaultOptions": {
+        "color": "#66cddd",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "number": 38,
+      "id": "magma-fissure",
+      "url": "https://00gamedevs.com/downloads/effects/magma-fissure.js",
+      "sha256": "beec60aaae80f9c6ecdd8f0d49635d7084e056827187dda82c5bee49074ca932",
+      "byteLength": 585344,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.18,
+          "end": 0.81
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaultOptions": {
+        "color": "#ff823e",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 13
+      }
+    },
+    {
+      "number": 43,
+      "id": "revival-bloom",
+      "url": "https://00gamedevs.com/downloads/effects/revival-bloom.js",
+      "sha256": "f32fb629ff94a9cc3f052b15265dfbd2e5635d8d29d87bda0a64c9f8f751edd3",
+      "byteLength": 585354,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.22,
+          "end": 0.99
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaultOptions": {
+        "color": "#ff8fbd",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 14
+      }
+    },
+    {
+      "number": 47,
+      "id": "dimensional-rend",
+      "url": "https://00gamedevs.com/downloads/effects/dimensional-rend.js",
+      "sha256": "17e62e01f388ea24ed2440bbd3de114b143af852d6e3e29c1c5add326450a448",
+      "byteLength": 586156,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.2,
+          "end": 2.4
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaultOptions": {
+        "color": "#729dff",
+        "size": 2,
+        "density": 0.3,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 18,
+        "spread": 2,
+        "panelCount": 9
+      }
+    },
+    {
+      "number": 48,
+      "id": "black-hole",
+      "url": "https://00gamedevs.com/downloads/effects/black-hole.js",
+      "sha256": "64c8a539a8a19022e0c3d832d5017c8455b484ad0084c5be0d9360a02af1b0b1",
+      "byteLength": 585648,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 1.1,
+          "end": 1.4
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaultOptions": {
+        "color": "#ffab42",
+        "size": 6,
+        "density": 1,
+        "speed": 1,
+        "detail": 2
+      }
+    },
+    {
+      "number": 53,
+      "id": "darkchain-detonation",
+      "url": "https://00gamedevs.com/downloads/effects/darkchain-detonation.js",
+      "sha256": "3f7725f6679bf24c6942c201be87651fcda3e38d09a5ba4dac05371bb5bf334f",
+      "byteLength": 590554,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.45,
+          "end": 1.35
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaultOptions": {
+        "color": "#8300ff",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "number": 68,
+      "id": "rolling-fireburst",
+      "url": "https://00gamedevs.com/downloads/effects/rolling-fireburst.js",
+      "sha256": "1e75685eb5ac3f3a12a6dd27a3bfe609644b5059bd10717165e3090de1e83e70",
+      "byteLength": 1565719,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "reset",
+          "rerollDebris",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "single-shot",
+        "lifecycle": {
+          "start": 0,
+          "end": 1.93
+        },
+        "notes": "Embedded rolling fire-to-smoke mesh, black radial spikes, flash, debris, dust and orange molten drops. No ink arcs; legacy ink* options are ignored. Thin horizontal warm-white shockwave expands at local Y=0.60 times size and fades by opacity through 0.65 seconds; no texture erosion. New burst: rerollDebris() then reset(); reset alone preserves the current layout for seeking. Each dust family samples 48-72 particles per new burst. Only size/speed are effective controls. No fetch, terrain modification or custom render hook; antialiased WebGL2 renderer recommended.",
+        "properties": [
+          "group",
+          "settings",
+          "phase",
+          "finished",
+          "elapsed",
+          "duration"
+        ],
+        "duration": 2.15,
+        "timeUnit": "seconds",
+        "plane": "XZ",
+        "up": "+Y",
+        "origin": "ground-impact-center",
+        "layerTypes": 11
+      },
+      "defaultOptions": {
+        "size": 1,
+        "speed": 1
+      }
+    },
+    {
+      "number": 70,
+      "id": "ice-lance-study",
+      "url": "https://00gamedevs.com/downloads/effects/ice-lance-study.js",
+      "sha256": "f97caf16350119bf4978c1d3754ed76d41b3d79fbcf16bb112766fdaf18c1fac",
+      "byteLength": 466037,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "reset",
+          "setOptions",
+          "render",
+          "dispose"
+        ],
+        "playback": "single-shot",
+        "lifecycle": {
+          "start": 0,
+          "end": 4.35
+        },
+        "notes": "Approved white-frost and pale-blue ice with depth-soft cold mist; default color #d4e8ed, bloom 1.1 and shiny 1. Lance flies along +X into (2.6,1.5,0); contact ice patch removed. Shield mist is emitted across the curved face, drifts outward, and stops spawning when the shield breaks; the shield holds steadily without impact events, starts breaking at 3.4s, and retains group.position.y=0.6. Ground crystals erupt at full height, vapor replenishes while present, then ice fragments explode at 3.6s. Fixed seed; reset and seek retain particle identity. Transparent supports do not write depth. The render hook is required even at bloom=0 for soft mist intersections. Bloom keeps opaque mesh occlusion, uses four lazy render targets, and restores scene/renderer state. Three.js r187, WebGL2, SRGBColorSpace, NoToneMapping, opaque full-frame output. No automatic animation loop, collision, terrain edits or external texture fetch; transparent environment bloom occlusion and additional host postprocessing are not supported. dispose releases owned resources; subsequent calls are inert.",
+        "properties": [
+          "group",
+          "settings",
+          "phase",
+          "finished",
+          "elapsed",
+          "duration"
+        ],
+        "duration": 4.35,
+        "timeUnit": "seconds",
+        "plane": "XZ",
+        "up": "+Y",
+        "layerTypes": 18,
+        "renderHook": "fx.render(renderer,scene,camera) replaces renderer.render; once per scene/frame, covers all ice instances"
+      },
+      "defaultOptions": {
+        "color": "#d4e8ed",
+        "size": 1,
+        "speed": 1,
+        "bloom": 1.1,
+        "shiny": 1
+      }
+    },
+    {
+      "number": 73,
+      "id": "anime-flame-shield",
+      "url": "https://00gamedevs.com/downloads/effects/anime-flame-shield.js",
+      "sha256": "a86934d55009111cb58f7432fdce82ed31b2eeb747650c2198f05b90d33e3093",
+      "byteLength": 53289,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setAim",
+          "render",
+          "setLayerVisible"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.25,
+          "end": 2
+        },
+        "notes": "Fixed-nozzle toon fire and smoke with an included ordinary opaque neutral sphere and cube. setAim(targetWorld) accepts a world-space Vector3 or finite {x,y,z}; parent/group transforms and size are included. Set transforms/size before aiming and resend the aim after transform changes to retain the same world target. The nearest positive nozzle-ray hit selects a prop; free fire keeps advancing and disperses into a small cooling tail, eroding within one visual second per birth, with a maximum forward center range of 10 local units. Default aim is the sphere. Instanced solid fire blobs (WebGL2) form thick fire outside the impacted front and sides; the back may remain exposed. Fixed material history has at most 384 records and two visual seconds, a 64-slot GPU birth ring is written only at spawn, and there is no 3D density texture or ray marching. There is no gas simulation. Seven retained VFX roles (0,1,3,5,7,11,14) plus two non-emissive solid props (4). Slots 2,6,8,9,10,12,13 are empty: the crown, peeling flames, ballistic sparks, speed lines, contact flash, smoke wisps and falling ash are removed. color, size and speed are the only appearance controls. Translation, rotation and positive uniform scale are supported. Start is 0.25 visual seconds, then sustain until stop(). stop prevents new births and leaves a two-visual-second tail. Already emitted material retains its root-local birth position, velocity and target; it may reach its original target after stopping. Heat requires actual arrival. Changing aim affects future births and cannot move an old tail or ignite a new target after stop. reset preserves aim, transform and settings, clears live material history, and replays the fixed seed. After updating all instances, call render(renderer,scene,camera) once through any Anime Flame Flow instance, replacing renderer.render. All same-family instances in this renderer/scene share the base/emission mesh passes and the glow composite; there is no separate depth prepass. Cooled smoke emits no light but still absorbs fire behind it; solid fire and cold smoke write hardware depth; idle/hidden instances skip postprocessing. The pipeline restores renderer and scene state. Perspective and orthographic cameras are supported. The host supplies timing and gameplay aim; downloads contain no pointer/DOM handlers, camera, automatic loop, damage, terrain or arbitrary-mesh collision solver. Preview/debug markers are private, not SDK properties. Three.js r187, WebGL2, SRGBColorSpace, NoToneMapping and opaque full-frame output; transparent host materials/output, arbitrary host postprocessing and automatic composition with other glow families remain unverified.",
+        "requiredRenderHook": "render(renderer,scene,camera)",
+        "aimMethod": "setAim(targetWorld)",
+        "properties": [
+          "group",
+          "settings",
+          "lifecycle",
+          "phase",
+          "finished",
+          "elapsed"
+        ],
+        "timeUnit": "seconds",
+        "up": "+Y",
+        "origin": "fixed-local-nozzle-and-targets",
+        "layerTypes": 7,
+        "includedProps": 2
+      },
+      "defaultOptions": {
+        "color": "#ff761f",
+        "size": 1,
+        "speed": 1
+      }
+    }
+  ]
+}
