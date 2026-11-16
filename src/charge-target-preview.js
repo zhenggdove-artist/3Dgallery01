@@ -21,6 +21,20 @@ export class ChargeTargetPreview{
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
   this.runes=new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:'#70d5ff',transparent:true,opacity:.85,depthTest:false,depthWrite:false}));
   this.runes.renderOrder=21;this.group.add(this.runes);
+  // Rising, finely scattered motes make the full charged radius legible in 3D,
+  // without changing the server-authoritative hit area projected by the rings.
+  const count=460,positions=new Float32Array(count*3);let seed=0x2a7b95;
+  const rnd=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  for(let i=0;i<count;i++){
+   const a=rnd()*Math.PI*2,r=Math.sqrt(rnd())*.94;
+   positions.set([Math.cos(a)*r,.045+rnd()*.78,Math.sin(a)*r],i*3);
+  }
+  const motes=new THREE.BufferGeometry();
+  motes.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  this.motes=new THREE.Points(motes,new THREE.PointsMaterial({color:'#b7efff',size:.055,sizeAttenuation:true,transparent:true,opacity:.76,depthWrite:false,depthTest:false,blending:THREE.AdditiveBlending}));
+  this.motes.frustumCulled=false;this.motes.renderOrder=22;this.group.add(this.motes);
+  this.beam=new THREE.Mesh(new THREE.CylinderGeometry(.12,.52,1.25,32,1,true),new THREE.MeshBasicMaterial({color:'#48adff',transparent:true,opacity:.14,depthWrite:false,depthTest:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));
+  this.beam.position.y=.64;this.beam.renderOrder=19;this.group.add(this.beam);
   this.path=new THREE.Line(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3)),new THREE.LineBasicMaterial({color:'#37b5ff',transparent:true,opacity:.65,depthTest:false,depthWrite:false}));
   this.path.frustumCulled=false;this.path.renderOrder=19;scene.add(this.path);
   this.group.visible=this.path.visible=false;this.t=0;
@@ -38,6 +52,8 @@ export class ChargeTargetPreview{
   this.outer.material.opacity=.6+.2*Math.sin(this.t*3);
   this.inner.material.opacity=.45+.18*Math.cos(this.t*2);
   this.runes.material.opacity=.62+.3*Math.sin(this.t*2.5);
+  this.motes.rotation.y-=.006;this.motes.material.opacity=(.38+.4*charge)*(.88+.12*Math.sin(this.t*3));
+  this.beam.material.opacity=.07+.19*charge;
   this.path.geometry.attributes.position.setXYZ(0,origin[0],origin[1],origin[2]);
   this.path.geometry.attributes.position.setXYZ(1,p[0],Math.max(.2,p[1])+.05,p[2]);
   this.path.geometry.attributes.position.needsUpdate=true;
