@@ -120,7 +120,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
   const nearSpawn=spawn&&distanceTo(next.position,spawn)<=6;
   if(!previous&&spawn&&!nearSpawn)return {error:'Spawn position rejected',state:{position:spawn,rotation:0,animation:'idle',visible:true}};
   if(previous&&role==='fighter'){
-    const freeze=effectActive(mobility,'freeze',now),root=effectActive(mobility,'root',now);
+    const freeze=effectActive(mobility||{},'freeze',now),root=effectActive(mobility||{},'root',now);
     if(freeze||root)return {state:{...previous,position:[...previous.position],
       rotation:freeze?previous.rotation:+next.rotation.toFixed(4),
       animation:'idle',visible:true}};

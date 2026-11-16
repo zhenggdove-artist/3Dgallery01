@@ -43,7 +43,7 @@ export function applyElementalHit(target,source,weapon,now){
  // restrain locomotion, leaving look and attacks available.
  const family=weapon.family;
  if(family==='ice'){delete e.slow;return put('freeze',1000,0,5000);}
- if(['planter','petal','palm','whip'].includes(family)&&!weapon.exotic){delete e.root;return put('root',1000,0,5000);}
+ if(['planter','petal','palm','whip'].includes(family)&&!weapon.exotic)return put('root',1000,0,5000);
  if(family==='fire'||weapon.element==='fire'){
   if(!e.burn||e.burn.until<=now)return put('burn',5000,1);
   return 'burn';

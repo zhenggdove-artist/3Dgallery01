@@ -46,7 +46,7 @@ test('PvP power is weighted by range, radius, cooldown and charging duration',()
    w.id+' must never two-shot via critical or headshot multipliers');
  }
 });
-test('starter clam takes about 8–10 ordinary confirmed strikes to eliminate a fresh 100 HP fighter',()=>{
+test('starter water clam uses the new 1.5x soak debuff after the first confirmed strike',()=>{
  const {w,caster,victim,b}=scenario('clam',[75,0,2.2]);
  let hits=0;
  for(let i=0;i<14&&b.hp>0;i++){
@@ -58,7 +58,7 @@ test('starter clam takes about 8–10 ordinary confirmed strikes to eliminate a 
   if(worldView(w,'caster',at+421).damageEvents.some(e=>e.target==='victim'))hits++;
  }
  assert.ok(b.hp<=0,'victim eventually dies');
- assert.ok(hits>=8&&hits<=10,'expected 8–10 hits, got '+hits);
+ assert.ok(hits>=5&&hits<=7,'expected 5–7 hits with water vulnerability, got '+hits);
 });
 test('damage is absent on firing and while the sphere has not yet reached the avatar',()=>{
  const {w,caster,victim,b}=scenario('calico-cat',[75,0,8]);
