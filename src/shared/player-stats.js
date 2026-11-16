@@ -6,10 +6,17 @@ import {originalEquipmentGame,equippedItem} from './fusion-adapter.js';
 // Original equipment/crop multipliers; Temple uses a 100 HP base instead of 3 HP.
 export function playerStats(world,profile,now=Date.now()){
   const key=profile.key,traits=traitStats(originalEquipmentGame(profile,world),key,now);
+  let fusedAttack=0,fusedDefense=0;
+  for(const [slot,id] of Object.entries(profile.equipment||{})){
+    const base=itemById(id),stats=profile.fusion?.[id]?.templeStats;
+    if(!base||!stats)continue;
+    if(slot!=='weapon')fusedAttack+=Math.max(0,(Number(stats.damage)||0)-(Number(base.damage)||0))/100;
+    fusedDefense+=Math.max(0,(Number(stats.defense)||0)-(Number(base.defense)||0));
+  }
   const rawWing=itemById(profile.equipment.wings),wing=rawWing&&equippedItem(profile,rawWing);
   return {maxHp:100+(profile.level-1)*4+traits.hp*10,
-    attack:traits.attack*(1-(effectActive(profile,'weak',now)?.power||0)),speed:traits.speed*(1-(effectActive(profile,'slow',now)?.power||0))*(effectActive(profile,'stun',now)||effectActive(profile,'root',now)?0:1),
-    jump:traits.jump,defense:traits.defense*(1+(effectActive(profile,'expose',now)?.power||0)),
+    attack:(traits.attack+fusedAttack)*(1-(effectActive(profile,'weak',now)?.power||0)),speed:traits.speed*(1-(effectActive(profile,'slow',now)?.power||0))*(effectActive(profile,'stun',now)||effectActive(profile,'root',now)?0:1),
+    jump:traits.jump,defense:Math.max(.35,traits.defense*(1+(effectActive(profile,'expose',now)?.power||0))*(1-Math.min(.5,fusedDefense/300))),
     gravity:wing?.gravity||1,impulse:wing?.impulse||0,flapMs:wing?.flapMs||0};
 }
 export function refreshStats(world,profile,now=Date.now()){

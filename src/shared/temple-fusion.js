@@ -20,22 +20,21 @@ export function fuseTemple(world,profile,body){
  const main=equippedItem(profile,target),material=equippedItem(profile,source),stats={...(old.templeStats||{})};
  const keys=['damage','chargeDamage','range','chargeRange','radius','defense','capacity','impulse','speed','jump'];
  for(const key of keys){
-  const a=Number(material[key]),b=Number(main[key]);
-  if(!(a>0)||!(b>0))continue;
+  const a=Number(material[key]),b=Number(main[key])||0;
+  if(!(a>0))continue;
   const cap=['range','chargeRange'].includes(key)?400:key==='radius'?80:key==='defense'?300:100000;
   stats[key]=+Math.min(cap,b+a*.3).toFixed(3);
  }
- if(source.slot==='material'&&target.slot==='weapon'){
-  const extra={'wet-stone':3.5,'signal-wire':6,'temple-resin':10}[source.id]||0;
-  stats.damage=+(Number(stats.damage??main.damage??0)+extra).toFixed(3);
- }
+ let bonus=Number(old.bonus)||0;
+ if(source.slot==='material'&&target.slot==='weapon')
+  bonus+=({'wet-stone':3.5,'signal-wire':6,'temple-resin':10}[source.id]||0);
  if(!profile.admin){profile.wallet-=cost;world.activity.coinBurned+=cost;}
  profile.inventory.splice(sourceIndex,1);
  if(source.id!==target.id&&profile.equipment[source.slot]===source.id)profile.equipment[source.slot]=null;
  const effects=(old.effects||[]).filter(id=>itemById(id)?.slot==='weapon').slice(0,2);
  const grantsEcho=target.slot==='weapon'&&source.slot==='weapon'&&effects.length<2;
  if(grantsEcho)effects.push(source.id);
- profile.fusion[target.id]={...old,layer,templeStats:stats,effects,
+ profile.fusion[target.id]={...old,layer,bonus,templeStats:stats,effects,
   sources:[...(old.sources||[]),{id:source.id,name:source.name,statPercent:30,echo:grantsEcho}]};
  const result={notice:'FUSION SUCCESS · '+target.name+' +'+layer+
   (grantsEcho?' · ULTIMATE ECHO '+effects.length+'/2':' · STATS +30%'),

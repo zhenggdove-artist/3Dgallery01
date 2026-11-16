@@ -131,3 +131,17 @@ test('WRITE survives a stale 201m WebSocket position at landing and commits one 
  assert.equal(w.plants.length,1);
  assert.equal(w.profiles[actor.key].writeJourney,null);
 });
+
+test('cross-rarity fusion works for shop-bought weapons and headwear',()=>{
+ const now=31_000_000,w=createInitialWorld(now),person=actor('buyer',[75,0,0]);
+ const p=ensureProfile(w,'buyer','Buyer','#abcdef',now);p.wallet=100000;
+ for(const id of ['frost-1','ember-1','storm-1','temple-halo'])p.inventory.push(id);
+ const fuse=(sourceId,targetId,requestId,at)=>applyAction(w,person,{action:'fuse',sourceId,targetId,requestId},{now:at});
+ assert.equal(fuse('frost-1','ember-1','fuse-echo-first',now+100).fusion.success,true);
+ assert.equal(fuse('storm-1','ember-1','fuse-echo-second',now+200).fusion.success,true);
+ assert.equal(fuse('temple-halo','ember-1','fuse-stats-third',now+300).fusion.success,true);
+ assert.deepEqual(p.fusion['ember-1'].effects,['frost-1','storm-1']);
+ assert.equal(p.fusion['ember-1'].layer,3);
+ assert.ok(p.fusion['ember-1'].templeStats.damage>itemById('ember-1').damage);
+ assert.equal(p.inventory.includes('temple-halo'),false);
+});
