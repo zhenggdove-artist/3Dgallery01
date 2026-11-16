@@ -124,6 +124,9 @@ export function applyAction(world,actor,body,context={}){
   if(body.action==='set-artwork-layout')return setArtworkLayout(world,profile,body,now);
   const denied=requireFighter(actor);if(denied)return denied;const dead=requireAlive(profile,now);if(dead&&!['respawn'].includes(body.action))return dead;
   if(body.action.startsWith('write-')){const result=journeyAction(world,profile,actor,body,now);if(!result.error)world.revision++;return result;}
+  // WebGL-heavy clients may not have sent their final landing pose when WRITE
+  // finishes. Trust the server's own timed journey, not stale socket coords.
+  if(body.action==='plant'&&profile.writeJourney){const pose=journeyPose(profile.writeJourney,now);if(pose?.phase==='land')actor={...actor,position:pose.position};}
   if(!insideArena(actor.position,2))return {error:'Invalid actor position'};
   if(ORIGINAL_ACTIONS.has(body.action)){const result=originalAction(world,profile,actor,body,now,rng);if(!result.error)world.revision++;return result;}
   let result;
