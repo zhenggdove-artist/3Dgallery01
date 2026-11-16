@@ -10,7 +10,18 @@ try{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&/Shader Error|WebGLProgram|shader compilation|ERROR: 0:/i.test(m.text()))errors.push(m.text());});
  await page.addInitScript(()=>localStorage.setItem('temple-backend-url','http://127.0.0.1:8787'));
  await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});
- await page.waitForFunction(()=>document.body.classList.contains('ready'),null,{timeout:120000});
+ try{await page.waitForFunction(()=>document.body.classList.contains('ready'),null,{timeout:65000});}
+ catch(error){
+  const debug=await page.evaluate(()=>({
+   bodyClass:document.body.className,
+   loading:document.querySelector('#loading')?.textContent?.slice(0,1000),
+   entryError:document.querySelector('#entry-error')?.textContent,
+   status:document.querySelector('#loading-status')?.textContent,
+   templeTest:!!window.templeTest,
+   readyState:document.readyState
+  }));
+  throw new Error('Temple never loaded: '+JSON.stringify(debug)+'; PAGEERRORS='+errors.join('; ').slice(0,2400),{cause:error});
+ }
  await page.locator('#player-name').fill('CIBrowser');
  await page.locator('#entry-form').evaluate(f=>f.requestSubmit());
  await page.locator('#hud').waitFor({state:'visible'});
