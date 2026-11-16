@@ -107,3 +107,22 @@ test('plant replies form persistent branches and monsters respect the central sa
   const profile=world.profiles.p1;world.monster={active:true,id:'monster',variant:'warden',position:[6.5,0,0],hp:420,maxHp:420,generation:1,nextAttackAt:now};const before=[...world.monster.position],hp=profile.hp;
   tickWorld(world,{now:now+2,activeFighters:1,actors:[writer]});assert.ok(Math.hypot(world.monster.position[0],world.monster.position[2])>=49);assert.equal(profile.hp,hp);
 });
+
+
+test('WRITE survives a stale 201m WebSocket position at landing and commits one plant',()=>{
+ const now=700000,w=createInitialWorld(now);
+ const actor={key:'write-high',name:'Writer',color:'#43b59a',role:'fighter',position:[0,0,0]};
+ ensureProfile(w,actor.key,actor.name,actor.color,now);
+ const begin=applyAction(w,actor,{action:'write-begin'},{now});
+ assert.ok(begin.journey);
+ const drink=applyAction(w,actor,{action:'write-drink',duration:2},{now:now+3100});
+ assert.ok(drink.journey?.landing);
+ const high={...actor,position:[0,201.5,0]};
+ const early=applyAction(w,high,{action:'plant',text:'Persistent WRITE plant',position:[0,0,0]},{now:now+7500});
+ assert.match(early.error,/landing/);
+ assert.equal(w.plants.length,0);
+ const saved=applyAction(w,high,{action:'plant',text:'Persistent WRITE plant',position:drink.journey.landing},{now:now+8650});
+ assert.equal(saved.plant?.text,'Persistent WRITE plant');
+ assert.equal(w.plants.length,1);
+ assert.equal(w.profiles[actor.key].writeJourney,null);
+});

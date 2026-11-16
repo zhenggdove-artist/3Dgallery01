@@ -144,7 +144,16 @@ export function applyAction(world,actor,body,context={}){
   if(body.action.startsWith('write-')){const result=journeyAction(world,profile,actor,body,now);if(!result.error)world.revision++;return result;}
   // WebGL-heavy clients may not have sent their final landing pose when WRITE
   // finishes. Trust the server's own timed journey, not stale socket coords.
-  if(body.action==='plant'&&profile.writeJourney){const pose=journeyPose(profile.writeJourney,now);if(pose?.phase==='land')actor={...actor,position:pose.position};}
+  if(body.action==='plant'&&profile.writeJourney){
+    const journey=profile.writeJourney;
+    if(!journey.drinkAt||!Array.isArray(journey.landing))return {error:'Finish WRITE before planting'};
+    // Client and Durable Object clocks/packets can disagree by several frames.
+    // Require the server-side fall to finish (with a small sync grace period),
+    // then use the authoritative landing point, never a stale 201m socket pose.
+    const landingAt=journey.drinkAt+journey.drinkDuration*1000+600+3000;
+    if(now<landingAt-250)return {error:'WRITE landing still in progress'};
+    actor={...actor,position:[...journey.landing]};
+  }
   if(!insideArena(actor.position,2))return {error:'Invalid actor position'};
   if(ORIGINAL_ACTIONS.has(body.action)){const result=originalAction(world,profile,actor,body,now,rng);if(!result.error)world.revision++;return result;}
   let result;
