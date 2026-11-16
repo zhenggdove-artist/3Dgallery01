@@ -125,7 +125,7 @@ try{
   const giraffe=items.find(w=>w.id==='giraffe');v.play({origin:[-20,1,-20],direction:[0,0,-1],range:28,charge:1,ultimate:true},giraffe,null);recipes.giraffe=v.signatureEffects.active.at(-1)?.obj?.name;
   return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
  });
- assert.deepEqual(vfxState.recipes,{swatter:'00GameDevs original VFX #53 darkchain-detonation',pan:'00GameDevs original VFX #68 rolling-fireburst',saber:'00GameDevs original VFX #38 magma-fissure',petal:'00GameDevs original VFX #43 revival-bloom',planter:'Three stacked solid thorn-vine tiers',palm:'00GameDevs original VFX #31 thorn-crown',shotgun:'Ten independent irregular multicolour volumetric shotgun spheres',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
+ assert.deepEqual(vfxState.recipes,{swatter:'00GameDevs original VFX #53 darkchain-detonation',pan:'00GameDevs original VFX #68 rolling-fireburst',saber:'00GameDevs original VFX #38 magma-fissure',petal:'00GameDevs original VFX #43 revival-bloom',planter:'Three stacked solid thorn-vine tiers',palm:'00GameDevs original VFX #31 thorn-crown',shotgun:'Twenty independent glowing rainbow shotgun spheres',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
  assert.equal(vfxState.sky,'World-oriented distant cloud sky (no moon)');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});
@@ -152,11 +152,13 @@ try{
     actual:fx?.spec?.number,group:fx?.group?.name,
     // Native cone/beam/wave/sword skills begin at the real nozzle; only
     // remote blast spells should be located at the ground AoE centre.
-    aligned:kind!=='ultimate'||[20,31,33,38,43].includes(num)
-      ?kind!=='ultimate'||Math.hypot(
-       fx.group.position.x+22,fx.group.position.y-(num===38?.12:1),fx.group.position.z+22)<.0001
-      :Math.hypot(
-       fx.group.position.x+22,fx.group.position.y-.16,fx.group.position.z+8)<.0001});
+    aligned:num===38
+      ?fx.group.position.z>-22&&Math.abs(fx.group.userData.fissureRange-17)<.001
+      :kind!=='ultimate'||[20,31,33,43].includes(num)
+        ?kind!=='ultimate'||Math.hypot(
+          fx.group.position.x+22,fx.group.position.y-1,fx.group.position.z+22)<.0001
+        :Math.hypot(
+          fx.group.position.x+22,fx.group.position.y-.16,fx.group.position.z+8)<.0001});
    // Allow at least one real frame with each source material. #70 / #73
    // also exercise their mandatory authored render pipeline through VHS.
    await new Promise(resolve=>setTimeout(resolve,220));

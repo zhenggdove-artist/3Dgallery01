@@ -18,11 +18,11 @@ function worldWithCat(){
  world.monster={id:'uncle',active:true,variant:'uncle',model:'uncle',position:[75,0,8],hp:800,maxHp:800,skills:[],nextAttackAt:start+10000};
  return {world,shooter,profile};
 }
-test('calico spread has exactly ten independent, normalized lanes and charged reach stays short of the SMG',()=>{
+test('calico spread has exactly twenty independent, normalized lanes and charged reach stays short of the SMG',()=>{
  const normal=calicoPellets([0,0,1],false),charged=calicoPellets([0,0,1],true);
- assert.equal(CALICO_PELLET_COUNT,10);
- assert.equal(normal.length,10);assert.equal(charged.length,10);
- assert.equal(new Set(normal.map(p=>p.direction.join(','))).size,10);
+ assert.equal(CALICO_PELLET_COUNT,20);
+ assert.equal(normal.length,20);assert.equal(charged.length,20);
+ assert.equal(new Set(normal.map(p=>p.direction.join(','))).size,20);
  assert.ok(normal.every(p=>Math.abs(Math.hypot(...p.direction)-1)<1e-10));
  const divergence=r=>r.reduce((sum,p)=>sum+Math.hypot(p.direction[0],p.direction[1]),0);
  assert.ok(divergence(charged)>divergence(normal));
@@ -32,7 +32,7 @@ test('calico spread has exactly ten independent, normalized lanes and charged re
  assert.ok(attackStats(shotgun,1).range<attackStats(smg,0).range);
  assert.ok(attackStats(shotgun,1).damage>attackStats(shotgun,0).damage);
 });
-test('all ten overlapping shotgun pellets hit a sixfold uncle as TEN damage numbers',()=>{
+test('all twenty overlapping shotgun pellets hit a sixfold uncle as twenty damage numbers',()=>{
  const {world,shooter}=worldWithCat();
  const before=world.monster.hp;
  const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1],charge:0},{now:start+2000,rng:()=>.5,actors:[shooter]});
@@ -42,21 +42,21 @@ test('all ten overlapping shotgun pellets hit a sixfold uncle as TEN damage numb
  tickWorld(world,{now:start+2390,rng:()=>.5,actors:[shooter],activeFighters:0});
  assert.equal(world.monster.hp<before,true);
  const damage=worldView(world,shooter.key,start+2391).damageEvents.filter(e=>e.target==='uncle');
- assert.equal(damage.length,10);
- assert.equal(new Set(damage.map(e=>e.id)).size,10);
+ assert.equal(damage.length,20);
+ assert.equal(new Set(damage.map(e=>e.id)).size,20);
  assert.equal(world.monster.aggroTarget,shooter.key);
 });
-test('ten pellet collisions can individually damage another fighter',()=>{
+test('twenty pellet collisions can individually damage another fighter',()=>{
  const {world,shooter}=worldWithCat();world.monster.active=false;
  const target=fighter('victim',75,6);
  const victim=ensureProfile(world,target.key,target.name,target.color,start);
- // Ten independently travelling pellets must remain observable even after
- // the shotgun buff; a normal 100 HP victim dies before all ten land.
+ // twenty independently travelling pellets must remain observable even after
+ // the shotgun buff; a normal 100 HP victim dies before all twenty land.
  victim.level=300;victim.maxHp=1296;victim.hp=1296;
  const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1]},{now:start+2000,rng:()=>.5,actors:[shooter,target]});
  assert.equal(result.hits.length,0,'shot packets launch but cannot instantly hit');
  tickWorld(world,{now:start+2390,rng:()=>.5,actors:[shooter,target],activeFighters:0});
- assert.equal(worldView(world,target.key,start+2391).damageEvents.filter(e=>e.target===target.key).length,10);
+ assert.equal(worldView(world,target.key,start+2391).damageEvents.filter(e=>e.target===target.key).length,20);
 });
 test('stray shotgun particles outside the sixfold torso do not inflict phantom damage',()=>{
  const {world,shooter}=worldWithCat();world.monster.position=[87,0,8];

@@ -63,7 +63,7 @@ test('starter clam takes about 8–10 ordinary confirmed strikes to eliminate a 
 test('damage is absent on firing and while the sphere has not yet reached the avatar',()=>{
  const {w,caster,victim,b}=scenario('calico-cat',[75,0,8]);
  const at=T+2000,shot=fire(w,caster,at);
- assert.equal(shot.attackEvent.pellets.length,10);
+ assert.equal(shot.attackEvent.pellets.length,20);
  assert.equal(b.hp,100);
  assert.equal((w.damageEvents||[]).length,0);
  assert.equal(shot.hit,null);
@@ -88,18 +88,18 @@ test('moving out of the trajectory before impact avoids all hits',()=>{
  assert.equal(b.hp,100);
  assert.equal((w.damageEvents||[]).filter(e=>e.target==='victim').length,0);
 });
-test('shotgun uses ten unique randomly scattered 3-D sphere trajectories, each with a complex multicolour surface',()=>{
+test('shotgun uses twenty unique randomly scattered 3-D sphere trajectories, each with a complex multicolour surface',()=>{
  const weapon=itemById('calico-cat'),scene=new THREE.Scene(),fx=new WeaponSignatureEffects(scene);
  const a=calicoPellets([0,0,1],false,111),b=calicoPellets([0,0,1],false,222);
  assert.notDeepEqual(a.map(p=>p.direction),b.map(p=>p.direction));
  assert.deepEqual(a,calicoPellets([0,0,1],false,111),'client/server share deterministic lanes');
- assert.equal(new Set(a.map(p=>p.direction.join(','))).size,10);
+ assert.equal(new Set(a.map(p=>p.direction.join(','))).size,20);
  const positions=a.map(p=>[p.direction[0],p.direction[1]]);
  assert.ok(new Set(positions.map(p=>p[1].toFixed(3))).size>=6,'not two neat rows');
  assert.ok(new Set(positions.map(p=>p[0].toFixed(3))).size>=6,'not five neat columns');
  fx.play({origin:[0,1,0],direction:[0,0,1],range:10,time:111,pellets:a.map(x=>x.direction)},weapon);
  const group=fx.active.at(-1).obj;
- assert.equal(group.children.length,10);
+ assert.equal(group.children.length,20);
  for(const child of group.children){
   assert.ok(child.isMesh&&child.geometry.type==='SphereGeometry');
   assert.ok(child.geometry.attributes.normal,'real sphere surface normals');

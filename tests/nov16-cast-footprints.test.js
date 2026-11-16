@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {ChargeTargetPreview} from '../src/charge-target-preview.js';
 import {chargedArea,spellFootprint,insideChargedArea} from '../src/shared/charge-area.js';
 import {WEAPONS,itemById,attackStats} from '../src/shared/catalog.js';
-import {isChannelStaff,weaponQuality,channelVisualRadius,channelReachMultiplier} from '../src/shared/weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier} from '../src/shared/weapon-abilities.js';
 
 const nearly=(a,b,what)=>assert.ok(Math.abs(a-b)<1e-6,what+': '+a+' vs '+b);
 const scene=()=>new THREE.Scene();
@@ -72,11 +72,11 @@ test('all weapons have dimensional warning contracts derived from identical atta
   const stats=attackStats(item,1),quality=weaponQuality(item);
   if(isChannelStaff(item))stats.range=Math.max(stats.range,item.id==='clam'?10:Math.min(18,item.range))*channelReachMultiplier(item);
   stats.range=+(stats.range*quality.range).toFixed(2);
-  stats.radius=isChannelStaff(item)?channelVisualRadius(item,quality,stats.range):+(stats.radius*quality.radius).toFixed(2);
+  stats.radius=forwardCastRadius(item,quality,stats.radius,isChannelStaff(item));
   if(item.id==='clam'){
    assert.equal(a.shape,'sector',item.id);
    nearly(preview.sector.settings.size*preview.sector.group.scale.x,stats.range,item.id);
-  }else if(isChannelStaff(item)||item.family==='saber'||item.family==='palm'||item.pattern==='scatter'||item.id==='goldfish'){
+  }else if(isChannelStaff(item)||item.firstPerson||item.family==='saber'||item.family==='palm'||item.pattern==='scatter'||item.id==='goldfish'){
    assert.equal(a.shape,'rectangle',item.id);
    nearly(preview.rectangle.settings.length*preview.rectangle.group.scale.x,stats.range,item.id);
    nearly(preview.rectangle.settings.width*preview.rectangle.group.scale.z,stats.radius*2,item.id);

@@ -36,8 +36,8 @@ test('chiang token is no longer a Temple weapon, including old accounts',()=>{
 test('calico shot spread is wider when charged and particles use a 3D cone',()=>{
  const weapon=itemById('calico-cat'),shot={direction:[0,0,1],charge:0,damage:50},charged={...shot,charge:1};
  assert.equal(recipeFor(weapon),'rainbow-scatter');
- assert.equal(oddVolley(weapon,shot).length,10);
- assert.equal(oddVolley(weapon,charged).length,10);
+ assert.equal(oddVolley(weapon,shot).length,20);
+ assert.equal(oddVolley(weapon,charged).length,20);
  assert.ok(Math.abs(oddVolley(weapon,charged)[0].direction[0])>.6);
  assert.ok(oddAttackStats(weapon,1).radius>oddAttackStats(weapon,0).radius);
 });

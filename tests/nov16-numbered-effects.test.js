@@ -60,11 +60,17 @@ test('every numbered attack instantiates an actual source module, never a partic
     assert.equal(entry.palmLayers.every(fx=>fx.group.userData.vfxNumber===31),true);
     assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,1,0))<1e-8);
    }else if(num===38){
-    assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,.12,0))<1e-8,weapon);
+    assert.ok(entry.group.position.z>0,'#38 cannot be centred at the actor');
+    const length=entry.range;
+    const tip=entry.group.position.clone().add(new THREE.Vector3(-2.25,0,0)
+       .multiply(entry.group.scale).applyQuaternion(entry.group.quaternion));
+    tip.y=1; // the ground crack starts below the hand, on the terrain
+    assert.ok(Math.abs(tip.z)<.02,'first crack must start at the sword');
+    assert.ok(Math.abs(entry.group.userData.fissureRange-length)<1e-8);
     const axis=new THREE.Vector3(1,0,0).applyQuaternion(entry.group.quaternion);
     assert.ok(axis.distanceTo(new THREE.Vector3(0,0,1))<1e-8,'crack must point along the sword ray');
-    assert.equal(entry.group.scale.x,4,'#38 forward fissure is twice the previous x2');
-    assert.equal(entry.group.scale.z,2,'#38 must not widen further');
+    assert.ok(Math.abs(entry.group.scale.x-entry.range/4.68)<1e-8,'length follows server range, not sideways stretch');
+    assert.ok(Math.abs(entry.group.scale.z-2/3)<1e-8,'side-to-side fissure is one-third prior width');
    }else assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,.16,8))<1e-8,weapon);
   }
   effects.update(.01);
@@ -184,13 +190,20 @@ test('authored #73 demonstration sphere and cube are hidden; the fire nozzle is 
  assert.equal(scene.children.length,0);
 });
 
-test('the original #70 ice pillar is scaled to exactly half the previous size',()=>{
+test('the original #70 ice shards detach from the staff and travel the full doubled distance',()=>{
  const scene=new THREE.Scene(),fx=new NumberedWeaponEffects(scene);
  fx.play(evt('channel'),itemById('frost-1'));
  assert.equal(fx.active[0].spec.number,70);
- assert.ok(Math.abs(fx.active[0].fx.group.scale.x-2.4)<1e-7,'ice forward distance doubles again');
- assert.ok(Math.abs(fx.active[0].fx.group.scale.y-.6)<1e-7,'ice width stays half size');
- assert.ok(Math.abs(fx.active[0].fx.settings.speed-2)<1e-7,'ice advance speed is doubled');
+ const entry=fx.active[0];
+ assert.ok(entry.cycles?.length===1);
+ const origin=entry.cycles[0].start.clone();
+ const baseSize=entry.cycles[0].fx.settings.size;
+ assert.ok(Math.abs(baseSize-.6)<1e-7,'ice shards stay half-size');
+ assert.ok(Math.abs(entry.cycles[0].fx.settings.speed-2)<1e-7,'source animation stays 2x speed');
+ fx.update(.65);
+ assert.ok(entry.cycles[0].fx.group.position.z>origin.z+entry.range*.45,'ice shards travel world-space');
+ fx.update(.65);
+ assert.ok(entry.cycles[0].fx.group.position.z>origin.z+entry.range*.95,'ice reaches entire server ray');
  fx.dispose();
  assert.equal(scene.children.length,0);
 });
@@ -272,7 +285,7 @@ test('charged sword has 2x additional reach and one-third previous width, consis
  assert.equal(fx.rectangle.group.userData.vfxNumber,59);
  assert.equal(fx.footprint.shape,'rectangle');
  assert.ok(Math.abs(fx.footprint.length-stats.range)<1e-8);
- assert.ok(Math.abs(fx.footprint.width-stats.radius*2)<1e-8);
+ assert.ok(Math.abs(fx.footprint.width-Math.max(.5,stats.radius*2))<1e-8);
  assert.ok(Math.abs(fx.footprint.position[2]-(muzzle[2]+stats.range/2))<1e-8);
  fx.dispose();
 });

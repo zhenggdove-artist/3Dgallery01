@@ -82,18 +82,21 @@ test('fan produces four server-owned independently wandering vortex tracks, and 
  const low=weaponQuality({...itemById('fan'),tier:1});
  assert.ok(fx.expiresAt-fx.createdAt>1400+low.tier*850);
 });
-test('shotgun is ten visible round coloured spheres, charged larger; other charged skills have separate constructions',()=>{
+test('shotgun is twenty half-sized glowing rainbow spheres, charged larger; other charged skills have separate constructions',()=>{
  const scene=new THREE.Scene(),vfx=new WeaponSignatureEffects(scene);
  const weapon=itemById('calico-cat'),pellets=calicoPellets([0,0,1],false).map(x=>x.direction);
  const shot={origin:[75,1,0],direction:[0,0,1],pellets,range:10,qualityScale:1,qualityTier:3,time:start};
  assert.equal(vfx.play({...shot,ultimate:false},weapon),true);
  const normal=vfx.active.at(-1);
- assert.equal(normal.obj.children.length,10,'ten actual volumetric coloured spheres');
- assert.equal(normal.obj.children.filter(x=>x.isMesh&&x.geometry.type==='SphereGeometry').length,10);
+ assert.equal(normal.obj.children.length,20,'twenty actual glowing volumetric spheres');
+ assert.equal(normal.obj.children.filter(x=>x.isMesh&&x.geometry.type==='SphereGeometry').length,20);
  assert.ok(normal.obj.children.every(x=>x.material.isMeshPhysicalMaterial&&x.material.vertexColors));
  const normalRadius=normal.obj.children[0].scale.x;
  assert.equal(vfx.play({...shot,ultimate:true,range:17,qualityScale:1.4},weapon),true);
  assert.ok(vfx.active.at(-1).obj.children[0].scale.x>normalRadius);
+ assert.ok(normalRadius<.3,'pellets are half size');
+ assert.ok(normal.obj.children.every(ball=>ball.children.some(halo=>halo.material?.blending===THREE.AdditiveBlending)),
+  'all twenty marbled orbs have an additive luminous halo');
  const cases=[
   ['bloom-3','One enormous forward rotating translucent particle blossom','Points'],
   ['planter-3','Three stacked solid thorn-vine tiers','Mesh'],
