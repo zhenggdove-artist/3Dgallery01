@@ -244,7 +244,7 @@ function followSpectator(key){if(self?.role!=='spectator')return;const target=ke
 function cycleSpectator(){if(self?.role!=='spectator')return;const fighters=players.filter(player=>player.role==='fighter'&&roots.get(player.key));if(!fighters.length)return followSpectator('');spectatorFollowIndex=(spectatorFollowIndex+1)%fighters.length;followSpectator(fighters[spectatorFollowIndex].key);}
 
 function performAttack(charge=0,phase=null){
- if(controller?.status?.freeze)return;
+ if(controller?.status?.freeze||world?.profile?.effects?.paralysis?.until>Date.now())return;
  if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
  const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
  const shot=item.firstPerson?gun.shot():null;
@@ -276,7 +276,8 @@ function update(dt,time){
   const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
   // First 500ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
   // the charging window; the very first sustained pulse is the ultimate.
-  if(attackHeld&&charge>=1&&isChannelStaff(heldItem)&&!staffChannel&&
+  if(attackHeld&&!world?.profile?.effects?.paralysis?.until||false){} // electrical safety is enforced below
+  if(attackHeld&&!(world?.profile?.effects?.paralysis?.until>Date.now())&&charge>=1&&isChannelStaff(heldItem)&&!staffChannel&&
      performance.now()-(window._templeLastChannelAttempt||0)>170){
    window._templeLastChannelAttempt=performance.now();
    const serial=++staffChannelSerial;
