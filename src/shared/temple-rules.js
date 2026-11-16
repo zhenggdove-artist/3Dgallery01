@@ -642,8 +642,12 @@ function tickPersistentAttacks(world,actors,now,rng){
      const pos=target.kind==='player'
       ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]:
        [enemy.position[0],enemy.position[1]+ENEMY_HEIGHT*.5,enemy.position[2]];
-     if(!insideChargedArea(fx.area,pos,target.kind==='player'?1.02:ENEMY_RADIUS))continue;
-     if(outcome(target,pos,fx.area.center,null,fx.area.travel))changed=true;
+     // A ground-borne AoE physically touches a sixfold human model at
+     // its legs first; testing only the torso centre at y=4.725 wrongly
+     // rejects valid visible contact. Display digits on the torso instead.
+     const groundContact=[pos[0],enemy.position[1]+(target.kind==='player'?1:1.25),pos[2]];
+     if(!insideChargedArea(fx.area,groundContact,target.kind==='player'?1.02:ENEMY_RADIUS))continue;
+     if(outcome(target,pos,groundContact,null,fx.area.travel))changed=true;
     }
    }
   }else if(fx.kind==='giraffe'){
