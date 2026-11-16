@@ -259,7 +259,7 @@ function update(dt,time){
   const chargedWeapon=itemById(world?.profile?.equipment?.weapon);
   if(charge>.08&&chargedWeapon&&controller){
    const direction=chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1);
-   chargePreview.update(localRoot,chargedWeapon,charge,direction,arena);
+   chargePreview.update(localRoot,chargedWeapon,charge,direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null);
   }else chargePreview.hide();
   const attackButton=document.getElementById('attack-button');attackButton.classList.toggle('charging',charge>0||!!staffChannel||artworkThrow.started!==null);attackButton.style.setProperty('--charge',`${(artworkThrow.started!==null?artworkThrow.progress:charge)*100}%`);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}
 }
