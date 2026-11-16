@@ -130,8 +130,8 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
       Array.isArray(mobility?.lastWriteLanding)&&distanceTo(next.position,mobility.lastWriteLanding)<=9;
     // Normal run speed is 8.64m/s; airborne wings, delayed packets, and
     // server-authorized knockback need more headroom without allowing teleports.
-    const maxSpeed=(hasWings?28:14)*boostedSpeed*(mobility?.channeling?.05:1)+(recentHit?18:0)+(recentImpulse?18:0);
-    const allowance=maxSpeed*elapsed+(mobility?.channeling?1.5:5.5)+(recentHit?6:0);
+    const maxSpeed=(hasWings?28:14)*boostedSpeed*(mobility?.channeling ? .05 : 1)+(recentHit?18:0)+(recentImpulse?18:0);
+    const allowance=maxSpeed*elapsed+(mobility?.channeling ? 1.5 : 5.5)+(recentHit?6:0);
     if(distance>allowance&&!justRespawned&&!landedFromWrite)
       return {error:'Movement rejected',state:previous};
   }
