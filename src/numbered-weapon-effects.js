@@ -18,17 +18,20 @@ import animeFlame from '../vendor/00gamedevs/source/anime-flame-shield.js';
 
 export const REQUESTED_VFX=Object.freeze({
  'clam:channel':{number:33,asset:'tidal-surge',original:true},
+ 'clam:ultimate':{number:33,asset:'tidal-surge',original:true},
  'beam:normal':{number:29,asset:'radiant-beam',original:true},
  'beam:channel':{number:29,asset:'radiant-beam',original:true},
  'beam:ultimate':{number:29,asset:'radiant-beam',original:true},
  'saber:ultimate':{number:38,asset:'magma-fissure',original:true},
  'petal:channel':{number:43,asset:'revival-bloom',original:true},
+ 'petal:ultimate':{number:43,asset:'revival-bloom',original:true},
  'swatter:ultimate':{number:53,asset:'darkchain-detonation',original:true},
  'fire:channel':{number:73,asset:'anime-flame-shield',original:true},
  'pan:ultimate':{number:68,asset:'rolling-fireburst',original:true},
  'ice:channel':{number:70,asset:'ice-lance-study',original:true},
  'lightning:channel':{number:8,asset:'arc-ray',original:true},
  'wave:channel':{number:20,asset:'energy-vortex',original:true},
+ 'wave:ultimate':{number:20,asset:'energy-vortex',original:true},
  'saber:combo':{number:47,asset:'dimensional-rend',original:true},
  'jellybrella:ultimate':{number:26,asset:'frost-wheel',original:true},
  'whip:ultimate':{number:48,asset:'black-hole',original:true}
@@ -66,7 +69,7 @@ export function requestedEffect(item,event){
  // Preserve signature ultimates for other exotic weapons.
  if(item.exotic&&!['clam','jellybrella'].includes(item.id))return null;
  const key=event.channel?(item.id==='clam'?'clam':item.family)+':channel':
-  event.ultimate?(item.id==='jellybrella'?'jellybrella':item.family)+':ultimate':
+  event.ultimate?(item.id==='clam'?'clam':item.id==='jellybrella'?'jellybrella':item.family)+':ultimate':
   item.family==='beam'?'beam:normal':
   item.family==='saber'&&(Number(event.qualityTier)||Number(item.tier))===4&&
    Number(event.combo)===5?'saber:combo':'';
@@ -131,23 +134,24 @@ export class NumberedWeaponEffects {
   // #29 is a forward beam: even its charged shot starts at the weapon, not
   // at an unrelated remote ground-circle centre.
   // Sword cracks begin from the hand, not a distant ground-target position.
-  const areaLocked=!!event.ultimate&&!event.channel&&![29,38].includes(spec.number)&&Array.isArray(event.area?.visualCenter);
+  const areaLocked=!!event.ultimate&&!event.channel&&![20,29,33,38,43].includes(spec.number)&&Array.isArray(event.area?.visualCenter);
   const target=areaLocked?vector(event.area.visualCenter,origin):origin.clone();
   const entry={
    spec,fx,group:fx.group,root,item,direction,origin,target,options,
    range:Math.max(.5,Number(event.range)||12),
    key,channel:!!event.channel,areaLocked,age:0,
-   duration:event.channel?Infinity:(spec.number===48?6.5:spec.number===53?7:5),
+   duration:event.channel?Infinity:(spec.number===20?4.5:spec.number===33?3.3:spec.number===43?2.25:spec.number===48?6.5:spec.number===53?7:5),
    lastPulse:performance.now(),stopping:false,
    heading:root?.rotation.y||0,
    // These original assets are one-shot. Each next copy begins before the
    // previous fades: no reset-to-zero flash, no pause between server pulses.
-   cycleTimer:0,cycles:null,waves:null,waveTimer:0
+   cycleTimer:0,cycles:null,waves:null,waveTimer:0,
+   singleTravel:!event.channel&&TRAVELLING_NATIVE.has(spec.number)
   };
   this.active.push(entry);
   if(this.active.length>24)this.remove(this.active[0]);
   this.align(entry);
-  if(key&&spec.number===33){
+  if(spec.number===33){
    // Dedicated long-running #33 tide: staggered, overlapping ORIGINAL
    // Breaking Tidal Surge modules, progressing out from the shell.
    entry.waves=[];
@@ -159,7 +163,7 @@ export class NumberedWeaponEffects {
   return true;
  }
  muzzleAt(entry) {
-  if(entry.root&&(entry.channel||entry.spec.number===38)) {
+  if(entry.root&&(entry.channel||entry.spec.number===33||entry.spec.number===38)) {
    const m=this.muzzle(entry.root,entry.item,entry.origin.clone());
    if(m?.isVector3)return m;
   }
@@ -245,7 +249,7 @@ export class NumberedWeaponEffects {
   entry.waveTimer+=dt;
   while(entry.waveTimer>=CLAM_WAVE_INTERVAL){
    entry.waveTimer-=CLAM_WAVE_INTERVAL;
-   this.spawnClamWave(entry);
+   if(entry.channel||entry.age<1.55)this.spawnClamWave(entry);
   }
   for(const wave of [...entry.waves]){
    wave.age+=dt;
@@ -268,7 +272,7 @@ export class NumberedWeaponEffects {
     this.disposeWave(wave);
    }
   }
-  if(!entry.waves.length)this.spawnClamWave(entry);
+  if(!entry.waves.length&&entry.channel)this.spawnClamWave(entry);
  }
  currentDirection(entry){
   const dir=entry.direction.clone();
@@ -332,9 +336,21 @@ export class NumberedWeaponEffects {
    if(e.key&&now-e.lastPulse>Math.max(CHANNEL_GRACE_MS,Number(e.item.cooldown||700)*2+650)){
     this.remove(e);continue;
    }
-   if(e.waves){this.updateClamWaves(e,dt);continue;}
+   if(e.waves){
+    this.updateClamWaves(e,dt);
+    if(!e.channel&&e.age>=e.duration)this.remove(e);
+    continue;
+   }
    if(e.cycles){this.updateNativeCycles(e,dt);continue;}
-   this.align(e);
+   if(e.singleTravel){
+    const t=Math.min(1,e.age/travelLifetime(e.spec.number));
+    const ease=t*t*(3-2*t);
+    const delta=Math.min(e.range,Math.max(4,e.range*.72))*ease;
+    e.fx.group.position.copy(e.origin).addScaledVector(e.direction,delta);
+    if(e.spec.number===20&&e.age>3.45&&!e.stopping){
+     e.stopping=true;e.fx.stop?.();
+    }
+   }else this.align(e);
    if(!e.key&&e.age>3&&!e.stopping&&typeof e.fx.stop==='function'){
     e.stopping=true;e.fx.stop();
    }
