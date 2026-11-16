@@ -1,5 +1,5 @@
 // Isolated Chrome mobile-touch regression against the real staging Worker.
-// Covers A camera cycling, actual scoped overlay, firing via scene tap, and
+// Covers A camera cycling, actual scoped overlay, fire-only via scope button, and
 // contextual E interactions without a separate mobile E button.
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
@@ -80,10 +80,16 @@ try {
  await page.waitForFunction(()=>templeTest.gun.mode===1);
  await button.tap();
  await page.waitForFunction(()=>templeTest.gun.mode===2);
- // Shoot INSIDE the transparent 35vmin scope aperture (not the mask).
+ // Touching the transparent scope aims ONLY; it never shoots.
  await page.touchscreen.tap(275,390);
+ assert.equal(await page.evaluate(()=>window.mobileTestShots),0,'touch aiming inside scope must not fire');
+ const fireButton=page.locator('.sniper-fire-button');
+ assert.equal(await fireButton.isVisible(),true,'touch FIRE button appears only in scope');
+ const fireBounds=await fireButton.boundingBox();
+ assert.ok(fireBounds.x<130&&fireBounds.y>500,'FIRE button occupies lower-left above movement stick');
+ await fireButton.tap();
  await page.waitForFunction(()=>window.mobileTestShots===1,null,{timeout:8000});
- assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,'tap scene fires, stays scoped');
+ assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,'FIRE shoots without leaving scope');
  await button.tap();
  await page.waitForFunction(()=>templeTest.gun.mode===0);
  assert.equal(await page.evaluate(()=>window.mobileTestShots),1,'third A exits scope without firing');
@@ -113,5 +119,5 @@ try {
  assert.equal(await page.evaluate(()=>window.mobileTestShots),1,'contextual A never fires a gun');
  await page.screenshot({path:output+'/mobile-a-interact.png'});
  assert.deepEqual(errors,[],errors.join('; '));
- console.log(JSON.stringify({mobileA:true,scope:true,sceneFire:true,interact:true,eButtonHidden:true}));
+ console.log(JSON.stringify({mobileA:true,scope:true,dedicatedScopeFire:true,interact:true,eButtonHidden:true}));
 } finally {await browser.close();}
