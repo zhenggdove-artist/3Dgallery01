@@ -1,11 +1,16 @@
 import * as THREE from 'three';
 import {weaponMuzzle} from './weapon-muzzle.js';
 
-// CSS uses a transparent 35vmin-radius circular sniper viewport. The opaque
-// remainder is an exit target, even though the overlay ignores hit-testing.
+// CSS uses a transparent 35vmin-radius circular sniper viewport. Touching
+// the opaque mask exits on mobile; desktop mouse clicks always shoot.
 export function outsideScopeCircle(x,y,width,height){
  const radius=.35*Math.min(width,height);
  return Math.hypot(x-width*.5,y-height*.5)>radius;
+}
+// Pointer-lock mouse coordinates are not meaningful screen hits. Only touch
+// on the scope's dark mask is an exit gesture; a desktop click always fires.
+export function shouldDismissScopePointer(pointerType,x,y,width,height){
+ return pointerType==='touch'&&outsideScopeCircle(x,y,width,height);
 }
 
 // RELETTER gun-additions: shoulder / sniper scope, original sensitivity and FOV.
@@ -14,11 +19,10 @@ export class GunController {
     Object.assign(this,{canvas,camera,controller,weapon,ui,attack});this.mode=0;this.held=false;this.nextShot=0;this.recoilOffset=0;this.recoilAmount=0;this.lastKick=-Infinity;
     this.overlay=document.createElement('div');this.overlay.id='gun-overlay';this.overlay.hidden=true;
     this.overlay.innerHTML='<div class="gun-reticle"></div><div class="scope-lines"></div><span>A/Q · CAMERA / TAP SCENE · FIRE</span>';document.body.append(this.overlay);
-    // Capture before the canvas firing handler and all HUD controls: any tap
-    // in the black scope mask dismisses mobile zoom without shooting or
-    // accidentally activating whatever UI lies beneath that mask.
+    // Capture before canvas firing handlers: only a TOUCH on the black mask
+    // dismisses zoom. Mouse buttons (including pointer lock) always fire.
     addEventListener('pointerdown',e=>{
-      if(this.mode!==2||e.button>0||!outsideScopeCircle(e.clientX,e.clientY,innerWidth,innerHeight))return;
+      if(this.mode!==2||e.button>0||!shouldDismissScopePointer(e.pointerType,e.clientX,e.clientY,innerWidth,innerHeight))return;
       e.preventDefault();e.stopImmediatePropagation();this.end();
     },true);
     addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)||ui.panelName)return;if(e.code==='KeyV'&&weapon()?.firstPerson&&!e.repeat){e.preventDefault();e.stopImmediatePropagation();this.cycle();}if(e.code==='Escape'&&this.mode){this.end();}},true);
@@ -39,7 +43,7 @@ export class GunController {
   direction(){const c=this.controller();return new THREE.Vector3(-Math.sin(c.yaw)*Math.cos(c.pitch),-Math.sin(c.pitch),-Math.cos(c.yaw)*Math.cos(c.pitch));}
   shot(){const ray=new THREE.Raycaster();this.camera.updateMatrixWorld();ray.setFromCamera(new THREE.Vector2(),this.camera);const c=this.controller(),range=this.weapon().chargedRange||this.weapon().range,origin=weaponMuzzle(c.root,this.weapon())||c.root.position.clone().add(new THREE.Vector3(0,1,0));let point=ray.ray.at(range,new THREE.Vector3());const targets=[...c.arena.artworks.values(),c.arena.monster,...(c.arena.remoteAimTargets||[])].filter(o=>o?.visible&&o!==c.root);const hit=ray.intersectObjects(targets,true).find(h=>h.distance>.15&&h.distance<=range);if(hit)point.copy(hit.point);return {origin:origin.toArray(),aimPoint:point.toArray(),direction:point.clone().sub(origin).normalize().toArray()};}
   shotDirection(){return new THREE.Vector3(...this.shot().direction);}
-  kick(weapon){if(!this.mode)return;const amount=weapon?.id==='black-cat'?.24:weapon?.id==='white-cat'?.06:0;if(!amount)return;this.recoilAmount=Math.min(.4,this.recoilAmount+amount);this.lastKick=performance.now();}
+  kick(weapon){if(!this.mode)return;const amount=weapon?.id==='black-cat'?.24:weapon?.id==='white-cat'?.006:0;if(!amount)return;this.recoilAmount=Math.min(.4,this.recoilAmount+amount);this.lastKick=performance.now();}
   aimWithRecoil(){return this.direction().add(new THREE.Vector3(0,this.recoilOffset,0)).normalize();}
   pose(presentation){if(!this.mode)return;const root=this.controller().root,d=root.userData,direction=this.aimWithRecoil(),right=new THREE.Vector3(Math.cos(this.controller().yaw),0,-Math.sin(this.controller().yaw));
     const solve=(side,target)=>{const hand=d.bones?.get(side+'Hand');if(!hand)return;const chain=[d.bones.get(side+'ForeArm'),d.bones.get(side+'Arm')].filter(Boolean);for(const bone of chain)presentation.restore.push([bone,'quaternion',bone.quaternion.clone()]);root.updateMatrixWorld(true);for(let i=0;i<3;i++)for(const bone of chain){const origin=bone.getWorldPosition(new THREE.Vector3()),actual=hand.getWorldPosition(new THREE.Vector3()).sub(origin),desired=target.clone().sub(origin);if(actual.lengthSq()<1e-8||desired.lengthSq()<1e-8)continue;const delta=new THREE.Quaternion().setFromUnitVectors(actual.normalize(),desired.normalize()),world=bone.getWorldQuaternion(new THREE.Quaternion()),parent=bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert();bone.quaternion.copy(parent.multiply(delta).multiply(world));bone.updateMatrixWorld(true);}return hand;};

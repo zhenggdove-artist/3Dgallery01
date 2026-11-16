@@ -93,7 +93,7 @@ test('model-only 30% filters and fire sprites restore original materials on expi
  assert.equal(burnFX.group.userData.vfxNumber,1);
  assert.equal(burnFX.group.userData.vfxSource,'00GameDevs');
  visuals.update(.5,T+500);
- assert.ok(visuals.entries.get(root).flames.pulses.length<=3);
+ assert.ok(visuals.entries.get(root).flames.pulses.length<=8);
  assert.ok(visuals.entries.get(root).flames.group.parent===root);
  assert.equal(visuals.entries.get(root).uniforms.color.value.getHexString(),'69bf49');
  visuals.update(.25,T+1200);

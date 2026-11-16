@@ -142,8 +142,9 @@ export class WeaponSignatureEffects {
    const travel=(event.range||32)*progress;
    group.position.copy(origin).addScaledVector(direction,travel);
    group.quaternion.copy(orientation);
-   // Turn the animal 90 degrees to its RIGHT within the travel frame.
-   const yaw=Math.PI/2+Math.sin(age*8)*.065;
+   // The fish is authored facing local +Z; qdir already maps +Z to travel.
+   // Any additional 90-degree yaw makes the nose point LEFT. Keep only swim sway.
+   const yaw=Math.sin(age*8)*.045;
    fish.rotation.y=yaw;
    fish.rotation.z=Math.sin(age*7)*.035;
    tail.rotation.y=Math.sin(age*16)*.44;
