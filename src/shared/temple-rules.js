@@ -669,7 +669,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     if(to>from+.00001){
      for(const target of targets){
       const enemy=target.value,key=enemy.id||enemy.key;
-      if(enemy.key===fx.owner||alreadyHit.has(key))continue;
+      if(enemy.key===fx.owner)continue;
       const radius=target.kind==='player'?1.02:ENEMY_RADIUS;
       const center=target.kind==='player'
        ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]
@@ -695,7 +695,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     fx.areaResolved=true;
     for(const target of targets){
      const enemy=target.value,key=enemy.id||enemy.key;
-     if(alreadyHit.has(key)||enemy.key===fx.owner)continue;
+     if(enemy.key===fx.owner)continue;
      const pos=target.kind==='player'
       ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]:
        [enemy.position[0],enemy.position[1]+ENEMY_HEIGHT*.5,enemy.position[2]];
@@ -713,7 +713,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       now<fx.expiresAt&&fx.expiresAt>fx.createdAt+flight){
     for(const target of targets){
      const enemy=target.value,key=enemy.id||enemy.key;
-     if(enemy.key===fx.owner||(target.kind==='player'&&insideArtSanctuary(enemy.position)))continue;
+     if(enemy.key===fx.owner||(target.kind==='player'&&insideSafeZone(enemy.position)))continue;
      const dist=target.kind==='player'
       ?rayCylinderDistance(fx.origin,fx.direction,fx.range,enemy.position,1.02+fx.radius,2.35)
       :monsterRayDistance(fx.origin,fx.direction,fx.range,enemy,fx.radius);
