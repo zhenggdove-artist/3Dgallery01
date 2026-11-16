@@ -6,3 +6,10 @@
 #gun-overlay.scoped .scope-lines{display:block;position:absolute;left:50%;top:50%;width:70vmin;height:70vmin;transform:translate(-50%,-50%);border-radius:50%;background:linear-gradient(transparent calc(50% - .5px),#111 50%,transparent calc(50% + .5px)),linear-gradient(90deg,transparent calc(50% - .5px),#111 50%,transparent calc(50% + .5px))}
 #gun-overlay.scoped .gun-reticle{width:5px;height:5px;background:#f34;border:none}
 #gun-overlay span{position:absolute;bottom:22%;left:50%;transform:translateX(-50%);color:white;font:12px sans-serif;text-shadow:0 1px 3px black}
+
+#gun-overlay .sniper-fire-button{display:none}
+@media(pointer:coarse){
+ #gun-overlay.scoped .sniper-fire-button{display:grid;place-items:center;position:fixed;left:max(20px,env(safe-area-inset-left) + 18px);bottom:max(142px,env(safe-area-inset-bottom) + 128px);width:72px;height:72px;border:3px solid #e8d1fc;border-radius:50%;background:radial-gradient(circle at 35% 25%,#ae79f1,#683ac0 68%,#3a2467);color:#fff;font:900 17px/1 system-ui;letter-spacing:.06em;text-shadow:0 2px 3px #2c174e;box-shadow:0 0 0 5px #4b297978,0 6px 18px #0008;touch-action:none;pointer-events:auto;user-select:none;-webkit-user-select:none;z-index:1}
+ #gun-overlay.scoped .sniper-fire-button:active{background:#cf8ff4;transform:scale(.94)}
+}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:530px){#gun-overlay.scoped .sniper-fire-button{bottom:max(115px,env(safe-area-inset-bottom) + 102px);width:62px;height:62px}}
