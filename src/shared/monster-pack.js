@@ -16,7 +16,15 @@ export function spawnMonsterPack(world,now=Date.now(),rng=Math.random){
  world.monsters??=[];let changed=false;
  for(let i=0;i<MONSTER_PACK_SIZE;i++){
   const old=world.monsters[i];
-  if(old?.active)continue;
+  // Persisted Durable Object rooms may still contain animals or auntie from
+  // older deployments. Convert those active slots in place on the next tick.
+  if(old?.active){
+   const model=ISLAND_ENEMIES[i%ISLAND_ENEMIES.length];
+   if(!ISLAND_ENEMIES.includes(old.model)||old.model!==model){
+    old.model=model;old.variant=model;old.skills=[];old.patrolTarget=null;changed=true;
+   }
+   continue;
+  }
   // Respawn a fallen creature at another safe perimeter position. Each slot
   // retains its model identity to avoid loading duplicate 6x asset variants.
   const peers=world.monsters.filter((m,n)=>n!==i&&m?.active);
