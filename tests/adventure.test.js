@@ -24,7 +24,7 @@ test('FISH gameplay and fishing inventory no longer exist',()=>{
  }
 });
 test('original fusion preserves two source effects and authoritative stats',()=>{
- const {world,actor,profile}=setup();const weapons=EQUIPMENT.filter(i=>i.slot==='weapon'&&i.family==='saber').slice(0,3);profile.inventory.push(...weapons.map(i=>i.id));profile.equipment.weapon=null;
+ const {world,actor,profile}=setup();const weapons=EQUIPMENT.filter(i=>i.slot==='weapon'&&i.family==='saber').slice(0,3);profile.inventory.push(...weapons.map(i=>i.id));profile.equipment.weapon=null;profile.wallet=100000;
  for(const source of weapons.slice(0,2)){const r=applyAction(world,actor,{action:'fuse',sourceId:source.id,targetId:weapons[2].id,requestId:crypto.randomUUID()},{now:Date.now(),rng:()=>0});assert.ok(!r.error,r.error);assert.ok(r.fusion.success);}
- assert.equal(profile.fusion[weapons[2].id].effects.length,2);assert.ok(profile.fusion[weapons[2].id].original.stats.damage>weapons[2].damage);
+ assert.equal(profile.fusion[weapons[2].id].effects.length,2);assert.ok(profile.fusion[weapons[2].id].templeStats.damage>weapons[2].damage);
 });
