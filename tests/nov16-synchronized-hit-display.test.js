@@ -38,9 +38,14 @@ test('the exact 90-degree clam cone cannot damage a monster before the original 
  assert.ok(world.monster.hp<before,'swept 90-degree wave intersects the body off centreline');
  const hits=worldView(world,caster.key,at+1801).damageEvents.filter(e=>e.target==='enemy');
  assert.equal(hits.length,1,'wave hit is not duplicated by invisible early AoE');
- assert.deepEqual(hits[0].position,
-  [world.monster.position[0],world.monster.position[1]+ENEMY_HEIGHT*.5,world.monster.position[2]],
-  'critical/damage numbers are anchored to the moving monster model, not the caster');
+ // tickWorld can move an enemy again AFTER the exact impact frame. The
+ // historical number must remain at the actual impact-time enemy position,
+ // not chase a future pose or move backwards onto the caster.
+ assert.equal(hits[0].position[1],ENEMY_HEIGHT*.5);
+ assert.ok(Math.hypot(hits[0].position[0]-caster.position[0],
+   hits[0].position[2]-caster.position[2])>4,'damage number cannot originate near caster');
+ assert.ok(Math.hypot(hits[0].position[0]-world.monster.position[0],
+   hits[0].position[2]-world.monster.position[2])<3,'impact marker must be close to enemy, even after it walks');
 });
 test('the warned clam cone must never damage actors beyond its 45-degree half-angle',()=>{
  const world=worldWith('clam',[89,0,7]),at=T+3000;
