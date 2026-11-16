@@ -75,7 +75,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
   if(current.admin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
   if(!current.inventory.includes(STARTER_LOADOUT.weapon))current.inventory.unshift(STARTER_LOADOUT.weapon);
-  current.equipment??={...STARTER_LOADOUT};delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
+  current.equipment??={...STARTER_LOADOUT};if(!itemById(current.equipment.weapon))current.equipment.weapon=STARTER_LOADOUT.weapon;delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
   refreshStats(world,current,now);
   if(current.deadUntil<=now&&current.hp<=0){current.hp=current.maxHp||100;current.deadUntil=0;}
   return current;
@@ -262,8 +262,8 @@ function attack(world,profile,actor,body,context,now){
   const area=stats.ultimate?chargedArea(weapon,origin,direction,stats,groundForSpell):null;
   let hit=null,hits=[];for(const target of context.actors||[]){
     if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(actor.position)||insideSafeZone(target.position))continue;
-    const targetPosition=[target.position[0],target.position[1]+1,target.position[2]],along=project(origin,direction,targetPosition);
-    if((area?.mode==='area'&&insideChargedArea(area,targetPosition))||(area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,targetPosition,along)<stats.radius+1)){
+    const targetPosition=[target.position[0],target.position[1]+1,target.position[2]],along=project(origin,direction,targetPosition),scatter=weapon.pattern==='scatter';
+    if((area?.mode==='area'&&insideChargedArea(area,targetPosition))||(area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,targetPosition,along)<(scatter?.65+along*(stats.ultimate?.56:.32):stats.radius)+1)){
      const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{position:target.position,island:true},targetPosition,now,context.rng??Math.random);
      const result=damagePlayer(world,profile,target,(stats.damage+bonus)*modifiers.multiplier,now,'pvp',actor.position,modifiers.kind);
      if(result){hits.push(result);hit??=result;}
@@ -275,7 +275,7 @@ function attack(world,profile,actor,body,context,now){
    if(!mob?.active)continue;
    const target=[mob.position[0],mob.position[1]+Math.min(1.2,ENEMY_HEIGHT*.5),mob.position[2]];
    if((area?.mode==='area'&&insideChargedArea(area,target,ENEMY_RADIUS))||
-      (area?.mode!=='area'&&rayHitsMonster(origin,direction,stats.range,mob,stats.radius+ENEMY_RADIUS))){
+      (area?.mode!=='area'&&(weapon.pattern==='scatter'?(()=>{const point=[mob.position[0],mob.position[1]+ENEMY_HEIGHT*.5,mob.position[2]],along=project(origin,direction,point);return along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<ENEMY_RADIUS+.65+along*(stats.ultimate?.56:.32);})():rayHitsMonster(origin,direction,stats.range,mob,stats.radius+ENEMY_RADIUS)))){
     const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{...mob,island:true,visualScale:ENEMY_HEIGHT/1.575},target,now,context.rng??Math.random);
     const result=damageMonster(world,profile,(stats.damage+bonus)*modifiers.multiplier,now,context.rng??Math.random,modifiers.kind,mob);
     if(result){monsterHits.push({monster:mob,result});monsterHit??=result;}
@@ -289,7 +289,7 @@ function attack(world,profile,actor,body,context,now){
   // reach every matching structure; directional attacks hit the nearest one.
   const candidates=(world.structures||[]).filter(v=>v.owner!=='temple').map(v=>{
    const point=[v.position[0],v.position[1]+structureHeight(v)*.5,v.position[2]],along=project(origin,direction,point);
-   const inside=area?.mode==='area'?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<stats.radius+structureRadius(v);
+   const inside=area?.mode==='area'?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<(weapon.pattern==='scatter'?.65+along*(stats.ultimate?.56:.32):stats.radius)+structureRadius(v);
    return {v,along,inside};
   }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
   for(const {v:structure} of (area?.mode==='area'?candidates:candidates.slice(0,1))){

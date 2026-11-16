@@ -26,7 +26,7 @@ export const MATERIALS = Object.freeze([
 ]);
 
 // Original RELETTER identity, range, cadence and effects; only Temple economy/HP scale differ.
-export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].map(original=>{
+export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(original=>original.id!=='chiang-token').map(original=>{
   const tier=Math.max(1,Math.min(5,original.tier||1)),price=original.notForSale||original.id==='water'?0:original.slot==='seed'?80+tier*35:TIER_PRICES[tier-1]+Math.min(180,original.price||0);
   return Object.freeze({...original,price,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10,chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10});
 }));
