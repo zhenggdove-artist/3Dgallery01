@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {oddParts} from './reletter/odd-weapon-art.js';
 import {calicoPellets} from './shared/calico-pellets.js';
 import {GOLDFISH_SWIM_MS} from './shared/weapon-abilities.js';
+import {projectileFlightMs} from './shared/combat-balance.js';
 
 const TAU=Math.PI*2;
 const sphere=new THREE.SphereGeometry(1,16,12);
@@ -27,26 +28,47 @@ export class WeaponSignatureEffects {
  }
  shotgun(event){
   const source=vec(event.origin),full=!!event.ultimate,scale=event.qualityScale||1,
-   rays=event.pellets?.length===10?event.pellets:calicoPellets(event.direction,full).map(p=>p.direction),
+   rays=event.pellets?.length===10?event.pellets:calicoPellets(event.direction,full,event.time).map(p=>p.direction),
    group=new THREE.Group(),balls=[];
-  group.name='Ten actual coloured pellet spheres (server aligned)';
+  group.name='Ten independent irregular multicolour volumetric shotgun spheres';
+  const palette=['#ff326d','#ffbd39','#fcff63','#29e8ac','#41beff','#9e69ff','#ff82dd','#ffffff'];
+  const textureColors=palette.map(hex=>new THREE.Color(hex));
   rays.forEach((ray,i)=>{
-   const core=new THREE.Mesh(sphere,material(COLORS[i],.995));
-   core.scale.setScalar((full?.57:.30)*scale);
-   const halo=new THREE.Mesh(sphere,lineMat(COLORS[i],.24));
-   halo.scale.setScalar((full?.88:.51)*scale);
-   group.add(halo,core);
-   balls.push({core,halo,dir:vec(ray).normalize(),offset:i*.012});
+   // Every pellet has hundreds of shaded faces with its OWN intertwined
+   // ribbons, marbling and iridescent colours, not one flat disc/colour.
+   const geometry=new THREE.SphereGeometry(1,40,28);
+   const positions=geometry.attributes.position,colors=new Float32Array(positions.count*3);
+   for(let n=0;n<positions.count;n++){
+    const x=positions.getX(n),y=positions.getY(n),z=positions.getZ(n);
+    const latitude=Math.atan2(y,Math.hypot(x,z)),longitude=Math.atan2(z,x);
+    const ribbon=Math.sin(longitude*7+latitude*5+i*1.39)+.56*Math.sin(longitude*15-latitude*9-i*.83);
+    const marble=Math.sin(x*13.4+y*9.2-z*11.7+i*2.1)*Math.cos(y*18.1+z*7.6+i);
+    const contour=Math.sin(longitude*23+latitude*15+i*.41);
+    const index=Math.abs(Math.floor((ribbon*2.2+marble*2.1+contour+12+i*2.13)*2))%textureColors.length;
+    const next=(index+2+(i%3))%textureColors.length;
+    const blend=.22+.24*(.5+.5*Math.sin(longitude*12-latitude*21+i));
+    const color=textureColors[index].clone().lerp(textureColors[next],blend);
+    const bright=.75+.25*(.5+.5*Math.cos(x*28+y*19+z*13+i));
+    colors.set([color.r*bright,color.g*bright,color.b*bright],n*3);
+   }
+   geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
+   const surface=new THREE.MeshPhysicalMaterial({vertexColors:true,roughness:.21,metalness:.23,
+    clearcoat:1,clearcoatRoughness:.12,emissive:'#19131e',toneMapped:false});
+   const ball=new THREE.Mesh(geometry,surface);
+   ball.name='Multicolour sphere '+(i+1);
+   ball.scale.setScalar((full?.58:.42)*scale);
+   ball.position.copy(source);
+   ball.rotation.set(i*.41,i*.69,i*.23);
+   group.add(ball);
+   balls.push({ball,dir:vec(ray).normalize(),spin:i*.5});
   });
-  const duration=full?.47:.33,range=event.range||10;
-  this.add(group,duration,(age)=>{
+  const duration=projectileFlightMs({pattern:'scatter'},full)/1000,range=event.range||10;
+  this.add(group,duration,age=>{
    const t=Math.min(1,age/duration);
    for(const b of balls){
-    const motion=Math.max(0,Math.min(1,(t-b.offset)*1.5));
-    const p=source.clone().addScaledVector(b.dir,range*motion);
-    b.core.position.copy(p);b.halo.position.copy(p);
-    b.halo.material.opacity=.28*(1-t*.7);
-    b.core.material.opacity=1-t*.62;b.core.material.transparent=true;b.core.material.depthWrite=false;
+    b.ball.position.copy(source).addScaledVector(b.dir,range*t);
+    b.ball.rotation.y=b.spin+age*10;
+    b.ball.rotation.x=age*5+b.spin;
    }
   });
  }
