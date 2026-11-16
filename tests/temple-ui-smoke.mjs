@@ -20,7 +20,7 @@ try{
  // Inventory categories, custom 3D spell preview, readable descriptions.
  await page.evaluate(()=>templeTest.ui.openPanel('bag'));
  for(const type of ['near','mid','far'])assert.equal(await page.locator('[data-category="'+type+'"]').count(),1,type);
- await page.locator('[data-category="mid"]').click();
+ await page.locator('[data-category="near"]').click();
  await page.waitForTimeout(400);
  assert.ok(await page.locator('#bag-items [data-bag-item]').count()>0);
  await page.screenshot({path:output+'/weapons.png'});
@@ -109,8 +109,8 @@ try{
   recipes.shotgun=v.particleSkills.active.at(-1)?.recipe;
   return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
  });
- assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',shotgun:'rainbow-falls'});
- assert.equal(vfxState.sky,'Moonlit particle sky');
+ assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',shotgun:'rainbow-scatter'});
+ assert.equal(vfxState.sky,'World-oriented distant cloud sky (no moon)');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});
  // CSS must keep field labels left and numeric controls right, even on a narrow

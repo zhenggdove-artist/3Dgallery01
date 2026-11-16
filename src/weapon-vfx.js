@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import {createOddEffect,updateOddEffect} from './reletter/odd-weapon-effects.js';
 import {weaponMuzzle} from './weapon-muzzle.js';
 import {chargedArea} from './shared/charge-area.js';
+import {ElementalCharge} from './elemental-charge.js';
+import {SaberImpact} from './saber-impact.js';
 import {WeaponParticleEffects} from './weapon-particle-effects.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
 import smear from '../vendor/00gamedevs/weapon-smear.js';
@@ -33,7 +35,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.pools=new Map();this.charger=null;this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -63,6 +65,10 @@ export class WeaponVFX{
   if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
   const muzzle=weaponMuzzle(root,item);if(muzzle){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
   this.particleSkills.play(data,item,origin,end);
+  // Calico uses only its three-dimensional rainbow shot cloud. Do not layer
+  // the former plasma bolt or electrical burst on top of the shotgun pellets.
+  if(item.id==='calico-cat')return;
+  if(data.ultimate&&item.family==='saber')this.saberImpact.play(data,origin,direction);
   if(item.id==='black-cat'){if(this.snipers.length>=4){const old=this.snipers.shift();old.root.removeFromParent();old.root.material.dispose();}const f=createOddEffect(THREE,{...data,origin:origin.toArray(),direction:direction.toArray(),range:origin.distanceTo(end)},{...item,pattern:'sniper'});f.root.position.addScaledVector(direction,-1.8);this.scene.add(f.root);this.snipers.push(f);return;}
   const entry=this.acquire(id,{color:item.color,size:data.ultimate?Math.min(3.6,Math.max(1.2,(impactArea?.radius||5)/3.5)):.6,speed:data.ultimate?1:1.8}),fx=entry.fx;
   fx.group.position.copy(origin);fx.group.rotation.y=Math.atan2(direction.x,direction.z)-Math.PI/2;
@@ -93,15 +99,15 @@ export class WeaponVFX{
   if(data.impactPoint&&!projectiles.has(id)){const impact=this.acquire(item.family==='ice'?'ice-shatter':'energy-burst',{size:.3,color:item.color,speed:2});impact.fx.group.position.copy(end);}
  }
  charging(root,progress,item){
-  this.particleSkills.charging(root,progress,item);
-  if(!root||!item||progress<=.06){if(this.charger){this.charger.fx.stop();this.charger.stopped=true;this.charger=null;}return;}
-  if(!this.charger){this.charger=this.acquire('arcane-missile',{color:item.color,size:.3});this.charger.fx.setDirection(new THREE.Vector3(0,1,0),0);}
-  const e=this.charger;e.fx.group.position.copy(root.position);e.fx.group.position.y+=1;e.fx.group.scale.setScalar(.5+progress*.5);
+  // No arcane-missile emitter here: that effect used to float to the right
+  // and remain suspended as a stuck particle cloud.
+  this.aura.charging(root,progress,item);
  }
- update(dt){this.particleSkills.update(dt);for(let i=this.snipers.length-1;i>=0;i--){const f=this.snipers[i];if(!updateOddEffect(f,dt)){f.root.removeFromParent();f.root.material.dispose();this.snipers.splice(i,1);}}for(const e of [...this.active]){e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
+
+ update(dt){this.saberImpact.update(dt);this.particleSkills.update(dt);for(let i=this.snipers.length-1;i>=0;i--){const f=this.snipers[i];if(!updateOddEffect(f,dt)){f.root.removeFromParent();f.root.material.dispose();this.snipers.splice(i,1);}}for(const e of [...this.active]){e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
    if(e.start&&!e.stopped)e.fx.group.position.lerpVectors(e.start,e.end,Math.min(1,e.age/e.travel));
    if(!e.stopped&&e.age>=e.stopAt){if(e.hit)e.fx.hit(e.end);else if(continuous.has(e.id)||e.id==='weapon-smear')e.fx.stop();e.stopped=true;}
    e.fx.update(dt);if(e.fx.finished||e.age>12)this.release(e);
   }}
- dispose(){this.particleSkills.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
+ dispose(){this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }

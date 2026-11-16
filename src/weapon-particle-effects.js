@@ -3,10 +3,9 @@ import * as THREE from 'three';
 // Additive, fine-grained GPU particles supplement the verified MIT 00GameDevs
 // assets. Every object produced here is a Points cloud, never a solid summon.
 export const PARTICLE_RECIPES=Object.freeze({
-  'white-cat':'rainbow','black-cat':'rainbow','calico-cat':'rainbow-falls',
+  'white-cat':'rainbow','black-cat':'rainbow','calico-cat':'rainbow-scatter',
   'accordion':'music','giraffe':'boomerang','goldfish':'jet',
   'clam':'shells','fan':'gust','telephone':'echo','jellybrella':'jelly',
-  'chiang-token':'ghost',
   water:'tidal',ice:'glacier',fire:'inferno',lightning:'storm',beam:'prism',
   petal:'petals',wave:'singularity',saber:'fissure',whip:'thorn',
   swatter:'flies',pan:'food',planter:'worldtree',palm:'monsoon'
@@ -17,7 +16,7 @@ function rand(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;re
 function recipePalette(recipe,item){
  const palettes={
  rainbow:['#ff414a','#ffb44e','#f9ff60','#58ff9f','#48deff','#7e71ff','#fb70f9'],
- 'rainbow-falls':['#ff394e','#ffc04b','#eaff70','#45f7a2','#55bbff','#a66cff','#ff7cd1'],
+ 'rainbow-scatter':['#ff394e','#ffc04b','#eaff70','#45f7a2','#55bbff','#a66cff','#ff7cd1'],
  flies:['#05070a','#0c0f17','#202333','#55566a','#9a9ab0'],
  food:['#ffd37a','#ff764c','#fff5db','#f8bc87','#d3e678','#e7a3f0'],
  music:['#ffa6dc','#ffc861','#adf9ff','#e6afff','#86ffd5'],
@@ -48,7 +47,7 @@ function modeFor(recipe){
  if(recipe==='food')return 3;
  if(recipe==='music')return 4;
  if(recipe==='fissure')return 5;
- if(recipe==='rainbow-falls')return 6;
+ if(recipe==='rainbow-scatter')return 6;
  return 7;
 }
 const styleIds=['tidal','glacier','inferno','storm','prism','petals','singularity','thorn','worldtree','monsoon','gust','echo','jelly','ghost','boomerang','jet','shells'];
@@ -111,13 +110,17 @@ void main(){
      alpha*=smoothstep(.1,.3,t)*(1.-smoothstep(.6,.88,t));
    }
  }else if(uMode<6.5){
-   // Calico cat: wide but short forward rainbow particle waterfall.
-   float front=uReach*min(1.,t*1.3);
-   p=position;
-   p.z=position.z+front*.35;
-   p.y=max(.35,position.y-uAge*(7.+v*6.)+sin(phase)*.36);
-   p.x+=sin(spin*2.)*.5;
-   alpha*=.92;
+   // Calico shotgun pellets diverge into volumetric 3D cones, not flat sheets.
+   float charged=step(.9,uCharge);
+   float lanes=mix(5.,8.,charged),pellet=floor(u*lanes);
+   float a=((pellet+.5)/lanes-.5)*mix(1.02,1.45,charged);
+   float front=uReach*min(1.,t*1.85);
+   float radius=(.2+front*mix(.09,.16,charged))*sqrt(w);
+   float ph=v*TAU+spin*.7+pellet*.67;
+   p=vec3(sin(a)*front+cos(ph)*radius,
+     1.45+sin(ph)*radius+(v-.5)*front*.17,
+     max(.1,front-1.6*w+position.z*.45));
+   alpha*=1.-smoothstep(.72,1.,t);
  }else{
    // Individual weapon families have different silhouette, path and movement,
    // all formed from small independent points rather than solid summoned meshes.
@@ -263,9 +266,8 @@ function populate(recipe,amount,range,palette){
        y=Math.cos(t)*24+7;ci=w>.94?3:2;
      }
    }else if(mode===6){
-     const lane=Math.floor(u*7);
-     z=2+v*range*.65;x=(w-.5)*(1+v*range*.75)*1.6;y=1.5+random()*7;
-     ci=lane;
+     // Each pellet owns a full XYZ cloud, rather than a flat waterfall.
+     x=(v-.5)*1.8;y=(w-.5)*1.8;z=(random()-.5)*1.4;ci=Math.floor(u*7);
    }else{
      const swirl=recipe==='storm'?5:recipe==='inferno'?3:recipe==='glacier'?8:recipe==='tidal'?3:6;
      const segment=Math.floor(u*swirl);
@@ -310,10 +312,10 @@ export class WeaponParticleEffects{
   // Ordinary shots for all three cats are always rainbow and shotgun charged
   // produces a nearby, very wide waterfall instead of a distant beam.
   if(!charged&&!['white-cat','black-cat','calico-cat'].includes(item.id))return;
-  const chosen=item.id==='calico-cat'&&charged?'rainbow-falls':item.id?.includes('cat')?'rainbow':recipe;
+  const chosen=item.id==='calico-cat'?'rainbow-scatter':item.id?.includes('cat')?'rainbow':recipe;
   const range=Math.max(3,Math.min(charged?48:160,source.distanceTo(end)));
-  const amount=charged?chosen==='fissure'?4500:chosen==='rainbow-falls'?4500:chosen==='music'||chosen==='flies'||chosen==='food'?3900:3200:1200;
-  const duration=charged?chosen==='fissure'?3:chosen==='rainbow-falls'?1.65:2.45:.65;
+  const amount=charged?chosen==='fissure'?4500:chosen==='rainbow-scatter'?4500:chosen==='music'||chosen==='flies'||chosen==='food'?3900:3200:chosen==='rainbow-scatter'?2300:1200;
+  const duration=charged?chosen==='fissure'?3:chosen==='rainbow-scatter'?1.65:2.45:.65;
   const entry=this.make(chosen,item,{range,duration,amount,charge:charged?1:.75});
   entry.root.position.copy(source);
   const direction=end.clone().sub(source);
@@ -321,11 +323,11 @@ export class WeaponParticleEffects{
     entry.root.position.y=Math.max(.12,source.y-1);
     direction.y=0;direction.normalize();
     entry.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.atan2(direction.x,direction.z));
-  }else if(chosen==='rainbow-falls'){
+  }else if(chosen==='rainbow-scatter'){
     entry.root.position.y=Math.max(.25,source.y);
     direction.y=0;direction.normalize();
     entry.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.atan2(direction.x,direction.z));
-    // A shower ahead of the player, not one hidden below the floor.
+    // A forward 3D scatter cloud, never a flat waterfall.
   }else{
     entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),direction.normalize());
     if(chosen!=='rainbow')entry.root.position.y=Math.max(.7,entry.root.position.y);

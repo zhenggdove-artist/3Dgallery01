@@ -1,105 +1,102 @@
 import * as THREE from 'three';
 
-// Entire celestial composition is point geometry: moon, crater rims, stars,
-// and thin drifting clouds. No opaque sky spheres or textured moon billboards.
-const golden='#ffe683';
-const cloudTint='#a3c6fb';
-function random(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
-function points(name,positions,colors,size,opacity){
-  const g=new THREE.BufferGeometry();
-  g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
-  g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
-  const m=new THREE.PointsMaterial({size,vertexColors:true,transparent:true,opacity,depthWrite:false,depthTest:false,sizeAttenuation:false,toneMapped:false});
-  const p=new THREE.Points(g,m);p.name=name;p.frustumCulled=false;p.renderOrder=-190;return p;
-}
-function colorTriplet(color,brightness,output){
-  const c=new THREE.Color(color);
-  output.push(Math.min(1,c.r*brightness),Math.min(1,c.g*brightness),Math.min(1,c.b*brightness));
-}
-function diskStars(rnd,count,radius,craters){
-  const positions=[],colors=[];
-  for(let i=0;i<count;i++){
-    const r=Math.sqrt(rnd())*radius,a=rnd()*Math.PI*2,x=Math.cos(a)*r,y=Math.sin(a)*r;
-    let shade=.67+rnd()*.33;
-    for(const crater of craters){
-      const distance=Math.hypot(x-crater[0],y-crater[1])/crater[2];
-      const inside=distance<.78,edge=distance>=.82&&distance<=1.14;
-      if(inside)shade*=.46+.13*rnd();
-      if(edge)shade*=1.25;
-    }
-    const sphericalDepth=Math.sqrt(Math.max(0,1-r*r/(radius*radius)))*1.6;
-    positions.push(x,y,sphericalDepth);
-    colorTriplet(golden,shade,colors);
+// The sky is an infinitely distant WORLD-ORIENTED backdrop. Only its origin
+// follows the camera position: it never follows the camera's rotation.
+// Every cloud is a translucent object hundreds of metres away with depth
+// testing enabled, so scene geometry always occludes it.
+const random=seed=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+function makeCloudTexture(seed){
+  const rnd=random(seed),canvas=document.createElement('canvas');
+  canvas.width=640;canvas.height=256;
+  const ctx=canvas.getContext('2d');
+  const mask=document.createElement('canvas');mask.width=640;mask.height=256;
+  const outline=mask.getContext('2d');outline.fillStyle='#ffffff';
+  // Build one continuous cloud mass from unequal silhouette lobes.
+  const lobes=[];
+  for(let i=0;i<23;i++){
+    const x=72+rnd()*495,y=150+(rnd()-.5)*35-(rnd()<.65?rnd()*37:0);
+    const rx=28+rnd()*61,ry=23+rnd()*39;
+    lobes.push({x,y,rx,ry});
+    outline.beginPath();outline.ellipse(x,y,rx,ry,-.25+rnd()*.5,0,Math.PI*2);outline.fill();
   }
-  return {positions,colors};
-}
-function craterDetail(rnd,craters){
-  const positions=[],colors=[];
-  for(const [cx,cy,r] of craters){
-    for(let k=0;k<1050;k++){
-      const a=rnd()*Math.PI*2,ring=.86+rnd()*.22,rr=r*ring;
-      positions.push(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr,2.1);
-      colorTriplet(k%4===0?'#f8c85f':'#fff2af',.55+rnd()*.38,colors);
-    }
-    for(let k=0;k<440;k++){
-      const a=rnd()*Math.PI*2,rr=Math.sqrt(rnd())*r*.8;
-      positions.push(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr,2.15);
-      colorTriplet('#ab873d',.6+rnd()*.3,colors);
-    }
+  outline.beginPath();outline.ellipse(320,181,265,31,0,0,Math.PI*2);outline.fill();
+  // Blurred outline stays an aerial cloud with broad, definite contours;
+  // it never becomes a peppered point overlay attached to the camera.
+  ctx.filter='blur(5px)';ctx.drawImage(mask,0,0);ctx.filter='none';
+  ctx.globalCompositeOperation='source-in';
+  const body=ctx.createLinearGradient(0,70,0,238);
+  body.addColorStop(0,'rgba(162,177,215,.92)');
+  body.addColorStop(.37,'rgba(113,137,182,.90)');
+  body.addColorStop(.72,'rgba(63,84,135,.92)');
+  body.addColorStop(1,'rgba(24,35,78,.89)');
+  ctx.fillStyle=body;ctx.fillRect(0,0,640,256);
+  // World-facing warm upper rims and cool deep undersides.
+  ctx.globalCompositeOperation='source-atop';
+  for(const l of lobes){
+    const g=ctx.createRadialGradient(l.x-l.rx*.18,l.y-l.ry*.5,l.ry*.06,l.x,l.y,l.rx*1.2);
+    g.addColorStop(0,'rgba(198,210,229,.35)');
+    g.addColorStop(.5,'rgba(139,157,194,.12)');
+    g.addColorStop(1,'rgba(17,28,63,0)');
+    ctx.fillStyle=g;ctx.beginPath();
+    ctx.ellipse(l.x,l.y,l.rx,l.ry,0,0,Math.PI*2);ctx.fill();
   }
-  return {positions,colors};
+  const shade=ctx.createLinearGradient(0,130,0,240);
+  shade.addColorStop(0,'rgba(31,45,87,0)');
+  shade.addColorStop(.63,'rgba(31,45,87,.10)');
+  shade.addColorStop(1,'rgba(15,21,55,.32)');
+  ctx.fillStyle=shade;ctx.fillRect(0,105,640,151);
+  ctx.globalCompositeOperation='source-over';
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=2;
+  return texture;
 }
-function makeMoon(root,touch,rnd){
-  const moon=new THREE.Group();
-  moon.name='Giant cratered yellow particle moon';
-  moon.position.set(-93,90,-136);
-  moon.lookAt(0,0,0);
-  root.add(moon);
-  const craters=[[-12,10,7],[11,14,4.7],[6,-9,8],[-19,-11,3.7],[19,-2,5.4],[0,21,3.1]];
-  const body=diskStars(rnd,touch?13000:33000,36,craters);
-  moon.add(points('Moon golden particulate surface',body.positions,body.colors,touch?1.9:2.2,.94));
-  const rings=craterDetail(rnd,craters);
-  moon.add(points('Moon visible crater outlines',rings.positions,rings.colors,touch?1.5:1.85,.72));
-  const haloPositions=[],haloColors=[];
-  for(let i=0;i<(touch?1800:4500);i++){
-    const a=rnd()*Math.PI*2,r=36+rnd()*9;
-    haloPositions.push(Math.cos(a)*r,Math.sin(a)*r,-1.8);
-    colorTriplet('#e2dca6',.5+rnd()*.5,haloColors);
-  }
-  moon.add(points('Diffuse moonlight dust',haloPositions,haloColors,2.5,.19));
-}
-function makeCloud(root,index,rnd,touch){
-  const cloud=new THREE.Group();cloud.name='Transparent drifting point cloud '+index;
-  const centers=[[-80,95,-120],[28,89,-140],[115,77,-85],[-145,62,25],[100,109,75],[-22,120,140],[-125,109,100],[70,83,145]];
-  const c=centers[index%centers.length];cloud.position.set(...c);
-  cloud.lookAt(0,0,0);
-  const positions=[],colors=[],count=touch?1400:3200;
-  for(let i=0;i<count;i++){
-    const lobe=i%6,angle=(lobe-2.5)*.55,spread=8+(lobe%3)*3;
-    const u=(rnd()+rnd()+rnd()-1.5)*spread,v=(rnd()+rnd()+rnd()-1.5)*(2.5+lobe%3);
-    const x=angle*15+u,y=Math.sin(lobe*2.8)*2.3+v;
-    if(rnd()<.14)continue;
-    positions.push(x,y,(rnd()-.5)*5);
-    colorTriplet(index%3===0?'#c9d9fa':cloudTint,.55+rnd()*.42,colors);
-  }
-  cloud.add(points('Cloud made of fine transparent particles',positions,colors,1.75,.19));
-  root.add(cloud);
-  return {cloud,baseX:c[0],phase:index*1.8};
+function cloudBank(root,index,rand,touch){
+  const angle=index*Math.PI*2/9+(index%2)*.12;
+  const distance=250+(index%3)*19,altitude=82+(index%4)*23;
+  const width=touch?115:135+(index%3)*21,height=47+(index%4)*10;
+  const group=new THREE.Group();group.name='Distant sky cloud bank '+index;
+  group.position.set(Math.cos(angle)*distance,altitude,Math.sin(angle)*distance);
+  // The plane faces the arena at a fixed WORLD angle, not the camera.
+  group.lookAt(0,70,0);
+  const texture=makeCloudTexture(0xc0124+index*2997);
+  const material=new THREE.MeshBasicMaterial({
+    map:texture,transparent:true,opacity:.81,depthTest:true,depthWrite:false,
+    side:THREE.DoubleSide,alphaTest:.012,blending:THREE.NormalBlending,
+    fog:false,toneMapped:false
+  });
+  const plane=new THREE.Mesh(new THREE.PlaneGeometry(width,height),material);
+  plane.renderOrder=-120;group.add(plane);
+  root.add(group);
+  return {group,base:angle,distance,altitude,phase:index*1.17};
 }
 export function createMoonlitSky(scene){
   const touch=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
-  const rnd=random(173331),root=new THREE.Group();root.name='Moonlit particle sky';scene.add(root);
-  makeMoon(root,touch,rnd);
-  const clouds=Array.from({length:8},(_,i)=>makeCloud(root,i,rnd,touch));
+  const rand=random(173331);
+  const root=new THREE.Group();
+  root.name='World-oriented distant cloud sky (no moon)';
+  scene.add(root);
+  const clouds=Array.from({length:9},(_,i)=>cloudBank(root,i,rand,touch));
   const stars=[],colors=[];
-  for(let i=0;i<(touch?1100:2400);i++){
-    const a=rnd()*Math.PI*2,el=.16+rnd()*1.06,rad=220;
-    stars.push(rad*Math.cos(a)*Math.cos(el),rad*Math.sin(el),rad*Math.sin(a)*Math.cos(el));
-    colorTriplet(rnd()<.15?'#ffe4ac':'#9fbfff',.3+rnd()*.55,colors);
+  for(let i=0;i<(touch?900:1900);i++){
+    const a=rand()*Math.PI*2,el=.24+rand()*1.17,r=345;
+    stars.push(r*Math.cos(a)*Math.cos(el),r*Math.sin(el),r*Math.sin(a)*Math.cos(el));
+    const c=new THREE.Color(rand()<.12?'#f3e2bd':'#adc8ff');const shade=.43+rand()*.57;
+    colors.push(c.r*shade,c.g*shade,c.b*shade);
   }
-  root.add(points('Sparse far star points',stars,colors,1.25,.55));
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(stars,3));
+  geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  const starfield=new THREE.Points(geo,new THREE.PointsMaterial({
+    size:1.15,vertexColors:true,opacity:.77,transparent:true,depthTest:true,
+    depthWrite:false,sizeAttenuation:false,toneMapped:false,fog:false
+  }));
+  starfield.name='Distant stars';starfield.renderOrder=-150;root.add(starfield);
   return {root,clouds,update(camera,time){
     if(camera)root.position.copy(camera.position);
-    for(const {cloud,baseX,phase} of clouds)cloud.position.x=baseX+Math.sin(time*.034+phase)*6+Math.cos(time*.012+phase)*3;
+    // Slow wind in world-space; no camera-relative quad or screen-space dirt.
+    for(const cloud of clouds){
+      const theta=cloud.base+Math.sin(time*.006+cloud.phase)*.014;
+      cloud.group.position.set(Math.cos(theta)*cloud.distance,cloud.altitude+Math.sin(time*.018+cloud.phase)*1.3,Math.sin(theta)*cloud.distance);
+    }
   }};
 }

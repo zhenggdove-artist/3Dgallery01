@@ -2,63 +2,95 @@ import * as THREE from 'three';
 import {attackStats} from './shared/catalog.js';
 import {chargedArea,spellGroundHeight} from './shared/charge-area.js';
 
-// Blue rune projection shown while charging, derived from the same target-area
-// calculation used by server-side full-charge hit testing.
+export const runeColorFor=item=>({
+ fire:'#ff712b',ice:'#98eaff',water:'#48d6ff',wave:'#5aeece',
+ lightning:'#b49aff',beam:'#ffd4f2',petal:'#ffa7d9',
+ saber:'#ffc879',swatter:'#668d83',pan:'#ffc48a',
+ whip:'#d6b7ff',planter:'#adf4a1',palm:'#a5ea8f'
+}[item?.family]||'#b6ddff');
+
+function circle(radius,width,color){
+ const mesh=new THREE.Mesh(new THREE.RingGeometry(radius-width/2,radius+width/2,96),
+   new THREE.MeshBasicMaterial({color,transparent:true,opacity:.8,depthTest:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));
+ mesh.rotation.x=-Math.PI/2;
+ return mesh;
+}
+function runes(color){
+ const v=[],line=(a,b,c,d)=>{v.push(a,.035,b,c,.035,d);};
+ for(let i=0;i<24;i++){
+  const a=i*Math.PI/12,b=a+.16,r=.79;
+  line(Math.cos(a)*r,Math.sin(a)*r,Math.cos(b)*r,Math.sin(b)*r);
+  const ri=.67+(i%3)*.04;
+  line(Math.cos(a)*ri,Math.sin(a)*ri,Math.cos(a)*(ri+.095),Math.sin(a)*(ri+.095));
+  if(i%3===0){const u=(i+1)*Math.PI/12;line(Math.cos(a)*.52,Math.sin(a)*.52,Math.cos(u)*.40,Math.sin(u)*.40);}
+ }
+ // Eight pointed star inscribed in the casting ring.
+ for(let i=0;i<8;i++){
+  const a=i*Math.PI/4,b=(i+3)*Math.PI/4;
+  line(Math.cos(a)*.55,Math.sin(a)*.55,Math.cos(b)*.55,Math.sin(b)*.55);
+ }
+ const geometry=new THREE.BufferGeometry();
+ geometry.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
+ const mesh=new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({
+  color,transparent:true,opacity:.88,depthTest:true,depthWrite:false,blending:THREE.AdditiveBlending
+ }));
+ return mesh;
+}
+// Every targeting marker is a real MAGIC CIRCLE, never a white debug rectangle.
 export class ChargeTargetPreview{
  constructor(scene){
-  this.scene=scene;this.group=new THREE.Group();this.group.name='Blue charged spell target rune';scene.add(this.group);
-  const mat=new THREE.MeshBasicMaterial({color:'#37b5ff',transparent:true,opacity:.62,depthWrite:false,depthTest:false,side:THREE.DoubleSide});
-  const inner=new THREE.Mesh(new THREE.RingGeometry(.61,.65,72),mat.clone());
-  const outer=new THREE.Mesh(new THREE.RingGeometry(.965,1,96),mat.clone());
-  for(const ring of [inner,outer]){ring.rotation.x=-Math.PI/2;ring.renderOrder=20;this.group.add(ring);}
-  this.outer=outer;this.inner=inner;
-  const v=[];
-  const seg=(x1,z1,x2,z2)=>{v.push(x1,0,z1,x2,0,z2);};
-  const polar=(a,r)=>[Math.sin(a)*r,Math.cos(a)*r];
-  for(let k=0;k<12;k++){const a=k*Math.PI/6,[x,z]=polar(a,.74),[u,w]=polar(a,.9);seg(x,z,u,w);}
-  for(const step of [0,1])for(let k=0;k<3;k++){const a=(k*2+step)*Math.PI/3,b=((k*2+step+2)%6)*Math.PI/3,[x,z]=polar(a,.72),[u,w]=polar(b,.72);seg(x,z,u,w);}
-  for(let k=0;k<8;k++){const a=k*Math.PI/4,[x,z]=polar(a,1.04),[u,w]=polar(a,1.12);seg(x,z,u,w);}
-  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
-  this.runes=new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:'#70d5ff',transparent:true,opacity:.85,depthTest:false,depthWrite:false}));
-  this.runes.renderOrder=21;this.group.add(this.runes);
-  this.path=new THREE.Line(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3)),new THREE.LineBasicMaterial({color:'#37b5ff',transparent:true,opacity:.65,depthTest:false,depthWrite:false}));
-  this.path.frustumCulled=false;this.path.renderOrder=19;scene.add(this.path);
-  // Show charged non-area skills as a corridor reaching forward.
-  const guide=new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(24),3));
-  this.corridor=new THREE.LineSegments(guide,new THREE.LineBasicMaterial({color:'#a5eeff',transparent:true,opacity:.84,depthTest:false,depthWrite:false}));
-  this.corridor.name='Forward charged skill corridor';this.corridor.renderOrder=22;this.corridor.frustumCulled=false;scene.add(this.corridor);
-  this.group.visible=this.path.visible=this.corridor.visible=false;this.t=0;
+  this.scene=scene;this.group=new THREE.Group();this.group.name='Charged magic target circle';
+  this.outer=circle(.96,.022,'#ffffff');this.inner=circle(.58,.014,'#ffffff');
+  this.middle=circle(.77,.011,'#ffffff');this.symbols=runes('#ffffff');
+  this.group.add(this.outer,this.inner,this.middle,this.symbols);
+  scene.add(this.group);this.group.visible=false;
+  this.guides=Array.from({length:6},(_,i)=>{
+   const g=new THREE.Group();g.name='Forward magic rune '+i;
+   const ring=circle(.9,.035,'#ffffff'),glyph=runes('#ffffff');
+   g.add(ring,glyph);scene.add(g);g.visible=false;return g;
+  });
+  this.t=0;
  }
  update(root,item,charge,direction,arena){
   if(!root||!item||charge<.1||!Array.isArray(direction)){this.hide();return;}
-  const origin=[root.position.x,root.position.y+1,root.position.z];
-  const area=chargedArea(item,origin,direction,attackStats(item,1),(x,z,y)=>spellGroundHeight(arena.world,x,z,y));
-  this.group.visible=area.mode==='area';this.path.visible=true;this.corridor.visible=area.mode!=='area';
-  const p=area.center,r=area.radius;
-  this.group.position.set(p[0],Math.max(.15,p[1])+.06,p[2]);
-  this.group.scale.setScalar(r);
-  this.t+=.028;
-  this.group.rotation.y+=.008;
-  this.outer.material.opacity=.6+.2*Math.sin(this.t*3);
-  this.inner.material.opacity=.45+.18*Math.cos(this.t*2);
-  this.runes.material.opacity=.62+.3*Math.sin(this.t*2.5);
-  this.path.geometry.attributes.position.setXYZ(0,origin[0],origin[1],origin[2]);
-  this.path.geometry.attributes.position.setXYZ(1,p[0],Math.max(.2,p[1])+.05,p[2]);
-  this.path.geometry.attributes.position.needsUpdate=true;
-  this.path.material.opacity=.35+.4*charge;
-   if(area.mode!=='area'){
-     const d=new THREE.Vector3(direction[0],0,direction[2]);if(d.lengthSq()<.01)d.set(0,0,1);d.normalize();
-     const right=new THREE.Vector3(-d.z,0,d.x),halfWidth=Math.min(7,Math.max(1.2,attackStats(item,1).radius+1.3));
-     const start=new THREE.Vector3(origin[0],Math.max(.25,origin[1]-.8),origin[2]);
-     const finish=new THREE.Vector3(p[0],Math.max(.25,p[1]),p[2]);
-     const arr=this.corridor.geometry.attributes.position,k=[start.clone().addScaledVector(right,halfWidth),finish.clone().addScaledVector(right,halfWidth),
-       start.clone().addScaledVector(right,-halfWidth),finish.clone().addScaledVector(right,-halfWidth),
-       finish.clone().addScaledVector(right,halfWidth),finish.clone().addScaledVector(right,-halfWidth),
-       start.clone().addScaledVector(right,halfWidth),start.clone().addScaledVector(right,-halfWidth)];
-     k.forEach((v,i)=>arr.setXYZ(i,v.x,v.y,v.z));arr.needsUpdate=true;
-     this.corridor.material.opacity=.55+.4*charge;
-   }
+  const stats=attackStats(item,1),origin=[root.position.x,root.position.y+1,root.position.z];
+  const area=chargedArea(item,origin,direction,stats,(x,z,y)=>spellGroundHeight(arena.world,x,z,y));
+  const dir=new THREE.Vector3(direction[0],0,direction[2]);
+  if(dir.lengthSq()<.001)dir.set(0,0,1);dir.normalize();
+  const travel=area.mode==='area'?area.travel:stats.range;
+  const x=area.mode==='area'?area.center[0]:origin[0]+dir.x*travel;
+  const z=area.mode==='area'?area.center[2]:origin[2]+dir.z*travel;
+  const y=Math.max(.14,spellGroundHeight(arena.world,x,z,origin[1])+.16);
+  const radius=area.mode==='area'?Math.max(1.7,area.radius):Math.max(1.7,Math.min(7,stats.radius+1));
+  const tint=new THREE.Color(runeColorFor(item));
+  const parts=[this.outer,this.inner,this.middle,this.symbols];
+  for(const p of parts)p.material.color.copy(tint);
+  this.group.visible=true;this.group.position.set(x,y,z);
+  this.group.scale.setScalar(radius);
+  this.t+=.033;
+  this.group.rotation.y+=.005;
+  this.outer.material.opacity=.5+.34*charge+.12*Math.sin(this.t*3);
+  this.inner.material.opacity=.45+.36*charge;
+  this.middle.material.opacity=.3+.2*charge;
+  this.symbols.material.opacity=.55+.42*charge;
+  // Non-area attacks show forward reach with smaller symbols at intervals.
+  // There are no rectangle corners/edges or screen-space geometry.
+  for(let i=0;i<this.guides.length;i++){
+   const g=this.guides[i],f=(i+1)/(this.guides.length+1);
+   g.visible=area.mode!=='area';
+   if(!g.visible)continue;
+   const gx=origin[0]+dir.x*travel*f,gz=origin[2]+dir.z*travel*f;
+   const gy=Math.max(.14,spellGroundHeight(arena.world,gx,gz,origin[1])+.17);
+   g.position.set(gx,gy,gz);g.scale.setScalar(.62+Math.min(1.2,stats.radius*.22));
+   g.rotation.y=this.t*.2+i*.37;
+   for(const child of g.children){child.material.color.copy(tint);child.material.opacity=.3+.42*charge;}
+  }
  }
- hide(){this.group.visible=false;this.path.visible=false;this.corridor.visible=false;}
- dispose(){this.hide();this.group.removeFromParent();this.path.removeFromParent();this.group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.path.geometry.dispose();this.path.material.dispose();this.corridor.removeFromParent();this.corridor.geometry.dispose();this.corridor.material.dispose();}
+ hide(){this.group.visible=false;for(const g of this.guides)g.visible=false;}
+ dispose(){
+  this.hide();
+  for(const group of [this.group,...this.guides]){
+   group.removeFromParent();group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});
+  }
+ }
 }

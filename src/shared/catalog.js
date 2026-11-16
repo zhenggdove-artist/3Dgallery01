@@ -26,7 +26,7 @@ export const MATERIALS = Object.freeze([
 ]);
 
 // Original RELETTER identity, range, cadence and effects; only Temple economy/HP scale differ.
-export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].map(original=>{
+export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(original=>original.id!=='chiang-token').map(original=>{
   const tier=Math.max(1,Math.min(5,original.tier||1)),price=original.notForSale||original.id==='water'?0:original.slot==='seed'?80+tier*35:TIER_PRICES[tier-1]+Math.min(180,original.price||0);
   return Object.freeze({...original,price,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10,chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10});
 }));
@@ -54,7 +54,7 @@ export const ECONOMY = Object.freeze({
   buildCosts:Object.freeze({cube:80,bar:110,cylinder:110,wall:80,column:110,platform:170,tree:95,house:240})
 });
 
-export const STARTER_LOADOUT = Object.freeze({weapon:'tide-1',armor:null,head:null,outfit:null,shield:null,wings:null});
+export const STARTER_LOADOUT = Object.freeze({weapon:'saber-1',armor:null,head:null,outfit:null,shield:null,wings:null});
 
 export function weightedChoice(entries,rng=Math.random){
   const total=entries.reduce((sum,entry)=>sum+(entry.weight||1),0);let cursor=rng()*total;

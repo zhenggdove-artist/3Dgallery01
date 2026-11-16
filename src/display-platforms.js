@@ -31,15 +31,17 @@ export class DisplayPlatforms{
    }
    const l=a.world?.artworkLayout?.[d.id]||a.defaultLayout[d.id]||{position:d.artPosition,rotation:[0,d.artYaw,0],scale:[1,1,1]};
    const transformed=box.clone().applyMatrix4(matrix.compose(new THREE.Vector3(),q.setFromEuler(new THREE.Euler(...l.rotation)),scale.fromArray(l.scale)));
-   const top=Math.max(0,l.position[1]+transformed.min.y-.1);
+   // Exhibition decks are world fixtures: moving the artwork does not relocate its floor.
+   const top=Math.max(0,d.size[1]);
    // Radius is a standalone GM-editable property, never hard-locked to art scale.
    const automatic=Math.max(2.4,Math.min(8,Math.max(transformed.max.x-transformed.min.x,transformed.max.z-transformed.min.z)*.54+.75));
    const chosenRadius=root.userData.previewPlatformRadius??l.platformRadius;
    const radius=Number.isFinite(chosenRadius)?THREE.MathUtils.clamp(chosenRadius,1.5,14):automatic;
-   const position=[l.position[0],top-.2,l.position[2]];
+   const position=[d.position[0],top-.2,d.position[2]];
    discs.push({position,radius,top,artwork:d.id,display:true});
-   const coneHeight=Math.max(1.2,top);
-   cones.push({position:[l.position[0],coneHeight*.5,l.position[2]],radius:Math.min(3.2,radius*.59),height:coneHeight,artwork:d.id});
+   // The support belongs to the top disc, not the artwork or the ground.
+   const coneHeight=.62;
+   cones.push({position:[position[0],top+coneHeight*.5+.015,position[2]],radius:Math.min(.72,Math.max(.3,radius*.13)),height:coneHeight,artwork:d.id});
    // Narrow jumpable access steps remain independent of artwork dimensions.
    const steps=Math.max(10,Math.ceil(top/1.7));
    const angle=Math.atan2(position[2],position[0]);

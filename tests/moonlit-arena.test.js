@@ -80,7 +80,7 @@ test('creator can edit uploaded artwork colour, while another player cannot',()=
 });
 
 test('charged weapons use identifiable fine particle concepts and cats fire rainbows',()=>{
- const idToRecipe={accordion:'music','white-cat':'rainbow','black-cat':'rainbow','calico-cat':'rainbow-falls',giraffe:'boomerang',goldfish:'jet'};
+ const idToRecipe={accordion:'music','white-cat':'rainbow','black-cat':'rainbow','calico-cat':'rainbow-scatter',giraffe:'boomerang',goldfish:'jet'};
  for(const [id,expected] of Object.entries(idToRecipe))assert.equal(recipeFor(WEAPONS.find(w=>w.id===id)),expected);
  for(const [family,expected] of Object.entries({saber:'fissure',swatter:'flies',pan:'food',wave:'singularity'})){
   const w=WEAPONS.find(w=>w.family===family&&!w.exotic);
@@ -95,7 +95,8 @@ test('charged weapons use identifiable fine particle concepts and cats fire rain
  assert.match(particles,/fine-grained GPU particles/i);
  assert.ok(!particles.includes('new THREE.Mesh('),'bespoke attacks must not summon solid meshes');
  const sky=readFileSync(new URL('../src/night-sky.js',import.meta.url),'utf8');
- for(const feature of ['craters','Moon golden particulate surface','Transparent drifting point cloud'])assert.ok(sky.includes(feature));
+ for(const feature of ['Distant sky cloud bank','depthTest:true','World-oriented distant cloud sky'])assert.ok(sky.includes(feature));
+ assert.ok(!sky.includes('makeMoon('),'no rendered moon');
  const thrower=readFileSync(new URL('../src/artwork-throw.js',import.meta.url),'utf8');
  assert.match(thrower,/Thick red ballistic arc/);
  assert.match(thrower,/Large red artwork landing marker/);
