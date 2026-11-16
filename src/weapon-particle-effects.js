@@ -51,10 +51,12 @@ function modeFor(recipe){
  if(recipe==='rainbow-falls')return 6;
  return 7;
 }
+const styleIds=['tidal','glacier','inferno','storm','prism','petals','singularity','thorn','worldtree','monsoon','gust','echo','jelly','ghost','boomerang','jet','shells'];
+function styleFor(recipe){const index=styleIds.indexOf(recipe);return index<0?4:index;}
 const vertex=`
 attribute vec3 seed;
 attribute vec3 pigment;
-uniform float uAge,uDuration,uReach,uMode,uRadius,uCharge;
+uniform float uAge,uDuration,uReach,uMode,uRadius,uCharge,uStyle;
 varying vec3 vColor;
 varying float vAlpha;
 const float TAU=6.283185307;
@@ -117,13 +119,80 @@ void main(){
    p.x+=sin(spin*2.)*.5;
    alpha*=.92;
  }else{
-   // Family-distinct spirals / waves, distributed along the forward skill range.
-   float wave=sin(position.z*.38+spin*2.+v*9.);
-   float a=atan(position.y,position.x)+uAge*2.9+position.z*.23;
-   float radius=length(position.xy)*(.74+.2*sin(spin));
-   p=vec3(cos(a)*radius+wave*.24,2.2+sin(a)*radius+sin(uAge*3.+w*TAU)*.6,
-     position.z+uReach*smoothstep(.05,.78,t)*.36);
-   alpha*=.88;
+   // Individual weapon families have different silhouette, path and movement,
+   // all formed from small independent points rather than solid summoned meshes.
+   float a=atan(position.y,position.x)+spin*1.8+position.z*.27;
+   float radius=length(position.xy),advance=uReach*smoothstep(.06,.78,t)*.35;
+   if(uStyle<.5){ // water: a travelling translucent tidal crest
+     p=vec3(position.x*1.8+sin(spin+v*12.)*.9,
+       1.1+abs(sin(position.x*.37+spin*1.6))*4.+v*3.,
+       position.z+advance); 
+   }else if(uStyle<1.5){ // ice: tall swirls of icy shatter
+     p=vec3(position.x*.8+sin(spin*.9)*.4,
+       1.3+abs(position.y)*1.9+u*5.*t,
+       position.z+advance+sin(v*TAU)*1.2);
+   }else if(uStyle<2.5){ // fire: ascending braided flame plumes
+     p=vec3(cos(a)*radius*.95,1.4+abs(position.y)*1.5+t*7.,
+       position.z+advance+sin(uAge*9.+u*23.)*.4);
+   }else if(uStyle<3.5){ // lightning: branching irregular bolts
+     float zig=floor(position.z*3.+t*14.);
+     p=vec3(position.x*.65+sin(zig*5.5+v*11.)*1.7,
+       2.5+abs(position.y)*.75+sin(zig*4.1)*2.2,
+       position.z+advance);
+   }else if(uStyle<4.5){ // prismatic helix beam
+     p=vec3(cos(a)*radius*.35+cos(position.z*.75+spin)*1.1,
+       2.5+sin(a)*radius*.35+sin(position.z*.75+spin)*1.1,
+       position.z+advance);
+   }else if(uStyle<5.5){ // rose petals in a moving flowering spiral
+     p=vec3(cos(a)*radius*1.9,2.1+sin(a)*radius*.52+abs(sin(spin))*1.2,
+       position.z+advance);
+   }else if(uStyle<6.5){ // singularity: expanding rings and cosmic orbit trails
+     float r=1.+radius*(1.+t*.6);
+     p=vec3(cos(a)*r,3.3+sin(a)*r*.8,position.z*.6+advance);
+   }else if(uStyle<7.5){ // thorn: several snapping, coiling whips
+     p=vec3(sin(position.z*.76+spin)*2.8+position.x*.32,
+       2.1+cos(position.z*.65+spin)*1.4+abs(position.y)*.24,
+       position.z+advance);
+   }else if(uStyle<8.5){ // world tree: giant rising branching particles
+     float branch=floor(u*7.);
+     p=vec3(position.x+sin(branch*2.7)*t*3.,.4+abs(position.y)*2.+t*5.,
+       position.z*.55+advance);
+   }else if(uStyle<9.5){ // tropical leaf and monsoon cyclone
+     p=vec3(cos(a)*radius*1.5,2.+abs(position.y)*.6+t*2.+sin(spin)*.8,
+       position.z*.8+advance);
+   }else if(uStyle<10.5){ // wind: four strands of gusting filaments
+     float strand=floor(u*4.);
+     p=vec3(cos(a+strand*1.571)*radius*1.3,
+       2.+sin(a+strand*1.571)*radius*.5,
+       position.z+advance*1.6);
+   }else if(uStyle<11.5){ // telephone: broad expanding resonant wave rings
+     float wavefront=fract(t*2.4+u*.7)*4.;
+     p=vec3(cos(a)*radius*wavefront,
+       2.8+sin(a)*radius*wavefront*.9,
+       position.z*.55+advance);
+   }else if(uStyle<12.5){ // glowing floating jellyfish strands
+     p=vec3(cos(a)*radius*.75,2.4+abs(sin(spin+u*7.))*2.+position.y*.24,
+       position.z*.65+advance);
+   }else if(uStyle<13.5){ // haunted spectral procession
+     p=vec3(position.x*.8+sin(spin+v*15.)*.4,
+       2.2+abs(position.y)*.75+sin(uAge*4.+w*10.)*.8,
+       position.z*.8+advance);
+   }else if(uStyle<14.5){ // giraffe-shaped boomerang in a wide return arc
+     float travel=sin(t*3.141593)*uReach;
+     p=vec3(sin(t*6.283+position.z*.25)*4.+position.x*.4,
+       3.+position.y*.45+abs(sin(spin))*2.,travel+position.z*.22);
+   }else if(uStyle<15.5){ // goldfish: dense streaming water nozzle
+     p=vec3(position.x*.48+sin(spin*2.)*.45,
+       2.6+position.y*.32+sin(spin+position.z)*.3,
+       position.z+advance*1.8);
+   }else{ // rotating giant clam shells, released in rippling groups
+     float shell=floor(u*6.);
+     p=vec3(cos(a+shell*1.047)*radius*1.5,
+       2.4+sin(a+shell*1.047)*radius*.9,
+       position.z*.65+advance*1.4);
+   }
+   p.y=max(.35,p.y);
+   alpha*=.95;
  }
  // All point sprites stay fine; bright density comes from many particles.
  vec4 mv=modelViewMatrix*vec4(p,1.);
@@ -223,7 +292,7 @@ export class WeaponParticleEffects{
   geometry.setAttribute('seed',new THREE.BufferAttribute(data.seed,3));
   geometry.setAttribute('pigment',new THREE.BufferAttribute(data.colors,3));
   const material=new THREE.ShaderMaterial({
-    uniforms:{uAge:{value:0},uDuration:{value:duration},uReach:{value:range},uMode:{value:modeFor(recipe)},uRadius:{value:2},uCharge:{value:charge}},
+    uniforms:{uAge:{value:0},uDuration:{value:duration},uReach:{value:range},uMode:{value:modeFor(recipe)},uRadius:{value:2},uCharge:{value:charge},uStyle:{value:styleFor(recipe)}},
     vertexShader:vertex,fragmentShader:fragment,
     transparent:true,depthTest:true,depthWrite:false,blending:THREE.AdditiveBlending
   });
