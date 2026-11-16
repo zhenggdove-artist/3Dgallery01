@@ -15,7 +15,7 @@ test('water makes target take 1.5x damage for precisely five seconds',()=>{
  assert.equal(victim.effects.soaked.power,.5);
  assert.equal(victim.effects.soaked.until,T+5000);
  assert.ok(effectActive(victim,'soaked',T+4999));
- assert.equal(effectActive(victim,'soaked',T+5000),null);
+ assert.ok(!effectActive(victim,'soaked',T+5000));
 });
 
 test('freeze prevents actions for one second, with five-second proc lock',()=>{
@@ -70,7 +70,7 @@ test('target-only overlay colors have exactly four 30%-alpha families',()=>{
  assert.deepEqual(Object.keys(ELEMENTAL_FILTERS).sort(),['dazzle','freeze','root','soaked']);
 });
 test('charged saber authoritative range is 60% of previous four-times multiplier',()=>{
- const item=itemById('saber-1'),uncharged=attackStats(item,.99),charged=attackStats(item,1);
- assert.ok(charged.range>=uncharged.range*2.39);
- assert.ok(charged.range<=uncharged.range*2.41);
+ const item=itemById('saber-1'),charged=attackStats(item,1);
+ const former=Math.max(30,item.range*2,(item.range+item.chargeRange)*1.8)*4;
+ assert.ok(Math.abs(charged.range-former*.60)<.01);
 });

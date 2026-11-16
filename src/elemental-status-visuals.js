@@ -129,7 +129,7 @@ export class ElementalStatusVisuals{
    entry.uniforms.alpha.value=FILTER_ALPHA;
    if(!entry.materials.length)this.applyTint(root,entry);
   }else{entry.uniforms.alpha.value=0;}
-  entry.active=active||null;
+  entry.active=active||null;entry.filterUntil=active?effects[active].until:0;
   if(burn&&!entry.flames){entry.flames=luminousFlames();root.add(entry.flames);}
   if(!burn&&entry.flames)this.stopFlames(entry);
   entry.burnUntil=burn?effects.burn.until:0;
@@ -147,7 +147,7 @@ export class ElementalStatusVisuals{
     if(now>=entry.burnUntil)this.stopFlames(entry);
     else entry.flames.material.uniforms.uTime.value+=dt;
    }
-   if(entry.active&&now>=entry.until)entry.uniforms.alpha.value=0;
+   if(entry.active&&now>=entry.filterUntil)entry.uniforms.alpha.value=0;
   }
  }
  clear(root){
