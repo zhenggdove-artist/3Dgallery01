@@ -102,6 +102,7 @@ network.addEventListener('state',event=>{const data=event.detail;if(data.key===s
 network.addEventListener('chat',event=>ui.addChat(event.detail));
 network.addEventListener('artwork-throw',event=>showThrowPulse(event.detail));
 network.addEventListener('attack',event=>showAttack(event.detail));
+network.addEventListener('channel-stop',event=>{const root=roots.get(event.detail.owner);if(root)arena.presentation.vfx.stopChannel(root);});
 network.addEventListener('structure-destroyed',event=>arena.showStructureBreak(event.detail));
 network.addEventListener('structure-hit',event=>arena.showStructureHit(event.detail));
 network.addEventListener('state-rejected',event=>{
@@ -175,8 +176,11 @@ ui.addEventListener('attack-release',async()=>{
   staffChannel=null;++staffChannelSerial;
   arena.presentation.vfx.stopChannel(localRoot);
   chargeStarted=null;attackHoldStarted=null;chargeRequest=null;
-  await Promise.resolve(pending);
-  await sendAction('attack',{phase:'channel-stop'});
+  // Local VFX stops on pointer-up, before any queued server response.
+  void sendAction('attack',{phase:'channel-stop'});
+  void Promise.resolve(pending).then(result=>{
+   if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});
+  });
   return;
  }
  if(attackHoldStarted===null)return;
@@ -201,7 +205,7 @@ ui.addEventListener('attack-cancel',()=>{
   const pending=staffChannelPromise;
   staffChannel=null;++staffChannelSerial;
   arena.presentation.vfx.stopChannel(localRoot);
-  void Promise.resolve(pending).then(()=>sendAction('attack',{phase:'channel-stop'}));
+  void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});
  }
 });
 ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;sendAction(action,data);});
@@ -212,7 +216,7 @@ ui.addEventListener('plant',event=>writer.submit(event.detail));
 ui.addEventListener('save-code',async()=>{try{const data=await network.createSaveCode();self.saveCode=data.code;ui.self=self;ui.showSaveCode(data.code);ui.toast('存檔代碼已產生 · 請保存');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
-ui.addEventListener('panel',event=>{chargeStarted=null;attackHoldStarted=null;chargeRequest=null;if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void Promise.resolve(pending).then(()=>sendAction('attack',{phase:'channel-stop'}));}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
+ui.addEventListener('panel',event=>{chargeStarted=null;attackHoldStarted=null;chargeRequest=null;if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
 ui.addEventListener('editor-settings',event=>applyEditorSettings(event.detail));
 
 function createLocalPlayer(data){
@@ -276,7 +280,6 @@ function update(dt,time){
   const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
   // First 500ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
   // the charging window; the very first sustained pulse is the ultimate.
-  if(attackHeld&&!world?.profile?.effects?.paralysis?.until||false){} // electrical safety is enforced below
   if(attackHeld&&!(world?.profile?.effects?.paralysis?.until>Date.now())&&charge>=1&&isChannelStaff(heldItem)&&!staffChannel&&
      performance.now()-(window._templeLastChannelAttempt||0)>170){
    window._templeLastChannelAttempt=performance.now();
@@ -298,7 +301,7 @@ function update(dt,time){
   if(staffChannel){
    if(!attackHeld||!isChannelStaff(heldItem)||heldItem.id!==staffChannel.weapon||!controller.enabled){
     const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;
-    void Promise.resolve(pending).then(()=>sendAction('attack',{phase:'channel-stop'}));
+    void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});
    }else if(staffChannel.ready&&!staffChannelBusy&&performance.now()-staffChannelShotAt>=channelInterval(heldItem)+45){
     staffChannelShotAt=performance.now();staffChannelBusy=true;
     void Promise.resolve(performAttack(1,'channel')).finally(()=>{staffChannelBusy=false;});
