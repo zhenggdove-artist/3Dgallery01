@@ -75,7 +75,7 @@ test('plant weapon roots a hit enemy and being hit triggers persistent pursuit',
  assert.equal(world.monster.aggroTarget,null,'art sanctuary cancels aggro');
 });
 test('flower staff, planter, giraffe and giant clam use distinct soft particle recipes',()=>{
- assert.equal(recipeFor(itemById('petal-1')),'lotus-veil');
+ assert.equal(recipeFor(itemById('bloom-1')),'lotus-veil');
  assert.equal(recipeFor(itemById('planter-1')),'thorn-tower');
  assert.equal(recipeFor(itemById('giraffe')),'boomerang');
  const scene=new THREE.Scene(),vfx=new WeaponParticleEffects(scene);
