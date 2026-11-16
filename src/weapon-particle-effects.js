@@ -330,6 +330,14 @@ export class WeaponParticleEffects{
     entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),direction.normalize());
     if(chosen!=='rainbow')entry.root.position.y=Math.max(.7,entry.root.position.y);
   }
+  if(chosen==='flies'&&Array.isArray(data.impactPoint)&&data.impactPoint.length===3){
+    // Only for the first metre or so of its apparent pursuit: steer the cloud
+    // toward the moving monster that the server actually reported as hit.
+    const impact=new THREE.Vector3(...data.impactPoint);
+    const monsters=this.scene.children.filter(o=>o.visible&&/^(Sixfold outer monster|Giant Nangan enemy)/.test(o.name));
+    const target=monsters.sort((x,y)=>x.position.distanceToSquared(impact)-y.position.distanceToSquared(impact))[0];
+    if(target&&target.position.distanceTo(impact)<12)entry.homingTarget=target;
+  }
   this.add(entry);
  }
  charging(root,progress,item){
@@ -349,6 +357,13 @@ export class WeaponParticleEffects{
   for(const entry of [...this.active]){
     if(entry.charging)continue;
     entry.age+=dt;entry.material.uniforms.uAge.value=entry.age;
+    if(entry.homingTarget&&entry.age<.9&&entry.homingTarget.visible){
+      const towards=entry.homingTarget.position.clone().add(new THREE.Vector3(0,3.5,0)).sub(entry.root.position);
+      if(towards.lengthSq()>.001){
+        const aiming=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),towards.normalize());
+        entry.root.quaternion.slerp(aiming,Math.min(1,dt*5));
+      }
+    }
     if(entry.age>=entry.duration)this.remove(entry);
   }
  }
