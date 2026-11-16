@@ -125,32 +125,48 @@ ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(item
 ui.addEventListener('original-action',event=>sendAction(event.detail.action,event.detail));
 ui.addEventListener('jump',()=>controller?.jump());
 addEventListener('keyup',e=>{if(e.code==='KeyE')artworkThrow.release();});
-ui.addEventListener('attack-start',()=>{if(!controller?.enabled||self?.role!=='fighter'||chargeStarted!==null||staffChannel)return;if(coarse&&buildPlacement){confirmBuildPlacement();return;}if(coarse&&!controller.holdingArt){const near=arena.nearest(controller.root.position.toArray());if(['artwork','plant','coin','drop'].includes(near?.type)||!near&&Math.hypot(controller.root.position.x,controller.root.position.z)<7){performInteract();return;}}if(controller.holdingArt){artworkThrow.begin();return;}
- const heldWeapon=itemById(world?.profile?.equipment?.weapon);
+// ATTACK is NEVER a contextual interact button. Short taps must execute a
+// normal melee swing or a single elemental orb; holding is solely charging.
+ui.addEventListener('attack-start',()=>{
+ if(!controller?.enabled||self?.role!=='fighter'||chargeStarted!==null||staffChannel)return;
+ if(coarse&&buildPlacement){confirmBuildPlacement();return;}
+ if(controller.holdingArt){artworkThrow.begin();return;}
  attackHeld=true;
- if(isChannelStaff(heldWeapon)){
-  const serial=++staffChannelSerial;staffChannel={weapon:heldWeapon.id,serial};
-  staffChannelShotAt=-Infinity;audio.play('charge',.42);
-  staffChannelPromise=sendAction('attack',{phase:'channel-start'});
-  void staffChannelPromise.then(result=>{
-   if(result?.channeling&&staffChannel?.serial===serial&&attackHeld)staffChannel.ready=true;
-  });
-  return;
- }
- chargeStarted=performance.now();audio.play('charge',.62);chargeRequest=sendAction('attack',{phase:'charge'});});
+ chargeStarted=performance.now();
+ audio.play('charge',.46);
+ chargeRequest=sendAction('attack',{phase:'charge'});
+});
 ui.addEventListener('attack-release',async()=>{
  attackHeld=false;
+ if(artworkThrow.started!==null)return artworkThrow.release();
  if(staffChannel){
-  const sequence=++staffChannelSerial;staffChannel=null;
-  await staffChannelPromise;
-  if(sequence===staffChannelSerial)await sendAction('attack',{phase:'channel-stop'});
+  const pending=staffChannelPromise;
+  staffChannel=null;++staffChannelSerial;
+  chargeStarted=null;
+  await Promise.resolve(pending);
+  await sendAction('attack',{phase:'channel-stop'});
   return;
  }
- if(artworkThrow.started!==null)return artworkThrow.release();if(chargeStarted===null)return;const charge=Math.min(1,(performance.now()-chargeStarted)/(itemById(world?.profile?.equipment?.weapon)?.chargeMs||1500));chargeStarted=null;await chargeRequest;performAttack(charge);});
+ if(chargeStarted===null)return;
+ const weapon=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
+ const charge=Math.min(1,(performance.now()-chargeStarted)/(weapon?.chargeMs||1500));
+ chargeStarted=null;
+ await chargeRequest;
+ // Staffs/clam ONLY emit ordinary shots on short taps. A completed staff
+ // hold is the end of a continuous cast, never an extra release projectile.
+ if(isChannelStaff(weapon)){
+  if(charge<1)performAttack(0);
+ }else{
+  performAttack(charge);
+ }
+});
 ui.addEventListener('attack-cancel',()=>{
  attackHeld=false;chargeStarted=null;artworkThrow.cancel();
- if(staffChannel){staffChannel=null;++staffChannelSerial;
-   void Promise.resolve(staffChannelPromise).then(()=>sendAction('attack',{phase:'channel-stop'}));}
+ if(staffChannel){
+  const pending=staffChannelPromise;
+  staffChannel=null;++staffChannelSerial;
+  void Promise.resolve(pending).then(()=>sendAction('attack',{phase:'channel-stop'}));
+ }
 });
 ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;sendAction(action,data);});
 ui.addEventListener('build-start',async event=>{try{const d=event.detail;const media=d.file?await uploadMedia(network,d.file):null;startBuildPlacement(d.kind,media?.id);}catch(error){ui.clearBuildMode();ui.toast(error.message);}});ui.addEventListener('build-rotate',()=>rotateBuildPlacement());ui.addEventListener('build-confirm',()=>confirmBuildPlacement());ui.addEventListener('build-cancel',()=>cancelBuildPlacement());
@@ -160,7 +176,7 @@ ui.addEventListener('plant',event=>writer.submit(event.detail));
 ui.addEventListener('save-code',async()=>{try{const data=await network.createSaveCode();self.saveCode=data.code;ui.self=self;ui.showSaveCode(data.code);ui.toast('存檔代碼已產生 · 請保存');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
-ui.addEventListener('panel',event=>{chargeStarted=null;if(event.detail.open&&staffChannel){staffChannel=null;++staffChannelSerial;void Promise.resolve(staffChannelPromise).then(()=>sendAction('attack',{phase:'channel-stop'}));}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
+ui.addEventListener('panel',event=>{chargeStarted=null;if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void Promise.resolve(pending).then(()=>sendAction('attack',{phase:'channel-stop'}));}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
 ui.addEventListener('editor-settings',event=>applyEditorSettings(event.detail));
 
 function createLocalPlayer(data){
@@ -195,22 +211,48 @@ function update(dt,time){
   if(joined)minimap.update(time,roots,self?.key,world?.monster,world?.monsters||[]);
   if(joined&&controller){writer.update();plantHover.update();const wasGrounded=controller.grounded;const state=controller.update(dt);if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy))network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil);}
   arena.update(dt,time,camera,roots);arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
+  const heldItem=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
+  const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
+  // The first 100% of a hold is SILENT. No staff may continuously cast during
+  // the charging window; the very first sustained pulse is the ultimate.
+  if(attackHeld&&charge>=1&&isChannelStaff(heldItem)&&!staffChannel&&
+     performance.now()-(window._templeLastChannelAttempt||0)>170){
+   window._templeLastChannelAttempt=performance.now();
+   const serial=++staffChannelSerial;
+   staffChannel={weapon:heldItem.id,serial,ready:false};
+   staffChannelShotAt=-Infinity;
+   staffChannelPromise=Promise.resolve(chargeRequest).then(result=>{
+    if(!result?.charging||!attackHeld||staffChannel?.serial!==serial)return null;
+    return sendAction('attack',{phase:'channel-start'});
+   }).then(result=>{
+    if(result?.channeling&&staffChannel?.serial===serial&&attackHeld){
+     staffChannel.ready=true;
+    }else if(staffChannel?.serial===serial){
+     staffChannel=null; // network latency may require retry after 100%
+    }
+    return result;
+   });
+  }
   if(staffChannel){
-   const item=itemById(world?.profile?.equipment?.weapon);
-   if(!attackHeld||!isChannelStaff(item)||item.id!==staffChannel.weapon||!controller.enabled){
-     staffChannel=null;++staffChannelSerial;void Promise.resolve(staffChannelPromise).then(()=>sendAction('attack',{phase:'channel-stop'}));
-   }else if(staffChannel.ready&&!staffChannelBusy&&performance.now()-staffChannelShotAt>=channelInterval(item)+45){
-     staffChannelShotAt=performance.now();staffChannelBusy=true;
-     void Promise.resolve(performAttack(0,'channel')).finally(()=>{staffChannelBusy=false;});
+   if(!attackHeld||!isChannelStaff(heldItem)||heldItem.id!==staffChannel.weapon||!controller.enabled){
+    const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;
+    void Promise.resolve(pending).then(()=>sendAction('attack',{phase:'channel-stop'}));
+   }else if(staffChannel.ready&&!staffChannelBusy&&performance.now()-staffChannelShotAt>=channelInterval(heldItem)+45){
+    staffChannelShotAt=performance.now();staffChannelBusy=true;
+    void Promise.resolve(performAttack(1,'channel')).finally(()=>{staffChannelBusy=false;});
    }
   }
-  const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(itemById(world?.profile?.equipment?.weapon)?.chargeMs||1500));if(charge>=1&&itemById(world?.profile?.equipment?.weapon)?.autoCharge&&!autoChargeBusy){autoChargeBusy=true;const pending=chargeRequest;chargeStarted=null;Promise.resolve(pending).then(async()=>{await performAttack(1);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeStarted=performance.now();chargeRequest=sendAction('attack',{phase:'charge'});}}).finally(()=>autoChargeBusy=false);}arena.presentation.charging(localRoot,charge);
+  if(charge>=1&&!isChannelStaff(heldItem)&&heldItem?.autoCharge&&!autoChargeBusy){
+   autoChargeBusy=true;const pending=chargeRequest;chargeStarted=null;
+   Promise.resolve(pending).then(async()=>{await performAttack(1);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeStarted=performance.now();chargeRequest=sendAction('attack',{phase:'charge'});}}).finally(()=>autoChargeBusy=false);
+  }
+  arena.presentation.charging(localRoot,charge);
   const chargedWeapon=itemById(world?.profile?.equipment?.weapon);
   if(charge>.08&&chargedWeapon&&controller){
    const direction=chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1);
    chargePreview.update(localRoot,chargedWeapon,charge,direction,arena);
   }else chargePreview.hide();
-  const attackButton=document.getElementById('attack-button');attackButton.classList.toggle('charging',charge>0||!!staffChannel||artworkThrow.started!==null);attackButton.style.setProperty('--charge',`${(artworkThrow.started!==null?artworkThrow.progress:staffChannel?Math.min(1,(performance.now()-(world?.profile?.channelStartedAt||performance.now()))/1800):charge)*100}%`);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}
+  const attackButton=document.getElementById('attack-button');attackButton.classList.toggle('charging',charge>0||!!staffChannel||artworkThrow.started!==null);attackButton.style.setProperty('--charge',`${(artworkThrow.started!==null?artworkThrow.progress:charge)*100}%`);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}
 }
 
 function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.05,elapsed/1000);last=now;if(!assetsReady)return;const started=performance.now();if(now>externalUntil)update(dt,now/1000);const updated=performance.now();vhs.render(scene,camera,performance.now()/1000);const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}}

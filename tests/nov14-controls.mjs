@@ -10,7 +10,7 @@ try{
  const page=await context.newPage(),errors=[];page.setDefaultTimeout(90000);page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:8000');await page.waitForFunction(()=>document.body.classList.contains('ready'));
  await page.locator('#player-name').fill('Ely');await page.locator('#memory-code').fill(secret);await page.locator('#entry-form').evaluate(f=>f.requestSubmit());await page.locator('#hud').waitFor({state:'visible'});
- assert.equal(await page.locator('#attack-button span').textContent(),'A');assert.equal(await page.locator('[data-action=interact]').count(),0);
+ assert.equal(await page.locator('#attack-button span').textContent(),'A');assert.equal(await page.locator('[data-action=interact]').count(),1);
  const inventory=await page.evaluate(()=>({missing:templeTest.items.filter(i=>!templeTest.ui.world.profile.inventory.includes(i.id)).map(i=>i.id)}));assert.deepEqual(inventory.missing,[]);
  await page.evaluate(()=>{const c=templeTest.controller();c.teleport([0,0,0]);c.grounded=true;c.setEnabled(true);});
  await page.evaluate(()=>templeTest.network.action('equip',{itemId:'tide-1'}));await page.waitForTimeout(300);
