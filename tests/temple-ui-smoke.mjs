@@ -58,6 +58,34 @@ try{
  assert.ok(await page.locator('#bag-items [data-bag-item]').count()>0);
  await page.screenshot({path:output+'/weapons.png'});
  await page.locator('#panel-close').click();
+ // Desktop sniper regression: two V presses (CAMERA) enter 2x scope, and
+ // BOTH an ordinary mouse click and a mask-area click must fire, not exit.
+ const setupDesk=await page.evaluate(()=>{
+  const t=templeTest,gun=t.gun;
+  const originalWeapon=gun.weapon,originalEmit=t.ui.emit;
+  window.desktopScopeShots=0;
+  gun.weapon=()=>({id:'black-cat',firstPerson:true,range:90,cooldown:800});
+  t.ui.emit=function(type,...args){
+   if(type==='gun-fire'){window.desktopScopeShots++;return;}
+   return originalEmit.call(this,type,...args);
+  };
+  window.restoreDesktopScope=()=>{
+   gun.end();gun.weapon=originalWeapon;t.ui.emit=originalEmit;
+  };
+  t.controller().setEnabled(true);
+  gun.cycle();gun.cycle();
+  return {mode:gun.mode,scopeVisible:!gun.overlay.hidden};
+ });
+ assert.equal(setupDesk.mode,2,'desktop sniper CAMERA enters full scope');
+ await page.mouse.click(640,400);
+ await page.waitForFunction(()=>window.desktopScopeShots===1);
+ assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,
+  'desktop mouse click must fire without quitting sniper view');
+ await page.mouse.click(1010,620);
+ await page.waitForFunction(()=>window.desktopScopeShots===2);
+ assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,
+  'desktop click outside glass circle must not trigger mobile-only scope exit');
+ await page.evaluate(()=>window.restoreDesktopScope());
  // World pickups must contain the full 3D weapon mesh, never a billboard.
  const weaponMesh=await page.evaluate(()=>{
   const view=templeTest.arena.adventure,previous=view.world;
