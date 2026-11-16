@@ -28,7 +28,19 @@ try {
   const hidden=getComputedStyle(e).display==='none';
   const coarse=matchMedia('(pointer:coarse)').matches;
   if(!t.ui.world?.profile?.equipment)throw Error('World equipment unavailable');
+  // The room pushes fresh authoritative world snapshots. Keep the gun
+  // equipped in ALL incoming snapshots during this isolated input test.
+  // Without this, a server inventory refresh switches back to the starter
+  // clam between pointerdown and the camera's next animation frame.
+  const setWorld=t.ui.setWorld.bind(t.ui);
+  window.mobileForceGun=true;
+  t.ui.setWorld=w=>{
+   if(window.mobileForceGun&&w?.profile?.equipment)w.profile.equipment.weapon='black-cat';
+   return setWorld(w);
+  };
   t.ui.world.profile.equipment.weapon='black-cat';
+  window.mobileAEvents=0;
+  t.ui.addEventListener('attack-start',()=>window.mobileAEvents++);
   const network=t.network,real=network.action.bind(network);
   window.mobileTestShots=0;
   network.action=async function(action,...args){
@@ -40,7 +52,15 @@ try {
  assert.deepEqual(initial,{hidden:true,coarse:true},'No E control; genuine coarse-pointer emulation');
  const button=page.locator('#attack-button');
  await button.tap();
- await page.waitForFunction(()=>templeTest.gun.mode===1);
+ try {await page.waitForFunction(()=>templeTest.gun.mode===1,null,{timeout:8000});}
+ catch(error){
+  const state=await page.evaluate(()=>({mode:templeTest.gun.mode,
+   selectedWeapon:templeTest.ui.world?.profile?.equipment?.weapon,
+   controller:templeTest.controller()?.enabled,panel:templeTest.ui.panelName,
+   aEvents:window.mobileAEvents,shots:window.mobileTestShots,
+   modeWeapon:templeTest.gun.weapon()?.id}));
+  throw new Error('First mobile A did not enter shoulder view: '+JSON.stringify(state),{cause:error});
+ }
  assert.equal(await page.evaluate(()=>window.mobileTestShots),0,'first A only opens shoulder');
  await button.tap();
  await page.waitForFunction(()=>templeTest.gun.mode===2&&
@@ -57,6 +77,7 @@ try {
  const setup=await page.evaluate(()=>{
   const t=templeTest,plant={id:'ci-touch-plant',author:'CI',text:'Mobile E equivalence',createdAt:Date.now()};
   t.ui.world.plants.push(plant);
+  window.mobileForceGun=false;
   t.ui.world.profile.equipment.weapon='clam';
   t.arena.nearest=()=>({type:'plant',id:plant.id});
   return t.controller().enabled;
