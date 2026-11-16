@@ -21,6 +21,9 @@ export const REQUESTED_VFX=Object.freeze({
 });
 export function requestedEffect(item,event){
  if(!item||!event)return null;
+ // Exotic weapons share ordinary families but have their own signature VFX:
+ // never replace the giant goldfish, returning giraffe, or four fan tornadoes.
+ if(item.exotic&&item.id!=='clam'&&item.id!=='jellybrella')return null;
  const key=event.channel?(item.id==='clam'?'clam':item.family)+':channel':
   event.ultimate?(item.id==='jellybrella'?'jellybrella':item.family)+':ultimate':
   item.family==='saber'&&(item.tier>=4||event.qualityTier>=4)&&event.combo===5?'saber:combo':'';

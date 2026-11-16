@@ -48,3 +48,12 @@ test('numbered effect has priority over generic, plain-color weapon presets',()=
   vfx.dispose();
  }
 });
+
+// Original character-defining ultimates must not be replaced by shared-family
+// presets (giraffe is whip, goldfish/accordion are pan, fan is swatter).
+test('family-based remapping never steals exotic signature effects',()=>{
+ for(const id of ['giraffe','goldfish','fan','accordion','telephone']){
+  const item=itemById(id);
+  assert.equal(requestedEffect(item,evt('ultimate')),null,id);
+ }
+});
