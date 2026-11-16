@@ -25,7 +25,7 @@ export class IslandEnemies{
  }
  sync(state,extras=[]){
   this.state=state;
-  const next=state?.active?this.models.get(state.model)||this.models.get('auntie'):null;
+  const next=state?.active?this.models.get(state.model)||this.models.get(ISLAND_ENEMIES[0]):null;
   if(this.current!==next||this.generation!==state?.id){
    if(this.current)this.current.visible=false;
    this.current=next;this.generation=state?.id;
