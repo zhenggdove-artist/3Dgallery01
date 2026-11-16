@@ -131,12 +131,20 @@ ui.addEventListener('attack-start',()=>{
  if(!controller?.enabled||self?.role!=='fighter'||chargeStarted!==null||staffChannel)return;
  if(coarse&&buildPlacement){confirmBuildPlacement();return;}
  if(controller.holdingArt){artworkThrow.begin();return;}
+ const weapon=itemById(world?.profile?.equipment?.weapon);
+ if(weapon?.firstPerson){
+  if(!gun.mode)gun.cycle(); // immediate over-shoulder view on pointer DOWN / Q
+  else if(weapon.id==='white-cat'){gun.held=true;gun.nextShot=0;}
+  else void performAttack(0);
+  return;
+ }
  attackHeld=true;
  attackHoldStarted=performance.now();
  chargeStarted=null;
  chargeRequest=null;
 });
 ui.addEventListener('attack-release',async()=>{
+ if(itemById(world?.profile?.equipment?.weapon)?.firstPerson){gun.held=false;return;}
  attackHeld=false;
  if(artworkThrow.started!==null)return artworkThrow.release();
  if(staffChannel){
@@ -164,6 +172,7 @@ ui.addEventListener('attack-release',async()=>{
  }
 });
 ui.addEventListener('attack-cancel',()=>{
+ gun.held=false;
  attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;artworkThrow.cancel();
  if(staffChannel){
   const pending=staffChannelPromise;
@@ -207,7 +216,15 @@ function cancelBuildPlacement(){buildPlacement=null;arena.clearBuildPreview();ui
 function followSpectator(key){if(self?.role!=='spectator')return;const target=key?roots.get(key):null;controller.setFollowTarget(target||null);spectatorFollowIndex=players.filter(player=>player.role==='fighter').findIndex(player=>player.key===key);ui.toast(target?`FOLLOWING ${players.find(player=>player.key===key)?.name||'FIGHTER'}`:'FREE SPECTATOR CAMERA');}
 function cycleSpectator(){if(self?.role!=='spectator')return;const fighters=players.filter(player=>player.role==='fighter'&&roots.get(player.key));if(!fighters.length)return followSpectator('');spectatorFollowIndex=(spectatorFollowIndex+1)%fighters.length;followSpectator(fighters[spectatorFollowIndex].key);}
 
-function performAttack(charge=0,phase=null){if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;const firearm=itemById(world?.profile?.equipment?.weapon)?.firstPerson;const shot=firearm?gun.shot():null;const direction=shot?.direction||attackDirection(controller,camera,arena,roots,itemById(world?.profile?.equipment?.weapon)||itemById('water'),charge);return sendAction('attack',{direction,charge,...(phase?{phase}:{}),...(shot||{})});}
+function performAttack(charge=0,phase=null){
+ if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
+ const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
+ const shot=item.firstPerson?gun.shot():null;
+ const direction=shot?.direction||attackDirection(controller,camera,arena,roots,item,charge);
+ const muzzle=isChannelStaff(item)?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
+ return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
+  ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
+}
 function performInteract(){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=arena.nearest(controller.root.position.toArray());if(!near){if(Math.hypot(controller.root.position.x,controller.root.position.z)<7)return ui.showPlantList();return ui.toast('NOTHING WITHIN REACH');}if(near.type==='plant'){const plant=(world?.plants||[]).find(p=>p.id===near.id);if(plant)ui.showPlant(plant);return;}if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
 
 function update(dt,time){
@@ -216,6 +233,7 @@ function update(dt,time){
   if(joined&&controller){writer.update();plantHover.update();controller.castMoveFactor=staffChannel?CAST_MOVE_FACTOR:1;const wasGrounded=controller.grounded;const state=controller.update(dt);if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy))network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil);}
   arena.update(dt,time,camera,roots);arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
   const heldItem=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
+  if(heldItem.firstPerson){attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;}
   if(attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&performance.now()-attackHoldStarted>=STAFF_TAP_MAX_MS){
    chargeStarted=performance.now();
    chargeRequest=sendAction('attack',{phase:'charge'});
@@ -259,7 +277,8 @@ function update(dt,time){
   const chargedWeapon=itemById(world?.profile?.equipment?.weapon);
   if(charge>.08&&!staffChannel&&chargedWeapon&&controller){
    const direction=chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1);
-   chargePreview.update(localRoot,chargedWeapon,charge,direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null);
+   const muzzle=isChannelStaff(chargedWeapon)?arena.presentation.vfx.channelMuzzle(localRoot,chargedWeapon):null;
+   chargePreview.update(localRoot,chargedWeapon,charge,direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null,muzzle?.toArray(),dt);
   }else chargePreview.hide();
   const attackButton=document.getElementById('attack-button');attackButton.classList.toggle('charging',charge>0||!!staffChannel||artworkThrow.started!==null);attackButton.style.setProperty('--charge',`${(artworkThrow.started!==null?artworkThrow.progress:charge)*100}%`);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}
 }

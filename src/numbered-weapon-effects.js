@@ -78,7 +78,10 @@ export class NumberedWeaponEffects{
    return true;
   }
   const scale=Math.max(.5,Math.min(2.5,Number(event.qualityScale)||1));
-  const size=(spec.number===26?4.2:spec.number===38?2:spec.number===48?2:1.2)*scale;
+  const normalSize=(spec.number===26?4.2:spec.number===38?2:spec.number===48?2:1.2)*scale;
+  // Server radius already contains fusion quality. Prevent double-scaling.
+  const size=event.ultimate&&!event.channel&&Number.isFinite(event.area?.radius)
+   ?Math.max(.25,Math.min(3.5,event.area.radius/4.5)):normalSize;
   const options={size,speed:1,color:channelColors[spec.asset]||undefined};
   if(options.color===undefined)delete options.color;
   // Exactly the original function from the MIT module; no custom stand-ins.
@@ -93,11 +96,11 @@ export class NumberedWeaponEffects{
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
   // Server-owned area visualCenter is the exact same world-space ground
   // anchor drawn by ChargeTargetPreview. Never replace it with a hit point.
-  const target=event.ultimate&&Array.isArray(event.area?.visualCenter)?
+  const target=event.ultimate&&!event.channel&&Array.isArray(event.area?.visualCenter)?
    vector(event.area.visualCenter,origin):origin.clone();
   const entry={spec,fx,group:fx.group,root,item,direction,origin,target,
    range:Math.max(.5,Number(event.range)||12),key,channel:!!event.channel,
-   areaLocked:!!event.ultimate&&Array.isArray(event.area?.visualCenter),
+   areaLocked:!!event.ultimate&&!event.channel&&Array.isArray(event.area?.visualCenter),
    age:0,duration:event.channel?Infinity:(spec.number===48?6.5:spec.number===53?7:5),
    lastPulse:performance.now(),stopping:false};
   this.active.push(entry);

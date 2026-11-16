@@ -11,10 +11,9 @@ export class GunController {
     addEventListener('pointermove',e=>{if(!this.mode||e.target!==canvas)return;e.stopImmediatePropagation();const c=controller(),s=.002*(this.mode===2?.3:1);const previous=this.lookPointer?.id===e.pointerId?this.lookPointer:null,dx=e.pointerType==='touch'?(previous?e.clientX-previous.x:0):e.movementX,dy=e.pointerType==='touch'?(previous?e.clientY-previous.y:0):e.movementY;if(e.pointerType==='touch')this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};c.yaw-=dx*s;c.pitch=THREE.MathUtils.clamp(c.pitch+dy*s,-1.1,1.2);},true);
     for(const type of ['pointerdown','pointerup','pointercancel'])addEventListener(type,e=>{
       const button=e.target.closest?.('#attack-button');if(!weapon()?.firstPerson||!controller()?.enabled||controller()?.holdingArt)return;
-      // RELETTER: the attack button cycles aiming; canvas press/release fires.
-      // The independent mobile AIM control owns camera cycling. A remains
-       // available for interaction/placement and firing, matching the E key.
-       if(button){if(matchMedia('(pointer:coarse)').matches)return;e.preventDefault();e.stopImmediatePropagation();if(type==='pointerup')this.cycle();return;}
+      // A/Q is handled by TempleUI and main: the FIRST pointerdown opens
+      // over-shoulder aim; subsequent presses fire. Never intercept it here.
+      if(button)return;
       if(!this.mode||e.target!==canvas||e.button>0)return;e.preventDefault();e.stopImmediatePropagation();
       if(type==='pointerdown'){this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};if(!document.pointerLockElement)canvas.setPointerCapture(e.pointerId);if(weapon().id==='white-cat'){this.held=true;this.nextShot=0;}else ui.emit('attack-start');}
       else{this.lookPointer=null;this.held=false;ui.emit(type==='pointercancel'?'attack-cancel':'attack-release');}

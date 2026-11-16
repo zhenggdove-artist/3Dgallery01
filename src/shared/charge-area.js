@@ -1,39 +1,84 @@
 import {discGroundHeight} from './artwork-discs.js';
-// Deterministic charged attack area, used by both the authoritative server
-// and the client's blue ground rune. Coordinates use world-space metres.
+import {isChannelStaff} from './weapon-abilities.js';
+
+// All coordinates and dimensions are world metres, shared by client previews
+// and the authoritative attack. Never apply a separate cosmetic range bonus.
 const AREAS=new Set(['water','ice','fire','lightning','petal','wave']);
 const EXOTIC_AREAS=new Set(['jet','score','gust','echo','jelly','shells']);
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const safeDirection=direction=>{
+ const values=Array.isArray(direction)?direction:[0,0,1];
+ const length=Math.hypot(...values)||1;
+ return values.map(v=>v/length);
+};
+const flatDirection=direction=>{
+ const d=safeDirection(direction),length=Math.hypot(d[0],d[2]);
+ return length>.0001?[d[0]/length,d[2]/length]:[0,1];
+};
+export const CLAM_SECTOR_ANGLE=90;
+
 export function chargedArea(item,origin,direction,stats,ground=()=>0){
- const mag=Math.hypot(...direction)||1,dir=direction.map(x=>x/mag);
+ const dir=safeDirection(direction);
  const range=clamp(Number(stats?.range)||Number(item?.range)||8,2,100);
  const radius=clamp(Number(stats?.radius)||2,1,18);
- // Ranged charged melee ultimates advance toward their targets rather than
- // rendering a meaningless circle at the caster's feet.
- const mode=(AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
- // Long-distance skills must actually land away from the caster. A downward
- // aim intersects the ground first; a horizontal aim travels along the arena.
- const defaultDistance=mode==='melee'?Math.min(range,3):clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
+ // Staff/clam streams are fired from the weapon, not an unrelated distant
+ // round explosion. Other spell families retain their target-centred circles.
+ const mode=item?.id==='clam'?'sector':isChannelStaff(item)?'corridor':
+  (AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
+ const defaultDistance=clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
  const floorAtDistance=ground(origin[0]+dir[0]*defaultDistance,origin[2]+dir[2]*defaultDistance,origin[1]);
  const intercept=dir[1]<-.04?(origin[1]-floorAtDistance)/(-dir[1]):Infinity;
- const travel=clamp(Number.isFinite(intercept)?intercept:defaultDistance,mode==='melee'?1:3,range);
+ const travel=clamp(Number.isFinite(intercept)?intercept:defaultDistance,3,range);
  const x=origin[0]+dir[0]*travel,z=origin[2]+dir[2]*travel;
  const floor=Math.max(0,ground(x,z,origin[1]));
- return {mode,
-  // visualCenter is the ONE canonical ground-plane target for both the
-  // blue warning circle and the actual charged VFX; it never changes damage.
-  visualCenter:[x,floor+.16,z],
-  center:[x,mode==='area'||mode==='melee'?floor+.12:Math.max(floor+.12,origin[1]+dir[1]*travel),z],
-  radius,travel,range};
-}
-export function insideChargedArea(area,target,actorRadius=1){
- if(!area||area.mode!=='area')return false;
- return Math.hypot(target[0]-area.center[0],target[2]-area.center[2])<=area.radius+actorRadius&&
-        Math.abs(target[1]-area.center[1])<=Math.max(3,area.radius*.7);
+ const [dx,dz]=flatDirection(direction);
+ const nearFloor=Math.max(0,ground(origin[0],origin[2],origin[1]));
+ return {
+  mode,visualCenter:[x,floor+.16,z],
+  center:[x,mode==='area'?floor+.12:Math.max(floor+.12,origin[1]+dir[1]*travel),z],
+  // Sector radius is its forward reach; circle radius is its AoE extent.
+  radius,travel,range,
+  ...(mode==='sector'?{apex:[origin[0],nearFloor+.12,origin[2]],
+   forward:[dx,dz],angleDeg:CLAM_SECTOR_ANGLE}: {})
+ };
 }
 
-// Both browser preview and server authority must agree on ground and
-// player-created GM floating platform elevations.
+export function insideChargedArea(area,target,actorRadius=1){
+ if(!area)return false;
+ if(area.mode==='sector'){
+  const dx=target[0]-area.apex[0],dz=target[2]-area.apex[2];
+  const along=dx*area.forward[0]+dz*area.forward[1];
+  const sideways=Math.abs(dx*area.forward[1]-dz*area.forward[0]);
+  return along>=-actorRadius&&Math.hypot(dx,dz)<=area.range+actorRadius&&
+   sideways<=Math.max(0,along)*Math.tan(area.angleDeg*Math.PI/360)+actorRadius&&
+   Math.abs(target[1]-area.apex[1])<=Math.max(3,area.radius*.7);
+ }
+ if(area.mode!=='area')return false;
+ return Math.hypot(target[0]-area.center[0],target[2]-area.center[2])<=area.radius+actorRadius&&
+  Math.abs(target[1]-area.center[1])<=Math.max(3,area.radius*.7);
+}
+
+// One dimensional contract for authored warning assets #58/#59 and casting
+// geometry. #58 starts at the staff/clam mouth; #59 is centered midway along
+// the full server ray, never on the remote area.visualCenter marker.
+export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
+ const range=clamp(Number(stats?.range)||Number(item?.range)||8,2,100);
+ const width=clamp((Number(stats?.radius)||1)*2,.5,36);
+ const [dx,dz]=flatDirection(direction);
+ const yaw=Math.atan2(-dz,dx); // official effects face local +X
+ const at=(x,z)=>Math.max(0,ground(x,z,origin[1]))+.16;
+ if(item?.id==='clam'){
+  return {shape:'sector',position:[origin[0],at(origin[0],origin[2]),origin[2]],
+   yaw,radius:range,angleDeg:CLAM_SECTOR_ANGLE,range,width};
+ }
+ if(isChannelStaff(item)||item?.pattern==='scatter'||item?.id==='goldfish'){
+  const x=origin[0]+dx*range*.5,z=origin[2]+dz*range*.5;
+  return {shape:'rectangle',position:[x,at(x,z),z],yaw,length:range,width,range};
+ }
+ const center=area?.visualCenter||[origin[0],at(origin[0],origin[2]),origin[2]];
+ return {shape:'circle',position:[...center],radius:Number(area?.radius)||Number(stats?.radius)||1,range};
+}
+
 export function spellGroundHeight(world,x,z,y=0){
  let height=discGroundHeight(x,z,y);
  for(const p of world?.floatingPlatforms||[]){

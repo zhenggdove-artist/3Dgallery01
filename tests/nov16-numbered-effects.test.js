@@ -92,7 +92,7 @@ test('the server area and the warning circle share exactly the same ground-space
  preview.update(root,item,1,direction,{world},fusion);
  assert.equal(preview.group.visible,true);
  assert.ok(preview.group.position.distanceTo(new THREE.Vector3(...area.visualCenter))<1e-8);
- assert.equal(preview.guides.some(g=>g.visible),false);
+ assert.equal(preview.footprint.shape,'circle');
  preview.dispose();
  assert.equal(scene.children.length,0);
 });
@@ -108,8 +108,9 @@ test('warning circle includes fused original range/radius and authoritative chan
  const area=chargedArea(actual,[3,1,4],direction,stats,(x,z,y)=>spellGroundHeight(world,x,z,y));
  const scene=new THREE.Scene(),preview=new ChargeTargetPreview(scene),root=new THREE.Group();
  root.position.set(3,0,4);preview.update(root,item,1,direction,{world},fusion);
- assert.ok(preview.group.position.distanceTo(new THREE.Vector3(...area.visualCenter))<1e-8);
- assert.ok(Math.abs(preview.group.scale.x-Math.max(1.7,area.radius))<1e-8);
+ assert.equal(preview.footprint.shape,'rectangle');
+ assert.ok(Math.abs(preview.rectangle.group.scale.x*preview.rectangle.settings.length-
+  ((stats.range)))<1e-7);
  preview.dispose();
 });
 
