@@ -91,7 +91,7 @@ export function validName(value){return typeof value==='string'&&value.trim().le
 
 export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
-    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,admin:profile.admin};
+    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,effects:clone(profile.effects||{}),admin:profile.admin};
 }
 
 export function worldView(world,actorKey,now=Date.now()){
@@ -120,6 +120,10 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
   const nearSpawn=spawn&&distanceTo(next.position,spawn)<=6;
   if(!previous&&spawn&&!nearSpawn)return {error:'Spawn position rejected',state:{position:spawn,rotation:0,animation:'idle',visible:true}};
   if(previous&&role==='fighter'){
+    const freeze=effectActive(mobility,'freeze',now),root=effectActive(mobility,'root',now);
+    if(freeze||root)return {state:{...previous,position:[...previous.position],
+      rotation:freeze?previous.rotation:+next.rotation.toFixed(4),
+      animation:'idle',visible:true}};
     const elapsed=clamp(elapsedMs/1000,.05,12),distance=distanceTo(next.position,previous.position);
     const boostedSpeed=clamp(Number(mobility?.stats?.speed)||1,.5,6);
     const hasWings=!!mobility?.stats?.impulse;
@@ -302,6 +306,7 @@ function fuse(world,profile,body,rng){
 }
 
 function attack(world,profile,actor,body,context,now){
+  if(effectActive(profile,'freeze',now))return {error:'Frozen: cannot attack'};
   if(profile.hitReaction&&now-profile.hitReaction.time<profile.hitReaction.stunMs)return {error:'Recovering from hit'};
   const weapon=equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon)),bonus=profile.fusion[weapon.id]?.bonus||0;
   if(body.phase==='channel-start'){
@@ -399,7 +404,7 @@ function attack(world,profile,actor,body,context,now){
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null){
   const target=world.profiles[targetActor.key];if(!target||target.hp<=0||target.deadUntil>now)return null;
   const stats=refreshStats(world,target,now);if(target.admin){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
-  const armor=itemById(target.equipment.armor),reduction=Math.min(.65,(armor?.defense||0)/100);let damage=Math.max(1,+((amount)*(1-reduction)*stats.defense).toFixed(1));
+  const armor=itemById(target.equipment.armor),reduction=Math.min(.65,(armor?.defense||0)/100);let damage=Math.max(1,+((amount)*(1-reduction)*stats.defense*(1+(effectActive(target,'soaked',now)?.power||0))).toFixed(1));
   if(target.shield){const absorbed=Math.min(target.shield.hp,damage);target.shield.hp-=absorbed;target.shield.lastHit=now;damage-=absorbed;}
   damage=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-damage);if(damage>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
@@ -474,8 +479,15 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
     if(insideArtSanctuary(mob.position)){mob.position=[...MONSTER_SPAWNS[(mob.slot||0)%MONSTER_SPAWNS.length]];}
     mob.bodyHeight=ENEMY_HEIGHT;mob.bodyRadius=ENEMY_RADIUS;
     const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));
-    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
-     move:(target,distance)=>moveMonster(world,mob,target,distance),hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position)});
+    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
+     move:(target,distance)=>{
+       const confused=effectActive(mob,'confuse',now);
+       if(confused){
+        const angle=(now/210+(mob.generation||0)*2.4+(mob.id?.length||0))%(Math.PI*2);
+        return moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],distance);
+       }
+       return moveMonster(world,mob,target,distance);
+      },hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position)});
     if(!mob.aggroTarget&&!fighters.some(a=>distance2d(a.position,mob.position)<18))patrolMonster(mob,now,rng,(target,distance)=>moveMonster(world,mob,target,distance));
     changed=true;
    }
@@ -742,7 +754,7 @@ function tickPersistentAttacks(world,actors,now,rng){
  return changed||world.persistentAttacks.length!==old;
 }
 
-function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-amount);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng),material=MATERIALS[Math.floor(rng()*MATERIALS.length)];world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),kind:'material',itemId:material.id,position:[monster.position[0],.4,monster.position[2]+1.4],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=3;if(profile)addXp(profile,120);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
+function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount*=1+(effectActive(monster,'soaked',now)?.power||0);amount=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-amount);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng),material=MATERIALS[Math.floor(rng()*MATERIALS.length)];world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),kind:'material',itemId:material.id,position:[monster.position[0],.4,monster.position[2]+1.4],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=3;if(profile)addXp(profile,120);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
 function moveMonster(world,monster,target,distance){const dx=target[0]-monster.position[0],dz=target[2]-monster.position[2],angle=Math.atan2(dz,dx);for(const offset of [0,.68,-.68,1.2,-1.2]){const next=[monster.position[0]+Math.cos(angle+offset)*distance,monster.position[1],monster.position[2]+Math.sin(angle+offset)*distance];if(!insideArena(next,-2)||insideArtSanctuary(next)||(world.structures||[]).some(s=>distance2d(next,s.position)<structureRadius(s)+1.1))continue;monster.position[0]=next[0];monster.position[2]=next[2];return;}}
 function hashString(value){let hash=2166136261;for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return hash>>>0;}
 

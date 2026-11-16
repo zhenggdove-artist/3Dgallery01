@@ -7,6 +7,7 @@ const VHSShader={
     intensity:{value:1.0},
     brightness:{value:2.0},
     resolution:{value:new THREE.Vector2(innerWidth,innerHeight)},
+    dizzy:{value:0},
   },
   vertexShader:`
     varying vec2 vUv;
@@ -17,6 +18,7 @@ const VHSShader={
     uniform float time;
     uniform float intensity;
     uniform float brightness;
+    uniform float dizzy;
     uniform vec2 resolution;
     varying vec2 vUv;
 
@@ -24,6 +26,13 @@ const VHSShader={
 
     void main(){
       vec2 uv=vUv;
+      // Local victim only: the dizzy spell twists the entire view for 3s.
+      vec2 centered=uv-vec2(.5);
+      float radius=length(centered);
+      float spin=dizzy*(1.0-smoothstep(.05,.72,radius))*
+        (1.75+sin(time*9.0)*.65);
+      float cs=cos(spin),sn=sin(spin);
+      uv=vec2(centered.x*cs-centered.y*sn,centered.x*sn+centered.y*cs)+vec2(.5);
 
       // === 波浪扭曲（慢） ===
       // 12.0=波浪密度（越大波紋越密）  2.5=晃動速度  0.0021=扭曲幅度（越大越歪）
@@ -82,5 +91,5 @@ export function createVHS(renderer){
  const target=new THREE.WebGLRenderTarget(1,1,{type:THREE.HalfFloatType});
  const material=new THREE.ShaderMaterial(VHSShader),quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),material),scene=new THREE.Scene(),camera=new THREE.Camera();scene.add(quad);
  let width=0,height=0;
- return {render(world,view,time,renderWorld=null,fullScreenNative=false){if(fullScreenNative){renderer.setRenderTarget(null);renderWorld(renderer,world,view);return;}const size=renderer.getDrawingBufferSize(new THREE.Vector2());if(width!==size.x||height!==size.y){width=size.x;height=size.y;target.setSize(width,height);material.uniforms.resolution.value.copy(size);}const autoReset=renderer.info.autoReset;renderer.info.autoReset=false;renderer.info.reset();renderer.setRenderTarget(target);if(renderWorld)renderWorld(renderer,world,view);else renderer.render(world,view);renderer.setRenderTarget(null);material.uniforms.tDiffuse.value=target.texture;material.uniforms.time.value=time;renderer.render(scene,camera);renderer.info.autoReset=autoReset;}};
+ return {setDizzy(amount){material.uniforms.dizzy.value=Math.max(0,Math.min(1,amount));},render(world,view,time,renderWorld=null,fullScreenNative=false){if(fullScreenNative&&!material.uniforms.dizzy.value){renderer.setRenderTarget(null);renderWorld(renderer,world,view);return;}const size=renderer.getDrawingBufferSize(new THREE.Vector2());if(width!==size.x||height!==size.y){width=size.x;height=size.y;target.setSize(width,height);material.uniforms.resolution.value.copy(size);}const autoReset=renderer.info.autoReset;renderer.info.autoReset=false;renderer.info.reset();renderer.setRenderTarget(target);if(fullScreenNative)renderer.render(world,view);else if(renderWorld)renderWorld(renderer,world,view);else renderer.render(world,view);renderer.setRenderTarget(null);material.uniforms.tDiffuse.value=target.texture;material.uniforms.time.value=time;renderer.render(scene,camera);renderer.info.autoReset=autoReset;}};
 }
