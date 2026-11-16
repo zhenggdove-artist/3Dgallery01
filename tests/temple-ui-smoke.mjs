@@ -47,8 +47,16 @@ try{
   gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
   let visible=0;
   for(let i=3;i<pixels.length;i+=4)if(pixels[i]>10)visible++;
-  return {visible,width:canvas.width,height:canvas.height,error:gl.getError()};
+  const t=templeTest.portraitViewport;
+  let meshes=0,bones=0;t.model?.traverse(o=>{if(o.isMesh)meshes++;if(o.isBone)bones++;});
+  return {visible,width:canvas.width,height:canvas.height,error:gl.getError(),
+   meshes,bones,focus:{size:t.focus?.size?.toArray(),center:t.focus?.center?.toArray()},
+   camera:t.camera?.position?.toArray(),modelScale:t.model?.scale?.toArray(),
+   orientation:t.model?.quaternion?.toArray(),
+   canvasRect:canvas.getBoundingClientRect().toJSON()};
+
  });
+ await page.screenshot({path:output+'/equip-diagnostic.png'});
  assert.ok(equipPixels.visible>100,
   'EQUIP must render an actual 3D A-pose model, not blank alt-text: '+JSON.stringify(equipPixels));
  await page.screenshot({path:output+'/equip-3d-paper-doll.png'});
