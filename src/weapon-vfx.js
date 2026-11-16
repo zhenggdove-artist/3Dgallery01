@@ -5,6 +5,7 @@ import {chargedArea} from './shared/charge-area.js';
 import {ElementalCharge} from './elemental-charge.js';
 import {SaberImpact} from './saber-impact.js';
 import {WeaponParticleEffects} from './weapon-particle-effects.js';
+import {WeaponSignatureEffects} from './weapon-signature-effects.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
 import smear from '../vendor/00gamedevs/weapon-smear.js';
 import plasma from '../vendor/00gamedevs/plasma-bolt.js';
@@ -35,7 +36,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -64,21 +65,22 @@ export class WeaponVFX{
   const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
   if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
   const muzzle=weaponMuzzle(root,item);if(muzzle&&item.id!=='calico-cat'){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
+  if(this.signatureEffects.play({...data,origin:origin.toArray(),direction:direction.toArray()},item,root))return;
   this.particleSkills.play(data,item,origin,end);
   // Dedicated point-cloud ultimates: do not summon a shared physical object.
   if(data.ultimate&&(item.family==='petal'||item.id==='giraffe'))return;
   // Orient actual 00GameDevs flame/tidal presets along the weapon muzzle.
   // The companion GPU streams travel from the player toward the target.
-  const spray=item.family==='fire'||item.family==='water'||item.family==='wave'||item.id==='goldfish'||(item.id==='clam'&&data.ultimate);
+  const spray=item.family==='fire'||item.family==='water'||item.family==='wave'||item.id==='goldfish'||item.id==='clam';
   if(spray&&!['white-cat','black-cat','calico-cat'].includes(item.id)){
    const fireJet=item.family==='fire',effect=fireJet?'flame-surge':'tidal-surge';
    for(let i=0;i<(item.id==='clam'&&data.ultimate?10:data.ultimate?2:1);i++){
-    const jet=this.acquire(effect,{color:fireJet?'#ff6d2d':'#70e5ff',size:data.ultimate?3.8:2.6,speed:2.6,density:1,quantity:10});
+    const jet=this.acquire(effect,{color:fireJet?'#ff6d2d':'#70e5ff',size:(data.ultimate?3.8:2.6)*(data.qualityScale||1),speed:2.6,density:1,quantity:10});
     jet.fx.group.position.copy(origin).addScaledVector(direction,.4+i*(item.id==='clam'?1.1:2.4));
     if(item.id==='clam'&&data.ultimate){const side=new THREE.Vector3(direction.z,0,-direction.x).normalize();jet.fx.group.position.addScaledVector(side,((i%5)-2)*.92);}
     jet.fx.group.quaternion.setFromUnitVectors(fireJet?new THREE.Vector3(0,1,0):new THREE.Vector3(0,0,1),direction);
     jet.fx.update(jet.fx.lifecycle.start||0);
-    jet.stopAt=item.id==='clam'?2.25:data.ultimate?1.4:.75;
+    jet.stopAt=item.id==='clam'?2.25:data.channel?1.35:data.ultimate?1.4:.75;
    }
    return;
   }
@@ -87,9 +89,9 @@ export class WeaponVFX{
   if(item.id==='calico-cat')return;
   if(data.ultimate&&item.family==='saber')this.saberImpact.play(data,origin,direction);
   if(item.id==='black-cat'){if(this.snipers.length>=4){const old=this.snipers.shift();old.root.removeFromParent();old.root.material.dispose();}const f=createOddEffect(THREE,{...data,origin:origin.toArray(),direction:direction.toArray(),range:origin.distanceTo(end)},{...item,pattern:'sniper'});f.root.position.addScaledVector(direction,-1.8);this.scene.add(f.root);this.snipers.push(f);return;}
-  const entry=this.acquire(id,{color:item.color,size:data.ultimate?Math.min(3.6,Math.max(1.2,(impactArea?.radius||5)/3.5)):.6,speed:data.ultimate?1:1.8}),fx=entry.fx;
+  const entry=this.acquire(id,{color:item.color,size:(data.ultimate?Math.min(3.6,Math.max(1.2,(impactArea?.radius||5)/3.5)):.6)*(data.qualityScale||1),speed:data.ultimate?1:1.8}),fx=entry.fx;
   fx.group.position.copy(origin);fx.group.rotation.y=Math.atan2(direction.x,direction.z)-Math.PI/2;
-  if(beams.has(id)){fx.group.position.set(0,0,0);fx.group.quaternion.identity();fx.setEndpoints(origin,end);fx.update(fx.lifecycle.start||0);entry.stopAt=data.ultimate?.65:.12;}
+  if(beams.has(id)){fx.group.position.set(0,0,0);fx.group.quaternion.identity();fx.setEndpoints(origin,end);fx.update(fx.lifecycle.start||0);entry.stopAt=data.channel?1.1:data.ultimate?.65:.12;}
   else if(projectiles.has(id)){fx.setDirection(direction,0);fx.update(fx.lifecycle.start||0);entry.start=origin;entry.end=end;entry.travel=Math.min(.45,Math.max(.12,origin.distanceTo(end)/45));entry.stopAt=entry.travel;entry.hit=!!data.impactPoint;}
   else {
    if(remoteCharged){fx.group.position.copy(end);fx.group.position.y=Math.max(.7,end.y);}
@@ -105,7 +107,7 @@ export class WeaponVFX{
     if(Number.isFinite(bounds.min.y)&&Number.isFinite(bounds.max.y))
      fx.group.position.y+=Math.max(0,Math.min(14,end.y+.3-bounds.min.y));
    }
-   entry.stopAt=data.ultimate?1.35:.35;
+   entry.stopAt=data.channel?1.3:data.ultimate?1.35:.35;
   }
   if(root?.userData.blade&&!beams.has(id)&&!projectiles.has(id)){
    let trail=this.active.find(e=>e.id==='weapon-smear'&&e.weapon===root.userData.blade&&!e.stopped);
@@ -121,10 +123,10 @@ export class WeaponVFX{
   this.aura.charging(root,progress,item);
  }
 
- update(dt){this.saberImpact.update(dt);this.particleSkills.update(dt);for(let i=this.snipers.length-1;i>=0;i--){const f=this.snipers[i];if(!updateOddEffect(f,dt)){f.root.removeFromParent();f.root.material.dispose();this.snipers.splice(i,1);}}for(const e of [...this.active]){e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
+ update(dt){this.saberImpact.update(dt);this.particleSkills.update(dt);this.signatureEffects.update(dt);for(let i=this.snipers.length-1;i>=0;i--){const f=this.snipers[i];if(!updateOddEffect(f,dt)){f.root.removeFromParent();f.root.material.dispose();this.snipers.splice(i,1);}}for(const e of [...this.active]){e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
    if(e.start&&!e.stopped)e.fx.group.position.lerpVectors(e.start,e.end,Math.min(1,e.age/e.travel));
    if(!e.stopped&&e.age>=e.stopAt){if(e.hit)e.fx.hit(e.end);else if(continuous.has(e.id)||e.id==='weapon-smear')e.fx.stop();e.stopped=true;}
    e.fx.update(dt);if(e.fx.finished||e.age>12)this.release(e);
   }}
- dispose(){this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
+ dispose(){this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }

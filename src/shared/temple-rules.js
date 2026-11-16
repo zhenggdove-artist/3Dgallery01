@@ -16,6 +16,7 @@ import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './isl
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
+import {isChannelStaff,weaponQuality} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
@@ -44,7 +45,7 @@ export function createInitialWorld(now=Date.now()){
     profiles:{},
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
-    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],groundDrops:[],structures:[],plants:[],sceneCleanupVersion:1,
+    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],groundDrops:[],structures:[],plants:[],sceneCleanupVersion:1,
     monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
     activity:{coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0}
@@ -54,7 +55,7 @@ export function createInitialWorld(now=Date.now()){
 export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
-  world.profiles??={};world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.groundDrops??=[];world.structures??=[];world.plants??=[];
+  world.profiles??={};world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.groundDrops??=[];world.structures??=[];world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
   world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];
@@ -282,14 +283,46 @@ function fuse(world,profile,body,rng){
 function attack(world,profile,actor,body,context,now){
   if(profile.hitReaction&&now-profile.hitReaction.time<profile.hitReaction.stunMs)return {error:'Recovering from hit'};
   const weapon=equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon)),bonus=profile.fusion[weapon.id]?.bonus||0;
+  if(body.phase==='channel-start'){
+    if(!isChannelStaff(weapon))return {error:'Only staffs support continuous casting'};
+    profile.channelWeapon=weapon.id;profile.channelStartedAt=now;
+    return {channeling:true};
+  }
+  if(body.phase==='channel-stop'){
+    profile.channelWeapon=null;profile.channelStartedAt=0;return {channeling:false};
+  }
+  const channel=body.phase==='channel';
+  if(channel&&(!isChannelStaff(weapon)||profile.channelWeapon!==weapon.id||
+     !profile.channelStartedAt||now-profile.channelStartedAt>120000))
+    return {error:'Staff channel is not active'};
   if(body.phase==='charge'){profile.chargeStartedAt=now;return {charging:true};}
   if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};const direction=normalDirection(body.direction);if(!direction)return {error:'Invalid attack direction'};profile.lastAttackAt=now;
-  const charge=Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);profile.chargeStartedAt=0;
-  const stats=attackStats(weapon,charge),origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if(weapon.firstPerson&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage*=playerStats(world,profile,now).attack;profile.combo=combo;profile.lastComboAt=now;
+  const charge=channel?((now-profile.channelStartedAt)>2200?1:0):Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
+  if(!channel)profile.chargeStartedAt=0;
+  const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
+  stats.damage=+(stats.damage*quality.damage).toFixed(2);
+  stats.range=+(stats.range*quality.range).toFixed(2);
+  stats.radius=+(stats.radius*quality.radius).toFixed(2);
+  const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if(weapon.firstPerson&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage*=playerStats(world,profile,now).attack;profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   const area=stats.ultimate?chargedArea(weapon,origin,direction,stats,groundForSpell):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate):null;
-  let hit=null,hits=[];if(!pellets)for(const target of context.actors||[]){
+  const returningGiraffe=weapon.id==='giraffe'&&stats.ultimate;
+  const roamingFan=weapon.id==='fan'&&stats.ultimate;
+  if(returningGiraffe||roamingFan){
+    world.persistentAttacks??=[];
+    const duration=returningGiraffe?2300:Math.round((1400+quality.tier*850)*quality.duration);
+    world.persistentAttacks.push({
+      id:id(),kind:returningGiraffe?'giraffe':'fan',owner:actor.key,
+      origin:[...origin],direction:[...direction],range:stats.range,
+      damage:stats.damage+bonus,radius:Math.max(2,stats.radius),tier:quality.tier,
+      createdAt:now,lastAt:now,expiresAt:now+duration,
+      outHits:[],backHits:[],fanHits:{}
+    });
+    if(world.persistentAttacks.length>32)world.persistentAttacks.splice(0,world.persistentAttacks.length-32);
+  }
+  const persistentOnly=returningGiraffe||roamingFan;
+  let hit=null,hits=[];if(!pellets&&!persistentOnly)for(const target of context.actors||[]){
     if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(actor.position)||insideSafeZone(target.position))continue;
     const targetPosition=[target.position[0],target.position[1]+1,target.position[2]],along=project(origin,direction,targetPosition),scatter=weapon.pattern==='scatter';
     if((area?.mode==='area'&&insideChargedArea(area,targetPosition))||(area?.mode!=='area'&&along>0&&along<stats.range&&perpendicular(origin,direction,targetPosition,along)<(scatter?.65+along*(stats.ultimate?.56:.32):stats.radius)+1)){
@@ -300,7 +333,7 @@ function attack(world,profile,actor,body,context,now){
     }
    }
   let monsterHit=null,monsterHits=[];
-  if(!pellets&&!insideSafeZone(actor.position))for(const mob of [world.monster,...(world.monsters||[])]){
+  if(!pellets&&!persistentOnly&&!insideSafeZone(actor.position))for(const mob of [world.monster,...(world.monsters||[])]){
    if(!mob?.active)continue;
    const target=[mob.position[0],mob.position[1]+Math.min(1.2,ENEMY_HEIGHT*.5),mob.position[2]];
    if((area?.mode==='area'&&insideChargedArea(area,target,ENEMY_RADIUS))||
@@ -311,7 +344,7 @@ function attack(world,profile,actor,body,context,now){
     if(area?.mode!=='area')break;
    }
   }
-  if(pellets&&!insideSafeZone(actor.position)){
+  if(pellets&&!persistentOnly&&!insideSafeZone(actor.position)){
    for(const pellet of pellets){
     const candidates=[];
     for(const target of context.actors||[]){
@@ -342,10 +375,10 @@ function attack(world,profile,actor,body,context,now){
   }
   const appliedTargets=new Set();
   for(const result of hits)if(!result.defeated&&!result.immune&&!appliedTargets.has(result.target)){
-   appliedTargets.add(result.target);applyStatus(world,profile,world.profiles[result.target],weapon,{direction,charge,damage:stats.damage},now);
+   appliedTargets.add(result.target);applyStatus(world,profile,world.profiles[result.target],weapon,{direction,charge,damage:stats.damage,qualityDuration:quality.duration},now);
   }
   for(const m of monsterHits)if(!m.result.defeated&&!appliedTargets.has(m.monster.id)){
-   appliedTargets.add(m.monster.id);applyStatus(world,profile,m.monster,weapon,{direction,charge,damage:stats.damage},now);
+   appliedTargets.add(m.monster.id);applyStatus(world,profile,m.monster,weapon,{direction,charge,damage:stats.damage,qualityDuration:quality.duration},now);
   }
   let structureHit=null,structureDestroyed=null;
   const structureHits=[],structureDestroyedEvents=[];
@@ -364,7 +397,7 @@ function attack(world,profile,actor,body,context,now){
    structureHit??=event;structureHits.push(event);
    if(structure.hp===0){const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);}
   }
-  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null){
@@ -430,6 +463,7 @@ function validBuildPosition(world,actor,position){return canBuildAt(world,actor.
 
 export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0,actors=[]}={}){
   migrateWorld(world,now);let changed=false;
+  changed=tickPersistentAttacks(world,actors,now,rng)||changed;
   if(world.monster?.active)changed=tickStatus(world.monster,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng))||changed;
   for(const mob of world.monsters||[])if(mob?.active)changed=tickStatus(mob,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng,'status',mob))||changed;
   for(const target of actors){const p=world.profiles[target.key];if(p&&!p.admin&&p.hp>0)changed=tickStatus(p,now,(owner,amount)=>damagePlayer(world,world.profiles[owner],target,amount,now,'status',target.position))||changed;}
@@ -492,6 +526,79 @@ function perpendicular(origin,direction,point,along){return Math.hypot(point[0]-
 function structureRadius(structure){return structure.kind==='house'?3.4:structure.kind==='tree'?1.4:['wall','bar'].includes(structure.kind)?3.3:1.7;}
 function structureHeight(structure){return structure.kind==='house'?3.8:structure.kind==='tree'?4:structure.kind==='column'?4:structure.kind==='platform'?.7:2;}
 function structureEvent(structure,now){return {id:structure.id,kind:structure.kind,variant:structure.variant||0,position:[...structure.position],rotation:structure.rotation||0,surface:structure.surface||null,time:now};}
+
+// Timed server-owned abilities: a returning giraffe can hit each target once
+// on the outward leg AND once on its return. Four independent fan vortices
+// wander for longer at higher qualities. Never trust a client hit report.
+function tickPersistentAttacks(world,actors,now,rng){
+ const attacks=world.persistentAttacks||[];
+ if(!attacks.length)return false;
+ let changed=false;
+ const targets=[...(world.monster?.active?[{kind:'monster',value:world.monster}]:[]),
+  ...(world.monsters||[]).filter(v=>v.active).map(value=>({kind:'monster',value})),
+  ...actors.filter(v=>v.role==='fighter'&&!insideSafeZone(v.position)).map(value=>({kind:'player',value}))];
+ for(const fx of attacks){
+  const prev=Math.max(0,Math.min(1,(fx.lastAt-fx.createdAt)/(fx.expiresAt-fx.createdAt)));
+  const next=Math.max(0,Math.min(1,(now-fx.createdAt)/(fx.expiresAt-fx.createdAt)));
+  const owner=world.profiles[fx.owner];
+  if(!owner){fx.lastAt=now;continue;}
+  if(fx.kind==='giraffe'){
+   for(const [leg,lo,hi] of [['out',0,.5],['back',.5,1]]){
+    const from=Math.max(prev,lo),to=Math.min(next,hi);
+    if(to<=from)continue;
+    const travel=p=>(p<=.5?p*2:(1-p)*2)*fx.range;
+    const a=fx.origin.map((v,j)=>v+fx.direction[j]*travel(from));
+    const b=fx.origin.map((v,j)=>v+fx.direction[j]*travel(to));
+    const ray=b.map((v,j)=>v-a[j]),length=Math.hypot(...ray);
+    if(length<.001)continue;
+    const direction=ray.map(v=>v/length),seen=leg==='out'?fx.outHits:fx.backHits;
+    for(const target of targets){
+     const value=target.value;if(value.key===fx.owner||seen.includes(value.id||value.key))continue;
+     if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
+     const contact=target.kind==='monster'?monsterRayDistance(a,direction,length,value,1.35*fx.radius):
+      rayCylinderDistance(a,direction,length,value.position,1+fx.radius,2.35);
+     if(contact===null)continue;
+     seen.push(value.id||value.key);
+     const hit=a.map((v,j)=>v+direction[j]*contact);
+     if(target.kind==='monster')damageMonster(world,owner,fx.damage*.53,now,rng,leg==='out'?'boomerang-out':'boomerang-return',value,hit);
+     else damagePlayer(world,owner,value,fx.damage*.53,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',hit);
+     changed=true;
+    }
+   }
+  }else if(fx.kind==='fan'){
+   // Each of the four tornado tracks has a deterministic, independently
+   // wandering trajectory; collision and client animation use the same seed.
+   for(let i=0;i<4;i++){
+    const progress=Math.max(0,Math.min(1,next));
+    const seed=i*1.618+fx.createdAt*.0003;
+    const travel=fx.range*progress;
+    const side=Math.sin(seed+progress*12)*2.8+Math.sin(seed*2.7+progress*27)*1.5;
+    const right=[fx.direction[2],0,-fx.direction[0]];
+    const p=fx.origin.map((v,j)=>v+fx.direction[j]*travel+right[j]*side);
+    for(const target of targets){
+     const value=target.value;if(value.key===fx.owner)continue;
+     if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
+     const pos=value.position,dist=Math.hypot(pos[0]-p[0],pos[2]-p[2]),id2=value.id||value.key,key=i+':'+id2;
+     if(dist>2.4+fx.radius*.48||now-(fx.fanHits[key]||0)<900)continue;
+     fx.fanHits[key]=now;
+     if(target.kind==='monster')damageMonster(world,owner,fx.damage*.18,now,rng,'tornado',value,p);
+     else damagePlayer(world,owner,value,fx.damage*.18,now,'tornado',fx.origin,'tornado',p);
+     const victim=target.kind==='monster'?value:world.profiles[value.key];
+     if(victim){
+      victim.effects??={};
+      victim.effects.slow={owner:fx.owner,power:.4,until:now+Math.round(1300*(1+(fx.tier-1)*.3)),next:now+1000};
+     }
+     changed=true;
+    }
+   }
+  }
+  fx.lastAt=now;
+ }
+ const old=attacks.length;
+ world.persistentAttacks=attacks.filter(v=>now<v.expiresAt);
+ return changed||world.persistentAttacks.length!==old;
+}
+
 function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-amount);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng),material=MATERIALS[Math.floor(rng()*MATERIALS.length)];world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),kind:'material',itemId:material.id,position:[monster.position[0],.4,monster.position[2]+1.4],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=3;if(profile)addXp(profile,120);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
 function moveMonster(world,monster,target,distance){const dx=target[0]-monster.position[0],dz=target[2]-monster.position[2],angle=Math.atan2(dz,dx);for(const offset of [0,.68,-.68,1.2,-1.2]){const next=[monster.position[0]+Math.cos(angle+offset)*distance,monster.position[1],monster.position[2]+Math.sin(angle+offset)*distance];if(!insideArena(next,-2)||insideArtSanctuary(next)||(world.structures||[]).some(s=>distance2d(next,s.position)<structureRadius(s)+1.1))continue;monster.position[0]=next[0];monster.position[2]=next[2];return;}}
 function hashString(value){let hash=2166136261;for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return hash>>>0;}

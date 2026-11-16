@@ -6,7 +6,15 @@ export function applyStatus(world,source,target,weapon,shot,now){
  if(!target||target.admin||target.hp<=0)return;
  const game={...originalEquipmentGame(source,world),boss:target,hits:{[source.key]:Math.max(0,(source.maxHp-source.hp)/10)}};
  const resolved={...shot,shooter:source.key,damage:shot.damage/10};
+ const previous=Object.fromEntries(Object.entries(target.effects||{}).map(([key,value])=>[key,value.until]));
  applyWeaponTraits(game,{...weapon,damage:weapon.damage/10},resolved,now);
+ // Rarity extends every newly inflicted debuff without multiplying older
+ // stacks each time the same persistent fire or vine hits again.
+ const durationScale=Math.max(1,Math.min(2.4,Number(shot.qualityDuration)||1));
+ for(const [key,effect] of Object.entries(target.effects||{})){
+  if(effect.owner!==source.key||effect.until<=(previous[key]||0))continue;
+  effect.until+=Math.round((effect.until-now)*(durationScale-1));
+ }
  for(const id of source.fusion?.[weapon.id]?.effects||[]){const item=equipmentById(id);if(item)applyWeaponTraits(game,item,{...shot,shooter:source.key},now);}
  if(weapon.family==='planter'&&!weapon.exotic){
   target.effects??={};

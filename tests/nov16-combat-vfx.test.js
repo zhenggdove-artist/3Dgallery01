@@ -82,9 +82,11 @@ test('flower staff, planter, giraffe and giant clam use distinct soft particle r
  const origin=new THREE.Vector3(0,1,0),end=new THREE.Vector3(0,1,22);
  for(const id of ['bloom-1','planter-1','giraffe','clam']){
   const item=itemById(id);
-  vfx.play({ultimate:true,charge:1,direction:[0,0,1],range:22},item,origin,end);
+  vfx.play({ultimate:true,charge:1,direction:[0,0,1],range:22,origin:[0,1,0]},item,origin,end);
  }
- assert.deepEqual(vfx.active.map(v=>v.recipe),['lotus-veil','thorn-tower','boomerang','tidal']);
- assert.ok(vfx.active[2].geometry.getAttribute('position').count>=2000);
+ assert.deepEqual(vfx.signatureEffects.active.map(v=>v.obj.name),['One enormous forward rotating translucent particle blossom','Three stacked solid thorn-vine tiers','Visible spinning yellow giraffe model, outbound and returning']);
+ assert.ok(vfx.particleSkills.active.some(v=>v.recipe==='tidal'));
+ assert.ok(vfx.signatureEffects.active.some(v=>v.obj.children.length>100));
+ assert.ok(vfx.signatureEffects.active[0].obj.children[0].geometry.getAttribute('position').count>=2000);
  vfx.dispose();assert.equal(scene.children.length,0);
 });
