@@ -47,6 +47,8 @@ test('higher quality increases strike volume, damage and debuff lifespan',()=>{
  assert.ok(high.attackEvent.range>low.attackEvent.range);
  assert.ok(high.attackEvent.damage>low.attackEvent.damage);
  assert.ok(high.attackEvent.radius>low.attackEvent.radius);
+ tickWorld(a.world,{now:start+3000,actors:[actor],activeFighters:0,rng:()=>.5});
+ tickWorld(b.world,{now:start+3000,actors:[actor],activeFighters:0,rng:()=>.5});
  assert.ok(b.world.monster.effects?.burn?.until>a.world.monster.effects?.burn?.until);
 });
 test('giraffe boomerang damages monster on both outbound and return independently',()=>{
@@ -84,8 +86,9 @@ test('shotgun is ten visible round coloured spheres, charged larger; other charg
  const shot={origin:[75,1,0],direction:[0,0,1],pellets,range:10,qualityScale:1,qualityTier:3,time:start};
  assert.equal(vfx.play({...shot,ultimate:false},weapon),true);
  const normal=vfx.active.at(-1);
- assert.equal(normal.obj.children.length,20,'two visible mesh shells per pellet');
- assert.equal(normal.obj.children.filter(x=>x.isMesh&&x.geometry.type==='SphereGeometry').length,20);
+ assert.equal(normal.obj.children.length,10,'ten actual volumetric coloured spheres');
+ assert.equal(normal.obj.children.filter(x=>x.isMesh&&x.geometry.type==='SphereGeometry').length,10);
+ assert.ok(normal.obj.children.every(x=>x.material.isMeshPhysicalMaterial&&x.material.vertexColors));
  const normalRadius=normal.obj.children[0].scale.x;
  assert.equal(vfx.play({...shot,ultimate:true,range:17,qualityScale:1.4},weapon),true);
  assert.ok(vfx.active.at(-1).obj.children[0].scale.x>normalRadius);

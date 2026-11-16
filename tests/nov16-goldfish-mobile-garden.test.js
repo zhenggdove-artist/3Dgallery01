@@ -59,6 +59,8 @@ test('shotgun damage has a threefold or greater random swing and deals more at p
   const before=world.monster.hp;
   const result=shoot(world,actor,NOW+2000,{},()=>rng);
   assert.equal(result.attackEvent.pellets.length,10);
+  assert.equal(world.monster.hp,before);
+  tickWorld(world,{now:NOW+2380,actors:[actor],rng:()=>rng,activeFighters:0});
   return before-world.monster.hp;
  };
  const close=damageAt(3,.5),far=damageAt(9,.5);

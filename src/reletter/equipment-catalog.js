@@ -51,8 +51,12 @@ const chargeByFamily={water:1320,ice:1560,fire:1770,lightning:1660,beam:2150,
  petal:1920,wave:2300,saber:900,whip:1080,swatter:790,pan:1240,
  planter:1660,palm:1850};
 DEFAULT_WEAPON.chargeMs=1370;
-for(const item of EQUIPMENT)if(item.slot==='weapon'&&!item.exotic)
- item.chargeMs=(chargeByFamily[item.family]||1450)+(Math.max(1,item.tier||1)-1)*47;
+const usedChargeMs=new Set([DEFAULT_WEAPON.chargeMs]);
+for(const item of EQUIPMENT)if(item.slot==='weapon'){
+ let time=item.exotic?item.chargeMs:(chargeByFamily[item.family]||1450)+(Math.max(1,item.tier||1)-1)*47;
+ while(usedChargeMs.has(time))time++;
+ item.chargeMs=time;usedChargeMs.add(time);
+}
 Object.assign(equipmentById('chiang-token'),{element:'dark',color:'#ae7bd5',cooldown:380,chargeMs:2450});
 
 for(const w of EQUIPMENT)if(w.slot==='weapon')w.critChance=weaponCritChance(w);
