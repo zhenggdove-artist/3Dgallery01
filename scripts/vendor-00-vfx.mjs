@@ -1,39 +1,46 @@
-// Download original MIT modules; verify each published digest before installation.
-// Mechanically deduplicate the identical runtime, retaining source provenance.
+// Preserve the exact 00GameDevs downloaded JavaScript. Never redraw, reimplement
+// or approximate a numbered effect. Fail closed on catalog/sha/license mismatch.
 import {createHash} from 'node:crypto';
 import {mkdir,writeFile} from 'node:fs/promises';
+
 const origin='https://00gamedevs.com';
-// Catalog ID -> user-selected 00GameDevs listing number. No imitations or substitutes.
-export const numberedIds={
+const numberedIds={
   8:'arc-ray',20:'energy-vortex',26:'frost-wheel',33:'tidal-surge',
   38:'magma-fissure',43:'revival-bloom',47:'dimensional-rend',48:'black-hole',
   53:'darkchain-detonation',68:'rolling-fireburst',70:'ice-lance-study',
   73:'anime-flame-shield'
 };
-const ids=[...new Set(['azure-sweep','weapon-smear','plasma-bolt','ice-shard','arcane-missile',
- 'pulse-beam','charged-beam','arc-ray','energy-burst','shockwave','ice-shatter',
- 'flame-surge','tidal-surge','thorn-crown','spiral-gale','astral-convergence',
- 'magic-barrier','burning-ground',...Object.values(numberedIds)])];
-const catalogReply=await fetch(origin+'/ai/catalog.v2.json');
-if(!catalogReply.ok)throw Error('Official 00GameDevs catalog unavailable: '+catalogReply.status);
-const catalog=await catalogReply.json();
-if(catalog.schemaVersion!==2)throw Error('Unsupported catalog');
-const sources=await Promise.all(ids.map(async id=>{const asset=catalog.assets.find(a=>a.kind==='effect'&&a.id===id);if(asset?.license!=='MIT'||asset.integration.type!=='scene-object')throw Error('Unsupported asset '+id);const url=new URL(asset.download.url,origin);
-if(url.origin!==origin)throw Error('Unexpected external asset host for '+id);
-const response=await fetch(url);if(!response.ok)throw Error('Original download unavailable '+id+': '+response.status);
-const bytes=Buffer.from(await response.arrayBuffer());if(createHash('sha256').update(bytes).digest('hex')!==asset.download.sha256)throw Error('Checksum mismatch '+id);return {asset,code:bytes.toString('utf8')};}));
-const dir='vendor/00gamedevs';await mkdir(dir,{recursive:true});
-let common;const meta=[];
-for(const {asset,code}of sources){
- const begin=code.indexOf('import * as THREE'),end=code.indexOf('\nconst preset =');
- if(begin<0||end<0)throw Error('Unexpected module layout '+asset.id);
- const runtime=code.slice(begin,end);
- if(common&&runtime!==common)throw Error('Runtime differs '+asset.id);
- common=runtime;
- const notice=code.slice(0,code.indexOf('*/')+2);
- await writeFile(dir+'/'+asset.id+'.js',notice+'\nimport {createEffect} from "./runtime.js";\n'+code.slice(end));
- meta.push({id:asset.id,number:Object.entries(numberedIds).find(([,v])=>v===asset.id)?.[0]||null,url:new URL(asset.download.url,origin).href,sha256:asset.download.sha256,license:asset.license,integration:asset.integration,defaults:asset.defaultOptions});
+const catalogResponse=await fetch(origin+'/ai/catalog.v2.json');
+if(!catalogResponse.ok)throw Error('Official catalog unavailable: '+catalogResponse.status);
+const catalog=await catalogResponse.json();
+if(catalog.schemaVersion!==2)throw Error('Unsupported official catalog schema');
+const dir='vendor/00gamedevs/source';
+await mkdir(dir,{recursive:true});
+const assets=[];
+for(const [num,id] of Object.entries(numberedIds)){
+ const a=catalog.assets.find(v=>v.id===id&&v.kind==='effect');
+ if(!a||a.license!=='MIT'||a.integration?.type!=='scene-object'||!a.download?.url||!a.download?.sha256)
+  throw Error('No verified original scene-object source in catalog for #'+num+': '+id);
+ const url=new URL(a.download.url,origin);
+ if(url.origin!==origin)throw Error('Invalid source origin: '+url.href);
+ const response=await fetch(url);
+ if(!response.ok)throw Error('Original source download failed for #'+num+': '+response.status);
+ const buffer=Buffer.from(await response.arrayBuffer());
+ const sha256=createHash('sha256').update(buffer).digest('hex');
+ if(sha256!==a.download.sha256)throw Error('Original source SHA-256 mismatch for #'+num+': '+id);
+ const code=buffer.toString('utf8');
+ if(!code.includes('00GameDevs')||!code.includes('The MIT License'))
+  throw Error('Source license header missing for #'+num+': '+id);
+ // Store the byte-identical official download including its own shader logic,
+ // presets, THREE import and license. Some effects cannot share one runtime.
+ await writeFile(dir+'/'+id+'.js',buffer);
+ assets.push({number:Number(num),id,url:url.href,sha256,byteLength:buffer.length,license:a.license,
+  integration:a.integration,defaultOptions:a.defaultOptions});
+ console.log('Verified official effect #'+num+' '+id+' '+sha256);
 }
-await writeFile(dir+'/runtime.js',sources[0].code.slice(0,sources[0].code.indexOf('*/')+2)+'\n'+common+'\nexport {createEffect};\n');
-await writeFile(dir+'/manifest.json',JSON.stringify({origin,contentVersion:catalog.contentVersion,sourceThree:'0.187.0',packaging:'identical runtime factored once; presets unchanged',assets:meta},null,2)+'\n');
-console.log('Verified and installed '+ids.length+' exact MIT effects; '+Object.keys(numberedIds).length+' user-selected numbered originals, one shared runtime.');
+await writeFile('vendor/00gamedevs/numbered-manifest.json',JSON.stringify({
+ origin,contentVersion:catalog.contentVersion,downloadedFrom:'official AI catalog v2',
+ packaging:'byte-identical original JavaScript, no imitation or generated particles',
+ assets
+},null,2)+'\n');
+console.log('Validated '+assets.length+' of '+Object.keys(numberedIds).length+' exact originals.');
