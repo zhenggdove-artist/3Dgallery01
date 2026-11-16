@@ -10,7 +10,18 @@ try{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&/Shader Error|WebGLProgram|shader compilation|ERROR: 0:/i.test(m.text()))errors.push(m.text());});
  await page.addInitScript(()=>localStorage.setItem('temple-backend-url','http://127.0.0.1:8787'));
  await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});
- await page.waitForFunction(()=>document.body.classList.contains('ready'),null,{timeout:120000});
+ try{await page.waitForFunction(()=>document.body.classList.contains('ready'),null,{timeout:65000});}
+ catch(error){
+  const debug=await page.evaluate(()=>({
+   bodyClass:document.body.className,
+   loading:document.querySelector('#loading')?.textContent?.slice(0,1000),
+   entryError:document.querySelector('#entry-error')?.textContent,
+   status:document.querySelector('#loading-status')?.textContent,
+   templeTest:!!window.templeTest,
+   readyState:document.readyState
+  }));
+  throw new Error('Temple never loaded: '+JSON.stringify(debug)+'; PAGEERRORS='+errors.join('; ').slice(0,2400),{cause:error});
+ }
  await page.locator('#player-name').fill('CIBrowser');
  await page.locator('#entry-form').evaluate(f=>f.requestSubmit());
  await page.locator('#hud').waitFor({state:'visible'});
@@ -102,15 +113,15 @@ try{
   for(const family of ['swatter','pan','saber','petal','planter']){
    const item=items.find(w=>w.slot==='weapon'&&w.family===family&&!w.exotic);
    v.play({origin:[-20,1,-20],direction:[0,0,-1],range:24,charge:1,ultimate:true,area:{mode:'corridor',center:[-20,1,-40],radius:7}},item,null);
-   recipes[family]=v.particleSkills.active.at(-1)?.recipe;
+   recipes[family]=['petal','planter'].includes(family)?v.signatureEffects.active.at(-1)?.obj?.name:v.particleSkills.active.at(-1)?.recipe;
   }
   const gun=items.find(w=>w.id==='calico-cat');
   v.play({origin:[-20,1,-20],direction:[0,0,-1],range:8,charge:1,ultimate:true},gun,null);
-  recipes.shotgun=v.particleSkills.active.at(-1)?.recipe;
-  const giraffe=items.find(w=>w.id==='giraffe');v.play({origin:[-20,1,-20],direction:[0,0,-1],range:28,charge:1,ultimate:true},giraffe,null);recipes.giraffe=v.particleSkills.active.at(-1)?.recipe;
+  recipes.shotgun=v.signatureEffects.active.at(-1)?.obj?.name;
+  const giraffe=items.find(w=>w.id==='giraffe');v.play({origin:[-20,1,-20],direction:[0,0,-1],range:28,charge:1,ultimate:true},giraffe,null);recipes.giraffe=v.signatureEffects.active.at(-1)?.obj?.name;
   return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
  });
- assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',petal:'lotus-veil',planter:'thorn-tower',shotgun:'rainbow-scatter',giraffe:'boomerang'});
+ assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',petal:'One enormous forward rotating translucent particle blossom',planter:'Three stacked solid thorn-vine tiers',shotgun:'Ten actual coloured pellet spheres (server aligned)',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
  assert.equal(vfxState.sky,'World-oriented distant cloud sky (no moon)');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});
