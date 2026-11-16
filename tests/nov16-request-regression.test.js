@@ -39,7 +39,7 @@ test('GM deletes floating disks and selected original exhibit disks, but not art
  const forged=applyAction(w,gm,{action:'delete-platform',platformId:'display:unknown'},{now:1009});
  assert.ok(forged.error);
 });
-test('normal fire and water attacks emit forward spray particles and library effects',()=>{
+test('fire and water continuous casts retain straight-ahead particle recipes and legacy mapping',()=>{
  const fire=itemById('ember-1'),water=itemById('tide-1'),clam=itemById('clam');
  assert.equal(effectFor(fire,false),'flame-surge');
  assert.equal(effectFor(water,false),'tidal-surge');
