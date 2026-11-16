@@ -100,3 +100,14 @@ test('charged weapons use identifiable fine particle concepts and cats fire rain
  assert.match(thrower,/Thick red ballistic arc/);
  assert.match(thrower,/Large red artwork landing marker/);
 });
+
+test('server-side WRITE landing can plant despite delayed browser position packets',()=>{
+ const world=createInitialWorld(1000),visitor=actor('writer');
+ assert.ok(applyAction(world,visitor,{action:'write-begin'},{now:1000}).journey);
+ assert.ok(applyAction(world,visitor,{action:'write-drink',duration:2},{now:4500}).journey);
+ // Avatar has landed at the central tree according to the server, but its
+ // most recent player socket position still refers to the outer arena.
+ const planted=applyAction(world,visitor,{action:'plant',text:'A reliable landing',position:[0,0,0]},{now:10500});
+ assert.ok(planted.plant?.id,planted.error);
+ assert.equal(world.plants[0].text,'A reliable landing');
+});
