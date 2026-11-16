@@ -5,6 +5,7 @@ import {ElementalCharge} from './elemental-charge.js';
 import {SaberImpact} from './saber-impact.js';
 import {WeaponParticleEffects} from './weapon-particle-effects.js';
 import {WeaponSignatureEffects} from './weapon-signature-effects.js';
+import {NumberedWeaponEffects,requestedEffect} from './numbered-weapon-effects.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
@@ -37,7 +38,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -69,6 +70,7 @@ export class WeaponVFX{
   return root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,1.1,0));
  }
  stopChannel(root){
+  this.numberedEffects.stop(root);
   for(const [key,entry] of [...this.channelStreams])if(entry.host===root){
    this.particleSkills.remove(entry);this.channelStreams.delete(key);
   }
@@ -125,6 +127,13 @@ export class WeaponVFX{
   const groundEffect=!!data.ultimate&&impactArea?.mode==='area';
   const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
   if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
+  // Special combos and user-assigned numbered effects supersede generic
+  // monochrome particles. Original source files exist for #08 / #33; the
+  // remaining bespoke variants are visually distinct local reconstructions.
+  if(this.numberedEffects.play(data,item,root)){
+   if(requestedEffect(item,data)?.number===38)this.saberImpact.play(data,origin,direction);
+   return;
+  }
   // Never re-aim or translate a server-approved trajectory to a cosmetic muzzle;
   // rendered bullets must occupy the same world-space volume as damage rays.
   if(isChannelStaff(item)&&item.id!=='clam'&&!data.ultimate&&!data.channel){
@@ -225,7 +234,7 @@ export class WeaponVFX{
    entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),aim);
    // No stale detached beam: the currently drawn particles remain weapon-bound.
   }
-  this.saberImpact.update(dt);this.particleSkills.update(dt);this.signatureEffects.update(dt);
+  this.saberImpact.update(dt);this.particleSkills.update(dt);this.signatureEffects.update(dt);this.numberedEffects.update(dt);
   for(const orb of [...this.staffOrbs]){
    orb.age+=dt;
    const t=Math.min(1,orb.age/orb.duration);
@@ -238,5 +247,5 @@ export class WeaponVFX{
    if(!e.stopped&&e.age>=e.stopAt){if(e.hit)e.fx.hit(e.end);else if(continuous.has(e.id)||e.id==='weapon-smear')e.fx.stop();e.stopped=true;}
    e.fx.update(dt);if(e.fx.finished||e.age>12)this.release(e);
   }}
- dispose(){this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
+ dispose(){this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }
