@@ -40,7 +40,7 @@ test('all thirteen IDs map to verified, byte-identical official downloads',async
   const file=await readFile(new URL('../vendor/00gamedevs/source/'+spec.asset+'.js',import.meta.url));
   assert.equal(createHash('sha256').update(file).digest('hex'),manifestEntry.sha256);
  }
- assert.equal(Object.keys(REQUESTED_VFX).length,15);
+ assert.equal(Object.keys(REQUESTED_VFX).length,18);
 });
 
 test('every numbered attack instantiates an actual source module, never a particle imitation',()=>{
@@ -270,4 +270,33 @@ test('charged sword server reach and radius are both doubled and the #59 preview
  assert.ok(Math.abs(fx.footprint.width-stats.radius*2)<1e-8);
  assert.ok(Math.abs(fx.footprint.position[2]-(muzzle[2]+stats.range/2))<1e-8);
  fx.dispose();
+});
+
+
+test('fully charged release also uses original wave/flower/conch sources, never the pan fireburst or static stand-ins',()=>{
+ for(const [id,number] of [['clam',33],['bloom-1',43],['nova-1',20]]){
+  const item=itemById(id),scene=new THREE.Scene(),root=new THREE.Group();
+  scene.add(root);
+  const effects=new NumberedWeaponEffects(scene,(host)=>host.position.clone().add(new THREE.Vector3(0,1,0)));
+  const data={...evt('ultimate'),area:{mode:'corridor',visualCenter:[20,.16,25]},range:16};
+  assert.equal(requestedEffect(item,data)?.number,number,id);
+  assert.equal(effects.play(data,item,root),true,id);
+  const active=effects.active[0];
+  assert.equal(active.spec.number,number,id);
+  if(number===33){
+   assert.ok(active.waves?.length===1,'clam creates a native water crest');
+   const wave=active.waves[0],before=wave.fx.group.position.z;
+   effects.update(.55);
+   assert.ok(wave.fx.group.position.z>before,'native water wave advances in world +Z');
+   assert.ok(active.waves.length>1,'unheld ultimate retains successive overlapping wave crests');
+  }else{
+   assert.equal(active.singleTravel,true,id);
+   const before=active.fx.group.position.z;
+   effects.update(.55);
+   assert.ok(active.fx.group.position.z>before+.1,id+' releases a forward-travelling native effect');
+   assert.ok(active.fx.group.position.z<16,id+' moves gradually, not teleports to the impact');
+  }
+  effects.dispose();root.removeFromParent();
+  assert.equal(scene.children.length,0);
+ }
 });
