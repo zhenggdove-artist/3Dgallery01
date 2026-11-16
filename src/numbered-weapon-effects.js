@@ -150,6 +150,16 @@ export class NumberedWeaponEffects{
    if(e.key&&e.fx.finished)e.fx.reset();
   }
  }
+ // The #70 and #73 originals include a mandatory authored glow compositor.
+ // Feed it the same world/camera/renderer and render target as the VHS input,
+ // rather than replacing it with a visually similar custom effect. Only one
+ // full-scene compositor can own a pass; the flame pass wins when both are live.
+ render(renderer,world,camera){
+  const post=this.active.find(e=>e.spec.number===73&&typeof e.fx.render==='function')||
+   this.active.find(e=>e.spec.number===70&&typeof e.fx.render==='function');
+  if(post)post.fx.render(renderer,world,camera);
+  else renderer.render(world,camera);
+ }
  stop(root){for(const e of [...this.active])if(e.channel&&e.root===root)this.remove(e);}
  remove(e){
   const index=this.active.indexOf(e);if(index<0)return;
