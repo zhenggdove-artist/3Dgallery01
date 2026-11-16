@@ -12,6 +12,7 @@ import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.j
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
 import {playerStats,refreshStats} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
+import {fuseTemple} from './temple-fusion.js';
 import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './island-combat.js';
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
@@ -293,17 +294,7 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
   return {notice:'ARTWORK DEFAULT SAVED · ALL PLAYERS',artworkLayout:clone(world.artworkLayout[platform.id])};
 }
 
-function fuse(world,profile,body,rng){
-  const source=itemById(body.sourceId),target=itemById(body.targetId),requestId=String(body.requestId||'');
-  if(requestId.length<8||requestId.length>80)return {error:'Missing fusion request ID'};profile.fusionReceipts??={};if(profile.fusionReceipts[requestId])return clone(profile.fusionReceipts[requestId]);
-  if(source?.slot!=='material'&&source&&target){const result=fuseOriginal(world,profile,body,rng);if(!result.error)profile.fusionReceipts[requestId]=clone(result);return result;}
-  if(!source||!target||source.id===target.id||!['weapon','material'].includes(source.slot)||target.slot!=='weapon')return {error:'Choose a weapon or material and a different target weapon'};
-  const sourceIndex=profile.inventory.indexOf(source.id),targetIndex=profile.inventory.indexOf(target.id);if(sourceIndex<0||targetIndex<0)return {error:'Weapons are not owned'};
-  const layer=(profile.fusion[target.id]?.layer||0)+1,cost=ECONOMY.fusionBaseCost*layer;if(!spend(profile,cost,world))return {error:'Not enough coins for fusion'};
-  profile.inventory.splice(sourceIndex,1);const materialBonus={"wet-stone":3.5,"signal-wire":6,"temple-resin":10}[source.id]||0,success=rng()<Math.max(.18,(source.slot==='material'?.82:.72)-layer*.09),gain=source.slot==='weapon'?source.damage*.2:materialBonus;if(success)profile.fusion[target.id]={layer,bonus:+((profile.fusion[target.id]?.bonus||0)+gain).toFixed(2),source:source.id};
-  const result={notice:success?`Fusion succeeded · ${target.name} +${layer}`:'Fusion failed · material consumed',fusion:{success,target:target.id,layer:success?layer:layer-1,cost}};
-  profile.fusionReceipts[requestId]=result;const keys=Object.keys(profile.fusionReceipts);if(keys.length>64)delete profile.fusionReceipts[keys[0]];return result;
-}
+function fuse(world,profile,body,rng){return fuseTemple(world,profile,body);}
 
 function attack(world,profile,actor,body,context,now){
   // A release must clear server collision objects even while stunned, frozen,
@@ -358,6 +349,7 @@ function attack(world,profile,actor,body,context,now){
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
   const area=stats.ultimate&&weapon.id!=='goldfish'?chargedArea(weapon,origin,direction,stats,groundForSpell,channel):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate,now):null;
+  const fusionEchoes=[];
   const pvpDamage=pvpShotDamage(weapon,stats,quality);
   const returningGiraffe=weapon.id==='giraffe'&&stats.ultimate;
   const roamingFan=weapon.id==='fan'&&stats.ultimate;
@@ -393,6 +385,33 @@ function attack(world,profile,actor,body,context,now){
     });
     if(world.persistentAttacks.length>40)world.persistentAttacks.splice(0,world.persistentAttacks.length-40);
   }
+  if(stats.ultimate&&!channel){
+    for(const sourceId of (profile.fusion?.[weapon.id]?.effects||[]).slice(0,2)){
+      const source=itemById(sourceId);if(source?.slot!=='weapon')continue;
+      const sourceQuality=weaponQuality(source),full=attackStats(source,1);
+      const radius=Math.max(.5,full.radius*sourceQuality.radius*.5);
+      const range=Math.max(1,Math.min(stats.range,full.range*sourceQuality.range)*.5);
+      const secondary={...full,range,radius};
+      const echoArea=source.id==='goldfish'?null:chargedArea(source,origin,direction,secondary,groundForSpell,false);
+      if(echoArea?.mode==='area'&&area?.visualCenter){
+        echoArea.center=[...area.center];echoArea.visualCenter=[...area.visualCenter];
+      }
+      const flight=projectileFlightMs(source,true),duration=Math.max(flight,visibleCollisionLifetimeMs(source,true));
+      const echoId=id(),echoDamage=+(full.damage*.2).toFixed(3);
+      const echoPvP=+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
+      world.persistentAttacks.push({id:echoId,kind:'projectile',echo:true,owner:actor.key,weapon:source.id,
+        origin:[...origin],direction:[...direction],range,radius,area:echoArea,
+        damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*.2,
+        flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
+        createdAt:now,lastAt:now,expiresAt:now+duration});
+      fusionEchoes.push({id:echoId,owner:actor.key,origin:[...origin],direction:[...direction],
+        weapon:source.id,family:source.family,color:source.color,charge:1,ultimate:true,
+        range,radius,area:echoArea,qualityTier:sourceQuality.tier,
+        qualityScale:sourceQuality.visual*.5,qualityDuration:sourceQuality.duration,
+        fusionEcho:true,echoPower:.2,time:now});
+    }
+    if(world.persistentAttacks.length>44)world.persistentAttacks.splice(0,world.persistentAttacks.length-44);
+  }
   const hit=null,hits=[],monsterHit=null,monsterHits=[];
   let structureHit=null,structureDestroyed=null;
   const structureHits=[],structureDestroyedEvents=[];
@@ -411,7 +430,7 @@ function attack(world,profile,actor,body,context,now){
    structureHit??=event;structureHits.push(event);
    if(structure.hp===0){const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);}
   }
-  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false){
@@ -620,7 +639,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
     const shotgunPellet=isPlayer&&weapon.pattern==='scatter'&&pellet!==null;
     const damage=shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage;
-    const lethalHeadshot=isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
+    const lethalHeadshot=!fx.echo&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
      fx.origin,fx.direction,fx.range,enemy.position);
     const hitKind=lethalHeadshot?(modifiers.critical?'critical-headshot':'headshot'):modifiers.kind;
     let applied;
@@ -638,7 +657,9 @@ function tickPersistentAttacks(world,actors,now,rng){
      const statusKey=enemy.id||enemy.key;
      if(!(fx.statusHits||[]).includes(statusKey)){
       fx.statusHits??=[];fx.statusHits.push(statusKey);
-      applyStatus(world,owner,isPlayer?world.profiles[enemy.key]:enemy,weapon,{
+      const targetStatus=isPlayer?world.profiles[enemy.key]:enemy;
+      if(fx.echo)applyElementalHit(targetStatus,owner,weapon,now,.2);
+      else applyStatus(world,owner,targetStatus,weapon,{
        direction:fx.direction,charge:fx.charge,
        damage:isPlayer?Math.min(12,fx.pvpDamage):fx.damage,
        qualityDuration:fx.qualityDuration
