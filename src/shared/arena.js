@@ -13,7 +13,7 @@ export const PLAYER_SPAWNS = Object.freeze([
 export const PLATFORMS=Object.freeze(Array.from({length:13},(_,index)=>{
  const disc=index?ART_DISPLAY_DISCS[index-1]:null,position=disc?[disc.position[0],0,disc.position[2]]:[-12,0,-12],height=disc?.top||0,radius=disc?.radius||4;
  // Coins now sit on accessible ground beyond the full 14m GM deck radius.
- const heading=Math.atan2(position[2],position[0]),distance=17.5;
+ const heading=index===0?0:Math.atan2(position[2],position[0]),distance=18.5;
  const coinPosition=[position[0]+Math.cos(heading)*distance,1.05,position[2]+Math.sin(heading)*distance];
  return Object.freeze({id:'platform-'+String(index+1).padStart(2,'0'),index,position,size:[radius*2,height,radius*2],steps:'none',artYaw:disc?-Math.atan2(position[0],position[2]):0,artPosition:Object.freeze([position[0],index===0?0:height+2.4,position[2]]),coinPosition:Object.freeze(coinPosition)});
 }));

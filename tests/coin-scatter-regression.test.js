@@ -9,6 +9,7 @@ test('display coins are walkable and outside all artwork decks',()=>{
  for(const p of PLATFORMS){
   const reach=Math.hypot(p.position[0]-p.coinPosition[0],p.position[2]-p.coinPosition[2]);
   assert.ok(reach>14,p.id);
+  for(const other of PLATFORMS){const separation=Math.hypot(other.position[0]-p.coinPosition[0],other.position[2]-p.coinPosition[2]);assert.ok(separation>15.5,p.id+' overlaps '+other.id);}
   assert.equal(p.coinPosition[1],1.05);
   assert.ok(Math.hypot(p.coinPosition[0],p.coinPosition[2])<92,p.id);
  }
