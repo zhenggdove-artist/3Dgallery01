@@ -1,12 +1,26 @@
 import * as THREE from 'three';
 import {weaponMuzzle} from './weapon-muzzle.js';
 
+// CSS uses a transparent 35vmin-radius circular sniper viewport. The opaque
+// remainder is an exit target, even though the overlay ignores hit-testing.
+export function outsideScopeCircle(x,y,width,height){
+ const radius=.35*Math.min(width,height);
+ return Math.hypot(x-width*.5,y-height*.5)>radius;
+}
+
 // RELETTER gun-additions: shoulder / sniper scope, original sensitivity and FOV.
 export class GunController {
   constructor({canvas,camera,controller,weapon,ui,attack}) {
     Object.assign(this,{canvas,camera,controller,weapon,ui,attack});this.mode=0;this.held=false;this.nextShot=0;
     this.overlay=document.createElement('div');this.overlay.id='gun-overlay';this.overlay.hidden=true;
     this.overlay.innerHTML='<div class="gun-reticle"></div><div class="scope-lines"></div><span>A/Q · CAMERA / TAP SCENE · FIRE</span>';document.body.append(this.overlay);
+    // Capture before the canvas firing handler and all HUD controls: any tap
+    // in the black scope mask dismisses mobile zoom without shooting or
+    // accidentally activating whatever UI lies beneath that mask.
+    addEventListener('pointerdown',e=>{
+      if(this.mode!==2||e.button>0||!outsideScopeCircle(e.clientX,e.clientY,innerWidth,innerHeight))return;
+      e.preventDefault();e.stopImmediatePropagation();this.end();
+    },true);
     addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)||ui.panelName)return;if(e.code==='KeyV'&&weapon()?.firstPerson&&!e.repeat){e.preventDefault();e.stopImmediatePropagation();this.cycle();}if(e.code==='Escape'&&this.mode){this.end();}},true);
     addEventListener('pointermove',e=>{if(!this.mode||e.target!==canvas)return;e.stopImmediatePropagation();const c=controller(),s=.002*(this.mode===2?.3:1);const previous=this.lookPointer?.id===e.pointerId?this.lookPointer:null,dx=e.pointerType==='touch'?(previous?e.clientX-previous.x:0):e.movementX,dy=e.pointerType==='touch'?(previous?e.clientY-previous.y:0):e.movementY;if(e.pointerType==='touch')this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};c.yaw-=dx*s;c.pitch=THREE.MathUtils.clamp(c.pitch+dy*s,-1.1,1.2);},true);
     for(const type of ['pointerdown','pointerup','pointercancel'])addEventListener(type,e=>{
@@ -21,7 +35,7 @@ export class GunController {
     addEventListener('blur',()=>this.end());document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement){this.held=false;ui.emit('attack-cancel');}});
   }
   cycle(){const c=this.controller(),w=this.weapon();if(!c?.enabled||!w?.firstPerson)return;if(!this.mode){this.savedFov=this.camera.fov;this.weaponId=w.id;this.mode=1;}else if(w.id==='black-cat'&&this.mode===1)this.mode=2;else return this.end();this.held=false;this.ui.emit('attack-cancel');if(matchMedia('(pointer:fine)').matches){try{this.canvas.requestPointerLock()?.catch(()=>{});}catch{}}}
-  end(){if(!this.mode)return;this.mode=0;this.held=false;this.overlay.hidden=true;this.ui.emit('attack-cancel');this.camera.fov=this.savedFov;this.camera.updateProjectionMatrix();const root=this.controller()?.root;if(root){root.userData.model.visible=true;if(root.userData.blade)root.userData.blade.visible=true;}if(document.pointerLockElement===this.canvas)document.exitPointerLock();}
+  end(){if(!this.mode)return;this.mode=0;this.held=false;this.lookPointer=null;this.overlay.hidden=true;this.ui.emit('attack-cancel');this.camera.fov=this.savedFov;this.camera.updateProjectionMatrix();const root=this.controller()?.root;if(root){root.userData.model.visible=true;if(root.userData.blade)root.userData.blade.visible=true;}if(document.pointerLockElement===this.canvas)document.exitPointerLock();}
   direction(){const c=this.controller();return new THREE.Vector3(-Math.sin(c.yaw)*Math.cos(c.pitch),-Math.sin(c.pitch),-Math.cos(c.yaw)*Math.cos(c.pitch));}
   shot(){const ray=new THREE.Raycaster();this.camera.updateMatrixWorld();ray.setFromCamera(new THREE.Vector2(),this.camera);const c=this.controller(),range=this.weapon().chargedRange||this.weapon().range,origin=weaponMuzzle(c.root,this.weapon())||c.root.position.clone().add(new THREE.Vector3(0,1,0));let point=ray.ray.at(range,new THREE.Vector3());const targets=[...c.arena.artworks.values(),c.arena.monster,...(c.arena.remoteAimTargets||[])].filter(o=>o?.visible&&o!==c.root);const hit=ray.intersectObjects(targets,true).find(h=>h.distance>.15&&h.distance<=range);if(hit)point.copy(hit.point);return {origin:origin.toArray(),aimPoint:point.toArray(),direction:point.clone().sub(origin).normalize().toArray()};}
   shotDirection(){return new THREE.Vector3(...this.shot().direction);}
