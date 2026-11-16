@@ -54,7 +54,7 @@ export class WeaponSignatureEffects {
    geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
    const surface=new THREE.MeshPhysicalMaterial({vertexColors:true,roughness:.12,metalness:.06,
     clearcoat:1,clearcoatRoughness:.04,emissive:palette[i%palette.length],
-    emissiveIntensity:.38,toneMapped:false});
+    emissiveIntensity:.38,toneMapped:false,transparent:true,opacity:1,depthWrite:false});
    const ball=new THREE.Mesh(geometry,surface);
    ball.name='Multicolour sphere '+(i+1);
    ball.scale.setScalar((full?.29:.21)*scale);
@@ -76,6 +76,12 @@ export class WeaponSignatureEffects {
     b.ball.position.copy(source).addScaledVector(b.dir,range*t);
     b.ball.rotation.y=b.spin+age*10;
     b.ball.rotation.x=age*5+b.spin;
+    // The physical sphere and its additive halo must dissolve together,
+    // rather than vanishing in one frame at their authoritative expiry.
+    const fade=Math.min(1,Math.max(0,(1-t)/.30));
+    b.ball.material.opacity=fade;
+    b.ball.children[0].material.opacity=.30*fade;
+    b.ball.scale.setScalar((full?.29:.21)*scale*(.72+.28*fade));
    }
   });
  }
@@ -272,6 +278,29 @@ export class WeaponSignatureEffects {
   const model=new THREE.Group();model.add(giraffe);
   const group=new THREE.Group();group.name='Visible spinning yellow giraffe model, outbound and returning';group.add(model);
   giraffe.scale.setScalar(5.4*quality);
+  // Purple electricity is physically attached to the spinning giraffe mesh,
+  // so every bolt follows the SAME boomerang trajectory and rotation.
+  const electricBolts=[];
+  for(let j=0;j<10;j++){
+   const points=[];
+   for(let k=0;k<9;k++){
+    const f=k/8,y=-.23+f*1.75,side=j%2?1:-1;
+    points.push(new THREE.Vector3(
+     side*(.08+.13*Math.sin(f*10.7+j*.81))+.045*Math.sin(j*3.7+k*7.1),
+     y,
+     (j%5-2)*.08+.06*Math.sin(j*2.3+k*5.1)
+    ));
+   }
+   const path=new THREE.CatmullRomCurve3(points);
+   const makeBolt=(radius,color,opacity)=>{
+    const bolt=new THREE.Mesh(new THREE.TubeGeometry(path,32,radius,5,false),
+     new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,
+      blending:THREE.AdditiveBlending,toneMapped:false}));
+    giraffe.add(bolt);return bolt;
+   };
+   electricBolts.push({core:makeBolt(.012,j%2?'#eac0ff':'#be6bff',.92),
+    glow:makeBolt(.027,'#7e32f3',.30),phase:j*1.73});
+  }
   const orientation=qdir(dir),duration=2.3;
   this.add(group,duration,age=>{
    const t=Math.min(1,age/duration),distance=Math.sin(t*Math.PI)*(event.range||28);
@@ -279,6 +308,11 @@ export class WeaponSignatureEffects {
    group.quaternion.copy(orientation);
    model.rotation.z=age*15.5;
    model.rotation.x=Math.sin(age*13)*.25;
+   for(const bolt of electricBolts){
+    const brightness=.48+.52*Math.abs(Math.sin(age*31+bolt.phase));
+    bolt.core.material.opacity=.92*brightness;
+    bolt.glow.material.opacity=.37*brightness;
+   }
   });
  }
  play(event,item,ownerRoot){
