@@ -16,6 +16,7 @@ import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './isl
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
+import {pvpShotDamage,projectileFlightMs} from './combat-balance.js';
 import {isChannelStaff,weaponQuality,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
@@ -317,7 +318,7 @@ function attack(world,profile,actor,body,context,now){
     return {error:'Staff channel is not active'};
   if(body.phase==='charge'){profile.chargeStartedAt=now;return {charging:true};}
   if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};const direction=normalDirection(body.direction);if(!direction)return {error:'Invalid attack direction'};profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
-  const charge=channel?((now-profile.channelStartedAt)>2200?1:0):Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
+  const charge=channel?((now-profile.channelStartedAt)>=(weapon.chargeMs||1500)?1:0):Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
   if(!channel)profile.chargeStartedAt=0;
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
   stats.damage=+(stats.damage*quality.damage).toFixed(2);
@@ -330,7 +331,8 @@ function attack(world,profile,actor,body,context,now){
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
   const area=stats.ultimate&&weapon.id!=='goldfish'?chargedArea(weapon,origin,direction,stats,groundForSpell):null;
-  const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate):null;
+  const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate,now):null;
+  const pvpDamage=pvpShotDamage(weapon,stats,quality);
   const returningGiraffe=weapon.id==='giraffe'&&stats.ultimate;
   const roamingFan=weapon.id==='fan'&&stats.ultimate;
   const swimmingFish=weapon.id==='goldfish'&&stats.ultimate;
@@ -340,80 +342,31 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:id(),kind:swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
       origin:[...origin],direction:[...direction],range:stats.range,
-      damage:stats.damage+bonus,radius:swimmingFish?GOLDFISH_SWIM_RADIUS*quality.visual:Math.max(2,stats.radius)*quality.radius,tier:quality.tier,
+      damage:stats.damage+bonus,pvpDamage,radius:swimmingFish?GOLDFISH_SWIM_RADIUS*quality.visual:Math.max(2,stats.radius)*quality.radius,tier:quality.tier,
       createdAt:now,lastAt:now,expiresAt:now+duration,
       outHits:[],backHits:[],fanHits:{},fishHits:[]
     });
     if(world.persistentAttacks.length>32)world.persistentAttacks.splice(0,world.persistentAttacks.length-32);
   }
   const persistentOnly=returningGiraffe||roamingFan||swimmingFish;
-  let hit=null,hits=[];if(!pellets&&!persistentOnly)for(const target of context.actors||[]){
-    if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(actor.position)||insideSafeZone(target.position))continue;
-    const targetPosition=[target.position[0],target.position[1]+1,target.position[2]];
-    // Full-height swept cylinder: a beam/jet/sword trail touching the rendered
-    // character counts, even when its centre point is above or below the aim ray.
-    const collision=rayCylinderDistance(origin,direction,stats.range,target.position,1.02+stats.radius,2.35)!==null;
-    if(collision||(area?.mode==='area'&&insideChargedArea(area,targetPosition,1.02))){
-     const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{position:target.position,island:true},targetPosition,now,context.rng??Math.random);
-     const result=damagePlayer(world,profile,target,(stats.damage+bonus)*modifiers.multiplier,now,'pvp',actor.position,modifiers.kind);
-     if(result){hits.push(result);hit??=result;}
-     if(area?.mode!=='area')break;
-    }
-   }
-  let monsterHit=null,monsterHits=[];
-  if(!pellets&&!persistentOnly&&!insideSafeZone(actor.position))for(const mob of [world.monster,...(world.monsters||[])]){
-   if(!mob?.active)continue;
-   const target=[mob.position[0],mob.position[1]+Math.min(1.2,ENEMY_HEIGHT*.5),mob.position[2]];
-   // Tall monsters use their complete visible body volume. The moving VFX
-   // corridor remains hittable even when a charged area also lands farther out.
-   if(monsterRayDistance(origin,direction,stats.range,mob,stats.radius)!==null||
-      (area?.mode==='area'&&insideChargedArea(area,target,ENEMY_RADIUS))){
-    const modifiers=directHitModifiers(weapon,{origin,direction,range:stats.range},{...mob,island:true,visualScale:ENEMY_HEIGHT/1.575},target,now,context.rng??Math.random);
-    const result=damageMonster(world,profile,(stats.damage+bonus)*modifiers.multiplier,now,context.rng??Math.random,modifiers.kind,mob);
-    if(result){monsterHits.push({monster:mob,result});monsterHit??=result;}
-    if(area?.mode!=='area')break;
-   }
+  // Attack requests only launch server-owned trajectories. Health, statuses,
+  // and damage-number events are produced by tickPersistentAttacks when the
+  // travelling VFX volume actually touches a target (never on key release).
+  if(!persistentOnly){
+    const duration=projectileFlightMs(weapon,stats.ultimate);
+    world.persistentAttacks??=[];
+    world.persistentAttacks.push({
+      id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
+      origin:[...origin],direction:[...direction],range:stats.range,
+      radius:stats.radius,area,damage:stats.damage+bonus,pvpDamage,charge,
+      qualityDuration:quality.duration,qualityScale:quality.visual,
+      pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
+      hits:[],pelletHits:{},areaResolved:false,
+      createdAt:now,lastAt:now,expiresAt:now+duration
+    });
+    if(world.persistentAttacks.length>40)world.persistentAttacks.splice(0,world.persistentAttacks.length-40);
   }
-  if(pellets&&!persistentOnly&&!insideSafeZone(actor.position)){
-   for(const pellet of pellets){
-    const candidates=[];
-    for(const target of context.actors||[]){
-     if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(target.position))continue;
-     const t=rayCylinderDistance(origin,pellet.direction,stats.range,target.position,1.03+pellet.radius,2.35);
-     if(t!==null)candidates.push({type:'player',target,t});
-    }
-    for(const mob of [world.monster,...(world.monsters||[])]){
-     if(!mob?.active)continue;
-     const t=monsterRayDistance(origin,pellet.direction,stats.range,mob,pellet.radius);
-     if(t!==null)candidates.push({type:'monster',target:mob,t});
-    }
-    candidates.sort((a,b)=>a.t-b.t);
-    const first=candidates[0];if(!first)continue;
-    const impact=origin.map((v,j)=>v+pellet.direction[j]*first.t);
-    const target=first.target,modifiers=directHitModifiers(weapon,{origin,direction:pellet.direction,range:stats.range},
-     {...target,island:true,visualScale:first.type==='monster'?ENEMY_HEIGHT/1.575:1},
-     first.type==='monster'?[target.position[0],target.position[1]+ENEMY_HEIGHT*.5,target.position[2]]:[target.position[0],target.position[1]+1,target.position[2]],now,context.rng??Math.random);
-    // Shotgun: threefold random damage swing, plus unmistakable point-blank
-    // falloff. Each of the ten visible balls remains a separate damage event.
-    const proximity=Math.max(0,1-first.t/Math.max(1,stats.range));
-    const variance=.55+2.45*(context.rng??Math.random)();
-    const power=((stats.damage+bonus)/pellets.length)*modifiers.multiplier*1.35*(1+1.7*proximity)*variance;
-    if(first.type==='player'){
-     const result=damagePlayer(world,profile,target,power,now,'pvp',actor.position,modifiers.kind,impact);
-     if(result){hits.push(result);hit??=result;}
-    }else{
-     const result=damageMonster(world,profile,power,now,context.rng??Math.random,modifiers.kind,target,impact);
-     if(result){monsterHits.push({monster:target,result});monsterHit??=result;}
-    }
-   }
-  }
-  const appliedTargets=new Set();
-  for(const result of hits)if(!result.defeated&&!result.immune&&!appliedTargets.has(result.target)){
-   appliedTargets.add(result.target);applyStatus(world,profile,world.profiles[result.target],weapon,{direction,charge,damage:stats.damage,qualityDuration:quality.duration},now);
-  }
-  for(const m of monsterHits)if(!m.result.defeated&&!appliedTargets.has(m.monster.id)){
-   appliedTargets.add(m.monster.id);applyStatus(world,profile,m.monster,weapon,{direction,charge,damage:stats.damage,qualityDuration:quality.duration},now);
-  }
+  const hit=null,hits=[],monsterHit=null,monsterHits=[];
   let structureHit=null,structureDestroyed=null;
   const structureHits=[],structureDestroyedEvents=[];
   // Evaluate builds regardless of hits on characters/monsters. Area attacks
@@ -500,7 +453,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
   if(world.monster?.active)changed=tickStatus(world.monster,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng))||changed;
   for(const mob of world.monsters||[])if(mob?.active)changed=tickStatus(mob,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng,'status',mob))||changed;
-  for(const target of actors){const p=world.profiles[target.key];if(p&&!p.admin&&p.hp>0)changed=tickStatus(p,now,(owner,amount)=>damagePlayer(world,world.profiles[owner],target,amount,now,'status',target.position))||changed;}
+  for(const target of actors){const p=world.profiles[target.key];if(p&&!p.admin&&p.hp>0)changed=tickStatus(p,now,(owner,amount)=>damagePlayer(world,world.profiles[owner],target,Math.min(amount,2),now,'status',target.position))||changed;}
   world.groundDrops=world.groundDrops.filter(drop=>drop.expiresAt>now);if(world.groundDrops.length>ECONOMY.maxGroundDrops)world.groundDrops.splice(0,world.groundDrops.length-ECONOMY.maxGroundDrops);
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
   if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
@@ -576,11 +529,87 @@ function tickPersistentAttacks(world,actors,now,rng){
   const next=Math.max(0,Math.min(1,(now-fx.createdAt)/(fx.expiresAt-fx.createdAt)));
   const owner=world.profiles[fx.owner];
   if(!owner){fx.lastAt=now;continue;}
-  if(fx.kind==='giraffe'){
+  if(fx.kind==='projectile'){
+   const weapon=itemById(fx.weapon);
+   if(!weapon){fx.lastAt=now;continue;}
+   const alreadyHit=new Set(fx.hits||[]);
+   const outcome=(target,position,impact,pellet=null,along=0)=>{
+    const enemy=target.value,key=(enemy.id||enemy.key),isPlayer=target.kind==='player';
+    if(enemy.key===fx.owner||(isPlayer&&insideSafeZone(enemy.position)))return false;
+    const hitKey=pellet===null?key:pellet+':'+key;
+    const history=pellet===null?alreadyHit:(fx.pelletHits[pellet]??=[]);
+    if(pellet===null?history.has(hitKey):history.includes(hitKey))return false;
+    if(pellet===null){alreadyHit.add(hitKey);fx.hits.push(hitKey);}else history.push(hitKey);
+    const modifiers=directHitModifiers(weapon,{origin:fx.origin,direction:pellet===null?fx.direction:fx.pellets[pellet].direction,range:fx.range},
+      {...enemy,island:true,visualScale:isPlayer?1:ENEMY_HEIGHT/1.575},position,now,rng);
+    const power=isPlayer?fx.pvpDamage:fx.damage;
+    const critical=isPlayer?Math.min(1.14,modifiers.multiplier):modifiers.multiplier;
+    const proximity=clamp(1-along/Math.max(1,fx.range),0,1);
+    const spread=pellet===null?1:(isPlayer?(.76+.48*proximity)*(.28+1.12*rng()):1.35*(1+1.7*proximity)*(.55+2.45*rng()));
+    const rawDamage=power*critical*spread/(pellet===null?1:fx.pellets.length);
+    // No uncharged weapon may bypass the 8-hit baseline through a lucky
+    // crit or a ten-ball shotgun burst. The pellets remain individually
+    // damaging, with a full 5x+ per-pellet random damage window.
+    const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?50:32):
+      fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
+    const damage=isPlayer?Math.min(rawDamage,pvpCap):rawDamage;
+    let applied;
+    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,modifiers.kind,impact);
+    else applied=damageMonster(world,owner,damage,now,rng,modifiers.kind,enemy,impact);
+    if(applied&&!applied.immune&&!applied.defeated){
+     const statusKey=enemy.id||enemy.key;
+     if(!(fx.statusHits||[]).includes(statusKey)){
+      fx.statusHits??=[];fx.statusHits.push(statusKey);
+      applyStatus(world,owner,isPlayer?world.profiles[enemy.key]:enemy,weapon,{
+       direction:fx.direction,charge:fx.charge,
+       damage:isPlayer?Math.min(12,fx.pvpDamage):fx.damage,
+       qualityDuration:fx.qualityDuration
+      },now);
+     }
+    }
+    return !!applied;
+   };
+   // Each travelling sphere uses its own independent ray. The server sweeps
+   // all travelled segments, so no damage can occur before contact.
+   const lanes=fx.pellets||[{direction:fx.direction,radius:fx.radius}];
+   const segmentLength=Math.max(0,(next-prev)*fx.range);
+   if(segmentLength>.00001){
+    lanes.forEach((pellet,index)=>{
+     const start=fx.origin.map((v,j)=>v+pellet.direction[j]*prev*fx.range);
+     for(const target of targets){
+      const enemy=target.value;
+      if(enemy.key===fx.owner)continue;
+      const radius=pellet.radius;
+      const t=target.kind==='player'
+       ?rayCylinderDistance(start,pellet.direction,segmentLength,enemy.position,1.02+radius,2.35)
+       :monsterRayDistance(start,pellet.direction,segmentLength,enemy,radius);
+      if(t===null)continue;
+      const impact=start.map((v,j)=>v+pellet.direction[j]*t);
+      const pos=target.kind==='player'?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]:
+        [enemy.position[0],enemy.position[1]+ENEMY_HEIGHT*.5,enemy.position[2]];
+      if(outcome(target,pos,impact,fx.pellets?index:null,prev*fx.range+t))changed=true;
+     }
+    });
+   }
+   // Ground-targeted charged area explosions are evaluated only once their
+   // visible travel has completed; targets that have moved away evade damage.
+   if(fx.area?.mode==='area'&&!fx.areaResolved&&next>=.70){
+    fx.areaResolved=true;
+    for(const target of targets){
+     const enemy=target.value,key=enemy.id||enemy.key;
+     if(alreadyHit.has(key)||enemy.key===fx.owner)continue;
+     const pos=target.kind==='player'
+      ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]:
+       [enemy.position[0],enemy.position[1]+ENEMY_HEIGHT*.5,enemy.position[2]];
+     if(!insideChargedArea(fx.area,pos,target.kind==='player'?1.02:ENEMY_RADIUS))continue;
+     if(outcome(target,pos,fx.area.center,null,fx.area.travel))changed=true;
+    }
+   }
+  }else if(fx.kind==='giraffe'){
    for(const [leg,lo,hi] of [['out',0,.5],['back',.5,1]]){
     const from=Math.max(prev,lo),to=Math.min(next,hi);
     if(to<=from)continue;
-    const travel=p=>(p<=.5?p*2:(1-p)*2)*fx.range;
+    const travel=p=>Math.sin(Math.PI*p)*fx.range; // same continuous path as the displayed giraffe
     const a=fx.origin.map((v,j)=>v+fx.direction[j]*travel(from));
     const b=fx.origin.map((v,j)=>v+fx.direction[j]*travel(to));
     const ray=b.map((v,j)=>v-a[j]),length=Math.hypot(...ray);
@@ -595,7 +624,7 @@ function tickPersistentAttacks(world,actors,now,rng){
      seen.push(value.id||value.key);
      const hit=a.map((v,j)=>v+direction[j]*contact);
      if(target.kind==='monster')damageMonster(world,owner,fx.damage*.53,now,rng,leg==='out'?'boomerang-out':'boomerang-return',value,hit);
-     else damagePlayer(world,owner,value,fx.damage*.53,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',hit);
+     else damagePlayer(world,owner,value,(fx.pvpDamage||12)*.62,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',hit);
      changed=true;
     }
    }
@@ -623,7 +652,7 @@ function tickPersistentAttacks(world,actors,now,rng){
        value.effects??={};value.effects.stun={owner:fx.owner,power:1,until:now+800,next:now+1000};
       }
      }else{
-      const hit=damagePlayer(world,owner,value,fx.damage*1.25,now,'goldfish',fx.origin,'giant-goldfish',impact);
+      const hit=damagePlayer(world,owner,value,(fx.pvpDamage||12)*1.08,now,'goldfish',fx.origin,'giant-goldfish',impact);
       if(hit&&!hit.immune){const profile=world.profiles[value.key];if(profile?.hitReaction){profile.hitReaction.stunMs=300;profile.hitReaction.knockback=14;}}
      }
      changed=true;
@@ -643,10 +672,14 @@ function tickPersistentAttacks(world,actors,now,rng){
      const value=target.value;if(value.key===fx.owner)continue;
      if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
      const pos=value.position,dist=Math.hypot(pos[0]-p[0],pos[2]-p[2]),id2=value.id||value.key,key=i+':'+id2;
+     // The rendered tornado is a finite 3-D column, not an infinite 2-D
+     // hazard: a fighter flying above the visible vortex cannot be struck.
+     const tornadoTop=p[1]+10*(1+(fx.tier-1)*.19),victimHeight=target.kind==='monster'?(value.bodyHeight||ENEMY_HEIGHT):2.35;
+     if(pos[1]>tornadoTop||pos[1]+victimHeight<p[1]-1)continue;
      if(dist>2.4+fx.radius*.48||now-(fx.fanHits[key]||0)<900)continue;
      fx.fanHits[key]=now;
      if(target.kind==='monster')damageMonster(world,owner,fx.damage*.18,now,rng,'tornado',value,p);
-     else damagePlayer(world,owner,value,fx.damage*.18,now,'tornado',fx.origin,'tornado',p);
+     else damagePlayer(world,owner,value,(fx.pvpDamage||10)*.10,now,'tornado',fx.origin,'tornado',p);
      const victim=target.kind==='monster'?value:world.profiles[value.key];
      if(victim){
       victim.effects??={};

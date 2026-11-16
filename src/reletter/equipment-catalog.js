@@ -46,6 +46,17 @@ export function attackStats(weapon,charge=0){
  return {ultimate,range:ultimate?+Math.max(30,weapon.range*2,baseRange*1.8).toFixed(2):baseRange,radius:ultimate?Math.max(6,baseRadius*2.4):baseRadius,damage:ultimate?+(Math.max(10,damage*2.2)).toFixed(2):damage};
 }
 
-Object.assign(equipmentById('chiang-token'),{element:'dark',color:'#ae7bd5',cooldown:380});
+// Weapon charge identity: distinct timing by family, rank, and exotic model.
+const chargeByFamily={water:1320,ice:1560,fire:1770,lightning:1660,beam:2150,
+ petal:1920,wave:2300,saber:900,whip:1080,swatter:790,pan:1240,
+ planter:1660,palm:1850};
+DEFAULT_WEAPON.chargeMs=1370;
+const usedChargeMs=new Set([DEFAULT_WEAPON.chargeMs]);
+for(const item of EQUIPMENT)if(item.slot==='weapon'){
+ let time=item.exotic?item.chargeMs:(chargeByFamily[item.family]||1450)+(Math.max(1,item.tier||1)-1)*47;
+ while(usedChargeMs.has(time))time++;
+ item.chargeMs=time;usedChargeMs.add(time);
+}
+Object.assign(equipmentById('chiang-token'),{element:'dark',color:'#ae7bd5',cooldown:380,chargeMs:2450});
 
 for(const w of EQUIPMENT)if(w.slot==='weapon')w.critChance=weaponCritChance(w);

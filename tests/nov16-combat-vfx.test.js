@@ -24,7 +24,8 @@ test('calico spread has exactly ten independent, normalized lanes and charged re
  assert.equal(normal.length,10);assert.equal(charged.length,10);
  assert.equal(new Set(normal.map(p=>p.direction.join(','))).size,10);
  assert.ok(normal.every(p=>Math.abs(Math.hypot(...p.direction)-1)<1e-10));
- assert.ok(Math.abs(charged[0].direction[0])>Math.abs(normal[0].direction[0]));
+ const divergence=r=>r.reduce((sum,p)=>sum+Math.hypot(p.direction[0],p.direction[1]),0);
+ assert.ok(divergence(charged)>divergence(normal));
  const shotgun=itemById('calico-cat'),smg=itemById('white-cat');
  assert.equal(attackStats(shotgun,0).range,10);
  assert.equal(attackStats(shotgun,1).range,17);
@@ -36,9 +37,11 @@ test('all ten overlapping shotgun pellets hit a sixfold uncle as TEN damage numb
  const before=world.monster.hp;
  const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1],charge:0},{now:start+2000,rng:()=>.5,actors:[shooter]});
  assert.equal(result.attackEvent?.pellets?.length,10);
- assert.equal(result.monsterHits?.length,10,result.error);
+ assert.equal(result.monsterHits?.length,0,'no immediate impact on release');
+ assert.equal(world.monster.hp,before);
+ tickWorld(world,{now:start+2390,rng:()=>.5,actors:[shooter],activeFighters:0});
  assert.equal(world.monster.hp<before,true);
- const damage=worldView(world,shooter.key,start+2001).damageEvents.filter(e=>e.target==='uncle');
+ const damage=worldView(world,shooter.key,start+2391).damageEvents.filter(e=>e.target==='uncle');
  assert.equal(damage.length,10);
  assert.equal(new Set(damage.map(e=>e.id)).size,10);
  assert.equal(world.monster.aggroTarget,shooter.key);
@@ -51,13 +54,15 @@ test('ten pellet collisions can individually damage another fighter',()=>{
  // the shotgun buff; a normal 100 HP victim dies before all ten land.
  victim.level=300;victim.maxHp=1296;victim.hp=1296;
  const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1]},{now:start+2000,rng:()=>.5,actors:[shooter,target]});
- assert.equal(result.hits.length,10);
- assert.equal(worldView(world,target.key,start+2002).damageEvents.filter(e=>e.target===target.key).length,10);
+ assert.equal(result.hits.length,0,'shot packets launch but cannot instantly hit');
+ tickWorld(world,{now:start+2390,rng:()=>.5,actors:[shooter,target],activeFighters:0});
+ assert.equal(worldView(world,target.key,start+2391).damageEvents.filter(e=>e.target===target.key).length,10);
 });
 test('stray shotgun particles outside the sixfold torso do not inflict phantom damage',()=>{
  const {world,shooter}=worldWithCat();world.monster.position=[87,0,8];
  const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1]},{now:start+2000,rng:()=>.5,actors:[shooter]});
  assert.equal(result.monsterHits.length,0);
+ tickWorld(world,{now:start+2390,rng:()=>.5,actors:[shooter],activeFighters:0});
  assert.equal(world.monster.hp,800);
 });
 test('plant weapon roots a hit enemy and being hit triggers persistent pursuit',()=>{
@@ -66,7 +71,8 @@ test('plant weapon roots a hit enemy and being hit triggers persistent pursuit',
  profile.inventory.push('planter-1');profile.equipment.weapon='planter-1';
  world.monster={id:'plant-target',active:true,variant:'uncle',model:'uncle',position:[75,0,4],hp:200,maxHp:200,skills:[],attackStyles:true,nextAttackAt:start+10000};
  const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1]},{now:start+2000,rng:()=>.5,actors:[shooter]});
- assert.ok(result.monsterHit?.damage>0,result.error);
+ assert.equal(result.monsterHit,null,'damage waits for contact');
+ tickWorld(world,{now:start+2250,rng:()=>.5,activeFighters:0,actors:[shooter]});
  assert.ok(world.monster.effects?.root?.until>start+2000);
  assert.equal(world.monster.aggroTarget,shooter.key);
  const before=world.monster.position.slice();

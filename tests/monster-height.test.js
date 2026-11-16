@@ -12,7 +12,9 @@ test('directional hits emit original critical damage events; direct-hit bypass i
  const w=createInitialWorld(1000),actor={key:'fighter',name:'Tester',role:'fighter',position:[20,0,20]},p=ensureProfile(w,actor.key,actor.name,null,1000);
  w.monster={id:'enemy',active:true,position:[20,0,22],hp:1000,maxHp:1000};
  const result=applyAction(w,actor,{action:'attack',direction:[0,0,1]},{now:5000,rng:()=>0});
- assert.ok(result.monsterHit?.damage>0);const event=worldView(w,p.key,5000).damageEvents[0];assert.equal(event.kind,'critical');assert.equal(event.amount,result.monsterHit.damage);assert.equal(event.target,'enemy');
+ assert.equal(result.monsterHit,null);assert.equal((w.damageEvents||[]).length,0);
+ tickWorld(w,{now:5400,rng:()=>0,actors:[actor],activeFighters:0});
+ const event=worldView(w,p.key,5400).damageEvents[0];assert.equal(event.kind,'critical');assert.ok(event.amount>0);assert.equal(event.target,'enemy');
  const hp=w.monster.hp;assert.ok(applyAction(w,actor,{action:'monster-hit'},{now:8000}).error);assert.equal(w.monster.hp,hp);
 });
 test('Nangan cast warns, expands on ground, hits once and can be jumped',()=>{

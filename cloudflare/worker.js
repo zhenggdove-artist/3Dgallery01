@@ -202,7 +202,7 @@ export class TempleRoom extends DurableObject{
   broadcast(type,data,except){const text=JSON.stringify({type,data});for(const ws of this.sockets())if(ws!==except)try{ws.send(text);}catch{this.closed.add(ws);}}
   broadcastRoster(){this.broadcast('players',this.roster());}
   broadcastWorld(world=this.world()){for(const ws of this.sockets()){const meta=ws.deserializeAttachment();if(meta)try{ws.send(JSON.stringify({type:'world',data:worldView(world,meta.profileKey)}));}catch{this.closed.add(ws);}}this.broadcastRoster();}
-  async tick(fromState=false){const now=Date.now();if(fromState&&now-this.lastTick<500)return;this.lastTick=now;const actors=this.actors(),world=this.world();if(tickWorld(world,{now,activeFighters:actors.filter(a=>a.role==='fighter').length,actors})){this.save(world);this.broadcastWorld(world);}await this.armAlarm();}
+  async tick(fromState=false){const now=Date.now();const world=this.world();const movingEffects=(world.persistentAttacks||[]).length>0;if(fromState&&now-this.lastTick<(movingEffects?70:500))return;this.lastTick=now;const actors=this.actors();if(tickWorld(world,{now,activeFighters:actors.filter(a=>a.role==='fighter').length,actors})){this.save(world);this.broadcastWorld(world);}await this.armAlarm();}
   async alarm(){this.prune();await this.tick();}
   async armAlarm(){if(this.roster().length)await this.ctx.storage.setAlarm(Date.now()+1_000);}
 }

@@ -56,7 +56,10 @@ test('PvP death drops exactly twenty percent of carried coins',()=>{
   const now=6_000_000,world=createInitialWorld(now),attacker=ensureProfile(world,'p1','p1','#fff',now),target=ensureProfile(world,'p2','p2','#fff',now);
   attacker.equipment.weapon='ember-5';attacker.inventory.push('ember-5');target.wallet=1_003;target.hp=1;
   const result=applyAction(world,actor('p1',[10,0,0]),{action:'attack',direction:[1,0,0]},{now,actors:[actor('p1',[10,0,0]),actor('p2',[12,0,0])]});
-  assert.equal(result.hit.defeated,true);assert.equal(result.hit.lostCoins,Math.floor(1003*.2));assert.equal(target.wallet,1003-Math.floor(1003*.2));
+  assert.equal(result.hit,null);
+  assert.equal(target.hp,1);
+  tickWorld(world,{now:now+400,actors:[actor('p1',[10,0,0]),actor('p2',[12,0,0])],activeFighters:0,rng:()=>.5});
+  assert.equal(target.hp,0);assert.equal(target.wallet,1003-Math.floor(1003*.2));
   assert.equal(world.groundDrops.at(-1).amount,Math.floor(1003*.2));
 });
 
@@ -72,7 +75,9 @@ test('GM is immune to PvP damage and held artwork is recovered on departure',()=
   const now=9_000_000,world=createInitialWorld(now),source=actor('fighter',[10,0,0]),target=actor('gm',[10,0,-2]);
   ensureProfile(world,'fighter','fighter','#abcdef',now);const gm=ensureProfile(world,'gm','Ely','#abcdef',now,true);world.artworks['platform-01'].holder='gm';
   const hit=applyAction(world,source,{action:'attack',direction:[0,0,-1]},{now,actors:[source,target]});
-  assert.equal(hit.hit.immune,true);assert.equal(gm.hp,gm.maxHp);
+  assert.equal(hit.hit,null);
+  tickWorld(world,{now:now+400,actors:[source,target],activeFighters:0,rng:()=>.5});
+  assert.equal(gm.hp,gm.maxHp);
   assert.equal(releasePlayerWorldState(world,'gm',now),true);assert.equal(world.artworks['platform-01'].holder,null);assert.equal(world.artworks['platform-01'].availableAt,now+30_000);
 });
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createInitialWorld,applyAction,ensureProfile} from '../src/shared/temple-rules.js';
+import {createInitialWorld,applyAction,ensureProfile,tickWorld} from '../src/shared/temple-rules.js';
 import {chargedArea,insideChargedArea} from '../src/shared/charge-area.js';
 import {artBombDamage,projectileHitsActor} from '../src/shared/art-bomb.js';
 import {WEAPONS,attackStats} from '../src/shared/catalog.js';
@@ -95,7 +95,9 @@ test('fully charged area spell damages two opponents and player-built architectu
  assert.ok(applyAction(world,caster,{action:'attack',phase:'charge'},{now:1000}).charging);
  const cast=applyAction(world,caster,{action:'attack',direction:[0,0,1],charge:1},{now:3000,actors:[caster,t1,t2],rng:()=>.4});
  assert.equal(cast.attackEvent?.ultimate,true,JSON.stringify(cast.error));
- assert.equal(cast.hits?.length,2,JSON.stringify(cast));
+ assert.equal(cast.hits?.length,0,'charged attacks cannot damage on release');
+ assert.equal(world.profiles[t1.key].hp,100);
+ tickWorld(world,{now:3700,actors:[caster,t1,t2],rng:()=>.4,activeFighters:0});
  assert.ok(world.profiles[t1.key].hp<100&&world.profiles[t2.key].hp<100);
  assert.ok(cast.structureHit?.hp<140,JSON.stringify(cast));
 });
@@ -165,7 +167,9 @@ test('regular strikes damage every player-built structure even after hitting a f
  ensureProfile(world,target.key,target.name,target.color,1000);
  world.structures=[{id:'shared-cube',kind:'cube',owner:'builder',position:[75,0,5],hp:140,maxHp:140,rotation:0,createdAt:1000}];
  const strike=applyAction(world,caster,{action:'attack',direction:[0,0,1],charge:0},{now:5000,actors:[caster,target]});
- assert.ok(strike.hit,JSON.stringify(strike.error||strike));
+ assert.equal(strike.hit,null,'PvP hit resolves only on projectile contact');
+ tickWorld(world,{now:5400,actors:[caster,target],rng:()=>.5,activeFighters:0});
+ assert.ok(world.profiles.target.hp<100);
  assert.ok(strike.structureHit,JSON.stringify(strike.error||strike));
  assert.equal(strike.structureHits.length,1);
  assert.ok(world.structures[0].hp<140);
@@ -204,8 +208,9 @@ test('all cat guns keep their advertised normal and charged range and deal PvP d
       if(charge)assert.equal(applyAction(world,shooter,{action:'attack',phase:'charge'},{now:2000}).charging,true);
       const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1],origin:[0,1,-35],charge},
         {now:5000,actors:[shooter,target],rng:()=>.8});
-      assert.ok(result.hit?.damage>0,id+' charge '+charge+': '+JSON.stringify(result.error||result));
-      assert.ok(world.profiles.target.hp<100,id+' charge '+charge+' must damage a fighter');
+      assert.equal(result.hit,null,id+' must not hit instantaneously');
+      tickWorld(world,{now:5900,actors:[shooter,target],activeFighters:0,rng:()=>.8});
+      assert.ok(world.profiles.target.hp<100,id+' charge '+charge+' must damage a fighter upon contact');
     }
   }
   const spell=WEAPONS.find(w=>w.id==='tide-1');
@@ -219,7 +224,8 @@ test('cat bullets aimed at the visible upper body of a tall monster deal damage'
   world.monster={id:'tall-test',active:true,position:[0,0,35],hp:500,maxHp:500,model:'auntie'};
   const vector=[0,6,20],size=Math.hypot(...vector),direction=vector.map(v=>v/size);
   const result=applyAction(world,shooter,{action:'attack',direction,origin:[0,1,15]},{now:5000,actors:[shooter],rng:()=>.8});
-  assert.ok(result.monsterHit?.damage>0,JSON.stringify(result.error||result));
+  assert.equal(result.monsterHit,null,'monster is not struck on release');
+  tickWorld(world,{now:5400,actors:[shooter],activeFighters:0,rng:()=>.8});
   assert.ok(world.monster.hp<500);
 });
 
@@ -232,5 +238,6 @@ test('cat gun server hitbox still rejects bullets passing beside the monster',()
   const result=applyAction(world,shooter,{action:'attack',direction,origin:[0,1,15]},{now:5000,actors:[shooter],rng:()=>.8});
   assert.equal(result.error,undefined);
   assert.equal(result.monsterHit,null);
+  tickWorld(world,{now:5400,actors:[shooter],activeFighters:0,rng:()=>.8});
   assert.equal(world.monster.hp,500);
 });

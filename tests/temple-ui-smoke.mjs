@@ -121,7 +121,7 @@ try{
   const giraffe=items.find(w=>w.id==='giraffe');v.play({origin:[-20,1,-20],direction:[0,0,-1],range:28,charge:1,ultimate:true},giraffe,null);recipes.giraffe=v.signatureEffects.active.at(-1)?.obj?.name;
   return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
  });
- assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',petal:'One enormous forward rotating translucent particle blossom',planter:'Three stacked solid thorn-vine tiers',shotgun:'Ten actual coloured pellet spheres (server aligned)',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
+ assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',petal:'One enormous forward rotating translucent particle blossom',planter:'Three stacked solid thorn-vine tiers',shotgun:'Ten independent irregular multicolour volumetric shotgun spheres',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
  assert.equal(vfxState.sky,'World-oriented distant cloud sky (no moon)');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});

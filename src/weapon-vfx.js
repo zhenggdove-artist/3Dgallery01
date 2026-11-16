@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import {createOddEffect,updateOddEffect} from './reletter/odd-weapon-effects.js';
-import {weaponMuzzle} from './weapon-muzzle.js';
 import {chargedArea} from './shared/charge-area.js';
 import {ElementalCharge} from './elemental-charge.js';
 import {SaberImpact} from './saber-impact.js';
@@ -64,7 +63,8 @@ export class WeaponVFX{
   const groundEffect=!!data.ultimate&&impactArea?.mode==='area';
   const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
   if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
-  const muzzle=weaponMuzzle(root,item);if(muzzle&&item.id!=='calico-cat'){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
+  // Never re-aim or translate a server-approved trajectory to a cosmetic muzzle;
+  // rendered bullets must occupy the same world-space volume as damage rays.
   if(this.signatureEffects.play({...data,origin:origin.toArray(),direction:direction.toArray()},item,root))return;
   this.particleSkills.play(data,item,origin,end);
   // Dedicated point-cloud ultimates: do not summon a shared physical object.
