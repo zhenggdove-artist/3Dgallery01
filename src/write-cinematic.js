@@ -20,7 +20,7 @@ export class WriteCinematic{
   this.mouthLayer.style.cssText='position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:26';
   document.body.append(this.mouthLayer);
   this.active=false;this.legacy=false;this.phase='';this.busy=false;this.journey=null;this.fallCameraActive=false;
-  this.pending=null;this.reveal=null;this.letters=[];this.textStarted=0;
+  this.pending=null;this.reveal=null;this.letters=[];this.textStarted=0;this.unsavedMessage=null;
  }
  async begin(){
   if(this.active||this.busy)return;
@@ -126,15 +126,36 @@ export class WriteCinematic{
   this.audio.play('explosion');
   this.bursts.play(pose.position,'write-'+this.journey.start);
   if(!this.pending){if(!this.legacy)this.send('write-finish').catch(error=>this.ui.toast(error.message));this.finish();return;}
-  const payload={...this.pending,position:pose.position};
-  this.pending=null;this.reveal={started:performance.now(),position:[...pose.position],plantId:null};
+  const payload={...this.pending,position:[...pose.position],requestId:crypto.randomUUID()};
+  this.pending=null;
+  const reveal=this.reveal={started:performance.now(),position:[...pose.position],plantId:null};
+  this.unsavedMessage=payload;
   this.plantHalo.position.set(pose.position[0],.12,pose.position[2]);
   this.plantHalo.visible=true;
-  this.send('plant',payload,{throwOnError:true}).then(result=>{
-   if(!result?.plant){this.ui.toast('留言尚未成功儲存');return;}
-   this.reveal.plantId=result.plant.id;
-   this.reveal.position=[...result.plant.position];
-  }).catch(error=>this.ui.toast('WRITE 植物儲存失敗：'+error.message));
+  void this.saveLandingPlant(payload,reveal);
+ }
+ async saveLandingPlant(payload,reveal){
+  // Stable requestId prevents duplicate messages when the network disconnects
+  // between server commit and response. A short server/client clock skew is
+  // recoverable rather than permanently losing the finished WRITE message.
+  for(let attempt=0;attempt<9;attempt++){
+   try{
+    const result=await this.send('plant',payload,{throwOnError:true});
+    if(!result?.plant)throw new Error('Server did not confirm message');
+    reveal.plantId=result.plant.id;
+    reveal.position=[...result.plant.position];
+    if(this.unsavedMessage?.requestId===payload.requestId)this.unsavedMessage=null;
+    return result.plant;
+   }catch(error){
+    const retryable=/landing|position|temple server|connection|network|failed|timed out|request failed/i.test(String(error?.message||''));
+    if(!retryable||attempt===8){
+     this.ui.toast('WRITE 尚未儲存：'+(error?.message||'連線失敗'));
+     return null;
+    }
+    await new Promise(resolve=>setTimeout(resolve,300+attempt*180));
+   }
+  }
+
  }
  finish(){
   const c=this.controller();this.active=false;this.legacy=false;this.phase='';this.fallCameraActive=false;
