@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {outsideScopeCircle} from '../src/gun-controller.js';
 
-test('sniper's opaque 35vmin mask is an exit target on portrait phones',()=>{
+test('sniper opaque 35vmin mask is an exit target on portrait phones',()=>{
  // 390×844: 35vmin means 136.5 CSS pixels from the viewport centre.
  assert.equal(outsideScopeCircle(8,422,390,844),true);
  assert.equal(outsideScopeCircle(335,390,390,844),true);
