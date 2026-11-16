@@ -110,7 +110,7 @@ try{
   return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
  });
  assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',shotgun:'rainbow-scatter'});
- assert.equal(vfxState.sky,'Moonlit particle sky');
+ assert.equal(vfxState.sky,'World-oriented distant cloud sky (no moon)');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});
  // CSS must keep field labels left and numeric controls right, even on a narrow
