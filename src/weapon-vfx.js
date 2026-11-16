@@ -65,6 +65,9 @@ export class WeaponVFX{
   if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
   const muzzle=weaponMuzzle(root,item);if(muzzle){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
   this.particleSkills.play(data,item,origin,end);
+  // Calico uses only its three-dimensional rainbow shot cloud. Do not layer
+  // the former plasma bolt or electrical burst on top of the shotgun pellets.
+  if(item.id==='calico-cat')return;
   if(data.ultimate&&item.family==='saber')this.saberImpact.play(data,origin,direction);
   if(item.id==='black-cat'){if(this.snipers.length>=4){const old=this.snipers.shift();old.root.removeFromParent();old.root.material.dispose();}const f=createOddEffect(THREE,{...data,origin:origin.toArray(),direction:direction.toArray(),range:origin.distanceTo(end)},{...item,pattern:'sniper'});f.root.position.addScaledVector(direction,-1.8);this.scene.add(f.root);this.snipers.push(f);return;}
   const entry=this.acquire(id,{color:item.color,size:data.ultimate?Math.min(3.6,Math.max(1.2,(impactArea?.radius||5)/3.5)):.6,speed:data.ultimate?1:1.8}),fx=entry.fx;
