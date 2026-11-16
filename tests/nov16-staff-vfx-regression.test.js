@@ -33,7 +33,9 @@ test('full-charge fire and water staff streams point straight along server aim; 
   const numbered=vfx.numberedEffects.active.at(-1);
   const stream=numbered||vfx.particleSkills.active[0];
   assert.ok(stream,id);
-  const forward=new THREE.Vector3(0,0,1).applyQuaternion((numbered?numbered.group:stream.root).quaternion);
+  // The licensed Ice Lance #70 is authored with local +X; others use local +Z.
+  const authoredForward=new THREE.Vector3(id==='frost-1'?1:0,0,id==='frost-1'?0:1);
+  const forward=authoredForward.applyQuaternion((numbered?numbered.group:stream.root).quaternion);
   assert.ok(forward.distanceTo(new THREE.Vector3(0,0,1))<.001,'the '+id+' stream must move forward');
   assert.deepEqual((numbered?numbered.group:stream.root).position.toArray(),[4,1,7],id);
   if(!numbered)assert.equal(stream.root.scale.x,1,id);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {attackStats} from './shared/catalog.js';
 import {chargedArea,spellGroundHeight} from './shared/charge-area.js';
+import {weaponQuality,isChannelStaff} from './shared/weapon-abilities.js';
 
 export const runeColorFor=item=>({
  fire:'#ff712b',ice:'#98eaff',water:'#48d6ff',wave:'#5aeece',
@@ -54,17 +55,22 @@ export class ChargeTargetPreview{
   });
   this.t=0;
  }
- update(root,item,charge,direction,arena){
+ update(root,item,charge,direction,arena,fusion=null){
   if(!root||!item||charge<.1||!Array.isArray(direction)){this.hide();return;}
-  const stats=attackStats(item,1),origin=[root.position.x,root.position.y+1,root.position.z];
+  // Reproduce equippedItem() before estimating the server impact area:
+  // fusion original.stats may override the catalogue range/radius directly.
+  const equipped=fusion?.original?.stats?{...item,...fusion.original.stats}:item;
+  const stats=attackStats(equipped,1),quality=weaponQuality(equipped,fusion);
+  // Authoritative channel attacks extend minimum casting reach before quality.
+  if(isChannelStaff(equipped))stats.range=Math.max(stats.range,equipped.id==='clam'?10:Math.min(18,equipped.range));
+  stats.range=+(stats.range*quality.range).toFixed(2);
+  stats.radius=+(stats.radius*quality.radius).toFixed(2);
+  const origin=[root.position.x,root.position.y+1,root.position.z];
+  // Use the identical ground and numeric range/radius as the authoritative
+  // chargedArea() calculation in temple-rules.js.
   const area=chargedArea(item,origin,direction,stats,(x,z,y)=>spellGroundHeight(arena.world,x,z,y));
-  const dir=new THREE.Vector3(direction[0],0,direction[2]);
-  if(dir.lengthSq()<.001)dir.set(0,0,1);dir.normalize();
-  const travel=area.mode==='area'?area.travel:stats.range;
-  const x=area.mode==='area'?area.center[0]:origin[0]+dir.x*travel;
-  const z=area.mode==='area'?area.center[2]:origin[2]+dir.z*travel;
-  const y=Math.max(.14,spellGroundHeight(arena.world,x,z,origin[1])+.16);
-  const radius=area.mode==='area'?Math.max(1.7,area.radius):Math.max(1.7,Math.min(7,stats.radius+1));
+  const [x,y,z]=area.visualCenter;
+  const radius=Math.max(1.7,area.radius);
   const tint=new THREE.Color('#24aaff');
   const parts=[this.outer,this.inner,this.middle,this.symbols];
   for(const p of parts)p.material.color.copy(tint);
@@ -77,18 +83,9 @@ export class ChargeTargetPreview{
   this.inner.material.opacity=.84+.14*charge;
   this.middle.material.opacity=.78+.16*charge;
   this.symbols.material.opacity=.85+.14*charge;
-  // Non-area attacks show forward reach with smaller symbols at intervals.
-  // There are no rectangle corners/edges or screen-space geometry.
-  for(let i=0;i<this.guides.length;i++){
-   const g=this.guides[i],f=(i+1)/(this.guides.length+1);
-   g.visible=area.mode!=='area';
-   if(!g.visible)continue;
-   const gx=origin[0]+dir.x*travel*f,gz=origin[2]+dir.z*travel*f;
-   const gy=Math.max(.14,spellGroundHeight(arena.world,gx,gz,origin[1])+.17);
-   g.position.set(gx,gy,gz);g.scale.setScalar(.62+Math.min(1.2,stats.radius*.22));
-   g.rotation.y=this.t*.2+i*.37;
-   for(const child of g.children){child.material.color.copy(tint);child.material.opacity=.68+.3*charge;}
-  }
+  // Exactly one target circle: secondary circles previously predicted
+  // different positions from the actual attack and were misleading.
+  for(const guide of this.guides)guide.visible=false;
  }
  hide(){this.group.visible=false;for(const g of this.guides)g.visible=false;}
  dispose(){

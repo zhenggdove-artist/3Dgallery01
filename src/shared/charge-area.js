@@ -19,7 +19,12 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0){
  const travel=clamp(Number.isFinite(intercept)?intercept:defaultDistance,mode==='melee'?1:3,range);
  const x=origin[0]+dir[0]*travel,z=origin[2]+dir[2]*travel;
  const floor=Math.max(0,ground(x,z,origin[1]));
- return {mode,center:[x,mode==='area'||mode==='melee'?floor+.12:Math.max(floor+.12,origin[1]+dir[1]*travel),z],radius,travel,range};
+ return {mode,
+  // visualCenter is the ONE canonical ground-plane target for both the
+  // blue warning circle and the actual charged VFX; it never changes damage.
+  visualCenter:[x,floor+.16,z],
+  center:[x,mode==='area'||mode==='melee'?floor+.12:Math.max(floor+.12,origin[1]+dir[1]*travel),z],
+  radius,travel,range};
 }
 export function insideChargedArea(area,target,actorRadius=1){
  if(!area||area.mode!=='area')return false;

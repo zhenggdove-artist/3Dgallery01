@@ -23,7 +23,7 @@ test('charged marker uses coloured magic rune circles, not rectangle guides',()=
  assert.ok(preview.outer.geometry.parameters.outerRadius-preview.outer.geometry.parameters.innerRadius>=.07);
  assert.equal(preview.glows.length,2);
  preview.update(parent,{family:'saber',range:5,radius:1,damage:5,chargeDamage:10,chargeRange:12,cooldown:300},.7,[0,0,1],arena);
- assert.ok(preview.guides.some(g=>g.visible),'forward sword spells use a runic path');
+ assert.equal(preview.guides.some(g=>g.visible),false,'only the canonical impact circle is shown; extra guide rings would mark false hit locations');
  assert.equal(preview.outer.geometry.type,'RingGeometry');
  assert.equal(preview.outer.material.color.getHexString(),'24aaff');
  preview.dispose();assert.equal(scene.children.length,0);

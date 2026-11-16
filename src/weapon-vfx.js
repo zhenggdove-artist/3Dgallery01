@@ -5,7 +5,7 @@ import {ElementalCharge} from './elemental-charge.js';
 import {SaberImpact} from './saber-impact.js';
 import {WeaponParticleEffects} from './weapon-particle-effects.js';
 import {WeaponSignatureEffects} from './weapon-signature-effects.js';
-import {NumberedWeaponEffects,requestedEffect} from './numbered-weapon-effects.js';
+import {NumberedWeaponEffects} from './numbered-weapon-effects.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
@@ -126,14 +126,10 @@ export class WeaponVFX{
   const impactArea=data.area||(data.ultimate?chargedArea(item,data.origin,data.direction,data):null);
   const groundEffect=!!data.ultimate&&impactArea?.mode==='area';
   const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
-  if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
-  // Special combos and user-assigned numbered effects supersede generic
-  // monochrome particles. Original source files exist for #08 / #33; the
-  // remaining bespoke variants are visually distinct local reconstructions.
-  if(this.numberedEffects.play(data,item,root)){
-   if(requestedEffect(item,data)?.number===38)this.saberImpact.play(data,origin,direction);
-   return;
-  }
+  if(data.ultimate&&Array.isArray(impactArea?.visualCenter))end.copy(new THREE.Vector3(...impactArea.visualCenter));
+  // Every numbered attack uses the exact original 00GameDevs source.
+  // Do not stack a custom SaberImpact or another imitation on top.
+  if(this.numberedEffects.play(data,item,root))return;
   // Never re-aim or translate a server-approved trajectory to a cosmetic muzzle;
   // rendered bullets must occupy the same world-space volume as damage rays.
   if(isChannelStaff(item)&&item.id!=='clam'&&!data.ultimate&&!data.channel){

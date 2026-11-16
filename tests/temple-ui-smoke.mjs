@@ -7,7 +7,7 @@ await mkdir(output,{recursive:true});
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--disable-dev-shm-usage','--enable-webgl']});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:800}});page.setDefaultTimeout(45000);
- const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&/Shader Error|WebGLProgram|shader compilation|ERROR: 0:/i.test(m.text()))errors.push(m.text());});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('requestfailed',req=>errors.push('REQUEST '+req.url()+' '+req.failure()?.errorText));page.on('console',m=>{if(m.type()==='error'&&/Shader Error|WebGLProgram|shader compilation|ERROR: 0:/i.test(m.text()))errors.push(m.text());});
  await page.addInitScript(()=>localStorage.setItem('temple-backend-url','http://127.0.0.1:8787'));
  await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});
  try{await page.waitForFunction(()=>document.body.classList.contains('ready'),null,{timeout:65000});}
@@ -18,7 +18,10 @@ try{
    entryError:document.querySelector('#entry-error')?.textContent,
    status:document.querySelector('#loading-status')?.textContent,
    templeTest:!!window.templeTest,
-   readyState:document.readyState
+   readyState:document.readyState,
+   loadTimings:window.templeLoadTimings,
+   resources:performance.getEntriesByType('resource').slice(-16).map(r=>({name:r.name.split('/').slice(-3).join('/'),ms:Math.round(r.duration),size:r.transferSize})),
+   pendingAssets:document.querySelectorAll('script[type="module"]').length
   }));
   throw new Error('Temple never loaded: '+JSON.stringify(debug)+'; PAGEERRORS='+errors.join('; ').slice(0,2400),{cause:error});
  }
@@ -122,10 +125,46 @@ try{
   const giraffe=items.find(w=>w.id==='giraffe');v.play({origin:[-20,1,-20],direction:[0,0,-1],range:28,charge:1,ultimate:true},giraffe,null);recipes.giraffe=v.signatureEffects.active.at(-1)?.obj?.name;
   return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
  });
- assert.deepEqual(vfxState.recipes,{swatter:'User numbered VFX #53 · custom fallback',pan:'User numbered VFX #68 · custom fallback',saber:'User numbered VFX #38 · custom fallback',petal:'One enormous forward rotating translucent particle blossom',planter:'Three stacked solid thorn-vine tiers',shotgun:'Ten independent irregular multicolour volumetric shotgun spheres',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
+ assert.deepEqual(vfxState.recipes,{swatter:'00GameDevs original VFX #53 darkchain-detonation',pan:'00GameDevs original VFX #68 rolling-fireburst',saber:'00GameDevs original VFX #38 magma-fissure',petal:'One enormous forward rotating translucent particle blossom',planter:'Three stacked solid thorn-vine tiers',shotgun:'Ten independent irregular multicolour volumetric shotgun spheres',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
  assert.equal(vfxState.sky,'World-oriented distant cloud sky (no moon)');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});
+ // Exercise every exact source inside a real WebGL renderer (not merely in
+ // Node). The magic-circle center and native group origin are inspected from
+ // the same server-authoritative event data; shader errors are collected above.
+ const numberedInspection=await page.evaluate(async()=>{
+  const t=templeTest,v=t.arena.presentation.vfx,check=[
+   ['clam',33,'channel'],['saber-1',38,'ultimate'],['bloom-1',43,'channel'],
+   ['swatter-1',53,'ultimate'],['ember-1',73,'channel'],['pan-1',68,'ultimate'],
+   ['frost-1',70,'channel'],['storm-1',8,'channel'],['nova-1',20,'channel'],
+   ['saber-4',47,'combo'],['jellybrella',26,'ultimate'],['whip-1',48,'ultimate']
+  ],records=[];
+  for(const [id,num,kind] of check){
+   v.numberedEffects.dispose();
+   const item=t.items.find(x=>x.id===id);
+   const event={origin:[-22,1,-22],direction:[0,0,1],range:17,qualityScale:1,
+    qualityTier:kind==='combo'?4:1,combo:kind==='combo'?5:0,
+    channel:kind==='channel',ultimate:kind!=='combo',
+    area:{mode:'area',center:[-22,.12,-8],visualCenter:[-22,.16,-8],radius:4,travel:14}};
+   v.play(event,item,null);
+   const fx=v.numberedEffects.active[0];
+   records.push({id,num,source:fx?.group?.userData?.vfxSource,
+    actual:fx?.spec?.number,group:fx?.group?.name,
+    aligned:kind!=='ultimate'||Math.hypot(
+     fx.group.position.x+22,fx.group.position.y-.16,fx.group.position.z+8)<.0001});
+   // Allow at least one real frame with each source material. #70 / #73
+   // also exercise their mandatory authored render pipeline through VHS.
+   await new Promise(resolve=>setTimeout(resolve,220));
+  }
+  v.numberedEffects.dispose();
+  return records;
+ });
+ assert.equal(numberedInspection.length,12);
+ for(const result of numberedInspection){
+  assert.equal(result.actual,result.num,JSON.stringify(result));
+  assert.equal(result.source,'00GameDevs',JSON.stringify(result));
+  assert.equal(result.aligned,true,JSON.stringify(result));
+ }
  // CSS must keep field labels left and numeric controls right, even on a narrow
  // mobile portrait screen; no hidden second row or horizontal overflow.
  await page.setViewportSize({width:360,height:740});
