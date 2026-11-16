@@ -1,0 +1,13 @@
+{
+  "number": 1,
+  "title": "熾焰火球 / Blazing Fireball",
+  "slug": "fireball",
+  "source_page": "https://00gamedevs.com/zh-TW/effects/fireball/",
+  "source_js": "https://00gamedevs.com/downloads/effects/fireball.js",
+  "source_git_blob_sha1": "25bb6590db9e9c6235659e619ed6afaaafed851e",
+  "license": "MIT",
+  "vendor": "00GameDevs",
+  "code": "vendor/00gamedevs/source/fireball.js",
+  "status_usage": "Repeated miniature tail-up burn effects on impacted target models",
+  "modified_original": false
+}

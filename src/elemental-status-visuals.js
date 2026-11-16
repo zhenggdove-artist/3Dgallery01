@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import createFireball from '../vendor/00gamedevs/source/fireball.js';
 
 // Every visible color treatment is attached to the TARGET'S model materials,
 // never a full-scene screen tint. Times and immunity are server-authoritative.
@@ -10,59 +11,66 @@ export const ELEMENTAL_FILTERS=Object.freeze({
 });
 const FILTER_ALPHA=.30;
 
-function luminousFlames(){
- const count=44,geometry=new THREE.BufferGeometry(),
-  positions=new Float32Array(count*3),phase=new Float32Array(count);
- for(let i=0;i<count;i++){
-  const a=i*2.39996323,r=.27+.38*((i*7%19)/19);
-  positions[i*3]=Math.cos(a)*r;
-  positions[i*3+1]=.38+((i*11%29)/29)*1.18;
-  positions[i*3+2]=Math.sin(a)*r;
-  phase[i]=((i*17%47)/47);
- }
- geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
- geometry.setAttribute('aPhase',new THREE.BufferAttribute(phase,1));
- const material=new THREE.ShaderMaterial({
-  uniforms:{uTime:{value:0}},
-  transparent:true,depthTest:true,depthWrite:false,
-  blending:THREE.AdditiveBlending,toneMapped:false,
-  vertexShader:`
-   attribute float aPhase;
-   uniform float uTime;
-   varying float vProgress;
-   varying float vSeed;
-   void main(){
-    float progress=fract(aPhase+uTime*0.74);
-    vProgress=progress;vSeed=aPhase;
-    vec3 p=position;
-    p.y+=progress*1.03;
-    p.x+=sin(uTime*5.1+aPhase*23.0+progress*7.0)*progress*.16;
-    p.z+=cos(uTime*4.0+aPhase*17.0+progress*8.0)*progress*.10;
-    vec4 eye=modelViewMatrix*vec4(p,1.0);
-    gl_Position=projectionMatrix*eye;
-    gl_PointSize=clamp(22.0/(-eye.z)*5.0,3.0,22.0)*(1.0-progress*.42);
-   }`,
-  fragmentShader:`
-   varying float vProgress;
-   varying float vSeed;
-   void main(){
-    vec2 uv=gl_PointCoord;
-    float x=abs(uv.x-.5)*2.0;
-    // Flame tail becomes narrower towards its upper end.
-    float y=uv.y;
-    float taper=mix(.64,.12,y);
-    float shape=1.0-smoothstep(taper*.35,taper,x);
-    float vertical=smoothstep(0.0,.14,y)*(1.0-smoothstep(.78,1.0,y));
-    float alpha=shape*vertical*(1.0-vProgress)*.73;
-    if(alpha<.012)discard;
-    vec3 warm=mix(vec3(1.0,.29,.04),vec3(1.0,.83,.22),clamp(1.0-y*.9,0.0,1.0));
-    gl_FragColor=vec4(warm,alpha);
-   }`
+// Source: exact, unmodified 00GameDevs #01 "Blazing Fireball" JavaScript.
+const tailUp=new THREE.Quaternion().setFromUnitVectors(
+ new THREE.Vector3(1,0,0),new THREE.Vector3(0,-1,0));
+const MAX_FIREBALLS_PER_TARGET=3;
+const BURN_SPAWN_INTERVAL=.46;
+
+function luminousFlames(root){
+ const group=new THREE.Group();
+ group.name='00GameDevs original VFX #01 Fireball — target burn';
+ group.userData.vfxSource='00GameDevs';
+ group.userData.vfxNumber=1;
+ group.userData.vfxId='fireball';
+ root.add(group);
+ // All emitters use the original factory; no custom particle recreation.
+ return {group,pulses:[],elapsed:0,nextSpawn:0,serial:0};
+}
+function addFireball(root,flames){
+ const n=flames.serial++;
+ const fx=createFireball({
+  size:.25,speed:1.15,density:.125,detail:.65,color:'#ff823e'
  });
- const points=new THREE.Points(geometry,material);
- points.name='Target burn: rising fading small flames (asset #01 unavailable)';
- points.frustumCulled=false;
- return points;
+ fx.group.name='Official 00GameDevs #01 small flame '+n;
+ fx.group.userData.vfxSource='00GameDevs';
+ fx.group.userData.vfxNumber=1;
+ fx.group.userData.vfxId='fireball';
+ // The fireball's local +X is its nose: rotate it to -Y so its thin
+ // trailing flame (local -X) always points upwards, exactly as requested.
+ fx.group.quaternion.copy(tailUp);
+ const radius=.25+Math.min(.35,(n%5)*.06),a=n*2.3999632297;
+ const height=Math.max(1.4,Math.min(6,root.userData?.burnBodyHeight||2));
+ const y=.36+height*(.18+.46*((n*7%11)/11));
+ fx.group.position.set(Math.cos(a)*radius,y,Math.sin(a)*radius);
+ const startY=y;
+ // Fireball has a 0.35s charge-up, but contact burns should be visible
+ // immediately. Advance its ORIGINAL animation to the first active frame.
+ fx.update(.36);
+ flames.group.add(fx.group);
+ flames.pulses.push({fx,age:0,stopped:false,startY});
+}
+function advanceFlames(root,flames,dt){
+ flames.elapsed+=dt;flames.nextSpawn-=dt;
+ for(let i=flames.pulses.length-1;i>=0;i--){
+  const pulse=flames.pulses[i];pulse.age+=dt;
+  if(pulse.age>=.34&&!pulse.stopped){pulse.fx.stop();pulse.stopped=true;}
+  pulse.fx.group.position.y=pulse.startY+pulse.age*.48;
+  pulse.fx.update(dt);
+  if(pulse.fx.finished||pulse.age>1.25){
+   pulse.fx.dispose();flames.pulses.splice(i,1);
+  }
+ }
+ if(flames.nextSpawn<=0&&flames.pulses.length<MAX_FIREBALLS_PER_TARGET){
+  addFireball(root,flames);
+  flames.nextSpawn=BURN_SPAWN_INTERVAL;
+ }
+}
+function disposeFlames(flames){
+ if(!flames)return;
+ for(const pulse of flames.pulses)pulse.fx.dispose();
+ flames.pulses.length=0;
+ flames.group.removeFromParent();
 }
 
 function tintMaterial(source,uniforms){
@@ -130,14 +138,13 @@ export class ElementalStatusVisuals{
    if(!entry.materials.length)this.applyTint(root,entry);
   }else{entry.uniforms.alpha.value=0;}
   entry.active=active||null;entry.filterUntil=active?effects[active].until:0;
-  if(burn&&!entry.flames){entry.flames=luminousFlames();root.add(entry.flames);}
+  if(burn&&!entry.flames){entry.flames=luminousFlames(root);addFireball(root,entry.flames);}
   if(!burn&&entry.flames)this.stopFlames(entry);
   entry.burnUntil=burn?effects.burn.until:0;
  }
  stopFlames(entry){
   if(!entry.flames)return;
-  entry.flames.removeFromParent();
-  entry.flames.geometry.dispose();entry.flames.material.dispose();
+  disposeFlames(entry.flames);
   entry.flames=null;
  }
  update(dt,now=Date.now()){
@@ -145,7 +152,7 @@ export class ElementalStatusVisuals{
    if(!root.parent||now>=entry.until){this.clear(root);continue;}
    if(entry.flames){
     if(now>=entry.burnUntil)this.stopFlames(entry);
-    else entry.flames.material.uniforms.uTime.value+=dt;
+    else advanceFlames(root,entry.flames,dt);
    }
    if(entry.active&&now>=entry.filterUntil)entry.uniforms.alpha.value=0;
   }
