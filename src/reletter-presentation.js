@@ -44,6 +44,10 @@ export class ReletterPresentation{
   beforeAnimation(){for(let i=this.restore.length-1;i>=0;i--){const [object,property,value]=this.restore[i];object[property].copy(value);}this.restore.length=0;}
   play(event,root){if(!event||this.seen.has(event.id))return;this.seen.add(event.id);if(this.seen.size>100)this.seen.delete(this.seen.values().next().value);const item=itemById(event.weapon);if(!item)return;const data={...item,...event,charge:event.charge||0};if(root&&meleeFamilies.includes(item.family))root.userData.attack={age:0,duration:meleeDuration(item.family,event.combo||0),combo:event.combo||0,data};
     this.vfx.play(data,item,root);
+    // Each bonus uses its real source weapon's ultimate and matched server collider.
+    for(const echo of (event.fusionEchoes||[]).slice(0,2)){
+      const source=itemById(echo.weapon);if(source)this.vfx.play({...source,...echo},source,root);
+    }
   }
   signature(data){const item=itemById(data.weapon);if(item)this.vfx.play(data,item,null);}
   charging(root,progress){this.vfx.charging(root,progress,itemById(root?.userData.weaponId));}

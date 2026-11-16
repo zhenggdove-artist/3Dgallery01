@@ -45,7 +45,9 @@ export class WeaponVFX{
   for(const id of Object.keys(factories)){const fx=this.create(id);fx.update(.18);warmScene.add(fx.group);fxs.push([id,fx]);}
   const sniper=createOddEffect(THREE,{charge:1,range:50,origin:[0,0,0],direction:[0,0,-1]},{pattern:'sniper',color:'#ffffff'});warmScene.add(sniper.root);await renderer.compileAsync(warmScene,camera);sniper.root.removeFromParent();sniper.root.material.dispose();
   for(const [id,fx]of fxs){fx.group.removeFromParent();fx.reset();fx.group.visible=false;this.pools.set(id,[fx]);}
-  return {source:'00GameDevs',effects:fxs.length};
+  let numbered=0;
+  try{numbered=await this.numberedEffects.warm(renderer,camera);}catch(error){console.warn('Ultimate shader prewarm incomplete',error);}
+  return {source:'00GameDevs',effects:fxs.length,numbered};
  }
  acquire(id,options={}){
   if(this.active.length>=24)this.release(this.active[0]);
@@ -218,7 +220,7 @@ export class WeaponVFX{
    if(!trail){trail=this.acquire('weapon-smear',{color:item.color,size:.8});trail.fx.attachWeapon(root.userData.blade,{base:[0,0,0],tip:[0,1.1,0]});trail.weapon=root.userData.blade;}
    trail.stopAt=trail.age+(root.userData.attack?.duration||.5);
   }
-  for(const effect of (data.fusionEffects||[]).slice(0,2)){const family=typeof effect==='string'?effect:effect.family||effect.type,id2=WEAPON_VFX[family]?.[1]||'energy-burst',echo=this.acquire(id2,{size:.35,color:item.color});echo.fx.group.position.copy(end);echo.fx.group.position.y=Math.max(.16,end.y);echo.stopAt=.35;}
+  // Fusion echoes are complete server-authored source weapon events, not placeholder flashes.
   if(data.impactPoint&&!projectiles.has(id)){const impact=this.acquire(item.family==='ice'?'ice-shatter':'energy-burst',{size:.3,color:item.color,speed:2});impact.fx.group.position.copy(end);}
  }
  charging(root,progress,item){
