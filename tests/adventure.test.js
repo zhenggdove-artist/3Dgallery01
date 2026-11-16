@@ -5,13 +5,13 @@ import {EQUIPMENT} from '../src/reletter/equipment-catalog.js';
 import {ITEMS,EQUIPPABLE_SLOTS} from '../src/shared/catalog.js';
 import {SEEDS} from '../src/reletter/garden-catalog.js';
 const setup=()=>{const world=createInitialWorld(1000),actor={key:'tester',name:'Test',role:'fighter',position:[-5,0,-12]},profile=ensureProfile(world,actor.key,actor.name,null,1000);return {world,actor,profile};};
-test('original seed → water → growth → harvest → eat persists',()=>{
- const {world,actor,profile}=setup();profile.inventory.push(SEEDS[0].id);let now=10000;
- const act=(action,body={})=>{const r=applyAction(world,actor,{action,...body},{now,rng:()=>.5});assert.ok(!r.error,r.error);return r;};
- act('seed-plant',{item:SEEDS[0].id,position:actor.position});const crop=world.reletter.garden.crops[0];
- for(let i=0;i<3;i++){now+=1500;act('crop-water',{id:crop.id});}now+=SEEDS[0].growMs+100;
- act('crop-harvest',{id:crop.id});assert.equal(world.reletter.garden.crops.length,0);const harvest=profile.inventory.find(id=>id.startsWith('harvest-'));assert.ok(harvest);profile.hp=50;act('harvest-eat',{item:harvest});assert.ok(profile.hp>50);assert.ok(Object.keys(world.reletter.garden.buffs[actor.key]).length);
- assert.ok(worldView(JSON.parse(JSON.stringify(world)),actor.key,now).reletter.garden);
+test('Garden seeds, watering, harvesting and crops are retired from Temple',()=>{
+ const {world,actor,profile}=setup();profile.inventory.push(SEEDS[0].id);
+ for(const action of ['seed-plant','crop-water','crop-harvest','harvest-eat']){
+  assert.equal(applyAction(world,actor,{action,item:SEEDS[0].id,position:actor.position},{now:10000}).error,'Unknown action',action);
+ }
+ assert.ok(!ITEMS.some(item=>['seed','harvest'].includes(item.slot)));
+ assert.equal(worldView(JSON.parse(JSON.stringify(world)),actor.key,10000).reletter.garden,undefined);
 });
 test('FISH gameplay and fishing inventory no longer exist',()=>{
  const {world,actor}=setup();

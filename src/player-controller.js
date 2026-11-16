@@ -21,7 +21,7 @@ export class PlayerController{
   setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();}}
   setRole(role){this.role=role;this.root.visible=role==='fighter';}
   setFollowTarget(root=null){this.followTarget=root;}
-  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);}
+  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.knockback=null;}
   stepHorizontal(dx,dz){
     const p=this.root.position,nx=p.x+dx,nz=p.z+dz;
     // A tall adjacent exhibit deck is not an invisible wall around the

@@ -4,6 +4,7 @@ import {resetPlayerArtworks} from '../src/shared/art-bomb.js';
 import {DurableObject} from 'cloudflare:workers';
 import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,releasePlayerWorldState,tickWorld,validateState,validColor,validName,worldView} from '../src/shared/temple-rules.js';
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
+import {playerStats} from '../src/shared/player-stats.js';
 
 const ROOM_ID='temple-main-v1',SESSION_MS=24*60*60*1000,SAVE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -106,7 +107,7 @@ export class TempleRoom extends DurableObject{
   async webSocketMessage(ws,message){
     const meta=ws.deserializeAttachment();if(!meta||this.closed.has(ws))return;const session=this.session(meta.sessionId);if(!session){this.closed.add(ws);ws.close(4001,'Session expired');return;}
     let event;try{event=JSON.parse(String(message));}catch{return;}if(event.type!=='state')return;
-    const now=Date.now();if(now-meta.lastStateAt<70)return;const previous=session.state?JSON.parse(session.state):null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],this.world().profiles[session.profile_key]?.writeJourney,now);if(result.error){ws.send(JSON.stringify({type:'state-rejected',data:{error:result.error}}));return;}
+    const now=Date.now();if(now-meta.lastStateAt<70)return;const previous=session.state?JSON.parse(session.state):null,world=this.world(),profile=world.profiles[session.profile_key],mobility=profile?{stats:playerStats(world,profile,now),hitReaction:profile.hitReaction,impulse:profile.impulse,lastRespawnAt:profile.lastRespawnAt,lastWriteLanding:profile.lastWriteLanding,lastWriteLandingAt:profile.lastWriteLandingAt}:null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],profile?.writeJourney,now,mobility);if(result.error){ws.send(JSON.stringify({type:'state-rejected',data:{error:result.error,state:result.state||previous||null}}));return;}
     meta.lastStateAt=now;ws.serializeAttachment(meta);this.sql.exec('UPDATE sessions SET state=?,expires=? WHERE id=?',JSON.stringify(result.state),now+SESSION_MS,session.id);
     this.broadcast('state',{id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,state:result.state},ws);await this.tick(true);
   }

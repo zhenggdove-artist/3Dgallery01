@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import {createHeart} from './heart-model.js';
 import {originalWorldVisuals} from './reletter/world-visuals.js';
-import {cropStage} from './reletter/garden-catalog.js';
 import {disposeGardenModel} from './reletter/garden-art.js';
 import {makePlant} from './reletter/plants.js';
 import {itemById} from './shared/catalog.js';
@@ -25,15 +24,13 @@ function createVisibleDrop(item,original){
 }
 
 export class AdventureView{
- constructor(scene){this.scene=scene;this.original=originalWorldVisuals(scene);this.crops=new Map();this.loot=new Map();this.plants=new Map();this.world=null;this.nextSync=0;}
+ constructor(scene){this.scene=scene;this.original=originalWorldVisuals(scene);this.loot=new Map();this.plants=new Map();this.world=null;this.nextSync=0;}
  beforeAnimation(){this.original.beforeAnimation();}
  sync(world){this.world=world;}
  reconcile(cache,records,create,remove=disposeGardenModel){const live=new Set();for(const record of records){live.add(record.id);if(!cache.has(record.id))cache.set(record.id,create(record));}for(const [id,o] of cache)if(!live.has(id)){remove(o);cache.delete(id);}}
  update(dt,time,roots,camera){
   if(!this.world)return;this.original.sync({holes:[],ponds:[],sessions:{}},roots);this.original.update(dt,time);
   if(time>=this.nextSync){this.nextSync=time+.5;
-   const crops=(this.world.reletter?.garden?.crops||[]).slice(0,40);for(const c of crops){const stage=cropStage(c);if(this.crops.get(c.id)?.userData.stage!==stage){disposeGardenModel(this.crops.get(c.id));this.crops.delete(c.id);}}
-   this.reconcile(this.crops,crops,c=>{const o=this.original.makeCropModel(c.species,cropStage(c));o.position.fromArray(c.position);o.userData.stage=cropStage(c);this.scene.add(o);return o;});
    this.reconcile(this.loot,this.world.groundDrops.filter(d=>d.kind==='heart'||d.kind!=='coin'&&itemById(d.itemId)),d=>{const o=d.kind==='heart'?createHeart():createVisibleDrop(itemById(d.itemId),this.original);o.userData.drop=d;this.scene.add(o);return o;});
    // Detailed original plants are distance bounded. All entries remain persistent/readable.
    const near=[...this.world.plants].sort((a,b)=>camera.position.distanceToSquared(new THREE.Vector3(...a.position))-camera.position.distanceToSquared(new THREE.Vector3(...b.position))).slice(0,24);
@@ -43,7 +40,6 @@ export class AdventureView{
     o.children[0]?.geometry?.setDrawRange(0,0);
     o.userData.phase=Math.random()*Math.PI*2;this.scene.add(o);return o;});
   }
-  for(const o of this.crops.values())o.visible=o.position.distanceToSquared(camera.position)<6400;
   for(const o of this.loot.values()){const d=o.userData.drop;o.position.fromArray(d.position);o.position.y+=(o.userData.weaponDrop?.95:1.2)+Math.sin(time*2)*.15;if(o.userData.weaponDrop){o.rotation.y=time*.7;o.rotation.z=Math.sin(time*1.4)*.18;}}
   // Original RELETTER indexed growth and organic wriggle, not whole-plant scaling.
   for(const o of this.plants.values()){const m=o.children[0],t=Math.max(0,Math.min(1,(performance.now()-o.userData.growStart)/o.userData.growDur)),ease=t*t*(3-2*t),ph=o.userData.phase;
