@@ -1,4 +1,16 @@
 export const SNIPER_RANGE=256; // Entire 184m-diameter arena from either edge, with margin.
+// The sniper head check is performed on the SERVER against the actual shot ray.
+// The fighter's combat capsule is 2.35m tall; the head is a small sphere near its top.
+export function sniperHitsHead(origin,direction,range,position){
+ if(![origin,direction,position].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite)))return false;
+ if(!Number.isFinite(range)||range<=0)return false;
+ const head=[position[0],position[1]+2.02,position[2]];
+ const delta=head.map((v,i)=>v-origin[i]);
+ const along=delta.reduce((n,v,i)=>n+v*direction[i],0);
+ if(along<0||along>range)return false;
+ const gap=Math.hypot(...delta.map((v,i)=>v-along*direction[i]));
+ return gap<=.36;
+}
 // Authoritative PvP balance independent from monster HP scaling (Temple uses
 // 100 HP per fighter; RELETTER's monster-scaled weapon numbers are far higher).
 // A clean 100-HP fighter should survive roughly 8–10 ordinary starter hits.
