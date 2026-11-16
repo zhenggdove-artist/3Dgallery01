@@ -92,14 +92,15 @@ export class WeaponSignatureEffects {
   group.name='Translucent spectral goldfish swimming forward';
   group.add(fish);
   // A glasslike moving fish image rather than a solid stack of toy primitives.
-  const bodyGeo=new THREE.SphereGeometry(1,48,32);
-  const glow=(color,opacity)=>new THREE.MeshPhysicalMaterial({
-   color,emissive:color,emissiveIntensity:.17,metalness:.08,roughness:.3,
-   clearcoat:1,clearcoatRoughness:.18,transparent:true,opacity,
-   depthWrite:false,side:THREE.DoubleSide,transmission:.10,thickness:.12
+  const bodyGeo=new THREE.SphereGeometry(1,20,12);
+  // Avoid expensive per-pixel physical refraction and four deep-cloned fish.
+  // One low-poly shared geometry with low-cost translucent emissive shading.
+  const glow=(color,opacity)=>new THREE.MeshLambertMaterial({
+   color,emissive:color,emissiveIntensity:.31,transparent:true,opacity,
+   depthWrite:false,side:THREE.DoubleSide
   });
-  const amber=glow('#ff9f4e',.37),pearl=glow('#ffe8af',.29),
-   finMat=glow('#ffb467',.24),rim=glow('#fff2d9',.55),eye=glow('#162b40',.8);
+  const amber=glow('#ec2439',.76),pearl=glow('#ff707a',.55),
+   finMat=glow('#f52b4e',.60),rim=glow('#ffb2a7',.78),eye=glow('#241020',.95);
   const add=(parent,geo,mat,pos,scale)=>{
    const mesh=new THREE.Mesh(geo,mat);mesh.position.set(...pos);mesh.scale.set(...scale);
    parent.add(mesh);return mesh;
@@ -118,7 +119,7 @@ export class WeaponSignatureEffects {
      new THREE.Vector3(side*(.56+i*.06),.33,1.04-i*.12),
      new THREE.Vector3(side*(.73+i*.04),0,.94-i*.12),
      new THREE.Vector3(side*(.56+i*.06),-.27,.99-i*.12)]);
-    fish.add(new THREE.Mesh(new THREE.TubeGeometry(curve,18,.009,5,false),rim));
+    fish.add(new THREE.Mesh(new THREE.TubeGeometry(curve,8,.009,3,false),rim));
    }
   }
   add(fish,bodyGeo,finMat,[0,.73,-.23],[.20,.62,.44]);
@@ -131,18 +132,13 @@ export class WeaponSignatureEffects {
      new THREE.Vector3(0,0,-.05),
      new THREE.Vector3(side*(.22+i*.065),.05+(i-2)*.16,-.48),
      new THREE.Vector3(side*(.36+i*.075),.05+(i-2)*.28,-.91)]);
-    tail.add(new THREE.Mesh(new THREE.TubeGeometry(line,14,.006,4,false),rim));
+    tail.add(new THREE.Mesh(new THREE.TubeGeometry(line,8,.006,3,false),rim));
    }
   }
-  // Four semi-transparent temporal silhouettes supply a depth-bearing motion blur.
-  const ghosts=[];
-  for(let i=0;i<4;i++){
-   const echo=fish.clone(true);
-   echo.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.material.opacity*=.34/(i+1);o.material.depthWrite=false;}});
-   group.add(echo);ghosts.push(echo);
-  }
+  // The original four cloned fish multiplied meshes, draw calls and material
+  // allocations by five, causing severe mobile stutters. No clones are built.
   const orientation=qdir(direction);
-  fish.scale.setScalar(2.5*quality);
+  fish.scale.setScalar(1.25*quality);
   this.add(group,duration,age=>{
    const progress=Math.min(1,age/duration);
    const travel=(event.range||32)*progress;
@@ -154,14 +150,6 @@ export class WeaponSignatureEffects {
    fish.rotation.y=yaw;
    fish.rotation.z=Math.sin(age*7)*.035;
    tail.rotation.y=Math.sin(age*16)*.44;
-   for(let i=0;i<ghosts.length;i++){
-    const echo=ghosts[i],lag=(i+1)*.41;
-    echo.position.set(0,0,-lag);
-    echo.rotation.y=yaw-Math.sin(age*5-i)*.045;
-    echo.rotation.z=fish.rotation.z;
-    echo.scale.setScalar(2.5*quality*(1-.07*(i+1)));
-    echo.visible=progress>(i+1)*.006;
-   }
    const fade=Math.min(1,age*6,(duration-age)*7);
    group.scale.setScalar(Math.max(0,fade));
   });
