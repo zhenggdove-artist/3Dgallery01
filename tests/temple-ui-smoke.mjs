@@ -66,66 +66,7 @@ try{
  assert.ok(await page.locator('#bag-items [data-bag-item]').count()>0);
  await page.screenshot({path:output+'/weapons.png'});
  await page.locator('#panel-close').click();
- // Desktop sniper regression: two V presses (CAMERA) enter 2x scope, and
- // BOTH an ordinary mouse click and a mask-area click must fire, not exit.
- const setupDesk=await page.evaluate(()=>{
-  const t=templeTest,gun=t.gun;
-  // Exactly like real online game updates, old snapshots can restore "clam".
-  // Force the authoritative local snapshot to carry the actual sniper so
-  // GunController's CLOSED-OVER weapon() callback also sees black-cat.
-  const originalSetWorld=t.ui.setWorld.bind(t.ui);
-  const originalAction=t.network.action.bind(t.network);
-  window.desktopScopeShots=0;
-  window.desktopScopeLog=[];
-  window.desktopForceGun=true;
-  t.ui.setWorld=w=>{
-   if(window.desktopForceGun&&w?.profile?.equipment)w.profile.equipment.weapon='black-cat';
-   return originalSetWorld(w);
-  };
-  t.ui.world.profile.equipment.weapon='black-cat';
-  t.network.action=async function(action,...args){
-   if(action==='attack'){window.desktopScopeShots++;return {};}
-   return originalAction(action,...args);
-  };
-  addEventListener('pointerdown',e=>window.desktopScopeLog.push({
-   target:e.target?.id||e.target?.tagName,
-   type:e.pointerType,x:e.clientX,y:e.clientY,locked:!!document.pointerLockElement
-  }),true);
-  window.restoreDesktopScope=()=>{
-   gun.end();window.desktopForceGun=false;
-   t.ui.setWorld=originalSetWorld;t.network.action=originalAction;
-   t.ui.world.profile.equipment.weapon='clam';
-  };
-  t.controller().setEnabled(true);
-  gun.cycle();gun.cycle();
-  return {mode:gun.mode,scopeVisible:!gun.overlay.hidden,weapon:gun.weapon()?.id};
- });
- assert.equal(setupDesk.mode,2,'desktop sniper CAMERA enters full scope');
- await page.mouse.click(640,400);
- await page.waitForTimeout(200);
- const firstScope=await page.evaluate(()=>({
-  shots:window.desktopScopeShots,mode:templeTest.gun.mode,
-  gunWeapon:templeTest.gun.weapon()?.id,
-  worldWeapon:templeTest.ui.world?.profile?.equipment?.weapon,
-  controllerEnabled:templeTest.controller()?.enabled,
-  holdingArt:templeTest.controller()?.holdingArt,
-  panel:templeTest.ui.panelName,events:window.desktopScopeLog,
-  locked:document.pointerLockElement?.id,
-  canvas:document.elementFromPoint(640,400)?.id||document.elementFromPoint(640,400)?.tagName
- }));
- assert.equal(firstScope.shots,1,'desktop scope must fire: '+JSON.stringify(firstScope));
- assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,
-  'desktop mouse click must fire without quitting sniper view');
- await page.mouse.click(1010,620);
- await page.waitForTimeout(200);
- const secondScope=await page.evaluate(()=>({
-  shots:window.desktopScopeShots,mode:templeTest.gun.mode,
-  events:window.desktopScopeLog,locked:document.pointerLockElement?.id
- }));
- assert.equal(secondScope.shots,2,'desktop mask click must fire: '+JSON.stringify(secondScope));
- assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,
-  'desktop click outside glass circle must not trigger mobile-only scope exit');
- await page.evaluate(()=>window.restoreDesktopScope());
+
  // World pickups must contain the full 3D weapon mesh, never a billboard.
  const weaponMesh=await page.evaluate(()=>{
   const view=templeTest.arena.adventure,previous=view.world;
@@ -298,6 +239,68 @@ try{
  assert.ok(mobileControls.chatInside,JSON.stringify(mobileControls));
  assert.deepEqual(mobileControls.collisions,[],'mobile chat, joystick, A and jump must never overlap');
  await page.screenshot({path:output+'/mobile-responsive.png'});
+ // Isolate desktop sniper tests AFTER WRITE and all other server smoke.
+ await page.setViewportSize({width:1280,height:800});
+ // Desktop sniper regression: two V presses (CAMERA) enter 2x scope, and
+ // BOTH an ordinary mouse click and a mask-area click must fire, not exit.
+ const setupDesk=await page.evaluate(()=>{
+  const t=templeTest,gun=t.gun;
+  // Exactly like real online game updates, old snapshots can restore "clam".
+  // Force the authoritative local snapshot to carry the actual sniper so
+  // GunController's CLOSED-OVER weapon() callback also sees black-cat.
+  const originalSetWorld=t.ui.setWorld.bind(t.ui);
+  const originalAction=t.network.action.bind(t.network);
+  window.desktopScopeShots=0;
+  window.desktopScopeLog=[];
+  window.desktopForceGun=true;
+  t.ui.setWorld=w=>{
+   if(window.desktopForceGun&&w?.profile?.equipment)w.profile.equipment.weapon='black-cat';
+   return originalSetWorld(w);
+  };
+  t.ui.world.profile.equipment.weapon='black-cat';
+  t.network.action=async function(action,...args){
+   if(action==='attack'){window.desktopScopeShots++;return {};}
+   return originalAction(action,...args);
+  };
+  addEventListener('pointerdown',e=>window.desktopScopeLog.push({
+   target:e.target?.id||e.target?.tagName,
+   type:e.pointerType,x:e.clientX,y:e.clientY,locked:!!document.pointerLockElement
+  }),true);
+  window.restoreDesktopScope=()=>{
+   gun.end();window.desktopForceGun=false;
+   t.ui.setWorld=originalSetWorld;t.network.action=originalAction;
+   t.ui.world.profile.equipment.weapon='clam';
+  };
+  t.controller().setEnabled(true);
+  gun.cycle();gun.cycle();
+  return {mode:gun.mode,scopeVisible:!gun.overlay.hidden,weapon:gun.weapon()?.id};
+ });
+ assert.equal(setupDesk.mode,2,'desktop sniper CAMERA enters full scope');
+ await page.mouse.click(640,400);
+ await page.waitForTimeout(200);
+ const firstScope=await page.evaluate(()=>({
+  shots:window.desktopScopeShots,mode:templeTest.gun.mode,
+  gunWeapon:templeTest.gun.weapon()?.id,
+  worldWeapon:templeTest.ui.world?.profile?.equipment?.weapon,
+  controllerEnabled:templeTest.controller()?.enabled,
+  holdingArt:templeTest.controller()?.holdingArt,
+  panel:templeTest.ui.panelName,events:window.desktopScopeLog,
+  locked:document.pointerLockElement?.id,
+  canvas:document.elementFromPoint(640,400)?.id||document.elementFromPoint(640,400)?.tagName
+ }));
+ assert.equal(firstScope.shots,1,'desktop scope must fire: '+JSON.stringify(firstScope));
+ assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,
+  'desktop mouse click must fire without quitting sniper view');
+ await page.mouse.click(1010,620);
+ await page.waitForTimeout(200);
+ const secondScope=await page.evaluate(()=>({
+  shots:window.desktopScopeShots,mode:templeTest.gun.mode,
+  events:window.desktopScopeLog,locked:document.pointerLockElement?.id
+ }));
+ assert.equal(secondScope.shots,2,'desktop mask click must fire: '+JSON.stringify(secondScope));
+ assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,
+  'desktop click outside glass circle must not trigger mobile-only scope exit');
+ await page.evaluate(()=>window.restoreDesktopScope());
  assert.deepEqual(errors,[],errors.join('\n'));
  console.log(JSON.stringify({ok:true,write:true,artBombPreview:scale,errors}));
 }catch(err){console.error(err);throw err;}finally{await browser.close();}

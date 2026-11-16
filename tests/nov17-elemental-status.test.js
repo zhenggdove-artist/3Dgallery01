@@ -92,6 +92,10 @@ test('model-only 30% filters and fire sprites restore original materials on expi
  const burnFX=visuals.entries.get(root).flames.pulses[0].fx;
  assert.equal(burnFX.group.userData.vfxNumber,1);
  assert.equal(burnFX.group.userData.vfxSource,'00GameDevs');
+ assert.ok(burnFX.group.scale.x<=.055,'each original fireball must be miniature');
+ const localBody=new THREE.Box3().setFromObject(mesh);
+ assert.ok(burnFX.group.position.y>localBody.min.y+localBody.getSize(new THREE.Vector3()).y*.20,
+  'small flames must spawn ON the body, not at its feet');
  visuals.update(.5,T+500);
  assert.ok(visuals.entries.get(root).flames.pulses.length<=8);
  assert.ok(visuals.entries.get(root).flames.group.parent===root);

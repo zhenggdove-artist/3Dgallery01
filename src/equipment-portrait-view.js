@@ -35,8 +35,8 @@ export class EquipmentPortraitViewport{
   model.traverse(bone=>{
    if(!bone.isBone)return;
    const name=bone.name.toLowerCase().replace(/[^a-z]/g,'');
-   if(/leftarm$/.test(name))bone.rotation.z+=.24;
-   if(/rightarm$/.test(name))bone.rotation.z-=.24;
+   if(/leftarm$/.test(name))bone.rotation.z+=.50;
+   if(/rightarm$/.test(name))bone.rotation.z-=.50;
   });
   orientPortraitModel(model);
   // The actual Temple avatar's anatomical 'front' lies on the sideways
