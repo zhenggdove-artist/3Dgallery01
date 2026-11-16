@@ -116,7 +116,7 @@ try{
   for(const family of ['swatter','pan','saber','petal','planter']){
    const item=items.find(w=>w.slot==='weapon'&&w.family===family&&!w.exotic);
    v.play({origin:[-20,1,-20],direction:[0,0,-1],range:24,charge:1,ultimate:true,area:{mode:'corridor',center:[-20,1,-40],radius:7}},item,null);
-   recipes[family]=['swatter','pan','saber'].includes(family)?v.numberedEffects.active.at(-1)?.group?.name:
+   recipes[family]=['swatter','pan','saber','petal'].includes(family)?v.numberedEffects.active.at(-1)?.group?.name:
     ['petal','planter'].includes(family)?v.signatureEffects.active.at(-1)?.obj?.name:v.particleSkills.active.at(-1)?.recipe;
   }
   const gun=items.find(w=>w.id==='calico-cat');
@@ -125,7 +125,7 @@ try{
   const giraffe=items.find(w=>w.id==='giraffe');v.play({origin:[-20,1,-20],direction:[0,0,-1],range:28,charge:1,ultimate:true},giraffe,null);recipes.giraffe=v.signatureEffects.active.at(-1)?.obj?.name;
   return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
  });
- assert.deepEqual(vfxState.recipes,{swatter:'00GameDevs original VFX #53 darkchain-detonation',pan:'00GameDevs original VFX #68 rolling-fireburst',saber:'00GameDevs original VFX #38 magma-fissure',petal:'One enormous forward rotating translucent particle blossom',planter:'Three stacked solid thorn-vine tiers',shotgun:'Ten independent irregular multicolour volumetric shotgun spheres',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
+ assert.deepEqual(vfxState.recipes,{swatter:'00GameDevs original VFX #53 darkchain-detonation',pan:'00GameDevs original VFX #68 rolling-fireburst',saber:'00GameDevs original VFX #38 magma-fissure',petal:'00GameDevs original VFX #43 revival-bloom',planter:'Three stacked solid thorn-vine tiers',shotgun:'Ten independent irregular multicolour volumetric shotgun spheres',giraffe:'Visible spinning yellow giraffe model, outbound and returning'});
  assert.equal(vfxState.sky,'World-oriented distant cloud sky (no moon)');
  await page.waitForTimeout(300);
  await page.screenshot({path:output+'/charged-particles.png'});
@@ -134,9 +134,9 @@ try{
  // the same server-authoritative event data; shader errors are collected above.
  const numberedInspection=await page.evaluate(async()=>{
   const t=templeTest,v=t.arena.presentation.vfx,check=[
-   ['clam',33,'channel'],['saber-1',38,'ultimate'],['bloom-1',43,'channel'],
+   ['clam',33,'channel'],['clam',33,'ultimate'],['saber-1',38,'ultimate'],['bloom-1',43,'channel'],['bloom-1',43,'ultimate'],
    ['swatter-1',53,'ultimate'],['ember-1',73,'channel'],['pan-1',68,'ultimate'],
-   ['frost-1',70,'channel'],['storm-1',8,'channel'],['nova-1',20,'channel'],
+   ['frost-1',70,'channel'],['storm-1',8,'channel'],['nova-1',20,'channel'],['nova-1',20,'ultimate'],
    ['saber-4',47,'combo'],['jellybrella',26,'ultimate'],['whip-1',48,'ultimate']
   ],records=[];
   for(const [id,num,kind] of check){
@@ -150,8 +150,13 @@ try{
    const fx=v.numberedEffects.active[0];
    records.push({id,num,source:fx?.group?.userData?.vfxSource,
     actual:fx?.spec?.number,group:fx?.group?.name,
-    aligned:kind!=='ultimate'||Math.hypot(
-     fx.group.position.x+22,fx.group.position.y-.16,fx.group.position.z+8)<.0001});
+    // Native cone/beam/wave/sword skills begin at the real nozzle; only
+    // remote blast spells should be located at the ground AoE centre.
+    aligned:kind!=='ultimate'||[20,33,38,43].includes(num)
+      ?kind!=='ultimate'||Math.hypot(
+       fx.group.position.x+22,fx.group.position.y-(num===38?.12:1),fx.group.position.z+22)<.0001
+      :Math.hypot(
+       fx.group.position.x+22,fx.group.position.y-.16,fx.group.position.z+8)<.0001});
    // Allow at least one real frame with each source material. #70 / #73
    // also exercise their mandatory authored render pipeline through VHS.
    await new Promise(resolve=>setTimeout(resolve,220));
@@ -159,7 +164,7 @@ try{
   v.numberedEffects.dispose();
   return records;
  });
- assert.equal(numberedInspection.length,12);
+ assert.equal(numberedInspection.length,15);
  for(const result of numberedInspection){
   assert.equal(result.actual,result.num,JSON.stringify(result));
   assert.equal(result.source,'00GameDevs',JSON.stringify(result));
