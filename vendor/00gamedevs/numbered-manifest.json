@@ -107,6 +107,40 @@
       }
     },
     {
+      "number": 29,
+      "id": "radiant-beam",
+      "url": "https://00gamedevs.com/downloads/effects/radiant-beam.js",
+      "sha256": "b2503f2c7c39e28a395ff0b1a6e0120aaa986f342766fe1ebc83efecef225cf6",
+      "byteLength": 585086,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "setEndpoints"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.4,
+          "end": 0.6
+        },
+        "notes": "See integration guide and per-asset header for coordinate spaces and exceptions."
+      },
+      "defaultOptions": {
+        "color": "#ffe3a0",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
       "number": 33,
       "id": "tidal-surge",
       "url": "https://00gamedevs.com/downloads/effects/tidal-surge.js",
