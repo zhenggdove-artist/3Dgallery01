@@ -318,7 +318,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:id(),kind:returningGiraffe?'giraffe':'fan',owner:actor.key,
       origin:[...origin],direction:[...direction],range:stats.range,
-      damage:stats.damage+bonus,radius:Math.max(2,stats.radius),tier:quality.tier,
+      damage:stats.damage+bonus,radius:Math.max(2,stats.radius)*quality.radius,tier:quality.tier,
       createdAt:now,lastAt:now,expiresAt:now+duration,
       outHits:[],backHits:[],fanHits:{}
     });

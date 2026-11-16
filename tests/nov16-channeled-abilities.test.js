@@ -74,6 +74,7 @@ test('fan produces four server-owned independently wandering vortex tracks, and 
  const fx=world.persistentAttacks.find(v=>v.kind==='fan');
  assert.ok(fx);
  assert.ok(fx.expiresAt-fx.createdAt>5000);
+ assert.ok(fx.radius>2,'purple/legendary fan must sweep a larger damage radius');
  const low=weaponQuality({...itemById('fan'),tier:1});
  assert.ok(fx.expiresAt-fx.createdAt>1400+low.tier*850);
 });
