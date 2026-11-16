@@ -3,7 +3,7 @@ import {recoverArtworks} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,spellGroundHeight} from './charge-area.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {artworkLanding} from './artwork-flight.js';
-import {publishArtBomb,resizeArtBomb,resetPlayerArtworks,projectileHitsActor,artBombDamage} from './art-bomb.js';
+import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,MATERIALS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
@@ -132,6 +132,7 @@ export function applyAction(world,actor,body,context={}){
     case 'pickup-drop':result=pickupDrop(world,profile,actor,body,now);break;
     case 'publish-art-bomb':if(!canPlaceArtworkAt(world,actor.position,body.artwork?.position))return {error:'Move outside the central WRITE zone and place artwork within 12 metres'};result=publishArtBomb(world,profile,actor,body,now);break;
     case 'resize-art-bomb':result=resizeArtBomb(world,actor,body,now);break;
+    case 'update-art-bomb-appearance':result=updateArtBombAppearance(world,actor,body,now);break;
     case 'pickup-artwork':result=pickupArtwork(world,actor,body,now);break;
     case 'throw-artwork':result=throwArtwork(world,profile,actor,body,context,now);break;
     case 'buy':result=buy(world,profile,body);break;
