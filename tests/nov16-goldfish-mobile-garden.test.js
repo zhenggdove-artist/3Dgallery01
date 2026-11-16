@@ -19,7 +19,7 @@ const shoot=(w,a,now,extra={},rng=()=>.5,actors=[a])=>applyAction(w,a,{action:'a
 test('giant goldfish creates a visible swimming fish and swept damage/knockback collider',()=>{
  const {world,actor}=game();
  assert.equal(shoot(world,actor,NOW+1000,{phase:'charge'}).charging,true);
- const result=shoot(world,actor,NOW+2400,{charge:1});
+ const result=shoot(world,actor,NOW+2700,{charge:1});
  assert.equal(result.attackEvent?.ultimate,true);
  assert.equal(result.attackEvent?.area,null);
  const fx=world.persistentAttacks.find(a=>a.kind==='goldfish');
@@ -33,10 +33,10 @@ test('giant goldfish creates a visible swimming fish and swept damage/knockback 
  effects.update(.4);
  assert.ok(mesh.position.z>0,'the visible fish must swim forward');
  const hp=world.monster.hp,originalZ=world.monster.position[2];
- tickWorld(world,{now:NOW+3200,actors:[actor],rng:()=>.5,activeFighters:0});
+ tickWorld(world,{now:NOW+3500,actors:[actor],rng:()=>.5,activeFighters:0});
  assert.ok(world.monster.hp<hp,'server fish collides and damages');
  assert.ok(world.monster.position[2]>originalZ,'fish knocks monster back');
- assert.ok(worldView(world,actor.key,NOW+3200).damageEvents.some(e=>e.kind==='giant-goldfish'));
+ assert.ok(worldView(world,actor.key,NOW+3500).damageEvents.some(e=>e.kind==='giant-goldfish'));
  effects.dispose();
  assert.equal(scene.children.length,0);
 });

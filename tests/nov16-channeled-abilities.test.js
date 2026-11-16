@@ -54,16 +54,16 @@ test('higher quality increases strike volume, damage and debuff lifespan',()=>{
 test('giraffe boomerang damages monster on both outbound and return independently',()=>{
  const {world}=game('giraffe');
  assert.ok(attack(world,start+1000,{phase:'charge'}).charging);
- const started=attack(world,start+2600,{charge:1});
+ const started=attack(world,start+3100,{charge:1});
  assert.equal(started.attackEvent.ultimate,true);
  assert.equal(world.persistentAttacks[0]?.kind,'giraffe');
  const before=world.monster.hp;
- tickWorld(world,{now:start+3300,actors:[actor],activeFighters:1,rng:()=>.5});
+ tickWorld(world,{now:start+3800,actors:[actor],activeFighters:1,rng:()=>.5});
  const afterOutbound=world.monster.hp;
  assert.ok(afterOutbound<before,'outgoing model must hit');
- tickWorld(world,{now:start+4900,actors:[actor],activeFighters:1,rng:()=>.5});
+ tickWorld(world,{now:start+5400,actors:[actor],activeFighters:1,rng:()=>.5});
  assert.ok(world.monster.hp<afterOutbound,'returning model hits again');
- const hits=worldView(world,actor.key,start+4901).damageEvents.filter(e=>e.target==='boss');
+ const hits=worldView(world,actor.key,start+5401).damageEvents.filter(e=>e.target==='boss');
  assert.ok(hits.some(e=>e.kind==='boomerang-out'));
  assert.ok(hits.some(e=>e.kind==='boomerang-return'));
 });
