@@ -7,7 +7,7 @@ await mkdir(output,{recursive:true});
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--disable-dev-shm-usage','--enable-webgl']});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:800}});page.setDefaultTimeout(45000);
- const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&/Shader Error|WebGLProgram|shader compilation|ERROR: 0:/i.test(m.text()))errors.push(m.text());});
  await page.addInitScript(()=>localStorage.setItem('temple-backend-url','http://127.0.0.1:8787'));
  await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});
  await page.waitForFunction(()=>document.body.classList.contains('ready'),null,{timeout:120000});
@@ -95,6 +95,43 @@ try{
  const scale=await page.evaluate(()=>templeTest.arena.buildPreview.scale.x);
  assert.equal(scale,2);
  await page.screenshot({path:output+'/art-bomb-placement.png'});
+ // Exercise real WebGL compilation of bespoke charged attacks (the source-only
+ // tests cannot catch browser shader compilation or alpha/blend regressions).
+ const vfxState=await page.evaluate(()=>{
+  const t=templeTest,items=t.items,v=t.arena.presentation.vfx,recipes={};
+  for(const family of ['swatter','pan','saber']){
+   const item=items.find(w=>w.slot==='weapon'&&w.family===family&&!w.exotic);
+   v.play({origin:[-20,1,-20],direction:[0,0,-1],range:24,charge:1,ultimate:true,area:{mode:'corridor',center:[-20,1,-40],radius:7}},item,null);
+   recipes[family]=v.particleSkills.active.at(-1)?.recipe;
+  }
+  const gun=items.find(w=>w.id==='calico-cat');
+  v.play({origin:[-20,1,-20],direction:[0,0,-1],range:8,charge:1,ultimate:true},gun,null);
+  recipes.shotgun=v.particleSkills.active.at(-1)?.recipe;
+  return {recipes,sky:t.arena.scene.userData.moonlitSky?.root?.name};
+ });
+ assert.deepEqual(vfxState.recipes,{swatter:'flies',pan:'food',saber:'fissure',shotgun:'rainbow-falls'});
+ assert.equal(vfxState.sky,'Moonlit particle sky');
+ await page.waitForTimeout(300);
+ await page.screenshot({path:output+'/charged-particles.png'});
+ // CSS must keep field labels left and numeric controls right, even on a narrow
+ // mobile portrait screen; no hidden second row or horizontal overflow.
+ await page.setViewportSize({width:360,height:740});
+ const mobileFields=await page.evaluate(async()=>{
+  const {editorPanelMarkup}=await import('/src/art-editor-panel.js');
+  const el=document.getElementById('art-editor');
+  el.innerHTML=editorPanelMarkup({depth:.1,brightness:1,contrast:1,saturation:1,blackPoint:0,tint:'#ffffff'},3.2,true);
+  el.hidden=false;
+  const fields=[...el.querySelectorAll('.art-editor-field')];
+  const result={count:fields.length,aligned:fields.every(row=>{
+   const label=row.querySelector('.art-field-name')?.getBoundingClientRect(),
+     input=row.querySelector('input')?.getBoundingClientRect();
+   return label&&input&&input.left>=label.right-1&&input.right<=innerWidth-3&&input.top>=row.getBoundingClientRect().top-2;
+  }),overflows:el.scrollWidth>el.clientWidth+2};
+  el.hidden=true;
+  return result;
+ });
+ assert.ok(mobileFields.count>=9&&mobileFields.aligned&&!mobileFields.overflows,JSON.stringify(mobileFields));
+ await page.screenshot({path:output+'/mobile-responsive.png'});
  assert.deepEqual(errors,[],errors.join('\n'));
  console.log(JSON.stringify({ok:true,write:true,artBombPreview:scale,errors}));
 }catch(err){console.error(err);throw err;}finally{await browser.close();}
