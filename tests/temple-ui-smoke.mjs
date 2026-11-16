@@ -20,7 +20,7 @@ try{
  // Inventory categories, custom 3D spell preview, readable descriptions.
  await page.evaluate(()=>templeTest.ui.openPanel('bag'));
  for(const type of ['near','mid','far'])assert.equal(await page.locator('[data-category="'+type+'"]').count(),1,type);
- await page.locator('[data-category="mid"]').click();
+ await page.locator('[data-category="near"]').click();
  await page.waitForTimeout(400);
  assert.ok(await page.locator('#bag-items [data-bag-item]').count()>0);
  await page.screenshot({path:output+'/weapons.png'});
