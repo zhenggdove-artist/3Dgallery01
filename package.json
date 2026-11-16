@@ -11,7 +11,7 @@
     "build:cloud": "node cloudflare/build.mjs",
     "dev:cloud": "npm run build:cloud && wrangler dev --local --port 8787",
     "deploy:cloud": "npm run build:cloud && wrangler deploy",
-    "check": "node --check src/main.js && node --check src/ui.js && node --check src/write-cinematic.js && node --check src/adventure-view.js && node --check src/arena-view.js && node --check src/bag-view.js && node --check src/reletter/equipment-catalog.js && node --check src/shared/reletter-actions.js && node --check src/shared/scene-cleanup.js && node --check src/shared/temple-rules.js && node --check cloudflare/worker.js"
+    "check": "node --check src/main.js && node --check src/ui.js && node --check src/write-cinematic.js && node --check src/adventure-view.js && node --check src/arena-view.js && node --check src/night-sky.js && node --check src/weapon-particle-effects.js && node --check src/artwork-throw.js && node --check src/display-platforms.js && node --check src/artwork-editor.js && node --check src/art-editor-panel.js && node --check src/charge-target-preview.js && node --check src/gun-controller.js && node --check src/player-controller.js && node --check src/shared/monster-patrol.js && node --check src/bag-view.js && node --check src/reletter/equipment-catalog.js && node --check src/shared/reletter-actions.js && node --check src/shared/scene-cleanup.js && node --check src/shared/temple-rules.js && node --check cloudflare/worker.js"
   },
   "dependencies": {
     "three": "^0.160.0",

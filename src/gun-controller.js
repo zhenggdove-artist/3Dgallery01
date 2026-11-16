@@ -12,7 +12,9 @@ export class GunController {
     for(const type of ['pointerdown','pointerup','pointercancel'])addEventListener(type,e=>{
       const button=e.target.closest?.('#attack-button');if(!weapon()?.firstPerson||!controller()?.enabled||controller()?.holdingArt)return;
       // RELETTER: the attack button cycles aiming; canvas press/release fires.
-      if(button){e.preventDefault();e.stopImmediatePropagation();if(type==='pointerup')this.cycle();return;}
+      // The independent mobile AIM control owns camera cycling. A remains
+       // available for interaction/placement and firing, matching the E key.
+       if(button){if(matchMedia('(pointer:coarse)').matches)return;e.preventDefault();e.stopImmediatePropagation();if(type==='pointerup')this.cycle();return;}
       if(!this.mode||e.target!==canvas||e.button>0)return;e.preventDefault();e.stopImmediatePropagation();
       if(type==='pointerdown'){this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};if(!document.pointerLockElement)canvas.setPointerCapture(e.pointerId);if(weapon().id==='white-cat'){this.held=true;this.nextShot=0;}else ui.emit('attack-start');}
       else{this.lookPointer=null;this.held=false;ui.emit(type==='pointercancel'?'attack-cancel':'attack-release');}

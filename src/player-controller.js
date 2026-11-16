@@ -22,7 +22,27 @@ export class PlayerController{
   setRole(role){this.role=role;this.root.visible=role==='fighter';}
   setFollowTarget(root=null){this.followTarget=root;}
   teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);}
-  stepHorizontal(dx,dz){const p=this.root.position,nx=p.x+dx,nz=p.z+dz;if(Math.hypot(nx,nz)>ARENA_RADIUS-1)return;const targetY=this.arena.groundHeight(nx,nz,p.y);if(this.grounded&&targetY-p.y>=3)return;if(!this.arena.blocked(nx,nz,p.y)){p.x=nx;p.z=nz;}else{if(!this.arena.blocked(nx,p.z,p.y))p.x=nx;if(!this.arena.blocked(p.x,nz,p.y))p.z=nz;}if(this.grounded){if(p.y-targetY>.5){this.fallStartY=p.y;this.grounded=false;this.velocityY=0;}else p.y=targetY;}}
+  stepHorizontal(dx,dz){
+    const p=this.root.position,nx=p.x+dx,nz=p.z+dz;
+    // A tall adjacent exhibit deck is not an invisible wall around the
+    // player's current disc: slide along its edge rather than cancelling both
+    // directions. Leaving a raised platform always begins a natural fall.
+    const permitted=(x,z)=>{
+      if(Math.hypot(x,z)>ARENA_RADIUS-1||this.arena.blocked(x,z,p.y))return false;
+      const h=this.arena.groundHeight(x,z,p.y);
+      return !this.grounded||h-p.y<3;
+    };
+    if(permitted(nx,nz)){p.x=nx;p.z=nz;}
+    else{
+      if(permitted(nx,p.z))p.x=nx;
+      if(permitted(p.x,nz))p.z=nz;
+    }
+    if(this.grounded){
+      const floor=this.arena.groundHeight(p.x,p.z,p.y);
+      if(p.y-floor>.5){this.fallStartY=p.y;this.grounded=false;this.velocityY=0;}
+      else p.y=floor;
+    }
+  }
   update(dt){
     if(!this.enabled){this.updateCamera(dt);return this.state();}
     if(this.knockback){this.stepHorizontal(this.knockback.x*dt,this.knockback.z*dt);this.knockback.multiplyScalar(Math.exp(-5*dt));if(this.knockback.lengthSq()<.001)this.knockback=null;}

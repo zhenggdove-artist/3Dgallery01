@@ -23,13 +23,17 @@ export class ChargeTargetPreview{
   this.runes.renderOrder=21;this.group.add(this.runes);
   this.path=new THREE.Line(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3)),new THREE.LineBasicMaterial({color:'#37b5ff',transparent:true,opacity:.65,depthTest:false,depthWrite:false}));
   this.path.frustumCulled=false;this.path.renderOrder=19;scene.add(this.path);
-  this.group.visible=this.path.visible=false;this.t=0;
+  // Show charged non-area skills as a corridor reaching forward.
+  const guide=new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(24),3));
+  this.corridor=new THREE.LineSegments(guide,new THREE.LineBasicMaterial({color:'#a5eeff',transparent:true,opacity:.84,depthTest:false,depthWrite:false}));
+  this.corridor.name='Forward charged skill corridor';this.corridor.renderOrder=22;this.corridor.frustumCulled=false;scene.add(this.corridor);
+  this.group.visible=this.path.visible=this.corridor.visible=false;this.t=0;
  }
  update(root,item,charge,direction,arena){
   if(!root||!item||charge<.1||!Array.isArray(direction)){this.hide();return;}
   const origin=[root.position.x,root.position.y+1,root.position.z];
   const area=chargedArea(item,origin,direction,attackStats(item,1),(x,z,y)=>spellGroundHeight(arena.world,x,z,y));
-  this.group.visible=this.path.visible=true;
+  this.group.visible=area.mode==='area';this.path.visible=true;this.corridor.visible=area.mode!=='area';
   const p=area.center,r=area.radius;
   this.group.position.set(p[0],Math.max(.15,p[1])+.06,p[2]);
   this.group.scale.setScalar(r);
@@ -42,7 +46,19 @@ export class ChargeTargetPreview{
   this.path.geometry.attributes.position.setXYZ(1,p[0],Math.max(.2,p[1])+.05,p[2]);
   this.path.geometry.attributes.position.needsUpdate=true;
   this.path.material.opacity=.35+.4*charge;
+   if(area.mode!=='area'){
+     const d=new THREE.Vector3(direction[0],0,direction[2]);if(d.lengthSq()<.01)d.set(0,0,1);d.normalize();
+     const right=new THREE.Vector3(-d.z,0,d.x),halfWidth=Math.min(7,Math.max(1.2,attackStats(item,1).radius+1.3));
+     const start=new THREE.Vector3(origin[0],Math.max(.25,origin[1]-.8),origin[2]);
+     const finish=new THREE.Vector3(p[0],Math.max(.25,p[1]),p[2]);
+     const arr=this.corridor.geometry.attributes.position,k=[start.clone().addScaledVector(right,halfWidth),finish.clone().addScaledVector(right,halfWidth),
+       start.clone().addScaledVector(right,-halfWidth),finish.clone().addScaledVector(right,-halfWidth),
+       finish.clone().addScaledVector(right,halfWidth),finish.clone().addScaledVector(right,-halfWidth),
+       start.clone().addScaledVector(right,halfWidth),start.clone().addScaledVector(right,-halfWidth)];
+     k.forEach((v,i)=>arr.setXYZ(i,v.x,v.y,v.z));arr.needsUpdate=true;
+     this.corridor.material.opacity=.55+.4*charge;
+   }
  }
- hide(){this.group.visible=false;this.path.visible=false;}
- dispose(){this.hide();this.group.removeFromParent();this.path.removeFromParent();this.group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.path.geometry.dispose();this.path.material.dispose();}
+ hide(){this.group.visible=false;this.path.visible=false;this.corridor.visible=false;}
+ dispose(){this.hide();this.group.removeFromParent();this.path.removeFromParent();this.group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.path.geometry.dispose();this.path.material.dispose();this.corridor.removeFromParent();this.corridor.geometry.dispose();this.corridor.material.dispose();}
 }

@@ -40,6 +40,21 @@ export function resizeArtBomb(world,actor,body,now=Date.now()){
  return {notice:'Artwork bomb size saved',artworkLayout:structuredClone(layout)};
 }
 
+// Creator-owned appearance adjustments are persisted across Durable Object
+// snapshots and mirrored to every player. They never grant transform/GM rights.
+export function updateArtBombAppearance(world,actor,body,now=Date.now()){
+ const record=(world.customArtworks||[]).find(a=>a.id===body.id&&a.bomb);
+ if(!record)return {error:'Unknown player artwork'};
+ if(record.owner!==actor.key&&!actor.admin)return {error:'Only its creator or GM can edit this artwork'};
+ const appearance=validateAppearance(body.appearance,record);
+ if(!appearance)return {error:'Invalid brightness, contrast, saturation, black point, depth or tint'};
+ const layout=world.artworkLayout?.[record.id];if(!layout)return {error:'Artwork layout missing'};
+ if(Number.isFinite(body.expectedRevision)&&body.expectedRevision!==layout.revision)return {error:'Artwork changed. Reload and retry.'};
+ layout.appearance=appearance;layout.revision=(layout.revision||0)+1;layout.updatedAt=now;
+ world.revision=(world.revision||0)+1;
+ return {notice:'Artwork appearance saved for all players',artworkLayout:structuredClone(layout)};
+}
+
 // Sampling actual throw trajectory is stricter than accepting any opponent
 // within a long, ground-level straight ray. The server owns this calculation.
 export function projectileHitsActor(event,target,landingTime,size=1){
