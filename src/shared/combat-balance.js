@@ -1,3 +1,4 @@
+export const SNIPER_RANGE=256; // Entire 184m-diameter arena from either edge, with margin.
 // Authoritative PvP balance independent from monster HP scaling (Temple uses
 // 100 HP per fighter; RELETTER's monster-scaled weapon numbers are far higher).
 // A clean 100-HP fighter should survive roughly 8–10 ordinary starter hits.
@@ -13,13 +14,13 @@ export function pvpShotDamage(weapon,stats,quality={tier:1}){
  const areaFactor=1/Math.sqrt(1+Math.max(0,radius-1.2)*.25);
  const tierFactor=1+clamp((quality.tier||1)-1,0,4)*.035;
  let base=clamp(10.7*distanceFactor*cadenceFactor*reachFactor*areaFactor*tierFactor,5.5,12.2);
- if(weapon.id==='black-cat')base=27;
+ if(weapon.id==='black-cat')base=81; // Three times the previous 27 damage.
  if(stats?.ultimate){
   const time=clamp(Number(weapon.chargeMs)||1500,650,3200);
   const spread=Math.max(radius,Number(stats.radius)||radius);
   const areaPenalty=1/Math.sqrt(1+Math.max(0,spread-2)*.055);
   const chargeFactor=1.35+.65*time/2500;
-  base=clamp(base*chargeFactor*areaPenalty,base*1.1,weapon.id==='black-cat'?43:26);
+  base=clamp(base*chargeFactor*areaPenalty,base*1.1,weapon.id==='black-cat'?129:26);
  }
  return +base.toFixed(3);
 }
