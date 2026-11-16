@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {createOddEffect,updateOddEffect} from './reletter/odd-weapon-effects.js';
 import {weaponMuzzle} from './weapon-muzzle.js';
 import {chargedArea} from './shared/charge-area.js';
+import {createChargedSignature,updateChargedSignature,disposeChargedSignature} from './charged-signatures.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
 import smear from '../vendor/00gamedevs/weapon-smear.js';
 import plasma from '../vendor/00gamedevs/plasma-bolt.js';
@@ -32,7 +33,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.pools=new Map();this.charger=null;this.created=0;this.replayed=0;}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.signatures=[];this.pools=new Map();this.charger=null;this.created=0;this.replayed=0;}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -61,6 +62,7 @@ export class WeaponVFX{
   const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
   if(groundEffect)end.copy(new THREE.Vector3(...impactArea.center));
   const muzzle=weaponMuzzle(root,item);if(muzzle){origin.copy(muzzle);direction.copy(end).sub(origin).normalize();}
+  if(data.ultimate){const signature=createChargedSignature(THREE,data,item,origin,direction,impactArea,{mobile:typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches});if(this.signatures.length>=10)disposeChargedSignature(this.signatures.shift());this.signatures.push(signature);this.scene.add(signature.root);}
   if(item.id==='black-cat'){if(this.snipers.length>=4){const old=this.snipers.shift();old.root.removeFromParent();old.root.material.dispose();}const f=createOddEffect(THREE,{...data,origin:origin.toArray(),direction:direction.toArray(),range:origin.distanceTo(end)},{...item,pattern:'sniper'});f.root.position.addScaledVector(direction,-1.8);this.scene.add(f.root);this.snipers.push(f);return;}
   const entry=this.acquire(id,{color:item.color,size:data.ultimate?Math.min(3.6,Math.max(1.2,(impactArea?.radius||5)/3.5)):.6,speed:data.ultimate?1:1.8}),fx=entry.fx;
   fx.group.position.copy(origin);fx.group.rotation.y=Math.atan2(direction.x,direction.z)-Math.PI/2;
@@ -95,10 +97,10 @@ export class WeaponVFX{
   if(!this.charger){this.charger=this.acquire('arcane-missile',{color:item.color,size:.3});this.charger.fx.setDirection(new THREE.Vector3(0,1,0),0);}
   const e=this.charger;e.fx.group.position.copy(root.position);e.fx.group.position.y+=1;e.fx.group.scale.setScalar(.5+progress*.5);
  }
- update(dt){for(let i=this.snipers.length-1;i>=0;i--){const f=this.snipers[i];if(!updateOddEffect(f,dt)){f.root.removeFromParent();f.root.material.dispose();this.snipers.splice(i,1);}}for(const e of [...this.active]){e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
+ update(dt){for(let i=this.signatures.length-1;i>=0;i--){const s=this.signatures[i];if(!updateChargedSignature(s,dt)){disposeChargedSignature(s);this.signatures.splice(i,1);}}for(let i=this.snipers.length-1;i>=0;i--){const f=this.snipers[i];if(!updateOddEffect(f,dt)){f.root.removeFromParent();f.root.material.dispose();this.snipers.splice(i,1);}}for(const e of [...this.active]){e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
    if(e.start&&!e.stopped)e.fx.group.position.lerpVectors(e.start,e.end,Math.min(1,e.age/e.travel));
    if(!e.stopped&&e.age>=e.stopAt){if(e.hit)e.fx.hit(e.end);else if(continuous.has(e.id)||e.id==='weapon-smear')e.fx.stop();e.stopped=true;}
    e.fx.update(dt);if(e.fx.finished||e.age>12)this.release(e);
   }}
- dispose(){for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
+ dispose(){for(const s of this.signatures)disposeChargedSignature(s);this.signatures=[];for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }
