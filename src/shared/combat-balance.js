@@ -52,3 +52,34 @@ export function projectileFlightMs(weapon,charged=false){
  if(MELEE.has(weapon.family))return charged?550:245;
  return charged?630:360;
 }
+
+// A single still-visible attack volume can contact the same actor again.
+// Intervals vary by weapon but remain in the requested 1–3 second range.
+export function contactDamageIntervalMs(weapon){
+ const id=weapon?.id;
+ if(id==='jellybrella')return 1200;
+ if(id==='goldfish')return 1100;
+ if(id==='giraffe')return 1200;
+ if(id==='fan')return 1000;
+ if(id==='clam')return 1350;
+ if(id==='black-cat')return 3000;
+ if(id==='calico-cat')return 1700;
+ const family=weapon?.family;
+ return ({fire:1000,lightning:1500,water:1400,wave:1500,ice:1800,
+  petal:1650,beam:2200,saber:1600,whip:1600,pan:1500,
+  planter:1800,swatter:1400,palm:2200})[family]||2000;
+}
+// Lifetimes follow the authored 00GameDevs and signature effect animations.
+// Never leave an invisible damaging field after its visible animation ends.
+export function visibleCollisionLifetimeMs(weapon,ultimate){
+ if(!ultimate)return projectileFlightMs(weapon,false);
+ const id=weapon?.id;
+ const duration=({jellybrella:5000,clam:3300,pan:5000,
+  swatter:7000,fan:2500,whip:6500,accordion:3300,
+  telephone:2600})[id];
+ if(duration)return duration;
+ const family=weapon?.family;
+ return ({petal:2250,wave:4500,fire:2200,ice:1260,
+  lightning:2500,beam:3500,saber:1250,palm:2500,
+  planter:3400,water:2200})[family]||projectileFlightMs(weapon,true);
+}
