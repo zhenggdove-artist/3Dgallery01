@@ -12,7 +12,7 @@ export function pvpShotDamage(weapon,stats,quality={tier:1}){
  const reachFactor=clamp(Math.pow(12/Math.max(3,reach),.13),.76,1.13);
  const areaFactor=1/Math.sqrt(1+Math.max(0,radius-1.2)*.25);
  const tierFactor=1+clamp((quality.tier||1)-1,0,4)*.035;
- let base=clamp(10.7*distanceFactor*cadenceFactor*reachFactor*areaFactor*tierFactor,5.5,13.5);
+ let base=clamp(10.7*distanceFactor*cadenceFactor*reachFactor*areaFactor*tierFactor,5.5,12.2);
  if(weapon.id==='black-cat')base=27;
  if(stats?.ultimate){
   const time=clamp(Number(weapon.chargeMs)||1500,650,3200);

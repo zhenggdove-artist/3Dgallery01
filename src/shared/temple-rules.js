@@ -543,10 +543,14 @@ function tickPersistentAttacks(world,actors,now,rng){
     const modifiers=directHitModifiers(weapon,{origin:fx.origin,direction:pellet===null?fx.direction:fx.pellets[pellet].direction,range:fx.range},
       {...enemy,island:true,visualScale:isPlayer?1:ENEMY_HEIGHT/1.575},position,now,rng);
     const power=isPlayer?fx.pvpDamage:fx.damage;
-    const critical=isPlayer?Math.min(1.22,modifiers.multiplier):modifiers.multiplier;
+    const critical=isPlayer?Math.min(1.14,modifiers.multiplier):modifiers.multiplier;
     const proximity=clamp(1-along/Math.max(1,fx.range),0,1);
-    const spread=pellet===null?1:(isPlayer?(.76+.48*proximity)*(.4+1.2*rng()):1.35*(1+1.7*proximity)*(.55+2.45*rng()));
-    const damage=power*critical*spread/(pellet===null?1:fx.pellets.length);
+    const spread=pellet===null?1:(isPlayer?(.76+.48*proximity)*(.28+1.12*rng()):1.35*(1+1.7*proximity)*(.55+2.45*rng()));
+    const rawDamage=power*critical*spread/(pellet===null?1:fx.pellets.length);
+    // No uncharged weapon may bypass the 8-hit baseline through a lucky
+    // crit or a ten-ball shotgun burst. The pellets remain individually
+    // damaging, with a full 5x+ per-pellet random damage window.
+    const damage=isPlayer?Math.min(rawDamage,fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39)):rawDamage;
     let applied;
     if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,modifiers.kind,impact);
     else applied=damageMonster(world,owner,damage,now,rng,modifiers.kind,enemy,impact);

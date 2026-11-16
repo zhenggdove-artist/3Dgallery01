@@ -39,8 +39,12 @@ test('PvP power is weighted by range, radius, cooldown and charging duration',()
  assert.ok(pvpShotDamage(candidate({}),{ultimate:true,radius:18},q)<pvpShotDamage(candidate({}),ultimate,q));
  assert.ok(pvpShotDamage(itemById('black-cat'),attackStats(itemById('black-cat'),0),q)>
   pvpShotDamage(itemById('prism-1'),attackStats(itemById('prism-1'),0),q)*2);
- for(const w of WEAPONS)if(w.id!=='black-cat')
-  assert.ok(pvpShotDamage(w,attackStats(w,0),weaponQuality(w))<=13.5,w.id);
+ for(const w of WEAPONS)if(w.id!=='black-cat'){
+  const normalPower=pvpShotDamage(w,attackStats(w,0),weaponQuality(w));
+  assert.ok(normalPower<=12.2,w.id);
+  assert.ok(Math.ceil(100/(normalPower*1.14))>=8,
+   w.id+' must never two-shot via critical or headshot multipliers');
+ }
 });
 test('starter clam takes about 8–10 ordinary confirmed strikes to eliminate a fresh 100 HP fighter',()=>{
  const {w,caster,victim,b}=scenario('clam',[75,0,2.2]);
