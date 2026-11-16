@@ -79,7 +79,7 @@ test('continuous original follows the weapon nozzle across movement and aim upda
  root.removeFromParent();
 });
 
-test('the server area and the warning circle share exactly the same ground-space position',()=>{
+test('saber ultimate warns with a sword-origin straight rectangle instead of a remote circle',()=>{
  const item=itemById('saber-1'),scene=new THREE.Scene(),root=new THREE.Group();
  root.position.set(5,0,9);
  const preview=new ChargeTargetPreview(scene);
@@ -90,9 +90,11 @@ test('the server area and the warning circle share exactly the same ground-space
  const world={floatingPlatforms:[]};
  const area=chargedArea(item,[5,1,9],direction,stats,(x,z,y)=>spellGroundHeight(world,x,z,y));
  preview.update(root,item,1,direction,{world},fusion);
- assert.equal(preview.group.visible,true);
- assert.ok(preview.group.position.distanceTo(new THREE.Vector3(...area.visualCenter))<1e-8);
- assert.equal(preview.footprint.shape,'circle');
+ assert.equal(preview.rectangle.group.visible,true);
+ assert.equal(preview.footprint.shape,'rectangle');
+ assert.ok(preview.footprint.position[2]>root.position.z);
+ assert.ok(Math.abs(preview.footprint.length-stats.range)<1e-7);
+ assert.ok(preview.rectangle.group.position.distanceTo(new THREE.Vector3(...area.visualCenter))>1);
  preview.dispose();
  assert.equal(scene.children.length,0);
 });

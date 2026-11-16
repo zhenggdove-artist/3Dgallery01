@@ -76,7 +76,7 @@ test('all weapons have dimensional warning contracts derived from identical atta
   if(item.id==='clam'){
    assert.equal(a.shape,'sector',item.id);
    nearly(preview.sector.settings.size*preview.sector.group.scale.x,stats.range,item.id);
-  }else if(isChannelStaff(item)||item.pattern==='scatter'||item.id==='goldfish'){
+  }else if(isChannelStaff(item)||item.family==='saber'||item.pattern==='scatter'||item.id==='goldfish'){
    assert.equal(a.shape,'rectangle',item.id);
    nearly(preview.rectangle.settings.length*preview.rectangle.group.scale.x,stats.range,item.id);
    nearly(preview.rectangle.settings.width*preview.rectangle.group.scale.z,stats.radius*2,item.id);

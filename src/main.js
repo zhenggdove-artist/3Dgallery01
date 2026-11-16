@@ -221,7 +221,7 @@ function performAttack(charge=0,phase=null){
  const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
  const shot=item.firstPerson?gun.shot():null;
  const direction=shot?.direction||attackDirection(controller,camera,arena,roots,item,charge);
- const muzzle=isChannelStaff(item)?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
+ const muzzle=isChannelStaff(item)||item.family==='saber'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
 }
@@ -277,7 +277,7 @@ function update(dt,time){
   const chargedWeapon=itemById(world?.profile?.equipment?.weapon);
   if(charge>.08&&!staffChannel&&chargedWeapon&&controller){
    const direction=chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1);
-   const muzzle=isChannelStaff(chargedWeapon)?arena.presentation.vfx.channelMuzzle(localRoot,chargedWeapon):null;
+   const muzzle=isChannelStaff(chargedWeapon)||chargedWeapon.family==='saber'?arena.presentation.vfx.channelMuzzle(localRoot,chargedWeapon):null;
    chargePreview.update(localRoot,chargedWeapon,charge,direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null,muzzle?.toArray(),dt);
   }else chargePreview.hide();
   const attackButton=document.getElementById('attack-button');attackButton.classList.toggle('charging',charge>0||!!staffChannel||artworkThrow.started!==null);attackButton.style.setProperty('--charge',`${(artworkThrow.started!==null?artworkThrow.progress:charge)*100}%`);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}

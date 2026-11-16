@@ -33,7 +33,17 @@ export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(o
 export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'));
 export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','armor','head','outfit','shield','wings']);
 export const SPELL_FAMILIES=Object.freeze(['water','ice','fire','lightning','beam','petal','wave']);
-export function attackStats(item,charge=0){const result=reletterAttackStats(item,charge);if(item.id==='water')result.damage*=10;if(SPELL_FAMILIES.includes(item.family)&&!item.exotic)result.range=+(result.range/3).toFixed(3);return result;}
+export function attackStats(item,charge=0){
+ const result=reletterAttackStats(item,charge);
+ if(item.id==='water')result.damage*=10;
+ if(SPELL_FAMILIES.includes(item.family)&&!item.exotic)result.range=+(result.range/3).toFixed(3);
+ // Full-charge sword fissure: both forward reach and area are 2x.
+ if(item.family==='saber'&&result.ultimate){
+  result.range=+(result.range*2).toFixed(3);
+  result.radius=+(result.radius*2).toFixed(3);
+ }
+ return result;
+}
 export const ITEMS = Object.freeze([...RELETTER_ITEMS,...ARMOR,...MATERIALS]);
 const INDEX = new Map(ITEMS.map(item=>[item.id,item]));
 export const itemById = id => INDEX.get(id) || null;

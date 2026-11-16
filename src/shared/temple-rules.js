@@ -337,7 +337,7 @@ function attack(world,profile,actor,body,context,now){
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
   stats.radius=channel?channelVisualRadius(weapon,quality,stats.range):
    +(stats.radius*quality.radius).toFixed(2);
-  const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||isChannelStaff(weapon))&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
+  const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
   const area=stats.ultimate&&weapon.id!=='goldfish'?chargedArea(weapon,origin,direction,stats,groundForSpell,channel):null;
