@@ -8,6 +8,11 @@ export function applyStatus(world,source,target,weapon,shot,now){
  const resolved={...shot,shooter:source.key,damage:shot.damage/10};
  const previous=Object.fromEntries(Object.entries(target.effects||{}).map(([key,value])=>[key,value.until]));
  applyWeaponTraits(game,{...weapon,damage:weapon.damage/10},resolved,now);
+ // RELETTER's old 400ms lightning stun immobilises monsters. Temple's electric
+ // effect MUST block attacks but never movement; replace that new stun.
+ if((weapon.family==='lightning'||weapon.element==='electric')&&
+    target.effects?.stun?.owner===source.key&&target.effects.stun.until<=now+400)
+   delete target.effects.stun;
  // Rarity extends every newly inflicted debuff without multiplying older
  // stacks each time the same persistent fire or vine hits again.
  // Temple's six elemental responses are authoritative and generated only after a real hit.
@@ -42,6 +47,8 @@ export function applyElementalHit(target,source,weapon,now){
  // Ice and plant are distinct: ice prevents every action, while vines only
  // restrain locomotion, leaving look and attacks available.
  const family=weapon.family;
+ if(family==='lightning'||['electric','lightning','thunder'].includes(weapon.element))
+   return put('paralysis',1500,0,5000);
  if(family==='ice'){delete e.slow;return put('freeze',1000,0,5000);}
  if(['planter','petal','palm','whip'].includes(family)&&!weapon.exotic)return put('root',1000,0,5000);
  if(family==='fire'||weapon.element==='fire'){

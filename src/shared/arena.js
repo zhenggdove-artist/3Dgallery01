@@ -6,7 +6,7 @@ export const SAFE_ZONE = Object.freeze({x:0,z:0,radius:9});
 export const insideArtSanctuary=position=>Math.hypot(position[0],position[2])<60;
 export const FISHING_POND = Object.freeze({x:-28,z:2,radius:7});
 export const PLAYER_SPAWNS = Object.freeze([
-  [-5,1,6],[5,1,6],[-5,1,-6],[5,1,-6],[0,9,34],[0,9,-34]
+  [-18,1,15],[18,1,15],[-18,1,-15],[18,1,-15],[0,9,34],[0,9,-34]
 ]);
 
 // One renderer and one server rule handle every platform; only data changes.

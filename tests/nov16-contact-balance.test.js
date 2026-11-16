@@ -123,7 +123,7 @@ test('black-cat rifle retains slow high-damage long-range shots unlike regular 8
  assert.equal(first.error,undefined);
  assert.equal(b.hp,100);
  advance(w,at+500,[caster,victim]);
- assert.ok(b.hp<=74&&b.hp>=65,'sniper must hit for approximately 27 HP rather than generic 10–13');
+ assert.ok(b.hp<=20&&b.hp>=0,'sniper must hit for approximately 81–96 HP, triple the old 27 HP baseline');
  assert.equal(fire(w,caster,at+500).error,'Weapon is recovering');
  assert.equal(fire(w,caster,at+3700).error,undefined);
  const {w:charged,caster:c,victim:v,b:target}=scenario('black-cat',[75,0,30]);

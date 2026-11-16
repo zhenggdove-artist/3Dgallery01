@@ -4,6 +4,7 @@ import createFireball from '../vendor/00gamedevs/source/fireball.js';
 // Every visible color treatment is attached to the TARGET'S model materials,
 // never a full-scene screen tint. Times and immunity are server-authoritative.
 export const ELEMENTAL_FILTERS=Object.freeze({
+ paralysis:'#a04bff',
  freeze:'#b9edff',
  root:'#69bf49',
  soaked:'#328dfb',

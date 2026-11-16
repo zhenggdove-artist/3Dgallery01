@@ -9,14 +9,14 @@ import {ECONOMY,ITEMS,MATERIALS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,atta
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
-import {applyStatus,tickStatus,effectActive} from './combat-status.js';
+import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
 import {playerStats,refreshStats} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
 import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './island-combat.js';
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
-import {pvpShotDamage,projectileFlightMs} from './combat-balance.js';
+import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE} from './combat-balance.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
@@ -306,7 +306,18 @@ function fuse(world,profile,body,rng){
 }
 
 function attack(world,profile,actor,body,context,now){
-  if(effectActive(profile,'freeze',now)&&body.phase!=='channel-stop')return {error:'Frozen: cannot attack'};
+  // A release must clear server collision objects even while stunned, frozen,
+  // or inside the previous hit-reaction recovery window.
+  if(body.phase==='channel-stop'){
+   profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;
+   profile.lastChannelPulseAt=0;
+   world.persistentAttacks=(world.persistentAttacks||[]).filter(
+    fx=>!(fx.owner===actor.key&&fx.channel));
+   return {channeling:false,channelStopped:{owner:actor.key,time:now}};
+  }
+  if(body.phase!=='channel-stop'&&(effectActive(profile,'freeze',now)||effectActive(profile,'paralysis',now)))
+   return {error:'Paralysed: attacks disabled'};
+
   if(profile.hitReaction&&now-profile.hitReaction.time<profile.hitReaction.stunMs)return {error:'Recovering from hit'};
   const weapon=equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon)),bonus=profile.fusion[weapon.id]?.bonus||0;
   if(body.phase==='channel-start'){
@@ -320,10 +331,7 @@ function attack(world,profile,actor,body,context,now){
     profile.lastChannelPulseAt=now;
     return {channeling:true};
   }
-  if(body.phase==='channel-stop'){
-    profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;
-    profile.lastChannelPulseAt=0;return {channeling:false};
-  }
+
   const channel=body.phase==='channel';
   if(channel&&(!isChannelStaff(weapon)||profile.channelWeapon!==weapon.id||
      !profile.channelStartedAt||now-(profile.lastChannelPulseAt||profile.channelStartedAt)>6000))
@@ -338,9 +346,13 @@ function attack(world,profile,actor,body,context,now){
   // collision must use exactly the same range; no 11m decorative overshoot.
   if(channel)stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range))*channelReachMultiplier(weapon);
   stats.range=+(stats.range*quality.range).toFixed(2);
+  if(weapon.id==='black-cat')stats.range=SNIPER_RANGE; // Match the centre-camera ray at every rarity.
   // The narrow server collision tube must agree with the visible spray and
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
   stats.radius=forwardCastRadius(weapon,quality,stats.radius,channel);
+  // Jellybrella's giant spinning wheel is an area hazard, not a .3m point.
+  // Scale the original authoritative area and its warning with the doubled wheel.
+  if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
   const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
@@ -368,15 +380,16 @@ function attack(world,profile,actor,body,context,now){
   // travelling VFX volume actually touches a target (never on key release).
   if(!persistentOnly){
     const duration=projectileFlightMs(weapon,stats.ultimate);
+    const visualLifetime=channel?duration:visibleCollisionLifetimeMs(weapon,stats.ultimate);
     world.persistentAttacks??=[];
     world.persistentAttacks.push({
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
       radius:stats.radius,area,damage:stats.damage+bonus*.1,pvpDamage,charge,
-      qualityDuration:quality.duration,qualityScale:quality.visual,
-      pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
+      qualityDuration:quality.duration,qualityScale:quality.visual,channel,
+      flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
       hits:[],pelletHits:{},areaResolved:false,
-      createdAt:now,lastAt:now,expiresAt:now+duration
+      createdAt:now,lastAt:now,expiresAt:now+Math.max(duration,visualLifetime)
     });
     if(world.persistentAttacks.length>40)world.persistentAttacks.splice(0,world.persistentAttacks.length-40);
   }
@@ -401,12 +414,13 @@ function attack(world,profile,actor,body,context,now){
   return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
-function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null){
+function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false){
   const target=world.profiles[targetActor.key];if(!target||target.hp<=0||target.deadUntil>now)return null;
   const stats=refreshStats(world,target,now);if(target.admin){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
-  const armor=itemById(target.equipment.armor),reduction=Math.min(.65,(armor?.defense||0)/100);let damage=Math.max(1,+((amount)*(1-reduction)*stats.defense*(1+(effectActive(target,'soaked',now)?.power||0))).toFixed(1));
-  if(target.shield){const absorbed=Math.min(target.shield.hp,damage);target.shield.hp-=absorbed;target.shield.lastHit=now;damage-=absorbed;}
-  damage=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-damage);if(damage>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
+  const armor=itemById(target.equipment.armor),reduction=Math.min(.65,(armor?.defense||0)/100);let damage=Math.max(1,+((amount)*(forceKill?1:1-reduction)*(forceKill?1:stats.defense)*(1+(effectActive(target,'soaked',now)?.power||0))).toFixed(1));
+  if(forceKill)damage=Math.max(damage,target.hp); // A verified sniper headshot ignores armour and shields.
+   if(target.shield&&!forceKill){const absorbed=Math.min(target.shield.hp,damage);target.shield.hp-=absorbed;target.shield.lastHit=now;damage-=absorbed;}
+  const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
   if(target.hp>0)return {target:targetActor.key,damage,defeated:false};
   target.deadUntil=now+5_000;releasePlayerWorldState(world,targetActor.key,now);if(sourceProfile)addXp(sourceProfile,60);const lost=Math.floor(target.wallet*ECONOMY.deathCoinFraction);target.wallet-=lost;
@@ -465,6 +479,8 @@ function validBuildPosition(world,actor,position){return canBuildAt(world,actor.
 export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0,actors=[]}={}){
   migrateWorld(world,now);let changed=false;
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
+  if(world.channelContactLocks)for(const [key,expiry] of Object.entries(world.channelContactLocks))
+   if(expiry<now-2000)delete world.channelContactLocks[key];
   if(world.monster?.active)changed=tickStatus(world.monster,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng))||changed;
   for(const mob of world.monsters||[])if(mob?.active)changed=tickStatus(mob,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng,'status',mob))||changed;
   for(const target of actors){const p=world.profiles[target.key];if(p&&!p.admin&&p.hp>0)changed=tickStatus(p,now,(owner,amount)=>damagePlayer(world,world.profiles[owner],target,Math.min(amount,2),now,'status',target.position))||changed;}
@@ -472,7 +488,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
   if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
   if(activeFighters>0&&!world.monster.active&&now>=world.monster.nextSpawnAt){const spawn=MONSTER_SPAWNS[Math.floor(rng()*MONSTER_SPAWNS.length)],variant=['warden','drowned','signal'][Math.floor(rng()*3)],maxHp={warden:420,drowned:520,signal:360}[variant];world.monster={active:true,id:id(),variant,position:[...spawn],hp:maxHp,maxHp,generation:(world.monster.generation||0)+1,spawnedAt:now,nextAttackAt:now+2_000,nextSpawnAt:now+ECONOMY.monsterIntervalMs};changed=true;}
-  if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
+  if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),silenced:!!effectActive(monster,'paralysis',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
  const confused=effectActive(monster,'confuse',now);
  if(confused){
   const angle=(now/210+(monster.generation||0)*2.4)%(Math.PI*2);
@@ -491,7 +507,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
     if(insideArtSanctuary(mob.position)){mob.position=[...MONSTER_SPAWNS[(mob.slot||0)%MONSTER_SPAWNS.length]];}
     mob.bodyHeight=ENEMY_HEIGHT;mob.bodyRadius=ENEMY_RADIUS;
     const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));
-    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
+    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),silenced:!!effectActive(mob,'paralysis',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
      move:(target,distance)=>{
        const confused=effectActive(mob,'confuse',now);
        if(confused){
@@ -563,8 +579,15 @@ function tickPersistentAttacks(world,actors,now,rng){
   ...(world.monsters||[]).filter(v=>v.active).map(value=>({kind:'monster',value})),
   ...actors.filter(v=>v.role==='fighter'&&!insideSafeZone(v.position)).map(value=>({kind:'player',value}))];
  for(const fx of attacks){
-  const prev=Math.max(0,Math.min(1,(fx.lastAt-fx.createdAt)/(fx.expiresAt-fx.createdAt)));
-  const next=Math.max(0,Math.min(1,(now-fx.createdAt)/(fx.expiresAt-fx.createdAt)));
+  // Persistent hazards must not cause a final phantom hit AFTER the visual
+  // has vanished. Ordinary short projectiles still sweep on a late tick.
+  if(fx.kind==='projectile'&&fx.flightMs&&
+     fx.expiresAt>fx.createdAt+fx.flightMs&&now>=fx.expiresAt){
+    fx.lastAt=now;continue;
+  }
+  const flight=fx.kind==='projectile'&&(Number(fx.flightMs)||0)>0?fx.flightMs:fx.expiresAt-fx.createdAt;
+  const prev=Math.max(0,Math.min(1,(fx.lastAt-fx.createdAt)/flight));
+  const next=Math.max(0,Math.min(1,(now-fx.createdAt)/flight));
   const owner=world.profiles[fx.owner];
   if(!owner){fx.lastAt=now;continue;}
   if(fx.kind==='projectile'){
@@ -575,9 +598,11 @@ function tickPersistentAttacks(world,actors,now,rng){
     const enemy=target.value,key=(enemy.id||enemy.key),isPlayer=target.kind==='player';
     if(enemy.key===fx.owner||(isPlayer&&insideSafeZone(enemy.position)))return false;
     const hitKey=pellet===null?key:pellet+':'+key;
-    const history=pellet===null?alreadyHit:(fx.pelletHits[pellet]??=[]);
-    if(pellet===null?history.has(hitKey):history.includes(hitKey))return false;
-    if(pellet===null){alreadyHit.add(hitKey);fx.hits.push(hitKey);}else history.push(hitKey);
+    const interval=contactDamageIntervalMs(weapon);
+    fx.hitTimes??={}; // Per visible projectile, not just the first contact.
+    const channelKey=fx.owner+':'+weapon.id+':'+hitKey;
+    const due=fx.channel?(world.channelContactLocks?.[channelKey]||0):(fx.hitTimes[hitKey]||0);
+    if(now<due)return false;
     const modifiers=directHitModifiers(weapon,{origin:fx.origin,direction:pellet===null?fx.direction:fx.pellets[pellet].direction,range:fx.range},
       {...enemy,island:true,visualScale:isPlayer?1:ENEMY_HEIGHT/1.575},position,now,rng);
     const power=isPlayer?fx.pvpDamage:fx.damage;
@@ -588,12 +613,22 @@ function tickPersistentAttacks(world,actors,now,rng){
     // No uncharged weapon may bypass the 8-hit baseline through a lucky
     // crit or a ten-ball shotgun burst. The pellets remain individually
     // damaging, with a full 5x+ per-pellet random damage window.
-    const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?50:32):
+    const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?150:96):
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
     const damage=isPlayer?Math.min(rawDamage,pvpCap):rawDamage;
+    const lethalHeadshot=isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
+     fx.origin,fx.direction,fx.range,enemy.position);
+    const hitKind=lethalHeadshot?(modifiers.critical?'critical-headshot':'headshot'):modifiers.kind;
     let applied;
-    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,modifiers.kind,position);
+    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,hitKind,position,lethalHeadshot);
     else applied=damageMonster(world,owner,damage,now,rng,modifiers.kind,enemy,position);
+    if(applied&&!applied.immune){
+     if(fx.channel){
+      world.channelContactLocks??={};world.channelContactLocks[channelKey]=now+interval;
+     }else fx.hitTimes[hitKey]=now+interval;
+     if(pellet===null&&!alreadyHit.has(key)){alreadyHit.add(key);fx.hits.push(key);}
+     else if(pellet!==null){const history=fx.pelletHits[pellet]??=[];if(!history.includes(key))history.push(key);}
+    }
     if(applied&&!applied.immune&&!applied.defeated){
      const statusKey=enemy.id||enemy.key;
      if(!(fx.statusHits||[]).includes(statusKey)){
@@ -641,7 +676,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     if(to>from+.00001){
      for(const target of targets){
       const enemy=target.value,key=enemy.id||enemy.key;
-      if(enemy.key===fx.owner||alreadyHit.has(key))continue;
+      if(enemy.key===fx.owner)continue;
       const radius=target.kind==='player'?1.02:ENEMY_RADIUS;
       const center=target.kind==='player'
        ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]
@@ -660,14 +695,14 @@ function tickPersistentAttacks(world,actors,now,rng){
    }
    // Ground-targeted charged area explosions are evaluated only once their
    // visible travel has completed; targets that have moved away evade damage.
-   if(fx.area?.mode==='area'&&!fx.areaResolved&&next>=1){
+   if(fx.area?.mode==='area'&&next>=1){
      // No invisible early area damage at 70% travel. The server-owned
      // collision sweep still handles the path, while remote AoE waits
      // until the travelling spell reaches its endpoint.
     fx.areaResolved=true;
     for(const target of targets){
      const enemy=target.value,key=enemy.id||enemy.key;
-     if(alreadyHit.has(key)||enemy.key===fx.owner)continue;
+     if(enemy.key===fx.owner)continue;
      const pos=target.kind==='player'
       ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]:
        [enemy.position[0],enemy.position[1]+ENEMY_HEIGHT*.5,enemy.position[2]];
@@ -677,6 +712,21 @@ function tickPersistentAttacks(world,actors,now,rng){
      const groundContact=[pos[0],enemy.position[1]+(target.kind==='player'?1:1.25),pos[2]];
      if(!insideChargedArea(fx.area,groundContact,target.kind==='player'?1.02:ENEMY_RADIUS))continue;
      if(outcome(target,pos,groundContact,null,fx.area.travel))changed=true;
+    }
+   }
+   // A persistent forward corridor remains dangerous only while its authored
+   // ultimate effect is visible. Check actual target volumes on every tick.
+   if(fx.area?.mode==='corridor'&&fx.charge>=1&&next>=1&&
+      now<fx.expiresAt&&fx.expiresAt>fx.createdAt+flight){
+    for(const target of targets){
+     const enemy=target.value,key=enemy.id||enemy.key;
+     if(enemy.key===fx.owner||(target.kind==='player'&&insideSafeZone(enemy.position)))continue;
+     const dist=target.kind==='player'
+      ?rayCylinderDistance(fx.origin,fx.direction,fx.range,enemy.position,1.02+fx.radius,2.35)
+      :monsterRayDistance(fx.origin,fx.direction,fx.range,enemy,fx.radius);
+     if(dist===null)continue;
+     const center=[enemy.position[0],enemy.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),enemy.position[2]];
+     if(outcome(target,center,center,null,dist))changed=true;
     }
    }
   }else if(fx.kind==='giraffe'){
@@ -692,13 +742,19 @@ function tickPersistentAttacks(world,actors,now,rng){
     for(const target of targets){
      const value=target.value;if(value.key===fx.owner||seen.includes(value.id||value.key))continue;
      if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
+     if(now<(fx.hitTimes?.[value.id||value.key]||0))continue;
      const contact=target.kind==='monster'?monsterRayDistance(a,direction,length,value,1.35*fx.radius):
       rayCylinderDistance(a,direction,length,value.position,1+fx.radius,2.35);
      if(contact===null)continue;
      seen.push(value.id||value.key);
+     fx.hitTimes??={};fx.hitTimes[value.id||value.key]=now+contactDamageIntervalMs({id:'giraffe'});
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
-     if(target.kind==='monster')damageMonster(world,owner,fx.damage*.53,now,rng,leg==='out'?'boomerang-out':'boomerang-return',value,center);
-     else damagePlayer(world,owner,value,(fx.pvpDamage||12)*.62,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',center);
+     const hit=target.kind==='monster'
+      ?damageMonster(world,owner,fx.damage*.53,now,rng,leg==='out'?'boomerang-out':'boomerang-return',value,center)
+      :damagePlayer(world,owner,value,(fx.pvpDamage||12)*.62,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',center);
+     if(hit&&!hit.immune&&!hit.defeated)applyElementalHit(
+      target.kind==='monster'?value:world.profiles[value.key],owner,
+      {family:'lightning',element:'electric'},now);
      changed=true;
     }
    }
@@ -710,13 +766,13 @@ function tickPersistentAttacks(world,actors,now,rng){
     const origin=fx.origin.map((v,j)=>v+fx.direction[j]*prev*fx.range);
     for(const target of targets){
      const value=target.value,key=value.id||value.key;
-     if(key===fx.owner||fx.fishHits.includes(key))continue;
+     if(key===fx.owner||now<(fx.hitTimes?.[key]||0))continue;
      if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
      const contact=target.kind==='monster'
       ?monsterRayDistance(origin,fx.direction,length,value,fx.radius)
       :rayCylinderDistance(origin,fx.direction,length,value.position,1.02+fx.radius,2.35);
      if(contact===null)continue;
-     fx.fishHits.push(key);
+     fx.hitTimes??={};fx.hitTimes[key]=now+contactDamageIntervalMs({id:'goldfish'});
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
      if(target.kind==='monster'){
       const result=damageMonster(world,owner,fx.damage*1.25,now,rng,'giant-goldfish',value,center);
@@ -752,12 +808,12 @@ function tickPersistentAttacks(world,actors,now,rng){
     for(const target of targets){
      const value=target.value;if(value.key===fx.owner)continue;
      if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
-     const pos=value.position,dist=Math.hypot(pos[0]-p[0],pos[2]-p[2]),id2=value.id||value.key,key=i+':'+id2;
+     const pos=value.position,dist=Math.hypot(pos[0]-p[0],pos[2]-p[2]),id2=value.id||value.key,key=id2; // All four tornadoes share a per-victim cooldown.
      // The rendered tornado is a finite 3-D column, not an infinite 2-D
      // hazard: a fighter flying above the visible vortex cannot be struck.
      const tornadoTop=p[1]+10*(1+(fx.tier-1)*.19),victimHeight=target.kind==='monster'?(value.bodyHeight||ENEMY_HEIGHT):2.35;
      if(pos[1]>tornadoTop||pos[1]+victimHeight<p[1]-1)continue;
-     if(dist>2.4+fx.radius*.48||now-(fx.fanHits[key]||0)<900)continue;
+     if(dist>2.4+fx.radius*.48||now-(fx.fanHits[key]||0)<contactDamageIntervalMs({id:'fan'}))continue;
      fx.fanHits[key]=now;
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
      if(target.kind==='monster')damageMonster(world,owner,fx.damage*.18,now,rng,'tornado',value,center);
@@ -778,7 +834,7 @@ function tickPersistentAttacks(world,actors,now,rng){
  return changed||world.persistentAttacks.length!==old;
 }
 
-function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount*=1+(effectActive(monster,'soaked',now)?.power||0);amount=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-amount);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng),material=MATERIALS[Math.floor(rng()*MATERIALS.length)];world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),kind:'material',itemId:material.id,position:[monster.position[0],.4,monster.position[2]+1.4],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=3;if(profile)addXp(profile,120);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
+function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount*=1+(effectActive(monster,'soaked',now)?.power||0);const hpLost=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-hpLost);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng),material=MATERIALS[Math.floor(rng()*MATERIALS.length)];world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),kind:'material',itemId:material.id,position:[monster.position[0],.4,monster.position[2]+1.4],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=3;if(profile)addXp(profile,120);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
 function moveMonster(world,monster,target,distance){const dx=target[0]-monster.position[0],dz=target[2]-monster.position[2],angle=Math.atan2(dz,dx);for(const offset of [0,.68,-.68,1.2,-1.2]){const next=[monster.position[0]+Math.cos(angle+offset)*distance,monster.position[1],monster.position[2]+Math.sin(angle+offset)*distance];if(!insideArena(next,-2)||insideArtSanctuary(next)||(world.structures||[]).some(s=>distance2d(next,s.position)<structureRadius(s)+1.1))continue;monster.position[0]=next[0];monster.position[2]=next[2];return;}}
 function hashString(value){let hash=2166136261;for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return hash>>>0;}
 

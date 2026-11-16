@@ -66,8 +66,8 @@ test('burn attaches a five-second damage-over-time visual status',()=>{
  assert.equal(hit(victim,'fire','fire'),'burn');
  assert.equal(victim.effects.burn.until,T+5000);
 });
-test('target-only overlay colors have exactly four 30%-alpha families',()=>{
- assert.deepEqual(Object.keys(ELEMENTAL_FILTERS).sort(),['dazzle','freeze','root','soaked']);
+test('target-only overlays include 30%-alpha violet paralysis',()=>{
+ assert.deepEqual(Object.keys(ELEMENTAL_FILTERS).sort(),['dazzle','freeze','paralysis','root','soaked']);
 });
 test('charged saber authoritative range is 60% of previous four-times multiplier',()=>{
  const item=itemById('saber-1'),charged=attackStats(item,1);

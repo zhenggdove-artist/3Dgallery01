@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 // Run against an ephemeral local Wrangler Durable Object; never production.
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {PLAYER_SPAWNS} from '../src/shared/arena.js';
 import {setTimeout as delay} from 'node:timers/promises';
 
 const base=process.env.TEMPLE_WORKER_URL||'http://127.0.0.1:8787';
@@ -38,7 +39,7 @@ assert.ok(token);
 // opens the real socket and submits a validated initial position.
 const socket=new WebSocket(base.replace(/^http/,'ws')+'/api/socket?token='+encodeURIComponent(token));
 await new Promise((resolve,reject)=>{socket.once('open',resolve);socket.once('error',reject);});
-socket.send(JSON.stringify({type:'state',data:{position:[-5,1,6],rotation:0,animation:'idle',visible:true}}));
+socket.send(JSON.stringify({type:'state',data:{position:PLAYER_SPAWNS[0],rotation:0,animation:'idle',visible:true}}));
 await delay(250);
 const act=async(action,extra={})=>call('/api/action',{action,requestId:randomUUID(),...extra},token);
 const denied=await call('/api/action',{action:'recover-artworks',requestId:randomUUID()},token,{expectedStatus:400});
@@ -62,7 +63,7 @@ assert.ok(worldAfterPlant.world.plants.some(p=>p.id===planted.plant.id));
 const png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9kAAAAASUVORK5CYII=','base64'));
 const uploaded=await call('/api/art-media',png,token,{raw:true,type:'image/png'});
 assert.ok(uploaded.id);
-const build=await act('publish-art-bomb',{artwork:{title:'Guest smoke art',mediaId:uploaded.id,position:[0,1.5,12],appearance:{depth:.1}},size:1.5});
+const build=await act('publish-art-bomb',{artwork:{title:'Guest smoke art',mediaId:uploaded.id,position:[-17,1.5,22],appearance:{depth:.1}},size:1.5});
 assert.ok(build.artwork?.bomb,JSON.stringify(build));
 assert.equal(build.artwork.owner,join.self.key);
 const resized=await act('resize-art-bomb',{id:build.artwork.id,size:2});

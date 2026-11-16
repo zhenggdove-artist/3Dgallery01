@@ -1,4 +1,5 @@
 import {EQUIPMENT,DEFAULT_WEAPON,attackStats as reletterAttackStats} from '../reletter/equipment-catalog.js';
+import {SNIPER_RANGE} from './combat-balance.js';
 export const RARITIES = Object.freeze([
   {id:'common',name:'Common',color:'#d7d2c6',weight:50},
   {id:'uncommon',name:'Uncommon',color:'#76d59a',weight:28},
@@ -36,6 +37,7 @@ export const SPELL_FAMILIES=Object.freeze(['water','ice','fire','lightning','bea
 export function attackStats(item,charge=0){
  const result=reletterAttackStats(item,charge);
  if(item.id==='water')result.damage*=10;
+ if(item.id==='black-cat'){result.range=SNIPER_RANGE;result.damage*=3;}
  if(SPELL_FAMILIES.includes(item.family)&&!item.exotic)result.range=+(result.range/3).toFixed(3);
  // Keep the narrower #59 preview equal to the real server hit tube.
  // The sword fissure is now 60% of the previous full-charge reach.
