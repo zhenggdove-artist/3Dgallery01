@@ -39,6 +39,11 @@ export class EquipmentPortraitViewport{
    if(/rightarm$/.test(name))bone.rotation.z-=.24;
   });
   orientPortraitModel(model);
+  // The actual Temple avatar's anatomical 'front' lies on the sideways
+  // imported model's world +X, unlike the generic Mixamo landmark fallback.
+  // Rotate around WORLD Y to put its face toward the portrait's +Z camera.
+  model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(
+   new THREE.Vector3(0,1,0),-Math.PI/2));
   this.scene.add(model);
   this.model=model;
   model.updateMatrixWorld(true);

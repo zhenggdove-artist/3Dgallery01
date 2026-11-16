@@ -72,6 +72,11 @@ try{
   const t=templeTest,gun=t.gun;
   const originalWeapon=gun.weapon,originalEmit=t.ui.emit;
   window.desktopScopeShots=0;
+  window.desktopScopeLog=[];
+  addEventListener('pointerdown',e=>window.desktopScopeLog.push({
+   target:e.target?.id||e.target?.tagName,
+   type:e.pointerType,x:e.clientX,y:e.clientY,locked:!!document.pointerLockElement
+  }),true);
   gun.weapon=()=>({id:'black-cat',firstPerson:true,range:90,cooldown:800});
   t.ui.emit=function(type,...args){
    if(type==='gun-fire'){window.desktopScopeShots++;return;}
@@ -86,11 +91,23 @@ try{
  });
  assert.equal(setupDesk.mode,2,'desktop sniper CAMERA enters full scope');
  await page.mouse.click(640,400);
- await page.waitForFunction(()=>window.desktopScopeShots===1);
+ await page.waitForTimeout(200);
+ const firstScope=await page.evaluate(()=>({
+  shots:window.desktopScopeShots,mode:templeTest.gun.mode,
+  panel:templeTest.ui.panelName,events:window.desktopScopeLog,
+  locked:document.pointerLockElement?.id,
+  canvas:document.elementFromPoint(640,400)?.id||document.elementFromPoint(640,400)?.tagName
+ }));
+ assert.equal(firstScope.shots,1,'desktop scope must fire: '+JSON.stringify(firstScope));
  assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,
   'desktop mouse click must fire without quitting sniper view');
  await page.mouse.click(1010,620);
- await page.waitForFunction(()=>window.desktopScopeShots===2);
+ await page.waitForTimeout(200);
+ const secondScope=await page.evaluate(()=>({
+  shots:window.desktopScopeShots,mode:templeTest.gun.mode,
+  events:window.desktopScopeLog,locked:document.pointerLockElement?.id
+ }));
+ assert.equal(secondScope.shots,2,'desktop mask click must fire: '+JSON.stringify(secondScope));
  assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,
   'desktop click outside glass circle must not trigger mobile-only scope exit');
  await page.evaluate(()=>window.restoreDesktopScope());

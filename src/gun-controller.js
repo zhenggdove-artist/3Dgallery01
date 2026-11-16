@@ -26,13 +26,21 @@ export class GunController {
       e.preventDefault();e.stopImmediatePropagation();this.end();
     },true);
     addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)||ui.panelName)return;if(e.code==='KeyV'&&weapon()?.firstPerson&&!e.repeat){e.preventDefault();e.stopImmediatePropagation();this.cycle();}if(e.code==='Escape'&&this.mode){this.end();}},true);
-    addEventListener('pointermove',e=>{if(!this.mode||controller()?.status?.freeze||e.target!==canvas)return;e.stopImmediatePropagation();const c=controller(),s=.002*(this.mode===2?.3:1);const previous=this.lookPointer?.id===e.pointerId?this.lookPointer:null,dx=e.pointerType==='touch'?(previous?e.clientX-previous.x:0):e.movementX,dy=e.pointerType==='touch'?(previous?e.clientY-previous.y:0):e.movementY;if(e.pointerType==='touch')this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};c.yaw-=dx*s;c.pitch=THREE.MathUtils.clamp(c.pitch+dy*s,-1.1,1.2);},true);
+    addEventListener('pointermove',e=>{if(!this.mode||controller()?.status?.freeze||(e.target!==canvas&&document.pointerLockElement!==canvas))return;e.stopImmediatePropagation();const c=controller(),s=.002*(this.mode===2?.3:1);const previous=this.lookPointer?.id===e.pointerId?this.lookPointer:null,dx=e.pointerType==='touch'?(previous?e.clientX-previous.x:0):e.movementX,dy=e.pointerType==='touch'?(previous?e.clientY-previous.y:0):e.movementY;if(e.pointerType==='touch')this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};c.yaw-=dx*s;c.pitch=THREE.MathUtils.clamp(c.pitch+dy*s,-1.1,1.2);},true);
     for(const type of ['pointerdown','pointerup','pointercancel'])addEventListener(type,e=>{
       const button=e.target.closest?.('#attack-button');if(!weapon()?.firstPerson||!controller()?.enabled||controller()?.holdingArt)return;
       // A/Q cycles CAMERA only. Direct canvas taps shoot while aiming;
       // neither the first nor subsequent A presses may trigger gunfire.
       if(button)return;
-      if(!this.mode||controller()?.status?.freeze||e.target!==canvas||e.button>0)return;e.preventDefault();e.stopImmediatePropagation();
+      if(!this.mode||controller()?.status?.freeze||e.button>0)return;
+      // Browser pointer-lock and translucent DOM layers can retarget desktop
+      // clicks to BODY rather than CANVAS. In scoped mode, every unblocked
+      // mouse click is a shot, regardless of aperture-screen coordinates.
+      const onCanvas=e.target===canvas;
+      const excluded=e.target.closest?.('button,input,textarea,select,a,[contenteditable="true"],#panel,#dock,#entry,#chat-hud,#mobile-stick');
+      const scopedMouse=this.mode===2&&e.pointerType==='mouse'&&!excluded;
+      if(!onCanvas&&!scopedMouse)return;
+      e.preventDefault();e.stopImmediatePropagation();
       if(type==='pointerdown'){this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};if(!document.pointerLockElement)canvas.setPointerCapture(e.pointerId);if(weapon().id==='white-cat'){this.held=true;this.nextShot=0;}else ui.emit('gun-fire');}
       else{this.lookPointer=null;this.held=false;}
     },true);
