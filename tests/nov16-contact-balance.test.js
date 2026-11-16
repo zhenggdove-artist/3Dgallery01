@@ -115,3 +115,21 @@ test('shotgun uses ten unique randomly scattered 3-D sphere trajectories, each w
  assert.ok(group.children.every(c=>c.position.z>0&&c.position.z<10));
  fx.dispose();assert.equal(scene.children.length,0);
 });
+
+test('black-cat rifle retains slow high-damage long-range shots unlike regular 8-hit weapons',()=>{
+ const {w,caster,victim,b}=scenario('black-cat',[75,0,30]);
+ const at=T+2000;
+ const first=fire(w,caster,at);
+ assert.equal(first.error,undefined);
+ assert.equal(b.hp,100);
+ advance(w,at+500,[caster,victim]);
+ assert.ok(b.hp<=74&&b.hp>=65,'sniper must hit for approximately 27 HP rather than generic 10–13');
+ assert.equal(fire(w,caster,at+500).error,'Weapon is recovering');
+ assert.equal(fire(w,caster,at+3700).error,undefined);
+ const {w:charged,caster:c,victim:v,b:target}=scenario('black-cat',[75,0,30]);
+ assert.ok(applyAction(charged,c,{action:'attack',phase:'charge'},{now:T+1000}).charging);
+ const ultimate=fire(charged,c,T+4000,{charge:1});
+ assert.equal(ultimate.attackEvent.ultimate,true);
+ advance(charged,T+4500,[c,v]);
+ assert.ok(target.hp<65,'longer charge increases black-cat ultimate damage');
+});
