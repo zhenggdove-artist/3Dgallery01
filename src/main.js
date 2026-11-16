@@ -76,6 +76,7 @@ network.addEventListener('connection',event=>{if(joined)ui.toast(event.detail.co
 ui.addEventListener('attack',()=>performAttack());ui.addEventListener('interact',()=>performInteract());
 ui.addEventListener('create-platform',event=>sendAction('create-platform',event.detail));
 ui.addEventListener('art-bomb-resize',event=>sendAction('resize-art-bomb',event.detail));
+ui.addEventListener('art-bomb-appearance',event=>sendAction('update-art-bomb-appearance',event.detail));
 ui.addEventListener('art-bomb-upload',async event=>{
  if(self?.role!=='fighter')return ui.toast('JOIN AS A FIGHTER TO PLACE ARTWORK');
  if(artBombUploading)return;
@@ -100,7 +101,7 @@ ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(!ite
 ui.addEventListener('original-action',event=>sendAction(event.detail.action,event.detail));
 ui.addEventListener('jump',()=>controller?.jump());
 addEventListener('keyup',e=>{if(e.code==='KeyE')artworkThrow.release();});
-ui.addEventListener('attack-start',()=>{if(!controller?.enabled||self?.role!=='fighter'||chargeStarted!==null)return;if(controller.holdingArt){artworkThrow.begin();return;}attackHeld=true;chargeStarted=performance.now();chargeRequest=sendAction('attack',{phase:'charge'});});
+ui.addEventListener('attack-start',()=>{if(!controller?.enabled||self?.role!=='fighter'||chargeStarted!==null)return;if(coarse&&buildPlacement){confirmBuildPlacement();return;}if(coarse&&!controller.holdingArt){const near=arena.nearest(controller.root.position.toArray());if(near?.type==='artwork'||near?.type==='plant'){performInteract();return;}}if(controller.holdingArt){artworkThrow.begin();return;}attackHeld=true;chargeStarted=performance.now();chargeRequest=sendAction('attack',{phase:'charge'});});
 ui.addEventListener('attack-release',async()=>{attackHeld=false;if(artworkThrow.started!==null)return artworkThrow.release();if(chargeStarted===null)return;const charge=Math.min(1,(performance.now()-chargeStarted)/(itemById(world?.profile?.equipment?.weapon)?.chargeMs||1500));chargeStarted=null;await chargeRequest;performAttack(charge);});
 ui.addEventListener('attack-cancel',()=>{attackHeld=false;chargeStarted=null;artworkThrow.cancel();});
 ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;sendAction(action,data);});
