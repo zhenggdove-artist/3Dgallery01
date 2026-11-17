@@ -11,7 +11,7 @@ const makeInvisible=root=>{root.visible=false;return root;};
 export class IslandEnemies{
  constructor(scene){
   this.scene=scene;this.models=new Map();this.spells=new Map();this.current=null;this.extraModels=[];
-  this.extraStates=[];this.extraLive=[];
+  this.extraStates=[];this.extraLive=[];this.skillPool=new Map();this.prewarmCount=0;
  }
  async load(){
   await Promise.all([
@@ -24,6 +24,32 @@ export class IslandEnemies{
     root.name='Sixfold outer monster '+(i+1)+' · '+kind;this.extraModels[i]=root;this.scene.add(root);
    })())
   ]);
+ }
+ async warm(renderer,camera){
+  const stage=new THREE.Scene(),warmed=[];
+  const types=['swipe','charge','laser','slam','venom'];
+  const now=Date.now();
+  for(const motion of types)for(let i=0;i<2;i++){
+   const skill={id:'warm-'+motion+'-'+i,motion,type:'shockwave',phase:'active',start:now-100,
+    end:now+1000,origin:[0,0,0],aim:[8,0,3],mouth:[0,7,0],radius:6};
+   const mesh=createArenaAbilityEffect(skill);
+   updateArenaAbilityEffect(mesh,skill,now,.05);
+   mesh.traverse(o=>{if(o.isMesh)o.visible=true;});
+   stage.add(mesh);warmed.push({motion,mesh});
+  }
+  const view=camera.clone();view.position.set(6,10,18);view.lookAt(0,1,0);
+  const old=renderer.getRenderTarget(),target=new THREE.WebGLRenderTarget(16,16);
+  try{
+   await renderer.compileAsync(stage,view);
+   renderer.setRenderTarget(target);renderer.render(stage,view);
+  }finally{
+   renderer.setRenderTarget(old);target.dispose();
+   for(const {motion,mesh} of warmed){
+    mesh.removeFromParent();mesh.userData.sourceVfx?.reset?.();
+    const pool=this.skillPool.get(motion)||[];pool.push(mesh);this.skillPool.set(motion,pool);
+   }
+  }
+  this.prewarmCount=warmed.length;
  }
  sync(state,extras=[]){
   this.state=state;
@@ -88,14 +114,17 @@ export class IslandEnemies{
     const key=state.id+':'+spell.id;live.add(key);
     let mesh=this.spells.get(key);
     if(!mesh){
-     mesh=spell.motion&&['charge','laser','slam','venom','swipe'].includes(spell.motion)?createArenaAbilityEffect(spell):createEnemySpellEffect(THREE,spell,{mobile:matchMedia('(pointer:coarse)').matches});
+     mesh=spell.motion&&['charge','laser','slam','venom','swipe'].includes(spell.motion)?
+       (this.skillPool.get(spell.motion)?.pop()||createArenaAbilityEffect(spell)):
+       createEnemySpellEffect(THREE,spell,{mobile:matchMedia('(pointer:coarse)').matches});
+      mesh.userData.sourceVfx?.reset?.();
      this.spells.set(key,mesh);this.scene.add(mesh);
     }
     if(mesh.userData.arenaSkill)updateArenaAbilityEffect(mesh,spell,now,dt);else updateEnemySpellEffect(THREE,mesh,spell,now,viewport);
    }
   }
   for(const [id,mesh] of this.spells)if(!live.has(id)){
-   if(mesh.userData.arenaSkill)disposeArenaAbilityEffect(mesh);else{mesh.removeFromParent();mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}this.spells.delete(id);
+   if(mesh.userData.arenaSkill){mesh.removeFromParent();const pool=this.skillPool.get(mesh.userData.arenaSkill)||[];if(pool.length<3){pool.push(mesh);this.skillPool.set(mesh.userData.arenaSkill,pool);}else disposeArenaAbilityEffect(mesh);}else{mesh.removeFromParent();mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}this.spells.delete(id);
   }
  }
 }
