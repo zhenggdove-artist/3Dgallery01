@@ -4,16 +4,17 @@ import {readFileSync} from 'node:fs';
 import {itemById,attackStats} from '../src/shared/catalog.js';
 import {chargedArea,scaleUltimateFootprint} from '../src/shared/charge-area.js';
 import {pvpShotDamage} from '../src/shared/combat-balance.js';
+import {weaponQuality,forwardCastRadius} from '../src/shared/weapon-abilities.js';
 
 test('all swatter ultimate warning radii and reaches match pan of the same tier',()=>{
  for(let tier=1;tier<=5;tier++){
   const pan=itemById('pan-'+tier),swatter=itemById('swatter-'+tier);
-  const p=scaleUltimateFootprint(attackStats(pan,1),pan);
-  const s=scaleUltimateFootprint(attackStats(swatter,1),swatter);
+  const footprint=item=>{const stats=attackStats(item,1),q=weaponQuality(item);stats.range=+(stats.range*q.range).toFixed(2);stats.radius=forwardCastRadius(item,q,stats.radius,false);return scaleUltimateFootprint(stats,item);};
+  const p=footprint(pan),s=footprint(swatter);
   assert.equal(s.range,p.range,'reach, tier '+tier);
   assert.equal(s.radius,p.radius,'radius, tier '+tier);
   assert.equal(chargedArea(swatter,[0,1.16,0],[0,0,1],s).mode,'area');
-  if(tier>1)assert.ok(s.radius>scaleUltimateFootprint(attackStats(itemById('swatter-'+(tier-1)),1),itemById('swatter-'+(tier-1))).radius);
+  if(tier>1)assert.ok(s.radius>footprint(itemById('swatter-'+(tier-1))).radius);
  }
 });
 test('SMG baseline damage halved, cadence doubled, and PvP damage uses same factor',()=>{
