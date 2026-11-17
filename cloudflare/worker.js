@@ -6,6 +6,7 @@ import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
 import {playerStats} from '../src/shared/player-stats.js';
 
+const MUSIC_CHUNK_BYTES=512*1024,MAX_GM_MUSIC_BYTES=7_500_000;
 const ROOM_ID='temple-main-v1',SESSION_MS=24*60*60*1000,SAVE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const FIGHTER_SEATS=Array.from({length:MAX_FIGHTERS},(_,i)=>i);
 const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
@@ -31,6 +32,8 @@ export class TempleRoom extends DurableObject{
       CREATE TABLE IF NOT EXISTS request_receipts (session_id TEXT NOT NULL, request_id TEXT NOT NULL, response TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(session_id,request_id));
       CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS plant_media (id TEXT PRIMARY KEY, owner TEXT NOT NULL, type TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL);
+       CREATE TABLE IF NOT EXISTS gm_music_meta (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, bytes INTEGER NOT NULL, chunks INTEGER NOT NULL);
+       CREATE TABLE IF NOT EXISTS gm_music_chunks (version INTEGER NOT NULL, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(version,part));
     `);
     initializeArtMedia(this.sql);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
@@ -51,6 +54,7 @@ export class TempleRoom extends DurableObject{
     try{
       if(path==='/health')return withCors(request,json({ok:true,service:'TempleRoom',database:'sqlite',players:this.roster().length,apiVersion:3,features:{artMediaUpload:true,artBombPlace:true,gmReset:true}}),this.env);
       if(path==='/api/join'&&request.method==='POST')return withCors(request,await this.join(request),this.env);
+       if(path==='/api/gm/music'&&['GET','HEAD'].includes(request.method))return withCors(request,this.gmMusicResponse(request,url),this.env);
       if(path.startsWith('/api/art-media/')&&request.method==='GET')return withCors(request,getArtMedia(this.sql,path.slice(15),request),this.env);
       if(path.startsWith('/api/media/')&&request.method==='GET'){
         const media=this.sql.exec('SELECT type,data FROM plant_media WHERE id=?',path.slice(11)).toArray()[0];
@@ -60,6 +64,7 @@ export class TempleRoom extends DurableObject{
       if(path==='/api/art-media'&&request.method==='POST')return withCors(request,await uploadArtMedia(request,session,this),this.env);
       if(path==='/api/socket')return this.connect(request,session,token);
       if(path==='/api/media'&&request.method==='POST')return withCors(request,await this.uploadMedia(request,session),this.env);
+       if(path==='/api/gm/music'&&request.method==='POST')return withCors(request,await this.uploadGmMusic(request,session),this.env);
       if(path==='/api/world'&&request.method==='GET')return withCors(request,json({world:worldView(this.world(),session.profile_key),players:this.roster(),self:this.self(session)}),this.env);
       if(path==='/api/gm/presence'&&request.method==='GET')return withCors(request,this.gmPresence(session),this.env);
       if(path==='/api/action'&&request.method==='POST')return withCors(request,await this.action(request,session),this.env);
@@ -157,6 +162,75 @@ export class TempleRoom extends DurableObject{
     this.ctx.storage.transactionSync(()=>{this.sql.exec('INSERT INTO save_codes VALUES(?,?,?,?)',code,session.profile_key,now,now);this.sql.exec('UPDATE sessions SET save_code=?,last_code_at=? WHERE id=?',code,now,session.id);});return json({ok:true,code});
   }
 
+  gmMusicResponse(request,url){
+    const meta=this.sql.exec('SELECT version,bytes,chunks FROM gm_music_meta WHERE id=1').toArray()[0];
+    if(!meta)return json({error:'GM soundtrack has not been uploaded'},404);
+    const size=Number(meta.bytes),range=request.headers.get('Range');
+    let start=0,end=size-1,status=200;
+    if(range){
+      const match=/^bytes=(\d*)-(\d*)$/.exec(range.trim());
+      if(!match||(!match[1]&&!match[2]))
+        return new Response(null,{status:416,headers:{'Content-Range':`bytes */${size}`}});
+      if(!match[1]){const suffix=Number(match[2]);start=Math.max(0,size-suffix);}
+      else {start=Number(match[1]);if(match[2])end=Math.min(size-1,Number(match[2]));}
+      if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=size||start>end)
+        return new Response(null,{status:416,headers:{'Content-Range':`bytes */${size}`}});
+      status=206;
+    }
+    const headers=new Headers({'Content-Type':'audio/mpeg','Accept-Ranges':'bytes',
+      'Content-Length':String(end-start+1),'X-Content-Type-Options':'nosniff',
+      'Cache-Control':url.searchParams.get('v')===String(meta.version)?
+        'public,max-age=31536000,immutable':'no-store'});
+    if(status===206)headers.set('Content-Range',`bytes ${start}-${end}/${size}`);
+    if(request.method==='HEAD')return new Response(null,{status,headers});
+    const out=new Uint8Array(end-start+1),first=Math.floor(start/MUSIC_CHUNK_BYTES),last=Math.floor(end/MUSIC_CHUNK_BYTES);
+    const records=this.sql.exec(
+      'SELECT part,data FROM gm_music_chunks WHERE version=? AND part>=? AND part<=? ORDER BY part',
+      meta.version,first,last).toArray();
+    if(records.length!==last-first+1)return json({error:'Soundtrack storage incomplete'},503);
+    for(const record of records){
+      const data=record.data,base=record.part*MUSIC_CHUNK_BYTES;
+      const a=Math.max(start,base),b=Math.min(end+1,base+data.length);
+      out.set(data.subarray(a-base,b-base),a-start);
+    }
+    return new Response(out,{status,headers});
+  }
+  async uploadGmMusic(request,session){
+    const world=this.world();
+    if(!world.profiles?.[session.profile_key]?.admin)return json({error:'GM only'},403);
+    if(!this.consumeRate('gm-music:'+session.profile_key,3,60_000))
+      return json({error:'Upload limit reached'},429);
+    const mime=(request.headers.get('Content-Type')||'').split(';')[0].toLowerCase();
+    if(!['audio/mpeg','audio/mp3','application/octet-stream'].includes(mime))
+      return json({error:'Only MP3 files are supported'},415);
+    const reader=request.body?.getReader();if(!reader)return json({error:'Empty upload'},400);
+    const chunks=[];let bytes=0;
+    for(;;){const {done,value}=await reader.read();if(done)break;
+      bytes+=value.byteLength;if(bytes>MAX_GM_MUSIC_BYTES){
+        await reader.cancel();return json({error:'MP3 file exceeds 7.5 MB'},413);
+      }chunks.push(value);
+    }
+    if(bytes<1024)return json({error:'MP3 file is empty or too small'},400);
+    const music=new Uint8Array(bytes);let offset=0;
+    for(const chunk of chunks){music.set(chunk,offset);offset+=chunk.length;}
+    if(!(music[0]===73&&music[1]===68&&music[2]===51)&&
+       !(music[0]===255&&(music[1]&224)===224))
+      return json({error:'File is not an MP3 stream'},415);
+    const before=this.sql.exec('SELECT version FROM gm_music_meta WHERE id=1').toArray()[0];
+    const version=Math.max(Date.now(),Number(before?.version||0)+1);
+    const partCount=Math.ceil(bytes/MUSIC_CHUNK_BYTES);
+    this.ctx.storage.transactionSync(()=>{
+      for(let part=0;part<partCount;part++)
+        this.sql.exec('INSERT INTO gm_music_chunks(version,part,data) VALUES(?,?,?)',
+          version,part,music.slice(part*MUSIC_CHUNK_BYTES,(part+1)*MUSIC_CHUNK_BYTES));
+      this.sql.exec('INSERT OR REPLACE INTO gm_music_meta(id,version,bytes,chunks) VALUES(1,?,?,?)',
+        version,bytes,partCount);
+      this.sql.exec('DELETE FROM gm_music_chunks WHERE version<>?',version);
+    });
+    world.musicVersion=version;world.revision=(world.revision||0)+1;
+    this.save(world);this.broadcastWorld(world);
+    return json({ok:true,version,bytes});
+  }
   async uploadMedia(request,session){
     if(session.role!=='fighter')return json({error:'Spectators cannot upload'},403);
     if(!this.consumeRate('media:'+session.profile_key,12,60_000))return json({error:'Upload limit reached'},429);
