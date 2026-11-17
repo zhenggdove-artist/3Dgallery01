@@ -65,7 +65,7 @@ const travelLifetime=number=>number===70?1.26:number===43?2.2:4.2;
 const vector=(value,fallback)=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite)?
  new THREE.Vector3(...value):fallback.clone();
 const channelColors=Object.freeze({
- 'arc-ray':'#2878ff','tidal-surge':'#66cddd','revival-bloom':'#ff8fbd',
+ 'arc-ray':'#2878ff','tidal-surge':'#66cddd','revival-bloom':'#ff1493',
  'anime-flame-shield':'#ff761f','ice-lance-study':'#d4e8ed',
  'energy-vortex':'#66d7ff','radiant-beam':'#b874ff','charged-beam':'#b874ff','thorn-crown':'#88d49a'
 });
@@ -79,7 +79,12 @@ export function ultimateWorldScale(number,event,options={}){
  if(number===26)return Math.max(2*(Number(options.quality)||1),Math.min(12,radius/2));
  // The widened whip warning must not enlarge the original #48 animation.
  if(number===48)return .2*Math.max(2,Math.min(12,(radius/1.5/.2)/Math.max(.25,(Number(options.size)||1)*.8)));
- if(number===53)return Math.max(.08,Math.min(1.6,radius/Math.max(4.5,(Number(options.size)||1)*9))); // #53 world footprint is constrained to the tier-matched pan warning
+ if(number===53){
+   // Native radius ~4.5 local metres: match the warning exactly instead
+   // of halving it with the previous /9 world-scale correction.
+   const nativeSize=Math.min(2,Math.max(.2,Number(options.size)||1));
+   return Math.max(.08,radius/(4.5*nativeSize));
+  }
  return null; // directional originals already follow the server-approved ray
 }
 export function requestedEffect(item,event){
