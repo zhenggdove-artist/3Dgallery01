@@ -23,11 +23,13 @@ export function scaleUltimateFootprint(stats,item=null){
   // The global 60% change remains in force. The frying-pan ultimate is
   // another 50% smaller; the whip ultimate is now another 80% smaller.
   // Use the item ID, not the family: the Chiang token is not a frying pan.
-  const relative=/^pan-[1-5]$/.test(item?.id||'')?.5:
-   /^whip-[1-5]$/.test(item?.id||'')?.2:1;
-  const factor=ULTIMATE_FOOTPRINT_SCALE*relative;
-  stats.range=+(Math.max(.5,Number(stats.range)||0)*factor).toFixed(3);
-  stats.radius=+(Math.max(.1,Number(stats.radius)||0)*factor).toFixed(3);
+  const pan=/^pan-[1-5]$/.test(item?.id||'');
+  const whip=/^whip-[1-5]$/.test(item?.id||'');
+  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:whip?.2:1);
+  // Broaden only the whip's warning/hit radius; retain its travel distance.
+  const radiusFactor=rangeFactor*(whip?1.5:1);
+  stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);
+  stats.radius=+(Math.max(.1,Number(stats.radius)||0)*radiusFactor).toFixed(3);
  }
  return stats;
 }
@@ -46,13 +48,12 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  const intercept=dir[1]<-.04?(origin[1]-floorAtDistance)/(-dir[1]):Infinity;
  const travel=clamp(Number.isFinite(intercept)?intercept:defaultDistance,3,range);
  const [dx,dz]=flatDirection(direction);
- // Shift the WHOLE whip explosion (VFX, warning, server hit circle) one
- // additional blast radius away from the caster. Preserve the attack's
- // charge range independently from the target-centre displacement.
- const whipOffset=stats?.ultimate&&/^whip-[1-5]$/.test(item?.id||'')?radius:0;
- const centerDistance=travel+whipOffset;
- const x=origin[0]+(whipOffset?dx:dir[0])*centerDistance,
-  z=origin[2]+(whipOffset?dz:dir[2])*centerDistance;
+ // Shift pan and whip centres forward by one CURRENT blast radius. This
+ // single coordinate drives the warning, authoritative hitbox and VFX.
+ const blastOffset=stats?.ultimate&&/^(?:pan|whip)-[1-5]$/.test(item?.id||'')?radius:0;
+ const centerDistance=travel+blastOffset;
+ const x=origin[0]+(blastOffset?dx:dir[0])*centerDistance,
+  z=origin[2]+(blastOffset?dz:dir[2])*centerDistance;
  const floor=Math.max(0,ground(x,z,origin[1]));
  const nearFloor=Math.max(0,ground(origin[0],origin[2],origin[1]));
  return {
