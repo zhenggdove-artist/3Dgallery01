@@ -100,3 +100,47 @@ test('whip pulls a still player at exactly half base walk speed, but outward mov
  assert.ok(resisting.root.position.x>20,'walk speed exceeds inward 50%-speed suction');
  assert.ok(Math.abs(resisting.root.position.x-(20+(8.64-WHIP_PULL_SPEED)*.1))<1e-8);
 });
+
+
+test('whip ultimate pulls both the boss and the five-monster pack toward its centre once per cast',()=>{
+ for(const tier of [1,3,5]){
+  const now=T+100_000+tier*20_000,world=createInitialWorld(now);
+  const caster=fighter('caster',[75,0,0]);
+  const profile=ensureProfile(world,'caster','caster','#ffffff',now);
+  profile.inventory.push('whip-'+tier);profile.equipment.weapon='whip-'+tier;
+  world.monster={active:true,id:'boss',generation:1,model:'uncle',variant:'warden',
+   position:[75,0,9],hp:10000,maxHp:10000,nextAttackAt:now+100000};
+  world.monsters=[{active:true,id:'minion',slot:0,model:'uncle',variant:'uncle',generation:1,
+   position:[75,0,9],hp:10000,maxHp:10000,nextAttackAt:now+100000}];
+  assert.equal(applyAction(world,caster,{action:'attack',phase:'charge'},{now:now+1000}).charging,true);
+  const at=now+6000,shot=applyAction(world,caster,
+   {action:'attack',direction:[0,0,1],charge:1},
+   {now:at,actors:[caster],rng:()=>.5});
+  assert.equal(shot.error,undefined);
+  const [cx,,cz]=shot.attackEvent.area.center;
+  world.monster.position=[cx+.6,0,cz];
+  world.monsters[0].position=[cx-.6,0,cz];
+  tickWorld(world,{now:at+650,actors:[caster],activeFighters:1,rng:()=>.5});
+  const victims=[world.monster,world.monsters[0]];
+  for(const monster of victims){
+   assert.ok(monster.whipPull,'monster must gain a server-owned suction window');
+   assert.equal(monster.whipPull.durationMs,whipPullDurationMs(tier));
+   assert.equal(monster.whipPull.speed,WHIP_PULL_SPEED);
+   assert.deepEqual(monster.whipPull.center,[cx,cz]);
+  }
+  const started=victims.map(monster=>monster.whipPull.id);
+  const before=victims.map(monster=>Math.hypot(monster.position[0]-cx,monster.position[2]-cz));
+  tickWorld(world,{now:at+750,actors:[caster],activeFighters:1,rng:()=>.5});
+  for(let i=0;i<victims.length;i++){
+   const monster=victims[i];
+   assert.ok(Math.hypot(monster.position[0]-cx,monster.position[2]-cz)<before[i],
+    'boss and pack members move visibly inward during the same timed vortex');
+   assert.equal(monster.whipPull?.id,started[i],'continued contact cannot refresh suction');
+  }
+  tickWorld(world,{now:at+2500,actors:[caster],activeFighters:1,rng:()=>.5});
+  assert.equal(world.monster.whipPull,undefined);
+  assert.equal(world.monsters[0].whipPull,undefined);
+  const fx=world.persistentAttacks.find(f=>f.weapon==='whip-'+tier);
+  assert.ok(fx.pullHits?.includes('boss')&&fx.pullHits?.includes('minion'));
+ }
+});
