@@ -69,13 +69,13 @@ const channelColors=Object.freeze({
 });
 // Scale the ORIGINAL authored effect, rather than replacing its artwork.
 // #68 and #48 retain their pre-change vendor size and apply the exact same
-// post-quality reduction as their server-owned circle: 50% pan, 60% whip.
+// post-quality reduction as their server-owned circle: 50% pan, 80% whip (a further 50% reduction).
 export function ultimateWorldScale(number,event,options={}){
  if(!event?.ultimate||event.channel)return null;
  const radius=Math.max(.1,Number(event.area?.radius)||Number(event.radius)||.1);
  if(number===68)return .5*Math.max(7.5,(radius/.5)/Math.max(.2,Number(options.size)||1));
  if(number===26)return Math.max(2*(Number(options.quality)||1),Math.min(12,radius/2));
- if(number===48)return .4*Math.max(2,Math.min(12,(radius/.4)/Math.max(.25,(Number(options.size)||1)*.8)));
+ if(number===48)return .2*Math.max(2,Math.min(12,(radius/.2)/Math.max(.25,(Number(options.size)||1)*.8)));
  if(number===53)return Math.max(2,Math.min(12,radius/Math.max(.25,(Number(options.size)||1)*.8)));
  return null; // directional originals already follow the server-approved ray
 }
@@ -168,7 +168,7 @@ export class NumberedWeaponEffects {
   if(event.ultimate&&!event.channel&&Number.isFinite(event.area?.radius)&&![26,29,31,38,70].includes(spec.number)){
    // Reconstruct the old vendor size first. Applying only the matching
    // outer world scale ensures identical proportional shrink at all tiers.
-   const originalRadius=event.area.radius/(spec.number===68?.5:spec.number===48?.4:1);
+   const originalRadius=event.area.radius/(spec.number===68?.5:spec.number===48?.2:1);
    size=Math.max(.25,Math.min(3.5,originalRadius/4.5));
   }
   const options={size,quality,detail:event.fusionEcho?.55:1,density:event.fusionEcho?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
