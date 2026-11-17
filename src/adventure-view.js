@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import {createHeart} from './heart-model.js';
 import {originalWorldVisuals} from './reletter/world-visuals.js';
 import {disposeGardenModel} from './reletter/garden-art.js';
 import {makePlant} from './reletter/plants.js';
@@ -31,7 +30,7 @@ export class AdventureView{
  update(dt,time,roots,camera){
   if(!this.world)return;this.original.sync({holes:[],ponds:[],sessions:{}},roots);this.original.update(dt,time);
   if(time>=this.nextSync){this.nextSync=time+.5;
-   this.reconcile(this.loot,this.world.groundDrops.filter(d=>d.kind==='heart'||d.kind!=='coin'&&itemById(d.itemId)),d=>{const o=d.kind==='heart'?createHeart():createVisibleDrop(itemById(d.itemId),this.original);o.userData.drop=d;this.scene.add(o);return o;});
+   this.reconcile(this.loot,this.world.groundDrops.filter(d=>d.kind!=='heart'&&d.kind!=='coin'&&itemById(d.itemId)),d=>{const o=createVisibleDrop(itemById(d.itemId),this.original);o.userData.drop=d;this.scene.add(o);return o;});
    // Detailed original plants are distance bounded. All entries remain persistent/readable.
    const near=[...this.world.plants].sort((a,b)=>camera.position.distanceToSquared(new THREE.Vector3(...a.position))-camera.position.distanceToSquared(new THREE.Vector3(...b.position))).slice(0,24);
    this.reconcile(this.plants,near,p=>{const o=makePlant(p.text||p.id);o.position.fromArray(p.position);o.userData.entry=p;o.userData.growDur=3100;

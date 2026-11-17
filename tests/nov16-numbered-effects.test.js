@@ -24,7 +24,7 @@ const evt=kind=>({origin:[0,1,0],direction:[0,0,1],range:12,
  area:{mode:'area',center:[0,.12,8],visualCenter:[0,.16,8],radius:3,travel:8},
  time:123});
 
-test('all fourteen IDs map to verified, byte-identical official downloads',async()=>{
+test('numbered effects retain verified originals; prism alone switches to original charged-beam',async()=>{
  const manifest=JSON.parse(await readFile(new URL('../vendor/00gamedevs/numbered-manifest.json',import.meta.url)));
  assert.equal(manifest.assets.length,14);
  assert.equal(manifest.packaging.includes('byte-identical'),true);
@@ -33,6 +33,13 @@ test('all fourteen IDs map to verified, byte-identical official downloads',async
   assert.ok(item,weapon);
   assert.equal(spec?.number,num,weapon);
   assert.equal(spec.original,true,weapon);
+  if(weapon.startsWith('prism-')){
+   assert.equal(spec.asset,'charged-beam','prism uses newly requested official source');
+   const source=await readFile(new URL('../vendor/00gamedevs/charged-beam.js',import.meta.url));
+   assert.match(source.toString(),/The MIT License/);
+   assert.match(source.toString(),/"id": "charged-beam"/);
+   continue; // The old numbered #29 is retained on disk for other effects.
+  }
   const manifestEntry=manifest.assets.find(a=>a.number===num);
   assert.equal(manifestEntry?.id,spec.asset,weapon);
   assert.equal(manifestEntry.license,'MIT');
@@ -150,14 +157,14 @@ test('custom exotic ultimates are not stolen by ordinary family mappings',()=>{
 });
 
 
-test('prism focuser #29 is the actual Solar Halo Beam on tap, full charge, and held cast',()=>{
+test('prism focuser uses original Charged Beam on tap, full charge, and held cast',()=>{
  const item=itemById('prism-2');
  for(const event of [
   {...evt('normal'),channel:false,ultimate:false},
   {...evt('ultimate'),channel:false,ultimate:true},
   {...evt('channel'),channel:true,ultimate:true}
  ]){
-  assert.equal(requestedEffect(item,event)?.number,29);
+  assert.equal(requestedEffect(item,event)?.asset,'charged-beam');
   const scene=new THREE.Scene(),effects=new NumberedWeaponEffects(scene);
   assert.equal(effects.play(event,item),true);
   const active=effects.active[0];

@@ -14,15 +14,16 @@ import darkchain from '../vendor/00gamedevs/source/darkchain-detonation.js';
 import rollingFireburst from '../vendor/00gamedevs/source/rolling-fireburst.js';
 import iceLance from '../vendor/00gamedevs/source/ice-lance-study.js';
 import radiantBeam from '../vendor/00gamedevs/source/radiant-beam.js';
+import chargedBeam from '../vendor/00gamedevs/charged-beam.js';
 import thornCrown from '../vendor/00gamedevs/source/thorn-crown.js';
 import animeFlame from '../vendor/00gamedevs/source/anime-flame-shield.js';
 
 export const REQUESTED_VFX=Object.freeze({
  'clam:channel':{number:33,asset:'tidal-surge',original:true},
  'clam:ultimate':{number:33,asset:'tidal-surge',original:true},
- 'beam:normal':{number:29,asset:'radiant-beam',original:true},
- 'beam:channel':{number:29,asset:'radiant-beam',original:true},
- 'beam:ultimate':{number:29,asset:'radiant-beam',original:true},
+ 'beam:normal':{number:29,asset:'charged-beam',original:true},
+ 'beam:channel':{number:29,asset:'charged-beam',original:true},
+ 'beam:ultimate':{number:29,asset:'charged-beam',original:true},
  'saber:ultimate':{number:38,asset:'magma-fissure',original:true},
  'palm:ultimate':{number:31,asset:'thorn-crown',original:true},
  'petal:channel':{number:43,asset:'revival-bloom',original:true},
@@ -44,6 +45,7 @@ const FACTORIES={
  'dimensional-rend':dimensionalRend,'black-hole':blackHole,
  'darkchain-detonation':darkchain,'rolling-fireburst':rollingFireburst,
  'ice-lance-study':iceLance,'anime-flame-shield':animeFlame,'radiant-beam':radiantBeam,
+  'charged-beam':chargedBeam,
  'thorn-crown':thornCrown
 };
 const UP=new THREE.Vector3(0,1,0);
@@ -65,7 +67,7 @@ const vector=(value,fallback)=>Array.isArray(value)&&value.length===3&&value.eve
 const channelColors=Object.freeze({
  'arc-ray':'#2878ff','tidal-surge':'#66cddd','revival-bloom':'#ff8fbd',
  'anime-flame-shield':'#ff761f','ice-lance-study':'#d4e8ed',
- 'energy-vortex':'#66d7ff','radiant-beam':'#b874ff','thorn-crown':'#88d49a'
+ 'energy-vortex':'#66d7ff','radiant-beam':'#b874ff','charged-beam':'#b874ff','thorn-crown':'#88d49a'
 });
 // Scale the ORIGINAL authored effect, rather than replacing its artwork.
 // #68 and #48 retain their pre-change vendor size and apply the exact same
@@ -119,7 +121,7 @@ export class NumberedWeaponEffects {
   const fx=factory(options);
   if(!fx?.group?.isObject3D||typeof fx.update!=='function'||typeof fx.dispose!=='function')
    throw Error('Invalid original 00GameDevs VFX #'+spec.number);
-  fx.group.name='00GameDevs original VFX #'+String(spec.number).padStart(2,'0')+' '+spec.asset;
+  fx.group.name=spec.asset==='charged-beam'?'00GameDevs original VFX charged-beam':'00GameDevs original VFX #'+String(spec.number).padStart(2,'0')+' '+spec.asset;
   fx.group.userData.vfxSource='00GameDevs';
   fx.group.userData.vfxId=spec.asset;
   fx.group.userData.vfxNumber=spec.number;
@@ -210,7 +212,7 @@ export class NumberedWeaponEffects {
   if(!options.color)delete options.color;
   const fx=this.acquire(spec,options);
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
-  // #29 is a forward beam: even its charged shot starts at the weapon, not
+  // The official charged-beam ray starts at the weapon muzzle, not
   // at an unrelated remote ground-circle centre.
   // Sword cracks begin from the hand, not a distant ground-target position.
   const areaLocked=!!event.ultimate&&!event.channel&&![20,29,31,33,38,43].includes(spec.number)&&Array.isArray(event.area?.visualCenter);
@@ -486,7 +488,7 @@ export class NumberedWeaponEffects {
    if((!e.key&&e.fx.finished)||e.age>=e.duration){
     this.remove(e);continue;
    }
-   // Continuous originals (#08, #29, #20, #73) sustain without being reset
+   // Continuous originals (#08, charged-beam, #20, #73) sustain without being reset
    // by individual server pulses. There is no animation reset on impact.
    if(e.key&&e.fx.finished)e.fx.reset();
   }
