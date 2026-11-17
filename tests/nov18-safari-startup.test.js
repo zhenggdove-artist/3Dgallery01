@@ -8,7 +8,10 @@ const audio=readFileSync(new URL('../src/game-audio.js',import.meta.url),'utf8')
 test('mobile startup uses a persistent cache key instead of rotating 15-second URLs',()=>{
  assert.doesNotMatch(html,/Math\.floor\(Date\.now\(\)\s*\/\s*15000\)/);
  assert.match(html,/temple-release=/);
- assert.match(html,/20261118-elemental-audio-charged-beam-r1/);
+ const release=html.match(/const release = '([^']+)'/)?.[1];
+ assert.match(release||'',/^20\d{6}-[a-z0-9-]+$/);
+ assert.ok(html.includes('window.templeStartupDiagnostics = {release: "'+release+'"'),
+  'startup diagnostics must report the same deployed module release');
 });
 
 test('failed module imports report the underlying exception rather than a generic 0% timeout',()=>{
