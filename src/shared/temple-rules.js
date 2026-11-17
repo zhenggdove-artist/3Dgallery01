@@ -115,15 +115,24 @@ function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>
 export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,journey=null,now=Date.now(),mobility=null){
   const pose=journeyPose(journey,now);
   if(pose&&role==='fighter')return {state:{position:pose.position,rotation:Math.PI,animation:pose.animation,visible:true}};
+  // Pan recoil can lift someone standing on a 30m GM deck above the
+  // ordinary 32m arena ceiling. Grant only the short, server-authorized
+  // explosion arc the extra vertical headroom.
+  const authorizedPanFlight=role==='fighter'&&mobility?.hitReaction?.panBlast&&
+   now-(mobility.hitReaction.time||0)>=0&&now-(mobility.hitReaction.time||0)<3200;
+  const validPanHeight=authorizedPanFlight&&Array.isArray(next?.position)&&
+   next.position.length===3&&next.position.every(Number.isFinite)&&
+   Math.hypot(next.position[0],next.position[2])<=ARENA_RADIUS+2&&
+   next.position[1]>=-4&&next.position[1]<=36;
   if(!next||!Array.isArray(next.position)||next.position.length!==3||!next.position.every(Number.isFinite)||
-     !insideArena(next.position,role==='spectator'?28:2)||!Number.isFinite(next.rotation))
+     !(insideArena(next.position,role==='spectator'?28:2)||validPanHeight)||!Number.isFinite(next.rotation))
     return {error:'Invalid position',state:previous||null};
   const distanceTo=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
   const nearSpawn=spawn&&distanceTo(next.position,spawn)<=6;
   if(!previous&&spawn&&!nearSpawn)return {error:'Spawn position rejected',state:{position:spawn,rotation:0,animation:'idle',visible:true}};
   if(previous&&role==='fighter'){
     const freeze=effectActive(mobility||{},'freeze',now),root=effectActive(mobility||{},'root',now);
-    if(freeze||root)return {state:{...previous,position:[...previous.position],
+    if((freeze||root)&&!authorizedPanFlight)return {state:{...previous,position:[...previous.position],
       rotation:freeze?previous.rotation:+next.rotation.toFixed(4),
       animation:'idle',visible:true}};
     const elapsed=clamp(elapsedMs/1000,.05,12);
