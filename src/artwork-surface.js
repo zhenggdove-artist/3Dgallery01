@@ -15,5 +15,34 @@ export function applyArtworkAppearance(root,value){const appearance={...artworkA
 export async function loadCustomArtwork(arena,record,base){const root=new THREE.Group();root.name='Artwork '+record.title;root.userData={platformId:record.id,record,base:record.position};const url=base+'/api/art-media/'+encodeURIComponent(record.mediaId);
  if(record.type==='model'){const gltf=await arena.loader.loadAsync(url),model=gltf.scene;model.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(model,true),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),scale=3/Math.max(size.x,size.y,size.z,.001);model.position.copy(center).negate();const holder=new THREE.Group();holder.add(model);holder.scale.setScalar(scale);root.add(holder);root.userData.model=true;if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);mixer.clipAction(gltf.animations[0]).play();arena.mixers.push(mixer);}}
  else{let texture,width,height;if(record.type==='video'){const v=document.createElement('video');v.crossOrigin='anonymous';v.muted=true;v.loop=true;v.playsInline=true;v.preload='auto';await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Video load timed out: '+record.title)),20000);v.onloadeddata=()=>{clearTimeout(timeout);resolve();};v.onerror=()=>{clearTimeout(timeout);reject(Error('Video cannot be decoded: '+record.title));};v.src=url;});texture=new THREE.VideoTexture(v);width=v.videoWidth;height=v.videoHeight;root.userData.video=v;}else{texture=await new THREE.TextureLoader().loadAsync(url);width=texture.image.width;height=texture.image.height;}texture.colorSpace=THREE.SRGBColorSpace;const h=3,w=3*width/height,mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshStandardMaterial({map:texture,alphaTest:.035,side:THREE.DoubleSide,roughness:.7,emissive:0xffffff,emissiveMap:texture,emissiveIntensity:.16}));root.add(mesh);addArtworkDepth(root,texture,w,h);}
+ addArtworkTitlePlate(root,record.title);
  root.position.fromArray(record.position);applyArtworkAppearance(root,arena.world?.artworkLayout?.[record.id]?.appearance);return root;
+}
+
+/** Black background / white letters; the title follows its uploaded artwork. */
+export function addArtworkTitlePlate(root,title){
+ const value=String(title||'').trim();if(!value)return null;
+ const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');if(!ctx)return null;
+ const width=1024,padding=42,lineHeight=60;
+ ctx.font='bold 44px system-ui, sans-serif';
+ const rows=[];let current='';
+ for(const glyph of Array.from(value.slice(0,120))){
+  if(glyph==='\n'){rows.push(current);current='';continue;}
+  if(current&&ctx.measureText(current+glyph).width>width-padding*2){rows.push(current);current=glyph;}
+  else current+=glyph;
+ }
+ if(current||!rows.length)rows.push(current);
+ canvas.width=width;canvas.height=padding*2+lineHeight*rows.length;
+ ctx.fillStyle='#000000';ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.font='bold 44px system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ffffff';
+ for(let i=0;i<rows.length;i++)ctx.fillText(rows[i],width/2,padding+lineHeight*(i+.5),width-padding*2);
+ const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+ texture.minFilter=THREE.LinearFilter;texture.generateMipmaps=false;
+ const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false,toneMapped:false}));
+ const bounds=new THREE.Box3().setFromObject(root,true),bottom=Number.isFinite(bounds.min.y)?bounds.min.y:-1.5;
+ sprite.scale.set(3.5,3.5*canvas.height/width,1);
+ sprite.position.set(0,bottom-sprite.scale.y/2-.13,.18);
+ sprite.name='Artwork title: '+value;sprite.renderOrder=10;
+ root.add(sprite);root.userData.titlePlate=sprite;
+ return sprite;
 }
