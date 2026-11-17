@@ -107,6 +107,6 @@ export function makeSpellEquipment(item){
  if(tier>=3){const crown=mesh(new THREE.TorusGeometry(.17+tier*.025,.02,7,24),metal,0,h+.45,0);crown.rotation.x=.25*tier;crown.rotation.y=pick(13)*Math.PI;}
  if(tier===5)for(let i=0;i<5;i++){const a=i*Math.PI*2/5;sphere(.045,Math.cos(a)*.31,h+.48,Math.sin(a)*.31,bright);}
  g.name=item.name+' / '+item.id;
- g.userData={family:item.family,spell:true,reach:1.6,weaponId:item.id};
+ g.userData={family:item.family,spell:true,reach:1.6,weaponId:item.id,muzzleHeight:h+.52};
  return g;
 }

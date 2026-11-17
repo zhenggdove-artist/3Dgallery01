@@ -68,7 +68,7 @@ export class WeaponVFX{
   if(!root)return fallback;
   const blade=root.userData?.blade;
   if(blade){
-   const tip=item?.id==='clam'?new THREE.Vector3(0,.68,.28):new THREE.Vector3(0,1.18,0);
+   const tip=item?.id==='clam'?new THREE.Vector3(0,.68,.28):new THREE.Vector3(0,Number(blade.userData.muzzleHeight)||1.18,0);
    blade.updateWorldMatrix(true,false);
    return blade.localToWorld(tip);
   }
