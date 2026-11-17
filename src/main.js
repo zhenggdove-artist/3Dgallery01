@@ -153,6 +153,9 @@ ui.addEventListener('attack-start',()=>{
  if(!controller?.enabled||self?.role!=='fighter')return;
  if(coarse&&buildPlacement){confirmBuildPlacement();return;}
  if(controller.holdingArt){artworkThrow.begin();return;}
+ // Artwork pickup always wins over weapon camera cycling, including rifles.
+ const nearbyArt=arena.nearest(controller.root.position.toArray());
+ if(nearbyArt?.type==='artwork'){performInteract();return;}
  const weapon=itemById(world?.profile?.equipment?.weapon);
  if(weapon?.firstPerson){gun.cycle();return;}
  if(!artworkThrow.started){
