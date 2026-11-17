@@ -206,7 +206,7 @@ export class NumberedWeaponEffects {
    const originalRadius=cosmeticRadius/(spec.number===68?.5:spec.number===48?.2:1);
    size=Math.max(.25,Math.min(3.5,originalRadius/4.5));
   }
-  const options={size,quality,detail:event.fusionEcho?.55:1,density:event.fusionEcho?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
+  const options={size,quality,detail:event.fusionEcho?.55:1,density:event.fusionEcho?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,color:spec.number===29?'#bc83ff':channelColors[spec.asset]||undefined};
   if(!options.color)delete options.color;
   const fx=this.acquire(spec,options);
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
@@ -234,6 +234,13 @@ export class NumberedWeaponEffects {
   if(entry.worldScale!=null)fx.group.scale.setScalar(entry.worldScale);
   // The vendor clamps 'size' at 2. Double the physical world-space group.
   if(spec.number===26)fx.group.scale.setScalar(entry.worldScale||2*quality);
+  if(spec.number===29){
+   // Cosmetic five-times-thicker purple core follows the original #29 preset.
+   const geometry=new THREE.CylinderGeometry(.8,.8,1,14,1,true);
+   const material=new THREE.MeshBasicMaterial({color:'#9d55fc',transparent:true,opacity:.34,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending});
+   entry.prismCore=new THREE.Mesh(geometry,material);this.scene.add(entry.prismCore);
+   this.alignPrismCore(entry);
+  }
   if(spec.number===31){
    // Three independently authored ORIGINAL #31 crown instances, not a
    // synthetic thorn mesh; aligned vertically and moved as one projectile.
@@ -259,6 +266,13 @@ export class NumberedWeaponEffects {
   }
   return entry.areaLocked?entry.target.clone():entry.origin.clone();
  }
+ alignPrismCore(entry){
+  const core=entry.prismCore;if(!core)return;
+  const origin=this.muzzleAt(entry),delta=entry.direction.clone().multiplyScalar(entry.range);
+  core.position.copy(origin).addScaledVector(delta,.5);
+  core.quaternion.setFromUnitVectors(UP,delta.clone().normalize());
+  core.scale.set(1,delta.length(),1);
+ }
  align(entry,fx=entry.fx) {
   const {spec,range}=entry;
   let dir=entry.direction.clone();
@@ -272,6 +286,7 @@ export class NumberedWeaponEffects {
    fx.group.position.set(0,0,0);
    fx.group.quaternion.identity();
    fx.setEndpoints(origin,origin.clone().addScaledVector(dir,range));
+   if(spec.number===29)this.alignPrismCore(entry);
    return;
   }
   if(spec.number===73){
@@ -505,6 +520,7 @@ export class NumberedWeaponEffects {
   const i=this.active.indexOf(e);
   if(i<0)return;
   this.active.splice(i,1);
+  if(e.prismCore){e.prismCore.removeFromParent();e.prismCore.geometry.dispose();e.prismCore.material.dispose();e.prismCore=null;}
   if(e.palmLayers){
    for(const fx of e.palmLayers)this.recycle(e.spec,fx);
    e.palmLayers.length=0;return;
