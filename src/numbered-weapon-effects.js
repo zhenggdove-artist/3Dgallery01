@@ -121,7 +121,7 @@ export class NumberedWeaponEffects {
   const fx=factory(options);
   if(!fx?.group?.isObject3D||typeof fx.update!=='function'||typeof fx.dispose!=='function')
    throw Error('Invalid original 00GameDevs VFX #'+spec.number);
-  fx.group.name='00GameDevs original VFX '+spec.asset;
+  fx.group.name=spec.asset==='charged-beam'?'00GameDevs original VFX charged-beam':'00GameDevs original VFX #'+String(spec.number).padStart(2,'0')+' '+spec.asset;
   fx.group.userData.vfxSource='00GameDevs';
   fx.group.userData.vfxId=spec.asset;
   fx.group.userData.vfxNumber=spec.number;
