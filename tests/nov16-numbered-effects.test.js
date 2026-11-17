@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import * as THREE from 'three';
 import {NumberedWeaponEffects,REQUESTED_VFX,requestedEffect} from '../src/numbered-weapon-effects.js';
 import {ChargeTargetPreview} from '../src/charge-target-preview.js';
-import {chargedArea,spellGroundHeight} from '../src/shared/charge-area.js';
+import {chargedArea,spellGroundHeight,scaleUltimateFootprint} from '../src/shared/charge-area.js';
 import {weaponQuality} from '../src/shared/weapon-abilities.js';
 import {equippedItem} from '../src/shared/fusion-adapter.js';
 import {attackStats,itemById} from '../src/shared/catalog.js';
@@ -105,6 +105,7 @@ test('saber ultimate warns with a sword-origin straight rectangle instead of a r
  const quality=weaponQuality(item,fusion),stats=attackStats(item,1);
  stats.range=+(stats.range*quality.range).toFixed(2);
  stats.radius=+(stats.radius*quality.radius).toFixed(2);
+ scaleUltimateFootprint(stats);
  const world={floatingPlatforms:[]};
  const area=chargedArea(item,[5,1,9],direction,stats,(x,z,y)=>spellGroundHeight(world,x,z,y));
  preview.update(root,item,1,direction,{world},fusion);
@@ -124,6 +125,7 @@ test('warning circle includes fused original range/radius and authoritative chan
  stats.range=Math.max(stats.range,Math.min(18,actual.range));
  stats.range=+(stats.range*quality.range).toFixed(2);
  stats.radius=+(stats.radius*quality.radius).toFixed(2);
+ scaleUltimateFootprint(stats);
  const world={floatingPlatforms:[]},direction=[0,-.12,1];
  const area=chargedArea(actual,[3,1,4],direction,stats,(x,z,y)=>spellGroundHeight(world,x,z,y));
  const scene=new THREE.Scene(),preview=new ChargeTargetPreview(scene),root=new THREE.Group();

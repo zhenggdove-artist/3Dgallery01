@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {attackStats} from './shared/catalog.js';
+import {SNIPER_RANGE} from './shared/combat-balance.js';
 import {chargedArea,spellGroundHeight,spellFootprint,scaleUltimateFootprint} from './shared/charge-area.js';
 import {weaponQuality,isChannelStaff,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_RADIUS} from './shared/weapon-abilities.js';
 // These are the ORIGINAL source downloads from 00GameDevs; do not redraw them.
@@ -64,6 +65,7 @@ export class ChargeTargetPreview {
   // Use the same thin hit tube as server-owned continuous casting, rather
   // than the giant charged blast radius.
   stats.radius=forwardCastRadius(equipped,quality,stats.radius,isChannelStaff(equipped));
+   if(equipped.id==='black-cat')stats.range=SNIPER_RANGE;
    if(equipped.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
    if(equipped.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
    scaleUltimateFootprint(stats);
