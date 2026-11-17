@@ -44,7 +44,7 @@ const renderer=new THREE.WebGLRenderer({canvas,antialias:!coarse,powerPreference
 renderer.setPixelRatio(Math.min(devicePixelRatio,settings.pixelRatio|| (coarse?1:1.35)));renderer.setSize(innerWidth,innerHeight,false);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.82;
 const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,1000),arena=new TempleArena(scene,renderer),ui=new TempleUI(),network=new TempleNetwork();
 const vhs=createVHS(renderer),audio=new GameAudio(),bursts=new GoldenBursts(scene),chargePreview=new ChargeTargetPreview(scene);
-const artworkThrow=new ArtworkThrow({scene,arena,controller:()=>controller,send:sendAction,bursts,audio});
+const artworkThrow=new ArtworkThrow({scene,arena,controller:()=>controller,holderKey:()=>self?.key,send:sendAction,bursts,audio});
 arena.artFloat=settings.artFloat??.17;
 
 let vitalModels=null;
@@ -118,7 +118,7 @@ network.addEventListener('state-rejected',event=>{
 });
 network.addEventListener('connection',event=>{if(joined)ui.toast(event.detail.connected?'REALTIME CONNECTED':'RECONNECTING…');});
 
-ui.addEventListener('attack',()=>performAttack());ui.addEventListener('interact',()=>performInteract());
+ui.addEventListener('attack',()=>performAttack());
 ui.addEventListener('gun-fire',()=>{if(gun.mode)void performAttack(0);});
 ui.addEventListener('create-platform',event=>sendAction('create-platform',event.detail));
 ui.addEventListener('art-bomb-resize',event=>sendAction('resize-art-bomb',event.detail));
@@ -146,8 +146,8 @@ ui.addEventListener('upload-artwork',async event=>{if(!self?.profile?.admin)retu
 ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(item&&controller)ui.toast('Use this material in BAG → FUSION');});
 ui.addEventListener('original-action',event=>sendAction(event.detail.action,event.detail));
 ui.addEventListener('jump',()=>controller?.jump());
-addEventListener('keyup',e=>{if(e.code==='KeyE')artworkThrow.release();});
-// On mobile A doubles as contextual E. For firearms A ONLY switches
+// On-screen A/Q is the sole interaction/throw control on desktop and mobile.
+// For firearms A ONLY switches
 // camera: standard > shoulder > sniper scope > standard; canvas tap fires.
 ui.addEventListener('attack-start',()=>{
  if(!controller?.enabled||self?.role!=='fighter')return;
@@ -155,7 +155,7 @@ ui.addEventListener('attack-start',()=>{
  if(controller.holdingArt){artworkThrow.begin();return;}
  const weapon=itemById(world?.profile?.equipment?.weapon);
  if(weapon?.firstPerson){gun.cycle();return;}
- if(coarse&&!artworkThrow.started){
+ if(!artworkThrow.started){
   const near=arena.nearest(controller.root.position.toArray());
   const canUse=near&&['artwork','coin','drop','plant'].includes(near.type);
   const byPlant=!near&&Math.hypot(controller.root.position.x,controller.root.position.z)<7;
