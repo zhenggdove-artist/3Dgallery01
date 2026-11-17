@@ -253,7 +253,7 @@ function syncPlayers(){
   for(const [key,root] of roots)if(key!==self.key&&!live.has(key)){statusVisuals.clear(root);root.removeFromParent();roots.delete(key);remoteTargets.delete(key);}ui.setPlayers(players);
 }
 function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root||!hit||root.userData.lastHitReaction===hit.id||Date.now()-hit.time>2500)return;root.userData.lastHitReaction=hit.id;audio.play('hit',root===localRoot?1:.35);root.userData.hitFlashUntil=performance.now()+250;if(root===localRoot){
-  controller.stunUntil=hit.whipPull?0:performance.now()+100;
+  controller.stunUntil=hit.whipPull?0:performance.now()+Math.max(0,(hit.stunMs||100)-(Date.now()-(hit.time||Date.now())));
   if(hit.whipPull){
    controller.lastWhipPullId=hit.whipPull.id;
    controller.beginWhipPull(hit.whipPull);
