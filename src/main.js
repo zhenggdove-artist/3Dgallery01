@@ -231,8 +231,11 @@ function syncPlayers(){
 }
 function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root||!hit||root.userData.lastHitReaction===hit.id||Date.now()-hit.time>2500)return;root.userData.lastHitReaction=hit.id;audio.play('hit',root===localRoot?1:.35);root.userData.hitFlashUntil=performance.now()+250;if(root===localRoot){
   controller.stunUntil=performance.now()+100;
-  if(Number(hit.knockbackDistance)>0){
-   // Pan VFX and warning use exactly the radius delivered by the server.
+  if(hit.panBlast&&Number(hit.knockbackDistance)>0){
+   // Server-authored launch. The local physics controller takes over for
+   // a complete parabola followed by three diminishing ground rebounds.
+   controller.beginPanBlast(hit);
+  }else if(Number(hit.knockbackDistance)>0){
    controller.knockback=new THREE.Vector3(...hit.vector).normalize();
    controller.knockbackRemaining=hit.knockbackDistance;
   }else{
