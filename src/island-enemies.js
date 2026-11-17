@@ -53,9 +53,16 @@ export class IslandEnemies{
   const skill=state.skills?.find(s=>s.motion&&s.phase==='active');
   animateIslandModel(root,{...state,skills:skill?[]:state.skills,lastHit:state.lastHitAt},dt,now);
   if(skill){
-   const t=Math.min(1,(now-skill.start)/1200),pulse=Math.sin(Math.PI*t);
+   const t=Math.min(1,Math.max(0,(now-skill.start)/Math.max(1,skill.end-skill.start))),pulse=Math.sin(Math.PI*t);
    root.userData.pivot.rotation.x=skill.motion==='stomp'?-.32*Math.sin(t*Math.PI*2):skill.motion==='charge'?.28:0;
-   if(skill.motion==='stomp')root.userData.pivot.position.y=Math.sin(Math.PI*t)*3.3;
+   if(skill.motion==='stomp'){
+     root.userData.pivot.position.y=pulse*6.6;
+     for(const name of ['LeftUpLeg','RightUpLeg','LeftLeg','RightLeg']){
+      const bone=root.userData.bones?.[name];if(!bone)continue;
+      root.userData.attackRestore.push([bone,bone.quaternion.clone()]);
+      bone.rotateX((name.endsWith('UpLeg')?-.56:1.15)*pulse);
+     }
+    }
    if(skill.motion==='swipe')root.traverse(b=>{
     if(b.isBone&&/RightArm$|RightForeArm$/i.test(b.name)){
      root.userData.attackRestore.push([b,b.quaternion.clone()]);
