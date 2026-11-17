@@ -23,9 +23,10 @@ export function scaleUltimateFootprint(stats,item=null){
   // The global 60% change remains in force. The frying-pan ultimate is
   // another 50% smaller; the whip ultimate is now another 80% smaller.
   // Use the item ID, not the family: the Chiang token is not a frying pan.
-  const pan=/^(?:pan|swatter)-[1-5]$/.test(item?.id||'');
+  const pan=/^pan-[1-5]$/.test(item?.id||'');
+  const swatter=/^swatter-[1-5]$/.test(item?.id||'');
   const whip=/^whip-[1-5]$/.test(item?.id||'');
-  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:whip?.2:1);
+  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:item?.family==='ice'?1.5:1);
   // Broaden only the whip's warning/hit radius; retain its travel distance.
   const radiusFactor=rangeFactor*(whip?1.5:1);
   stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);

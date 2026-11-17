@@ -392,7 +392,8 @@ function attack(world,profile,actor,body,context,now){
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
   stats.radius=forwardCastRadius(weapon,quality,stats.radius,channel);
    // Restrict ordinary whip contacts to the visible, narrow forward-moving lash.
-   if(weapon.family==='whip'&&!weapon.exotic&&!stats.ultimate){stats.range=Math.min(stats.range,4.7+(Math.max(1,weapon.tier||1)-1)*1.5);stats.radius=.24;}
+   if(weapon.family==='whip'&&!weapon.exotic&&!stats.ultimate){stats.range=+(Math.min(stats.range,4.7+(Math.max(1,weapon.tier||1)-1)*1.5)/3).toFixed(3);stats.radius=.16;}
+    if(weapon.family==='swatter'&&!weapon.exotic&&!stats.ultimate){stats.range=Math.min(stats.range,1.55+(Math.max(1,weapon.tier||1)-1)*.2);stats.radius=.18;}
   // Jellybrella's giant spinning wheel is an area hazard, not a .3m point.
   // Scale the original authoritative area and its warning with the doubled wheel.
   if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
@@ -471,7 +472,7 @@ function attack(world,profile,actor,body,context,now){
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
         outHits:[],backHits:[],fanHits:{},fishHits:[],
         createdAt:now,lastAt:now,expiresAt:now+duration});
-      fusionEchoes.push({id:echoId,owner:actor.key,origin:[...origin],direction:[...direction],
+      fusionEchoes.push({id:echoId,owner:actor.key,fusionSlot,origin:[...origin],direction:[...direction],
         weapon:source.id,family:source.family,color:source.color,charge:1,ultimate:true,channel:echoChannel,
         range:secondary.range,radius:secondary.radius,area:echoArea,qualityTier:sourceQuality.tier,
         qualityScale:sourceQuality.visual*.5,qualityDuration:sourceQuality.duration,
@@ -498,7 +499,7 @@ function attack(world,profile,actor,body,context,now){
    structureHit??=event;structureHits.push(event);
    if(structure.hp===0){const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);}
   }
-  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false,fixedDamage=false){

@@ -13,9 +13,9 @@ export const ENEMY_RADIUS=.42*6; // Includes the sixfold humanoid's shoulders an
 // This module is shared by the Worker and browser, so it cannot import Three.js.
 const SKILLS=Object.freeze({
  swipe:{warning:480,active:500,range:4.8,radius:4.2},
- charge:{warning:850,active:800,range:19,radius:2.35},
- beam:{warning:750,active:1250,range:38,radius:1.65},
- stomp:{warning:1000,active:650,range:8,radius:7},
+ charge:{warning:850,active:1600,range:19,radius:2.35},
+ beam:{warning:750,active:3400,range:38,radius:1.65},
+ stomp:{warning:1000,active:1500,range:8,radius:7},
  venom:{warning:850,active:5100,range:27,radius:5.2}
 });
 export const MONSTER_SKILLS=SKILLS;
@@ -57,8 +57,10 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
   if(s.motion==='charge'){
    // A fixed marked path, not homing after the warning has been shown.
    const duration=Math.max(.1,(s.end-s.start)/1000);
-   const step=flatDistance(monster.position,s.aim)*Math.min(1,dt/duration*1.7);
-   if(step>.001){move(s.aim,Math.max(2,step)*(1-slow));monster.moving=true;}
+   const remaining=flatDistance(monster.position,s.aim);
+   const speed=Math.max(4,flatDistance(s.origin,s.aim)/duration);
+   const step=Math.min(remaining,speed*Math.min(dt,.25)*Math.max(0,1-slow));
+   if(step>.001){move(s.aim,step);monster.moving=true;}
   }
   for(const target of targets){
    const key=target.key;
@@ -82,7 +84,9 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
  const order=['swipe','beam','charge','venom','stomp'];
  const count=monster.attackCount||0;
  // Prefer a usable ability at distance: the outer mobs MUST engage at range.
- const choices=target.d>12?['beam','venom','charge']:target.d>6?['charge','beam','venom','stomp']:['swipe','stomp','venom','beam','charge'];
+ const choices=(target.d>12?['beam','venom','charge']:target.d>6?['charge','beam','venom','stomp']:['swipe','stomp','venom','beam','charge'])
+  .filter(motion=>(motion!=='charge'||monster.model==='uncle')&&target.d<=SKILLS[motion].range);
+ if(!choices.length)return;
  const motion=choices[count%choices.length],config=SKILLS[motion];
  // Even while preparing a warning the enemy continues to pursue its attacker.
  if(target.d>3.2){move(target.a.position,(aggro?5:3.6)*(1-slow)*dt);monster.moving=true;}
