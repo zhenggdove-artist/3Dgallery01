@@ -79,7 +79,7 @@ export function ultimateWorldScale(number,event,options={}){
  if(number===26)return Math.max(2*(Number(options.quality)||1),Math.min(12,radius/2));
  // The widened whip warning must not enlarge the original #48 animation.
  if(number===48)return .2*Math.max(2,Math.min(12,(radius/1.5/.2)/Math.max(.25,(Number(options.size)||1)*.8)));
- if(number===53)return Math.max(2,Math.min(12,radius/Math.max(.25,(Number(options.size)||1)*.8)));
+ if(number===53)return Math.max(.08,Math.min(1.6,radius/Math.max(4.5,(Number(options.size)||1)*9))); // #53 world footprint is constrained to the tier-matched pan warning
  return null; // directional originals already follow the server-approved ray
 }
 export function requestedEffect(item,event){
