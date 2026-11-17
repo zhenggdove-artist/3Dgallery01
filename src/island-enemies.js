@@ -67,10 +67,10 @@ export class IslandEnemies{
    const stomp=state.skills?.find(s=>s.motion==='stomp'&&(s.phase==='warning'||s.phase==='active'));
    if(stomp){
     const t=Math.max(0,Math.min(1,(now-stomp.start)/Math.max(1,stomp.end-stomp.start)));
-    const windup=stomp.phase==='warning',rise=.64;
+    const windup=stomp.phase==='warning',rise=.55,landing=.76;
     const crouch=windup?Math.min(1,t*1.7):t<.08?1-t/.08:t>.76?Math.min(1,(t-.76)/.24)*.35:0;
     // Slow decelerating ascent; shorter, accelerating gravity-like fall.
-    const height=windup?0:t<=rise?6.6*(1-(1-t/rise)**2):6.6*(1-((t-rise)/(1-rise))**2);
+    const height=windup?0:t<=rise?6.6*(1-(1-t/rise)**2):t<landing?6.6*(1-((t-rise)/(landing-rise))**2):0;
     root.userData.pivot.position.y=height-crouch*.30;
     root.userData.pivot.rotation.x=-.22*crouch;
     const bend=Math.max(crouch,!windup?Math.sin(Math.PI*t)*.38:0);

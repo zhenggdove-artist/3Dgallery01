@@ -102,17 +102,18 @@ export class MonsterAttackEffects {
    marker.scale.setScalar(r);marker.rotation.set(-Math.PI/2,0,0);
    fringe.position.copy(marker.position);fringe.scale.setScalar(r*1.02);
   }
-  wave.visible=active&&(s.motion==='stomp'||s.motion==='swipe');
+  const stompLanded=s.motion==='stomp'&&active&&now>=s.start+(s.end-s.start)*.76;
+  wave.visible=active&&(s.motion==='swipe'||stompLanded);
   if(wave.visible){
-   const t=Math.min(1,Math.max(0,(now-s.start)/Math.max(1,s.end-s.start)));
+   const t=Math.min(1,Math.max(0,(now-(s.motion==='stomp'?s.start+(s.end-s.start)*.76:s.start))/Math.max(1,(s.end-s.start)*(s.motion==='stomp'?.24:1))));
    const c=s.motion==='stomp'?aim:origin;
    wave.position.set(c[0],.20,c[2]);
    wave.scale.setScalar(Math.max(.01,r*t));wave.material.opacity=.90*(1-t);
   }
   if(e.rubble){
-   e.rubble.visible=active;e.fractures.visible=active;
-   if(active){
-    const phase=Math.min(1,Math.max(0,(now-s.start)/Math.max(1,s.end-s.start)));
+   e.rubble.visible=stompLanded;e.fractures.visible=stompLanded;
+   if(stompLanded){
+    const phase=Math.min(1,Math.max(0,(now-(s.start+(s.end-s.start)*.76))/Math.max(1,(s.end-s.start)*.24)));
     const origin=s.aim||s.origin;
     const mat=new THREE.Matrix4(),pos=new THREE.Vector3(),rot=new THREE.Quaternion(),
      scale=new THREE.Vector3(),axis=new THREE.Vector3(.4,.8,.3).normalize();
