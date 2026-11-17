@@ -81,6 +81,30 @@ jobs:
           cat /tmp/temple-browser-worker.log || true
           cat /tmp/temple-browser-static.log || true
 
+  safari-webkit-startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - name: Serve repository assets for WebKit
+        run: npm run start > /tmp/temple-safari-static.log 2>&1 &
+      - name: Verify actual Safari/WebKit module graph and 0% startup
+        run: node tests/temple-safari-startup.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: safari-boot-screenshot
+          path: output/temple-safari-startup
+          if-no-files-found: ignore
+      - if: failure()
+        run: cat /tmp/temple-safari-static.log || true
+
   mobile-touch-smoke:
     # Isolated worker/database for mobile A/E/scope; must not contaminate
     # the independent WRITE cinematic/browser game integration smoke.
