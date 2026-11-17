@@ -28,6 +28,9 @@ const segmentDistance=(p,a,b)=>{
 export function monsterSkillContains(skill,p,now,origin=skill.origin){
  if(skill.phase!=='active'||now>=skill.end)return false;
  const config=SKILLS[skill.motion];if(!config)return false;
+ // Ground AoEs can be jumped; all attacks must respect vertical separation.
+ const vertical=Math.abs((p[1]||0)-(origin[1]||0));
+ if(vertical>(skill.motion==='beam'?9.2:skill.motion==='charge'?3.2:skill.motion==='swipe'?3.2:2.2))return false;
  if(skill.motion==='venom'||skill.motion==='stomp')return flatDistance(p,skill.aim)<=config.radius;
  if(skill.motion==='swipe') {
   const dx=p[0]-origin[0],dz=p[2]-origin[2],fx=skill.aim[0]-origin[0],fz=skill.aim[2]-origin[2];
