@@ -431,7 +431,9 @@ export class NumberedWeaponEffects {
    if(e.singleTravel){
     const t=Math.min(1,e.age/travelLifetime(e.spec.number));
     const ease=t*t*(3-2*t);
-    const delta=Math.min(e.range,Math.max(4,e.range*.72))*ease;
+    // The travelling #20/#43/#70 original must traverse the ENTIRE warned
+    // ray; the former 72% cap stopped visibly short of the blue #59 footprint.
+    const delta=e.range*ease;
     e.fx.group.position.copy(e.origin).addScaledVector(e.direction,delta);
     if(e.spec.number===20&&e.age>3.45&&!e.stopping){
      e.stopping=true;e.fx.stop?.();
