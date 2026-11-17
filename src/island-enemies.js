@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {MonsterAttackEffects} from './monster-attack-effects.js';
 import {islandModel,animateIslandModel} from './reletter/island-actors.js';
 import {createEnemySpellEffect,updateEnemySpellEffect} from './reletter/temple-spell-effects.js';
 import {ISLAND_ENEMIES,ENEMY_HEIGHT} from './shared/island-combat.js';
@@ -10,7 +11,7 @@ const makeInvisible=root=>{root.visible=false;return root;};
 export class IslandEnemies{
  constructor(scene){
   this.scene=scene;this.models=new Map();this.spells=new Map();this.current=null;this.extraModels=[];
-  this.extraStates=[];this.extraLive=[];
+  this.extraStates=[];this.extraLive=[];this.attackEffects=new MonsterAttackEffects(scene);
  }
  async load(){
   await Promise.all([
@@ -48,12 +49,13 @@ export class IslandEnemies{
  updateModel(root,state,dt,now){
   if(!root||!state?.active)return;
   for(const [bone,q] of root.userData.attackRestore||[])bone.quaternion.copy(q);
-  root.userData.attackRestore=[];root.userData.pivot.rotation.x=0;
+  root.userData.attackRestore=[];root.userData.pivot.rotation.x=0;root.userData.pivot.position.y=0;
   const skill=state.skills?.find(s=>s.motion&&s.phase==='active');
   animateIslandModel(root,{...state,skills:skill?[]:state.skills,lastHit:state.lastHitAt},dt,now);
   if(skill){
    const t=Math.min(1,(now-skill.start)/1200),pulse=Math.sin(Math.PI*t);
-   root.userData.pivot.rotation.x=skill.motion==='roar'?.45*pulse:skill.motion==='charge'?.28:0;
+   root.userData.pivot.rotation.x=skill.motion==='stomp'?-.32*Math.sin(t*Math.PI*2):skill.motion==='charge'?.28:0;
+   if(skill.motion==='stomp')root.userData.pivot.position.y=Math.sin(Math.PI*t)*3.3;
    if(skill.motion==='swipe')root.traverse(b=>{
     if(b.isBone&&/RightArm$|RightForeArm$/i.test(b.name)){
      root.userData.attackRestore.push([b,b.quaternion.clone()]);
@@ -78,9 +80,11 @@ export class IslandEnemies{
    sources.push(state);
   }
   const live=new Set();
+  this.attackEffects.sync(sources,now);
   for(const state of sources){
    if(!state?.active)continue;
    for(const spell of state.skills||[]){
+    if(spell.motion)continue; // use the dedicated original 00GameDevs attack effects.
     if(now>=spell.end&&spell.phase==='active')continue;
     const key=state.id+':'+spell.id;live.add(key);
     let mesh=this.spells.get(key);
