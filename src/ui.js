@@ -4,7 +4,8 @@ import {ART_ACCEPT} from './artwork-upload.js';
 import {bindBagDrag} from './bag-drag.js';
 import {PLATFORMS} from './shared/arena.js';
 import {playerArtworkAppearanceMarkup} from './art-editor-panel.js';
-import {ECONOMY,RARITIES,SHOP_ITEMS,EQUIPPABLE_SLOTS,itemById,attackStats} from './shared/catalog.js';
+import {ECONOMY,RARITIES,SHOP_ITEMS,EQUIPPABLE_SLOTS,itemById,attackStats,WEAPONS} from './shared/catalog.js';
+import {SOUND_PROFILES} from './game-audio.js';
 import {pvpShotDamage} from './shared/combat-balance.js';
 import {weaponQuality} from './shared/weapon-abilities.js';
 import {itemPreview as itemIcon} from './item-preview.js';
@@ -37,7 +38,9 @@ export class TempleUI extends EventTarget{
     $('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.dataset.action)this.emit(button.dataset.action);});
     $('build-confirm').onclick=()=>this.emit('build-confirm');$('build-rotate').onclick=()=>this.emit('build-rotate');$('build-cancel').onclick=()=>this.emit('build-cancel');
     this.content.addEventListener('click',event=>this.panelClick(event));this.content.addEventListener('submit',event=>this.panelSubmit(event));
-    this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');});
+    this.content.addEventListener('input',event=>{const slider=event.target.closest('[data-audio-volume]');if(slider&&this.panelName==='gm')slider.nextElementSibling.textContent=slider.value+'%';});
+     this.content.addEventListener('change',event=>{const slider=event.target.closest('[data-audio-volume]');if(!slider||!this.self?.profile?.admin)return;this.emit('gm-audio-change',{key:slider.dataset.audioVolume,volume:Number(slider.value)});});
+     this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');});
     this.content.addEventListener('click',event=>{const b=event.target.closest('button');if(b?.dataset.unequip)this.emit('server-action',{action:'unequip',slot:b.dataset.unequip});if(b?.dataset.use)this.emit('use-item',b.dataset.use);});
     this.content.addEventListener('click',event=>{const b=event.target.closest('[data-original]');if(!b)return;this.emit('original-action',{action:b.dataset.original,id:b.dataset.id,hole:b.dataset.hole,item:b.dataset.item,pond:b.dataset.pond});});
     addEventListener('keydown',event=>{if(event.code==='Escape'&&this.panelName){event.preventDefault();this.closePanel();return;}if(/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName))return;const code=event.code;if(this.buildKind){if(code==='KeyE'){event.preventDefault();this.emit('build-confirm');}if(code==='KeyR')this.emit('build-rotate');if(code==='Escape')this.emit('build-cancel');return;}if(code==='Tab'&&this.self?.role==='spectator'){event.preventDefault();this.emit('spectator-cycle');return;}if(code==='KeyJ')this.emit('attack');if(code==='KeyB')this.openPanel('bag');if(code==='KeyI')this.openPanel('shop');if(code==='KeyV')this.openPanel('build');if(code==='KeyC')this.openPanel('social');if(code==='Escape')this.closePanel();if(code==='KeyY'&&event.shiftKey){event.preventDefault();this.openPanel('editor');}});
@@ -141,13 +144,21 @@ export class TempleUI extends EventTarget{
     if(!this.self?.profile?.admin){this.content.textContent='GM only';return;}
     const data=this.gmPresenceData,online=data?.online||this.players||[],events=data?.events||[];
     const date=time=>{const ms=Number(time);return Number.isFinite(ms)?new Date(ms).toLocaleString('zh-TW',{hour12:false}):'—';};
+     const mix=this.world?.audioMix||{},levels=mix.levels||{};
+     const channel=(key,label)=>{const value=['master','music','sfx'].includes(key)?mix[key]??100:levels[key]??100;
+       return `<label class="gm-audio-row"><span>${escape(label)}</span><input type="range" min="0" max="200" step="5" data-audio-volume="${escape(key)}" value="${Number(value)}"><output>${Number(value)}%</output></label>`;};
+     const families=[...new Set(WEAPONS.map(w=>w.family))];
+     const weaponLevels=families.map(family=>`<details><summary>${escape(family.toUpperCase())} · ${WEAPONS.filter(w=>w.family===family).length} weapons</summary>${WEAPONS.filter(w=>w.family===family).map(w=>channel(w.id,w.name)).join('')}</details>`).join('');
+     const globalLevels=Object.keys(SOUND_PROFILES).map(key=>channel(key,key)).join('');
+     const audioMarkup=`<div class="gm-audio-controls"><h3>聲音控制 · 全體玩家同步</h3>${channel('master','整體音量')}${channel('music','背景音樂')}${channel('sfx','所有音效')}<details><summary>一般音效與怪物技能</summary>${globalLevels}</details><details><summary>每把武器獨立音量</summary>${weaponLevels}</details></div>`;
     this.content.innerHTML=`<section class="gm-admin">
       <h3>GM 功能</h3><div class="gm-tools">
         <button type="button" data-gm-action="editor">作品與圓盤編輯</button>
         <button type="button" data-gm-action="help">編輯快捷鍵</button>
         <button type="button" data-gm-action="refresh">${this.gmPresenceLoading?'讀取中…':'重新整理紀錄'}</button>
       </div>
-      <h3>目前在線（${online.length}）</h3>
+      ${audioMarkup}
+       <h3>目前在線（${online.length}）</h3>
       <div class="gm-presence-live">${online.map(p=>`<span>${escape(p.name)} · ${p.role==='fighter'?'玩家':'觀眾'}</span>`).join('')||'<small>目前沒有在線玩家</small>'}</div>
       <h3>玩家上下線紀錄</h3>
       <p>以伺服器時間記錄登入及離線，顯示最近 200 筆；斷線重連的 45 秒寬限期不視為離線。</p>
