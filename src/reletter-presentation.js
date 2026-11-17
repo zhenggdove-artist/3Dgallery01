@@ -30,7 +30,7 @@ export function disposeVisual(root){if(!root)return;const geometry=new Set(),mat
 export class ReletterPresentation{
   removeOdd(f){f.root.removeFromParent();if(!f.root.geometry.userData.sharedOdd)f.root.geometry.dispose();f.root.material.dispose();}
   removeGuardian(f){f.root.removeFromParent();f.root.traverse(o=>{if(o.geometry&&!o.geometry.userData.sharedGuardian)o.geometry.dispose();o.material?.dispose();});}
-  constructor(scene){this.scene=scene;this.players=new Set();this.bursts=[];this.ultimates=[];this.restore=[];this.seen=new Set();this.charge=null;this.odd=[];this.guardians=[];this.echoes=[];this.vfx=new WeaponVFX(scene);}
+  constructor(scene){this.scene=scene;this.players=new Set();this.bursts=[];this.ultimates=[];this.restore=[];this.seen=new Set();this.charge=null;this.odd=[];this.guardians=[];this.echoes=[];this.fusionEchoLast=new Map();this.vfx=new WeaponVFX(scene);}
   equipment(root,equipment={}){
     const d=root.userData;this.players.add(root);d.equipment=equipment;
     const weapon=itemById(equipment.weapon),signature=JSON.stringify(equipment);if(d.equipmentSignature===signature)return;d.equipmentSignature=signature;
@@ -46,8 +46,19 @@ export class ReletterPresentation{
     this.vfx.play(data,item,root);
     // Each bonus uses its real source weapon's ultimate and matched server collider.
     for(const echo of (event.fusionEchoes||[]).slice(0,2)){
-      const source=itemById(echo.weapon);if(source)this.vfx.play({...source,...echo},source,root);
-    }
+       const source=itemById(echo.weapon);if(!source)continue;
+       // Persist channel-staff echoes using the keyed native emitter. For
+       // non-channel source ultimates, never allocate new multi-pass effects
+       // on every 300–1000ms damage pulse.
+       if(event.channel&&!echo.channel){
+         const key=event.owner+':'+(echo.fusionSlot||0)+':'+echo.weapon;
+         const now=performance.now(),lifetime=({swatter:7000,whip:6500,pan:5000})[source.family]||3500;
+         if(now-(this.fusionEchoLast.get(key)??-Infinity)<lifetime)continue;
+         this.fusionEchoLast.set(key,now);
+         if(this.fusionEchoLast.size>96)this.fusionEchoLast.delete(this.fusionEchoLast.keys().next().value);
+       }
+       this.vfx.play({...source,...echo},source,root);
+     }
   }
   signature(data){const item=itemById(data.weapon);if(item)this.vfx.play(data,item,null);}
   charging(root,progress){this.vfx.charging(root,progress,itemById(root?.userData.weaponId));}

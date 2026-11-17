@@ -108,7 +108,9 @@ async function boot(){
 }
 
 ui.addEventListener('join',async event=>{
-  if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);arena.world=data.world;await arena.loadCustomArtworks(data.world.customArtworks,network.base);self=data.self;world=data.world;players=data.players||[];joined=true;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
+  if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();
+    void arena.loadCustomArtworks(data.world.customArtworks,network.base).catch(error=>console.warn('Deferred artwork loading',error));
+    network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
   catch(error){ui.joinError(error.message);}
 });
 

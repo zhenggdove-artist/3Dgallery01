@@ -13,8 +13,9 @@ root.userData={mixer,actions,clipYaw,materials,pivot,bones,kind,nanganActor:true
 export function animateIslandModel(root,b,dt,now){
  animateChimera(root,now,b.moving&&!b.paused);
  const u=root.userData,skill=b.skills?.some(s=>s.phase==='active');
- const walking=!!(b.patrolling&&b.moving&&!skill&&!b.leap);
- const name=b.leap?'Jump':skill?'Kick':b.moving?(b.patrolling?'Walk':'Run'):'Idle';
+ const charging=b.skills?.some(s=>s.motion==='charge'&&s.phase==='active');
+  const walking=!!(b.patrolling&&b.moving&&!skill&&!b.leap);
+  const name=charging?'Run':b.leap?'Jump':skill?'Kick':b.moving?(b.patrolling?'Walk':'Run'):'Idle';
  const walk=u.actions.Walk||u.actions.walk||u.actions.Walking||u.actions.walking||u.actions.stroll;
  const idle=u.actions.Idle||u.actions.idle;
  const action=(walking&&!walk?idle:null)||u.actions[name]||u.actions[name.toLowerCase()]||

@@ -51,7 +51,9 @@ export class IslandEnemies{
   for(const [bone,q] of root.userData.attackRestore||[])bone.quaternion.copy(q);
   root.userData.attackRestore=[];root.userData.pivot.rotation.x=0;root.userData.pivot.position.y=0;
   const skill=state.skills?.find(s=>s.motion&&s.phase==='active');
-  animateIslandModel(root,{...state,skills:skill?[]:state.skills,lastHit:state.lastHitAt},dt,now);
+  animateIslandModel(root,{...state,moving:state.moving||skill?.motion==='charge',
+   leap:skill?.motion==='stomp',skills:skill?.motion==='charge'?[skill]:skill?[]:state.skills,
+   lastHit:state.lastHitAt},dt,now);
   if(skill){
    const t=Math.min(1,Math.max(0,(now-skill.start)/Math.max(1,skill.end-skill.start))),pulse=Math.sin(Math.PI*t);
    root.userData.pivot.rotation.x=skill.motion==='stomp'?-.32*Math.sin(t*Math.PI*2):skill.motion==='charge'?.28:0;
@@ -71,16 +73,26 @@ export class IslandEnemies{
    });
   }
  }
+ placeModel(root,state,dt,now){
+  const previous=root.position.clone(),flight=state.panBlastFlight;
+  const target=new THREE.Vector3(...(flight?samplePanBlastPosition(flight,now).position:state.position));
+  if(flight)root.position.copy(target);
+  else root.position.lerp(target,1-Math.exp(-dt*10));
+  const motion=state.skills?.find(s=>s.motion==='charge'&&s.phase==='active');
+  if(motion&&state.model==='uncle'){
+   const delta=new THREE.Vector3(...motion.aim).sub(new THREE.Vector3(...motion.origin));
+   if(delta.lengthSq()>.001)root.rotation.y=Math.atan2(delta.x,delta.z);
+  }else{
+   const delta=root.position.clone().sub(previous);
+   if(delta.lengthSq()>.00025)root.rotation.y=Math.atan2(delta.x,delta.z);
+  }
+ }
  update(dt,now,viewport,camera){
+  if(this.current&&this.state?.active)this.placeModel(this.current,this.state,dt,now);
   this.updateModel(this.current,this.state,dt,now);
   const sources=[this.state?.active?this.state:null];
   for(const {root,state} of this.extraLive){
-   const previous=root.position.clone(),flight=state.panBlastFlight;
-   const next=new THREE.Vector3(...(flight?samplePanBlastPosition(flight,now).position:state.position));
-   if(flight)root.position.copy(next);
-   else root.position.lerp(next,1-Math.exp(-dt*7));
-   const displacement=next.sub(previous);
-   if(displacement.lengthSq()>.00025)root.rotation.y=Math.atan2(displacement.x,displacement.z);
+   this.placeModel(root,state,dt,now);
    this.updateModel(root,state,dt,now);
    setHealthBar(root,state.hp,state.maxHp,ENEMY_HEIGHT+.65);
    if(camera)faceHealthBar(root,camera);

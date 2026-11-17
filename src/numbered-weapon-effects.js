@@ -181,7 +181,7 @@ export class NumberedWeaponEffects {
   play(event,item,root) {
   const spec=requestedEffect(item,event);
   if(!spec)return false;
-  const key=event.channel&&root?root.uuid+':'+spec.number:null;
+  const key=event.channel&&root?root.uuid+':'+spec.number+':'+(event.fusionEcho?'fusion'+(event.fusionSlot||0):'main'):null;
   const live=key?this.active.find(e=>e.key===key):null;
   const direction=vector(event.direction,FORWARD).normalize();
   if(live) {
@@ -196,7 +196,7 @@ export class NumberedWeaponEffects {
   const normalSize=(spec.number===26?84:spec.number===38?2:spec.number===48?2:1.2)*quality;
   // The Ice Lance / erupting pillar #70 must be exactly half the previous
   // display dimensions, irrespective of rarity/fusion quality.
-  let size=spec.number===70?normalSize*.5:normalSize;
+  let size=spec.number===70?normalSize*.5*(event.ultimate?1.5:1):normalSize;
   // The nozzle and authored free flame have a 10-local-metre reach.
   // Scale its world container to the server's range, not its actual props.
   if(spec.number===73)size=1;
