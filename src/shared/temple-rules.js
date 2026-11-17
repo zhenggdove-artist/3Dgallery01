@@ -49,7 +49,7 @@ export function createInitialWorld(now=Date.now()){
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],groundDrops:[],structures:[],plants:[],sceneCleanupVersion:1,
-    monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],
+    monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],audioSettings:{},
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
     activity:{coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0}
   };
@@ -63,7 +63,7 @@ export function migrateWorld(raw,now=Date.now()){
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
   // Old RELETTER farming data must not survive the removal of the Garden game mode.
   if(world.reletter?.garden)delete world.reletter.garden;
-  world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];
+  world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];world.audioSettings??={};
   world.nextGroundDropAt??=now+ECONOMY.groundSpawnMinMs;
   return cleanLegacyScene(world);
 }
@@ -100,7 +100,7 @@ export function worldView(world,actorKey,now=Date.now()){
   const profile=world.profiles[actorKey];
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
-    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),
+    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000))};
 }
@@ -131,7 +131,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
   const nearSpawn=spawn&&distanceTo(next.position,spawn)<=6;
   if(!previous&&spawn&&!nearSpawn)return {error:'Spawn position rejected',state:{position:spawn,rotation:0,animation:'idle',visible:true}};
   if(previous&&role==='fighter'){
-    const freeze=effectActive(mobility||{},'freeze',now),root=effectActive(mobility||{},'root',now);
+    const freeze=effectActive(mobility||{},'freeze',now)||effectActive(mobility||{},'stun',now),root=effectActive(mobility||{},'root',now);
     if((freeze||root)&&!authorizedPanFlight)return {state:{...previous,position:[...previous.position],
       rotation:freeze?previous.rotation:+next.rotation.toFixed(4),
       animation:'idle',visible:true}};
@@ -171,6 +171,14 @@ export function applyAction(world,actor,body,context={}){
   const now=context.now??Date.now(),rng=context.rng??Math.random,profile=ensureProfile(world,actor.key,actor.name,actor.color,now,actor.admin);
   if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
   if(body.action==='reset-player-artworks')return resetPlayerArtworks(world,profile.admin,now);
+   if(body.action==='gm-audio-setting'){
+    if(!profile.admin)return {error:'GM only'};
+    const key=String(body.key||'');const value=Number(body.value);
+    if(!/^(master|music|[a-z][a-z-]{0,40})$/.test(key)||!Number.isFinite(value)||value<0||value>2)return {error:'Invalid sound channel or volume'};
+    world.audioSettings??={};world.audioSettings[key]=Math.round(value*100)/100;
+    world.revision=(world.revision||0)+1;
+    return {notice:'全服音量已同步',audioSettings:clone(world.audioSettings)};
+   }
   if(body.action==='create-platform'){if(!profile.admin)return {error:'僅限 GM'};const p=body.position,r=Number(body.radius);if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)||Math.hypot(p[0],p[2])>88||p[1]<0||p[1]>30||!Number.isFinite(r)||r<.6||r>8)return {error:'圓盤位置或半徑無效'};world.floatingPlatforms??=[];if(world.floatingPlatforms.length>=128)return {error:'已達 128 個圓盤上限'};const platform={id:id(),position:[...p],radius:r};world.floatingPlatforms.push(platform);world.revision++;return {platform,notice:'已建立漂浮圓盤，所有玩家皆可使用'};}
   if(body.action==='delete-platform'){
     if(!profile.admin)return {error:'僅限 GM 刪除圓盤'};
@@ -578,7 +586,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   return moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],distance);
  }
  return moveMonster(world,monster,target,distance);
-},hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position)});if(!monster.panBlastFlight&&!monster.whipPull&&effectActive(monster,'confuse',now)){
+},hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position,'normal',null,false,false,skill?.motion==='venom');const player=world.profiles[target.key];if(skill?.motion==='stomp'&&player?.hp>0&&!player.admin){player.effects??={};player.effects.stun={owner:'monster',power:0,until:now+1000,next:now+1000};if(player.hitReaction)player.hitReaction.stunMs=1000;}return result;}});if(!monster.panBlastFlight&&!monster.whipPull&&effectActive(monster,'confuse',now)){
  const angle=(now/217+(monster.generation||0)*1.73)%(Math.PI*2);
  moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],.21);
 }else if(!monster.panBlastFlight&&!monster.whipPull&&!effectActive(monster,'root',now)&&!effectActive(monster,'freeze',now)&&
@@ -599,7 +607,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
         return moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],distance);
        }
        return moveMonster(world,mob,target,distance);
-      },hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position)});
+      },hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position,'normal',null,false,false,skill?.motion==='venom');const player=world.profiles[target.key];if(skill?.motion==='stomp'&&player?.hp>0&&!player.admin){player.effects??={};player.effects.stun={owner:'monster',power:0,until:now+1000,next:now+1000};if(player.hitReaction)player.hitReaction.stunMs=1000;}return result;}});
     if(!mob.panBlastFlight&&!mob.whipPull&&effectActive(mob,'confuse',now)){
  const angle=(now/217+(mob.slot||0)*1.73)%(Math.PI*2);
  moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],.21);
