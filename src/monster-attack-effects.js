@@ -91,7 +91,7 @@ export class MonsterAttackEffects {
   if(!active)return;
   if(s.motion==='beam'){
    const a=new THREE.Vector3(origin[0],ENEMY_HEIGHT*.76,origin[2]);
-   const b=a.clone().add(new THREE.Vector3(dx/length,0,dz/length).multiplyScalar(BEAM_RANGE));
+   const b=new THREE.Vector3(aim[0],(aim[1]||0)+1.2,aim[2]);
    native.group.position.set(0,0,0);native.group.quaternion.identity();
    native.setEndpoints(a,b);
   }else{
