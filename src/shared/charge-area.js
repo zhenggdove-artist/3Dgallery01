@@ -18,10 +18,16 @@ const flatDirection=direction=>{
 export const CLAM_SECTOR_ANGLE=90;
 export const ULTIMATE_FOOTPRINT_SCALE=.6;
 // Authoritative damage geometry and warning VFX always use identical dimensions.
-export function scaleUltimateFootprint(stats){
+export function scaleUltimateFootprint(stats,item=null){
  if(stats?.ultimate){
-  stats.range=+(Math.max(.5,Number(stats.range)||0)*ULTIMATE_FOOTPRINT_SCALE).toFixed(3);
-  stats.radius=+(Math.max(.1,Number(stats.radius)||0)*ULTIMATE_FOOTPRINT_SCALE).toFixed(3);
+  // The global 60% change remains in force. The frying-pan ultimate is
+  // another 50% smaller; the whip ultimate is another 60% smaller.
+  // Use the item ID, not the family: the Chiang token is not a frying pan.
+  const relative=/^pan-[1-5]$/.test(item?.id||'')?.5:
+   /^whip-[1-5]$/.test(item?.id||'')?.4:1;
+  const factor=ULTIMATE_FOOTPRINT_SCALE*relative;
+  stats.range=+(Math.max(.5,Number(stats.range)||0)*factor).toFixed(3);
+  stats.radius=+(Math.max(.1,Number(stats.radius)||0)*factor).toFixed(3);
  }
  return stats;
 }
@@ -32,8 +38,9 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  const radius=clamp(Number(stats?.radius)||2,.1,50);
  // Staff/clam streams are fired from the weapon, not an unrelated distant
  // round explosion. Other spell families retain their target-centred circles.
+ const areaUltimate=!!stats?.ultimate&&/^(pan|whip)-[1-5]$/.test(item?.id||'');
  const mode=item?.id==='clam'?'sector':channel&&isChannelStaff(item)?'corridor':
-  (AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
+  (areaUltimate||AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
  const defaultDistance=clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
  const floorAtDistance=ground(origin[0]+dir[0]*defaultDistance,origin[2]+dir[2]*defaultDistance,origin[1]);
  const intercept=dir[1]<-.04?(origin[1]-floorAtDistance)/(-dir[1]):Infinity;
