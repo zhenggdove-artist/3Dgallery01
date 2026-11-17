@@ -13,7 +13,7 @@ export const ENEMY_RADIUS=.42*6; // Includes the sixfold humanoid's shoulders an
 // This module is shared by the Worker and browser, so it cannot import Three.js.
 const SKILLS=Object.freeze({
  swipe:{warning:480,active:500,range:4.8,radius:4.2},
- charge:{warning:850,active:1600,range:19,radius:2.35},
+ freeze:{warning:850,active:5200,range:22,radius:5.2},
  beam:{warning:750,active:5000,range:38,radius:4.95},
  stomp:{warning:1000,active:1500,range:8,radius:7},
  venom:{warning:850,active:5100,range:27,radius:5.2}
@@ -45,13 +45,13 @@ export function monsterSkillContains(skill,p,now,origin=skill.origin){
  const config=SKILLS[skill.motion];if(!config)return false;
  // Ground AoEs can be jumped; all attacks must respect vertical separation.
  const vertical=Math.abs((p[1]||0)-(origin[1]||0));
- if(vertical>(skill.motion==='beam'?9.2:skill.motion==='charge'?3.2:skill.motion==='swipe'?3.2:2.2))return false;
+ if(vertical>(skill.motion==='beam'?9.2:skill.motion==='freeze'?2.2:skill.motion==='swipe'?3.2:2.2))return false;
  if(skill.motion==='stomp'){
   // The shockwave must hit on landing, not during the jump.
   if(now<skill.start+(skill.end-skill.start)*.76)return false;
   return flatDistance(p,skill.aim)<=config.radius;
  }
- if(skill.motion==='venom')return flatDistance(p,skill.aim)<=config.radius;
+ if(skill.motion==='venom'||skill.motion==='freeze')return flatDistance(p,skill.aim)<=config.radius;
  if(skill.motion==='swipe') {
   const dx=p[0]-origin[0],dz=p[2]-origin[2],fx=skill.aim[0]-origin[0],fz=skill.aim[2]-origin[2];
   return Math.hypot(dx,dz)<=config.radius&&dx*fx+dz*fz>0;
@@ -65,19 +65,14 @@ export function monsterSkillContains(skill,p,now,origin=skill.origin){
 export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,silenced=false,slow=0}){
  const dt=Math.min(.5,Math.max(0,(now-(monster.updatedAt??now-500))/1000));
  monster.updatedAt=now;monster.moving=false;monster.patrolling=false;monster.skills??=[];
+ // Eliminate persisted dashes before collision and skill gating.
+ monster.skills=monster.skills.filter(s=>SKILLS[s.motion]&&now<s.end);
  if(disabled||silenced){monster.skills=[];return;}
  // Expired warnings become active on the server even if the room tick is late.
  for(const s of monster.skills){
   if(!SKILLS[s.motion])continue; // discard pre-update persistent spell snapshots
   s.hit??=[];s.lastTick??={};
   if(s.phase==='warning'&&now>=s.end){s.phase='active';s.start=s.end;s.end=s.start+(SKILLS[s.motion]?.active||800);s.lastTick={};}
-  // Finish the time-based path even if this is the skill-expiration tick.
-  if(s.phase==='active'&&s.motion==='charge'){
-   const desired=monsterChargePosition(s,now),remaining=flatDistance(monster.position,desired);
-   const speed=Math.max(4,flatDistance(s.origin,s.aim)/Math.max(.1,(s.end-s.start)/1000));
-   const step=Math.min(remaining,speed*Math.min(dt,.5)*Math.max(0,1-slow));
-   if(step>.001){move(desired,step);monster.moving=true;}
-  }
   if(s.phase!=='active'||now>=s.end)continue;
   if(s.motion==='beam'){
     // Walking side-step while spraying, speed at most .85m/s.
@@ -107,11 +102,10 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
  const ranked=targets.map(a=>({a,d:flatDistance(a.position,monster.position)})).sort((a,b)=>a.d-b.d);
  const target=aggro?ranked.find(t=>t.a.key===aggro.key):ranked.find(t=>t.d<40);
  if(!target||monster.skills.some(s=>s.phase==='warning'||s.motion!=='venom'))return;
- const order=['swipe','beam','charge','venom','stomp'];
  const count=monster.attackCount||0;
  // Prefer a usable ability at distance: the outer mobs MUST engage at range.
- const choices=(target.d>12?['beam','venom','charge']:target.d>6?['charge','beam','venom','stomp']:['swipe','stomp','venom','beam','charge'])
-  .filter(motion=>(motion!=='charge'||monster.model==='uncle')&&target.d<=SKILLS[motion].range);
+ const choices=(target.d>12?['beam','freeze','venom']:target.d>6?['freeze','beam','venom','stomp']:['swipe','stomp','venom','freeze','beam'])
+  .filter(motion=>target.d<=SKILLS[motion].range);
  if(!choices.length)return;
  const motion=choices[count%choices.length],config=SKILLS[motion];
  // Even while preparing a warning the enemy continues to pursue its attacker.
@@ -120,13 +114,13 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
   monster.attackCount=count+1;monster.aggroTarget=target.a.key;monster.aggroUntil=now+9000;
   const aim=[...target.a.position];aim[1]=0;
   // Lock both warning and actual strike to the full-range path, not target distance.
-  if(motion==='charge'||motion==='beam'){
+  if(motion==='beam'){
    const x=aim[0]-monster.position[0],z=aim[2]-monster.position[2],length=Math.hypot(x,z)||1;
    aim[0]=monster.position[0]+x/length*config.range;
    aim[2]=monster.position[2]+z/length*config.range;
   }
   const id=crypto.randomUUID();
-  const s={id,type:'shockwave',motion,origin:[...monster.position],aim,phase:'warning',start:now,end:now+config.warning,hit:[],radius:config.radius,height:1.3,damage:motion==='venom'?5:motion==='stomp'?12:motion==='beam'?8:monster.damage||12,island:true,lastTick:{}};
+  const s={id,type:'shockwave',motion,origin:[...monster.position],aim,phase:'warning',start:now,end:now+config.warning,hit:[],radius:config.radius,height:1.3,damage:motion==='venom'?5:motion==='stomp'?12:motion==='beam'?8:motion==='freeze'?8:monster.damage||12,island:true,lastTick:{}};
   monster.skills.push(s);
   monster.nextAttackAt=now+1900+(monster.slot||0)*140;
   return;
