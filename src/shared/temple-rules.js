@@ -135,9 +135,9 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
   const nearSpawn=spawn&&distanceTo(next.position,spawn)<=6;
   if(!previous&&spawn&&!nearSpawn)return {error:'Spawn position rejected',state:{position:spawn,rotation:0,animation:'idle',visible:true}};
   if(previous&&role==='fighter'){
-    const freeze=effectActive(mobility||{},'freeze',now),root=effectActive(mobility||{},'root',now);
-    if((freeze||root)&&!authorizedPanFlight)return {state:{...previous,position:[...previous.position],
-      rotation:freeze?previous.rotation:+next.rotation.toFixed(4),
+    const freeze=effectActive(mobility||{},'freeze',now),root=effectActive(mobility||{},'root',now),stunned=effectActive(mobility||{},'stun',now)||now-(mobility?.hitReaction?.time||0)<(mobility?.hitReaction?.stunMs||0);
+    if((freeze||root||stunned)&&!authorizedPanFlight)return {state:{...previous,position:[...previous.position],
+      rotation:freeze||stunned?previous.rotation:+next.rotation.toFixed(4),
       animation:'idle',visible:true}};
     const elapsed=clamp(elapsedMs/1000,.05,12);
     // Horizontal movement and vertical free-fall are different physical
@@ -516,7 +516,7 @@ function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosit
   if(forceKill)damage=Math.max(damage,target.hp); // A verified sniper headshot ignores armour and shields.
   if(shotgunPellet)damage=+Math.max(5,Math.min(20,damage)).toFixed(1); // Per pellet after armour; shields still absorb.
    if(target.shield&&!forceKill&&!fixedDamage){const absorbed=Math.min(target.shield.hp,damage);target.shield.hp-=absorbed;target.shield.lastHit=now;damage-=absorbed;}
-  const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
+  const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0&&cause!=='monster-venom'){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
   if(target.hp>0)return {target:targetActor.key,damage,defeated:false};
   target.deadUntil=now+5_000;target.lastKilledBy={key:sourceProfile?.key||null,name:sourceProfile?.name||'ENVIRONMENT',time:now};
@@ -574,6 +574,25 @@ export function canBuildAt(world,actorPosition,position){
 
 function validBuildPosition(world,actor,position){return canBuildAt(world,actor.position,position);}
 
+
+// Apply the authoritative skill's special mechanics; no animation can deal
+// damage merely because its warning or graphic touched the player.
+function hitPlayerWithMonsterSkill(world,mob,target,amount,skill,now){
+ const profile=world.profiles[target.key];if(!profile)return null;
+ const venom=skill?.motion==='venom';
+ if(venom&&profile.admin)return null;
+ const applied=venom?5:amount*(1-(effectActive(mob,'weak',now)?.power||0));
+ const result=damagePlayer(world,null,target,applied,now,venom?'monster-venom':'monster',mob.position,
+   venom?'poison':'normal',target.position,false,false,venom);
+ if(skill?.motion==='slam'&&result&&!result.immune&&profile.hp>0){
+  profile.effects??={};
+  profile.effects.stun={owner:null,power:1,until:now+1000,next:now+1000};
+  profile.hitReaction??={id:id(),time:now,vector:[0,0,0]};
+  profile.hitReaction.stunMs=1000;
+ }
+ return result;
+}
+
 export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0,actors=[]}={}){
   migrateWorld(world,now);let changed=false;
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
@@ -593,7 +612,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   return moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],distance);
  }
  return moveMonster(world,monster,target,distance);
-},hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position)});if(!monster.panBlastFlight&&!monster.whipPull&&effectActive(monster,'confuse',now)){
+},hit:(target,amount,skill)=>hitPlayerWithMonsterSkill(world,monster,target,amount,skill,now)});if(!monster.panBlastFlight&&!monster.whipPull&&effectActive(monster,'confuse',now)){
  const angle=(now/217+(monster.generation||0)*1.73)%(Math.PI*2);
  moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],.21);
 }else if(!monster.panBlastFlight&&!monster.whipPull&&!effectActive(monster,'root',now)&&!effectActive(monster,'freeze',now)&&
@@ -614,7 +633,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
         return moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],distance);
        }
        return moveMonster(world,mob,target,distance);
-      },hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position)});
+      },hit:(target,amount,skill)=>hitPlayerWithMonsterSkill(world,mob,target,amount,skill,now)});
     if(!mob.panBlastFlight&&!mob.whipPull&&effectActive(mob,'confuse',now)){
  const angle=(now/217+(mob.slot||0)*1.73)%(Math.PI*2);
  moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],.21);
