@@ -66,7 +66,7 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
  const dt=Math.min(.5,Math.max(0,(now-(monster.updatedAt??now-500))/1000));
  monster.updatedAt=now;monster.moving=false;monster.patrolling=false;monster.skills??=[];
  // Eliminate persisted dashes before collision and skill gating.
- monster.skills=monster.skills.filter(s=>SKILLS[s.motion]&&now<s.end);
+ monster.skills=monster.skills.filter(s=>SKILLS[s.motion]&&(s.phase==='warning'||now<s.end));
  if(disabled||silenced){monster.skills=[];return;}
  // Expired warnings become active on the server even if the room tick is late.
  for(const s of monster.skills){
