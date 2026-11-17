@@ -126,7 +126,7 @@ try{
  await page.waitForFunction(()=>templeTest.arena.buildPreview?.userData.actualArtwork===true,null,{timeout:30000});
  assert.ok(await page.evaluate(()=>templeTest.arena.buildPreview.children[0]?.userData?.record?.mediaId),'The real uploaded media must be rendered instead of a placeholder');
  assert.equal(await page.evaluate(()=>templeTest.arena.buildPreview.children[0]?.userData?.record?.title),'CI Artwork · 作品名稱');
- assert.equal(await page.evaluate(()=>!!templeTest.arena.buildPreview.children[0]?.userData?.titlePlate),'Uploaded artwork must show its name on a black title plate');
+ assert.ok(await page.evaluate(()=>!!templeTest.arena.buildPreview.children[0]?.userData?.titlePlate),'Uploaded artwork must show its name on a black title plate');
  const start=await page.evaluate(()=>templeTest.arena.buildPreview.position.toArray());
  const stateBefore=await page.evaluate(()=>({enabled:templeTest.controller().enabled,grounded:templeTest.controller().grounded,position:templeTest.controller().root.position.toArray(),panel:templeTest.ui.panelName,buildKind:templeTest.ui.buildKind,active:templeTest.writer.active,focused:document.activeElement?.tagName}));
  await page.keyboard.down('w');
