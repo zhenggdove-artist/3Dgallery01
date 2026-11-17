@@ -71,3 +71,31 @@ await writeFile('vendor/00gamedevs/warning-manifest.json',JSON.stringify({
  packaging:'byte-identical original JavaScript, no imitation',assets:warnings
 },null,2)+'\n');
 console.log('Validated '+assets.length+' of '+Object.keys(numberedIds).length+' exact originals.');
+
+// Also vendor the exact ground-freeze-study scene object requested for monster frost.
+// Keep it in a separate manifest: its catalogue number is not assumed.
+{
+ const id='ground-freeze-study';
+ const a=catalog.assets.find(v=>v.id===id&&v.kind==='effect');
+ if(!a||a.license!=='MIT'||a.integration?.type!=='scene-object'||!a.download?.url||!a.download?.sha256)
+  throw Error('Official ground-freeze-study source is not available for verified vendoring');
+ const url=new URL(a.download.url,origin);
+ if(url.origin!==origin)throw Error('Unexpected monster freeze source origin: '+url.href);
+ const response=await fetch(url);
+ if(!response.ok)throw Error('Official monster freeze source download failed: '+response.status);
+ const bytes=Buffer.from(await response.arrayBuffer());
+ const sha256=createHash('sha256').update(bytes).digest('hex');
+ if(sha256!==a.download.sha256)throw Error('Official monster freeze checksum mismatch');
+ const code=bytes.toString('utf8');
+ if(!code.includes('00GameDevs')||!code.includes('The MIT License'))
+  throw Error('Official monster freeze license header missing');
+ await writeFile(dir+'/'+id+'.js',bytes);
+ await writeFile('vendor/00gamedevs/monster-manifest.json',JSON.stringify({
+  origin,contentVersion:catalog.contentVersion,
+  downloadedFrom:'official AI catalog v2',
+  packaging:'byte-identical original JavaScript, no imitation',
+  assets:[{id,url:url.href,sha256,byteLength:bytes.length,license:a.license,
+   integration:a.integration,defaultOptions:a.defaultOptions}]
+ },null,2)+'\n');
+ console.log('Verified original monster effect '+id+' '+sha256);
+}
