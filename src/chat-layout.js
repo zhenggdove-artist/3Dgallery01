@@ -44,6 +44,12 @@ export function bindChatLayout(){
  });
  // Never restore old coordinates that now overlap joystick or action buttons.
  try{const saved=JSON.parse(localStorage.getItem('temple-chat-position')||'null');
-  if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top))requestAnimationFrame(()=>relocate(saved.left,saved.top));
+  if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top))requestAnimationFrame(()=>{
+   const key='temple-chat-raise-20261117',top=saved.top-(localStorage.getItem(key)?0:4);
+   for(let rise=0;rise<=120;rise+=4)if(relocate(saved.left,top-rise)){
+    localStorage.setItem('temple-chat-position',JSON.stringify({left:saved.left,top:top-rise}));
+    localStorage.setItem(key,'1');break;
+   }
+  });
  }catch{}
 }

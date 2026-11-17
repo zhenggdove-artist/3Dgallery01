@@ -27,7 +27,7 @@ input,textarea,[contenteditable=true]{user-select:text;-webkit-user-select:text;
 #dock #attack-button span{font-size:24px;font-weight:bold}
 #vitals #wallet{color:#ffe775;font-size:23px;font-weight:900;white-space:nowrap;text-shadow:0 1px #b69527,0 2px #9c741b,0 3px #705019,1px 4px 2px #000;animation:wallet-float 3s ease-in-out infinite}
 @keyframes wallet-float{50%{transform:translateY(-3px)}}
-#chat-hud{--chat-height:68px;bottom:max(3px,env(safe-area-inset-bottom));height:var(--chat-height);width:clamp(150px,32vw,430px);display:flex;flex-direction:column}
+#chat-hud{--chat-height:68px;bottom:max(7px,env(safe-area-inset-bottom) + 4px);height:var(--chat-height);width:clamp(150px,32vw,430px);display:flex;flex-direction:column}
 #chat-resize{display:flex;align-items:center;height:20px;min-height:20px;cursor:ns-resize;font-size:10px}
 #chat-toggle{width:26px;height:20px;padding:0;border:0;background:#edd3e5;color:#412d44}
 #chat-messages{height:auto!important;min-height:0;flex:1;padding:2px 5px;font-size:11px}
@@ -158,7 +158,7 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
  #chat-hud{position:fixed;left:max(12px,env(safe-area-inset-left) + 8px);
    right:auto;top:auto;transform:none;min-width:0;
    width:min(258px,calc(100vw - 32px));max-width:calc(100vw - 32px);
-   bottom:max(140px,env(safe-area-inset-bottom) + 126px);z-index:21;}
+   bottom:max(144px,env(safe-area-inset-bottom) + 130px);z-index:21;}
  #chat-form{min-width:0}
  #chat-form input{min-width:0;max-width:100%;font-size:16px}
  #chat-resize,#chat-form{touch-action:manipulation}
@@ -168,23 +168,23 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
 }
 /* Landscape: joystick left, chat central, combat cluster right. */
 @media(pointer:coarse) and (orientation:landscape) and (min-width:601px){
- #chat-hud{left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom) + 8px);
+ #chat-hud{left:50%;transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom) + 12px);
    width:min(260px,calc(100vw - 390px));max-height:calc(100dvh - 80px);}
  #prompt{bottom:calc(50% + 42px)}
 }
 
 #vitals{overflow:visible}
-#player-roster{position:absolute;top:101px;right:0;width:200px;max-width:min(230px,calc(100vw - 24px));display:grid;gap:5px;pointer-events:none;color:#f7ecfb;text-shadow:0 1px 2px #140b1f}
+#player-roster{position:absolute;top:calc(100% + 6px);left:0;right:auto;width:200px;max-width:none;transform:scale(.4);transform-origin:top left;display:grid;gap:5px;pointer-events:none;color:#f7ecfb;text-shadow:0 1px 2px #140b1f;overflow:visible}
 #player-roster:empty{display:none}
-.roster-player{background:#1e102ab8;border:1px solid #f0c4e34f;border-radius:6px;padding:5px 7px}
-.roster-player.roster-self{border-color:#ffb1d2}
+.roster-player{background:transparent;border:0;border-radius:0;padding:5px 7px;box-shadow:none}
+.roster-player.roster-self{border:0}
 .roster-title{display:flex;align-items:center;justify-content:space-between;gap:9px;font:700 11px/1.3 Arial,sans-serif}
 .roster-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .roster-title small{font:9px/1.2 Arial,sans-serif;color:#fbd9eb;flex:none}
-.roster-track{width:100%;height:7px;margin-top:4px;background:#2d172b;border:1px solid #ffaedc70;border-radius:10px;overflow:hidden}
+.roster-track{width:100%;height:7px;margin-top:4px;background:transparent;border:1px solid #ffaedc70;border-radius:10px;overflow:hidden}
 .roster-track i{display:block;height:100%;background:linear-gradient(90deg,#46b991,#8fe9ad);transition:width .16s linear}
 .roster-track i.critical{background:linear-gradient(90deg,#fa6a88,#ffb0b2)}
 #kill-notice{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:65;max-width:90vw;white-space:normal;text-align:center;padding:12px 18px;border-radius:10px;background:#280d25dd;border:2px solid #fbaacb;color:#fff0f7;font:700 clamp(17px,3vw,28px)/1.3 Arial,sans-serif;text-shadow:0 2px 4px #140718;pointer-events:none}
 #kill-notice[hidden]{display:none}
 #death #death-killer{font:700 clamp(15px,3vw,25px)/1.4 Arial,sans-serif;letter-spacing:.03em;color:#ffb4d0;max-width:90vw;overflow-wrap:anywhere}
-@media(max-width:720px),(pointer:coarse){#mobile-stick{width:105px;height:105px}#mobile-stick i{width:42px;height:42px;left:calc(50% - 21px);top:calc(50% - 21px)}#player-roster{top:103px;right:0;width:min(178px,calc(100vw - 24px));gap:3px}.roster-player{padding:4px 6px}.roster-title{font-size:10px}#chat-hud{bottom:max(141px,env(safe-area-inset-bottom) + 127px)}}
+@media(max-width:720px),(pointer:coarse){#mobile-stick{width:105px;height:105px}#mobile-stick i{width:42px;height:42px;left:calc(50% - 21px);top:calc(50% - 21px)}#player-roster{top:calc(100% + 6px);left:0;right:auto;width:200px;gap:3px}.roster-player{padding:4px 6px}.roster-title{font-size:10px}#chat-hud{bottom:max(145px,env(safe-area-inset-bottom) + 131px)}}

@@ -24,14 +24,9 @@ export class PlayerController{
   teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.knockback=null;}
   stepHorizontal(dx,dz){
     const p=this.root.position,nx=p.x+dx,nz=p.z+dz;
-    // A tall adjacent exhibit deck is not an invisible wall around the
-    // player's current disc: slide along its edge rather than cancelling both
-    // directions. Leaving a raised platform always begins a natural fall.
-    const permitted=(x,z)=>{
-      if(Math.hypot(x,z)>ARENA_RADIUS-1||this.arena.blocked(x,z,p.y))return false;
-      const h=this.arena.groundHeight(x,z,p.y);
-      return !this.grounded||h-p.y<3;
-    };
+    // All discs are walkable tops without invisible side colliders.
+    // Keep only real build collision and the outer arena limit.
+    const permitted=(x,z)=>Math.hypot(x,z)<=ARENA_RADIUS-1&&!this.arena.blocked(x,z,p.y);
     if(permitted(nx,nz)){p.x=nx;p.z=nz;}
     else{
       if(permitted(nx,p.z))p.x=nx;
