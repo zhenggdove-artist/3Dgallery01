@@ -31,6 +31,7 @@ export class TempleRoom extends DurableObject{
       CREATE TABLE IF NOT EXISTS request_receipts (session_id TEXT NOT NULL, request_id TEXT NOT NULL, response TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(session_id,request_id));
       CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS plant_media (id TEXT PRIMARY KEY, owner TEXT NOT NULL, type TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL);
+       CREATE TABLE IF NOT EXISTS gm_music (id INTEGER PRIMARY KEY CHECK (id=1), type TEXT NOT NULL, data BLOB NOT NULL, updated INTEGER NOT NULL);
     `);
     initializeArtMedia(this.sql);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
@@ -52,7 +53,11 @@ export class TempleRoom extends DurableObject{
       if(path==='/health')return withCors(request,json({ok:true,service:'TempleRoom',database:'sqlite',players:this.roster().length,apiVersion:3,features:{artMediaUpload:true,artBombPlace:true,gmReset:true}}),this.env);
       if(path==='/api/join'&&request.method==='POST')return withCors(request,await this.join(request),this.env);
       if(path.startsWith('/api/art-media/')&&request.method==='GET')return withCors(request,getArtMedia(this.sql,path.slice(15),request),this.env);
-      if(path.startsWith('/api/media/')&&request.method==='GET'){
+      if(path==='/api/gm/music'&&request.method==='GET'){
+         const music=this.sql.exec('SELECT type,data FROM gm_music WHERE id=1').toArray()[0];
+         return withCors(request,music?new Response(music.data,{headers:{'Content-Type':music.type,'Cache-Control':'public,max-age=86400','X-Content-Type-Options':'nosniff'}}):json({error:'No GM music uploaded'},404),this.env);
+       }
+       if(path.startsWith('/api/media/')&&request.method==='GET'){
         const media=this.sql.exec('SELECT type,data FROM plant_media WHERE id=?',path.slice(11)).toArray()[0];
         return withCors(request,media?new Response(media.data,{headers:{'Content-Type':media.type,'X-Content-Type-Options':'nosniff','Cache-Control':'public,max-age=31536000,immutable'}}):json({error:'Media missing'},404),this.env);
       }
@@ -60,6 +65,7 @@ export class TempleRoom extends DurableObject{
       if(path==='/api/art-media'&&request.method==='POST')return withCors(request,await uploadArtMedia(request,session,this),this.env);
       if(path==='/api/socket')return this.connect(request,session,token);
       if(path==='/api/media'&&request.method==='POST')return withCors(request,await this.uploadMedia(request,session),this.env);
+       if(path==='/api/gm/music'&&request.method==='POST')return withCors(request,await this.uploadGmMusic(request,session),this.env);
       if(path==='/api/world'&&request.method==='GET')return withCors(request,json({world:worldView(this.world(),session.profile_key),players:this.roster(),self:this.self(session)}),this.env);
       if(path==='/api/gm/presence'&&request.method==='GET')return withCors(request,this.gmPresence(session),this.env);
       if(path==='/api/action'&&request.method==='POST')return withCors(request,await this.action(request,session),this.env);
@@ -157,7 +163,26 @@ export class TempleRoom extends DurableObject{
     this.ctx.storage.transactionSync(()=>{this.sql.exec('INSERT INTO save_codes VALUES(?,?,?,?)',code,session.profile_key,now,now);this.sql.exec('UPDATE sessions SET save_code=?,last_code_at=? WHERE id=?',code,now,session.id);});return json({ok:true,code});
   }
 
-  async uploadMedia(request,session){
+  async uploadGmMusic(request,session){
+     const world=this.world();if(world.profiles?.[session.profile_key]?.admin!==true)return json({error:'GM only'},403);
+     if(!this.consumeRate('gm-music',3,60_000))return json({error:'Too many music uploads'},429);
+     const type=(request.headers.get('Content-Type')||'').split(';')[0];
+     if(type!=='audio/mpeg')return json({error:'Use an MP3 file'},415);
+     const reader=request.body?.getReader();if(!reader)return json({error:'No file received'},400);
+     let length=0;const chunks=[];
+     for(;;){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>8_000_000){await reader.cancel();return json({error:'Music must be under 8 MB'},413);}chunks.push(value);}
+     if(length<512)return json({error:'Invalid MP3'},400);
+     const data=new Uint8Array(length);let offset=0;
+     for(const chunk of chunks){data.set(chunk,offset);offset+=chunk.length;}
+     if(!(data[0]===73&&data[1]===68&&data[2]===51)&&!(data[0]===255&&(data[1]&224)===224))
+       return json({error:'Invalid MP3 header'},415);
+     const updated=Date.now();
+     this.sql.exec('INSERT OR REPLACE INTO gm_music (id,type,data,updated) VALUES(1,?,?,?)',type,data,updated);
+     world.audioMix??={master:75,music:45,sfx:100,levels:{}};
+     world.audioMix.musicVersion=updated;this.save(world);this.broadcastWorld(world);
+     return json({ok:true,size:length,version:updated});
+   }
+   async uploadMedia(request,session){
     if(session.role!=='fighter')return json({error:'Spectators cannot upload'},403);
     if(!this.consumeRate('media:'+session.profile_key,12,60_000))return json({error:'Upload limit reached'},429);
     const type=(request.headers.get('Content-Type')||'').split(';')[0];
