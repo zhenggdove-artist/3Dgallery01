@@ -82,7 +82,8 @@ test('staff attack direction is solved from the actual raised muzzle to the cent
  const muzzle=new THREE.Vector3(0,3,0);
  const direction=new THREE.Vector3(...attackDirection(controller,camera,arena,new Map(),itemById('ember-1'),0,muzzle));
  const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(),camera);
- const target=ray.ray.at(150,new THREE.Vector3());
+ const target=ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),new THREE.Vector3());
+ assert.ok(target,'centre reticle must intersect the ground');
  const expected=target.sub(muzzle).normalize();
  assert.ok(direction.dot(expected)>.995,'aim direction must intersect the reticle ray at distance');
 });
