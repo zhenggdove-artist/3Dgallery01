@@ -23,7 +23,7 @@ export class PlayerController{
   setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();}}
   setRole(role){this.role=role;this.root.visible=role==='fighter';}
   setFollowTarget(root=null){this.followTarget=root;}
-  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.panBlastFlight=null;this.whipPull=null;}
+  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;}
   beginPanBlast(hit){
     if(!hit?.panBlast||!(Number(hit.knockbackDistance)>0))return false;
     const d=new THREE.Vector3(...hit.vector);d.y=0;
@@ -129,12 +129,12 @@ export class PlayerController{
     if(this.knockback&&this.knockbackRemaining>0){
      // Pan recoil follows the explosion radius unless a real obstacle
      // intervenes, independent of the frame rate.
-     const speed=Math.max(16,this.knockbackRemaining*2),step=Math.min(this.knockbackRemaining,speed*dt);
+     const speed=this.knockbackSpeed||Math.max(16,this.knockbackRemaining*2),step=Math.min(this.knockbackRemaining,speed*dt);
      const px=this.root.position.x,pz=this.root.position.z;
      this.stepHorizontal(this.knockback.x*step,this.knockback.z*step);
      const travelled=Math.hypot(this.root.position.x-px,this.root.position.z-pz);
      this.knockbackRemaining=Math.max(0,this.knockbackRemaining-travelled);
-     if(travelled<.00001||this.knockbackRemaining<.0001){this.knockback=null;this.knockbackRemaining=0;}
+     if(travelled<.00001||this.knockbackRemaining<.0001){this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;}
     }else if(this.knockback){
      this.stepHorizontal(this.knockback.x*dt,this.knockback.z*dt);
      this.knockback.multiplyScalar(Math.exp(-5*dt));
