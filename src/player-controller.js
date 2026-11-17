@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {ARENA_RADIUS,PLAYER_SPAWNS} from './shared/arena.js';
+import {PAN_BLAST_GRAVITY,PAN_BLAST_LAUNCH_SPEED,PAN_BLAST_BOUNCE_SPEEDS,PAN_BLAST_INITIAL_DURATION} from './shared/pan-blast-flight.js';
 
 // RELETTER Explore's actual acceleration, camera, momentum and jump constants.
 export const RELETTER_MOVEMENT=Object.freeze({speed:8.64,acceleration:6,deceleration:12,gravity:25,jump:10});
@@ -17,11 +18,60 @@ export class PlayerController{
     this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
     if(stick){let pointer=null;const knob=stick.firstElementChild;const move=e=>{if(e.pointerId!==pointer)return;const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,radius=Math.max(20,(r.width-knob.offsetWidth)/2-4),f=radius/Math.max(radius,Math.hypot(x,y));this.move.set(x*f/radius,y*f/radius);knob.style.transform=`translate(${x*f}px,${y*f}px)`;};stick.onpointerdown=e=>{e.preventDefault();if(pointer!==null)return;pointer=e.pointerId;stick.setPointerCapture(pointer);move(e);};stick.onpointermove=move;stick.onpointerup=stick.onpointercancel=stick.onlostpointercapture=e=>{if(e.pointerId!==pointer)return;pointer=null;this.move.set(0,0);knob.style.transform='';};}
   }
-  jump(){if(!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>38)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
+  jump(){if(this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>38)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
   setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();}}
   setRole(role){this.role=role;this.root.visible=role==='fighter';}
   setFollowTarget(root=null){this.followTarget=root;}
-  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;}
+  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.panBlastFlight=null;}
+  beginPanBlast(hit){
+    if(!hit?.panBlast||!(Number(hit.knockbackDistance)>0))return false;
+    const d=new THREE.Vector3(...hit.vector);d.y=0;
+    if(d.lengthSq()<.0001)d.set(0,0,1);
+    d.normalize();
+    this.panBlastFlight={
+      direction:d,remaining:hit.knockbackDistance,
+      horizontalSpeed:hit.knockbackDistance/PAN_BLAST_INITIAL_DURATION,
+      rebounds:0,landings:0,elapsed:0
+    };
+    this.knockback=null;this.knockbackRemaining=0;
+    this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;
+    this.velocityY=PAN_BLAST_LAUNCH_SPEED;this.grounded=false;this.fallStartY=this.root.position.y;
+    this.speed=0;
+    return true;
+  }
+  advancePanBlast(dt){
+    let remaining=Math.max(0,Math.min(Number(dt)||0,.4));
+    while(remaining>.0000001&&this.panBlastFlight){
+      const step=Math.min(remaining,1/120),flight=this.panBlastFlight,root=this.root;
+      remaining-=step;flight.elapsed+=step;
+      if(flight.remaining>0){
+        const move=Math.min(flight.remaining,flight.horizontalSpeed*step);
+        const x=root.position.x,z=root.position.z;
+        this.stepHorizontal(flight.direction.x*move,flight.direction.z*move);
+        const travelled=Math.hypot(root.position.x-x,root.position.z-z);
+        flight.remaining=Math.max(0,flight.remaining-travelled);
+        // Real obstacles/arena limits stop the horizontal knockback.
+        if(travelled<.000001)flight.remaining=0;
+      }
+      const previousY=root.position.y;
+      this.velocityY-=PAN_BLAST_GRAVITY*step;
+      root.position.y+=this.velocityY*step;
+      const floor=this.arena.groundHeight(root.position.x,root.position.z,Math.max(previousY,root.position.y));
+      if(this.velocityY<=0&&previousY>=floor-.05&&root.position.y<=floor){
+        root.position.y=floor;flight.landings++;
+        if(flight.rebounds<PAN_BLAST_BOUNCE_SPEEDS.length){
+          this.velocityY=PAN_BLAST_BOUNCE_SPEEDS[flight.rebounds++];
+        }else{
+          this.velocityY=0;this.grounded=true;this.panBlastFlight=null;
+          this.jumpVelocity.set(0,0,0);
+        }
+      }
+      if(root.position.y<-4){
+        root.position.y=0;this.velocityY=0;this.grounded=true;this.panBlastFlight=null;
+      }
+    }
+    this.animation=this.panBlastFlight?(this.velocityY>=0?'jump':'fall'):'idle';
+  }
   stepHorizontal(dx,dz){
     const p=this.root.position,nx=p.x+dx,nz=p.z+dz;
     // All discs are walkable tops without invisible side colliders.
@@ -49,6 +99,11 @@ export class PlayerController{
   }
   update(dt){
     if(!this.enabled){this.updateCamera(dt);return this.state();}
+    if(this.panBlastFlight){
+      // Hit stun cannot cancel the launch: steer/jump return only after
+      // one big parabola and precisely three successively lower bounces.
+      this.advancePanBlast(dt);this.updateCamera(dt);return this.state();
+    }
     if(this.knockback&&this.knockbackRemaining>0){
      // Pan recoil follows the explosion radius unless a real obstacle
      // intervenes, independent of the frame rate.
