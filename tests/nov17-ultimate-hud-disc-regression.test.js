@@ -7,7 +7,7 @@ import {ChargeTargetPreview} from '../src/charge-target-preview.js';
 import {ULTIMATE_FOOTPRINT_SCALE,scaleUltimateFootprint} from '../src/shared/charge-area.js';
 import {ultimateWorldScale,NumberedWeaponEffects} from '../src/numbered-weapon-effects.js';
 import {WEAPONS,itemById,attackStats} from '../src/shared/catalog.js';
-import {weaponQuality} from '../src/shared/weapon-abilities.js';
+import {weaponQuality,isChannelStaff,channelReachMultiplier} from '../src/shared/weapon-abilities.js';
 
 test('all ultimate hitboxes reduce radius and forward reach to exactly 60%',()=>{
  assert.equal(ULTIMATE_FOOTPRINT_SCALE,.6);
@@ -33,9 +33,11 @@ test('every weapon receives a smaller warning with its quality multiplier',()=>{
   assert.ok(v.footprint.position.every(Number.isFinite),item.id);
   const q=weaponQuality(item);
   const stats=attackStats(item,1);
-  if(!['black-cat','goldfish','jellybrella'].includes(item.id)){
-   assert.ok(v.footprint.range <= stats.range*q.range+.01,item.id);
-  }
+  if(isChannelStaff(item))stats.range=Math.max(stats.range,item.id==='clam'?10:Math.min(18,item.range))*channelReachMultiplier(item);
+  stats.range=+(stats.range*q.range).toFixed(2);
+  if(item.id==='black-cat')stats.range=256;
+  scaleUltimateFootprint(stats);
+  assert.ok(Math.abs(v.footprint.range-stats.range)<.001,item.id);
  }
  v.dispose();
 });

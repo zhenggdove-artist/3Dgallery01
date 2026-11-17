@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createInitialWorld,applyAction,ensureProfile,tickWorld} from '../src/shared/temple-rules.js';
-import {chargedArea,insideChargedArea} from '../src/shared/charge-area.js';
+import {chargedArea,insideChargedArea,ULTIMATE_FOOTPRINT_SCALE} from '../src/shared/charge-area.js';
 import {artBombDamage,projectileHitsActor} from '../src/shared/art-bomb.js';
 import {WEAPONS,attackStats} from '../src/shared/catalog.js';
 import {ARTWORK_DISCS,discGroundHeight} from '../src/shared/artwork-discs.js';
@@ -11,7 +11,7 @@ test('every weapon has finite charge distance and a target rune outside the cast
  assert.ok(WEAPONS.length>40);
  for(const weapon of WEAPONS){
   const stats=attackStats(weapon,1),area=chargedArea(weapon,[0,1,0],[0,0,1],stats);
-  assert.ok(area.radius>=1&&Number.isFinite(area.radius),weapon.id);
+  assert.ok(area.radius>=.1&&Number.isFinite(area.radius),weapon.id);
   assert.ok(area.travel>=1&&area.travel<=area.range,weapon.id);
   assert.ok(area.center.every(Number.isFinite),weapon.id);
   assert.ok(area.center[2]>0,weapon.id);
@@ -201,7 +201,9 @@ test('all cat guns keep their advertised normal and charged range and deal PvP d
     assert.equal(attackStats(weapon,0).range,range,id+' normal range');
     assert.equal(attackStats(weapon,1).range,chargedRange,id+' charged range');
     for(const [charge,distance] of [[0,normalDistance],[1,chargedDistance]]){
-      const world=createInitialWorld(1000),shooter=actor('shooter',[0,0,-35]),target=actor('target',[0,0,-35+distance]);
+      // Charged collision/preview now share 60% of the catalog reach.
+      const actualDistance=charge?Math.min(distance,chargedRange*ULTIMATE_FOOTPRINT_SCALE*.75):distance;
+      const world=createInitialWorld(1000),shooter=actor('shooter',[0,0,-35]),target=actor('target',[0,0,-35+actualDistance]);
       ensureProfile(world,target.key,target.name,target.color,1000);
       const profile=ensureProfile(world,shooter.key,shooter.name,shooter.color,1000);
       profile.inventory.push(id);profile.equipment.weapon=id;

@@ -278,7 +278,7 @@ test('doubling the ice timeline retains overlapping channels without a zero-visi
  assert.equal(scene.children.length,0);
 });
 
-test('charged sword uses 60% of preceding reach and unchanged thin width, consistent with #59',()=>{
+test('charged sword warning and radius follow the final 60% collision dimensions',()=>{
  const item=itemById('saber-1'),stats=attackStats(item,1);
  const oldReach=Math.max(30,item.range*2,(item.range+item.chargeRange)*1.8)*4;
  assert.ok(Math.abs(stats.range-oldReach*.60)<.01,'ultimate reach must equal 60% of the former 4x baseline');
@@ -288,9 +288,10 @@ test('charged sword uses 60% of preceding reach and unchanged thin width, consis
  fx.update(root,item,.95,direction,{world:{floatingPlatforms:[]}},null,muzzle);
  assert.equal(fx.rectangle.group.userData.vfxNumber,59);
  assert.equal(fx.footprint.shape,'rectangle');
- assert.ok(Math.abs(fx.footprint.length-stats.range)<1e-8);
- assert.ok(Math.abs(fx.footprint.width-Math.max(.5,Number((stats.radius*weaponQuality(item).radius).toFixed(2))*2))<1e-8);
- assert.ok(Math.abs(fx.footprint.position[2]-(muzzle[2]+stats.range/2))<1e-8);
+ const expected=scaleUltimateFootprint({...stats,radius:+(stats.radius*weaponQuality(item).radius).toFixed(2)});
+ assert.ok(Math.abs(fx.footprint.length-expected.range)<1e-8);
+ assert.ok(Math.abs(fx.footprint.width-Math.max(.5,expected.radius*2))<1e-8);
+ assert.ok(Math.abs(fx.footprint.position[2]-(muzzle[2]+expected.range/2))<1e-8);
  fx.dispose();
 });
 
@@ -366,7 +367,7 @@ test('500ms A hold threshold is shared by tap vs charge and client and server ic
  assert.equal(channelReachMultiplier(ice),2);
  assert.equal(channelReachMultiplier(fire),1);
  const q=weaponQuality(ice),stats=attackStats(ice,1);
- const expected=+(Math.max(stats.range,Math.min(18,ice.range))*2*q.range).toFixed(2);
+ const expected=+((+(Math.max(stats.range,Math.min(18,ice.range))*2*q.range).toFixed(2))*.6).toFixed(3);
  const scene=new THREE.Scene(),fx=new ChargeTargetPreview(scene),root=new THREE.Group();
  fx.update(root,ice,.7,[0,0,1],{world:{floatingPlatforms:[]}});
  assert.equal(fx.footprint.shape,'rectangle');

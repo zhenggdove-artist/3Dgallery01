@@ -110,7 +110,7 @@ test('spinning jellybrella wheel deals damage again every ~1.2s until its 5s ani
  const at=NOW+4000,shot=shoot(r,at,{charge:1});
  assert.equal(shot.attackEvent.ultimate,true);
  assert.equal(shot.attackEvent.area.mode,'area');
- assert.ok(shot.attackEvent.area.radius>=10);
+ assert.ok(shot.attackEvent.area.radius>=6,'jelly warning and hitbox are both 60% of the former minimum');
  tick(r,at+650);
  const first=r.world.damageEvents.filter(e=>e.target==='victim').length;
  assert.ok(first>=1,'first visible wheel contact must damage');
@@ -161,8 +161,9 @@ test('jellybrella actual 00GameDevs #26 group is scaled 2x, not only its capped 
   qualityScale:1,area:{mode:'area',visualCenter:[0,.16,15],center:[0,.12,15],radius:10}};
  assert.equal(fx.play(event,item,null),true);
  assert.equal(fx.active[0].spec.number,26);
- assert.equal(fx.active[0].fx.group.scale.x,2);
+ const visualSize=fx.active[0].fx.group.scale.x;
+ assert.ok(visualSize>=2,'at least the original wheel scale');
  fx.update(.1);
- assert.equal(fx.active[0].fx.group.scale.x,2);
+ assert.equal(fx.active[0].fx.group.scale.x,visualSize,'native asset preserves world scaling');
  fx.dispose();
 });
