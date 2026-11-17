@@ -52,7 +52,7 @@ export class IslandEnemies{
   root.userData.attackRestore=[];root.userData.pivot.rotation.x=0;root.userData.pivot.position.y=0;
   const skill=state.skills?.find(s=>s.motion&&s.phase==='active');
   animateIslandModel(root,{...state,moving:state.moving||skill?.motion==='charge',
-   leap:skill?.motion==='stomp',skills:skill?.motion==='charge'?[skill]:skill?[]:state.skills,
+   leap:false,skills:skill?.motion==='charge'?[skill]:skill?[]:state.skills,
    lastHit:state.lastHitAt},dt,now);
   if(skill){
    const t=Math.min(1,Math.max(0,(now-skill.start)/Math.max(1,skill.end-skill.start))),pulse=Math.sin(Math.PI*t);
@@ -71,6 +71,7 @@ export class IslandEnemies{
     const crouch=windup?Math.min(1,t*1.7):t<.08?1-t/.08:t>.76?Math.min(1,(t-.76)/.24)*.35:0;
     // Slow decelerating ascent; shorter, accelerating gravity-like fall.
     const height=windup?0:t<=rise?6.6*(1-(1-t/rise)**2):t<landing?6.6*(1-((t-rise)/(landing-rise))**2):0;
+    // The root/pivot is positioned once per frame, with no jump mixer fighting it.
     root.userData.pivot.position.y=height-crouch*.30;
     root.userData.pivot.rotation.x=-.22*crouch;
     const bend=Math.max(crouch,!windup?Math.sin(Math.PI*t)*.38:0);

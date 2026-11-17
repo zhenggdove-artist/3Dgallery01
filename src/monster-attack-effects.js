@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import pulseBeam from '../vendor/00gamedevs/pulse-beam.js';
+import {beamSweepEndpoint} from './shared/island-combat.js';
 import venomPool from '../vendor/00gamedevs/venom-pool.js';
 import {ENEMY_HEIGHT} from './shared/island-combat.js';
 
@@ -19,7 +20,7 @@ export class MonsterAttackEffects {
   marker.rotation.x=-Math.PI/2;marker.position.y=.12;root.add(marker);
   const fringe=new THREE.Mesh(warningCircle,softMat('#ff242c'));
   fringe.rotation.x=-Math.PI/2;fringe.position.y=.125;root.add(fringe);
-  const native=motion==='beam'?pulseBeam({size:1.8,density:.48,color:'#80ffed',quantity:4}):
+  const native=motion==='beam'?pulseBeam({size:3.6,density:.35,color:'#80ffed',quantity:3}):
    motion==='venom'?venomPool({size:1.8,density:.5,color:'#b4f745',quantity:7}):null;
   if(native){native.group.visible=false;root.add(native.group);}
   const wave=new THREE.Mesh(new THREE.RingGeometry(.84,1,48),softMat('#ffe8ab'));
@@ -135,7 +136,8 @@ export class MonsterAttackEffects {
   if(!active)return;
   if(s.motion==='beam'){
    const a=mouth?.isVector3?mouth:new THREE.Vector3(origin[0],ENEMY_HEIGHT*.86,origin[2]);
-   const b=new THREE.Vector3(aim[0],(aim[1]||0)+1.3,aim[2]);
+   const endpoint=beamSweepEndpoint(s,now);
+   const b=new THREE.Vector3(endpoint[0],(endpoint[1]||0)+1.3,endpoint[2]);
    native.group.position.set(0,0,0);native.group.quaternion.identity();
    native.setEndpoints(a,b);
   }else{

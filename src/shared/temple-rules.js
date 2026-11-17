@@ -394,6 +394,14 @@ function attack(world,profile,actor,body,context,now){
    // Restrict ordinary whip contacts to the visible, narrow forward-moving lash.
    if(weapon.family==='whip'&&!weapon.exotic&&!stats.ultimate){stats.range=+(Math.min(stats.range,4.7+(Math.max(1,weapon.tier||1)-1)*1.5)/3).toFixed(3);stats.radius=.16;}
     if(weapon.family==='swatter'&&!weapon.exotic&&!stats.ultimate){stats.range=Math.min(stats.range,1.55+(Math.max(1,weapon.tier||1)-1)*.2);stats.radius=.18;}
+   // Server distances use world units, not screen pixels. A 0.10m tolerance
+   // approximates the requested ten-pixel contact margin at normal play zoom.
+   // Do not change sword reach, charged ultimates, guns or channel spells.
+   if(['whip','swatter','pan','planter','palm','giraffe'].includes(weapon.family)&&!stats.ultimate&&!channel){
+    const reach={whip:1.9,swatter:1.55,pan:1.55,planter:1.65,palm:1.7,giraffe:1.85}[weapon.family];
+    stats.range=Math.min(stats.range,reach+.10);
+    stats.radius=Math.min(stats.radius,.10);
+   }
   // Jellybrella's giant spinning wheel is an area hazard, not a .3m point.
   // Scale the original authoritative area and its warning with the doubled wheel.
   if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);

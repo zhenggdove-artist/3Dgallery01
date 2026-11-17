@@ -118,7 +118,10 @@ export class NumberedWeaponEffects {
  create(spec,options) {
   const factory=FACTORIES[spec.asset];
   if(!factory)throw Error('Missing exact 00GameDevs factory #'+spec.number);
-  const fx=factory(options);
+  // The original dimensional-rend uses expensive refractive panels. Retain
+   // the exact vendor asset but cap its optional panels before GPU allocation.
+   const safeOptions=spec.asset==='dimensional-rend'?{...options,panelCount:0,detail:.35,density:.2}:options;
+   const fx=factory(safeOptions);
   if(!fx?.group?.isObject3D||typeof fx.update!=='function'||typeof fx.dispose!=='function')
    throw Error('Invalid original 00GameDevs VFX #'+spec.number);
   fx.group.name=spec.asset==='charged-beam'?'00GameDevs original VFX charged-beam':'00GameDevs original VFX #'+String(spec.number).padStart(2,'0')+' '+spec.asset;
@@ -144,7 +147,7 @@ export class NumberedWeaponEffects {
     // native instances on their first cast. Create these before entering play.
     // Reserve simultaneous native pan/whip bursts and their GPU buffers up
     // front; no geometric or particle simplification occurs at cast time.
-    const copiesByNumber={31:3,33:4,20:2,43:2,70:2,68:3,48:3};
+    const copiesByNumber={31:3,33:4,20:2,43:2,70:2,68:3,48:3,47:2};
     let warmed=0;
     const target=new THREE.WebGLRenderTarget(32,32,{depthBuffer:true});
     const view=camera.clone();view.position.set(10,8,16);view.lookAt(0,1,0);
@@ -402,7 +405,8 @@ export class NumberedWeaponEffects {
  updateNativeCycles(entry,dt){
   const number=entry.spec.number,moving=TRAVELLING_NATIVE.has(number);
   entry.cycleTimer+=dt;
-  while(entry.cycleTimer>=CYCLE_INTERVAL[number]){
+  let spawned=0;
+   while(entry.cycleTimer>=CYCLE_INTERVAL[number]&&spawned++<2){
    entry.cycleTimer-=CYCLE_INTERVAL[number];
    const fx=this.acquire(entry.spec,entry.options);
    entry.cycles.push(this.makeCycle(entry,fx));
@@ -453,6 +457,8 @@ export class NumberedWeaponEffects {
   if(entry.age>=1.88)entry.stopping=true;
  }
  update(dt){
+  // Limit catch-up work after a tab suspension or shader compilation stall.
+  dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));
   const now=performance.now();
   for(const e of [...this.active]){
    e.age+=dt;

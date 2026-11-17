@@ -14,7 +14,7 @@ export const ENEMY_RADIUS=.42*6; // Includes the sixfold humanoid's shoulders an
 const SKILLS=Object.freeze({
  swipe:{warning:480,active:500,range:4.8,radius:4.2},
  charge:{warning:850,active:1600,range:19,radius:2.35},
- beam:{warning:750,active:5000,range:38,radius:2.475},
+ beam:{warning:750,active:5000,range:38,radius:4.95},
  stomp:{warning:1000,active:1500,range:8,radius:7},
  venom:{warning:850,active:5100,range:27,radius:5.2}
 });
@@ -25,6 +25,20 @@ const segmentDistance=(p,a,b)=>{
  const t=l?Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[2]-a[2])*dz)/l)):0;
  return Math.hypot(p[0]-a[0]-t*dx,p[2]-a[2]-t*dz);
 };
+// Sweep from near to far over the five-second beam. A single pure function
+// drives both the authoritative collision ray and the rendered beam endpoint.
+export function beamSweepEndpoint(skill,now){
+ const origin=skill.origin,aim=skill.aim;
+ const duration=Math.max(1,skill.end-skill.start);
+ const t=Math.max(0,Math.min(1,(now-skill.start)/duration));
+ const reach=.22+.78*(t*t*(3-2*t));
+ const angle=Math.sin(t*Math.PI*1.65)*.16;
+ const dx=aim[0]-origin[0],dz=aim[2]-origin[2],len=Math.hypot(dx,dz)||1;
+ const x=dx/len,z=dz/len;
+ return [origin[0]+(x*Math.cos(angle)-z*Math.sin(angle))*len*reach,
+         aim[1]||0,
+         origin[2]+(z*Math.cos(angle)+x*Math.sin(angle))*len*reach];
+}
 export function monsterSkillContains(skill,p,now,origin=skill.origin){
  if(skill.phase!=='active'||now>=skill.end)return false;
  const config=SKILLS[skill.motion];if(!config)return false;
@@ -43,7 +57,7 @@ export function monsterSkillContains(skill,p,now,origin=skill.origin){
  }
  if(skill.motion==='beam') {
   // The ray starts at the giant monster's mouth and extends toward its locked aim.
-  const end=[skill.aim[0],0,skill.aim[2]];
+  const end=beamSweepEndpoint(skill,now);
   return segmentDistance(p,skill.origin,end)<=config.radius;
  }
  return segmentDistance(p,skill.origin,skill.aim)<=config.radius;
