@@ -56,8 +56,10 @@ export class WeaponSignatureEffects {
    }
    for(const e of this.active){stage.add(e.obj);e.update(.016);}
    await renderer.compileAsync(stage,camera);
-   const target=new THREE.WebGLRenderTarget(32,32),prior=renderer.getRenderTarget();
-   try{renderer.setRenderTarget(target);renderer.render(stage,camera);}finally{renderer.setRenderTarget(prior);target.dispose();}
+   if(typeof renderer.getRenderTarget==='function'&&typeof renderer.setRenderTarget==='function'&&typeof renderer.render==='function'){
+    const target=new THREE.WebGLRenderTarget(32,32),prior=renderer.getRenderTarget();
+    try{renderer.setRenderTarget(target);renderer.render(stage,camera);}finally{renderer.setRenderTarget(prior);target.dispose();}
+   }
   }finally{
    for(const e of [...this.active])this.remove(e);
   }
