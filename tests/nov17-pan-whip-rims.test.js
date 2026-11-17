@@ -21,14 +21,13 @@ test('every frying-pan and whip tier uses the same warning/authoritative AoE foo
    scaleUltimateFootprint(stats,weapon);
    const relative=family==='pan'?.5:.2;
    assert.ok(Math.abs(stats.range-base.range*q.range*.6*relative)<.002,weapon.id);
-   assert.ok(Math.abs(stats.radius-forwardCastRadius(weapon,q,base.radius,false)*.6*relative)<.002,weapon.id);
+   assert.ok(Math.abs(stats.radius-forwardCastRadius(weapon,q,base.radius,false)*.6*relative*(family==='whip'?1.5:1))<.002,weapon.id);
    const area=chargedArea(weapon,[75,1,0],[0,0,1],stats);
    assert.equal(area.mode,'area',weapon.id);
    assert.equal(area.radius,stats.radius,weapon.id);
-   if(family==='whip'){
-    const oldCenter=Math.min(Math.max(stats.range*.65,9),stats.range);
-    assert.ok(Math.abs(area.visualCenter[2]-(oldCenter+stats.radius))<.002,weapon.id+' shifted exactly one new radius');
-   }
+   const oldCenter=Math.min(Math.max(stats.range*.65,9),stats.range);
+   assert.ok(Math.abs(area.visualCenter[2]-(oldCenter+stats.radius))<.002,
+    weapon.id+' explosion/warning shifted forward exactly one current radius');
   }
  }
  const spectral={id:'chiang-token',family:'pan'};
@@ -79,7 +78,9 @@ test('pan explosion hits all victims once, recoils onto caster for exactly 15 HP
  const radius=released.attackEvent.area.radius;
  assert.equal(p.hp,100);
  assert.equal(v.hp,100);
- tickWorld(world,{now:at+600,actors:[caster,victim,other],activeFighters:0,rng:()=>.5});
+ tickWorld(world,{now:at+200,actors:[caster,victim,other],activeFighters:0,rng:()=>.5});
+ assert.equal(p.hp,100,'do not launch before the blast expansion midpoint');
+ tickWorld(world,{now:at+330,actors:[caster,victim,other],activeFighters:0,rng:()=>.5});
  assert.equal(p.hp,85,'exact fixed self-damage bypasses armour, resistance and shield');
  assert.equal(p.shield.hp,80,'self blast bypasses the shield rather than depleting it');
  assert.ok(v.hp<100&&o.hp<100,'all overlapping enemies receive the blast');
