@@ -44,10 +44,10 @@ jobs:
       - run: npm run build:cloud
       - name: Boot ephemeral local Wrangler worker
         run: |
-          npx wrangler dev --local --port 8787 > /tmp/temple-worker-ci.log 2>&1 &
+          npx wrangler dev --local --port 8787 --var TEMPLE_ADMIN_KEY:ci-only-smoke-secret > /tmp/temple-worker-ci.log 2>&1 &
           echo $! > /tmp/temple-worker-ci.pid
       - name: Validate actual room API, WRITE and artwork upload
-        run: node tests/backend-smoke.mjs
+        run: TEMPLE_TEST_ADMIN_KEY=ci-only-smoke-secret node tests/backend-smoke.mjs
       - name: Print server diagnostics if unsuccessful
         if: failure()
         run: cat /tmp/temple-worker-ci.log || true
