@@ -159,7 +159,12 @@ export class NumberedWeaponEffects {
           // Force one real GPU draw while the loading overlay is visible;
           // shader compilation alone does not upload first-use buffers.
           renderer.setRenderTarget(target);
-          try{renderer.render(stage,view);}finally{renderer.setRenderTarget(previousTarget);}
+          try{
+           // Exercise native #70/#73 full-screen postprocess passes too;
+           // the first cast must not allocate or compile them in combat.
+           if(typeof fx.render==='function')fx.render(renderer,stage,view);
+           else renderer.render(stage,view);
+          }finally{renderer.setRenderTarget(previousTarget);}
           this.recycle(spec,fx);fx=null;warmed++;
         }catch(error){
           if(fx){fx.group.removeFromParent();fx.dispose();}
