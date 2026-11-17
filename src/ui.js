@@ -24,7 +24,7 @@ export class TempleUI extends EventTarget{
     const sendChat=()=>{if(composing)return;const value=chatInput.value.trim();if(!value)return;chatInput.value='';imeEnter=false;chatInput.blur();this.emit('chat',value);};
     chatInput.addEventListener('compositionstart',()=>{composing=true;});
     chatInput.addEventListener('compositionend',()=>{composing=false;if(imeEnter){imeEnter=false;setTimeout(()=>{if(!composing)sendChat();},0);}});
-    chatInput.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();if(composing||event.isComposing||event.keyCode===229){imeEnter=true;return;}sendChat();});
+    chatInput.addEventListener('keydown',event=>{if(event.key!=='Enter')return;if(composing||event.isComposing||event.keyCode===229){imeEnter=true;return;}event.preventDefault();sendChat();});
     chatInput.addEventListener('keyup',event=>{if(event.key==='Enter'&&imeEnter&&!composing){imeEnter=false;sendChat();}});
     $('chat-form').onsubmit=event=>{event.preventDefault();if(!composing&&!imeEnter)sendChat();};
   }
