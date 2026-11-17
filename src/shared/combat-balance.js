@@ -74,6 +74,10 @@ export function contactDamageIntervalMs(weapon){
 export function visibleCollisionLifetimeMs(weapon,ultimate){
  if(!ultimate)return projectileFlightMs(weapon,false);
  const id=weapon?.id;
+ // Actual tiered IDs are pan-1..5 / whip-1..5, not bare 'pan'/'whip'.
+ // Keep their server hit volumes alive for the entire native visual effect.
+ if(/^pan-[1-5]$/.test(id))return 5000;
+ if(/^whip-[1-5]$/.test(id))return 6500;
  const duration=({jellybrella:5000,clam:3300,pan:5000,
   swatter:7000,fan:2500,whip:6500,accordion:3300,
   telephone:2600})[id];
