@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="./reletter-theme.css">
   <link rel="stylesheet" href="./gun.css">
   <link rel="stylesheet" href="./sketch-hud.css">
-  <link rel="stylesheet" href="./fidelity-ui.css?v=20261117-art-chat">
+  <link rel="stylesheet" href="./fidelity-ui.css?v=20261117-gm-presence">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
   <script src="./temple-config.js"></script>
@@ -81,8 +81,9 @@
 
   <section id="hud" hidden>
     <button id="gm-help" hidden aria-label="GM editing shortcuts">!</button>
+    <button id="gm-menu" type="button" hidden aria-label="GM functions and player login history" title="GM menu">S</button>
     <div id="identity" class="hud-block"><strong class="reletter-wordmark">GGTEMPLE</strong><strong id="hud-name" hidden>—</strong><span id="hud-role">FIGHTER</span></div>
-    <div id="vitals" class="hud-block"><span id="player-level">LV. 1</span><label><progress id="hp" max="100" value="100"></progress><b id="hp-label">100/100</b></label><span id="wallet">0 COINS</span><span id="weapon">TIDE BLADE</span><span id="online">0 / 6</span><section id="player-roster" aria-label="Online players and health"></section></div>
+    <div id="vitals" class="hud-block"><span id="player-level">LV. 1</span><label><progress id="hp" max="100" value="100"></progress><b id="hp-label">100/100</b></label><span id="wallet">0 COINS</span><span id="weapon">貓貓衝鋒槍</span><span id="online">0 / 6</span><section id="player-roster" aria-label="Online players and health"></section></div>
     <div id="monster-hud" class="hud-block" hidden><small id="monster-name">MONSTER</small><progress id="monster-hp" max="100" value="100"></progress></div>
     <div id="crosshair"></div><div id="prompt"></div><div id="toast"></div><div id="kill-notice" role="status" hidden></div>
     <div id="map-cluster"><button id="function-toggle" aria-label="Open functions" aria-expanded="false">☰</button><svg id="minimap" viewBox="-65 -65 130 130" role="img" aria-label="Minimap"><circle r="63" fill="#ede3e6" fill-opacity=".7" stroke="#947285"/><g id="map-static"></g><g id="map-dynamic"></g></svg></div>
