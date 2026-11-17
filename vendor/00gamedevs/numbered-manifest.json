@@ -1,6 +1,6 @@
 {
   "origin": "https://00gamedevs.com",
-  "contentVersion": "e27df5c89f123862e204613ae4091360d70af8174351761c8e99972f06a6b7f1",
+  "contentVersion": "85f9efcbf6afd18f959638d15ee7f77e5b9340e59afd1516e0d7d5ea8e9932dd",
   "downloadedFrom": "official AI catalog v2",
   "packaging": "byte-identical original JavaScript, no imitation or generated particles",
   "assets": [
@@ -8,8 +8,8 @@
       "number": 8,
       "id": "arc-ray",
       "url": "https://00gamedevs.com/downloads/effects/arc-ray.js",
-      "sha256": "f30d04d9f73e4ef8970d3c400b03e50a34a7a1fd96c18e7c42e79299b388edd0",
-      "byteLength": 585250,
+      "sha256": "4346ddd21c4ddcf31416901534d56c870a5a3a0e4c615a8f14fa309e83c630ca",
+      "byteLength": 625467,
       "license": "MIT",
       "integration": {
         "type": "scene-object",
@@ -43,8 +43,8 @@
       "number": 20,
       "id": "energy-vortex",
       "url": "https://00gamedevs.com/downloads/effects/energy-vortex.js",
-      "sha256": "43312e5c20cfb76f4dccd5b6aab7457625362ed9862f4b52749167163f0a3523",
-      "byteLength": 585086,
+      "sha256": "b7528ff77d67b93079cbe0af9ec422dccf47ad35ef1e8bacd5ea79c89a7ee39f",
+      "byteLength": 625303,
       "license": "MIT",
       "integration": {
         "type": "scene-object",
@@ -76,8 +76,8 @@
       "number": 26,
       "id": "frost-wheel",
       "url": "https://00gamedevs.com/downloads/effects/frost-wheel.js",
-      "sha256": "cb89d2aa3e8290be27ba8b249cc672b8bd58ffe0137df1336558ff7e87af0709",
-      "byteLength": 585089,
+      "sha256": "fdf7bd9a20fe788cdb6a1a887c993a664607c866623182f027102f8981dcfbc4",
+      "byteLength": 625306,
       "license": "MIT",
       "integration": {
         "type": "scene-object",
@@ -110,8 +110,8 @@
       "number": 29,
       "id": "radiant-beam",
       "url": "https://00gamedevs.com/downloads/effects/radiant-beam.js",
-      "sha256": "b2503f2c7c39e28a395ff0b1a6e0120aaa986f342766fe1ebc83efecef225cf6",
-      "byteLength": 585086,
+      "sha256": "82b1e3abcb0b082a717b6471f5d19b6a7de270792a37772f6649d49e2fec7359",
+      "byteLength": 625303,
       "license": "MIT",
       "integration": {
         "type": "scene-object",
@@ -144,8 +144,8 @@
       "number": 31,
       "id": "thorn-crown",
       "url": "https://00gamedevs.com/downloads/effects/thorn-crown.js",
-      "sha256": "0c0112c1f29f165f40b8ffc7c4d122c2ff0ff810a37e0e822644a24967703af5",
-      "byteLength": 585319,
+      "sha256": "14050719e2183f21437854c61bd571192cddc2521a2243b297bcc5f3ca77caf4",
+      "byteLength": 625536,
       "license": "MIT",
       "integration": {
         "type": "scene-object",
@@ -178,8 +178,8 @@
       "number": 33,
       "id": "tidal-surge",
       "url": "https://00gamedevs.com/downloads/effects/tidal-surge.js",
-      "sha256": "57694bd0c61bb47466a8545140021bcfd20ebdd0f1813d81d46b367a3b8f3c9a",
-      "byteLength": 585126,
+      "sha256": "8de5f11c18ee50e1a999313acc9bb2c503db50276babdee8b8a1b7dbea6b9d1d",
+      "byteLength": 625343,
       "license": "MIT",
       "integration": {
         "type": "scene-object",
@@ -211,8 +211,8 @@
       "number": 38,
       "id": "magma-fissure",
       "url": "https://00gamedevs.com/downloads/effects/magma-fissure.js",
-      "sha256": "beec60aaae80f9c6ecdd8f0d49635d7084e056827187dda82c5bee49074ca932",
-      "byteLength": 585344,
+      "sha256": "bca96c16851ef30e19e0a86946d6db68c892ec72f88c74ba2e389a8c69527e23",
+      "byteLength": 625561,
       "license": "MIT",
       "integration": {
         "type": "scene-object",
@@ -245,8 +245,8 @@
       "number": 43,
       "id": "revival-bloom",
       "url": "https://00gamedevs.com/downloads/effects/revival-bloom.js",
-      "sha256": "f32fb629ff94a9cc3f052b15265dfbd2e5635d8d29d87bda0a64c9f8f751edd3",
-      "byteLength": 585354,
+      "sha256": "81e19ff853cb258b611e195ec8effd99e48c4a47ad4dd90618fb67a105c421bb",
+      "byteLength": 625571,
       "license": "MIT",
       "integration": {
         "type": "scene-object",
@@ -279,8 +279,8 @@
       "number": 47,
       "id": "dimensional-rend",
       "url": "https://00gamedevs.com/downloads/effects/dimensional-rend.js",
-      "sha256": "17e62e01f388ea24ed2440bbd3de114b143af852d6e3e29c1c5add326450a448",
-      "byteLength": 586156,
+      "sha256": "719652a80035b72a586296febcdf03f20ec0b6e283e49c577bf3fbd9ef58d534",
+      "byteLength": 626373,
       "license": "MIT",
       "integration": {
         "type": "scene-object",
@@ -315,8 +315,8 @@
       "number": 48,
       "id": "black-hole",
       "url": "https://00gamedevs.com/downloads/effects/black-hole.js",
-      "sha256": "64c8a539a8a19022e0c3d832d5017c8455b484ad0084c5be0d9360a02af1b0b1",
-      "byteLength": 585648,
+      "sha256": "679ddd1800d0df7dc7e78fecd3152c7940d443a6bb1740bc0057401c64136236",
+      "byteLength": 625865,
       "license": "MIT",
       "integration": {
         "type": "scene-object",
@@ -348,8 +348,8 @@
       "number": 53,
       "id": "darkchain-detonation",
       "url": "https://00gamedevs.com/downloads/effects/darkchain-detonation.js",
-      "sha256": "3f7725f6679bf24c6942c201be87651fcda3e38d09a5ba4dac05371bb5bf334f",
-      "byteLength": 590554,
+      "sha256": "f89adb0b49ff7f6f569df719ab5aafa53a4e70ded3e825507261e41ccc378a41",
+      "byteLength": 630771,
       "license": "MIT",
       "integration": {
         "type": "scene-object",

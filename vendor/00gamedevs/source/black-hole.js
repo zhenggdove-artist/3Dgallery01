@@ -4486,6 +4486,1033 @@ void main(){vec3 c=texture2D(baseImage,vUv).rgb+texture2D(tightGlow,vUv).rgb*wei
 	}
 
 //#endregion
+//#region src/effects/arcane-arrow-rain-runtime.js
+	const ARCANE_ARROW_RAIN = Object.freeze({
+		duration: 6.5,
+		maxQuantity: 64,
+		radius: 3,
+		height: 6.5,
+		flight: .34,
+		hold: 2.5,
+		dissolve: .7,
+		detonateAt: 5.125,
+		sigilRelease: .52,
+		burstLife: .85,
+		spreadWindow: 1.6,
+		jitter: .08,
+		groundHold: 3,
+		groundFade: .4,
+		arrowLength: 1.24,
+		arrowHeadLength: .34 * (2 / 3),
+		penetration: .03
+	});
+	const A = ARCANE_ARROW_RAIN;
+	const F = (value) => {
+		const s = String(value);
+		return s.includes(".") ? s : s + ".0";
+	};
+	function arRandomValues(seed) {
+		const values = new Float64Array(A.maxQuantity * 4);
+		let state = seed >>> 0;
+		for (let i = 0; i < values.length; i++) {
+			state = Math.imul(state, 1664525) + 1013904223 >>> 0;
+			values[i] = state / 4294967296;
+		}
+		return values;
+	}
+	function arConfigureArrow(values, slot, quantity, spread, out) {
+		const k = slot * 4;
+		const a = values[k], b = values[k + 1], c = values[k + 2], d = values[k + 3];
+		const angle = slot * 2.399963229728653 + (a - .5) * .5;
+		const radial = quantity > 1 ? Math.sqrt((slot + .5) / quantity) : 0;
+		const endRadius = A.radius * radial * spread;
+		const birth = A.spreadWindow * Math.pow(radial, 1.2) + (b - .5) * 2 * A.jitter;
+		const tilt = (c - .5) * .12;
+		const tiltAngle = d * Math.PI * 2;
+		out.slot = slot;
+		out.birth = Math.max(0, birth);
+		out.end[0] = Math.cos(angle) * endRadius;
+		out.end[1] = 0;
+		out.end[2] = Math.sin(angle) * endRadius;
+		out.start[0] = out.end[0] + Math.cos(tiltAngle) * tilt * A.height;
+		out.start[1] = A.height + (c - .5) * .5;
+		out.start[2] = out.end[2] + Math.sin(tiltAngle) * tilt * A.height;
+		out.length = Math.hypot(out.start[0] - out.end[0], out.start[1] - out.end[1], out.start[2] - out.end[2]);
+		out.seed = a;
+		out.active = true;
+		return out;
+	}
+	function arcaneArrowLayout(seed, quantity = 32, spread = 1) {
+		quantity = Math.max(1, Math.min(A.maxQuantity, Math.round(Number.isFinite(quantity) ? quantity : 32)));
+		spread = Math.max(.5, Math.min(2, Number.isFinite(spread) ? spread : 1));
+		const values = arRandomValues(seed);
+		const arrows = [];
+		for (let slot = 0; slot < quantity; slot++) arrows.push(arConfigureArrow(values, slot, quantity, spread, {
+			start: [
+				0,
+				0,
+				0
+			],
+			end: [
+				0,
+				0,
+				0
+			]
+		}));
+		return arrows;
+	}
+	function buildArcaneArrowRainEffect({ THREE, spec, cap, uniforms, geometries, animated, mesh, instanced, shader, output }) {
+		if (spec.id !== "arcane-arrow-rain") return false;
+		const maxArrows = A.maxQuantity;
+		const randomValues = arRandomValues(spec.seed);
+		const layout = arcaneArrowLayout(spec.seed, maxArrows, 1);
+		const arMotion = `
+    float arPenetration(float age){float t=clamp((age-${F(A.flight)})/0.08,0.0,1.0);return ${F(A.penetration)}*(1.0-pow(1.0-t,3.0));}
+    float arTipDistance(float age,float span){return pow(clamp(age/${F(A.flight)},0.0,1.0),1.6)*span+arPenetration(age);}
+  `;
+		function arInstances(base, maximum) {
+			const geometry = new THREE.InstancedBufferGeometry();
+			if (base.index) geometry.setIndex(base.index.clone());
+			for (const [key, value] of Object.entries(base.attributes)) geometry.setAttribute(key, value.clone());
+			base.dispose();
+			geometry.setAttribute("aStart", new THREE.InstancedBufferAttribute(new Float32Array(maximum * 3), 3));
+			geometry.setAttribute("aEnd", new THREE.InstancedBufferAttribute(new Float32Array(maximum * 3), 3));
+			geometry.setAttribute("aTime", new THREE.InstancedBufferAttribute(new Float32Array(maximum * 2), 2));
+			geometry.instanceCount = 0;
+			return geometry;
+		}
+		function arArrowGeometry() {
+			const positions = [], normals = [], uvs = [], indices = [];
+			const headTop = 0, headTip = -A.arrowHeadLength, headRadius = .16 / 3;
+			const ring = [];
+			for (let i = 0; i < 3; i++) {
+				const ang = Math.PI / 2 + i * (Math.PI * 2 / 3);
+				ring.push([Math.cos(ang) * headRadius, Math.sin(ang) * headRadius]);
+			}
+			const shaftTop = 1.4 * (2 / 3), shaftRadius = .05 / 3;
+			const shaftRing = [
+				[shaftRadius, 0],
+				[0, shaftRadius],
+				[-.016666666666666666, 0],
+				[0, -.016666666666666666]
+			];
+			function addQuad(p0, p1, p2, p3, n) {
+				const base = positions.length / 3;
+				for (const p of [
+					p0,
+					p1,
+					p2,
+					p3
+				]) {
+					positions.push(p[0], p[1], p[2]);
+					normals.push(n[0], n[1], n[2]);
+				}
+				uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+				indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+			}
+			function addTri(p0, p1, p2, n) {
+				const base = positions.length / 3;
+				for (const p of [
+					p0,
+					p1,
+					p2
+				]) {
+					positions.push(p[0], p[1], p[2]);
+					normals.push(n[0], n[1], n[2]);
+				}
+				uvs.push(0, 0, 1, 0, .5, 1);
+				indices.push(base, base + 1, base + 2);
+			}
+			for (let i = 0; i < 3; i++) {
+				const a = ring[i], b = ring[(i + 1) % 3];
+				const n = normalize3([
+					(a[0] + b[0]) * .5,
+					.35,
+					(a[1] + b[1]) * .5
+				]);
+				addTri([
+					0,
+					headTip,
+					0
+				], [
+					a[0],
+					headTop,
+					a[1]
+				], [
+					b[0],
+					headTop,
+					b[1]
+				], n);
+			}
+			for (let i = 0; i < 4; i++) {
+				const a = shaftRing[i], b = shaftRing[(i + 1) % 4];
+				const n = normalize3([
+					(a[0] + b[0]) * .5,
+					0,
+					(a[1] + b[1]) * .5
+				]);
+				addQuad([
+					a[0],
+					headTop,
+					a[1]
+				], [
+					a[0],
+					shaftTop,
+					a[1]
+				], [
+					b[0],
+					shaftTop,
+					b[1]
+				], [
+					b[0],
+					headTop,
+					b[1]
+				], n);
+			}
+			const finBase = 1.24 * (2 / 3), finTop = A.arrowLength - A.arrowHeadLength;
+			const finInner = shaftRadius, finWidth = shaftRadius * 1.6;
+			for (const [dx, dz] of [
+				[1, 0],
+				[0, 1],
+				[-1, 0],
+				[0, -1]
+			]) addQuad([
+				dx * finInner,
+				finBase,
+				dz * finInner
+			], [
+				dx * finWidth,
+				finTop,
+				dz * finWidth
+			], [
+				dx * finInner,
+				finTop,
+				dz * finInner
+			], [
+				dx * finInner,
+				.8466666666666667,
+				dz * finInner
+			], normalize3([
+				-dz,
+				0,
+				dx
+			]));
+			const geometry = new THREE.BufferGeometry();
+			geometry.setIndex(indices);
+			geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+			geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+			geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+			return geometry;
+		}
+		function normalize3(v) {
+			const l = Math.hypot(v[0], v[1], v[2]) || 1;
+			return [
+				v[0] / l,
+				v[1] / l,
+				v[2] / l
+			];
+		}
+		const arrowGeometry = arInstances(arArrowGeometry(), maxArrows);
+		const arrowVertex = `${arMotion}
+    attribute vec3 aStart,aEnd;attribute vec2 aTime;uniform float uTime;
+    varying vec3 vNormal,vViewPosition,vLocal;varying float vAge,vAlive,vSeed,vHeat;
+    void main(){
+      float age=uTime-aTime.x;
+      vec3 delta=aEnd-aStart;float span=length(delta);vec3 forward=delta/span;
+      vec3 right=normalize(cross(forward,vec3(0.0,1.0,0.0)));
+      if(length(right)<0.001)right=vec3(1.0,0.0,0.0);
+      vec3 side=normalize(cross(right,forward));
+      float tip=arTipDistance(age,span);
+      // arTipDistance already adds the shallow penetration to the travel, so the
+      // contact offset only cancels the tip vertex's own -Y extent (no double pen).
+      float contactOffset=-${F(A.arrowHeadLength)}*forward.y;
+      // The model's -Y tip sits at the traveling tip; body extends backward.
+      vec3 local=aStart+forward*tip+right*position.x+forward*(-position.y)+side*position.z+vec3(0.0,contactOffset,0.0);
+      vLocal=local;
+      vNormal=normalize(normalMatrix*(right*normal.x+forward*(-normal.y)+side*normal.z));
+      vec4 view=modelViewMatrix*vec4(local*uSize,1.0);vViewPosition=-view.xyz;
+      vAge=age;vSeed=aTime.y;
+      vHeat=1.0-clamp(age/${F(A.flight)},0.0,1.0);
+      vAlive=step(0.0,age);
+      gl_Position=projectionMatrix*view;
+    }`;
+		const arrowMaterial = shader(`
+    uniform vec3 uColor;
+    varying vec3 vNormal,vViewPosition,vLocal;varying float vAge,vAlive,vSeed,vHeat;
+    float arHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    void main(){
+      if(vAlive<0.5||vLocal.y<0.0)discard;
+      vec3 n=normalize(vNormal);
+      vec3 viewDirection=isOrthographic?vec3(0.0,0.0,1.0):normalize(vViewPosition);
+      vec3 light=normalize(vec3(-0.35,0.8,0.65));
+      float diffuse=clamp(dot(n,light)*0.65+0.35,0.0,1.0);
+      float shine=pow(max(0.0,dot(n,normalize(light+viewDirection))),38.0);
+      // Arcane body: saturated violet with a bright core and flowing energy.
+      vec3 body=mix(uColor*vec3(0.16,0.10,0.30),uColor*vec3(0.55,0.42,0.95),smoothstep(0.13,0.82,diffuse));
+      body+=uColor*shine*0.30;
+      float flow=0.5+0.5*sin(vLocal.y*26.0-vAge*9.0+vSeed*6.283185);
+      body+=uColor*vec3(0.85,0.75,1.0)*pow(flow,5.0)*0.35*min(uDetail,1.4);
+      // Fresnel rim so the slender body reads as glowing energy, not a stick.
+      float rim=pow(1.0-abs(dot(n,viewDirection)),2.0);
+      body+=uColor*vec3(1.1,0.9,1.4)*rim*0.8;
+      // Hot tip while falling; cools once embedded.
+      float tipHeat=exp(-max(0.0,vLocal.y)*6.0)*vHeat;
+      body+=mix(uColor,vec3(1.0,0.97,1.0),0.6)*tipHeat*1.3;
+      // Embedded arrows keep a steady arcane glow so the standing shaft and
+      // fletching read clearly against the ground for the whole hold.
+      float embedded=1.0-vHeat;
+      float pulse=0.75+0.25*sin(vAge*3.0+vSeed*6.283185);
+      body+=uColor*vec3(0.9,0.8,1.2)*embedded*0.55*pulse;
+
+      gl_FragColor=vec4(body*1.25,1.0);
+      ${output}
+    }`, arrowVertex, {}, false);
+		arrowMaterial.transparent = false;
+		arrowMaterial.depthWrite = true;
+		arrowMaterial.side = THREE.DoubleSide;
+		arrowMaterial.userData.ownLifecycle = true;
+		const arrows = mesh(arrowGeometry, arrowMaterial, 1);
+		arrows.name = "arcane-arrow-bodies";
+		const coreGeometry = arInstances(new THREE.PlaneGeometry(1, 1), maxArrows);
+		const coreVertex = `${arMotion}
+    attribute vec3 aStart,aEnd;attribute vec2 aTime;uniform float uTime;
+    varying vec2 vUv;varying float vFade;
+    void main(){
+      float age=uTime-aTime.x;
+      vec3 delta=aEnd-aStart;float span=length(delta);vec3 forward=delta/span;
+      float tip=arTipDistance(age,span);
+      vec3 center=aStart+forward*tip;
+      vec4 view=modelViewMatrix*vec4(center*uSize,1.0);
+      float scale=0.34*(1.0-smoothstep(${F(A.flight)},${F(A.flight)}+0.1,age));
+      view.xy+=position.xy*scale*uSize*length(modelViewMatrix[0].xyz);
+      vUv=uv;
+      vFade=step(0.0,age)*(1.0-smoothstep(${F(A.flight)},${F(A.flight)}+0.1,age));
+      gl_Position=vFade<=0.0?vec4(2.0,2.0,2.0,1.0):projectionMatrix*view;
+    }`;
+		const coreMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vUv;varying float vFade;
+    void main(){
+      if(vFade<=0.0)discard;
+      vec2 q=vUv*2.0-1.0;float r=length(q);
+      float core=exp(-r*r*26.0);
+      float halo=exp(-r*r*6.0)*0.5;
+      float alpha=(core+halo)*vFade;
+      if(alpha<0.004)discard;
+      vec3 color=mix(uColor,vec3(1.0,0.98,1.0),core*0.8);
+      gl_FragColor=vec4(color*2.0,alpha);
+      ${output}
+    }`, coreVertex, {}, true);
+		coreMaterial.userData.ownLifecycle = true;
+		const cores = mesh(coreGeometry, coreMaterial, 3);
+		cores.name = "arcane-arrow-tip-cores";
+		const flashGeometry = arInstances(new THREE.PlaneGeometry(1, 1), maxArrows);
+		const flashVertex = `
+    attribute vec3 aEnd;attribute vec2 aTime;uniform float uTime;
+    varying vec2 vUv;varying float vFade,vSeed;
+    void main(){
+      float age=uTime-aTime.x-${F(A.flight)};
+      float life=0.12;
+      float t=clamp(age/life,0.0,1.0);
+      vec4 view=modelViewMatrix*vec4(aEnd*uSize,1.0);
+      float scale=0.55*(0.4+0.6*(1.0-pow(1.0-t,2.0)));
+      view.xy+=position.xy*scale*uSize*length(modelViewMatrix[0].xyz);
+      vUv=uv;vSeed=aTime.y;
+      vFade=step(0.0,age)*(1.0-smoothstep(0.0,life,age));
+      gl_Position=vFade<=0.0?vec4(2.0,2.0,2.0,1.0):projectionMatrix*view;
+    }`;
+		const flashMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vUv;varying float vFade,vSeed;
+    void main(){
+      if(vFade<=0.0)discard;
+      vec2 q=vUv*2.0-1.0;float r=length(q);float a=atan(q.y,q.x);
+      float core=exp(-r*r*30.0);
+      float rays=pow(abs(sin(a*4.0+vSeed*6.283185)),16.0)*exp(-r*4.0)*0.6;
+      float halo=exp(-r*r*7.0)*0.4;
+      float alpha=(core+rays+halo)*vFade;
+      if(alpha<0.004)discard;
+      vec3 color=mix(uColor,vec3(1.0,0.97,1.0),core*0.7);
+      gl_FragColor=vec4(color*1.5,alpha);
+      ${output}
+    }`, flashVertex, {}, true);
+		flashMaterial.userData.ownLifecycle = true;
+		const flashes = mesh(flashGeometry, flashMaterial, 3);
+		flashes.name = "arcane-arrow-landing-flash";
+		const ringGeometry = arInstances(new THREE.PlaneGeometry(2, 2), maxArrows);
+		const ringVertex = `
+    attribute vec3 aEnd;attribute vec2 aTime;uniform float uTime;
+    varying vec2 vUv;varying float vFade;
+    void main(){
+      float age=uTime-aTime.x-${F(A.flight)};
+      float life=0.3;
+      float t=clamp(age/life,0.0,1.0);
+      float radius=0.7*(1.0-pow(1.0-t,3.0));
+      vec3 p=aEnd+vec3(position.x*radius,0.012,position.y*radius);
+      vUv=position.xy;
+      vFade=step(0.0,age)*(1.0-smoothstep(0.0,life,age));
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(p*uSize,1.0);
+    }`;
+		const ringMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vUv;varying float vFade;
+    void main(){
+      if(vFade<=0.0)discard;
+      float r=length(vUv);
+      float ring=exp(-pow((r-0.82)*9.0,2.0));
+      float inner=exp(-r*r*10.0)*0.25;
+      float alpha=(ring+inner)*vFade*min(uDetail,1.4);
+      if(alpha<0.004)discard;
+      vec3 color=mix(uColor,vec3(1.0,0.97,1.0),ring*0.4);
+      gl_FragColor=vec4(color*1.3,alpha);
+      ${output}
+    }`, ringVertex, {}, true);
+		ringMaterial.userData.ownLifecycle = true;
+		const rings = mesh(ringGeometry, ringMaterial, 0);
+		rings.name = "arcane-arrow-impact-rings";
+		function arCrackGeometry() {
+			const positions = [], uvs = [], indices = [];
+			let state = spec.seed >>> 0;
+			const random = () => {
+				state = Math.imul(state, 1664525) + 1013904223 >>> 0;
+				return state / 4294967296;
+			};
+			function strip(a, b, width, r0, r1) {
+				const dx = b[0] - a[0], dz = b[1] - a[1];
+				const len = Math.hypot(dx, dz) || 1;
+				const nx = -dz / len, nz = dx / len;
+				const v = [
+					[
+						a[0] + nx * width,
+						a[1] + nz * width,
+						-1,
+						r0
+					],
+					[
+						a[0] - nx * width,
+						a[1] - nz * width,
+						1,
+						r0
+					],
+					[
+						b[0] + nx * width * .55,
+						b[1] + nz * width * .55,
+						-1,
+						r1
+					],
+					[
+						b[0] - nx * width * .55,
+						b[1] - nz * width * .55,
+						1,
+						r1
+					]
+				];
+				const base = positions.length / 3;
+				for (const [x, z, u, vv] of v) {
+					positions.push(x, .012, z);
+					uvs.push(u, vv);
+				}
+				indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+			}
+			for (let ray = 0; ray < 6; ray++) {
+				const angle = ray * Math.PI / 3 + (random() - .5) * .4;
+				const reach = .7 + random() * .3;
+				let previous = [0, 0];
+				for (let segment = 1; segment <= 5; segment++) {
+					const radius = segment / 5 * reach;
+					const turn = angle + (random() - .5) * .4;
+					const next = [Math.cos(turn) * radius, Math.sin(turn) * radius];
+					strip(previous, next, .03 * (1 - segment / 7), (segment - 1) / 5, segment / 5);
+					if (segment === 2 || segment === 4) {
+						const fork = turn + (random() > .5 ? 1 : -1) * (.5 + random() * .5);
+						const length = .12 + random() * .12;
+						strip(next, [next[0] + Math.cos(fork) * length, next[1] + Math.sin(fork) * length], .012, segment / 5, Math.min(1, segment / 5 + .22));
+					}
+					previous = next;
+				}
+			}
+			const g = new THREE.BufferGeometry();
+			g.setIndex(indices);
+			g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+			g.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+			return g;
+		}
+		const crackGeometry = arInstances(arCrackGeometry(), maxArrows);
+		const crackTransform = `
+    vec2 arCrackPoint(vec2 q,float seed){
+      float radius=length(q),angle=seed*6.283185;
+      q*=0.88+0.12*sin((radius>0.0?atan(q.y,q.x):0.0)*3.0+seed*37.0+radius*4.0);
+      return mat2(cos(angle),-sin(angle),sin(angle),cos(angle))*q;
+    }`;
+		const crackVertex = `${crackTransform}
+    attribute vec3 aEnd;attribute vec2 aTime;uniform float uTime;
+    varying vec2 vCrack;varying float vAge;
+    void main(){
+      vec2 q=arCrackPoint(position.xz,aTime.y);
+      vec3 p=aEnd+vec3(q.x,position.y,q.y);
+      vCrack=uv;vAge=uTime-aTime.x;
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(p*uSize,1.0);
+    }`;
+		const crackMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vCrack;varying float vAge;
+    void main(){
+      float reveal=smoothstep(vCrack.y*0.15,vCrack.y*0.15+0.03,vAge-${F(A.flight)});
+      float fade=1.0-smoothstep(${F(A.flight)}+${F(A.groundHold)},${F(A.flight)}+${F(A.groundHold)}+${F(A.groundFade)},vAge);
+      float edge=1.0-smoothstep(0.72,1.0,abs(vCrack.x));
+      float alpha=reveal*fade*edge;
+      if(alpha<0.004)discard;
+      float core=1.0-smoothstep(0.08,0.72,abs(vCrack.x));
+      vec3 color=mix(uColor*vec3(0.7,0.5,1.0),mix(uColor,vec3(1.0,0.95,1.0),0.4)*1.5,core);
+      gl_FragColor=vec4(color,alpha);
+      ${output}
+    }`, crackVertex, {}, true);
+		crackMaterial.userData.ownLifecycle = true;
+		const cracks = mesh(crackGeometry, crackMaterial, 0);
+		cracks.name = "arcane-arrow-ground-cracks";
+		const crackGlowVertex = `${crackTransform}
+    attribute vec3 aEnd;attribute vec2 aTime;uniform float uTime;
+    varying vec2 vGlow;varying float vAge;
+    void main(){
+      // Reuse the crack quad positions but widen them into a soft band.
+      vec2 q=arCrackPoint(position.xz*1.6,aTime.y);
+      vec3 p=aEnd+vec3(q.x,0.014,q.y);
+      vGlow=uv;vAge=uTime-aTime.x;
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(p*uSize,1.0);
+    }`;
+		const crackGlowMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vGlow;varying float vAge;
+    void main(){
+      float reveal=smoothstep(vGlow.y*0.15,vGlow.y*0.15+0.03,vAge-${F(A.flight)});
+      float fade=1.0-smoothstep(${F(A.flight)}+${F(A.groundHold)},${F(A.flight)}+${F(A.groundHold)}+${F(A.groundFade)},vAge);
+      float band=exp(-pow(abs(vGlow.x)*2.2,2.0));
+      float alpha=band*reveal*fade*0.35*min(uDetail,1.5);
+      if(alpha<0.002)discard;
+      gl_FragColor=vec4(uColor*vec3(1.4,1.1,2.0),alpha);
+      ${output}
+    }`, crackGlowVertex, {}, true);
+		crackGlowMaterial.userData.ownLifecycle = true;
+		const crackGlow = mesh(crackGeometry, crackGlowMaterial, -1);
+		crackGlow.name = "arcane-arrow-crack-glow";
+		const socketGeometry = arInstances(new THREE.PlaneGeometry(1, 1), maxArrows);
+		const socketVertex = `
+    attribute vec3 aEnd;attribute vec2 aTime;uniform float uTime;
+    varying vec2 vUv;varying float vFade;
+    void main(){
+      float age=uTime-aTime.x-${F(A.flight)};
+      float appear=smoothstep(0.0,0.08,age);
+      float fade=1.0-smoothstep(${F(A.hold)}+${F(A.dissolve)}+0.6,${F(A.hold)}+${F(A.dissolve)}+1.0,age);
+      vec3 p=aEnd+vec3(0.0,0.02,0.0);
+      vec4 view=modelViewMatrix*vec4(p*uSize,1.0);
+      float scale=0.30;
+      view.xy+=position.xy*scale*uSize*length(modelViewMatrix[0].xyz);
+      vUv=uv;vFade=appear*fade;
+      gl_Position=vFade<=0.0?vec4(2.0,2.0,2.0,1.0):projectionMatrix*view;
+    }`;
+		const socketMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vUv;varying float vFade;
+    void main(){
+      if(vFade<=0.0)discard;
+      vec2 q=vUv*2.0-1.0;float r=length(q);
+      float core=exp(-r*r*20.0);
+      float halo=exp(-r*r*5.0)*0.4;
+      float alpha=(core+halo)*vFade*0.8;
+      if(alpha<0.004)discard;
+      vec3 color=mix(uColor,vec3(1.0,0.97,1.0),core*0.5);
+      gl_FragColor=vec4(color*1.3,alpha);
+      ${output}
+    }`, socketVertex, {}, true);
+		socketMaterial.userData.ownLifecycle = true;
+		const sockets = mesh(socketGeometry, socketMaterial, 0);
+		sockets.name = "arcane-arrow-socket-glow";
+		const moteVertex = `
+    attribute vec4 seed;attribute vec3 aEnd;attribute vec2 aTime;uniform float uTime;
+    varying vec2 vUv;varying float vFade;
+    void main(){
+      float contact=uTime-aTime.x-${F(A.flight)};
+      float delay=seed.z*0.5;
+      float life=1.4;
+      float elapsed=contact-delay;
+      float cycle=floor(max(elapsed,0.0)/life);
+      float age=elapsed-cycle*life;
+      float drift=max(age,0.0);
+      float angle=seed.w*6.283185;
+      vec3 p=aEnd+vec3(cos(angle)*0.12,0.05+drift*(0.5+seed.y*0.4),sin(angle)*0.12);
+      vFade=step(0.0,elapsed)*smoothstep(0.0,0.15,age)*(1.0-smoothstep(1.0,1.4,age));
+      float scale=0.05+seed.y*0.04;
+      vec4 view=modelViewMatrix*vec4(p*uSize,1.0);
+      view.xy+=position.xy*scale*uSize*length(modelViewMatrix[0].xyz);
+      vUv=uv;gl_Position=vFade<=0.0?vec4(2.0,2.0,2.0,1.0):projectionMatrix*view;
+    }`;
+		const moteMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vUv;varying float vFade;
+    void main(){
+      if(vFade<=0.0)discard;
+      vec2 q=vUv*2.0-1.0;float r=length(q);
+      float alpha=exp(-r*r*8.0)*vFade*min(uDetail,1.4);
+      if(alpha<0.004)discard;
+      gl_FragColor=vec4(mix(uColor,vec3(1.0,0.97,1.0),0.4)*1.4,alpha);
+      ${output}
+    }`, moteVertex, {}, true);
+		moteMaterial.userData.ownLifecycle = true;
+		const motes = instanced(new THREE.PlaneGeometry(1, 1), cap, .5, moteMaterial, 4);
+		motes.name = "arcane-arrow-rising-motes";
+		const sparkVertex = `
+    attribute vec4 seed;attribute vec3 aStart,aEnd;attribute vec2 aTime;uniform float uTime;
+    varying vec2 vUv;varying float vFade;
+    void main(){
+      float age=uTime-aTime.x-seed.z*0.3;
+      vec3 delta=aEnd-aStart;float span=length(delta);vec3 forward=delta/span;
+      vec3 right=normalize(cross(forward,vec3(0.0,1.0,0.0)));
+      if(length(right)<0.001)right=vec3(1.0,0.0,0.0);
+      vec3 side=normalize(cross(right,forward));
+      float travel=pow(clamp(age/${F(A.flight)},0.0,1.0),1.6);
+      float offset=(seed.y-0.5)*0.3;
+      vec3 center=aStart+forward*(travel*span)+right*offset+side*(seed.w-0.5)*0.3;
+      vec4 view=modelViewMatrix*vec4(center*uSize,1.0);
+      vec3 dirView=mat3(modelViewMatrix)*forward;
+      vec2 heading=length(dirView.xy)>0.0001?normalize(dirView.xy):vec2(0.0,1.0);
+      vec2 lateral=vec2(heading.y,-heading.x);
+      float scale=0.16;
+      view.xy+=(lateral*position.x*0.3+heading*position.y)*scale*uSize*length(modelViewMatrix[0].xyz);
+      vUv=uv;
+      vFade=step(0.0,age)*(1.0-smoothstep(${F(A.flight)}*0.7,${F(A.flight)},age));
+      gl_Position=vFade<=0.0?vec4(2.0,2.0,2.0,1.0):projectionMatrix*view;
+    }`;
+		const sparkMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vUv;varying float vFade;
+    void main(){
+      if(vFade<=0.0)discard;
+      float across=abs(vUv.x*2.0-1.0);
+      float along=1.0-vUv.y;
+      float alpha=exp(-across*across*14.0)*pow(along,1.5)*vFade*min(uDetail,1.4);
+      if(alpha<0.004)discard;
+      gl_FragColor=vec4(mix(uColor,vec3(1.0,0.97,1.0),along*0.5)*1.4,alpha);
+      ${output}
+    }`, sparkVertex, {}, true);
+		sparkMaterial.userData.ownLifecycle = true;
+		const sparks = instanced(new THREE.PlaneGeometry(1, 1), cap, .3, sparkMaterial, 4);
+		sparks.name = "arcane-arrow-falling-sparks";
+		const sigilGeometry = new THREE.PlaneGeometry(2, 2);
+		const sigilVertex = `
+    uniform float uTime;varying vec2 vUv;varying float vFade;
+    void main(){
+      float appear=smoothstep(0.0,0.065,uTime);
+      // A fast opening settles into steady outward travel, with no stationary interval.
+      float radius=3.65*(0.72+0.35*(1.0-exp(-4.0*uTime))+0.16*uTime/${F(A.detonateAt)});
+      float release=smoothstep(${F(A.detonateAt)},${F(A.detonateAt + A.sigilRelease)},uTime);
+      radius*=1.0+0.38*release;
+      vec3 p=vec3(position.x*radius,0.015,position.y*radius);
+      vUv=position.xy;vFade=appear*(1.0-release);
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(p*uSize,1.0);
+    }`;
+		const sigilMaterial = shader(`
+    uniform vec3 uColor;uniform float uTime;varying vec2 vUv;varying float vFade;
+    // Segment distance for the engraved outer ring.
+    float segment(vec2 p,vec2 a,vec2 b){
+      vec2 v=b-a;return length(p-a-v*clamp(dot(p-a,v)/dot(v,v),0.0,1.0));
+    }
+    // A hollow diamond hub and four split lance heads, offset from the outer crowns.
+    float crest(vec2 uv){
+      vec2 p=mat2(.9238795,-.3826834,.3826834,.9238795)*uv;
+      vec2 f=abs(p);
+      vec2 k=vec2(max(f.x,f.y),min(f.x,f.y));
+      float hub=abs(k.x+k.y-.120)*.7071-.011;
+      // A bevelled spear silhouette with a long kite-shaped cutout.
+      float blade=max(max((.124-k.x)*.62+k.y*.78,
+                          (k.x-.444)*.19+k.y*.98),-k.x);
+      float slit=max((.177-k.x)*.45+k.y*.89,(k.x-.348)*.14+k.y*.99);
+      blade=max(blade,-slit);
+      float arc=max(abs(length(k)-.274)-.008,max(.078-k.y,k.y-.154));
+      float shard=abs(k.x+k.y-.316)+2.8*(k.x-k.y)-.052;
+      return min(min(hub,blade),min(arc,shard));
+    }
+    void main(){
+      float r=length(vUv);
+      if(r>0.997)discard;
+      float d,accent;
+      if(r<0.50){
+        d=crest(vUv);accent=.72;
+      }else{
+        float a=atan(vUv.y,vUv.x), turn=6.2831853;
+        // Concentric rails, a woven band and engraved angular runes.
+        d=min(abs(r-.706)-.006,abs(r-.814)-.009);
+        d=min(d,abs(r-.864)-.006);
+        d=min(d,abs(r-(.757+.029*sin(12.0*a)))-.004);
+        d=min(d,abs(r-(.757-.029*sin(12.0*a)))-.004);
+        float glyphAngle=mod(a+turn/96.0,turn/48.0)-turn/96.0;
+        vec2 g=vec2(r*sin(glyphAngle),r-.838);
+        d=min(d,segment(g,vec2(-.022,-.013),vec2(.002,.012))-.0045);
+        d=min(d,segment(g,vec2(.002,.012),vec2(.021,-.002))-.0045);
+        // Sixteen kites interrupt the rims; every fourth grows into a violet crown.
+        float sector=floor(a/(turn/16.0)+.5);
+        float phi=a-sector*(turn/16.0);
+        float major=1.0-step(.1,mod(sector,4.0));
+        float medium=1.0-step(.1,mod(sector,2.0));
+        vec2 k=vec2(r*cos(phi),abs(r*sin(phi)));
+        float tip=.882+.045*medium+.058*major, root=.707-.063*medium-.095*major;
+        float crown=segment(k,vec2(root,0),vec2(.777,.052+.022*major));
+        crown=min(crown,segment(k,vec2(.777,.052+.022*major),vec2(tip,0)));
+        crown=min(crown,segment(k,vec2(root+.048,0),vec2(.795,.029)));
+        crown=min(crown,segment(k,vec2(.795,.029),vec2(tip-.035,0)));
+        float barb=segment(k,vec2(.78,.039),vec2(.852,.075));
+        barb=min(barb,segment(k,vec2(.852,.075),vec2(.818,.021)));
+        crown=min(crown,barb+.10*(1.0-medium))-.009;
+        float ornament=1.0-smoothstep(0.0,.022,crown);
+        d=min(d,crown);
+        accent=ornament*major;
+      }
+      float aa=max(.001,.52*fwidth(d)),ink=1.0-smoothstep(-aa,aa,d);
+      float glow=.30*exp(-max(d,0.0)*100.0);
+      vec3 tint=mix(vec3(.34,.046,.84),vec3(.56,.13,1.0),accent);
+      float alpha=max(ink,glow)*vFade*min(uDetail,1.4);
+      if(alpha<.005)discard;
+      gl_FragColor=vec4(tint*(1.0+.20*ink),alpha);
+      ${output}
+    }`, sigilVertex, {}, true);
+		sigilMaterial.userData.ownLifecycle = true;
+		const sigil = mesh(sigilGeometry, sigilMaterial, 0);
+		sigil.name = "arcane-arrow-casting-sigil";
+		const dustMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vUv;varying float vFade;
+    void main(){
+      if(vFade<=0.0)discard;
+      vec2 q=vUv*2.0-1.0;float r=length(q);
+      float alpha=exp(-r*r*7.0)*vFade*0.5*min(uDetail,1.4);
+      if(alpha<0.004)discard;
+      gl_FragColor=vec4(mix(uColor,vec3(1.0,0.97,1.0),0.3)*1.2,alpha);
+      ${output}
+    }`, `
+    attribute vec4 seed;uniform float uTime;
+    varying vec2 vUv;varying float vFade;
+    void main(){
+      float angle=seed.x*6.283185+uTime*0.1;
+      float radius=0.5+seed.y*2.8;
+      float y=0.3+seed.z*4.5+sin(uTime*0.5+seed.w*6.283185)*0.2;
+      vec3 p=vec3(cos(angle)*radius,y,sin(angle)*radius);
+      float appear=smoothstep(0.0,0.4,uTime);
+      float fade=1.0-smoothstep(3.6,4.4,uTime);
+      vec4 view=modelViewMatrix*vec4(p*uSize,1.0);
+      float scale=0.04+seed.w*0.03;
+      view.xy+=position.xy*scale*uSize*length(modelViewMatrix[0].xyz);
+      vUv=uv;vFade=appear*fade*(0.4+0.6*sin(uTime*2.0+seed.x*20.0)*0.5+0.3);
+      gl_Position=vFade<=0.0?vec4(2.0,2.0,2.0,1.0):projectionMatrix*view;
+    }`, {}, true);
+		dustMaterial.userData.ownLifecycle = true;
+		const dust = instanced(new THREE.PlaneGeometry(1, 1), cap, .2, dustMaterial, 4);
+		dust.name = "arcane-arrow-ambient-dust";
+		const chipVertex = `
+    attribute vec4 seed;attribute vec3 aEnd;attribute vec2 aTime;uniform float uTime;
+    varying vec2 vUv;varying float vFade,vHeat;
+    void main(){
+      float age=uTime-${F(A.detonateAt)};
+      float t=max(age,0.0);
+      float angle=seed.x*6.283185;
+      float radius=mix(0.8,1.9,seed.y);
+      float progress=(1.0-exp(-3.0*t))/(1.0-exp(-3.0*0.5));
+      vec3 p=aEnd+vec3(cos(angle)*radius*progress,0.16+(1.7+3.0*seed.z)*t-4.0*t*t,sin(angle)*radius*progress);
+      vFade=step(0.0,age)*(1.0-smoothstep(0.35,0.5,age));
+      vHeat=1.0-clamp(t/0.3,0.0,1.0);
+      float scale=mix(0.09,0.20,seed.y);
+      float spin=angle+t*mix(8.0,17.0,seed.z);
+      vec2 direction=vec2(cos(spin),sin(spin));
+      vec4 view=modelViewMatrix*vec4(p*uSize,1.0);
+      vec2 offset=(direction*position.y+vec2(-direction.y,direction.x)*position.x*0.7)*scale;
+      view.xy+=offset*uSize*length(modelViewMatrix[0].xyz);
+      vUv=uv;gl_Position=vFade<=0.0?vec4(2.0,2.0,2.0,1.0):projectionMatrix*view;
+    }`;
+		const chipMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vUv;varying float vFade,vHeat;
+    void main(){
+      if(vFade<=0.0)discard;
+      vec2 q=vUv*2.0-1.0;
+      float edge=max(max(-q.y-0.55,q.x*0.92+q.y*0.5-0.30),-q.x*0.75+q.y*0.55-0.34);
+      float chip=1.0-smoothstep(-0.045,0.025,edge);
+      float alpha=chip*0.85*vFade*min(uDetail,1.4);
+      if(alpha<0.004)discard;
+      vec3 color=uColor*(0.85+vUv.y*0.7)+vec3(0.5,0.4,0.8)*exp(-abs(edge)*60.0)*vHeat;
+      gl_FragColor=vec4(color,alpha);
+      ${output}
+    }`, chipVertex, {}, true);
+		chipMaterial.userData.ownLifecycle = true;
+		const chips = instanced(new THREE.PlaneGeometry(1, 1), maxArrows * 8, 0, chipMaterial, 4);
+		chips.name = "arcane-arrow-erosion-chips";
+		chips.geometry.userData.arcaneArrowChips = true;
+		const waveMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vP;varying float vT;
+    void main(){
+      float r=length(vP);
+      if(r>.98)discard;
+      float front=.31+.62*(1.0-pow(1.0-vT,2.4));
+      float d=abs(r-front);
+      float ring=1.0-smoothstep(.009,.028,d);
+      float echo=1.0-smoothstep(.005,.018,abs(r-front+.080));
+      float a=atan(vP.y,vP.x);
+      float alpha=(ring+.6*echo*smoothstep(-.4,.4,cos(12.0*a+5.0*vT))+.27*exp(-55.0*d))*(1.0-vT);
+      if(alpha<.005)discard;
+      gl_FragColor=vec4(mix(uColor,vec3(.55,.90,1.),ring*.55)*1.7,alpha);
+      ${output}
+    }`, `
+    uniform float uTime; uniform float uSpread; varying vec2 vP;varying float vT;
+    void main(){vP=position.xy;vT=clamp((uTime-${F(A.detonateAt)})/${F(A.burstLife)},0.0,1.0);
+      vec2 xz=vP*(1.8+3.2*uSpread);
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(vec3(xz.x,.025,xz.y)*uSize,1.0);}
+    `, {}, true);
+		waveMaterial.userData.ownLifecycle = true;
+		const wave = mesh(new THREE.PlaneGeometry(2, 2), waveMaterial, 1);
+		wave.name = "arcane-arrow-release-wave";
+		const burstGeometry = arInstances(new THREE.PlaneGeometry(2, 2), maxArrows);
+		const burstMaterial = shader(`
+    uniform vec3 uColor;varying vec2 vPoint;varying float vPhase,vSeed;
+    void main(){
+      float t=vPhase,r=length(vPoint),angle=atan(vPoint.y,vPoint.x)+6.283185*vSeed;
+      float wave=0.18+0.67*(1.0-pow(1.0-t,2.0));
+      float arc=(1.0-smoothstep(0.025,0.09,abs(r-wave)))*
+        smoothstep(-0.45,0.15,cos(3.0*angle-2.5*t))*(1.0-t);
+      float chips=clamp(1.0-abs(r-wave*1.09)/0.21-abs(sin(angle*3.5))/0.29,0.0,1.0);
+      float core=(1.0-smoothstep(0.05,0.30,r))*(1.0-smoothstep(0.05,0.5,t));
+      float glow=0.30*exp(-8.0*r)*(1.0-t);
+      float ray=pow(max(0.0,cos(angle*7.0+.45*sin(angle*3.0))),20.0);
+      float lance=ray*(1.0-smoothstep(.25,.95,r))*(1.0-smoothstep(.0,.25,t));
+      float alpha=max(core+lance,max(arc,chips)+glow)*(1.0-smoothstep(0.55,1.0,t));
+      if(alpha<0.004)discard;
+      gl_FragColor=vec4(1.8*mix(mix(uColor,vec3(1.0,.58,.19),chips*.65),vec3(1.0),clamp(core+lance,0.0,1.0)),alpha);
+      ${output}
+    }`, `
+    attribute vec2 aTime;attribute vec3 aEnd;uniform float uTime;
+    varying vec2 vPoint;varying float vPhase,vSeed;
+    void main(){
+      float age=uTime-${F(A.detonateAt)};
+      vPhase=clamp(age/${F(A.burstLife)},0.0,1.0);vSeed=aTime.y;vPoint=position.xy;
+      vec4 view=modelViewMatrix*vec4((aEnd+vec3(0.0,0.62+0.30*vPhase,0.0))*uSize,1.0);
+      view.xy+=position.xy*1.74*uSize*length(modelViewMatrix[0].xyz);
+      gl_Position=(age<0.0||age>=${F(A.burstLife)})?vec4(2.0,2.0,2.0,1.0):projectionMatrix*view;
+    }`, {}, true);
+		burstMaterial.userData.ownLifecycle = true;
+		const bursts = mesh(burstGeometry, burstMaterial, 3);
+		bursts.name = "arcane-arrow-expiry-bursts";
+		const decorative = [
+			motes.geometry,
+			sparks.geometry,
+			dust.geometry,
+			chips.geometry
+		];
+		for (const geometry of decorative) {
+			const capacity = geometry.attributes.seed.count;
+			geometry.setAttribute("aStart", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3));
+			geometry.setAttribute("aEnd", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3));
+			geometry.setAttribute("aTime", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 2), 2));
+		}
+		function arWrite(geometry, index, arrow) {
+			geometry.attributes.aStart.setXYZ(index, arrow.start[0], arrow.start[1], arrow.start[2]);
+			geometry.attributes.aEnd.setXYZ(index, arrow.end[0], arrow.end[1], arrow.end[2]);
+			geometry.attributes.aTime.setXY(index, arrow.birth, arrow.seed);
+		}
+		function arDirty(geometry) {
+			geometry.attributes.aStart.needsUpdate = true;
+			geometry.attributes.aEnd.needsUpdate = true;
+			geometry.attributes.aTime.needsUpdate = true;
+		}
+		let latestBirth = 0;
+		let configuredQuantity = -1, configuredSpread = -1;
+		function arSynchronizeLayout() {
+			const quantity = Math.max(1, Math.min(maxArrows, Math.round(uniforms.uQuantity.value)));
+			const spread = uniforms.uSpread.value;
+			if (quantity === configuredQuantity && spread === configuredSpread) return;
+			latestBirth = 0;
+			configuredQuantity = quantity;
+			configuredSpread = spread;
+			for (let slot = 0; slot < quantity; slot++) {
+				const arrow = arConfigureArrow(randomValues, slot, quantity, spread, layout[slot]);
+				latestBirth = Math.max(latestBirth, arrow.birth);
+				for (const geometry of [
+					arrowGeometry,
+					coreGeometry,
+					flashGeometry,
+					ringGeometry,
+					crackGeometry,
+					socketGeometry,
+					burstGeometry
+				]) arWrite(geometry, slot, arrow);
+			}
+			for (let slot = quantity; slot < layout.length; slot++) layout[slot].active = false;
+			for (const geometry of [
+				arrowGeometry,
+				coreGeometry,
+				flashGeometry,
+				ringGeometry,
+				crackGeometry,
+				socketGeometry,
+				burstGeometry
+			]) {
+				geometry.instanceCount = quantity;
+				arDirty(geometry);
+			}
+			for (const geometry of decorative) {
+				const capacity = geometry.attributes.seed.count;
+				for (let i = 0; i < capacity; i++) arWrite(geometry, i, layout[i % quantity]);
+				arDirty(geometry);
+			}
+		}
+		const layerDefs = [
+			{
+				key: "bodies",
+				mesh: arrows,
+				zh: "能量箭實體",
+				en: "Energy arrow bodies",
+				desc: "三角錐箭頭、細箭身與貼身尾翼；落下、插地後同時炸開的主體。"
+			},
+			{
+				key: "cores",
+				mesh: cores,
+				zh: "箭尖熱核",
+				en: "Arrow-tip hot cores",
+				desc: "箭尖的白熱亮點，飛行時最醒目。"
+			},
+			{
+				key: "flash",
+				mesh: flashes,
+				zh: "著地閃光",
+				en: "Landing flash",
+				desc: "落地瞬間的中等星芒閃光。"
+			},
+			{
+				key: "rings",
+				mesh: rings,
+				zh: "衝擊環",
+				en: "Impact rings",
+				desc: "落點向外擴張的貼地細環。"
+			},
+			{
+				key: "cracks",
+				mesh: cracks,
+				zh: "地面能量裂紋",
+				en: "Ground energy cracks",
+				desc: "由中心向外連接生長的分支裂紋網絡。"
+			},
+			{
+				key: "crackGlow",
+				mesh: crackGlow,
+				zh: "裂紋柔光",
+				en: "Crack soft glow",
+				desc: "裂紋周圍的柔和光帶。"
+			},
+			{
+				key: "sockets",
+				mesh: sockets,
+				zh: "插地光點",
+				en: "Embedded socket glow",
+				desc: "箭插地處持續發亮的光點。"
+			},
+			{
+				key: "motes",
+				mesh: motes,
+				zh: "上浮微光",
+				en: "Rising motes",
+				desc: "從落點緩緩上升的能量微光。"
+			},
+			{
+				key: "sparks",
+				mesh: sparks,
+				zh: "下落火花",
+				en: "Falling sparks",
+				desc: "跟隨箭雨下落的細碎火花。"
+			},
+			{
+				key: "sigil",
+				mesh: sigil,
+				zh: "施放符文環",
+				en: "Casting sigil",
+				desc: "多重刻紋環交織，十六枚冠飾環繞中空箭星。"
+			},
+			{
+				key: "dust",
+				mesh: dust,
+				zh: "氛圍塵光",
+				en: "Ambient dust",
+				desc: "體積中緩慢飄浮的奧術塵光。"
+			},
+			{
+				key: "bursts",
+				mesh: bursts,
+				zh: "消散爆光",
+				en: "Expiry bursts",
+				desc: "所有箭同時消失時，白芯從插地處爆開，化成弧光與碎芒。"
+			},
+			{
+				key: "chips",
+				mesh: chips,
+				zh: "侵蝕碎屑",
+				en: "Erosion chips",
+				desc: "箭消散時拋出的銳利碎片。"
+			},
+			{
+				key: "wave",
+				mesh: wave,
+				zh: "終結震波",
+				en: "Final shockwave",
+				desc: "箭陣齊爆時，兩道光波橫掃地面。"
+			}
+		];
+		const layerEnabled = new Map(layerDefs.map((l) => [l.key, true]));
+		function arSynchronize() {
+			arSynchronizeLayout();
+			const time = uniforms.uTime.value;
+			const lastContact = latestBirth + A.flight;
+			const arrowEnd = A.detonateAt;
+			const groundEnd = lastContact + A.groundHold + A.groundFade;
+			const on = (key) => layerEnabled.get(key) !== false;
+			arrows.visible = on("bodies") && time > 0 && time < arrowEnd;
+			bursts.visible = on("bursts") && time >= A.detonateAt && time < arrowEnd + A.burstLife;
+			cores.visible = on("cores") && time > 0 && time < lastContact + .12;
+			flashes.visible = on("flash") && time >= A.flight && time < lastContact + .3;
+			rings.visible = on("rings") && time >= A.flight && time < lastContact + .3;
+			cracks.visible = on("cracks") && time >= A.flight && time < groundEnd;
+			crackGlow.visible = on("crackGlow") && time >= A.flight && time < groundEnd;
+			sockets.visible = on("sockets") && time >= A.flight && time < groundEnd;
+			motes.visible = on("motes") && time >= A.flight && time < groundEnd;
+			sparks.visible = on("sparks") && time > 0 && time < lastContact;
+			sigil.visible = on("sigil") && time > 0 && time < A.detonateAt + A.sigilRelease;
+			dust.visible = on("dust") && time > 0 && time < A.duration - .1;
+			chips.visible = on("chips") && time >= A.detonateAt && time < arrowEnd + .5;
+			wave.visible = on("wave") && time >= A.detonateAt && time < A.detonateAt + A.burstLife;
+		}
+		const layerApi = {
+			list: () => layerDefs.map((l) => ({
+				key: l.key,
+				name: l.mesh.name,
+				zh: l.zh,
+				en: l.en,
+				desc: l.desc,
+				enabled: layerEnabled.get(l.key) !== false,
+				visible: l.mesh.visible
+			})),
+			setEnabled: (key, enabled) => {
+				if (layerEnabled.has(key)) {
+					layerEnabled.set(key, !!enabled);
+					arSynchronize();
+				}
+			},
+			solo: (key) => {
+				for (const l of layerDefs) layerEnabled.set(l.key, l.key === key);
+				arSynchronize();
+			},
+			showAll: () => {
+				for (const l of layerDefs) layerEnabled.set(l.key, true);
+				arSynchronize();
+			},
+			hideAll: () => {
+				for (const l of layerDefs) layerEnabled.set(l.key, false);
+				arSynchronize();
+			},
+			reset: () => {
+				for (const l of layerDefs) layerEnabled.set(l.key, true);
+				arSynchronize();
+			}
+		};
+		arrows.parent.userData.arcaneLayers = layerApi;
+		animated.push(arSynchronize);
+		arSynchronize();
+		return true;
+	}
+
+//#endregion
 //#region src/effects/utility-runtime.js
 	function buildUtilityEffect(ctx) {
 		const { THREE, kind, variant, cap, mesh, instanced, shader, output } = ctx;
@@ -8200,6 +9227,17 @@ uniform float uStretch;varying vec2 vUv;varying float vFade;varying float vLight
 			instanced,
 			shader,
 			output
+		}) || buildArcaneArrowRainEffect({
+			THREE: three,
+			spec,
+			cap,
+			uniforms,
+			geometries,
+			animated,
+			mesh,
+			instanced,
+			shader,
+			output
 		}) || buildSpatialSweepEffect({
 			THREE: three,
 			spec,
@@ -10282,7 +11320,7 @@ gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);
 				if (item.pivot) item.object.position.y += item.pivot * (1 - settings.size);
 			}
 			if (endpoints) applyEndpoints();
-			if (spec.id === "golden-chain-rain") for (const animate of animated) animate();
+			if (spec.id === "golden-chain-rain" || spec.id === "arcane-arrow-rain") for (const animate of animated) animate();
 			syncLifecycle();
 		}
 		function applyEndpoints() {

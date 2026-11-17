@@ -1,0 +1,53 @@
+{
+  "origin": "https://00gamedevs.com",
+  "contentVersion": "85f9efcbf6afd18f959638d15ee7f77e5b9340e59afd1516e0d7d5ea8e9932dd",
+  "downloadedFrom": "official AI catalog v2",
+  "packaging": "byte-identical original JavaScript, no imitation",
+  "assets": [
+    {
+      "id": "ground-freeze-study",
+      "url": "https://00gamedevs.com/downloads/effects/ground-freeze-study.js",
+      "sha256": "ade2236d06e48630c12367a43d21b5afebebe1c0c46dd096683f2732cba2e399",
+      "byteLength": 466051,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "reset",
+          "setOptions",
+          "render",
+          "dispose"
+        ],
+        "playback": "single-shot",
+        "lifecycle": {
+          "start": 0,
+          "end": 5.2
+        },
+        "notes": "Approved white-frost and pale-blue ice with depth-soft cold mist; default color #d4e8ed, bloom 1.1 and shiny 1. Lance flies along +X into (2.6,1.5,0); contact ice patch removed. Shield mist is emitted across the curved face, drifts outward, and stops spawning when the shield breaks; the shield holds steadily without impact events, starts breaking at 3.4s, and retains group.position.y=0.6. Ground crystals erupt at full height, vapor replenishes while present, then ice fragments explode at 3.6s. Fixed seed; reset and seek retain particle identity. Transparent supports do not write depth. The render hook is required even at bloom=0 for soft mist intersections. Bloom keeps opaque mesh occlusion, uses four lazy render targets, and restores scene/renderer state. Three.js r187, WebGL2, SRGBColorSpace, NoToneMapping, opaque full-frame output. No automatic animation loop, collision, terrain edits or external texture fetch; transparent environment bloom occlusion and additional host postprocessing are not supported. dispose releases owned resources; subsequent calls are inert.",
+        "properties": [
+          "group",
+          "settings",
+          "phase",
+          "finished",
+          "elapsed",
+          "duration"
+        ],
+        "duration": 5.2,
+        "timeUnit": "seconds",
+        "plane": "XZ",
+        "up": "+Y",
+        "layerTypes": 13,
+        "renderHook": "fx.render(renderer,scene,camera) replaces renderer.render; once per scene/frame, covers all ice instances"
+      },
+      "defaultOptions": {
+        "color": "#d4e8ed",
+        "size": 1,
+        "speed": 1,
+        "bloom": 1.1,
+        "shiny": 1
+      }
+    }
+  ]
+}
