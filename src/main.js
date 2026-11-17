@@ -233,8 +233,10 @@ function syncPlayers(){
   for(const [key,root] of roots)if(key!==self.key&&!live.has(key)){statusVisuals.clear(root);root.removeFromParent();roots.delete(key);remoteTargets.delete(key);}ui.setPlayers(players);
 }
 function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root||!hit||root.userData.lastHitReaction===hit.id||Date.now()-hit.time>2500)return;root.userData.lastHitReaction=hit.id;audio.play('hit',root===localRoot?1:.35);root.userData.hitFlashUntil=performance.now()+250;if(root===localRoot){
-  controller.stunUntil=performance.now()+100;
-  if(hit.panBlast&&Number(hit.knockbackDistance)>0){
+  controller.stunUntil=hit.whipPull?0:performance.now()+100;
+  if(hit.whipPull){
+   controller.beginWhipPull(hit.whipPull);
+  }else if(hit.panBlast&&Number(hit.knockbackDistance)>0){
    // Server-authored launch. The local physics controller takes over for
    // a complete parabola followed by three diminishing ground rebounds.
    controller.beginPanBlast(hit);
