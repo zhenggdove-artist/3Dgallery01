@@ -78,7 +78,7 @@ test('continuous staff fusion produces three simultaneous native VFX streams and
 test('staff attack direction is solved from the actual raised muzzle to the centre reticle',()=>{
  const camera=new THREE.PerspectiveCamera(60,1,.1,300);
  camera.position.set(0,2,6);camera.lookAt(0,1,0);camera.updateMatrixWorld(true);
- const root=new THREE.Group(),controller={root},arena={};
+ const root=new THREE.Group(),controller={root},arena={structureGroup:new THREE.Group(),world:{},islandEnemies:{extraModels:[]}};
  const muzzle=new THREE.Vector3(0,3,0);
  const direction=new THREE.Vector3(...attackDirection(controller,camera,arena,new Map(),itemById('ember-1'),0,muzzle));
  const ray=new THREE.Raycaster().setFromCamera(new THREE.Vector2(),camera);
