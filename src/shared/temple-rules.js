@@ -502,6 +502,18 @@ function attack(world,profile,actor,body,context,now){
   return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
+function applyMonsterImpactReaction(player,target,skill,now){
+ if(!player||player.admin||player.hp<=0||!player.hitReaction||!['charge','stomp'].includes(skill?.motion))return;
+ const charge=skill.motion==='charge',origin=charge?skill.origin:skill.aim;
+ let dx=target.position[0]-origin[0],dz=target.position[2]-origin[2];
+ if(Math.hypot(dx,dz)<.01){dx=skill.aim[0]-skill.origin[0];dz=skill.aim[2]-skill.origin[2];}
+ const length=Math.hypot(dx,dz)||1;
+ player.effects??={};
+ player.effects.stun={owner:'monster',power:0,until:now+1000,next:now+1000};
+ Object.assign(player.hitReaction,{motion:skill.motion,stunMs:charge?1000:800,
+  knockbackDistance:charge?8:2.2,knockbackDurationMs:charge?1000:undefined,
+  vector:[dx/length,.08,dz/length]});
+}
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false,fixedDamage=false){
   const target=world.profiles[targetActor.key];if(!target||target.hp<=0||target.deadUntil>now)return null;
   const stats=refreshStats(world,target,now);if(target.admin&&!fixedDamage){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
@@ -590,7 +602,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   return moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],distance);
  }
  return moveMonster(world,monster,target,distance);
-},hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position,'normal',null,false,false,skill?.motion==='venom');const player=world.profiles[target.key];if(skill?.motion==='stomp'&&player?.hp>0&&!player.admin){player.effects??={};player.effects.stun={owner:'monster',power:0,until:now+1000,next:now+1000};if(player.hitReaction){const dx=target.position[0]-skill.aim[0],dz=target.position[2]-skill.aim[2],length=Math.hypot(dx,dz)||1;Object.assign(player.hitReaction,{stunMs:800,knockbackDistance:2.2,vector:[dx/length,.08,dz/length]});}}return result;}});if(!monster.panBlastFlight&&!monster.whipPull&&effectActive(monster,'confuse',now)){
+},hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position,'normal',null,false,false,skill?.motion==='venom');applyMonsterImpactReaction(world.profiles[target.key],target,skill,now);return result;}});if(!monster.panBlastFlight&&!monster.whipPull&&effectActive(monster,'confuse',now)){
  const angle=(now/217+(monster.generation||0)*1.73)%(Math.PI*2);
  moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],.21);
 }else if(!monster.panBlastFlight&&!monster.whipPull&&!effectActive(monster,'root',now)&&!effectActive(monster,'freeze',now)&&
@@ -611,7 +623,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
         return moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],distance);
        }
        return moveMonster(world,mob,target,distance);
-      },hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position,'normal',null,false,false,skill?.motion==='venom');const player=world.profiles[target.key];if(skill?.motion==='stomp'&&player?.hp>0&&!player.admin){player.effects??={};player.effects.stun={owner:'monster',power:0,until:now+1000,next:now+1000};if(player.hitReaction){const dx=target.position[0]-skill.aim[0],dz=target.position[2]-skill.aim[2],length=Math.hypot(dx,dz)||1;Object.assign(player.hitReaction,{stunMs:800,knockbackDistance:2.2,vector:[dx/length,.08,dz/length]});}}return result;}});
+      },hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position,'normal',null,false,false,skill?.motion==='venom');applyMonsterImpactReaction(world.profiles[target.key],target,skill,now);return result;}});
     if(!mob.panBlastFlight&&!mob.whipPull&&effectActive(mob,'confuse',now)){
  const angle=(now/217+(mob.slot||0)*1.73)%(Math.PI*2);
  moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],.21);

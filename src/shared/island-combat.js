@@ -14,7 +14,7 @@ export const ENEMY_RADIUS=.42*6; // Includes the sixfold humanoid's shoulders an
 const SKILLS=Object.freeze({
  swipe:{warning:480,active:500,range:4.8,radius:4.2},
  charge:{warning:850,active:1600,range:19,radius:2.35},
- beam:{warning:750,active:3400,range:38,radius:1.65},
+ beam:{warning:750,active:5000,range:38,radius:2.475},
  stomp:{warning:1000,active:1500,range:8,radius:7},
  venom:{warning:850,active:5100,range:27,radius:5.2}
 });
@@ -31,14 +31,18 @@ export function monsterSkillContains(skill,p,now,origin=skill.origin){
  // Ground AoEs can be jumped; all attacks must respect vertical separation.
  const vertical=Math.abs((p[1]||0)-(origin[1]||0));
  if(vertical>(skill.motion==='beam'?9.2:skill.motion==='charge'?3.2:skill.motion==='swipe'?3.2:2.2))return false;
- if(skill.motion==='venom'||skill.motion==='stomp')return flatDistance(p,skill.aim)<=config.radius;
+ if(skill.motion==='stomp'){
+  // The shockwave must hit on landing, not during the jump.
+  if(now<skill.start+(skill.end-skill.start)*.76)return false;
+  return flatDistance(p,skill.aim)<=config.radius;
+ }
+ if(skill.motion==='venom')return flatDistance(p,skill.aim)<=config.radius;
  if(skill.motion==='swipe') {
   const dx=p[0]-origin[0],dz=p[2]-origin[2],fx=skill.aim[0]-origin[0],fz=skill.aim[2]-origin[2];
   return Math.hypot(dx,dz)<=config.radius&&dx*fx+dz*fz>0;
  }
  if(skill.motion==='beam') {
   // The ray starts at the giant monster's mouth and extends toward its locked aim.
-  const dx=skill.aim[0]-skill.origin[0],dz=skill.aim[2]-skill.origin[2],dist=Math.hypot(dx,dz)||1;
   const end=[skill.aim[0],0,skill.aim[2]];
   return segmentDistance(p,skill.origin,end)<=config.radius;
  }
@@ -64,11 +68,11 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
   }
   for(const target of targets){
    const key=target.key;
-   if(s.motion==='venom'){
+   if(s.motion==='venom'||s.motion==='beam'){
     if(!monsterSkillContains(s,target.position,now))continue;
-    // Do not multiply ticks when the simulation catches up from 2Hz.
+    // Continuous contact: one hit per second, never catch-up burst damage.
     const last=s.lastTick[key]??(s.start-1000);
-    if(now-last>=1000){s.lastTick[key]=now;hit(target,5,s);}
+    if(now-last>=1000){s.lastTick[key]=now;hit(target,s.motion==='venom'?5:s.damage,s);}
     continue;
    }
    if(s.hit.includes(key)||!monsterSkillContains(s,target.position,now))continue;
@@ -93,6 +97,12 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
  if(now>=(monster.nextAttackAt||0)&&target.d<=config.range){
   monster.attackCount=count+1;monster.aggroTarget=target.a.key;monster.aggroUntil=now+9000;
   const aim=[...target.a.position];aim[1]=0;
+  // Lock both warning and actual strike to the full-range path, not target distance.
+  if(motion==='charge'||motion==='beam'){
+   const x=aim[0]-monster.position[0],z=aim[2]-monster.position[2],length=Math.hypot(x,z)||1;
+   aim[0]=monster.position[0]+x/length*config.range;
+   aim[2]=monster.position[2]+z/length*config.range;
+  }
   const id=crypto.randomUUID();
   const s={id,type:'shockwave',motion,origin:[...monster.position],aim,phase:'warning',start:now,end:now+config.warning,hit:[],radius:config.radius,height:1.3,damage:motion==='venom'?5:motion==='stomp'?12:motion==='beam'?8:monster.damage||12,island:true,lastTick:{}};
   monster.skills.push(s);
