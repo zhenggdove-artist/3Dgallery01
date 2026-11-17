@@ -15,6 +15,7 @@ export class MonsterAttackEffects {
   this.scene=scene;this.live=new Map();this.pool=new Map();this.completed=new Set();
   this.scratch={mat:new THREE.Matrix4(),pos:new THREE.Vector3(),rot:new THREE.Quaternion(),
    scale:new THREE.Vector3(),axis:new THREE.Vector3(.4,.8,.3).normalize()};this.failedSkills=new Set();
+  this.retryAfter=new Map();
  }
  make(motion){
   const root=new THREE.Group();root.name='Monster skill '+motion;
@@ -169,12 +170,21 @@ export class MonsterAttackEffects {
    for(const s of state.skills||[]){
     if(!s.motion||now>=s.end)continue;
     const key=state.id+':'+s.id;needed.add(key);
+    // A failed effect constructor can throw before updateEntry starts.
+    // Back off instead of retrying an expensive GPU allocation every frame.
+    if(now<(this.retryAfter.get(s.motion)||0)){needed.delete(key);continue;}
     let e=this.live.get(key);
-    if(!e){e=this.take(s.motion);this.scene.add(e.root);this.live.set(key,e);}
-    try{this.updateEntry(e,s,now,s.motion==='beam'?mouthForState(state,s):null,state.position);}
-    catch(error){
-     this.live.delete(key);this.put(e);needed.delete(key);
-     if(!this.failedSkills.has(s.motion)){this.failedSkills.add(s.motion);console.error('Monster VFX update failed',s.motion,error);}
+    try{
+     if(!e){e=this.take(s.motion);this.scene.add(e.root);this.live.set(key,e);}
+     this.updateEntry(e,s,now,s.motion==='beam'?mouthForState(state,s):null,state.position);
+    }catch(error){
+     this.live.delete(key);needed.delete(key);
+     if(e)try{this.put(e);}catch(cleanupError){e.root.removeFromParent();}
+     this.retryAfter.set(s.motion,now+3000);
+     if(!this.failedSkills.has(s.motion)){
+      this.failedSkills.add(s.motion);
+      console.error('Monster VFX creation/update failed; temporarily disabled',s.motion,error);
+     }
     }
    }
   }

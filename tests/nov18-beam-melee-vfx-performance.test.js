@@ -66,6 +66,33 @@ test('repeated original #47 casts reuse the native effect without growing concur
  assert.equal(effects.active.length,0);
 });
 
+test('monster VFX allocation failures are contained and throttled without stopping the game frame',()=>{
+ const effects=new MonsterAttackEffects(new THREE.Scene());
+ const state={id:'ci-monster',active:true,position:[0,0,0],skills:[{
+  id:'ci-stomp',motion:'stomp',phase:'active',origin:[0,0,0],aim:[0,0,0],
+  start:T-1100,end:T+5000,radius:7
+ }]};
+ const original=effects.take.bind(effects),originalError=console.error;
+ let attempts=0,logged=0;
+ effects.take=()=>{attempts++;throw Error('simulated GPU allocation failure');};
+ console.error=()=>{logged++;};
+ try{
+  assert.doesNotThrow(()=>effects.sync([state],T));
+  assert.equal(attempts,1);
+  assert.equal(effects.retryAfter.get('stomp'),T+3000);
+  assert.equal(effects.live.size,0);
+  assert.doesNotThrow(()=>effects.sync([state],T+1000));
+  assert.equal(attempts,1,'do not reallocate once per gameplay frame');
+  effects.take=(...args)=>{attempts++;return original(...args);};
+  assert.doesNotThrow(()=>effects.sync([state],T+3100));
+  assert.equal(attempts,2,'retry after bounded backoff');
+  assert.equal(effects.live.size,1);
+  effects.sync([],T+3500);
+  assert.equal(effects.live.size,0);
+  assert.equal(logged,1,'log the first failure without flooding the console');
+ }finally{console.error=originalError;}
+});
+
 test('native full-screen post effects cannot override a VHS offscreen render target',()=>{
  const effects=new NumberedWeaponEffects(new THREE.Scene());
  let rendered=0;

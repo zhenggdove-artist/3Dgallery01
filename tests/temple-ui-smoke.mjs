@@ -208,6 +208,52 @@ try{
   assert.equal(result.source,'00GameDevs',JSON.stringify(result));
   assert.equal(result.aligned,true,JSON.stringify(result));
  }
+ // Reproduce the two reported browser freezes under the real WebGL scene:
+ // repeated #47 saber finales and a humanoid stomp at landing.
+ const animationStress=await page.evaluate(async()=>{
+  const {MonsterAttackEffects}=await import('/src/monster-attack-effects.js');
+  const monsters=new MonsterAttackEffects(templeTest.arena.scene);
+  const numbered=templeTest.arena.presentation.vfx.numberedEffects;
+  const actor=templeTest.arena.islandEnemies.extraModels[0];
+  const saber=templeTest.items.find(item=>item.id==='saber-2');
+  if(!actor||!saber)throw Error('Missing live model or saber for VFX stress test');
+  let frames=0,landings=0,jumpHeight=0;
+  try{
+   for(let i=0;i<4;i++){
+    const t=performance.now();
+    const ascent={id:'ci-stomp-'+i,motion:'stomp',phase:'active',
+     origin:[-35,0,-35],aim:[-35,0,-35],start:t-650,end:t+850,radius:7};
+    templeTest.arena.islandEnemies.updateModel(actor,{
+     active:true,skills:[ascent],moving:false,lastHitAt:0
+    },.016,t);
+    jumpHeight=Math.max(jumpHeight,actor.userData.pivot.position.y);
+    const landing={...ascent,start:t-1200,end:t+300};
+    monsters.sync([{id:'ci-monster-'+i,active:true,position:[-35,0,-35],skills:[landing]}],t);
+    const effect=[...monsters.live.values()][0];
+    if(!effect?.rubble?.visible||!effect?.fractures?.visible)
+     throw Error('Monster stomp landing FX did not activate');
+    landings++;
+    numbered.play({id:'ci-rend-'+i,origin:[-35,1,-35],direction:[0,0,1],
+     range:8,qualityTier:2,combo:5,ultimate:false},saber,null);
+    numbered.update(.016);
+    if(numbered.active.filter(e=>e.spec.number===47).length!==1)
+     throw Error('Concurrent dimensional-rend GPU effects are not bounded to one');
+    await new Promise(resolve=>requestAnimationFrame(resolve));
+    frames++;
+    monsters.sync([],t+350);
+   }
+   return {frames,landings,jumpHeight,failed:[...monsters.failedSkills],
+    nativeFailed:[...(numbered.failedEffects||[])]};
+  }finally{
+   monsters.sync([],performance.now());
+   numbered.dispose();
+  }
+ });
+ assert.equal(animationStress.frames,4,'four successive GPU frames must complete');
+ assert.equal(animationStress.landings,4,'stomp debris and cracks must activate every time');
+ assert.ok(animationStress.jumpHeight>1,'humanoid must visibly rise during the leap');
+ assert.deepEqual(animationStress.failed,[],'stomp rendering must not throw');
+ assert.deepEqual(animationStress.nativeFailed,[],'original dimensional-rend update must not throw');
  // CSS must keep field labels left and numeric controls right, even on a narrow
  // mobile portrait screen; no hidden second row or horizontal overflow.
  await page.setViewportSize({width:360,height:740});
