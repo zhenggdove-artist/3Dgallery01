@@ -82,7 +82,11 @@ export class ReletterPresentation{
        // on every 300–1000ms damage pulse.
        if(event.channel&&!echo.channel){
          const key=event.owner+':'+(echo.fusionSlot||0)+':'+echo.weapon;
-         const now=performance.now(),lifetime=({swatter:7000,whip:6500,pan:5000})[source.family]||3500;
+         // Keep every borrowed ultimate visually present while the main staff channels.
+          // Pooled beams stay continuous; distinct one-shot weapon ultimates refresh
+          // only as their earlier effect fades, avoiding per-pulse allocations.
+          const now=performance.now(),lifetime=({swatter:6000,whip:2100,pan:4200,planter:1800,palm:1700})[source.family]||
+           (source.firstPerson?900:source.exotic?1900:1400);
          if(now-(this.fusionEchoLast.get(key)??-Infinity)<lifetime)continue;
          this.fusionEchoLast.set(key,now);
          if(this.fusionEchoLast.size>96)this.fusionEchoLast.delete(this.fusionEchoLast.keys().next().value);

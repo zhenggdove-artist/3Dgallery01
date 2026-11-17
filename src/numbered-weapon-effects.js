@@ -221,7 +221,7 @@ export class NumberedWeaponEffects {
    spec,fx,group:fx.group,root,item,direction,origin,target,options,
    worldScale:ultimateWorldScale(spec.number,event,options),
    range:Math.max(.5,Number(event.range)||12),
-   key,channel:!!event.channel,areaLocked,age:0,
+   key,channel:!!event.channel,fusionEcho:!!event.fusionEcho,areaLocked,age:0,
    duration:event.channel?Infinity:(spec.number===31?2.5:spec.number===20?4.5:spec.number===33?3.3:spec.number===43?2.25:spec.number===48?6.5:spec.number===53?7:5),
    lastPulse:performance.now(),stopping:false,
    heading:root?.rotation.y||0,
@@ -430,7 +430,9 @@ export class NumberedWeaponEffects {
    if(copy.fx.finished||(moving&&copy.age>travelLifetime(number)+.55))
     this.discardCycle(entry,copy);
   }
-  while(entry.cycles.length>(moving?4:3))this.discardCycle(entry,entry.cycles[0]);
+  // Two pooled sub-effect instances per borrowed channel cap draw calls and
+   // GPU allocations without suppressing either of the two fusion layers.
+   while(entry.cycles.length>(entry.fusionEcho?2:moving?4:3))this.discardCycle(entry,entry.cycles[0]);
   if(!entry.cycles.length){
    const fx=this.acquire(entry.spec,entry.options);
    entry.cycles.push(this.makeCycle(entry,fx));
