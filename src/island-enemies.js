@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {MonsterAttackEffects} from './monster-attack-effects.js';
 import {islandModel,animateIslandModel} from './reletter/island-actors.js';
 import {createEnemySpellEffect,updateEnemySpellEffect} from './reletter/temple-spell-effects.js';
-import {ISLAND_ENEMIES,ENEMY_HEIGHT,monsterBeamEndpoint,monsterChargePosition} from './shared/island-combat.js';
+import {ISLAND_ENEMIES,ENEMY_HEIGHT,monsterBeamEndpoint} from './shared/island-combat.js';
 import {MONSTER_PACK_SIZE} from './shared/monster-pack.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {samplePanBlastPosition} from './shared/pan-blast-flight.js';
@@ -42,7 +42,7 @@ export class IslandEnemies{
    for(const pose of ['jump','run','idle']){
     for(const root of actors)animateIslandModel(root,{
      moving:pose==='run',leap:pose==='jump',patrolling:false,
-     skills:pose==='run'?[{motion:'charge',phase:'active'}]:[],
+     skills:[],
     },.017,0);
     await renderer.compileAsync(stage,view);
     renderer.setRenderTarget(target);renderer.render(stage,view);
@@ -92,13 +92,13 @@ export class IslandEnemies{
    restore.set(bone,q);
   };
   const skill=state.skills?.find(s=>s.motion&&s.phase==='active');
-  animateIslandModel(root,{...state,moving:state.moving||skill?.motion==='charge',
+  animateIslandModel(root,{...state,moving:state.moving,
    patrolling:skill?.motion==='beam'?true:state.patrolling,
-   leap:skill?.motion==='stomp',skills:skill?.motion==='charge'?[skill]:skill?[]:state.skills,
+   leap:skill?.motion==='stomp',skills:skill?[skill]:state.skills,
    lastHit:state.lastHitAt},dt,now);
   if(skill){
    const t=Math.min(1,Math.max(0,(now-skill.start)/Math.max(1,skill.end-skill.start))),pulse=Math.sin(Math.PI*t);
-   root.userData.pivot.rotation.x=skill.motion==='charge'?.28:0;
+   root.userData.pivot.rotation.x=0;
    if(skill.motion==='swipe')root.traverse(b=>{
     if(b.isBone&&/RightArm$|RightForeArm$/i.test(b.name)){
      saveBone(b);
@@ -136,15 +136,13 @@ export class IslandEnemies{
   const previous=root.userData.previousMonsterPosition??=new THREE.Vector3();
   previous.copy(root.position);
   const flight=state.panBlastFlight;
-  const charge=state.skills?.find(s=>s.motion==='charge'&&s.phase==='active'&&now<=s.end);
   const target=root.userData.monsterPositionTarget??=new THREE.Vector3();
   if(flight)target.fromArray(samplePanBlastPosition(flight,now).position);
-  else if(charge)target.fromArray(monsterChargePosition(charge,now));
   else target.fromArray(state.position);
   // Keep rendering motion continuous between discrete authoritative packets.
   if(flight)root.position.copy(target);
-  else root.position.lerp(target,1-Math.exp(-dt*(charge?30:10)));
-  const motion=state.skills?.find(s=>['charge','beam'].includes(s.motion)&&(s.phase==='warning'||s.phase==='active'));
+  else root.position.lerp(target,1-Math.exp(-dt*10));
+  const motion=state.skills?.find(s=>s.motion==='beam'&&(s.phase==='warning'||s.phase==='active'));
   if(motion){
    const end=motion.motion==='beam'?monsterBeamEndpoint(motion,now,state.position):motion.aim;
    const delta=new THREE.Vector3(...end).sub(new THREE.Vector3(...state.position));

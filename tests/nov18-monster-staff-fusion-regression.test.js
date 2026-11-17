@@ -33,14 +33,18 @@ test('monster beam lasts five seconds and damages on each second of contact with
  assert.equal(MONSTER_SKILLS.beam.radius,4.95);
 });
 
-test('charge telegraph has exact fixed 19m reach, even when target is closer',()=>{
+test('monsters never select removed dash and frost ground hitbox respects warning radius',()=>{
  const monster={id:'dash',model:'uncle',position:[0,0,0],damage:10,nextAttackAt:0,skills:[],attackCount:0};
  const target={key:'near',position:[3,0,7],hits:[]};
- advanceIslandEnemy(monster,[target],NOW,opts);
- const charge=monster.skills[0];
- assert.equal(charge.motion,'charge');
- assert.ok(Math.abs(Math.hypot(charge.aim[0],charge.aim[2])-19)<.001);
- assert.equal(charge.phase,'warning');
+ for(let count=0;count<14;count++){
+  monster.attackCount=count;monster.skills=[];monster.nextAttackAt=0;
+  advanceIslandEnemy(monster,[target],NOW+count*9000,opts);
+  assert.notEqual(monster.skills[0]?.motion,'charge');
+ }
+ assert.equal(MONSTER_SKILLS.charge,undefined);
+ const freeze={motion:'freeze',phase:'active',origin:[0,0,0],aim:[3,0,7],start:NOW,end:NOW+5200};
+ assert.equal(monsterSkillContains(freeze,[3,0,7],NOW+100),true);
+ assert.equal(monsterSkillContains(freeze,[15,0,7],NOW+100),false);
 });
 
 test('stomp collision starts on late descent instead of midair',()=>{

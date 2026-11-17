@@ -1,5 +1,6 @@
 import {itemById,ECONOMY} from './catalog.js';
 import {equippedItem} from './fusion-adapter.js';
+import {itemAffixes} from '../reletter/combat-traits.js';
 
 // Only the server mutates inventory, spending, fusion properties and ultimate echoes.
 export function fuseTemple(world,profile,body){
@@ -18,6 +19,9 @@ export function fuseTemple(world,profile,body){
  const cost=ECONOMY.fusionBaseCost*layer;
  if(!profile.admin&&profile.wallet<cost)return {error:'Not enough coins for fusion'};
  const main=equippedItem(profile,target),material=equippedItem(profile,source),stats={...(old.templeStats||{})};
+ // Affixes always accumulate; only ULTIMATE echoes have the two-source limit.
+ const affixIds=[...new Set([...itemAffixes(main),...itemAffixes(material),
+  ...itemAffixes(old),...itemAffixes(old.original)])];
  const keys=['damage','chargeDamage','range','chargeRange','radius','defense','capacity','impulse','speed','jump'];
  for(const key of keys){
   const a=Number(material[key]),b=Number(main[key])||0;
@@ -34,11 +38,11 @@ export function fuseTemple(world,profile,body){
  const effects=(old.effects||[]).filter(id=>itemById(id)?.slot==='weapon').slice(0,2);
  const grantsEcho=target.slot==='weapon'&&source.slot==='weapon'&&effects.length<2;
  if(grantsEcho)effects.push(source.id);
- profile.fusion[target.id]={...old,layer,bonus,templeStats:stats,effects,
+ profile.fusion[target.id]={...old,layer,bonus,templeStats:stats,effects,affixIds,affixId:affixIds[0]||null,
   sources:[...(old.sources||[]),{id:source.id,name:source.name,statPercent:30,echo:grantsEcho}]};
  const result={notice:'FUSION SUCCESS · '+target.name+' +'+layer+
   (grantsEcho?' · ULTIMATE ECHO '+effects.length+'/2':' · STATS +30%'),
-  fusion:{success:true,target:target.id,layer,cost,effects:[...effects]}};
+  fusion:{success:true,target:target.id,layer,cost,effects:[...effects],affixIds:[...affixIds]}};
  profile.fusionReceipts[requestId]=structuredClone(result);
  const receipts=Object.keys(profile.fusionReceipts);
  if(receipts.length>64)delete profile.fusionReceipts[receipts[0]];

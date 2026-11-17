@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {monsterBeamEndpoint} from './shared/island-combat.js';
 import pulseBeam from '../vendor/00gamedevs/pulse-beam.js';
 import venomPool from '../vendor/00gamedevs/venom-pool.js';
+import groundFreezeStudy from '../vendor/00gamedevs/source/ground-freeze-study.js';
 import {ENEMY_HEIGHT} from './shared/island-combat.js';
 
 const TAU=Math.PI*2;
@@ -19,12 +20,13 @@ export class MonsterAttackEffects {
  }
  make(motion){
   const root=new THREE.Group();root.name='Monster skill '+motion;
-  const marker=new THREE.Mesh((motion==='charge'||motion==='beam')?warningRect:warningCircle,softMat('#ff242c'));
+  const marker=new THREE.Mesh(motion==='beam'?warningRect:warningCircle,softMat(motion==='freeze'?'#93e7ff':'#ff242c'));
   marker.rotation.x=-Math.PI/2;marker.position.y=.12;root.add(marker);
-  const fringe=new THREE.Mesh(warningCircle,softMat('#ff242c'));
+  const fringe=new THREE.Mesh(warningCircle,softMat(motion==='freeze'?'#93e7ff':'#ff242c'));
   fringe.rotation.x=-Math.PI/2;fringe.position.y=.125;root.add(fringe);
   const native=motion==='beam'?pulseBeam({size:1.8,density:.48,color:'#80ffed',quantity:4}):
-   motion==='venom'?venomPool({size:1.8,density:.5,color:'#b4f745',quantity:7}):null;
+   motion==='venom'?venomPool({size:1.8,density:.5,color:'#b4f745',quantity:7}):
+   motion==='freeze'?groundFreezeStudy({size:1,speed:1,bloom:1.1,color:'#d4e8ed'}):null;
   if(native){native.group.visible=false;root.add(native.group);}
   const wave=new THREE.Mesh(new THREE.RingGeometry(.84,1,48),softMat('#ffe8ab'));
   wave.rotation.x=-Math.PI/2;wave.position.y=.18;wave.visible=false;root.add(wave);
@@ -34,15 +36,34 @@ export class MonsterAttackEffects {
    rubble=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.18,0),
     new THREE.MeshStandardMaterial({color:'#82776b',roughness:.95,flatShading:true}),32);
    rubble.name='Stomp shattered rocks';rubble.frustumCulled=false;root.add(rubble);
-   const segments=[];
-   for(let ray=0;ray<18;ray++){
-    const angle=ray*TAU/18,tip=4.5+Math.sin(ray*23.71)*.55;
+   // One batched draw: 26 jagged primary fractures, with two branch levels.
+   // Deterministic precomputed geometry adds detail without frame allocations.
+   const segments=[],line=(x,z,nx,nz)=>segments.push(x,.17,z,nx,.17,nz);
+   for(let ray=0;ray<26;ray++){
+    const angle=ray*TAU/26,tip=5.85+.75*Math.sin(ray*15.71);
     let x=0,z=0;
-    for(let step=1;step<=4;step++){
-     const f=step/4,offset=Math.sin(ray*17.7+step*2.8)*.26;
-     const nx=Math.cos(angle)*tip*f+Math.cos(angle+Math.PI/2)*offset;
-     const nz=Math.sin(angle)*tip*f+Math.sin(angle+Math.PI/2)*offset;
-     segments.push(x,.17,z,nx,.17,nz);x=nx;z=nz;
+    for(let step=1;step<=7;step++){
+     const f=step/7,offset=(Math.sin(ray*7.7+step*2.8)*.22+
+      Math.sin(ray*3.2-step*5.1)*.15)*f;
+     const nx=Math.cos(angle)*tip*f-Math.sin(angle)*offset;
+     const nz=Math.sin(angle)*tip*f+Math.cos(angle)*offset;
+     line(x,z,nx,nz);x=nx;z=nz;
+     if(step===2||step===4||step===6){
+      for(const side of [-1,1]){
+       const bend=angle+side*(.53+.16*Math.sin(ray*1.9+step));
+       let bx=nx,bz=nz;
+       for(let j=1;j<=3;j++){
+        const reach=.43*j*(step===6?.76:1),jitter=.13*Math.sin(ray*4.3+j*2.2+step);
+        const tx=nx+Math.cos(bend)*reach-Math.sin(bend)*jitter;
+        const tz=nz+Math.sin(bend)*reach+Math.cos(bend)*jitter;
+        line(bx,bz,tx,tz);bx=tx;bz=tz;
+        if(j===2&&step===4){
+         const spur=bend+side*.85;
+         line(bx,bz,bx+Math.cos(spur)*.38,bz+Math.sin(spur)*.38);
+        }
+       }
+      }
+     }
     }
    }
    fractures=new THREE.LineSegments(
@@ -53,7 +74,7 @@ export class MonsterAttackEffects {
   }
   const entry={root,motion,marker,fringe,wave,native,rubble,fractures,last:0};
   root.userData.weaponVfxSource=native?'00GameDevs':'Temple warning';
-  root.userData.vfxId=motion==='beam'?'pulse-beam':motion==='venom'?'venom-pool':motion;
+  root.userData.vfxId=motion==='beam'?'pulse-beam':motion==='venom'?'venom-pool':motion==='freeze'?'ground-freeze-study':motion;
   this.scene.add(root);
   return entry;
  }
@@ -76,8 +97,8 @@ export class MonsterAttackEffects {
   const view=camera.clone();view.position.set(0,10,23);view.lookAt(0,1,0);view.updateMatrixWorld(true);
   const target=new THREE.WebGLRenderTarget(32,32),before=renderer.getRenderTarget();
   try{
-   for(const motion of ['beam','venom','charge','stomp','swipe']){
-    const count=motion==='stomp'?6:motion==='beam'?4:motion==='venom'?3:2;
+   for(const motion of ['beam','venom','freeze','stomp','swipe']){
+    const count=motion==='stomp'?6:motion==='beam'?4:motion==='venom'?3:motion==='freeze'?2:2;
     for(let i=0;i<count;i++){
      const e=this.make(motion),stage=new THREE.Scene();
      stage.add(e.root);e.native?.group&&(e.native.group.visible=true);
@@ -103,10 +124,10 @@ export class MonsterAttackEffects {
   const {marker,fringe,wave,native}=e,aim=s.aim||s.origin,origin=s.origin;
   const dx=aim[0]-origin[0],dz=aim[2]-origin[2],length=Math.max(.01,Math.hypot(dx,dz));
   const warning=s.phase==='warning',active=s.phase==='active';
-  marker.visible=warning;fringe.visible=warning&&s.motion!=='charge'&&s.motion!=='beam';
+  marker.visible=warning;fringe.visible=warning&&s.motion!=='beam';
   marker.material.opacity=.36+.28*Math.sin(now*.024);
   const r=s.radius||5;
-  if(s.motion==='beam'||s.motion==='charge'){
+  if(s.motion==='beam'){
    const reach=s.motion==='beam'?BEAM_RANGE:length;
    marker.scale.set(r*2,reach,1);
    marker.position.set(origin[0]+dx/length*reach/2,.16,origin[2]+dz/length*reach/2);
@@ -156,10 +177,13 @@ export class MonsterAttackEffects {
   }else{
    native.group.position.set(aim[0],.05,aim[2]);
    native.group.quaternion.identity();
-   native.group.scale.setScalar(Math.max(.35,r/3.4));
+   native.group.scale.setScalar(s.motion==='freeze'?r/2.8:Math.max(.35,r/3.4));
   }
   const dt=e.last?Math.min(.06,Math.max(.001,(now-e.last)/1000)):.016;
   e.last=now;native.update(dt);
+  // Official frost scene rewrites root transforms while advancing.
+  // Reapply the authored world-scale only after the native simulation tick.
+  if(s.motion==='freeze')native.group.scale.setScalar(r/2.8);
   if(s.motion==='beam'){
    // The vendor clamps shader option size to 2. Double *world* thickness
    // instead (after update/endpoints so it never accumulates exponentially).

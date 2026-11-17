@@ -1,8 +1,14 @@
 import {fuseEquipment} from '../reletter/server/fusion-rules.js';
 import {equipmentById} from '../reletter/equipment-catalog.js';
+import {itemAffixes} from '../reletter/combat-traits.js';
 
 export function originalEquipmentGame(profile,world={}){
- const key=profile.key,instances=profile.inventory.filter(id=>equipmentById(id)).map(id=>({id,baseId:id,origin:profile.itemOrigins?.[id]||'monster',sourceLevel:profile.level,obtainedAt:profile.createdAt,...profile.fusion?.[id]?.original}));
+ const key=profile.key,instances=profile.inventory.filter(id=>equipmentById(id)).map(id=>{
+  const record=profile.fusion?.[id],original=record?.original||{};
+  const affixIds=[...new Set([...itemAffixes(original),...itemAffixes(record)])];
+  return {id,baseId:id,origin:profile.itemOrigins?.[id]||'monster',sourceLevel:profile.level,
+   obtainedAt:profile.createdAt,...original,affixIds,affixId:affixIds[0]||null};
+ });
  return {inventories:{[key]:[...profile.inventory]},equipment:{[key]:{...profile.equipment}},weaponInstances:{[key]:instances},garden:world.reletter?.garden,equipmentRevision:0};
 }
 export function fuseOriginal(world,profile,body,rng){
@@ -14,6 +20,11 @@ export function fuseOriginal(world,profile,body,rng){
  return result;
 }
 export function equippedItem(profile,item){
- const record=profile.fusion?.[item.id];if(record?.templeStats)return {...item,...record.templeStats};const raw=record?.original?.stats;if(!raw)return item;
- const original=profile.fusion?.[item.id]?.original||{};return {...item,...raw,affixId:original.affixId,affixIds:[...new Set([...(original.affixIds||[]),original.affixId].filter(Boolean))],damage:raw.damage===undefined?item.damage:raw.damage*10,chargeDamage:raw.chargeDamage===undefined?item.chargeDamage:raw.chargeDamage*10};
+ const record=profile.fusion?.[item.id],original=record?.original||{};
+ const affixIds=[...new Set([...itemAffixes(item),...itemAffixes(original),...itemAffixes(record)])];
+ const named={...item,affixId:affixIds[0]||null,affixIds};
+ if(record?.templeStats)return {...named,...record.templeStats};
+ const raw=original.stats;if(!raw)return named;
+ return {...named,...raw,damage:raw.damage===undefined?item.damage:raw.damage*10,
+  chargeDamage:raw.chargeDamage===undefined?item.chargeDamage:raw.chargeDamage*10};
 }

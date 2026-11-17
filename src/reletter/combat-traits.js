@@ -9,7 +9,7 @@ export const AFFIXES=[
  ['thunderous','雷鳴的','Stun for 0.65s (4s recovery).',{}],
  ['vampiric','嗜血的','Heal 0.35 HP on a hit (2s cooldown).',{}],
  ['renewing','再生的','Hits restore 0.3 HP/s over 5s; refreshes.',{}],
- ['stalwart','堅毅的','Incoming damage -25%.',{defense:.75}],
+ ['stalwart','堅韌的','Incoming damage -25%.',{defense:.75}],
  ['mighty','巨力的','Attack +30%; movement -10%.',{attack:1.3,speed:.9}],
  ['featherlight','輕盈的','Jump +35%; movement +10%.',{jump:1.35,speed:1.1}],
  ['swift','迅捷的','Attack cooldown -30%.',{cooldown:.7}],
