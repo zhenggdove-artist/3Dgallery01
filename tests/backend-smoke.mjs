@@ -46,6 +46,24 @@ if(process.env.TEMPLE_TEST_ADMIN_KEY){
  assert.ok(history.online.some(p=>p.name===guest));
  assert.ok(history.events.some(e=>e.name===guest&&e.event==='online'));
  assert.ok(history.events.some(e=>e.name==='Ely'&&e.event==='online'));
+ // The GM soundtrack upload serves Safari-compatible range reads even
+ // across the 512 KiB SQLite chunk boundary.
+ const soundtrack=Buffer.alloc(540_000);
+ for(let i=0;i<soundtrack.length;i++)soundtrack[i]=i%251;
+ soundtrack[0]=73;soundtrack[1]=68;soundtrack[2]=51; // ID3
+ const deniedMusic=await call('/api/gm/music',soundtrack,token,{raw:true,type:'audio/mpeg',expectedStatus:403});
+ assert.match(deniedMusic.error,/GM only/i);
+ const uploadedMusic=await call('/api/gm/music',soundtrack,gm.token,{raw:true,type:'audio/mpeg'});
+ assert.ok(uploadedMusic.version>0);
+ assert.equal(uploadedMusic.bytes,soundtrack.length);
+ const soundtrackResponse=await fetch(base+'/api/gm/music?v='+uploadedMusic.version,{
+  headers:{Range:'bytes=524276-524300'},signal:AbortSignal.timeout(15000)});
+ assert.equal(soundtrackResponse.status,206);
+ assert.equal(soundtrackResponse.headers.get('Content-Range'),'bytes 524276-524300/540000');
+ assert.equal(soundtrackResponse.headers.get('Content-Type'),'audio/mpeg');
+ assert.deepEqual(Buffer.from(await soundtrackResponse.arrayBuffer()),soundtrack.subarray(524276,524301));
+ const musicWorld=await call('/api/world',undefined,token);
+ assert.equal(musicWorld.world.musicVersion,uploadedMusic.version);
  await call('/api/disconnect',{},gm.token);
  const gmAgain=await call('/api/join',{name:'Ely',color:'#43b59a',memoryCode:process.env.TEMPLE_TEST_ADMIN_KEY});
  const historyAgain=await call('/api/gm/presence',undefined,gmAgain.token);
