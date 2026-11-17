@@ -23,6 +23,7 @@ import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
 import {replenishHearts} from './heart-pickups.js';
+import {AUDIO_KEYS,normaliseAudioMix,DEFAULT_AUDIO_MIX} from '../game-audio.js';
 import {cleanLegacyScene} from './scene-cleanup.js';
 import {samplePanBlastPosition,PAN_BLAST_DETONATION_ADVANCE_MS} from './pan-blast-flight.js';
 
@@ -50,6 +51,7 @@ export function createInitialWorld(now=Date.now()){
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],groundDrops:[],structures:[],plants:[],sceneCleanupVersion:1,
     monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],
+     audioMix:normaliseAudioMix(DEFAULT_AUDIO_MIX),
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
     activity:{coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0}
   };
@@ -64,6 +66,7 @@ export function migrateWorld(raw,now=Date.now()){
   // Old RELETTER farming data must not survive the removal of the Garden game mode.
   if(world.reletter?.garden)delete world.reletter.garden;
   world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];
+   world.audioMix??=normaliseAudioMix(DEFAULT_AUDIO_MIX);
   world.nextGroundDropAt??=now+ECONOMY.groundSpawnMinMs;
   return cleanLegacyScene(world);
 }
@@ -101,7 +104,8 @@ export function worldView(world,actorKey,now=Date.now()){
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),
-    profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
+    audioMix:clone(world.audioMix||DEFAULT_AUDIO_MIX),
+     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000))};
 }
 
@@ -223,6 +227,17 @@ export function applyAction(world,actor,body,context={}){
     case 'unequip':if(!EQUIPPABLE_SLOTS.includes(body.slot))return {error:'Invalid slot'};profile.equipment[body.slot]=null;result={notice:'Unequipped'};break;
     case 'fuse':result=fuse(world,profile,body,rng);break;
     case 'attack':result=attack(world,profile,actor,body,context,now);break;
+     case 'set-audio-level':{
+       if(!profile.admin)return {error:'GM only'};
+       const key=String(body.key||'');
+       if(!['master','music','sfx'].includes(key)&&!AUDIO_KEYS.includes(key))return {error:'Unknown audio channel'};
+       const value=Number(body.volume);
+       if(!Number.isFinite(value)||value<0||value>200)return {error:'Audio level must be 0–200'};
+       const mix=normaliseAudioMix(world.audioMix);
+       if(['master','music','sfx'].includes(key))mix[key]=Math.round(value);
+       else mix.levels[key]=Math.round(value);
+       world.audioMix=mix;result={notice:'Audio levels updated'};break;
+     }
     case 'monster-hit':return {error:'Use a directional weapon attack'};
     case 'build':result=build(world,profile,actor,body,now,rng);break;
     case 'destroy':result=destroy(world,profile,actor,body,now);break;
