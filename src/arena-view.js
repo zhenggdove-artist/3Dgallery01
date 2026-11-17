@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {GrassField} from './grass-field.js';
 import {DisplayPlatforms} from './display-platforms.js';
-import {artworkPosition,artworkLanding} from './shared/artwork-flight.js';
+import {artworkPosition,artworkLanding,artworkRenderFlight} from './shared/artwork-flight.js';
 import {artworkDefinitions} from './shared/artwork-library.js';
 import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork} from './artwork-surface.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
@@ -24,7 +24,7 @@ const tempMatrix=new THREE.Matrix4(),tempPosition=new THREE.Vector3(),tempQuater
 export class TempleArena{
   constructor(scene,renderer){
     this.scene=scene;this.renderer=renderer;this.dracoLoader=new DRACOLoader();this.dracoLoader.setDecoderPath('./vendor/three/examples/jsm/libs/draco/');this.loader=new GLTFLoader().setDRACOLoader(this.dracoLoader);this.clock=0;this.world=null;this.players=[];this.dropMeshes=[];
-    this.artworks=new Map();this.coinMesh=null;this.dropMesh=null;this.dropIds=[];this.dropCoinFlights=[];this.coinFlights=new Map();this.structureGroup=new THREE.Group();this.structureGroup.name='Persistent structures';scene.add(this.structureGroup);this.plantGroup=new THREE.Group();this.plantGroup.name='Permanent message plants';scene.add(this.plantGroup);
+    this.artworks=new Map();this.localArtworkFlights=new Map();this.coinMesh=null;this.dropMesh=null;this.dropIds=[];this.dropCoinFlights=[];this.coinFlights=new Map();this.structureGroup=new THREE.Group();this.structureGroup.name='Persistent structures';scene.add(this.structureGroup);this.plantGroup=new THREE.Group();this.plantGroup.name='Permanent message plants';scene.add(this.plantGroup);
     this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.collapsingShells=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
   }
   async load(progress=()=>{}){
@@ -167,7 +167,7 @@ export class TempleArena{
    // RESET must remove deleted artwork immediately, including cached assets.
    for(const [id,root] of this.artworks){
     if(defaults.has(id)||live.has(id))continue;
-    disposeArtworkRoot(root);this.artworks.delete(id);this.customLoads.delete(id);
+    disposeArtworkRoot(root);this.artworks.delete(id);this.customLoads.delete(id);this.localArtworkFlights.delete(id);
    }
    await Promise.all((records||[]).map(record=>{
     if(this.artworks.has(record.id))return;
@@ -258,7 +258,7 @@ export class TempleArena{
      fly.mesh.scale.setScalar(1.6*(1-t)**1.25);
      if(t>=1){fly.mesh.removeFromParent();this.dropCoinFlights.splice(i,1);}
     }
-    for(const p of artworkDefinitions(this.world)){const root=this.artworks.get(p.id),state=this.world?.artworks?.[p.id];if(!root||!state||root.userData.editing)continue;const layout=this.world?.artworkLayout?.[p.id]||this.defaultLayout[p.id]||{position:p.artPosition,rotation:[0,p.artYaw,0],scale:[1,1,1]};applyArtworkAppearance(root,layout.appearance);if(root.userData.video){const near=camera.position.distanceToSquared(root.position)<900;if(near&&!root.userData.videoPlaying){root.userData.videoPlaying=true;root.userData.video.play().catch(()=>{root.userData.videoPlaying=false;});}else if(!near&&root.userData.videoPlaying){root.userData.video.pause();root.userData.videoPlaying=false;}}const holder=state.holder&&playerRoots.get(state.holder);if(holder){root.visible=true;root.position.copy(holder.position).add(new THREE.Vector3(0,1.6,0));root.rotation.set(0,holder.rotation.y+Math.PI,Math.sin(time*2)*.05);root.scale.fromArray(layout.scale).multiplyScalar(.48);continue;}root.scale.fromArray(layout.scale);if(state.throwEvent&&root.userData.flightId!==state.throwEvent.id){root.userData.flightId=state.throwEvent.id;root.userData.flightLanding=artworkLanding(state.throwEvent,(x,z,y)=>this.groundHeight(x,z,y));}if(state.throwEvent&&Date.now()-state.throwEvent.time<root.userData.flightLanding.time*1000){const age=Math.max(0,(Date.now()-state.throwEvent.time)/1000),origin=state.throwEvent.origin,d=state.throwEvent.direction,power=state.throwEvent.power;root.visible=true;root.position.fromArray(artworkPosition(state.throwEvent,age));root.rotation.set(...layout.rotation);continue;}const available=Date.now()>=(state.availableAt||0);root.visible=available;if(available){root.position.fromArray(layout.position);root.position.y+=Math.sin(time*.72+p.index)*(this.artFloat??.17);root.rotation.set(...layout.rotation);}}
+    for(const p of artworkDefinitions(this.world)){const root=this.artworks.get(p.id),state=this.world?.artworks?.[p.id];if(!root||!state||root.userData.editing)continue;const layout=this.world?.artworkLayout?.[p.id]||this.defaultLayout[p.id]||{position:p.artPosition,rotation:[0,p.artYaw,0],scale:[1,1,1]};applyArtworkAppearance(root,layout.appearance);if(root.userData.video){const near=camera.position.distanceToSquared(root.position)<900;if(near&&!root.userData.videoPlaying){root.userData.videoPlaying=true;root.userData.video.play().catch(()=>{root.userData.videoPlaying=false;});}else if(!near&&root.userData.videoPlaying){root.userData.video.pause();root.userData.videoPlaying=false;}}const now=Date.now(),visual=artworkRenderFlight(state,this.localArtworkFlights.get(p.id),now);if(!visual.local)this.localArtworkFlights.delete(p.id);if(visual.waiting){root.visible=false;continue;}const holder=state.holder&&playerRoots.get(state.holder);if(holder&&!visual.local){root.visible=true;root.position.copy(holder.position).add(new THREE.Vector3(0,1.6,0));root.rotation.set(0,holder.rotation.y+Math.PI,Math.sin(time*2)*.05);root.scale.fromArray(layout.scale).multiplyScalar(.48);continue;}root.scale.fromArray(layout.scale);const flight=visual.event;if(flight&&root.userData.flightId!==flight.id){root.userData.flightId=flight.id;root.userData.flightLanding=artworkLanding(flight,(x,z,y)=>this.groundHeight(x,z,y));}if(flight&&now-flight.time<root.userData.flightLanding.time*1000){const age=Math.max(0,(now-flight.time)/1000);root.visible=true;root.position.fromArray(artworkPosition(flight,age));root.rotation.set(...layout.rotation);continue;}const available=Date.now()>=(state.availableAt||0);root.visible=available;if(available){root.position.fromArray(layout.position);root.position.y+=Math.sin(time*.72+p.index)*(this.artFloat??.17);root.rotation.set(...layout.rotation);}}
     if(this.monster?.visible&&this.world?.monster?.position){
       const before=this.monster.position.clone();
       // Durable Object snapshots arrive much slower than the render loop.

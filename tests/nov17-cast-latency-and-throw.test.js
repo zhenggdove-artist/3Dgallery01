@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import {NumberedWeaponEffects} from '../src/numbered-weapon-effects.js';
 import {WeaponParticleEffects} from '../src/weapon-particle-effects.js';
 import {ArtworkThrow} from '../src/artwork-throw.js';
+import {artworkRenderFlight} from '../src/shared/artwork-flight.js';
 import {itemById} from '../src/shared/catalog.js';
 
 test('repeated original 00GameDevs ultimate recycles the exact native instance',()=>{
@@ -54,11 +55,18 @@ test('A-button throw launches its predicted ballistic flight immediately and can
  assert.equal(thrower.started,null,'release must not wait for a server response');
  assert.equal(state.holder,null,'the object must leave the hand on the same frame');
  assert.ok(state.throwEvent.id.startsWith('local-'));
+ assert.ok(arena.localArtworkFlights.has('art1'));
+ const predicted=arena.localArtworkFlights.get('art1');
+ const authoritative={holder:null,availableAt:predicted.event.time+30000,throwEvent:{...predicted.event,id:'server-event',origin:[3,1.4,4],time:predicted.event.time+300}};
+ const visual=artworkRenderFlight(authoritative,predicted,predicted.event.time+400);
+ assert.equal(visual.event,predicted.event,'delayed authoritative snapshot must not pull the 3D artwork backwards');
+ assert.equal(artworkRenderFlight(authoritative,predicted,predicted.event.time+predicted.landing.time*1000+1).waiting,true,'hide after landing instead of replaying the server launch');
  assert.ok(payload.power>1.39,'full A-button charge reaches maximum throw distance');
  reply(null);
  await waiting;
  assert.equal(state.holder,'player-1','rejecting the throw restores held artwork');
  assert.equal(state.throwEvent,null);
+ assert.equal(arena.localArtworkFlights.size,0,'rejected throw also clears optimistic visual');
 });
 
 test('desktop artwork control uses the on-screen A and does not create an extra USE button',async()=>{

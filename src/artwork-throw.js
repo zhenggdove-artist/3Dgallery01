@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {artworkPosition,artworkLanding} from './shared/artwork-flight.js';
+import {ARTWORK_BLAST_RADIUS} from './shared/art-bomb.js';
 export class ArtworkThrow{
  constructor({scene,controller,holderKey=()=>null,arena,send,bursts,audio}){Object.assign(this,{scene,controller,holderKey,arena,send,bursts,audio});this.started=null;this.pending=new Map();this.seen=new Set();this.lastPreviewAt=0;this.marker=new THREE.Group();this.marker.name='Large red artwork landing marker';
   const red=new THREE.MeshBasicMaterial({color:'#ff2038',transparent:true,opacity:.94,depthTest:false,depthWrite:false,side:THREE.DoubleSide});
@@ -28,7 +29,14 @@ export class ArtworkThrow{
    const predicted={id:'local-'+Date.now()+'-'+Math.random().toString(36).slice(2),platformId,origin:event.origin,direction:event.direction,power:event.power,time:Date.now(),owner:this.holderKey()};
    // The artwork leaves the hand in the SAME frame; only the server awards hits.
    art.holder=null;art.throwEvent=predicted;art.availableAt=predicted.time+12000;
-   rollback=()=>{if(art.throwEvent===predicted)Object.assign(art,previous);};
+   // Preserve the first-frame trajectory through every network/world update.
+   // The confirmed server origin/time may be older than this visible launch.
+   this.arena.localArtworkFlights??=new Map();
+   this.arena.localArtworkFlights.set(platformId,{event:predicted,
+    landing:artworkLanding(predicted,(x,z,y)=>this.arena.groundHeight(x,z,y))});
+   rollback=()=>{if(art.throwEvent===predicted)Object.assign(art,previous);
+    if(this.arena.localArtworkFlights.get(platformId)?.event===predicted)
+     this.arena.localArtworkFlights.delete(platformId);};
   }
   try{
    const result=await this.send('throw-artwork',{direction:event.direction,power:event.power});
@@ -39,7 +47,7 @@ export class ArtworkThrow{
  }
  queue(event){if(this.seen.has(event.id))return;this.seen.add(event.id);if(this.seen.size>128)this.seen.delete(this.seen.values().next().value);this.pending.set(event.id,{event,landing:artworkLanding(event,(x,z,y)=>this.arena.groundHeight(x,z,y))});}
  update(){if(this.started!==null&&performance.now()-this.lastPreviewAt>=65){this.lastPreviewAt=performance.now();const event=this.trajectory(),landing=artworkLanding(event,(x,z,y)=>this.arena.groundHeight(x,z,y));this.marker.position.fromArray(landing.position);this.marker.position.y+=.22;
-  this.marker.rotation.y=0;this.marker.scale.setScalar(1);
+  this.marker.rotation.y=0;this.marker.scale.setScalar(ARTWORK_BLAST_RADIUS/2.12);
   this.marker.visible=this.path.visible=true;
   for(let i=0;i<33;i++)this.trajectoryPoints[i].fromArray(artworkPosition(event,landing.time*i/32));
   for(let i=0;i<32;i++){const a=this.trajectoryPoints[i],b=this.trajectoryPoints[i+1],d=this.segmentDirection.subVectors(b,a),length=d.length();

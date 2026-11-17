@@ -89,9 +89,11 @@ test('raised displays have no side wall: the player can cross an edge and fall n
  assert.equal(controller.root.position.x,3);
  assert.equal(controller.grounded,false,'walking beyond the disc enters gravity');
 });
-test('mobile roster is 40% scale without a black panel, chat is shifted above joystick',()=>{
+test('roster is enlarged to 52% with 10% clash fallback and no black panel',()=>{
  const css=readFileSync(new URL('../fidelity-ui.css',import.meta.url),'utf8');
- assert.match(css,/#player-roster\{[^}]*transform:scale\(\.4\)[^}]*transform-origin:top left/);
+ assert.match(css,/#player-roster\{[^}]*transform:scale\(var\(--roster-scale,\.52\)\)[^}]*transform-origin:top left/);
+ const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
+ assert.match(ui, /--roster-scale','\.468'/);
  assert.match(css,/\.roster-player\{background:transparent;border:0/);
  assert.doesNotMatch(css,/\.roster-player\{background:#1e102ab8/);
  assert.match(css,/#chat-hud\{bottom:max\(145px,env\(safe-area-inset-bottom\) \+ 131px\)/);

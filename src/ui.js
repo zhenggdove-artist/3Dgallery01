@@ -16,7 +16,7 @@ export class TempleUI extends EventTarget{
   constructor(){
     super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
-    bindBagDrag(this);bindChatLayout();
+    bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
     this.bind();$('gm-help').onclick=()=>this.openPanel('help');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag')e.dataTransfer.setData('text/plain',cell.dataset.bagItem);});this.content.addEventListener('dragover',e=>{if(this.panelName==='bag')e.preventDefault();});this.content.addEventListener('drop',e=>{if(this.panelName!=='bag')return;e.preventDefault();const sourceId=e.dataTransfer.getData('text/plain'),targetId=e.target.closest('[data-bag-item]')?.dataset.bagItem;if(this.bagFusionMode&&sourceId&&targetId&&sourceId!==targetId)this.emit('server-action',{action:'fuse',sourceId,targetId,requestId:crypto.randomUUID()});});
     $('function-toggle').onclick=()=>{const open=this.hud.classList.toggle('functions-open');$('function-toggle').setAttribute('aria-expanded',String(open));};
     $('chat-form').onsubmit=e=>{e.preventDefault();const input=$('chat-input'),text=input.value.trim();if(text)this.emit('chat',text);input.value='';input.blur();};
@@ -61,6 +61,25 @@ export class TempleUI extends EventTarget{
       const fill=document.createElement('i');fill.style.width=(p.role==='spectator'?0:Math.min(100,hp/max*100))+'%';
       if(hp/max<.25)fill.className='critical';track.append(fill);row.append(label,track);box.append(row);
     }
+    this.scheduleRosterLayout();
+  }
+  scheduleRosterLayout(){
+    cancelAnimationFrame(this.rosterLayoutFrame||0);
+    this.rosterLayoutFrame=requestAnimationFrame(()=>{
+      const roster=$('player-roster');if(!roster?.childElementCount||this.hud?.hidden)return;
+      // Previous scale was .4: enlarge 1.3x, shrink an additional 10%
+      // only when viewport bounds or other HUD elements would be covered.
+      roster.style.setProperty('--roster-scale','.52');
+      const box=roster.getBoundingClientRect();
+      const overlap=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
+      const ids=['wallet','identity','chat-hud','dock','mobile-stick','map-cluster','gm-help'];
+      const obstructed=ids.some(id=>{
+        const node=$(id);if(!node||node.hidden||getComputedStyle(node).display==='none')return false;
+        return overlap(box,node.getBoundingClientRect());
+      });
+      if(obstructed||box.left<6||box.right>innerWidth-6||box.top<6||box.bottom>innerHeight-6)
+        roster.style.setProperty('--roster-scale','.468');
+    });
   }
   showKillEvents(events=[]){
     if(!this.self)return;
