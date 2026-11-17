@@ -324,7 +324,7 @@ export class WeaponParticleEffects{
   // Compile the actual GPU point-sprite shader before a player can cast.
   const sample=this.make('prism',{id:'shader-warmup',family:'water'},{amount:1200,range:12});
   const stage=new THREE.Scene();stage.add(sample.root);
-  try{await renderer.compileAsync(stage,camera);}
+  try{await renderer.compileAsync(stage,camera);const target=new THREE.WebGLRenderTarget(32,32),prior=renderer.getRenderTarget();try{renderer.setRenderTarget(target);renderer.render(stage,camera);}finally{renderer.setRenderTarget(prior);target.dispose();}}
   finally{sample.root.removeFromParent();sample.geometry.dispose();sample.material.dispose();}
  }
  make(recipe,item,{duration=2.1,range=20,amount=2300,charge=1}={}){
