@@ -75,7 +75,8 @@ export function ultimateWorldScale(number,event,options={}){
  const radius=Math.max(.1,Number(event.area?.radius)||Number(event.radius)||.1);
  if(number===68)return .5*Math.max(7.5,(radius/.5)/Math.max(.2,Number(options.size)||1));
  if(number===26)return Math.max(2*(Number(options.quality)||1),Math.min(12,radius/2));
- if(number===48)return .2*Math.max(2,Math.min(12,(radius/.2)/Math.max(.25,(Number(options.size)||1)*.8)));
+ // The widened whip warning must not enlarge the original #48 animation.
+ if(number===48)return .2*Math.max(2,Math.min(12,(radius/1.5/.2)/Math.max(.25,(Number(options.size)||1)*.8)));
  if(number===53)return Math.max(2,Math.min(12,radius/Math.max(.25,(Number(options.size)||1)*.8)));
  return null; // directional originals already follow the server-approved ray
 }
@@ -139,9 +140,14 @@ export class NumberedWeaponEffects {
     const unique=new Map(Object.values(REQUESTED_VFX).map(spec=>[spec.asset,spec]));
     // The 3-crown and overlapping travelling-wave skills need MULTIPLE real
     // native instances on their first cast. Create these before entering play.
-    const copiesByNumber={31:3,33:4,20:2,43:2,70:2};
+    // Reserve simultaneous native pan/whip bursts and their GPU buffers up
+    // front; no geometric or particle simplification occurs at cast time.
+    const copiesByNumber={31:3,33:4,20:2,43:2,70:2,68:3,48:3};
     let warmed=0;
-    for(const spec of unique.values()){
+    const target=new THREE.WebGLRenderTarget(32,32,{depthBuffer:true});
+    const view=camera.clone();view.position.set(10,8,16);view.lookAt(0,1,0);
+    const previousTarget=renderer.getRenderTarget();
+    try{for(const spec of unique.values()){
       const copies=copiesByNumber[spec.number]||1;
       for(let i=0;i<copies;i++){
         let fx=null;
@@ -149,7 +155,11 @@ export class NumberedWeaponEffects {
           fx=this.create(spec,{size:1,detail:1,density:.5});
           const stage=new THREE.Scene();stage.add(fx.group);fx.group.visible=true;
           fx.update(.016);
-          await renderer.compileAsync(stage,camera);
+          await renderer.compileAsync(stage,view);
+          // Force one real GPU draw while the loading overlay is visible;
+          // shader compilation alone does not upload first-use buffers.
+          renderer.setRenderTarget(target);
+          try{renderer.render(stage,view);}finally{renderer.setRenderTarget(previousTarget);}
           this.recycle(spec,fx);fx=null;warmed++;
         }catch(error){
           if(fx){fx.group.removeFromParent();fx.dispose();}
@@ -158,6 +168,7 @@ export class NumberedWeaponEffects {
         }
       }
     }
+    }finally{renderer.setRenderTarget(previousTarget);target.dispose();}
     return warmed;
   }
   play(event,item,root) {
@@ -186,7 +197,8 @@ export class NumberedWeaponEffects {
   if(event.ultimate&&!event.channel&&Number.isFinite(event.area?.radius)&&![26,29,31,38,70].includes(spec.number)){
    // Reconstruct the old vendor size first. Applying only the matching
    // outer world scale ensures identical proportional shrink at all tiers.
-   const originalRadius=event.area.radius/(spec.number===68?.5:spec.number===48?.2:1);
+   const cosmeticRadius=spec.number===48?event.area.radius/1.5:event.area.radius;
+   const originalRadius=cosmeticRadius/(spec.number===68?.5:spec.number===48?.2:1);
    size=Math.max(.25,Math.min(3.5,originalRadius/4.5));
   }
   const options={size,quality,detail:event.fusionEcho?.55:1,density:event.fusionEcho?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
