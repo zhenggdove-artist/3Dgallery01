@@ -67,6 +67,16 @@ const channelColors=Object.freeze({
  'anime-flame-shield':'#ff761f','ice-lance-study':'#d4e8ed',
  'energy-vortex':'#66d7ff','radiant-beam':'#ffe3a0','thorn-crown':'#88d49a'
 });
+// #68 size is reduced with AoE radius: scaling its world root by 7.5x
+// after the .6x radius reduction produces >=4.5x the old explosion.
+export function ultimateWorldScale(number,event,options={}){
+ if(!event?.ultimate||event.channel)return null;
+ const radius=Math.max(.1,Number(event.area?.radius)||Number(event.radius)||.1);
+ if(number===68)return Math.max(7.5,radius/Math.max(.2,Number(options.size)||1));
+ if(number===26)return Math.max(2*(Number(options.quality)||1),Math.min(12,radius/2));
+ if(number===53||number===48)return Math.max(2,Math.min(12,radius/Math.max(.25,(Number(options.size)||1)*.8)));
+ return null; // directional originals already follow the server-approved ray
+}
 export function requestedEffect(item,event){
  if(!item||!event)return null;
  // Preserve signature ultimates for other exotic weapons.
@@ -168,6 +178,7 @@ export class NumberedWeaponEffects {
   const target=areaLocked?vector(event.area.visualCenter,origin):origin.clone();
   const entry={
    spec,fx,group:fx.group,root,item,direction,origin,target,options,
+   worldScale:ultimateWorldScale(spec.number,event,options),
    range:Math.max(.5,Number(event.range)||12),
    key,channel:!!event.channel,areaLocked,age:0,
    duration:event.channel?Infinity:(spec.number===31?2.5:spec.number===20?4.5:spec.number===33?3.3:spec.number===43?2.25:spec.number===48?6.5:spec.number===53?7:5),
@@ -181,8 +192,9 @@ export class NumberedWeaponEffects {
   this.active.push(entry);
   if(this.active.length>24)this.remove(this.active[0]);
   this.align(entry);
+  if(entry.worldScale!=null)fx.group.scale.setScalar(entry.worldScale);
   // The vendor clamps 'size' at 2. Double the physical world-space group.
-  if(spec.number===26)fx.group.scale.setScalar(2*quality);
+  if(spec.number===26)fx.group.scale.setScalar(entry.worldScale||2*quality);
   if(spec.number===31){
    // Three independently authored ORIGINAL #31 crown instances, not a
    // synthetic thorn mesh; aligned vertically and moved as one projectile.
@@ -313,8 +325,10 @@ export class NumberedWeaponEffects {
    const appearing=Math.min(1,wave.age/.28);
    const leaving=Math.max(0,Math.min(1,(CLAM_WAVE_LIFETIME-wave.age)/.55));
    const envelope=Math.max(.001,Math.min(appearing,leaving));
-   wave.fx.group.scale.setScalar(envelope);
+   const lateral=Math.max(1,Math.min(6,entry.range/Math.max(6,entry.options.size*5)));
    wave.fx.update(dt);
+   // The native wave may reset scale inside its update.
+   wave.fx.group.scale.set(lateral*envelope,envelope,envelope);
    if(wave.age>=CLAM_WAVE_LIFETIME||wave.fx.finished){
     entry.waves.splice(entry.waves.indexOf(wave),1);
     this.disposeWave(wave);
@@ -427,7 +441,7 @@ export class NumberedWeaponEffects {
     e.stopping=true;e.fx.stop();
    }
    e.fx.update(dt);
-   if(e.spec.number===26)e.fx.group.scale.setScalar(2*Math.max(.25,Math.min(4,Number(e.options.quality)||1)));
+   if(e.worldScale!=null)e.fx.group.scale.setScalar(e.worldScale);
    if((!e.key&&e.fx.finished)||e.age>=e.duration){
     this.remove(e);continue;
    }

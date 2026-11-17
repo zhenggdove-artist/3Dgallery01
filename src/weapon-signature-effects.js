@@ -184,7 +184,9 @@ export class WeaponSignatureEffects {
   });
  }
  thorns(event){
-  const scale=event.qualityScale||1,center=vec(event.area?.center||event.impactPoint||event.origin);
+   const quality=event.qualityScale||1;
+   const scale=Math.max(quality,(Number(event.area?.radius)||Number(event.radius)||3.6)/1.95);
+   const center=vec(event.area?.center||event.impactPoint||event.origin);
   center.y=Math.max(.05,center.y);
   const group=new THREE.Group();group.name='Three stacked solid thorn-vine tiers';
   const leaves=[];

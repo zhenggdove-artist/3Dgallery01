@@ -372,7 +372,7 @@ export class WeaponParticleEffects{
     entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),direction.normalize());
     if(chosen!=='rainbow')entry.root.position.y=Math.max(.7,entry.root.position.y);
     if(elementalJet){
-     if(data.channel&&chosen==='tidal'){
+     if((data.channel||charged)&&['tidal','inferno','singularity'].includes(chosen)){
       // Local authored tidal jet reaches ~4.9m to either side at full
       // charge. Scale only its lateral axes to the server's actual tube
       // radius, preserving 100% of the real forward travel distance.
@@ -382,7 +382,13 @@ export class WeaponParticleEffects{
      }else entry.root.scale.setScalar(data.channel?1:charged?1.7:1.35);
     }
   }
-  if(chosen==='flies'&&Array.isArray(data.impactPoint)&&data.impactPoint.length===3){
+  if(charged&&!elementalJet&&!['rainbow-scatter','rainbow','fissure'].includes(chosen)){
+    const targetRadius=Math.max(.35,Number(data.area?.radius)||Number(data.radius)||.35);
+    const localRadius=chosen==='food'||chosen==='flies'?1.5:4.9;
+    const lateral=Math.max(1,Math.min(10,targetRadius/localRadius));
+    entry.root.scale.set(lateral,lateral,1); // keep the exact Z flight range
+   }
+   if(chosen==='flies'&&Array.isArray(data.impactPoint)&&data.impactPoint.length===3){
     // Only for the first metre or so of its apparent pursuit: steer the cloud
     // toward the moving monster that the server actually reported as hit.
     const impact=new THREE.Vector3(...data.impactPoint);
