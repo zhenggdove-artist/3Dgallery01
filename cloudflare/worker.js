@@ -189,7 +189,7 @@ export class TempleRoom extends DurableObject{
       meta.version,first,last).toArray();
     if(records.length!==last-first+1)return json({error:'Soundtrack storage incomplete'},503);
     for(const record of records){
-      const data=record.data,base=record.part*MUSIC_CHUNK_BYTES;
+      const data=record.data instanceof Uint8Array?record.data:new Uint8Array(record.data),base=record.part*MUSIC_CHUNK_BYTES;
       const a=Math.max(start,base),b=Math.min(end+1,base+data.length);
       out.set(data.subarray(a-base,b-base),a-start);
     }
