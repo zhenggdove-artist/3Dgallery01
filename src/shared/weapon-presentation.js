@@ -28,8 +28,9 @@ const affixDescriptions={
 export function weaponPresentation(item,record={}){
  const origin=record?.original||{},stats=record?.templeStats||origin.stats||{},count=Number.isFinite(origin.fusionCount)?origin.fusionCount:(Number.isFinite(record.layer)?record.layer:0);
  const level=Math.max(0,Math.min(99,Math.floor(count)));
- const title=item.name+(level?' +'+level:'');
- const affixIds=[...new Set([...(origin.affixIds||[]),origin.affixId].filter(Boolean))];
+ const affixIds=[...new Set([...(origin.affixIds||[]),origin.affixId,...(record?.affixIds||[]),record?.affixId].filter(Boolean))];
+ const prefixes=affixIds.map(id=>affixById(id)?.name.replace(/的$/,'')).filter(Boolean);
+ const title=(prefixes.length?prefixes.join('')+'的 ':'')+item.name+(level?' +'+level:'');
  const traits=[];
  for(const id of affixIds){const a=affixById(id);if(a)traits.push({name:a.name,details:affixDescriptions[id]||a.description});}
  if(item.slot==='weapon'){
