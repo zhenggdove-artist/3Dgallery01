@@ -17,14 +17,14 @@ test('directional hits emit original critical damage events; direct-hit bypass i
  const event=worldView(w,p.key,5400).damageEvents[0];assert.equal(event.kind,'critical');assert.ok(event.amount>0);assert.equal(event.target,'enemy');
  const hp=w.monster.hp;assert.ok(applyAction(w,actor,{action:'monster-hit'},{now:8000}).error);assert.equal(w.monster.hp,hp);
 });
-test('Nangan cast warns, expands on ground, hits once and can be jumped',()=>{
- const monster={position:[0,0,0],skills:[],nextAttackAt:0},targets=[{key:'ground',position:[1.1,0,0]},{key:'air',position:[1.1,2,0]}],hits=[];
+test('peripheral monster warns before a faster grounded swipe and never hits jumping targets',()=>{
+ const monster={position:[0,0,0],skills:[],nextAttackAt:0,damage:10},targets=[
+ {key:'ground',position:[1.1,0,0]},{key:'air',position:[1.1,5,0]}],hits=[];
  const context={move(){},hit(t){hits.push(t.key);}};
  advanceIslandEnemy(monster,targets,1000,context);
- assert.equal(monster.skills[0].phase,'warning');assert.deepEqual(hits,[]);
- advanceIslandEnemy(monster,targets,2199,context);assert.deepEqual(hits,[]);
- advanceIslandEnemy(monster,targets,2200,context);assert.deepEqual(hits,[]);
- advanceIslandEnemy(monster,targets,2800,context);assert.deepEqual(hits,['ground']);
- advanceIslandEnemy(monster,targets,2850,context);assert.deepEqual(hits,['ground']);
+ assert.equal(monster.skills[0].phase,'warning');assert.equal(monster.skills[0].motion,'swipe');
+ advanceIslandEnemy(monster,targets,1450,context);assert.deepEqual(hits,[]);
+ advanceIslandEnemy(monster,targets,1500,context);assert.deepEqual(hits,['ground']);
+ advanceIslandEnemy(monster,targets,1550,context);assert.deepEqual(hits,['ground']);
  assert.ok(!ISLAND_ENEMIES.includes('foreman'));
 });
