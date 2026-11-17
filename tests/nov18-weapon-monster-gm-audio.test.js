@@ -49,8 +49,9 @@ test('outer monsters cycle short melee, stomp and poison, with 5 HP/s venom tick
  advanceIslandEnemy(m,[target],3000,opt);
  assert.ok(m.skills.some(s=>s.motion==='stomp'&&s.phase==='warning'));
  advanceIslandEnemy(m,[target],4100,opt);
- assert.ok(strikes.some(([type])=>type==='stomp'));
- advanceIslandEnemy(m,[target],4700,opt);
+ assert.equal(strikes.filter(([type])=>type==='stomp').length,0,'no stomp damage while ascending');
+ advanceIslandEnemy(m,[target],5300,opt);
+ assert.ok(strikes.some(([type])=>type==='stomp'),'stomp applies damage after descent');
  advanceIslandEnemy(m,[target],5700,opt);
  assert.ok(m.skills.some(s=>s.motion==='venom'&&s.phase==='warning'));
  advanceIslandEnemy(m,[target],6600,opt);
@@ -80,7 +81,7 @@ test('ground slam stuns grounded non-GM fighters for exactly one second',()=>{
  const profile=ensureProfile(world,actor.key,actor.name,'#aabbcc',now);
  world.monster={active:true,id:'m',position:[75,0,24],skills:[{
    id:'slam',motion:'stomp',phase:'active',origin:[75,0,24],aim:[75,0,25],
-   start:now-100,end:now+300,hit:[],lastTick:{},damage:8
+   start:now-1200,end:now+300,hit:[],lastTick:{},damage:8
  }],nextAttackAt:now+3000,hp:100,maxHp:100};
  tickWorld(world,{now,activeFighters:0,actors:[actor],rng:()=>.5});
  assert.equal(profile.effects?.stun?.until,now+1000);
