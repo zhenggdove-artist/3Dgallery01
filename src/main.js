@@ -236,6 +236,13 @@ ui.addEventListener('chat',async event=>{const text=String(event.detail||'').tri
 ui.addEventListener('plant',event=>writer.submit(event.detail));
 ui.addEventListener('save-code',async()=>{try{const data=await network.createSaveCode();self.saveCode=data.code;ui.self=self;ui.showSaveCode(data.code);ui.toast('存檔代碼已產生 · 請保存');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('gm-audio-change',event=>{if(self?.profile?.admin)void sendAction('set-audio-level',event.detail);});
+ ui.addEventListener('gm-music-upload',async event=>{
+  if(!self?.profile?.admin)return;
+  const file=event.detail;if(!file||file.size>8_000_000)return ui.toast('MP3 must be 8 MB or smaller');
+  try{const result=await fetch(network.base+'/api/gm/music',{method:'POST',headers:{Authorization:'Bearer '+network.token,'Content-Type':'audio/mpeg'},body:file});
+   const data=await result.json();if(!result.ok)throw Error(data.error||'Music upload failed');ui.toast('GM music uploaded and synchronized');}
+  catch(error){ui.toast(error.message||'Music upload failed');}
+ });
  ui.addEventListener('gm-presence-request',async()=>{if(!self?.profile?.admin)return;try{ui.setGmPresence(await network.gmPresence());}catch(error){ui.setGmPresenceError(error.message);}});
 ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
@@ -272,6 +279,7 @@ function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root|
 const heardMonsterSkills=new Set();
  function syncWorld(){if(!world)return;
   audio.applyMix(world.audioMix);
+  if(world.audioMix?.musicVersion)audio.setMusicUrl(network.base+'/api/gm/music?v='+world.audioMix.musicVersion);
   for(const mob of [world.monster,...(world.monsters||[])])for(const skill of mob?.skills||[]){
    if(skill.phase!=='active')continue;
    const key=mob.id+':'+skill.id;if(heardMonsterSkills.has(key))continue;
