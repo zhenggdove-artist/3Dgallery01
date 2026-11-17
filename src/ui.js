@@ -14,10 +14,10 @@ const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(
 
 export class TempleUI extends EventTarget{
   constructor(){
-    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;
+    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
     bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
-    this.bind();$('gm-help').onclick=()=>this.openPanel('help');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag')e.dataTransfer.setData('text/plain',cell.dataset.bagItem);});this.content.addEventListener('dragover',e=>{if(this.panelName==='bag')e.preventDefault();});this.content.addEventListener('drop',e=>{if(this.panelName!=='bag')return;e.preventDefault();const sourceId=e.dataTransfer.getData('text/plain'),targetId=e.target.closest('[data-bag-item]')?.dataset.bagItem;if(this.bagFusionMode&&sourceId&&targetId&&sourceId!==targetId)this.emit('server-action',{action:'fuse',sourceId,targetId,requestId:crypto.randomUUID()});});
+    this.bind();$('gm-help').onclick=()=>this.openPanel('help');$('gm-menu').onclick=()=>this.openPanel('gm');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag')e.dataTransfer.setData('text/plain',cell.dataset.bagItem);});this.content.addEventListener('dragover',e=>{if(this.panelName==='bag')e.preventDefault();});this.content.addEventListener('drop',e=>{if(this.panelName!=='bag')return;e.preventDefault();const sourceId=e.dataTransfer.getData('text/plain'),targetId=e.target.closest('[data-bag-item]')?.dataset.bagItem;if(this.bagFusionMode&&sourceId&&targetId&&sourceId!==targetId)this.emit('server-action',{action:'fuse',sourceId,targetId,requestId:crypto.randomUUID()});});
     $('function-toggle').onclick=()=>{const open=this.hud.classList.toggle('functions-open');$('function-toggle').setAttribute('aria-expanded',String(open));};
     // A single IME Return commits and sends the completed text.
     const chatInput=$('chat-input');let composing=false,imeEnter=false;
@@ -37,6 +37,7 @@ export class TempleUI extends EventTarget{
     $('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.dataset.action)this.emit(button.dataset.action);});
     $('build-confirm').onclick=()=>this.emit('build-confirm');$('build-rotate').onclick=()=>this.emit('build-rotate');$('build-cancel').onclick=()=>this.emit('build-cancel');
     this.content.addEventListener('click',event=>this.panelClick(event));this.content.addEventListener('submit',event=>this.panelSubmit(event));
+    this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');});
     this.content.addEventListener('click',event=>{const b=event.target.closest('button');if(b?.dataset.unequip)this.emit('server-action',{action:'unequip',slot:b.dataset.unequip});if(b?.dataset.use)this.emit('use-item',b.dataset.use);});
     this.content.addEventListener('click',event=>{const b=event.target.closest('[data-original]');if(!b)return;this.emit('original-action',{action:b.dataset.original,id:b.dataset.id,hole:b.dataset.hole,item:b.dataset.item,pond:b.dataset.pond});});
     addEventListener('keydown',event=>{if(event.code==='Escape'&&this.panelName){event.preventDefault();this.closePanel();return;}if(/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName))return;const code=event.code;if(this.buildKind){if(code==='KeyE'){event.preventDefault();this.emit('build-confirm');}if(code==='KeyR')this.emit('build-rotate');if(code==='Escape')this.emit('build-cancel');return;}if(code==='Tab'&&this.self?.role==='spectator'){event.preventDefault();this.emit('spectator-cycle');return;}if(code==='KeyJ')this.emit('attack');if(code==='KeyB')this.openPanel('bag');if(code==='KeyI')this.openPanel('shop');if(code==='KeyV')this.openPanel('build');if(code==='KeyC')this.openPanel('social');if(code==='Escape')this.closePanel();if(code==='KeyY'&&event.shiftKey){event.preventDefault();this.openPanel('editor');}});
@@ -45,8 +46,8 @@ export class TempleUI extends EventTarget{
   ready(){document.body.classList.add('ready');document.body.classList.remove('booting');}
   joinBusy(value){$('enter-button').disabled=value;$('enter-button').textContent=value?'Connecting…':'Enter ↵';}
   joinError(message){$('entry-error').textContent=message;this.joinBusy(false);}
-  enter(data){document.activeElement?.blur();this.self=data.self;this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;$('memory-code').value='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;this.refreshHUD();this.joinBusy(false);}
-  setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;this.refreshHUD();if(this.panelName)this.renderPanel();}
+  enter(data){document.activeElement?.blur();this.self=data.self;this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;$('memory-code').value='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;$('gm-menu').hidden=!data.self.profile?.admin;this.refreshHUD();this.joinBusy(false);}
+  setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;$('gm-menu').hidden=!this.self.profile?.admin;this.refreshHUD();if(this.panelName)this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
   setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop'].includes(this.panelName)&&this.panelSignature!==JSON.stringify([world.profile.inventory,world.profile.equipment,world.profile.wallet,world.profile.fusion])&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
   refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);$('weapon').textContent=(itemById(profile.equipment?.weapon)?.name||'UNARMED').toUpperCase();}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();const monster=this.world?.monster,visible=false;$('monster-hud').hidden=!visible;if(visible){$('monster-name').textContent=`${String(monster.variant).toUpperCase()} · GENERATION ${monster.generation}`;$('monster-hp').max=monster.maxHp;$('monster-hp').value=monster.hp;}}
@@ -79,7 +80,7 @@ export class TempleUI extends EventTarget{
       roster.style.setProperty('--roster-scale','.52');
       const box=roster.getBoundingClientRect();
       const overlap=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
-      const ids=['wallet','identity','chat-hud','dock','mobile-stick','map-cluster','gm-help'];
+      const ids=['wallet','identity','chat-hud','dock','mobile-stick','map-cluster','gm-help','gm-menu'];
       const obstructed=ids.some(id=>{
         const node=$(id);if(!node||node.hidden||getComputedStyle(node).display==='none')return false;
         return overlap(box,node.getBoundingClientRect());
@@ -114,10 +115,45 @@ export class TempleUI extends EventTarget{
     this.fusionTimer=setTimeout(()=>{box.remove();if(this.fusionIndicator===box)this.fusionIndicator=null;},1020);
   }
   death(until,killer=''){if(this.deathUntil===until&&this.deathKiller===killer)return;this.deathUntil=until;this.deathKiller=killer;clearTimeout(this.deathTimer);const overlay=$('death');$('death-killer').textContent=killer?'KILLED BY '+killer:'';if(!until||until<=Date.now()){overlay.hidden=true;return;}overlay.hidden=false;const update=()=>{const left=Math.max(0,Math.ceil((until-Date.now())/1000));$('respawn-count').textContent=left;if(left)this.deathTimer=setTimeout(update,200);else overlay.hidden=true;};update();}
-  openPanel(name,fromJourney=false){if(!this.self)return;if(name==='social'&&!fromJourney){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});}
+  openPanel(name,fromJourney=false){if(!this.self)return;if(name==='gm'&&!this.self.profile?.admin)return;if(name==='social'&&!fromJourney){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});if(name==='gm')this.requestGmPresence();}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;document.body.classList.remove('panel-open');this.panelName='';this.emit('panel',{open:false});}
-  renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
+  renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
+    if(this.panelName==='gm'){this.renderGm();return;}
     if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + D：圓盤刪除模式（點選變藍、DELETE 刪除、ESC 離開）<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(this.panelName==='shop')this.renderShop(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<hr><h3>建立漂浮圓盤</h3><form data-form="gm-platform">${['x','y','z'].map(k=>`<label>${k.toUpperCase()}<input name="${k}" type="number" value="${k==='y'?2:0}" step=".1" required></label>`).join('')}<label>半徑<input name="radius" type="number" value="2.5" min=".6" max="8" step=".1" required></label><button>建立並儲存圓盤</button></form><hr><h3>上傳藝術品</h3><form data-form="upload-artwork"><p>PNG／JPEG／WebP、MP4／WebM、GLB／glTF／FBX。模型貼圖與 BIN 檔請一起選取。轉換後上限 32 MB、50 萬三角面、200 個網格；保留圖片透明度，模型會打包成完整 GLB。</p><label>作品名稱<input name="title" type="text" maxlength="100" required placeholder="輸入作品名稱"></label><input name="artwork" type="file" accept="${ART_ACCEPT}" multiple required><button class="panel-button" data-upload-submit>驗證並發布</button><p data-upload-status role="status"></p></form>`);}
+  }
+  requestGmPresence(){
+    if(!this.self?.profile?.admin)return;
+    this.gmPresenceError='';this.gmPresenceLoading=true;
+    if(this.panelName==='gm')this.renderGm();
+    this.emit('gm-presence-request');
+  }
+  setGmPresence(data){
+    if(!this.self?.profile?.admin)return;
+    this.gmPresenceData={online:Array.isArray(data?.online)?data.online:[],events:Array.isArray(data?.events)?data.events:[]};
+    this.gmPresenceLoading=false;this.gmPresenceError='';
+    if(this.panelName==='gm')this.renderGm();
+  }
+  setGmPresenceError(message){
+    this.gmPresenceLoading=false;this.gmPresenceError=String(message||'無法讀取上下線紀錄');
+    if(this.panelName==='gm')this.renderGm();
+  }
+  renderGm(){
+    if(!this.self?.profile?.admin){this.content.textContent='GM only';return;}
+    const data=this.gmPresenceData,online=data?.online||this.players||[],events=data?.events||[];
+    const date=time=>{const ms=Number(time);return Number.isFinite(ms)?new Date(ms).toLocaleString('zh-TW',{hour12:false}):'—';};
+    this.content.innerHTML=`<section class="gm-admin">
+      <h3>GM 功能</h3><div class="gm-tools">
+        <button type="button" data-gm-action="editor">作品與圓盤編輯</button>
+        <button type="button" data-gm-action="help">編輯快捷鍵</button>
+        <button type="button" data-gm-action="refresh">${this.gmPresenceLoading?'讀取中…':'重新整理紀錄'}</button>
+      </div>
+      <h3>目前在線（${online.length}）</h3>
+      <div class="gm-presence-live">${online.map(p=>`<span>${escape(p.name)} · ${p.role==='fighter'?'玩家':'觀眾'}</span>`).join('')||'<small>目前沒有在線玩家</small>'}</div>
+      <h3>玩家上下線紀錄</h3>
+      <p>以伺服器時間記錄登入及離線，顯示最近 200 筆；斷線重連的 45 秒寬限期不視為離線。</p>
+      ${this.gmPresenceError?`<p role="alert">${escape(this.gmPresenceError)}</p>`:''}
+      <div class="gm-presence-list" role="log">${events.map(e=>`<div class="gm-presence-row"><strong>${escape(e.name)} · ${e.event==='online'?'上線':'下線'} · ${e.role==='fighter'?'玩家':'觀眾'}</strong><time>${escape(date(e.time))}</time></div>`).join('')||(this.gmPresenceLoading?'<p>正在取得紀錄…</p>':'<p>目前沒有可顯示的上下線紀錄。</p>')}</div>
+    </section>`;
   }
   renderSave(){const code=this.saveCode||this.self?.saveCode||'';this.content.innerHTML=`<h3>MEMORY CODE</h3><p>將目前的等級、裝備、背包與遊戲進度儲存至伺服器。重新進入遊戲時，在 Memorycode 欄位輸入代碼恢復。</p><label for="save-code-output">存檔代碼<input id="save-code-output" readonly autocomplete="off" spellcheck="false" class="panel-input" value="${escape(code)}" placeholder="尚未產生代碼"></label><button type="button" class="panel-button" data-save-code>產生／重新取得代碼</button><button type="button" class="panel-button" data-copy-save-code ${code?'':'disabled'}>複製存檔代碼</button><p>請妥善保管代碼。擁有代碼的人可能存取你的存檔。</p>`;}
   showSaveCode(code){this.saveCode=String(code||'');this.openPanel('save');this.content.querySelector('#save-code-output')?.select();}

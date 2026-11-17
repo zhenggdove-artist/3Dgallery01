@@ -61,9 +61,9 @@ try{
   'EQUIP must render an actual 3D A-pose model, not blank alt-text: '+JSON.stringify(equipPixels));
  await page.screenshot({path:output+'/equip-3d-paper-doll.png'});
  for(const type of ['near','mid','far'])assert.equal(await page.locator('[data-category="'+type+'"]').count(),1,type);
- await page.locator('[data-category="near"]').click();
+ await page.locator('[data-category="mid"]').click();
  await page.waitForTimeout(400);
- assert.ok(await page.locator('#bag-items [data-bag-item]').count()>0);
+ assert.ok(await page.locator('#bag-items [data-bag-item="white-cat"]').count()>0,'The starter SMG must appear in mid-range weapons');
  await page.screenshot({path:output+'/weapons.png'});
  await page.locator('#panel-close').click();
 

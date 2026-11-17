@@ -27,6 +27,7 @@ export class TempleRoom extends DurableObject{
       CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, profile_key TEXT NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL, role TEXT NOT NULL, seat INTEGER NOT NULL, expires INTEGER NOT NULL, state TEXT, save_code TEXT, last_code_at INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS save_codes (code TEXT PRIMARY KEY, profile_key TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, last_used INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, profile_key TEXT NOT NULL, name TEXT NOT NULL, text TEXT NOT NULL, time INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS presence_events (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, role TEXT NOT NULL, event TEXT NOT NULL, time INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS request_receipts (session_id TEXT NOT NULL, request_id TEXT NOT NULL, response TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(session_id,request_id));
       CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS plant_media (id TEXT PRIMARY KEY, owner TEXT NOT NULL, type TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL);
@@ -60,6 +61,7 @@ export class TempleRoom extends DurableObject{
       if(path==='/api/socket')return this.connect(request,session,token);
       if(path==='/api/media'&&request.method==='POST')return withCors(request,await this.uploadMedia(request,session),this.env);
       if(path==='/api/world'&&request.method==='GET')return withCors(request,json({world:worldView(this.world(),session.profile_key),players:this.roster(),self:this.self(session)}),this.env);
+      if(path==='/api/gm/presence'&&request.method==='GET')return withCors(request,this.gmPresence(session),this.env);
       if(path==='/api/action'&&request.method==='POST')return withCors(request,await this.action(request,session),this.env);
       if(path==='/api/role'&&request.method==='POST')return withCors(request,await this.changeRole(request,session),this.env);
       if(path==='/api/save-code'&&request.method==='POST')return withCors(request,await this.saveCode(session),this.env);
@@ -88,6 +90,7 @@ export class TempleRoom extends DurableObject{
     const id=crypto.randomUUID(),expires=now+SESSION_MS,world=this.world(),profile=ensureProfile(world,profileKey,saved?null:admin?'Ely':body.name,saved?null:body.color,now,admin);if(admin)profile.name='Ely';this.save(world);
     this.sql.exec('INSERT INTO sessions(id,profile_key,name,color,role,seat,expires,state,save_code,last_code_at) VALUES(?,?,?,?,?,?,?,?,?,0)',id,profileKey,profile.name,profile.color,role,seat,expires,null,saveCode||null);
     if(saved)this.sql.exec('UPDATE save_codes SET last_used=? WHERE code=?',now,saveCode);
+    this.recordPresence({name:profile.name,role},'online',now);
     this.broadcastRoster();await this.armAlarm();return json({ok:true,token:id,role,seat,saveCode:saveCode||null,self:this.self(this.session(id)),world:worldView(world,profileKey),players:this.roster()});
   }
 
@@ -199,11 +202,23 @@ export class TempleRoom extends DurableObject{
     const message={id:crypto.randomUUID(),profileKey:session.profile_key,name:session.name,text,time:Date.now()};this.sql.exec('INSERT INTO chat_messages VALUES(?,?,?,?,?)',message.id,message.profileKey,message.name,message.text,message.time);this.sql.exec('DELETE FROM chat_messages WHERE time<?',Date.now()-30*86_400_000);this.broadcast('chat',message);return json({ok:true,message});
   }
 
+  recordPresence(session,event,time=Date.now()){
+    this.sql.exec('INSERT INTO presence_events(name,role,event,time) VALUES(?,?,?,?)',session.name,session.role,event,time);
+    this.sql.exec('DELETE FROM presence_events WHERE time<? OR id NOT IN (SELECT id FROM presence_events ORDER BY id DESC LIMIT 2000)',time-90*86_400_000);
+  }
+  gmPresence(session){
+    // Authentication must be enforced on the server, not only by hiding the S button.
+    if(this.world().profiles?.[session.profile_key]?.admin!==true)return json({error:'GM only'},403);
+    this.prune();
+    const events=this.sql.exec('SELECT name,role,event,time FROM presence_events ORDER BY id DESC LIMIT 200').toArray();
+    const online=this.roster().map(({name,role})=>({name,role}));
+    return json({ok:true,online,events});
+  }
   roster(){this.prune();const world=this.world();return this.sql.exec('SELECT id,profile_key,name,color,role,seat,state FROM sessions WHERE expires>? ORDER BY seat',Date.now()).toArray().map(row=>({id:row.id,key:row.profile_key,name:row.name,color:row.color,role:row.role,seat:row.seat,state:row.state?JSON.parse(row.state):null,profile:world.profiles[row.profile_key]?publicProfile(world.profiles[row.profile_key]):null}));}
   actors(){return this.roster().filter(player=>player.state?.position).map(player=>({...player,position:player.state.position}));}
   self(session){const world=this.world(),profile=world.profiles[session.profile_key];return {id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,saveCode:session.save_code||null,profile:profile?publicProfile(profile):null};}
   prune(){const now=Date.now();for(const row of this.sql.exec('SELECT id FROM sessions WHERE expires<=?',now).toArray())this.disconnectSession(row.id,false);this.sql.exec('DELETE FROM rate_limits WHERE window_start<?',now-3_600_000);}
-  disconnectSession(id,broadcast=true){const row=this.sql.exec('SELECT profile_key FROM sessions WHERE id=?',id).toArray()[0];for(const ws of this.ctx.getWebSockets(id)){this.closed.add(ws);try{ws.close(1000,'Disconnected');}catch{}}this.sql.exec('DELETE FROM sessions WHERE id=?',id);if(row){const world=this.world();if(releasePlayerWorldState(world,row.profile_key,Date.now())){this.save(world);this.broadcastWorld(world);}}if(broadcast)this.broadcastRoster();}
+  disconnectSession(id,broadcast=true){const row=this.sql.exec('SELECT profile_key,name,role FROM sessions WHERE id=?',id).toArray()[0];for(const ws of this.ctx.getWebSockets(id)){this.closed.add(ws);try{ws.close(1000,'Disconnected');}catch{}}this.sql.exec('DELETE FROM sessions WHERE id=?',id);if(row){this.recordPresence(row,'offline');const world=this.world();if(releasePlayerWorldState(world,row.profile_key,Date.now())){this.save(world);this.broadcastWorld(world);}}if(broadcast)this.broadcastRoster();}
   broadcast(type,data,except){const text=JSON.stringify({type,data});for(const ws of this.sockets())if(ws!==except)try{ws.send(text);}catch{this.closed.add(ws);}}
   broadcastRoster(){this.lastRosterAt=Date.now();this.broadcast('players',this.roster());}
   broadcastWorld(world=this.world()){

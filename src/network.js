@@ -18,6 +18,7 @@ export class TempleNetwork extends EventTarget{
   async chat(text){return this.request('/api/chat',{method:'POST',body:{text}});}
   async chatHistory(){return this.request('/api/chat');}
   async createSaveCode(){return this.request('/api/save-code',{method:'POST',body:{}});}
+  async gmPresence(){return this.request('/api/gm/presence');}
   async changeRole(role){return this.request('/api/role',{method:'POST',body:{role}});}
   async world(){return this.request('/api/world');}
   async request(path,{method='GET',body,auth=true}={}){
