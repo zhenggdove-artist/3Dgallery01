@@ -65,7 +65,7 @@ const vector=(value,fallback)=>Array.isArray(value)&&value.length===3&&value.eve
 const channelColors=Object.freeze({
  'arc-ray':'#2878ff','tidal-surge':'#66cddd','revival-bloom':'#ff8fbd',
  'anime-flame-shield':'#ff761f','ice-lance-study':'#d4e8ed',
- 'energy-vortex':'#66d7ff','radiant-beam':'#ffe3a0','thorn-crown':'#88d49a'
+ 'energy-vortex':'#66d7ff','radiant-beam':'#b874ff','thorn-crown':'#88d49a'
 });
 // Scale the ORIGINAL authored effect, rather than replacing its artwork.
 // #68 and #48 retain their pre-change vendor size and apply the exact same
@@ -272,6 +272,7 @@ export class NumberedWeaponEffects {
    fx.group.position.set(0,0,0);
    fx.group.quaternion.identity();
    fx.setEndpoints(origin,origin.clone().addScaledVector(dir,range));
+   if(spec.number===29&&entry.item?.id?.startsWith('prism-')){fx.group.scale.y=5;fx.group.scale.z=5;}
    return;
   }
   if(spec.number===73){
@@ -480,6 +481,7 @@ export class NumberedWeaponEffects {
     e.stopping=true;e.fx.stop();
    }
    e.fx.update(dt);
+   if(e.spec.number===29&&e.item?.id?.startsWith('prism-')){e.fx.group.scale.y=5;e.fx.group.scale.z=5;}
    if(e.worldScale!=null)e.fx.group.scale.setScalar(e.worldScale);
    if((!e.key&&e.fx.finished)||e.age>=e.duration){
     this.remove(e);continue;
