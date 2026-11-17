@@ -97,6 +97,21 @@ export class NumberedWeaponEffects {
   this.muzzle=muzzle;
   this.active=[];this.prewarmed=new Map();
   }
+ acquire(spec,options){
+  const pool=this.prewarmed.get(spec.asset),cached=pool?.pop();
+  const fx=cached||this.create(spec,options);
+  if(cached){fx.reset?.();fx.setOptions?.(options);this.scene.add(fx.group);}
+  fx.group.visible=true;
+  return fx;
+ }
+ recycle(spec,fx){
+  if(!fx)return;
+  fx.group.removeFromParent();fx.group.visible=false;fx.reset?.();
+  let pool=this.prewarmed.get(spec.asset);
+  if(!pool){pool=[];this.prewarmed.set(spec.asset,pool);}
+  // Keep the real 00GameDevs module and GPU resources alive between casts.
+  if(pool.length<4)pool.push(fx);else fx.dispose();
+ }
  create(spec,options) {
   const factory=FACTORIES[spec.asset];
   if(!factory)throw Error('Missing exact 00GameDevs factory #'+spec.number);
@@ -122,22 +137,25 @@ export class NumberedWeaponEffects {
     // Compile every original #00GameDevs shader while the loading window is
     // open, and retain one expensive module for immediate first-use playback.
     const unique=new Map(Object.values(REQUESTED_VFX).map(spec=>[spec.asset,spec]));
-    const retain=new Set([26,31,38,43,70,73]);
+    // The 3-crown and overlapping travelling-wave skills need MULTIPLE real
+    // native instances on their first cast. Create these before entering play.
+    const copiesByNumber={31:3,33:4,20:2,43:2,70:2};
     let warmed=0;
     for(const spec of unique.values()){
-      let fx=null;
-      try{
-        fx=this.create(spec,{size:.7,detail:.35,density:.28});
-        const stage=new THREE.Scene();stage.add(fx.group);fx.group.visible=true;
-        fx.update(.016);
-        await renderer.compileAsync(stage,camera);
-        fx.group.removeFromParent();
-        if(retain.has(spec.number)){fx.group.visible=false;this.prewarmed.set(spec.asset,fx);}
-        else fx.dispose();
-        warmed++;
-      }catch(error){
-        if(fx){fx.group.removeFromParent();fx.dispose();}
-        console.warn('Cannot prewarm 00GameDevs #'+spec.number,error);
+      const copies=copiesByNumber[spec.number]||1;
+      for(let i=0;i<copies;i++){
+        let fx=null;
+        try{
+          fx=this.create(spec,{size:1,detail:1,density:.5});
+          const stage=new THREE.Scene();stage.add(fx.group);fx.group.visible=true;
+          fx.update(.016);
+          await renderer.compileAsync(stage,camera);
+          this.recycle(spec,fx);fx=null;warmed++;
+        }catch(error){
+          if(fx){fx.group.removeFromParent();fx.dispose();}
+          console.warn('Cannot prewarm 00GameDevs #'+spec.number,error);
+          break;
+        }
       }
     }
     return warmed;
@@ -173,9 +191,7 @@ export class NumberedWeaponEffects {
   }
   const options={size,quality,detail:event.fusionEcho?.55:1,density:event.fusionEcho?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
   if(!options.color)delete options.color;
-  const cached=this.prewarmed.get(spec.asset);
-   const fx=cached||this.create(spec,options);
-   if(cached){this.prewarmed.delete(spec.asset);this.scene.add(fx.group);fx.reset?.();fx.setOptions?.(options);fx.group.visible=true;}
+  const fx=this.acquire(spec,options);
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
   // #29 is a forward beam: even its charged shot starts at the weapon, not
   // at an unrelated remote ground-circle centre.
@@ -204,7 +220,7 @@ export class NumberedWeaponEffects {
   if(spec.number===31){
    // Three independently authored ORIGINAL #31 crown instances, not a
    // synthetic thorn mesh; aligned vertically and moved as one projectile.
-   entry.palmLayers=[fx,this.create(spec,options),this.create(spec,options)];
+   entry.palmLayers=[fx,this.acquire(spec,options),this.acquire(spec,options)];
    entry.palmStart=this.muzzleAt(entry);
    entry.palmDirection=direction.clone();
    this.updatePalm(entry,0);
@@ -292,7 +308,7 @@ export class NumberedWeaponEffects {
  }
  spawnClamWave(entry,existing=null) {
   if(!entry.waves)return;
-  const fx=existing||this.create(entry.spec,entry.options);
+  const fx=existing||this.acquire(entry.spec,entry.options);
   const dir=entry.direction.clone();
   if(entry.root)dir.applyAxisAngle(UP,entry.root.rotation.y-entry.heading).normalize();
   const start=this.muzzleAt(entry);
@@ -308,8 +324,7 @@ export class NumberedWeaponEffects {
  }
  disposeWave(wave) {
   if(!wave)return;
-  wave.fx.group.removeFromParent();
-  wave.fx.dispose();
+  this.recycle({asset:wave.fx.group.userData.vfxId},wave.fx);
  }
  updateClamWaves(entry,dt){
   entry.waveTimer+=dt;
@@ -362,15 +377,14 @@ export class NumberedWeaponEffects {
  discardCycle(entry,copy){
   const index=entry.cycles.indexOf(copy);
   if(index>=0)entry.cycles.splice(index,1);
-  copy.fx.group.removeFromParent();
-  copy.fx.dispose();
+  this.recycle(entry.spec,copy.fx);
  }
  updateNativeCycles(entry,dt){
   const number=entry.spec.number,moving=TRAVELLING_NATIVE.has(number);
   entry.cycleTimer+=dt;
   while(entry.cycleTimer>=CYCLE_INTERVAL[number]){
    entry.cycleTimer-=CYCLE_INTERVAL[number];
-   const fx=this.create(entry.spec,entry.options);
+   const fx=this.acquire(entry.spec,entry.options);
    entry.cycles.push(this.makeCycle(entry,fx));
   }
   for(const copy of [...entry.cycles]){
@@ -398,7 +412,7 @@ export class NumberedWeaponEffects {
   }
   while(entry.cycles.length>(moving?4:3))this.discardCycle(entry,entry.cycles[0]);
   if(!entry.cycles.length){
-   const fx=this.create(entry.spec,entry.options);
+   const fx=this.acquire(entry.spec,entry.options);
    entry.cycles.push(this.makeCycle(entry,fx));
   }
   entry.fx=entry.cycles[0].fx;
@@ -475,7 +489,7 @@ export class NumberedWeaponEffects {
   if(i<0)return;
   this.active.splice(i,1);
   if(e.palmLayers){
-   for(const fx of e.palmLayers){fx.group.removeFromParent();fx.dispose();}
+   for(const fx of e.palmLayers)this.recycle(e.spec,fx);
    e.palmLayers.length=0;return;
   }
   if(e.waves){
@@ -483,11 +497,10 @@ export class NumberedWeaponEffects {
    e.waves.length=0;return;
   }
   if(e.cycles){
-   for(const c of [...e.cycles]){c.fx.group.removeFromParent();c.fx.dispose();}
+   for(const c of [...e.cycles])this.recycle(e.spec,c.fx);
    e.cycles.length=0;return;
   }
-  e.fx.group.removeFromParent();
-  e.fx.dispose();
+  this.recycle(e.spec,e.fx);
  }
- dispose(){for(const e of [...this.active])this.remove(e);for(const fx of this.prewarmed.values()){fx.group.removeFromParent();fx.dispose();}this.prewarmed.clear();}
+ dispose(){for(const e of [...this.active])this.remove(e);for(const list of this.prewarmed.values())for(const fx of list){fx.group.removeFromParent();fx.dispose();}this.prewarmed.clear();}
 }
