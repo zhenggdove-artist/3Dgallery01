@@ -50,6 +50,8 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
  if(disabled||silenced){monster.skills=[];return;}
  // Expired warnings become active on the server even if the room tick is late.
  for(const s of monster.skills){
+  if(!SKILLS[s.motion])continue; // discard pre-update persistent spell snapshots
+  s.hit??=[];s.lastTick??={};
   if(s.phase==='warning'&&now>=s.end){s.phase='active';s.start=s.end;s.end=s.start+(SKILLS[s.motion]?.active||800);s.lastTick={};}
   if(s.phase!=='active'||now>=s.end)continue;
   if(s.motion==='charge'){
@@ -71,7 +73,7 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
    s.hit.push(key);hit(target,s.damage,s);
   }
  }
- monster.skills=monster.skills.filter(s=>now<s.end);
+ monster.skills=monster.skills.filter(s=>SKILLS[s.motion]&&now<s.end);
  if(!targets.length){monster.aggroTarget=null;monster.aggroUntil=0;return;}
  const aggro=monster.aggroTarget&&now<(monster.aggroUntil||0)?targets.find(a=>a.key===monster.aggroTarget):null;
  const ranked=targets.map(a=>({a,d:flatDistance(a.position,monster.position)})).sort((a,b)=>a.d-b.d);
