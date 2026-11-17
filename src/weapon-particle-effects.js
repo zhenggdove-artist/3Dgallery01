@@ -256,7 +256,8 @@ void main(){
 function populate(recipe,amount,range,palette){
  const random=rand(0x421eab+recipe.length*1931),mode=modeFor(recipe);
  const positions=new Float32Array(amount*3),seed=new Float32Array(amount*3),colors=new Float32Array(amount*3);
- const set=(i,x,y,z,c,u,v,w)=>{positions.set([x,y,z],i*3);seed.set([u,v,w],i*3);colors.set(palette[c%palette.length].toArray(),i*3);};
+ // Typed-array direct writes avoid ~10k temporary arrays per skill activation.
+ const set=(i,x,y,z,c,u,v,w)=>{const j=i*3,p=palette[c%palette.length];positions[j]=x;positions[j+1]=y;positions[j+2]=z;seed[j]=u;seed[j+1]=v;seed[j+2]=w;colors[j]=p.r;colors[j+1]=p.g;colors[j+2]=p.b;};
  for(let i=0;i<amount;i++){
    const u=random(),v=random(),w=random(),a=v*Math.PI*2;
    let x=0,y=0,z=0,ci=Math.floor(u*palette.length);
@@ -318,10 +319,26 @@ function populate(recipe,amount,range,palette){
  return {positions,seed,colors};
 }
 export class WeaponParticleEffects{
- constructor(scene){this.scene=scene;this.active=[];this.charger=null;this.maxActive=14;}
+ constructor(scene){this.scene=scene;this.active=[];this.charger=null;this.maxActive=14;this.pools=new Map();this.pooledCount=0;}
+ async warm(renderer,camera){
+  // Compile the actual GPU point-sprite shader before a player can cast.
+  const sample=this.make('prism',{id:'shader-warmup',family:'water'},{amount:1200,range:12});
+  const stage=new THREE.Scene();stage.add(sample.root);
+  try{await renderer.compileAsync(stage,camera);}
+  finally{sample.root.removeFromParent();sample.geometry.dispose();sample.material.dispose();}
+ }
  make(recipe,item,{duration=2.1,range=20,amount=2300,charge=1}={}){
   const touch=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
   const count=Math.min(amount,touch?MAX_PARTICLES_TOUCH:MAX_PARTICLES_DESKTOP);
+  const key=[recipe,item?.id||item?.family||'unknown',count,Number(range).toFixed(2)].join(':');
+  const stored=this.pools.get(key);
+  if(stored?.length){
+   const e=stored.pop();this.pooledCount--;e.age=0;e.duration=duration;e.channeling=false;e.charging=false;e.homingTarget=null;
+   e.root.visible=true;e.root.position.set(0,0,0);e.root.quaternion.identity();e.root.scale.setScalar(1);
+   e.material.uniforms.uAge.value=0;e.material.uniforms.uDuration.value=duration;
+   e.material.uniforms.uCharge.value=charge;e.material.uniforms.uLooping.value=0;
+   return e;
+  }
   const palette=recipePalette(recipe,item),data=populate(recipe,count,range,palette);
   const geometry=new THREE.BufferGeometry();
   geometry.setAttribute('position',new THREE.BufferAttribute(data.positions,3));
@@ -334,7 +351,7 @@ export class WeaponParticleEffects{
   });
   const root=new THREE.Points(geometry,material);
   root.name='Fine particle '+recipe+' skill';root.frustumCulled=false;root.renderOrder=24;
-  return {root,age:0,duration,recipe,material,geometry};
+  return {root,age:0,duration,recipe,material,geometry,poolKey:key};
  }
  add(entry){
   if(this.active.length>=this.maxActive)this.remove(this.active[0]);
@@ -426,6 +443,16 @@ export class WeaponParticleEffects{
     if(!entry.channeling&&entry.age>=entry.duration)this.remove(entry);
   }
  }
- remove(entry){const i=this.active.indexOf(entry);if(i>=0)this.active.splice(i,1);entry.root.removeFromParent();entry.geometry.dispose();entry.material.dispose();if(this.charger===entry)this.charger=null;}
- dispose(){for(const entry of [...this.active])this.remove(entry);}
+ remove(entry){
+  const i=this.active.indexOf(entry);if(i>=0)this.active.splice(i,1);
+  entry.root.removeFromParent();entry.root.visible=false;if(this.charger===entry)this.charger=null;
+  let list=this.pools.get(entry.poolKey);if(!list){list=[];this.pools.set(entry.poolKey,list);}
+  if(list.length<2&&this.pooledCount<18){list.push(entry);this.pooledCount++;}
+  else{entry.geometry.dispose();entry.material.dispose();}
+ }
+ dispose(){
+  for(const entry of [...this.active])this.remove(entry);
+  for(const list of this.pools.values())for(const entry of list){entry.geometry.dispose();entry.material.dispose();}
+  this.pools.clear();this.pooledCount=0;
+ }
 }
