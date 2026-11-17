@@ -1,10 +1,24 @@
 import {ARENA_RADIUS} from './arena.js';
 import {validateAppearance} from './artwork-library.js';
 import {artworkPosition} from './artwork-flight.js';
+import {itemById,attackStats} from './catalog.js';
+import {weaponQuality,forwardCastRadius} from './weapon-abilities.js';
+import {scaleUltimateFootprint} from './charge-area.js';
 
 const inside=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
 export const MAX_ART_BOMBS_PER_PLAYER=4;
 export const MAX_ART_BOMBS_GLOBAL=32;
+// Same authoritative radius as the Epic (purple, tier-4) frying-pan ultimate.
+const purplePan=itemById('pan-4'),purpleQuality=weaponQuality(purplePan);
+const purpleStats=attackStats(purplePan,1);
+purpleStats.radius=forwardCastRadius(purplePan,purpleQuality,purpleStats.radius);
+scaleUltimateFootprint(purpleStats,purplePan);
+export const ARTWORK_BLAST_RADIUS=purpleStats.radius;
+export function artworkBlastHits(position,target,radius=ARTWORK_BLAST_RADIUS,actorRadius=1.02){
+ if(!inside(position)||!inside(target))return false;
+ return Math.hypot(position[0]-target[0],position[2]-target[2])<=radius+actorRadius&&
+  Math.abs(position[1]-target[1])<=Math.max(3,radius*.7);
+}
 export function validArtBombSize(value){const n=Number(value);return Number.isFinite(n)&&n>=1&&n<=3?n:null;}
 
 export function publishArtBomb(world,profile,actor,body,now=Date.now()){
@@ -26,7 +40,7 @@ export function publishArtBomb(world,profile,actor,body,now=Date.now()){
  world.artworks??={};world.artworks[id]={availableAt:0,holder:null,throwEvent:null};
  world.artworkLayout??={};world.artworkLayout[id]={position:[...p],rotation:[0,0,0],scale:[size,size,size],appearance,revision:1,updatedAt:now};
  world.revision=(world.revision||0)+1;
- return {notice:'Artwork bomb placed · press E nearby to pick up and charge throw',artwork:entry};
+ return {notice:'Artwork bomb placed',artwork:entry};
 }
 
 export function resizeArtBomb(world,actor,body,now=Date.now()){
@@ -69,7 +83,8 @@ export function projectileHitsActor(event,target,landingTime,size=1){
 }
 export function artBombDamage(maxHp,rng=Math.random){
  const chance=Math.max(0,Math.min(1,Number(rng())||0));
- return Math.max(1,(Number(maxHp)||100)*(.3+.7*chance));
+ // Independent 50% instant-elimination roll on each affected target.
+ return Math.max(1,(Number(maxHp)||100)*(chance<.5?1:.5));
 }
 
 // GM-only: remove ALL non-GM uploaded works, but never touch original gallery

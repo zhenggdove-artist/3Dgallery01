@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createInitialWorld,applyAction,ensureProfile,tickWorld} from '../src/shared/temple-rules.js';
 import {chargedArea,insideChargedArea,ULTIMATE_FOOTPRINT_SCALE} from '../src/shared/charge-area.js';
-import {artBombDamage,projectileHitsActor} from '../src/shared/art-bomb.js';
+import {artBombDamage,projectileHitsActor,artworkBlastHits,ARTWORK_BLAST_RADIUS} from '../src/shared/art-bomb.js';
 import {WEAPONS,attackStats} from '../src/shared/catalog.js';
 import {ARTWORK_DISCS,discGroundHeight} from '../src/shared/artwork-discs.js';
 
@@ -42,9 +42,14 @@ test('players own their uploaded artworks; ownership, size, and limits are enfor
  for(let i=0;i<3;i++)assert.ok(applyAction(world,owner,original,{now:2100+i}).artwork);
  assert.match(applyAction(world,owner,original,{now:3000}).error,/four art bombs/);
 });
-test('ballistic artwork bomb damage is 30–100% of maximum health before protection',()=>{
- assert.equal(artBombDamage(100,()=>0),30);
- assert.equal(artBombDamage(100,()=>1),100);
+test('artwork splash has a 50% instant elimination roll and Epic pan radius',()=>{
+ assert.equal(artBombDamage(100,()=>0),100);
+ assert.equal(artBombDamage(100,()=>.4999),100);
+ assert.equal(artBombDamage(100,()=>.5),50);
+ assert.equal(artBombDamage(100,()=>1),50);
+ assert.ok(ARTWORK_BLAST_RADIUS>2);
+ assert.equal(artworkBlastHits([0,0,0],[ARTWORK_BLAST_RADIUS-.2,1,0]),true);
+ assert.equal(artworkBlastHits([0,0,0],[ARTWORK_BLAST_RADIUS+3,1,0]),false);
  const event={origin:[0,1.4,0],direction:[0,0,1],power:1};
  assert.equal(projectileHitsActor(event,[0,0,11],1.5,1),true);
  assert.equal(projectileHitsActor(event,[20,0,11],1.5,1),false);
@@ -119,7 +124,8 @@ test('player-published artwork bomb uses ballistic collision and server damage a
  const result=applyAction(world,thrower,{action:'throw-artwork',direction:[0,0,1],power:1},{now:5000,actors:[thrower,target],rng:()=>0});
  assert.ok(result.throwEvent?.bomb,JSON.stringify(result));
  assert.equal(result.hit?.target,target.key,JSON.stringify(result));
- assert.ok(result.hit.damage>=30&&result.hit.damage<=100);
+ assert.equal(result.hit.damage,100);
+ assert.equal(result.hit.defeated,true);
  assert.ok(world.profiles[target.key].hp<100);
 });
 

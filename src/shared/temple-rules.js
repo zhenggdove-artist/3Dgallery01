@@ -3,7 +3,7 @@ import {recoverArtworks} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,spellGroundHeight,scaleUltimateFootprint} from './charge-area.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {artworkLanding} from './artwork-flight.js';
-import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage} from './art-bomb.js';
+import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,MATERIALS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
@@ -24,7 +24,7 @@ import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
 import {replenishHearts} from './heart-pickups.js';
 import {cleanLegacyScene} from './scene-cleanup.js';
-import {samplePanBlastPosition} from './pan-blast-flight.js';
+import {samplePanBlastPosition,PAN_BLAST_DETONATION_ADVANCE_MS} from './pan-blast-flight.js';
 
 export const WORLD_VERSION=1;
 export const ARTWORK_RESPAWN_MS=30_000;
@@ -264,33 +264,51 @@ function throwArtwork(world,profile,actor,body,context,now){
   const origin=[actor.position[0],actor.position[1]+1.4,actor.position[2]],event={id:id(),platformId,origin,direction,time:now,power:clamp(Number(body.power)||1,.4,1.4),owner:actor.key,bomb};
   art.holder=null;art.availableAt=now+ARTWORK_RESPAWN_MS;art.throwEvent=event;
   const ground=(x,z,y)=>{let h=discGroundHeight(x,z,y);for(const p of world.floatingPlatforms||[])if(y>=p.position[1]-.5&&Math.hypot(x-p.position[0],z-p.position[2])<p.radius*2)h=Math.max(h,p.position[1]);return h;};
-  const landing=bomb?artworkLanding(event,ground):null,bombSize=world.artworkLayout?.[platformId]?.scale?.[0]||1;
-  let hit=null;for(const target of context.actors||[]){if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(target.position))continue;
-    const along=project(origin,direction,target.position),ordinaryHit=along>0&&along<90*event.power&&perpendicular(origin,direction,target.position,along)<2.1;
-    const collision=bomb?projectileHitsActor(event,target.position,landing.time,bombSize):ordinaryHit;
-    if(collision){const maxHp=world.profiles?.[target.key]?.maxHp||100,damage=bomb?artBombDamage(maxHp,context.rng??Math.random):34*event.power;hit=damagePlayer(world,profile,target,damage,now,bomb?'art-bomb':'artwork',actor.position);break;}
+  // Both original models and user-uploaded artwork explode on the shared
+  // ballistic landing, with the same radius as the purple frying pan.
+  const landing=artworkLanding(event,ground),bombSize=world.artworkLayout?.[platformId]?.scale?.[0]||1;
+  event.blastRadius=ARTWORK_BLAST_RADIUS;
+  const rng=context.rng??Math.random,blastTouches=position=>artworkBlastHits(landing.position,position);
+  let hit=null;const hits=[];
+  for(const target of context.actors||[]){
+   if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(target.position))continue;
+   const collision=projectileHitsActor(event,target.position,landing.time,bombSize)||
+    blastTouches([target.position[0],target.position[1]+1,target.position[2]]);
+   if(!collision)continue;
+   const maxHp=world.profiles?.[target.key]?.maxHp||100,damage=artBombDamage(maxHp,rng);
+   const result=damagePlayer(world,profile,target,damage,now,bomb?'art-bomb':'artwork',
+    actor.position,'art-explosion',[target.position[0],target.position[1]+1,target.position[2]],damage>=maxHp);
+   if(result){hit??=result;hits.push(result);}
   }
-  let monsterHit=null;for(const mob of [world.monster,...(world.monsters||[])]){
-    if(!mob?.active)continue;
-    const along=project(origin,direction,mob.position);
-    if(along>0&&along<90*event.power&&perpendicular(origin,direction,mob.position,along)<ENEMY_RADIUS+1){
-     monsterHit=damageMonster(world,profile,68*event.power,now,context.rng??Math.random,'artwork',mob);
-     break;
-    }
+  let monsterHit=null;const monsterHits=[];
+  for(const mob of [world.monster,...(world.monsters||[])]){
+   if(!mob?.active)continue;
+   const collision=projectileHitsActor(event,mob.position,landing.time,Math.max(bombSize,ENEMY_RADIUS))||
+    blastTouches([mob.position[0],mob.position[1]+1.25,mob.position[2]]);
+   if(!collision)continue;
+   const damage=rng()<.5?mob.hp:68*event.power;
+   const result=damageMonster(world,profile,damage,now,rng,'artwork',mob);
+   if(result){monsterHit??=result;monsterHits.push(result);}
+  }
+  let structureDestroyed=null,structureHit=null;const structureHits=[],structureDestroyedEvents=[];
+  for(const structure of [...(world.structures||[])]){
+   if(structure.owner==='temple')continue;
+   const along=project(origin,direction,structure.position);
+   const direct=along>0&&along<90*event.power&&
+    perpendicular(origin,direction,structure.position,along)<structureRadius(structure);
+   const splash=artworkBlastHits(landing.position,structure.position,ARTWORK_BLAST_RADIUS,structureRadius(structure));
+   if(!direct&&!splash)continue;
+   structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
+   const damage=Math.round(70*event.power);
+   structure.hp=Math.max(0,structure.hp-damage);
+   const record={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
+   structureHit??=record;structureHits.push(record);
+   if(structure.hp<=0){
+    const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;
+    structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);
    }
-  let structureDestroyed=null,structureHit=null;if(!hit&&!monsterHit){for(const structure of world.structures||[]){
-    if(structure.owner==='temple')continue;
-    const along=project(origin,direction,structure.position);
-    if(along>0&&along<90*event.power&&perpendicular(origin,direction,structure.position,along)<structureRadius(structure)){
-     structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
-     const damage=Math.round(70*event.power);
-     structure.hp=Math.max(0,structure.hp-damage);
-     structureHit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
-     if(structure.hp<=0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}
-     break;
-    }
-   }}
-  return {throwEvent:event,hit,monsterHit,structureHit,structureDestroyed,notice:monsterHit?.defeated?'Monster defeated · loot dropped':structureDestroyed?'Artwork shattered a structure':undefined};
+  }
+  return {throwEvent:event,hit,hits,monsterHit,monsterHits,structureHit,structureHits,structureDestroyed,structureDestroyedEvents,notice:monsterHit?.defeated?'Monster defeated · loot dropped':structureDestroyed?'Artwork shattered a structure':undefined};
 }
 
 function buy(world,profile,body){const item=SHOP_ITEMS.find(entry=>entry.id===body.itemId);if(!item)return {error:'Item is not sold'};if(profile.inventory.includes(item.id)&&item.slot!=='seed')return {error:'Already owned'};if(profile.inventory.length>=600)return {error:'Inventory full'};if(!spend(profile,item.price,world))return {error:'Not enough coins'};profile.inventory.push(item.id);profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';return {notice:`Purchased ${item.name}`};}
@@ -828,9 +846,9 @@ function tickPersistentAttacks(world,actors,now,rng){
    }
    // Ground-targeted charged area explosions are evaluated only once their
    // visible travel has completed; targets that have moved away evade damage.
-   // Begin pan launch 100ms earlier than the former halfway detonation.
+   // Begin pan launch 200ms earlier than the former halfway detonation.
    // Damage and the authoritative flight impulse share that exact contact.
-   if(fx.area?.mode==='area'&&next>=(panBlast?Math.max(0,.5-100/flight):1)&&
+   if(fx.area?.mode==='area'&&next>=(panBlast?Math.max(0,.5-PAN_BLAST_DETONATION_ADVANCE_MS/flight):1)&&
       (!panBlast||!fx.areaResolved)){
      // The pan's explosion physically strikes midway through its expansion,
      // not after the entire travelling animation. It resolves exactly once.

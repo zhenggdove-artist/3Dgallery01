@@ -2,6 +2,8 @@
 // one high launch, followed by exactly three progressively smaller bounces.
 // The server samples these arcs for human-shaped monsters; fighters integrate
 // the same launch velocities against the actual walkable ground below them.
+// Blast starts 200ms before the original halfway detonation (100ms earlier than before).
+export const PAN_BLAST_DETONATION_ADVANCE_MS=200;
 export const PAN_BLAST_GRAVITY=25;
 export const PAN_BLAST_LAUNCH_SPEED=13.5;
 // Preserve each rebound's original peak height while compressing all three
