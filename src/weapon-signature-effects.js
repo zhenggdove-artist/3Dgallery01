@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {itemById} from './shared/catalog.js';
 import {oddParts} from './reletter/odd-weapon-art.js';
 import {calicoPellets,CALICO_PELLET_COUNT} from './shared/calico-pellets.js';
 import {GOLDFISH_SWIM_MS} from './shared/weapon-abilities.js';
@@ -16,24 +17,57 @@ const lineMat=(color,opacity=.8)=>new THREE.MeshBasicMaterial({color,transparent
 const stable=(n)=>((Math.sin(n*127.1+17.7)*43758.5453)%1+1)%1;
 
 export class WeaponSignatureEffects {
- constructor(scene){this.scene=scene;this.active=[];this.maxActive=18;}
- add(obj,duration,update){
+ constructor(scene){this.scene=scene;this.active=[];this.maxActive=18;this.recycled=new Map();this.recycledCount=0;}
+ take(key){
+  const list=this.recycled.get(key);
+  if(!list?.length)return null;
+  this.recycledCount--;return list.pop();
+ }
+ add(obj,duration,update,key=null){
   if(this.active.length>=this.maxActive)this.remove(this.active[0]);
-  const e={obj,age:0,duration,update};this.scene.add(obj);this.active.push(e);return e;
+  const e={obj,age:0,duration,update,key};this.scene.add(obj);this.active.push(e);return e;
+ }
+ disposeGroup(obj){
+  obj.removeFromParent();
+  obj.traverse(o=>{if(o.geometry&&![sphere,geomBox,geomCone].includes(o.geometry))o.geometry.dispose();
+    if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});
  }
  remove(e){
-  this.active.splice(this.active.indexOf(e),1);e.obj.removeFromParent();
-  e.obj.traverse(o=>{if(o.geometry&&![sphere,geomBox,geomCone].includes(o.geometry))o.geometry.dispose();
-    if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});
+  const index=this.active.indexOf(e);if(index<0)return;
+  this.active.splice(index,1);e.obj.removeFromParent();
+  let list=this.recycled.get(e.key);
+  if(e.key&&(!list||list.length<3)&&this.recycledCount<15){
+   if(!list){list=[];this.recycled.set(e.key,list);}
+   list.push(e.obj);this.recycledCount++;return;
+  }
+  this.disposeGroup(e.obj);
+ }
+ async warm(renderer,camera){
+  // Construct representative signature skills while the loading screen is visible.
+  // Keep their actual 3D models and GPU buffers for first-use playback.
+  const event={id:'prewarm',origin:[0,1,0],direction:[0,0,1],range:18,
+   qualityScale:1,qualityTier:2,qualityDuration:1,ultimate:true,time:1234,
+   area:{mode:'area',center:[0,.1,10],visualCenter:[0,.1,10],radius:4}};
+  const stage=new THREE.Scene();
+  try{
+   for(const id of ['calico-cat','calico-cat','goldfish','fan','bloom-1','planter-1','giraffe']){
+    const item=itemById(id);
+    if(item)this.play(event,item,null);
+   }
+   for(const e of this.active){stage.add(e.obj);e.update(.016);}
+   await renderer.compileAsync(stage,camera);
+  }finally{
+   for(const e of [...this.active])this.remove(e);
+  }
  }
  shotgun(event){
   const source=vec(event.origin),full=!!event.ultimate,scale=event.qualityScale||1,
    rays=event.pellets?.length===CALICO_PELLET_COUNT?event.pellets:calicoPellets(event.direction,full,event.time).map(p=>p.direction),
-   group=new THREE.Group(),balls=[];
+   group=this.take('shotgun')||new THREE.Group(),balls=[];
   group.name='Twenty independent glowing rainbow shotgun spheres';
   const palette=['#ff326d','#ffbd39','#fcff63','#29e8ac','#41beff','#9e69ff','#ff82dd','#ffffff'];
   const textureColors=palette.map(hex=>new THREE.Color(hex));
-  rays.forEach((ray,i)=>{
+  if(!group.children.length)rays.forEach((ray,i)=>{
    // Every pellet has hundreds of shaded faces with its OWN intertwined
    // ribbons, marbling and iridescent colours, not one flat disc/colour.
    const geometry=new THREE.SphereGeometry(1,40,28);
@@ -69,6 +103,11 @@ export class WeaponSignatureEffects {
    group.add(ball);
    balls.push({ball,dir:vec(ray).normalize(),spin:i*.5});
   });
+  else group.children.forEach((ball,i)=>{
+   ball.material.opacity=1;ball.children[0].material.opacity=.30;
+   ball.position.copy(source);ball.rotation.set(i*.41,i*.69,i*.23);
+   balls.push({ball,dir:vec(rays[i]).normalize(),spin:i*.5});
+  });
   const duration=projectileFlightMs({pattern:'scatter'},full)/1000,range=event.range||10;
   this.add(group,duration,age=>{
    const t=Math.min(1,age/duration);
@@ -83,14 +122,16 @@ export class WeaponSignatureEffects {
     b.ball.children[0].material.opacity=.30*fade;
     b.ball.scale.setScalar((full?.29:.21)*scale*(.72+.28*fade));
    }
-  });
+  },'shotgun');
  }
  goldfish(event){
   const origin=vec(event.origin),direction=vec(event.direction).normalize();
   const quality=event.qualityScale||1,duration=GOLDFISH_SWIM_MS/1000*(event.qualityDuration||1);
-  const group=new THREE.Group(),fish=new THREE.Group();
+  const cached=this.take('goldfish');
+  const group=cached||new THREE.Group(),fish=cached?.userData.fish||new THREE.Group();
   group.name='Translucent spectral goldfish swimming forward';
-  group.add(fish);
+  let tail=cached?.userData.tail;
+  if(!cached){group.add(fish);
   // A glasslike moving fish image rather than a solid stack of toy primitives.
   const bodyGeo=new THREE.SphereGeometry(1,20,12);
   // Avoid expensive per-pixel physical refraction and four deep-cloned fish.
@@ -123,7 +164,7 @@ export class WeaponSignatureEffects {
    }
   }
   add(fish,bodyGeo,finMat,[0,.73,-.23],[.20,.62,.44]);
-  const tail=new THREE.Group();tail.position.z=-1.3;fish.add(tail);
+  tail=new THREE.Group();tail.position.z=-1.3;fish.add(tail);
   for(const side of [-1,1]){
    const blade=add(tail,bodyGeo,finMat,[side*.35,.03,-.55],[.55,.83,.11]);
    blade.rotation.z=side*.35;
@@ -135,10 +176,13 @@ export class WeaponSignatureEffects {
     tail.add(new THREE.Mesh(new THREE.TubeGeometry(line,8,.006,3,false),rim));
    }
   }
+  group.userData.fish=fish;group.userData.tail=tail;
+  }
   // The original four cloned fish multiplied meshes, draw calls and material
   // allocations by five, causing severe mobile stutters. No clones are built.
   const orientation=qdir(direction);
   fish.scale.setScalar(1.25*quality);
+  group.position.copy(origin);group.quaternion.copy(orientation);group.scale.setScalar(1);
   this.add(group,duration,age=>{
    const progress=Math.min(1,age/duration);
    const travel=(event.range||32)*progress;
@@ -152,10 +196,13 @@ export class WeaponSignatureEffects {
    tail.rotation.y=Math.sin(age*16)*.44;
    const fade=Math.min(1,age*6,(duration-age)*7);
    group.scale.setScalar(Math.max(0,fade));
-  });
+  },'goldfish');
  }
  flower(event){
   const quality=event.qualityScale||1,origin=vec(event.origin),direction=vec(event.direction).normalize();
+  const key='flower:'+quality.toFixed(3),group=this.take(key)||new THREE.Group();
+  let blossom=group.children[0],m=blossom?.material;
+  if(!blossom){
   const num=2400,positions=new Float32Array(num*3),colors=new Float32Array(num*3);
   const palette=['#ffe3f6','#ff8dce','#edaaff','#c8bdff','#ffb9e7','#fff4fd'];
   for(let i=0;i<num;i++){
@@ -170,25 +217,28 @@ export class WeaponSignatureEffects {
   }
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(positions,3));
   g.setAttribute('color',new THREE.BufferAttribute(colors,3));
-  const m=new THREE.PointsMaterial({size:.15*quality,vertexColors:true,transparent:true,opacity:.9,
+  m=new THREE.PointsMaterial({size:.15*quality,vertexColors:true,transparent:true,opacity:.9,
     sizeAttenuation:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
-  const blossom=new THREE.Points(g,m),group=new THREE.Group();
-  group.name='One enormous forward rotating translucent particle blossom';group.add(blossom);
-  const orientation=qdir(direction);
+  blossom=new THREE.Points(g,m);group.add(blossom);
+  }
+  group.name='One enormous forward rotating translucent particle blossom';
+  const orientation=qdir(direction);group.position.copy(origin);group.quaternion.copy(orientation);blossom.rotation.z=0;m.opacity=.9;
   const duration=3.3*(event.qualityDuration||1);
   this.add(group,duration,age=>{
    const t=Math.min(1,age/duration);
    group.position.copy(origin).addScaledVector(direction,(event.range||18)*.78*t);
    group.quaternion.copy(orientation);blossom.rotation.z=age*1.1;
    m.opacity=Math.min(.95,t*6)*(1-Math.pow(t,3))*.9;
-  });
+  },key);
  }
  thorns(event){
    const quality=event.qualityScale||1;
    const scale=Math.max(quality,(Number(event.area?.radius)||Number(event.radius)||3.6)/1.95);
    const center=vec(event.area?.center||event.impactPoint||event.origin);
   center.y=Math.max(.05,center.y);
-  const group=new THREE.Group();group.name='Three stacked solid thorn-vine tiers';
+  const key='thorns:'+scale.toFixed(3),group=this.take(key)||new THREE.Group();
+  group.name='Three stacked solid thorn-vine tiers';
+  if(!group.children.length){
   const leaves=[];
   for(let tier=0;tier<3;tier++){
    const baseY=tier*3.45;
@@ -215,21 +265,24 @@ export class WeaponSignatureEffects {
     }
    }
   }
+  }
+  group.position.copy(center);group.rotation.y=0;group.scale.set(1,1,1);
+  for(const child of group.children)child.material.opacity=1;
   this.add(group,3.6*(event.qualityDuration||1),age=>{
    const t=Math.min(1,age/.85);
    group.position.copy(center);group.rotation.y=age*.7;
    group.scale.set(1,Math.max(.02,t*t*(3-2*t)),1);
    const fade=Math.min(1,(3.6*(event.qualityDuration||1)-age)*2);
    for(const child of group.children)child.material.opacity=fade;
-  });
+  },key);
  }
  tornado(event){
   const quality=event.qualityScale||1,origin=vec(event.origin),direction=vec(event.direction).normalize(),
     right=new THREE.Vector3(direction.z,0,-direction.x),range=event.range||20,tier=event.qualityTier||3,
     duration=(1400+tier*850)*(event.qualityDuration||1)/1000,
-    group=new THREE.Group(),vortices=[];
+    group=this.take('tornado:'+quality.toFixed(3))||new THREE.Group(),vortices=[...group.children];
   group.name='Four independent wandering volumetric tornadoes';
-  for(let i=0;i<4;i++){
+  if(!vortices.length)for(let i=0;i<4;i++){
    const count=640,positions=new Float32Array(count*3),cols=new Float32Array(count*3);
    const tint=new THREE.Color(['#bffff3','#8feede','#d6f8f0','#a6d9ff'][i]);
    for(let j=0;j<count;j++){
@@ -246,6 +299,8 @@ export class WeaponSignatureEffects {
    const v=new THREE.Points(geo,mat);v.name='Wandering tornado '+(i+1);
    group.add(v);vortices.push(v);
   }
+  group.scale.setScalar(1);
+  for(const v of vortices){v.position.set(0,0,0);v.rotation.y=0;v.material.opacity=.8;}
   this.add(group,duration,age=>{
    const t=Math.min(1,age/duration);
    vortices.forEach((v,i)=>{
@@ -255,22 +310,25 @@ export class WeaponSignatureEffects {
     v.rotation.y=age*(4.2+i*.85);
     v.material.opacity=.78*Math.min(1,age*5)*(1-Math.pow(t,4));
    });
-  });
+  },'tornado:'+quality.toFixed(3));
  }
  giraffe(event,ownerRoot){
   const quality=event.qualityScale||1,origin=vec(event.origin),dir=vec(event.direction).normalize();
-  const giraffe=new THREE.Group();giraffe.name='Visible spinning yellow giraffe model, outbound and returning';
+  const key='giraffe:'+quality.toFixed(3),cached=this.take(key),
+   group=cached||new THREE.Group(),giraffe=cached?.userData.giraffe||new THREE.Group(),
+   model=cached?.userData.model||new THREE.Group(),electricBolts=cached?.userData.bolts||[];
+  giraffe.name='Visible spinning yellow giraffe model, outbound and returning';
+  if(!cached){
   for(const p of oddParts('giraffe')){
    const g=p.shape==='box'?geomBox:p.shape==='cone'?geomCone:sphere;
    const m=new THREE.Mesh(g,material(p.color));m.position.set(p.x,p.y,p.z);m.scale.set(p.sx,p.sy,p.sz);giraffe.add(m);
   }
   // It must read as ONE recognizable yellow giraffe, not a V-shaped dust trail.
-  const model=new THREE.Group();model.add(giraffe);
-  const group=new THREE.Group();group.name='Visible spinning yellow giraffe model, outbound and returning';group.add(model);
+  model.add(giraffe);
+  group.name='Visible spinning yellow giraffe model, outbound and returning';group.add(model);
   giraffe.scale.setScalar(5.4*quality);
   // Purple electricity is physically attached to the spinning giraffe mesh,
   // so every bolt follows the SAME boomerang trajectory and rotation.
-  const electricBolts=[];
   for(let j=0;j<10;j++){
    const points=[];
    for(let k=0;k<9;k++){
@@ -291,6 +349,9 @@ export class WeaponSignatureEffects {
    electricBolts.push({core:makeBolt(.012,j%2?'#eac0ff':'#be6bff',.92),
     glow:makeBolt(.027,'#7e32f3',.30),phase:j*1.73});
   }
+  group.userData.giraffe=giraffe;group.userData.model=model;group.userData.bolts=electricBolts;
+  }
+  giraffe.scale.setScalar(5.4*quality);group.scale.setScalar(1);
   const orientation=qdir(dir),duration=2.3;
   this.add(group,duration,age=>{
    const t=Math.min(1,age/duration),distance=Math.sin(t*Math.PI)*(event.range||28);
@@ -303,7 +364,7 @@ export class WeaponSignatureEffects {
     bolt.core.material.opacity=.92*brightness;
     bolt.glow.material.opacity=.37*brightness;
    }
-  });
+  },key);
  }
  play(event,item,ownerRoot){
   if(item.id==='calico-cat')return this.shotgun(event),true;
@@ -321,5 +382,9 @@ export class WeaponSignatureEffects {
    if(entry.age>=entry.duration)this.remove(entry);
   }
  }
- dispose(){for(const e of [...this.active])this.remove(e);}
+ dispose(){
+  for(const e of [...this.active])this.remove(e);
+  for(const list of this.recycled.values())for(const group of list)this.disposeGroup(group);
+  this.recycled.clear();this.recycledCount=0;
+ }
 }

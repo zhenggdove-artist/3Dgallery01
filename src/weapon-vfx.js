@@ -48,6 +48,7 @@ export class WeaponVFX{
   let numbered=0;
   try{numbered=await this.numberedEffects.warm(renderer,camera);}catch(error){console.warn('Ultimate shader prewarm incomplete',error);}
   try{await this.particleSkills.warm(renderer,camera);}catch(error){console.warn('Particle shader prewarm incomplete',error);}
+  try{await this.signatureEffects.warm(renderer,camera);}catch(error){console.warn('Signature shader prewarm incomplete',error);}
   return {source:'00GameDevs',effects:fxs.length,numbered};
  }
  acquire(id,options={}){
