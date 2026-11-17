@@ -26,9 +26,10 @@ test('every frying-pan and whip tier uses the same warning/authoritative AoE foo
    assert.equal(area.radius,stats.radius,weapon.id);
   }
  }
- const token=itemById('chiang-token'),before=attackStats(token,1);
- scaleUltimateFootprint(before,token);
- assert.ok(before.radius>0,'the separate spectral-token family is not shrunk as a frying pan');
+ const spectral={id:'chiang-token',family:'pan'};
+ const original={ultimate:true,range:10,radius:4};
+ scaleUltimateFootprint(original,spectral);
+ assert.equal(original.radius,2.4,'the separate spectral token is unaffected by pan-only tuning');
 });
 
 test('pan explosion hits all victims once, recoils onto caster for exactly 15 HP regardless of armour and shield',()=>{
