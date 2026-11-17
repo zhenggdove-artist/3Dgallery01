@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {islandModel,animateIslandModel} from './reletter/island-actors.js';
 import {createEnemySpellEffect,updateEnemySpellEffect} from './reletter/temple-spell-effects.js';
+import {createArenaAbilityEffect,updateArenaAbilityEffect,disposeArenaAbilityEffect} from './monster-ability-effects.js';
 import {ISLAND_ENEMIES,ENEMY_HEIGHT} from './shared/island-combat.js';
 import {MONSTER_PACK_SIZE} from './shared/monster-pack.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
@@ -48,12 +49,14 @@ export class IslandEnemies{
  updateModel(root,state,dt,now){
   if(!root||!state?.active)return;
   for(const [bone,q] of root.userData.attackRestore||[])bone.quaternion.copy(q);
-  root.userData.attackRestore=[];root.userData.pivot.rotation.x=0;
+  root.userData.attackRestore=[];root.userData.pivot.rotation.x=0;root.userData.pivot.position.y=0;
   const skill=state.skills?.find(s=>s.motion&&s.phase==='active');
   animateIslandModel(root,{...state,skills:skill?[]:state.skills,lastHit:state.lastHitAt},dt,now);
   if(skill){
    const t=Math.min(1,(now-skill.start)/1200),pulse=Math.sin(Math.PI*t);
-   root.userData.pivot.rotation.x=skill.motion==='roar'?.45*pulse:skill.motion==='charge'?.28:0;
+   root.userData.pivot.rotation.x=skill.motion==='roar'?.45*pulse:skill.motion==='charge'?.28:skill.motion==='slam'?.5*pulse:0;
+   if(skill.motion==='slam')root.userData.pivot.position.y=Math.sin(Math.PI*Math.min(1,t))*2.2;
+   else root.userData.pivot.position.y=0;
    if(skill.motion==='swipe')root.traverse(b=>{
     if(b.isBone&&/RightArm$|RightForeArm$/i.test(b.name)){
      root.userData.attackRestore.push([b,b.quaternion.clone()]);
@@ -85,14 +88,14 @@ export class IslandEnemies{
     const key=state.id+':'+spell.id;live.add(key);
     let mesh=this.spells.get(key);
     if(!mesh){
-     mesh=createEnemySpellEffect(THREE,spell,{mobile:matchMedia('(pointer:coarse)').matches});
+     mesh=spell.motion&&['charge','laser','slam','venom','swipe'].includes(spell.motion)?createArenaAbilityEffect(spell):createEnemySpellEffect(THREE,spell,{mobile:matchMedia('(pointer:coarse)').matches});
      this.spells.set(key,mesh);this.scene.add(mesh);
     }
-    updateEnemySpellEffect(THREE,mesh,spell,now,viewport);
+    if(mesh.userData.arenaSkill)updateArenaAbilityEffect(mesh,spell,now,dt);else updateEnemySpellEffect(THREE,mesh,spell,now,viewport);
    }
   }
   for(const [id,mesh] of this.spells)if(!live.has(id)){
-   mesh.removeFromParent();mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.spells.delete(id);
+   if(mesh.userData.arenaSkill)disposeArenaAbilityEffect(mesh);else{mesh.removeFromParent();mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}this.spells.delete(id);
   }
  }
 }
