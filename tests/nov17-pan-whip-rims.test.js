@@ -78,9 +78,9 @@ test('pan explosion hits all victims once, recoils onto caster for exactly 15 HP
  const radius=released.attackEvent.area.radius;
  assert.equal(p.hp,100);
  assert.equal(v.hp,100);
+ tickWorld(world,{now:at+160,actors:[caster,victim,other],activeFighters:0,rng:()=>.5});
+ assert.equal(p.hp,100,'do not launch earlier than the midpoint minus 100ms');
  tickWorld(world,{now:at+200,actors:[caster,victim,other],activeFighters:0,rng:()=>.5});
- assert.equal(p.hp,100,'do not launch before the blast expansion midpoint');
- tickWorld(world,{now:at+330,actors:[caster,victim,other],activeFighters:0,rng:()=>.5});
  assert.equal(p.hp,85,'exact fixed self-damage bypasses armour, resistance and shield');
  assert.equal(p.shield.hp,80,'self blast bypasses the shield rather than depleting it');
  assert.ok(v.hp<100&&o.hp<100,'all overlapping enemies receive the blast');
