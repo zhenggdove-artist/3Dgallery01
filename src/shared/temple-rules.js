@@ -391,12 +391,14 @@ function attack(world,profile,actor,body,context,now){
   // The narrow server collision tube must agree with the visible spray and
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
   stats.radius=forwardCastRadius(weapon,quality,stats.radius,channel);
+   // Restrict ordinary whip contacts to the visible, narrow forward-moving lash.
+   if(weapon.family==='whip'&&!weapon.exotic&&!stats.ultimate){stats.range=Math.min(stats.range,4.7+(Math.max(1,weapon.tier||1)-1)*1.5);stats.radius=.24;}
   // Jellybrella's giant spinning wheel is an area hazard, not a .3m point.
   // Scale the original authoritative area and its warning with the doubled wheel.
   if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
    if(weapon.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
    scaleUltimateFootprint(stats,weapon);
-  const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
+  const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
   const area=stats.ultimate&&weapon.id!=='goldfish'?chargedArea(weapon,origin,direction,stats,groundForSpell,channel):null;
@@ -437,19 +439,20 @@ function attack(world,profile,actor,body,context,now){
     });
     if(world.persistentAttacks.length>40)world.persistentAttacks.splice(0,world.persistentAttacks.length-40);
   }
-  if(stats.ultimate&&!channel){
-    for(const sourceId of (profile.fusion?.[weapon.id]?.effects||[]).slice(0,2)){
+  if(stats.ultimate){
+    for(const [fusionSlot,sourceId] of (profile.fusion?.[weapon.id]?.effects||[]).slice(0,2).entries()){
       const source=itemById(sourceId);if(source?.slot!=='weapon')continue;
       const sourceQuality=weaponQuality(source),full=attackStats(source,1);
       const radius=Math.max(.5,full.radius*sourceQuality.radius*.5);
       const range=Math.max(1,Math.min(stats.range,full.range*sourceQuality.range)*.5);
-      const secondary={...full,range,radius};
+      const echoChannel=channel&&isChannelStaff(source);
+       const secondary={...full,range,radius:echoChannel?Math.max(.3,forwardCastRadius(source,sourceQuality,full.radius,true)*.5):radius};
       // A fused pan/whip retains its 20% echo budget but inherits the
       // same per-weapon footprint shrink as a separately equipped one.
       const echoFactor=/^pan-[1-5]$/.test(source.id)?.5:/^whip-[1-5]$/.test(source.id)?.2:1;
       secondary.range=+(secondary.range*echoFactor).toFixed(3);
       secondary.radius=+(secondary.radius*echoFactor*(/^whip-[1-5]$/.test(source.id)?1.5:1)).toFixed(3);
-      const echoArea=source.id==='goldfish'?null:chargedArea(source,origin,direction,secondary,groundForSpell,false);
+      const echoArea=source.id==='goldfish'?null:chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel);
       if(echoArea?.mode==='area'&&area?.visualCenter&&source.family!=='whip'){
         echoArea.center=[...area.center];echoArea.visualCenter=[...area.visualCenter];
       }
@@ -461,7 +464,7 @@ function attack(world,profile,actor,body,context,now){
       const echoId=id(),echoDamage=+(full.damage*.2).toFixed(3);
       const echoPvP=+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
-      world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,owner:actor.key,weapon:source.id,
+      world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],range:secondary.range,radius:secondary.radius,area:echoArea,
         damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*.2,
         tier:sourceQuality.tier,flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
@@ -469,7 +472,7 @@ function attack(world,profile,actor,body,context,now){
         outHits:[],backHits:[],fanHits:{},fishHits:[],
         createdAt:now,lastAt:now,expiresAt:now+duration});
       fusionEchoes.push({id:echoId,owner:actor.key,origin:[...origin],direction:[...direction],
-        weapon:source.id,family:source.family,color:source.color,charge:1,ultimate:true,
+        weapon:source.id,family:source.family,color:source.color,charge:1,ultimate:true,channel:echoChannel,
         range:secondary.range,radius:secondary.radius,area:echoArea,qualityTier:sourceQuality.tier,
         qualityScale:sourceQuality.visual*.5,qualityDuration:sourceQuality.duration,
         pellets:secondaryPellets?.map(v=>v.direction)||null,
@@ -586,7 +589,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   return moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],distance);
  }
  return moveMonster(world,monster,target,distance);
-},hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position,'normal',null,false,false,skill?.motion==='venom');const player=world.profiles[target.key];if(skill?.motion==='stomp'&&player?.hp>0&&!player.admin){player.effects??={};player.effects.stun={owner:'monster',power:0,until:now+1000,next:now+1000};if(player.hitReaction)player.hitReaction.stunMs=1000;}return result;}});if(!monster.panBlastFlight&&!monster.whipPull&&effectActive(monster,'confuse',now)){
+},hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position,'normal',null,false,false,skill?.motion==='venom');const player=world.profiles[target.key];if(skill?.motion==='stomp'&&player?.hp>0&&!player.admin){player.effects??={};player.effects.stun={owner:'monster',power:0,until:now+1000,next:now+1000};if(player.hitReaction){const dx=target.position[0]-skill.aim[0],dz=target.position[2]-skill.aim[2],length=Math.hypot(dx,dz)||1;Object.assign(player.hitReaction,{stunMs:800,knockbackDistance:2.2,vector:[dx/length,.08,dz/length]});}}return result;}});if(!monster.panBlastFlight&&!monster.whipPull&&effectActive(monster,'confuse',now)){
  const angle=(now/217+(monster.generation||0)*1.73)%(Math.PI*2);
  moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],.21);
 }else if(!monster.panBlastFlight&&!monster.whipPull&&!effectActive(monster,'root',now)&&!effectActive(monster,'freeze',now)&&
@@ -607,7 +610,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
         return moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],distance);
        }
        return moveMonster(world,mob,target,distance);
-      },hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position,'normal',null,false,false,skill?.motion==='venom');const player=world.profiles[target.key];if(skill?.motion==='stomp'&&player?.hp>0&&!player.admin){player.effects??={};player.effects.stun={owner:'monster',power:0,until:now+1000,next:now+1000};if(player.hitReaction)player.hitReaction.stunMs=1000;}return result;}});
+      },hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position,'normal',null,false,false,skill?.motion==='venom');const player=world.profiles[target.key];if(skill?.motion==='stomp'&&player?.hp>0&&!player.admin){player.effects??={};player.effects.stun={owner:'monster',power:0,until:now+1000,next:now+1000};if(player.hitReaction){const dx=target.position[0]-skill.aim[0],dz=target.position[2]-skill.aim[2],length=Math.hypot(dx,dz)||1;Object.assign(player.hitReaction,{stunMs:800,knockbackDistance:2.2,vector:[dx/length,.08,dz/length]});}}return result;}});
     if(!mob.panBlastFlight&&!mob.whipPull&&effectActive(mob,'confuse',now)){
  const angle=(now/217+(mob.slot||0)*1.73)%(Math.PI*2);
  moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],.21);
@@ -731,7 +734,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     const hitKey=pellet===null?key:pellet+':'+key;
     const interval=contactDamageIntervalMs(weapon);
     fx.hitTimes??={}; // Per visible projectile, not just the first contact.
-    const channelKey=fx.owner+':'+weapon.id+':'+hitKey;
+    const channelKey=fx.owner+':'+weapon.id+':'+(fx.echo?'echo'+(fx.fusionSlot??0):'main')+':'+hitKey;
     const due=fx.channel?(world.channelContactLocks?.[channelKey]||0):(fx.hitTimes[hitKey]||0);
     if(now<due)return false;
     const modifiers=directHitModifiers(weapon,{origin:fx.origin,direction:pellet===null?fx.direction:fx.pellets[pellet].direction,range:fx.range},
