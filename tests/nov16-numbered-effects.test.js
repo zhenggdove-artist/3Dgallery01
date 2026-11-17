@@ -36,8 +36,8 @@ test('numbered effects retain verified originals; prism alone switches to origin
   if(weapon.startsWith('prism-')){
    assert.equal(spec.asset,'charged-beam','prism uses newly requested official source');
    const source=await readFile(new URL('../vendor/00gamedevs/charged-beam.js',import.meta.url));
-   assert.match(source.toString(),'The MIT License');
-   assert.match(source.toString(),'"id": "charged-beam"');
+   assert.match(source.toString(),/The MIT License/);
+   assert.match(source.toString(),/"id": "charged-beam"/);
    continue; // The old numbered #29 is retained on disk for other effects.
   }
   const manifestEntry=manifest.assets.find(a=>a.number===num);
