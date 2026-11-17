@@ -38,12 +38,22 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
-  const warmScene=new THREE.Scene(),fxs=[];
+  const warmScene=new THREE.Scene(),fxs=[],warmOrbs=[];
   for(const id of Object.keys(factories)){const fx=this.create(id);fx.update(.18);warmScene.add(fx.group);fxs.push([id,fx]);}
-  const sniper=createOddEffect(THREE,{charge:1,range:50,origin:[0,0,0],direction:[0,0,-1]},{pattern:'sniper',color:'#ffffff'});warmScene.add(sniper.root);await renderer.compileAsync(warmScene,camera);sniper.root.removeFromParent();sniper.root.material.dispose();
+  const sniper=createOddEffect(THREE,{charge:1,range:50,origin:[0,0,0],direction:[0,0,-1]},{pattern:'sniper',color:'#ffffff'});warmScene.add(sniper.root);
+  for(const family of ['water','ice','fire','lightning','beam','petal','wave']){
+   for(let i=0;i<2;i++){this.staffOrb({range:12},{family,range:12},new THREE.Vector3(i*3,2,0),new THREE.Vector3(0,0,1));
+    const entry=this.staffOrbs.at(-1);warmScene.add(entry.group);warmOrbs.push(entry);}
+  }
+  await renderer.compileAsync(warmScene,camera);
+  const previous=renderer.getRenderTarget(),target=new THREE.WebGLRenderTarget(16,16);
+  try{renderer.setRenderTarget(target);renderer.render(warmScene,camera);}
+  finally{renderer.setRenderTarget(previous);target.dispose();}
+  sniper.root.removeFromParent();sniper.root.material.dispose();
+  for(const entry of warmOrbs)this.releaseStaffOrb(entry);
   for(const [id,fx]of fxs){fx.group.removeFromParent();fx.reset();fx.group.visible=false;this.pools.set(id,[fx]);}
   let numbered=0;
   try{numbered=await this.numberedEffects.warm(renderer,camera);}catch(error){console.warn('Ultimate shader prewarm incomplete',error);}
@@ -93,8 +103,10 @@ export class WeaponVFX{
    wave:['#59dfff','#d7ffff','#2da7ab']
   };
   const shades=palette[item.family]||palette.water;
-  const group=new THREE.Group();
+  const group=this.orbPools.get(item.family)?.pop()||new THREE.Group();
+  group.userData.orbFamily=item.family;
   group.name='Flying elemental '+item.family+' spell orb';
+  if(!group.userData.orbBuilt){
   const core=new THREE.Mesh(new THREE.SphereGeometry(.38,20,16),
    new THREE.MeshPhysicalMaterial({color:shades[0],emissive:shades[0],emissiveIntensity:.65,
     metalness:.12,roughness:.24,clearcoat:1,clearcoatRoughness:.17}));
@@ -109,6 +121,8 @@ export class WeaponVFX{
    mote.position.set(Math.cos(angle)*.46,Math.sin(angle*1.3)*.35,Math.sin(angle)*.42);
    group.add(mote);
   }
+  group.userData.orbBuilt=true;
+  }
   const duration=projectileFlightMs(item,false)/1000,range=Math.max(1,Number(data.range)||12);
   group.position.copy(origin);group.scale.setScalar(Math.max(.7,Math.min(1.6,Number(data.qualityScale)||1)));
   this.scene.add(group);
@@ -117,10 +131,10 @@ export class WeaponVFX{
  releaseStaffOrb(entry){
   const at=this.staffOrbs.indexOf(entry);if(at>=0)this.staffOrbs.splice(at,1);
   entry.group.removeFromParent();
-  entry.group.traverse(child=>{
-   child.geometry?.dispose();
-   if(child.material)for(const m of Array.isArray(child.material)?child.material:[child.material])m.dispose();
-  });
+  const family=entry.group.userData.orbFamily,pool=this.orbPools.get(family)||[];
+  if(pool.length<3){pool.push(entry.group);this.orbPools.set(family,pool);}else{
+   entry.group.traverse(child=>{child.geometry?.dispose();if(child.material)for(const m of Array.isArray(child.material)?child.material:[child.material])m.dispose();});
+  }
  }
  play(data,item,root){
   const id=effectFor(item,data.ultimate),direction=new THREE.Vector3(...(data.direction||[0,0,1])).normalize(),origin=new THREE.Vector3(...data.origin),range=Math.max(1,data.range||4),end=data.aimPoint?new THREE.Vector3(...data.aimPoint):data.impactPoint?new THREE.Vector3(...data.impactPoint):origin.clone().addScaledVector(direction,range);
