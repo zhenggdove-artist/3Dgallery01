@@ -26,6 +26,11 @@ export function forwardCastRadius(item,quality=weaponQuality(item),statsRadius=1
 export const channelReachMultiplier=item=>item?.family==='ice'?2:1;
 export const STAFF_TAP_MAX_MS=500;
 export const CAST_MOVE_FACTOR=.05;
+// Whip tiers 4 and 5 share the maximum 0.8-second pull duration.
+export const WHIP_PULL_SPEED=8.64*.5;
+export function whipPullDurationMs(tier){
+ return [200,400,600,800,800][Math.max(0,Math.min(4,(Math.floor(Number(tier))||1)-1))];
+}
 export const MONSTER_WEAPON_DAMAGE_FACTOR=.1;
 export function chargeProgress(heldMs,weaponChargeMs){return Math.max(0,Math.min(1,((Number(heldMs)||0)-STAFF_TAP_MAX_MS)/Math.max(1,Number(weaponChargeMs)||1500)));}
 export function isStaffTap(item,heldMs){
