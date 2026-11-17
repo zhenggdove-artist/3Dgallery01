@@ -40,6 +40,10 @@ export class PlayerController{
        this.fallStartY=p.y;this.grounded=false;this.velocityY=0;
        const length=Math.hypot(dx,dz);
        if(length>.00001){this.jumpVelocity.set(dx/length*this.speed,0,dz/length*this.speed);this.walkOffMomentum=true;}
+      }else if(floor>p.y+.06){
+       // Higher neighbouring decks are not vertical elevators or invisible
+       // guardrails. If feet are already below their top, pass the side.
+       this.fallStartY=p.y;this.grounded=false;this.velocityY=Math.min(0,this.velocityY);
       }else p.y=floor;
     }
   }
