@@ -258,7 +258,17 @@ export class WeaponVFX{
    entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),aim);
    // No stale detached beam: the currently drawn particles remain weapon-bound.
   }
-  this.saberImpact.update(dt);this.particleSkills.update(dt);this.signatureEffects.update(dt);this.numberedEffects.update(dt);
+  // An exception in one animation subsystem must never abort the gameplay frame.
+  for(const [label,system] of [['saber',this.saberImpact],['particles',this.particleSkills],
+    ['signature',this.signatureEffects],['numbered',this.numberedEffects]]){
+   try{system.update(dt);}catch(error){
+    this.failedAnimationSystems??=new Set();
+    if(!this.failedAnimationSystems.has(label)){
+     this.failedAnimationSystems.add(label);
+     console.error('VFX subsystem update failed without blocking other effects',label,error);
+    }
+   }
+  }
   for(const orb of [...this.staffOrbs]){
    orb.age+=dt;
    const t=Math.min(1,orb.age/orb.duration);
@@ -268,11 +278,43 @@ export class WeaponVFX{
     orb.core.scale.setScalar(.93+.11*Math.sin(orb.age*22));
     orb.cloud.material.opacity=.52+.12*Math.sin(orb.age*16);
    if(orb.age>=orb.duration)this.releaseStaffOrb(orb);
-  }for(let i=this.snipers.length-1;i>=0;i--){const f=this.snipers[i];if(!updateOddEffect(f,dt)){f.root.removeFromParent();f.root.material.dispose();this.snipers.splice(i,1);}}for(const e of [...this.active]){e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
-   if(e.start&&!e.stopped)e.fx.group.position.lerpVectors(e.start,e.end,Math.min(1,e.age/e.travel));
-   if(!e.stopped&&e.age>=e.stopAt){if(e.hit)e.fx.hit(e.end);else if(continuous.has(e.id)||e.id==='weapon-smear')e.fx.stop();e.stopped=true;}
-   e.fx.update(dt);if(e.fx.finished||e.age>12)this.release(e);
-  }}
+  }
+  for(let i=this.snipers.length-1;i>=0;i--){
+   const f=this.snipers[i];
+   try{
+    if(!updateOddEffect(f,dt)){f.root.removeFromParent();f.root.material.dispose();this.snipers.splice(i,1);}
+   }catch(error){
+    this.snipers.splice(i,1);
+    try{f.root.removeFromParent();f.root.material.dispose();}catch{}
+    this.reportAnimationFailure('sniper',error);
+   }
+  }
+  for(const e of [...this.active]){
+   try{
+    e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
+    if(e.start&&!e.stopped)e.fx.group.position.lerpVectors(e.start,e.end,Math.min(1,e.age/e.travel));
+    if(!e.stopped&&e.age>=e.stopAt){
+     if(e.hit)e.fx.hit(e.end);
+     else if(continuous.has(e.id)||e.id==='weapon-smear')e.fx.stop();
+     e.stopped=true;
+    }
+    e.fx.update(dt);
+    if(e.fx.finished||e.age>12)this.release(e);
+   }catch(error){
+    // The failed native instance cannot go back to the reusable GPU pool.
+    const index=this.active.indexOf(e);if(index>=0)this.active.splice(index,1);
+    if(this.charger===e)this.charger=null;
+    try{e.fx.group.removeFromParent();e.fx.dispose();}catch{}
+    this.reportAnimationFailure(e.id,error);
+   }
+  }
+ }
+ reportAnimationFailure(id,error){
+  this.failedAnimations??=new Set();
+  if(this.failedAnimations.has(id))return;
+  this.failedAnimations.add(id);
+  console.error('Weapon animation failed; quarantined this instance',id,error);
+ }
  dispose(){this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
   for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}

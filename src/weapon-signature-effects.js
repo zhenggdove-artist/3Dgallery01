@@ -383,8 +383,19 @@ export class WeaponSignatureEffects {
  }
  update(dt){
   for(const entry of [...this.active]){
-   entry.age+=dt;entry.update(entry.age);
-   if(entry.age>=entry.duration)this.remove(entry);
+   try{
+    entry.age+=dt;entry.update(entry.age);
+    if(entry.age>=entry.duration)this.remove(entry);
+   }catch(error){
+    const index=this.active.indexOf(entry);if(index>=0)this.active.splice(index,1);
+    try{this.disposeGroup(entry.obj);}catch{entry.obj.removeFromParent();}
+    this.failedSignatureEffects??=new Set();
+    const key=entry.key||'signature';
+    if(!this.failedSignatureEffects.has(key)){
+     this.failedSignatureEffects.add(key);
+     console.error('Failed signature animation disposed; render continues',key,error);
+    }
+   }
   }
  }
  dispose(){

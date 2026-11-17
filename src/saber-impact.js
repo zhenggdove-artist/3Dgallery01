@@ -100,29 +100,34 @@ export class SaberImpact{
  }
  update(dt){
   for(const fx of [...this.active]){
-   fx.age+=dt;const t=fx.age,burst=Math.max(0,t-.34);
-   const travel=Math.min(1,t/.54);
-   fx.wave.position.z=1+fx.length*travel*.81;
-   fx.wave.rotation.z=-.38+Math.sin(t*6)*.06;
-   fx.wave.scale.setScalar(1+Math.min(1,travel)*.5);
-   fx.waveMat.uniforms.strength.value=Math.max(0,1-t/.83)*1.45;
-   fx.wave.visible=t<.85;
-   fx.gap.visible=fx.glowingRims.visible=t>.27;
-   fx.gap.material.opacity=Math.max(0,Math.min(1,(t-.27)*8))*.94*(1-Math.max(0,t-2.1)/1.1);
-   fx.glowingRims.material.opacity=Math.max(0,1-Math.max(0,t-1.6)/1.4)*.94;
-   fx.shockwave.visible=t>.3&&t<1.55;
-   fx.shockwave.scale.setScalar(1+burst*11);
-   fx.shockwave.material.opacity=Math.max(0,.8-burst*.64);
-   for(let i=0;i<fx.seeds.length;i++){
-    const s=fx.seeds[i],delay=.24+(s.z/fx.length)*.26,d=Math.max(0,t-delay);
-    const live=d>0&&d<2;
-    fx.pos.set(s.x+s.velocity*d,.22+Math.max(0,s.speed*d-13*d*d),s.z+Math.sin(s.twist)*d*1.4);
-    fx.q.setFromAxisAngle(up,s.twist+d*11);
-    fx.scale.setScalar(live?(0.32+(i%7)*.13)*Math.max(.08,1-d*.5):0);
-    fx.matrix.compose(fx.pos,fx.q,fx.scale);fx.rocks.setMatrixAt(i,fx.matrix);
+   try{
+    fx.age+=dt;const t=fx.age,burst=Math.max(0,t-.34);
+    const travel=Math.min(1,t/.54);
+    fx.wave.position.z=1+fx.length*travel*.81;
+    fx.wave.rotation.z=-.38+Math.sin(t*6)*.06;
+    fx.wave.scale.setScalar(1+Math.min(1,travel)*.5);
+    fx.waveMat.uniforms.strength.value=Math.max(0,1-t/.83)*1.45;
+    fx.wave.visible=t<.85;
+    fx.gap.visible=fx.glowingRims.visible=t>.27;
+    fx.gap.material.opacity=Math.max(0,Math.min(1,(t-.27)*8))*.94*(1-Math.max(0,t-2.1)/1.1);
+    fx.glowingRims.material.opacity=Math.max(0,1-Math.max(0,t-1.6)/1.4)*.94;
+    fx.shockwave.visible=t>.3&&t<1.55;
+    fx.shockwave.scale.setScalar(1+burst*11);
+    fx.shockwave.material.opacity=Math.max(0,.8-burst*.64);
+    for(let i=0;i<fx.seeds.length;i++){
+     const s=fx.seeds[i],delay=.24+(s.z/fx.length)*.26,d=Math.max(0,t-delay);
+     const live=d>0&&d<2;
+     fx.pos.set(s.x+s.velocity*d,.22+Math.max(0,s.speed*d-13*d*d),s.z+Math.sin(s.twist)*d*1.4);
+     fx.q.setFromAxisAngle(up,s.twist+d*11);
+     fx.scale.setScalar(live?(0.32+(i%7)*.13)*Math.max(.08,1-d*.5):0);
+     fx.matrix.compose(fx.pos,fx.q,fx.scale);fx.rocks.setMatrixAt(i,fx.matrix);
+    }
+    fx.rocks.instanceMatrix.needsUpdate=true;
+    if(t>=fx.duration)this.remove(fx);
+   }catch(error){
+    try{this.remove(fx);}catch{fx.root?.removeFromParent();this.active.splice(this.active.indexOf(fx),1);}
+    if(!this.failedSaberError){this.failedSaberError=true;console.error('Saber impact failed; animation frame continues',error);}
    }
-   fx.rocks.instanceMatrix.needsUpdate=true;
-   if(t>=fx.duration)this.remove(fx);
   }
  }
  remove(fx){

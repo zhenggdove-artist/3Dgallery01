@@ -71,6 +71,9 @@ export class MonsterAttackEffects {
  }
  async warm(renderer,camera){
   // First use is GPU-warmed behind the loading screen, not in the combat frame.
+  // The boot camera was historically left at (0,0,0), causing all the
+  // hidden floor impacts to be culled by the first actual GPU draw.
+  const view=camera.clone();view.position.set(0,10,23);view.lookAt(0,1,0);view.updateMatrixWorld(true);
   const target=new THREE.WebGLRenderTarget(32,32),before=renderer.getRenderTarget();
   try{
    for(const motion of ['beam','venom','charge','stomp','swipe']){
@@ -88,8 +91,8 @@ export class MonsterAttackEffects {
       }
      if(e.native&&motion==='beam')e.native.setEndpoints(new THREE.Vector3(0,7,0),new THREE.Vector3(10,7,6));
      e.native?.update(.016);
-     await renderer.compileAsync(stage,camera);
-     renderer.setRenderTarget(target);renderer.render(stage,camera);
+     await renderer.compileAsync(stage,view);
+     renderer.setRenderTarget(target);renderer.render(stage,view);
      renderer.setRenderTarget(before);
      this.scene.add(e.root);this.put(e);
     }
