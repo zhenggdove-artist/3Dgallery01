@@ -34,6 +34,12 @@ export function monsterBeamEndpoint(skill,now,origin=skill.origin){
  const reach=length*(.24+.76*t),pan=Math.sin(t*Math.PI*1.65)*.12*reach;
  return [origin[0]+ux*reach-uz*pan,origin[1]||0,origin[2]+uz*reach+ux*pan];
 }
+// Predict a fixed charge path from the same timestamps on server and client.
+export function monsterChargePosition(skill,now){
+ const t=Math.max(0,Math.min(1,(now-skill.start)/Math.max(1,skill.end-skill.start)));
+ return [skill.origin[0]+(skill.aim[0]-skill.origin[0])*t,
+  skill.origin[1]||0,skill.origin[2]+(skill.aim[2]-skill.origin[2])*t];
+}
 export function monsterSkillContains(skill,p,now,origin=skill.origin){
  if(skill.phase!=='active'||now>=skill.end)return false;
  const config=SKILLS[skill.motion];if(!config)return false;
@@ -65,6 +71,13 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
   if(!SKILLS[s.motion])continue; // discard pre-update persistent spell snapshots
   s.hit??=[];s.lastTick??={};
   if(s.phase==='warning'&&now>=s.end){s.phase='active';s.start=s.end;s.end=s.start+(SKILLS[s.motion]?.active||800);s.lastTick={};}
+  // Finish the time-based path even if this is the skill-expiration tick.
+  if(s.phase==='active'&&s.motion==='charge'){
+   const desired=monsterChargePosition(s,now),remaining=flatDistance(monster.position,desired);
+   const speed=Math.max(4,flatDistance(s.origin,s.aim)/Math.max(.1,(s.end-s.start)/1000));
+   const step=Math.min(remaining,speed*Math.min(dt,.5)*Math.max(0,1-slow));
+   if(step>.001){move(desired,step);monster.moving=true;}
+  }
   if(s.phase!=='active'||now>=s.end)continue;
   if(s.motion==='beam'){
     // Walking side-step while spraying, speed at most .85m/s.
@@ -75,14 +88,6 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
     const remaining=flatDistance(monster.position,position);
     if(remaining>.01&&dt>0){move(position,Math.min(remaining,.85*dt));monster.moving=true;monster.patrolling=true;}
    }
-   if(s.motion==='charge'){
-   // A fixed marked path, not homing after the warning has been shown.
-   const duration=Math.max(.1,(s.end-s.start)/1000);
-   const remaining=flatDistance(monster.position,s.aim);
-   const speed=Math.max(4,flatDistance(s.origin,s.aim)/duration);
-   const step=Math.min(remaining,speed*Math.min(dt,.5)*Math.max(0,1-slow));
-   if(step>.001){move(s.aim,step);monster.moving=true;}
-  }
   for(const target of targets){
    const key=target.key;
    if(s.motion==='venom'||s.motion==='beam'){
