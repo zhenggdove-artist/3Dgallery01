@@ -431,6 +431,7 @@ export class WeaponParticleEffects{
  }
  update(dt){
   for(const entry of [...this.active]){
+   try{
     if(entry.charging)continue;
     entry.age+=dt;entry.material.uniforms.uAge.value=entry.age;
     if(entry.homingTarget&&entry.age<.9&&entry.homingTarget.visible){
@@ -441,6 +442,16 @@ export class WeaponParticleEffects{
       }
     }
     if(!entry.channeling&&entry.age>=entry.duration)this.remove(entry);
+   }catch(error){
+    const index=this.active.indexOf(entry);if(index>=0)this.active.splice(index,1);
+    if(this.charger===entry)this.charger=null;
+    try{entry.root.removeFromParent();entry.geometry.dispose();entry.material.dispose();}catch{}
+    this.failedParticleEffects??=new Set();
+    if(!this.failedParticleEffects.has(entry.recipe)){
+     this.failedParticleEffects.add(entry.recipe);
+     console.error('Invalid particle emitter released; render continues',entry.recipe,error);
+    }
+   }
   }
  }
  remove(entry){
