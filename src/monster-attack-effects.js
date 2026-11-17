@@ -13,6 +13,8 @@ const warningRect=new THREE.PlaneGeometry(1,1),warningCircle=new THREE.CircleGeo
 export class MonsterAttackEffects {
  constructor(scene){
   this.scene=scene;this.live=new Map();this.pool=new Map();this.completed=new Set();
+  this.scratch={mat:new THREE.Matrix4(),pos:new THREE.Vector3(),rot:new THREE.Quaternion(),
+   scale:new THREE.Vector3(),axis:new THREE.Vector3(.4,.8,.3).normalize()};this.failedSkills=new Set();
  }
  make(motion){
   const root=new THREE.Group();root.name='Monster skill '+motion;
@@ -71,7 +73,7 @@ export class MonsterAttackEffects {
   const target=new THREE.WebGLRenderTarget(32,32),before=renderer.getRenderTarget();
   try{
    for(const motion of ['beam','venom','charge','stomp','swipe']){
-    const count=motion==='beam'||motion==='venom'?3:2;
+    const count=motion==='stomp'?6:motion==='beam'?4:motion==='venom'?3:2;
     for(let i=0;i<count;i++){
      const e=this.make(motion),stage=new THREE.Scene();
      stage.add(e.root);e.native?.group&&(e.native.group.visible=true);
@@ -124,8 +126,7 @@ export class MonsterAttackEffects {
    if(stompLanded){
     const phase=Math.min(1,Math.max(0,(now-(s.start+(s.end-s.start)*.76))/Math.max(1,(s.end-s.start)*.24)));
     const origin=s.aim||s.origin;
-    const mat=new THREE.Matrix4(),pos=new THREE.Vector3(),rot=new THREE.Quaternion(),
-     scale=new THREE.Vector3(),axis=new THREE.Vector3(.4,.8,.3).normalize();
+    const {mat,pos,rot,scale,axis}=this.scratch;
     e.fractures.position.set(origin[0],.03,origin[2]);
     e.fractures.scale.setScalar(Math.max(.01,(s.radius||7)/7*Math.min(1,phase*5)));
     for(let j=0;j<32;j++){
@@ -165,7 +166,11 @@ export class MonsterAttackEffects {
     const key=state.id+':'+s.id;needed.add(key);
     let e=this.live.get(key);
     if(!e){e=this.take(s.motion);this.scene.add(e.root);this.live.set(key,e);}
-    this.updateEntry(e,s,now,s.motion==='beam'?mouthForState(state,s):null,state.position);
+    try{this.updateEntry(e,s,now,s.motion==='beam'?mouthForState(state,s):null,state.position);}
+    catch(error){
+     this.live.delete(key);this.put(e);needed.delete(key);
+     if(!this.failedSkills.has(s.motion)){this.failedSkills.add(s.motion);console.error('Monster VFX update failed',s.motion,error);}
+    }
    }
   }
   for(const [key,e] of this.live)if(!needed.has(key)){this.put(e);this.live.delete(key);}

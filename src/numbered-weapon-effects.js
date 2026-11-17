@@ -465,6 +465,7 @@ export class NumberedWeaponEffects {
  update(dt){
   const now=performance.now();
   for(const e of [...this.active]){
+   try{
    e.age+=dt;
    if(e.key&&now-e.lastPulse>Math.max(CHANNEL_GRACE_MS,Number(e.item.cooldown||700)*2+650)){
     this.remove(e);continue;
@@ -503,6 +504,14 @@ export class NumberedWeaponEffects {
    // Continuous originals (#08, charged-beam, #20, #73) sustain without being reset
    // by individual server pulses. There is no animation reset on impact.
    if(e.key&&e.fx.finished)e.fx.reset();
+   }catch(error){
+    // A bad native effect must not stop the entire gameplay frame.
+    this.remove(e);this.failedEffects??=new Set();
+    if(!this.failedEffects.has(e.spec.asset)){
+     this.failedEffects.add(e.spec.asset);
+     console.error('00GameDevs VFX update failure',e.spec.asset,error);
+    }
+   }
   }
  }
  hasFullScreenPostprocess(){
