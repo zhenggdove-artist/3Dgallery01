@@ -7,7 +7,7 @@ import {ChargeTargetPreview} from '../src/charge-target-preview.js';
 import {ULTIMATE_FOOTPRINT_SCALE,scaleUltimateFootprint} from '../src/shared/charge-area.js';
 import {ultimateWorldScale,NumberedWeaponEffects} from '../src/numbered-weapon-effects.js';
 import {WEAPONS,itemById,attackStats} from '../src/shared/catalog.js';
-import {weaponQuality,isChannelStaff,channelReachMultiplier} from '../src/shared/weapon-abilities.js';
+import {weaponQuality,isChannelStaff,channelReachMultiplier,forwardCastRadius} from '../src/shared/weapon-abilities.js';
 
 test('ultimate footprint ratios: global 60%, pan another 50%, whip another 60%',()=>{
  assert.equal(ULTIMATE_FOOTPRINT_SCALE,.6);
@@ -37,6 +37,8 @@ test('every weapon receives a smaller warning with its quality multiplier',()=>{
   if(isChannelStaff(item))stats.range=Math.max(stats.range,item.id==='clam'?10:Math.min(18,item.range))*channelReachMultiplier(item);
   stats.range=+(stats.range*q.range).toFixed(2);
   if(item.id==='black-cat')stats.range=256;
+  stats.radius=forwardCastRadius(item,q,stats.radius,isChannelStaff(item));
+  if(item.id==='jellybrella')stats.radius=Math.max(10,stats.radius*2);
   scaleUltimateFootprint(stats,item);
   assert.ok(Math.abs(v.footprint.range-stats.range)<.001,item.id);
   if(item.id.startsWith('pan-')||item.id.startsWith('whip-')){
