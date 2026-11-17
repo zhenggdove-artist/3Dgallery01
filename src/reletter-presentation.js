@@ -31,11 +31,13 @@ export function disposeVisual(root){if(!root)return;const geometry=new Set(),mat
 function poseOverheadStaff(root,blade,bones,restore){
  const angle=root.rotation.y,forward=new THREE.Vector3(Math.sin(angle),0,Math.cos(angle));
  const right=new THREE.Vector3(Math.cos(angle),0,-Math.sin(angle));
- const grip=root.position.clone().add(new THREE.Vector3(0,2.04,0)).addScaledVector(forward,.48);
+ const grip=root.localToWorld(new THREE.Vector3(0,2.04,.48));
  for(const side of ['Right','Left']){
   const hand=bones?.get(side+'Hand'),chain=[bones?.get(side+'ForeArm'),bones?.get(side+'Arm')].filter(Boolean);
   if(!hand||!chain.length)continue;
-  const target=grip.clone().addScaledVector(right,side==='Right'?.11:-.11);
+  // Both hands clasp one upright staff shaft, with a staggered vertical grip.
+  const target=grip.clone().addScaledVector(right,side==='Right'?.06:-.06)
+   .add(new THREE.Vector3(0,side==='Right'?.08:-.10,0));
   for(const bone of chain)restore.push([bone,'quaternion',bone.quaternion.clone()]);
   root.updateWorldMatrix(true,true);
   for(let pass=0;pass<2;pass++)for(const bone of chain){
@@ -50,10 +52,12 @@ function poseOverheadStaff(root,blade,bones,restore){
  }
  const source=Array.isArray(root.userData.staffAimDirection)?new THREE.Vector3(...root.userData.staffAimDirection):forward;
  const aim=source.lengthSq()>.001?source.normalize():forward;
+ // The reticle controls the emitted ray, NOT the staff shaft's orientation.
+ const upright=new THREE.Vector3(aim.x*.06,1,aim.z*.06).normalize();
  root.updateWorldMatrix(true,true);
- blade.position.copy(root.worldToLocal(grip));
+ blade.position.copy(root.worldToLocal(grip.clone()));
  blade.quaternion.copy(root.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(
-  new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),aim)));
+  new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),upright)));
  blade.updateWorldMatrix(true,true);
 }
 
