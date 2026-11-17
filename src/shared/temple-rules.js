@@ -731,9 +731,13 @@ function tickPersistentAttacks(world,actors,now,rng){
      }
     }
     if(applied&&!applied.immune&&!fx.echo&&fx.charge>=1&&
-       /^whip-[1-5]$/.test(weapon.id)&&isPlayer&&fx.area?.mode==='area'){
+       /^whip-[1-5]$/.test(weapon.id)&&isPlayer&&fx.area?.mode==='area'&&
+       !(fx.pullHits||[]).includes(enemy.key)){
       const victim=world.profiles[enemy.key];
       if(victim){
+       // One suction window per struck player per cast, never prolonged by
+       // the continuing hitbox's independent damage-over-time contacts.
+       fx.pullHits??=[];fx.pullHits.push(enemy.key);
        const whipPull={id:id(),time:now,center:[fx.area.center[0],fx.area.center[2]],
         durationMs:whipPullDurationMs(fx.tier||weapon.tier),speed:WHIP_PULL_SPEED};
        victim.whipPull=whipPull;
