@@ -93,7 +93,7 @@ export function validName(value){return typeof value==='string'&&value.trim().le
 
 export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
-    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,effects:clone(profile.effects||{}),admin:profile.admin};
+    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,effects:clone(profile.effects||{}),admin:profile.admin};
 }
 
 export function worldView(world,actorKey,now=Date.now()){
@@ -730,6 +730,22 @@ function tickPersistentAttacks(world,actors,now,rng){
       },now);
      }
     }
+    if(applied&&!applied.immune&&!fx.echo&&fx.charge>=1&&
+       /^whip-[1-5]$/.test(weapon.id)&&isPlayer&&fx.area?.mode==='area'){
+      const victim=world.profiles[enemy.key];
+      if(victim){
+       const whipPull={id:id(),time:now,center:[fx.area.center[0],fx.area.center[2]],
+        durationMs:whipPullDurationMs(fx.tier||weapon.tier),speed:WHIP_PULL_SPEED};
+       victim.whipPull=whipPull;
+       // The whip's ordinary root debuff must not make resisting this
+       // charged vortex impossible. Preserve other casters' status effects.
+       if(victim.effects?.root?.owner===fx.owner)delete victim.effects.root;
+       if(victim.effectLocks?.root)delete victim.effectLocks.root;
+       if(victim.hitReaction?.time===now)
+        Object.assign(victim.hitReaction,{whipPull,stunMs:0});
+       else victim.hitReaction={id:id(),time:now,stunMs:0,vector:[0,0,0],whipPull};
+      }
+    }
     return !!applied;
    };
    // Each travelling sphere uses its own independent ray. The server sweeps
@@ -818,16 +834,6 @@ function tickPersistentAttacks(world,actors,now,rng){
       }
      }else if(outcome(target,pos,groundContact,null,fx.area.travel)){
       changed=true;
-      if(!fx.echo&&/^whip-[1-5]$/.test(weapon.id)&&fx.charge>=1&&target.kind==='player'){
-       const victim=world.profiles[enemy.key];
-       if(victim){
-        const whipPull={center:[fx.area.center[0],fx.area.center[2]],
-         durationMs:whipPullDurationMs(fx.tier||weapon.tier),speed:WHIP_PULL_SPEED};
-        // Shield-absorbed hits still pull; the victim can steer against it.
-        if(victim.hitReaction?.time===now)Object.assign(victim.hitReaction,{whipPull,stunMs:0});
-        else victim.hitReaction={id:id(),time:now,stunMs:0,vector:[0,0,0],whipPull};
-       }
-      }
       if(panBlast&&target.kind==='player'){
        const reaction=world.profiles[enemy.key]?.hitReaction;
        if(reaction)Object.assign(reaction,{vector:blastDirection(fx.area.center,enemy.position,fx.direction),
