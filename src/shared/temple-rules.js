@@ -125,7 +125,14 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
     if(freeze||root)return {state:{...previous,position:[...previous.position],
       rotation:freeze?previous.rotation:+next.rotation.toFixed(4),
       animation:'idle',visible:true}};
-    const elapsed=clamp(elapsedMs/1000,.05,12),distance=distanceTo(next.position,previous.position);
+    const elapsed=clamp(elapsedMs/1000,.05,12);
+    // Horizontal movement and vertical free-fall are different physical
+    // quantities. The prior Euclidean distance budget incorrectly rejected
+    // legitimate accelerations under 25m/s² gravity when stepping off high
+    // circular platforms, snapping players back against an invisible rim.
+    const horizontal=Math.hypot(next.position[0]-previous.position[0],
+      next.position[2]-previous.position[2]);
+    const deltaY=next.position[1]-previous.position[1];
     const boostedSpeed=clamp(Number(mobility?.stats?.speed)||1,.5,6);
     const hasWings=!!mobility?.stats?.impulse;
     const recentHit=now-(mobility?.hitReaction?.time||0)<1800;
@@ -137,7 +144,14 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
     // server-authorized knockback need more headroom without allowing teleports.
     const maxSpeed=(hasWings?28:14)*boostedSpeed*(mobility?.channeling ? .05 : 1)+(recentHit?18:0)+(recentImpulse?18:0);
     const allowance=maxSpeed*elapsed+(mobility?.channeling ? 1.5 : 5.5)+(recentHit?6:0);
-    if(distance>allowance&&!justRespawned&&!landedFromWrite)
+    // Descending from a 30m platform reaches ~39m/s before landing,
+    // while ordinary upward jumps start at 10m/s. Validate both axes
+    // without turning gravity into a forbidden lateral wall.
+    const verticalSpeed=deltaY<0?42:(hasWings?32:18);
+    const verticalAllowance=(verticalSpeed+(recentHit||recentImpulse?14:0))*elapsed+
+      (mobility?.channeling?1.5:5.5);
+    if((horizontal>allowance||Math.abs(deltaY)>verticalAllowance)&&
+      !justRespawned&&!landedFromWrite)
       return {error:'Movement rejected',state:previous};
   }
   return {state:{position:next.position.map(n=>+n.toFixed(3)),rotation:+next.rotation.toFixed(4),animation:String(next.animation||'idle').slice(0,12),visible:next.visible!==false}};
