@@ -66,6 +66,20 @@ export class GameAudio{
   if(this.music)this.music.volume=this.musicVolume();
  }
  musicVolume(){return Math.max(0,Math.min(1,.35*(this.volumes.music??1)*(this.volumes.master??1)));}
+ setUploadedMusic(backendUrl,version){
+  // Do not restart the track on ordinary world snapshots.
+  if(!backendUrl||!Number.isSafeInteger(Number(version))||Number(version)<=0)return;
+  const url=String(backendUrl).replace(/\/$/,'')+'/api/gm/music?v='+encodeURIComponent(version);
+  if(url===this.uploadedMusicUrl)return;
+  this.uploadedMusicUrl=url;
+  this.trackSources=[url,'./sound/GGTEMPLE%E9%9F%B3%E6%A8%82.mp3','./sound/backgroundmusic.MP3'];
+  this.musicIndex=0;
+  if(this.music){
+   this.music.pause();this.music.src=url;this.music.load();
+   this.music.volume=this.musicVolume();
+   this.music.play().catch(()=>{}); // Playback may await the next user gesture on iOS.
+  }
+ }
  startMusic(){
   this.unlock();if(!this.music){
    this.music=new Audio();this.music.loop=true;this.music.preload='auto';
