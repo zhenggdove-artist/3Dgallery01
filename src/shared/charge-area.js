@@ -21,10 +21,10 @@ export const ULTIMATE_FOOTPRINT_SCALE=.6;
 export function scaleUltimateFootprint(stats,item=null){
  if(stats?.ultimate){
   // The global 60% change remains in force. The frying-pan ultimate is
-  // another 50% smaller; the whip ultimate is another 60% smaller.
+  // another 50% smaller; the whip ultimate is now another 80% smaller.
   // Use the item ID, not the family: the Chiang token is not a frying pan.
   const relative=/^pan-[1-5]$/.test(item?.id||'')?.5:
-   /^whip-[1-5]$/.test(item?.id||'')?.4:1;
+   /^whip-[1-5]$/.test(item?.id||'')?.2:1;
   const factor=ULTIMATE_FOOTPRINT_SCALE*relative;
   stats.range=+(Math.max(.5,Number(stats.range)||0)*factor).toFixed(3);
   stats.radius=+(Math.max(.1,Number(stats.radius)||0)*factor).toFixed(3);
@@ -45,15 +45,20 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  const floorAtDistance=ground(origin[0]+dir[0]*defaultDistance,origin[2]+dir[2]*defaultDistance,origin[1]);
  const intercept=dir[1]<-.04?(origin[1]-floorAtDistance)/(-dir[1]):Infinity;
  const travel=clamp(Number.isFinite(intercept)?intercept:defaultDistance,3,range);
- const x=origin[0]+dir[0]*travel,z=origin[2]+dir[2]*travel;
- const floor=Math.max(0,ground(x,z,origin[1]));
  const [dx,dz]=flatDirection(direction);
+ // Shift the WHOLE whip explosion (VFX, warning, server hit circle) one
+ // additional blast radius away from the caster. Preserve the attack's
+ // charge range independently from the target-centre displacement.
+ const whipOffset=stats?.ultimate&&/^whip-[1-5]$/.test(item?.id||'')?radius:0;
+ const centerDistance=travel+whipOffset;
+ const x=origin[0]+dx*centerDistance,z=origin[2]+dz*centerDistance;
+ const floor=Math.max(0,ground(x,z,origin[1]));
  const nearFloor=Math.max(0,ground(origin[0],origin[2],origin[1]));
  return {
   mode,visualCenter:[x,floor+.16,z],
   center:[x,mode==='area'?floor+.12:Math.max(floor+.12,origin[1]+dir[1]*travel),z],
   // Sector radius is its forward reach; circle radius is its AoE extent.
-  radius,travel,range,
+  radius,travel:centerDistance,range,
   ...(mode==='sector'?{apex:[origin[0],nearFloor+.12,origin[2]],
    forward:[dx,dz],angleDeg:CLAM_SECTOR_ANGLE}: {})
  };
