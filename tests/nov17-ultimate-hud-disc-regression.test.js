@@ -16,7 +16,7 @@ test('ultimate footprint ratios: global 60%, pan another 50%, whip another 60%',
   assert.ok(normal.ultimate,weapon.id);
   const stats={...normal};
   scaleUltimateFootprint(stats,weapon);
-  const extra=weapon.id.startsWith('pan-')?.5:weapon.id.startsWith('whip-')?.4:1;
+  const extra=weapon.id.startsWith('pan-')?.5:weapon.id.startsWith('whip-')?.2:1;
   assert.ok(Math.abs(stats.range-normal.range*.6*extra)<.001,weapon.id+' reach');
   assert.ok(Math.abs(stats.radius-normal.radius*.6*extra)<.001,weapon.id+' radius');
  }
@@ -60,16 +60,17 @@ test('original #68 pan and #48 whip world geometry reduce by exactly 50% and 60%
  fx.update(.016);
  assert.ok(Math.abs(e.group.scale.x-panExpected)<1e-6,'native frame update must not reset pan size');
  fx.dispose();
- const whipping={...event,area:{...event.area,radius:2.88}};
+ const whipping={...event,area:{...event.area,radius:1.44}};
  const whip=new NumberedWeaponEffects(new THREE.Scene());
  assert.ok(whip.play(whipping,itemById('whip-1'),null));
  const we=whip.active[0];
  assert.equal(we.spec.number,48);
  assert.ok(Math.abs(we.group.scale.x-ultimateWorldScale(48,whipping,{size:we.options.size}))<1e-6);
- const originalWhipScale=Math.max(2,Math.min(12,(2.88/.4)/Math.max(.25,we.options.size*.8)));
- assert.ok(Math.abs(we.group.scale.x-originalWhipScale*.4)<1e-6);
+ const originalWhipScale=Math.max(2,Math.min(12,(1.44/.2)/Math.max(.25,we.options.size*.8)));
+ assert.ok(Math.abs(we.group.scale.x-originalWhipScale*.2)<1e-6);
  whip.dispose();
  assert.ok(ultimateWorldScale(53,event,{size:.8})>1);
+ assert.ok(ultimateWorldScale(48,event,{size:.8})>0,'tiny whip FX stays visible');
 });
 test('raised displays have no side wall: the player can cross an edge and fall naturally',()=>{
  const controller=Object.create(PlayerController.prototype);
