@@ -24,7 +24,10 @@
   // GitHub Pages and mobile Safari can otherwise mix cached modules from
   // different rapid deployments, failing before boot() and leaving 0%.
   (() => {
-    const release = String(Math.floor(Date.now() / 15000));
+    // Stable for one deployment: 15-second URL rotation previously defeated Safari cache
+    // and forced every 4G reload to download the whole large module graph.
+    // Bump this token when changing the boot graph or deployed JS modules.
+    const release = '20261118-safari-startup-fix-01';
     const imports = {
       "three": "./vendor/three/build/three.module.js",
       "three/addons/": "./vendor/three/examples/jsm/"
@@ -38,14 +41,19 @@
   // Import/link failures happen before main.js can enter its boot try/catch.
   (() => {
     let moduleFailure = "";
+    window.templeStartupDiagnostics = {release: "20261118-safari-startup-fix-01", failures: []};
     function displayFailure(message) {
       if (!message || document.body?.classList.contains("ready")) return;
+      // Do not replace the original module/import error with a later timeout.
+      if (moduleFailure) return;
       moduleFailure = String(message);
+      window.templeStartupDiagnostics.failures.push(moduleFailure);
       const detail = document.getElementById("loading-detail");
       const value = document.getElementById("loading-percent");
       if (detail) detail.textContent = "Startup error: " + moduleFailure;
       if (value) value.textContent = "ERROR";
     }
+    window.templeDisplayStartupError = displayFailure;
     addEventListener("error", event => {
       if (event.message) displayFailure(event.message);
       else if (event.target?.tagName === "SCRIPT") displayFailure("Module request failed");
@@ -53,11 +61,19 @@
     addEventListener("unhandledrejection", event => displayFailure(event.reason?.message || event.reason || "Uncaught startup rejection"));
     document.addEventListener("DOMContentLoaded", () => {
       if (moduleFailure) displayFailure(moduleFailure);
+      // A 4G cold load of the vendor-heavy ES module graph can legitimately
+      // exceed 12 seconds. A slow download is not itself a startup failure.
       setTimeout(() => {
-        if (!window.templeLoadTimings && !document.body.classList.contains("ready")) {
-          displayFailure("Game module did not initialise; refresh this page");
+        if (!window.templeLoadTimings && !moduleFailure && !document.body.classList.contains("ready")) {
+          const detail = document.getElementById("loading-detail");
+          if (detail) detail.textContent = "Loading game modules over the network…";
         }
-      }, 12000);
+      }, 20000);
+      setTimeout(() => {
+        if (!window.templeLoadTimings && !moduleFailure && !document.body.classList.contains("ready")) {
+          displayFailure("Module loading stalled. Check connection and reopen this page.");
+        }
+      }, 120000);
     });
   })();
 </script>
@@ -106,6 +122,12 @@
   <aside id="art-editor" hidden aria-label="GM artwork editor"></aside>
   <div id="art-handles" hidden></div>
   <div id="death" hidden><p>YOU FELL</p><p id="death-killer"></p><strong id="respawn-count">5</strong><small>Equipment kept. 20% of coins dropped where you fell.</small></div>
-  <script type="module">import "./src/main.js";</script>
+  <script type="module">
+    // Unlike a static import, dynamic import exposes the actual module error
+    // (syntax, missing asset or MIME failure) so mobile Safari can report it.
+    import("./src/main.js").catch(error => {
+      window.templeDisplayStartupError?.(error?.stack || error?.message || String(error));
+    });
+  </script>
 </body>
 </html>
