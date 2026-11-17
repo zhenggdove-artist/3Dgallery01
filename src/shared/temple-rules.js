@@ -411,11 +411,11 @@ function attack(world,profile,actor,body,context,now){
       const secondary={...full,range,radius};
       // A fused pan/whip retains its 20% echo budget but inherits the
       // same per-weapon footprint shrink as a separately equipped one.
-      const echoFactor=/^pan-[1-5]$/.test(source.id)?.5:/^whip-[1-5]$/.test(source.id)?.4:1;
+      const echoFactor=/^pan-[1-5]$/.test(source.id)?.5:/^whip-[1-5]$/.test(source.id)?.2:1;
       secondary.range=+(secondary.range*echoFactor).toFixed(3);
       secondary.radius=+(secondary.radius*echoFactor).toFixed(3);
       const echoArea=source.id==='goldfish'?null:chargedArea(source,origin,direction,secondary,groundForSpell,false);
-      if(echoArea?.mode==='area'&&area?.visualCenter){
+      if(echoArea?.mode==='area'&&area?.visualCenter&&source.family!=='whip'){
         echoArea.center=[...area.center];echoArea.visualCenter=[...area.visualCenter];
       }
       const exotic=source.id==='fan'?'fan':source.id==='giraffe'?'giraffe':source.id==='goldfish'?'goldfish':null;
