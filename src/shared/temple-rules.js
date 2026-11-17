@@ -510,16 +510,24 @@ function attack(world,profile,actor,body,context,now){
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
- if(!player||player.admin||player.hp<=0||!['charge','stomp'].includes(skill?.motion))return;
+ if(!player||player.admin||player.hp<=0)return;
+  if(skill?.motion==='freeze'){
+   // Apply an authoritative 80% movement slow for precisely two seconds.
+   // Never use the full immobilising "freeze" status for this ability.
+   player.effects??={};
+   player.effects.slow={owner:'monster',power:.8,until:now+2000,next:now+1000};
+   return;
+  }
+  if(skill?.motion!=='stomp')return;
  if(!player.hitReaction||player.hitReaction.time!==now)player.hitReaction={id:id(),time:now,stunMs:100,vector:[0,0,0]};
- const charge=skill.motion==='charge',origin=charge?skill.origin:skill.aim;
+ const origin=skill.aim;
  let dx=target.position[0]-origin[0],dz=target.position[2]-origin[2];
  if(Math.hypot(dx,dz)<.01){dx=skill.aim[0]-skill.origin[0];dz=skill.aim[2]-skill.origin[2];}
  const length=Math.hypot(dx,dz)||1;
  player.effects??={};
  player.effects.stun={owner:'monster',power:0,until:now+1000,next:now+1000};
- Object.assign(player.hitReaction,{motion:skill.motion,stunMs:charge?1000:800,
-  knockbackDistance:charge?8:2.2,knockbackDurationMs:charge?1000:undefined,
+ Object.assign(player.hitReaction,{motion:skill.motion,stunMs:800,
+  knockbackDistance:2.2,knockbackDurationMs:undefined,
   vector:[dx/length,.08,dz/length]});
 }
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false,fixedDamage=false){
