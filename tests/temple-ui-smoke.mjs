@@ -117,6 +117,7 @@ try{
  assert.equal(await page.locator('[data-form="art-bomb-upload"] input[name="size"]').getAttribute('max'),'3');
  const png=await page.screenshot({clip:{x:50,y:50,width:128,height:128}});
  await upload.setInputFiles({name:'ci-art.png',mimeType:'image/png',buffer:png});
+ await page.locator('[data-form="art-bomb-upload"] [name="title"]').fill('CI Artwork · 作品名稱');
  await page.locator('[data-form="art-bomb-upload"] [name="size"]').fill('2');
  await page.locator('[data-form="art-bomb-upload"]').evaluate(f=>f.requestSubmit());
  await page.waitForTimeout(1200);
@@ -124,6 +125,8 @@ try{
  await page.waitForFunction(()=>templeTest.arena.buildPreview?.userData.kind==='art-bomb',{},{timeout:20000});
  await page.waitForFunction(()=>templeTest.arena.buildPreview?.userData.actualArtwork===true,null,{timeout:30000});
  assert.ok(await page.evaluate(()=>templeTest.arena.buildPreview.children[0]?.userData?.record?.mediaId),'The real uploaded media must be rendered instead of a placeholder');
+ assert.equal(await page.evaluate(()=>templeTest.arena.buildPreview.children[0]?.userData?.record?.title),'CI Artwork · 作品名稱');
+ assert.equal(await page.evaluate(()=>!!templeTest.arena.buildPreview.children[0]?.userData?.titlePlate),'Uploaded artwork must show its name on a black title plate');
  const start=await page.evaluate(()=>templeTest.arena.buildPreview.position.toArray());
  const stateBefore=await page.evaluate(()=>({enabled:templeTest.controller().enabled,grounded:templeTest.controller().grounded,position:templeTest.controller().root.position.toArray(),panel:templeTest.ui.panelName,buildKind:templeTest.ui.buildKind,active:templeTest.writer.active,focused:document.activeElement?.tagName}));
  await page.keyboard.down('w');
