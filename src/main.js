@@ -229,7 +229,17 @@ function syncPlayers(){
   for(const player of players){const root=roots.get(player.key);if(root){arena.setPlayerEquipment(root,player.profile?.equipment);if(root!==localRoot)setHealthBar(root,player.profile?.hp,player.profile?.maxHp);root.userData.deadUntil=player.profile?.deadUntil||0;applyHitReaction(root,player.profile);statusVisuals.sync(root,player.profile?.effects);}}
   for(const [key,root] of roots)if(key!==self.key&&!live.has(key)){statusVisuals.clear(root);root.removeFromParent();roots.delete(key);remoteTargets.delete(key);}ui.setPlayers(players);
 }
-function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root||!hit||root.userData.lastHitReaction===hit.id||Date.now()-hit.time>2500)return;root.userData.lastHitReaction=hit.id;audio.play('hit',root===localRoot?1:.35);root.userData.hitFlashUntil=performance.now()+250;if(root===localRoot){controller.stunUntil=performance.now()+100;controller.knockback=new THREE.Vector3(...hit.vector).multiplyScalar(hit.knockback||4);}}
+function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root||!hit||root.userData.lastHitReaction===hit.id||Date.now()-hit.time>2500)return;root.userData.lastHitReaction=hit.id;audio.play('hit',root===localRoot?1:.35);root.userData.hitFlashUntil=performance.now()+250;if(root===localRoot){
+  controller.stunUntil=performance.now()+100;
+  if(Number(hit.knockbackDistance)>0){
+   // Pan VFX and warning use exactly the radius delivered by the server.
+   controller.knockback=new THREE.Vector3(...hit.vector).normalize();
+   controller.knockbackRemaining=hit.knockbackDistance;
+  }else{
+   controller.knockbackRemaining=0;
+   controller.knockback=new THREE.Vector3(...hit.vector).multiplyScalar(hit.knockback||4);
+  }
+ }}
 function syncWorld(){if(!world)return;arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));damageNumbers.receive(world.damageEvents);arena.sync(world,players);ui.setWorld(world);ui.showKillEvents(world.killEvents);
  for(const player of players){const root=roots.get(player.key);if(root)statusVisuals.sync(root,player.profile?.effects);}
  if(arena.monster)statusVisuals.sync(arena.monster,world.monster?.effects);
