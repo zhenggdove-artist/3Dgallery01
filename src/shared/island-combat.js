@@ -59,7 +59,7 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
    const duration=Math.max(.1,(s.end-s.start)/1000);
    const remaining=flatDistance(monster.position,s.aim);
    const speed=Math.max(4,flatDistance(s.origin,s.aim)/duration);
-   const step=Math.min(remaining,speed*Math.min(dt,.25)*Math.max(0,1-slow));
+   const step=Math.min(remaining,speed*Math.min(dt,.5)*Math.max(0,1-slow));
    if(step>.001){move(s.aim,step);monster.moving=true;}
   }
   for(const target of targets){

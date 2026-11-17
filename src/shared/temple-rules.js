@@ -426,7 +426,7 @@ function attack(world,profile,actor,body,context,now){
   // and damage-number events are produced by tickPersistentAttacks when the
   // travelling VFX volume actually touches a target (never on key release).
   if(!persistentOnly){
-    const duration=projectileFlightMs(weapon,stats.ultimate);
+    const duration=projectileFlightMs(weapon,stats.ultimate,stats.range);
     const visualLifetime=channel?duration:visibleCollisionLifetimeMs(weapon,stats.ultimate);
     world.persistentAttacks??=[];
     world.persistentAttacks.push({

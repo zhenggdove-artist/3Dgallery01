@@ -38,7 +38,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -49,6 +49,7 @@ export class WeaponVFX{
   try{numbered=await this.numberedEffects.warm(renderer,camera);}catch(error){console.warn('Ultimate shader prewarm incomplete',error);}
   try{await this.particleSkills.warm(renderer,camera);}catch(error){console.warn('Particle shader prewarm incomplete',error);}
   try{await this.signatureEffects.warm(renderer,camera);}catch(error){console.warn('Signature shader prewarm incomplete',error);}
+  try{await this.warmStaffOrbs(renderer,camera);}catch(error){console.warn('Orb GPU warmup incomplete',error);}
   return {source:'00GameDevs',effects:fxs.length,numbered};
  }
  acquire(id,options={}){
@@ -81,46 +82,58 @@ export class WeaponVFX{
  }
  // Each ordinary tap launches ONE volumetric elemental orb, visibly flying
  // on exactly the same server-owned ray and duration as the damage hitbox.
+ // Pooled three-draw elemental globes replace per-cast geometry and
+ // physical-material allocations. The shell and the spark cloud pulsate.
  staffOrb(data,item,origin,direction){
   if(this.staffOrbs.length>=28)this.releaseStaffOrb(this.staffOrbs[0]);
-  const palette={
-   water:['#65eaff','#b9ffff','#2a91e8'],
-   ice:['#c9faff','#ffffff','#83caff'],
-   fire:['#ff751b','#ffd044','#ff2d17'],
-   lightning:['#e8d0ff','#ffffff','#8471ff'],
-   beam:['#fff3a4','#ffffff','#f1b73b'],
-   petal:['#ff98d6','#fff1ff','#d55fbd'],
-   wave:['#59dfff','#d7ffff','#2da7ab']
-  };
-  const shades=palette[item.family]||palette.water;
-  const group=new THREE.Group();
-  group.name='Flying elemental '+item.family+' spell orb';
-  const core=new THREE.Mesh(new THREE.SphereGeometry(.38,20,16),
-   new THREE.MeshPhysicalMaterial({color:shades[0],emissive:shades[0],emissiveIntensity:.65,
-    metalness:.12,roughness:.24,clearcoat:1,clearcoatRoughness:.17}));
-  group.add(core);
-  const shell=new THREE.Mesh(new THREE.IcosahedronGeometry(.49,1),
-   new THREE.MeshBasicMaterial({color:shades[1],transparent:true,opacity:.24,depthWrite:false,side:THREE.DoubleSide}));
-  group.add(shell);
-  for(let i=0;i<9;i++){
-   const angle=i*Math.PI*2/9;
-   const mote=new THREE.Mesh(new THREE.SphereGeometry(.07+(i%3)*.02,7,6),
-    new THREE.MeshBasicMaterial({color:shades[i%3]}));
-   mote.position.set(Math.cos(angle)*.46,Math.sin(angle*1.3)*.35,Math.sin(angle)*.42);
-   group.add(mote);
+  const palette={water:['#35c9ff','#d7ffff'],ice:['#9eeaff','#ffffff'],
+   fire:['#ff581d','#ffd063'],lightning:['#9c81ff','#f1ecff'],
+   beam:['#fff2a3','#ffffff'],petal:['#ff8dcc','#fff1fd'],wave:['#44dccb','#e4fffb']};
+  const family=item.family,colors=palette[family]||palette.water;
+  const pool=this.orbPools.get(family)||[];let entry=pool.pop();
+  if(!entry){
+   const group=new THREE.Group();group.name='Pulsing '+family+' elemental orb';
+   const core=new THREE.Mesh(new THREE.IcosahedronGeometry(.35,2),
+    new THREE.MeshBasicMaterial({color:colors[0],toneMapped:false}));
+   const shell=new THREE.Mesh(new THREE.IcosahedronGeometry(.47,1),
+    new THREE.MeshBasicMaterial({color:colors[1],transparent:true,opacity:.24,
+     depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,side:THREE.DoubleSide}));
+   const n=64,positions=new Float32Array(n*3);
+   for(let i=0;i<n;i++){
+    const a=i*2.39996323,h=1-2*(i+.5)/n,r=.45*Math.sqrt(Math.max(0,1-h*h));
+    positions[i*3]=Math.cos(a)*r;positions[i*3+1]=h*.47;positions[i*3+2]=Math.sin(a)*r;
+   }
+   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
+   const cloud=new THREE.Points(geometry,new THREE.PointsMaterial({color:colors[1],size:.14,
+    transparent:true,opacity:.64,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true}));
+   cloud.frustumCulled=false;group.add(core,shell,cloud);entry={group,core,shell,cloud,family};
   }
-  const duration=projectileFlightMs(item,false)/1000,range=Math.max(1,Number(data.range)||12);
-  group.position.copy(origin);group.scale.setScalar(Math.max(.7,Math.min(1.6,Number(data.qualityScale)||1)));
-  this.scene.add(group);
-  this.staffOrbs.push({group,origin:origin.clone(),direction:direction.clone(),duration,range,age:0});
+  this.orbPools.set(family,pool);
+  entry.origin=origin.clone();entry.direction=direction.clone();
+  entry.age=0;entry.range=Math.max(1,Number(data.range)||12);
+  entry.duration=Math.max(.16,Number(data.flightMs)||projectileFlightMs(item,false,entry.range))/1000;
+  entry.group.position.copy(origin);entry.group.scale.setScalar(Math.max(.7,Math.min(1.6,Number(data.qualityScale)||1)));
+  entry.group.visible=true;this.scene.add(entry.group);this.staffOrbs.push(entry);
  }
  releaseStaffOrb(entry){
-  const at=this.staffOrbs.indexOf(entry);if(at>=0)this.staffOrbs.splice(at,1);
-  entry.group.removeFromParent();
-  entry.group.traverse(child=>{
-   child.geometry?.dispose();
-   if(child.material)for(const m of Array.isArray(child.material)?child.material:[child.material])m.dispose();
-  });
+  const index=this.staffOrbs.indexOf(entry);if(index>=0)this.staffOrbs.splice(index,1);
+  entry.group.removeFromParent();entry.group.visible=false;
+  const pool=this.orbPools.get(entry.family)||[];
+  if(pool.length<12){pool.push(entry);this.orbPools.set(entry.family,pool);}
+  else entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
+ }
+ async warmStaffOrbs(renderer,camera){
+  const stage=new THREE.Scene(),entries=[];
+  for(const family of ['water','ice','fire','lightning','beam','petal','wave']){
+   for(let i=0;i<2;i++){
+    this.staffOrb({range:14,flightMs:420},{family,range:14},new THREE.Vector3(0,1,i*2),new THREE.Vector3(0,0,1));
+    const entry=this.staffOrbs[this.staffOrbs.length-1];
+    stage.add(entry.group);entries.push(entry);
+   }
+  }
+  const target=new THREE.WebGLRenderTarget(16,16),previous=renderer.getRenderTarget();
+  try{await renderer.compileAsync(stage,camera);renderer.setRenderTarget(target);renderer.render(stage,camera);}
+  finally{renderer.setRenderTarget(previous);target.dispose();for(const entry of entries)this.releaseStaffOrb(entry);}
  }
  play(data,item,root){
   const id=effectFor(item,data.ultimate),direction=new THREE.Vector3(...(data.direction||[0,0,1])).normalize(),origin=new THREE.Vector3(...data.origin),range=Math.max(1,data.range||4),end=data.aimPoint?new THREE.Vector3(...data.aimPoint):data.impactPoint?new THREE.Vector3(...data.impactPoint):origin.clone().addScaledVector(direction,range);
@@ -131,15 +144,12 @@ export class WeaponVFX{
   const groundEffect=!!data.ultimate&&impactArea?.mode==='area';
   const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
   if(data.ultimate&&Array.isArray(impactArea?.visualCenter))end.copy(new THREE.Vector3(...impactArea.visualCenter));
-  // Every numbered attack uses the exact original 00GameDevs source.
-  // Do not stack a custom SaberImpact or another imitation on top.
-  if(this.numberedEffects.play(data,item,root))return;
-  // Never re-aim or translate a server-approved trajectory to a cosmetic muzzle;
-  // rendered bullets must occupy the same world-space volume as damage rays.
+  // Every ordinary staff shot, including beam, is a pulsing elemental orb.
   if(isChannelStaff(item)&&item.id!=='clam'&&!data.ultimate&&!data.channel){
-   this.staffOrb(data,item,origin,direction);
-   return;
+   this.staffOrb(data,item,origin,direction);return;
   }
+  // Charged and sustained spells keep their original 00GameDevs effects.
+  if(this.numberedEffects.play(data,item,root))return;
   if(this.signatureEffects.play({...data,origin:origin.toArray(),direction:direction.toArray()},item,root))return;
   if(isChannelStaff(item)&&(data.channel||data.ultimate&&['water','fire','wave'].includes(item.family))){
    // Reuse ONE continuously moving emitter per owner. The weapon tip, not
@@ -197,7 +207,9 @@ export class WeaponVFX{
    const f=createOddEffect(THREE,{...data,origin:origin.toArray(),direction:direction.toArray(),range},{...item,pattern:'sniper'});
    this.scene.add(f.root);this.snipers.push(f);return;
   }
-  const entry=this.acquire(id,{color:item.color,size:(data.ultimate?Math.min(3.6,Math.max(1.2,(impactArea?.radius||5)/3.5)):.6)*(data.qualityScale||1),speed:data.ultimate?1:1.8}),fx=entry.fx;
+  const meleeColor=({dark:'#18121e',light:'#ffe65b',fire:'#ff5f1d',
+   water:'#4fbaff',wind:'#96e6ba',earth:'#d9a761'})[item.element];
+  const entry=this.acquire(id,{color:meleeColor&&['saber','whip','swatter','pan','planter','palm'].includes(item.family)?meleeColor:item.color,size:(data.ultimate?Math.min(3.6,Math.max(1.2,(impactArea?.radius||5)/3.5)):.6)*(data.qualityScale||1),speed:data.ultimate?1:1.8}),fx=entry.fx;
   fx.group.position.copy(origin);fx.group.rotation.y=Math.atan2(direction.x,direction.z)-Math.PI/2;
   if(beams.has(id)){fx.group.position.set(0,0,0);fx.group.quaternion.identity();fx.setEndpoints(origin,end);fx.update(fx.lifecycle.start||0);entry.stopAt=data.channel?1.1:data.ultimate?.65:.12;}
   else if(projectiles.has(id)){fx.setDirection(direction,0);fx.update(fx.lifecycle.start||0);entry.start=origin;entry.end=end;entry.travel=Math.min(.45,Math.max(.12,origin.distanceTo(end)/45));entry.stopAt=entry.travel;entry.hit=!!data.impactPoint;}
@@ -251,13 +263,17 @@ export class WeaponVFX{
    orb.age+=dt;
    const t=Math.min(1,orb.age/orb.duration);
    orb.group.position.copy(orb.origin).addScaledVector(orb.direction,orb.range*t);
-   orb.group.rotation.z=orb.age*4.8;
-   orb.group.rotation.y=orb.age*7;
+   orb.group.rotation.z=orb.age*2.8;orb.cloud.rotation.y=orb.age*7;
+    orb.shell.scale.setScalar(1+.18*Math.sin(orb.age*18));
+    orb.core.scale.setScalar(.93+.11*Math.sin(orb.age*22));
+    orb.cloud.material.opacity=.52+.12*Math.sin(orb.age*16);
    if(orb.age>=orb.duration)this.releaseStaffOrb(orb);
   }for(let i=this.snipers.length-1;i>=0;i--){const f=this.snipers[i];if(!updateOddEffect(f,dt)){f.root.removeFromParent();f.root.material.dispose();this.snipers.splice(i,1);}}for(const e of [...this.active]){e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
    if(e.start&&!e.stopped)e.fx.group.position.lerpVectors(e.start,e.end,Math.min(1,e.age/e.travel));
    if(!e.stopped&&e.age>=e.stopAt){if(e.hit)e.fx.hit(e.end);else if(continuous.has(e.id)||e.id==='weapon-smear')e.fx.stop();e.stopped=true;}
    e.fx.update(dt);if(e.fx.finished||e.age>12)this.release(e);
   }}
- dispose(){this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
+ dispose(){this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
+  for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
+  this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }
