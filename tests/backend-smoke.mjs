@@ -35,6 +35,10 @@ const join=await call('/api/join',{name:guest,color:'#43b59a'});
 assert.equal(join.role,'fighter');
 const token=join.token;
 assert.ok(token);
+assert.equal(join.self.profile.equipment.weapon,'white-cat','new players must spawn equipped with the SMG');
+assert.ok(join.self.profile.inventory.includes('white-cat'),'the starter SMG must be owned');
+const deniedGmHistory=await call('/api/gm/presence',undefined,token,{expectedStatus:403});
+assert.match(deniedGmHistory.error,/GM only/i,'regular players may not view private GM login history');
 // The authoritative API deliberately refuses game actions until the player
 // opens the real socket and submits a validated initial position.
 const socket=new WebSocket(base.replace(/^http/,'ws')+'/api/socket?token='+encodeURIComponent(token));
