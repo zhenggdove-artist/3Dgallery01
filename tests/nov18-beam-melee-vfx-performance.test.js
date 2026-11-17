@@ -70,7 +70,7 @@ test('monster VFX allocation failures are contained and throttled without stoppi
  const effects=new MonsterAttackEffects(new THREE.Scene());
  const state={id:'ci-monster',active:true,position:[0,0,0],skills:[{
   id:'ci-stomp',motion:'stomp',phase:'active',origin:[0,0,0],aim:[0,0,0],
-  start:T-1100,end:T+400,radius:7
+  start:T-1100,end:T+5000,radius:7
  }]};
  const original=effects.take.bind(effects),originalError=console.error;
  let attempts=0,logged=0;
