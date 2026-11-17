@@ -76,10 +76,10 @@ test('GM volume changes are authorized and persist into every player world view'
 });
 
 test('ground slam stuns grounded non-GM fighters for exactly one second',()=>{
- const now=6000,world=createInitialWorld(now),actor={key:'fighter',name:'Target',role:'fighter',position:[25,0,25]};
+ const now=6000,world=createInitialWorld(now),actor={key:'fighter',name:'Target',role:'fighter',position:[75,0,25]};
  const profile=ensureProfile(world,actor.key,actor.name,'#aabbcc',now);
- world.monster={active:true,id:'m',position:[25,0,24],skills:[{
-   id:'slam',motion:'stomp',phase:'active',origin:[25,0,24],aim:[25,0,25],
+ world.monster={active:true,id:'m',position:[75,0,24],skills:[{
+   id:'slam',motion:'stomp',phase:'active',origin:[75,0,24],aim:[75,0,25],
    start:now-100,end:now+300,hit:[],lastTick:{},damage:8
  }],nextAttackAt:now+3000,hp:100,maxHp:100};
  tickWorld(world,{now,activeFighters:0,actors:[actor],rng:()=>.5});
