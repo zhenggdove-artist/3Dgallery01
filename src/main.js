@@ -241,6 +241,24 @@ ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.
 ui.addEventListener('panel',event=>{chargeStarted=null;attackHoldStarted=null;chargeRequest=null;if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
 ui.addEventListener('editor-settings',event=>applyEditorSettings(event.detail));
 ui.addEventListener('gm-audio-setting',event=>{if(!self?.profile?.admin)return;audio.setVolumes({[event.detail.key]:event.detail.value});void sendAction('gm-audio-setting',event.detail);});
+ ui.addEventListener('gm-music-upload',async event=>{
+  if(!self?.profile?.admin)return;
+  const file=event.detail;
+  if(!file||file.size<1024||file.size>7_500_000||!/\.mp3$/i.test(file.name)){
+   ui.toast('請選擇 7.5 MB 以內的 MP3');return;
+  }
+  ui.toast('背景音樂上傳中');
+  try{
+   const response=await fetch(network.base+'/api/gm/music',{method:'POST',
+    headers:{Authorization:'Bearer '+network.token,'Content-Type':'audio/mpeg'},body:file});
+   const result=await response.json();
+   if(!response.ok)throw Error(result.error||'MP3 upload failed');
+   audio.setUploadedMusic(network.base,result.version);
+   audio.startMusic();
+   if(world){world.musicVersion=result.version;ui.world=world;if(ui.panelName==='gm')ui.renderGm();}
+   ui.toast('背景音樂已更新 · 所有玩家同步');
+  }catch(error){ui.toast('背景音樂上傳失敗：'+(error.message||'連線錯誤'));}
+ });
 
 function createLocalPlayer(data){
    audio.unlock();audio.startMusic();
@@ -284,7 +302,7 @@ function updateKnockdowns(){
   model.rotation.z=model.userData.knockdownBase-Math.PI*.39*collapsed;
  }
 }
-function syncWorld(){if(!world)return;audio.setVolumes(world.audioSettings||{});arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));damageNumbers.receive(world.damageEvents);arena.sync(world,players);ui.setWorld(world);ui.showKillEvents(world.killEvents);
+function syncWorld(){if(!world)return;audio.setVolumes(world.audioSettings||{});if(world.musicVersion)audio.setUploadedMusic(network.base,world.musicVersion);arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));damageNumbers.receive(world.damageEvents);arena.sync(world,players);ui.setWorld(world);ui.showKillEvents(world.killEvents);
  for(const player of players){const root=roots.get(player.key);if(root)statusVisuals.sync(root,player.profile?.effects);}
  if(arena.monster)statusVisuals.sync(arena.monster,world.monster?.effects);
  for(const {root,state} of arena.islandEnemies.extraLive)statusVisuals.sync(root,state?.effects);const profile=world.profile,dead=profile?.deadUntil>Date.now();if(localRoot&&profile){arena.setPlayerEquipment(localRoot,profile.equipment);localRoot.userData.deadUntil=profile.deadUntil||0;applyHitReaction(localRoot,profile);
