@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createInitialWorld,ensureProfile,applyAction,tickWorld} from '../src/shared/temple-rules.js';
 import {artworkPosition,artworkLanding} from '../src/shared/artwork-flight.js';
+import {visibleCollisionLifetimeMs} from '../src/shared/combat-balance.js';
+import {itemById} from '../src/shared/catalog.js';
 import {WHIP_PULL_SPEED,whipPullDurationMs} from '../src/shared/weapon-abilities.js';
 import {ultimateWorldScale} from '../src/numbered-weapon-effects.js';
 import {PlayerController} from '../src/player-controller.js';
@@ -27,6 +29,13 @@ test('artwork has fivefold horizontal reach with unchanged vertical ballistic ar
  assert.equal(result.hit?.target,'victim','server hit range tracks longer ordinary artwork flight');
 });
 
+test('native pan/whip authoritative damage lifetime matches the visible original animation',()=>{
+ for(let tier=1;tier<=5;tier++){
+  assert.equal(visibleCollisionLifetimeMs(itemById('pan-'+tier),true),5000);
+  assert.equal(visibleCollisionLifetimeMs(itemById('whip-'+tier),true),6500);
+ }
+});
+
 test('whip applies all quality-based pull durations on server-confirmed contact',()=>{
  for(let tier=1;tier<=5;tier++){
   const now=T+tier*15_000,world=createInitialWorld(now);
@@ -48,6 +57,10 @@ test('whip applies all quality-based pull durations on server-confirmed contact'
   assert.equal(target.hitReaction.whipPull.speed,WHIP_PULL_SPEED);
   assert.deepEqual(target.hitReaction.whipPull.center,[center[0],center[2]]);
   assert.equal(target.hitReaction.stunMs,0,'pull allows steering immediately');
+  assert.equal(target.effects?.root,undefined,'no root may prevent resisting the suction');
+  const initialPullId=target.whipPull.id;
+  tickWorld(world,{now:at+3000,actors:[caster,victim],activeFighters:0,rng:()=>.5});
+  assert.equal(target.whipPull.id,initialPullId,'repeat weapon damage does not prolong the initial suction');
  }
 });
 
