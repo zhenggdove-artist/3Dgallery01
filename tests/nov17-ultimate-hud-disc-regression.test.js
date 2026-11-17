@@ -9,7 +9,7 @@ import {ultimateWorldScale,NumberedWeaponEffects} from '../src/numbered-weapon-e
 import {WEAPONS,itemById,attackStats} from '../src/shared/catalog.js';
 import {weaponQuality,isChannelStaff,channelReachMultiplier,forwardCastRadius} from '../src/shared/weapon-abilities.js';
 
-test('ultimate footprint ratios: global 60%, pan another 50%, whip another 60%',()=>{
+test('ultimate footprint ratios: global 60%, pan another 50%, whip another 80%',()=>{
  assert.equal(ULTIMATE_FOOTPRINT_SCALE,.6);
  for(const weapon of WEAPONS){
   const normal=attackStats(weapon,1);
@@ -48,7 +48,7 @@ test('every weapon receives a smaller warning with its quality multiplier',()=>{
  }
  v.dispose();
 });
-test('original #68 pan and #48 whip world geometry reduce by exactly 50% and 60%',()=>{
+test('original #68 pan and #48 whip world geometry reduce by exactly 50% and 80%',()=>{
  const event={ultimate:true,channel:false,range:18,radius:3.6,area:{radius:3.6,center:[0,.1,9],visualCenter:[0,.16,9]},origin:[0,1,0],direction:[0,0,1],qualityScale:1};
  const fx=new NumberedWeaponEffects(new THREE.Scene());
  assert.ok(fx.play(event,itemById('pan-1'),null));
