@@ -9,7 +9,7 @@ import {ultimateWorldScale,NumberedWeaponEffects} from '../src/numbered-weapon-e
 import {WEAPONS,itemById,attackStats} from '../src/shared/catalog.js';
 import {weaponQuality,isChannelStaff,channelReachMultiplier,forwardCastRadius} from '../src/shared/weapon-abilities.js';
 
-test('ultimate footprint ratios: global 60%, pan another 50%, whip another 80%',()=>{
+test('ultimate footprint ratios: unchanged reach, with 1.5x wider whip blast radius',()=>{
  assert.equal(ULTIMATE_FOOTPRINT_SCALE,.6);
  for(const weapon of WEAPONS){
   const normal=attackStats(weapon,1);
@@ -18,7 +18,7 @@ test('ultimate footprint ratios: global 60%, pan another 50%, whip another 80%',
   scaleUltimateFootprint(stats,weapon);
   const extra=weapon.id.startsWith('pan-')?.5:weapon.id.startsWith('whip-')?.2:1;
   assert.ok(Math.abs(stats.range-normal.range*.6*extra)<.001,weapon.id+' reach');
-  assert.ok(Math.abs(stats.radius-normal.radius*.6*extra)<.001,weapon.id+' radius');
+  assert.ok(Math.abs(stats.radius-normal.radius*.6*extra*(weapon.id.startsWith('whip-')?1.5:1))<.001,weapon.id+' radius');
  }
  const normal=attackStats(itemById('pan-1'),0);
  const before=structuredClone(normal);
@@ -66,7 +66,8 @@ test('original #68 pan and #48 whip world geometry reduce by exactly 50% and 80%
  const we=whip.active[0];
  assert.equal(we.spec.number,48);
  assert.ok(Math.abs(we.group.scale.x-ultimateWorldScale(48,whipping,{size:we.options.size}))<1e-6);
- const originalWhipScale=Math.max(2,Math.min(12,(1.44/.2)/Math.max(.25,we.options.size*.8)));
+ const oldWhipRadius=1.44/1.5; // Wider collision/warning, same pre-existing #48 art dimensions.
+ const originalWhipScale=Math.max(2,Math.min(12,(oldWhipRadius/.2)/Math.max(.25,we.options.size*.8)));
  assert.ok(Math.abs(we.group.scale.x-originalWhipScale*.2)<1e-6);
  whip.dispose();
  assert.ok(ultimateWorldScale(53,event,{size:.8})>1);
