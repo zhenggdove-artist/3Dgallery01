@@ -89,11 +89,19 @@ export function requestedEffect(item,event){
  const key=event.channel?(item.id==='clam'?'clam':item.family)+':channel':
   event.ultimate?(item.id==='clam'?'clam':item.id==='jellybrella'?'jellybrella':item.family)+':ultimate':
   item.family==='beam'?'beam:normal':
-  item.family==='saber'&&(Number(event.qualityTier)||Number(item.tier))===4&&
-   Number(event.combo)===5?'saber:combo':'';
+  item.family==='saber'&&Number(event.combo)===5?'saber:combo':'';
  return REQUESTED_VFX[key]||null;
 }
 
+// #47 is the official dimensional-rend export. Its transmission panels cause
+// an additional full-scene GPU sampling pass and can stall WebGL when stacked.
+// Preserve the authored slash mesh, glow and particles with fewer slashes and
+// disable only the costly refraction panels. Prewarm exactly these settings.
+export function budgetedNativeOptions(spec,options){
+ if(spec.number!==47)return options;
+ return {...options,size:Math.min(1.7,Number(options.size)||1.2),
+  quantity:8,density:.18,detail:.7,panelCount:0,spread:1.5};
+}
 export class NumberedWeaponEffects {
  constructor(scene,muzzle=()=>null) {
   this.scene=scene;
@@ -102,6 +110,7 @@ export class NumberedWeaponEffects {
   }
  acquire(spec,options){
   const pool=this.prewarmed.get(spec.asset),cached=pool?.pop();
+  options=budgetedNativeOptions(spec,options);
   const fx=cached||this.create(spec,options);
   if(cached){fx.reset?.();fx.setOptions?.(options);this.scene.add(fx.group);}
   fx.group.visible=true;
@@ -113,12 +122,12 @@ export class NumberedWeaponEffects {
   let pool=this.prewarmed.get(spec.asset);
   if(!pool){pool=[];this.prewarmed.set(spec.asset,pool);}
   // Keep the real 00GameDevs module and GPU resources alive between casts.
-  if(pool.length<4)pool.push(fx);else fx.dispose();
+  if(pool.length<(spec.number===47?1:4))pool.push(fx);else fx.dispose();
  }
  create(spec,options) {
   const factory=FACTORIES[spec.asset];
   if(!factory)throw Error('Missing exact 00GameDevs factory #'+spec.number);
-  const fx=factory(options);
+  const fx=factory(budgetedNativeOptions(spec,options));
   if(!fx?.group?.isObject3D||typeof fx.update!=='function'||typeof fx.dispose!=='function')
    throw Error('Invalid original 00GameDevs VFX #'+spec.number);
   fx.group.name=spec.asset==='charged-beam'?'00GameDevs original VFX charged-beam':'00GameDevs original VFX #'+String(spec.number).padStart(2,'0')+' '+spec.asset;
@@ -156,7 +165,7 @@ export class NumberedWeaponEffects {
         try{
           fx=this.create(spec,{size:1,detail:1,density:.5});
           const stage=new THREE.Scene();stage.add(fx.group);fx.group.visible=true;
-          fx.update(.016);
+          fx.update(spec.number===47?.68:.016);
           await renderer.compileAsync(stage,view);
           // Force one real GPU draw while the loading overlay is visible;
           // shader compilation alone does not upload first-use buffers.
@@ -164,8 +173,8 @@ export class NumberedWeaponEffects {
           try{
            // Exercise native #70/#73 full-screen postprocess passes too;
            // the first cast must not allocate or compile them in combat.
-           if(typeof fx.render==='function')fx.render(renderer,stage,view);
-           else renderer.render(stage,view);
+           // Avoid unsupported nested vendor full-screen render targets.
+           renderer.render(stage,view);
           }finally{renderer.setRenderTarget(previousTarget);}
           this.recycle(spec,fx);fx=null;warmed++;
         }catch(error){
@@ -210,6 +219,7 @@ export class NumberedWeaponEffects {
   }
   const options={size,quality,detail:event.fusionEcho?.55:1,density:event.fusionEcho?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
   if(!options.color)delete options.color;
+  if(spec.number===47)for(const old of [...this.active])if(old.spec.number===47)this.remove(old);
   const fx=this.acquire(spec,options);
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
   // The official charged-beam ray starts at the weapon muzzle, not
@@ -231,7 +241,7 @@ export class NumberedWeaponEffects {
    singleTravel:!event.channel&&TRAVELLING_NATIVE.has(spec.number)
   };
   this.active.push(entry);
-  if(this.active.length>24)this.remove(this.active[0]);
+  if(this.active.length>14)this.remove(this.active.find(e=>!e.channel)||this.active[0]);
   this.align(entry);
   if(entry.worldScale!=null)fx.group.scale.setScalar(entry.worldScale);
   // The vendor clamps 'size' at 2. Double the physical world-space group.
@@ -501,7 +511,10 @@ export class NumberedWeaponEffects {
  render(renderer,world,camera){
   const post=this.active.find(e=>e.spec.number===73&&typeof e.fx.render==='function')||
    this.active.find(e=>e.spec.number===70&&typeof e.fx.render==='function');
-  if(post)post.fx.render(renderer,world,camera);
+  // VHS always renders into an offscreen framebuffer. The vendor's #70/#73
+  // custom pass resets that framebuffer and has caused browser stalls.
+  if(post&&typeof renderer.getRenderTarget==='function'&&renderer.getRenderTarget()===null)
+   post.fx.render(renderer,world,camera);
   else renderer.render(world,camera);
  }
  stop(root){
