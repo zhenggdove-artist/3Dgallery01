@@ -9,12 +9,12 @@ import {effectFor} from '../src/weapon-vfx.js';
 
 const gm={key:'gm',name:'GM',color:'#ffffff',role:'fighter',position:[2,0,2],admin:true};
 const guest={key:'guest',name:'Guest',color:'#ffffff',role:'fighter',position:[2,0,2],admin:false};
-test('new players begin with the giant clam, not the saber',()=>{
+test('new players begin with the cat SMG, not the former giant clam or saber',()=>{
  const w=createInitialWorld(1000),p=createProfile('guest','Guest','#ffffff',1000);
- assert.equal(STARTER_LOADOUT.weapon,'clam');
- assert.equal(p.equipment.weapon,'clam');
- assert.ok(p.inventory.includes('clam'));
- assert.equal(itemById('clam').name,'大花蛤');
+ assert.equal(STARTER_LOADOUT.weapon,'white-cat');
+ assert.equal(p.equipment.weapon,'white-cat');
+ assert.ok(p.inventory.includes('white-cat'));
+ assert.equal(itemById('white-cat').name,'貓貓衝鋒槍');
 });
 test('GM deletes floating disks and selected original exhibit disks, but not artwork',()=>{
  const w=createInitialWorld(1000);
