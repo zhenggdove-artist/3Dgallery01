@@ -70,9 +70,11 @@ export function updateArenaAbilityEffect(root,skill,now,dt){
  const origin=skill.origin,aim=skill.aim;
  if(ud.warning){ud.warning.visible=!active;ud.warning.material.opacity=.35+.3*Math.sin(now*.014)**2;}
  if(motion==='charge'){
+  if(ud.warning)strip(root,ud.warning,skill.origin,skill.aim,5.0);
   if(active&&ud.warning)ud.warning.visible=true;
   if(ud.warning)ud.warning.material.opacity=active?.22:.4+.25*Math.sin(now*.02)**2;
  }else if(motion==='laser'){
+  if(ud.warning)strip(root,ud.warning,skill.origin,skill.aim,2.5);
   const vfx=ud.sourceVfx;
   const from=skill.mouth||[origin[0],origin[1]+6,origin[2]];
   a.fromArray(from);b.fromArray(aim);
