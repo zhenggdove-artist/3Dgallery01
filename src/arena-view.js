@@ -12,6 +12,7 @@ import {itemById} from './shared/catalog.js';
 import {buildReletterEnvironment,reletterPlatformMaterial,ReletterPresentation,disposeVisual} from './reletter-presentation.js';
 import {AdventureView} from './adventure-view.js';
 import {IslandEnemies} from './island-enemies.js';
+import {createHeart} from './heart-model.js';
 import {createPlantInsects} from './reletter/plant-insects.js';
 import artworkDelivery from '../artwork-delivery.json' with {type:'json'};
 import {ARTWORK_DISCS,discGroundHeight} from './shared/artwork-discs.js';
@@ -24,7 +25,7 @@ const tempMatrix=new THREE.Matrix4(),tempPosition=new THREE.Vector3(),tempQuater
 export class TempleArena{
   constructor(scene,renderer){
     this.scene=scene;this.renderer=renderer;this.dracoLoader=new DRACOLoader();this.dracoLoader.setDecoderPath('./vendor/three/examples/jsm/libs/draco/');this.loader=new GLTFLoader().setDRACOLoader(this.dracoLoader);this.clock=0;this.world=null;this.players=[];this.dropMeshes=[];
-    this.artworks=new Map();this.localArtworkFlights=new Map();this.coinMesh=null;this.dropMesh=null;this.dropIds=[];this.dropCoinFlights=[];this.coinFlights=new Map();this.structureGroup=new THREE.Group();this.structureGroup.name='Persistent structures';scene.add(this.structureGroup);this.plantGroup=new THREE.Group();this.plantGroup.name='Permanent message plants';scene.add(this.plantGroup);
+    this.heartDrops=new Map();this.artworks=new Map();this.localArtworkFlights=new Map();this.coinMesh=null;this.dropMesh=null;this.dropIds=[];this.dropCoinFlights=[];this.coinFlights=new Map();this.structureGroup=new THREE.Group();this.structureGroup.name='Persistent structures';scene.add(this.structureGroup);this.plantGroup=new THREE.Group();this.plantGroup.name='Permanent message plants';scene.add(this.plantGroup);
     this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.collapsingShells=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
   }
   async load(progress=()=>{}){
@@ -193,7 +194,7 @@ export class TempleArena{
   for(const prior of this.world?.groundDrops||[]){
    if(prior.kind==='coin'&&!active.has(prior.id))this.spawnDropCoinFlight(prior);
   }
-  this.world=world;this.players=players;this.displayPlatforms.sync();this.syncDrops();this.syncStructures();this.adventure.sync(world);this.syncMonster();}
+  this.world=world;this.players=players;this.displayPlatforms.sync();this.syncHearts();this.syncDrops();this.syncStructures();this.adventure.sync(world);this.syncMonster();}
   spawnDropCoinFlight(drop){
    if(!this.coinMesh||!Array.isArray(drop.position))return;
    if(this.dropCoinFlights.length>=40){const old=this.dropCoinFlights.shift();old.mesh.removeFromParent();}
@@ -205,6 +206,21 @@ export class TempleArena{
    this.scene.add(mesh);
    this.dropCoinFlights.push({mesh,age:0,startY:mesh.position.y,spin:Math.random()*Math.PI*2});
   }
+  syncHearts(){
+    const live=new Set();
+    for(const drop of this.world?.groundDrops||[]){
+     if(drop.kind!=='heart')continue;
+     live.add(drop.id);
+     if(this.heartDrops.has(drop.id))continue;
+     const mesh=createHeart();mesh.name='Floating rotating healing heart '+drop.id;
+     mesh.position.fromArray(drop.position);mesh.userData.baseY=mesh.position.y+.90;
+     mesh.position.y=mesh.userData.baseY;mesh.userData.seed=this.heartDrops.size*.83;
+     this.scene.add(mesh);this.heartDrops.set(drop.id,mesh);
+    }
+    for(const [id,mesh] of this.heartDrops)if(!live.has(id)){
+     mesh.removeFromParent();mesh.geometry.dispose();mesh.material.dispose();this.heartDrops.delete(id);
+    }
+   }
   syncDrops(){const drops=(this.world?.groundDrops||[]).filter(d=>d.kind==='coin'),signature=drops.map(d=>`${d.id}:${d.position.join(',')}`).join('|');if(signature===this.dropSignature)return;this.dropSignature=signature;for(const mesh of this.dropMeshes){mesh.removeFromParent();mesh.geometry.dispose();mesh.material.dispose();}this.dropMeshes=[];if(!drops.length)return;const groups=new Map();for(const drop of drops){const item=itemById(drop.itemId),shape=drop.kind==='coin'?'coin':item?.slot==='weapon'?'weapon':['armor','head'].includes(item?.slot)?'armor':'material';if(!groups.has(shape))groups.set(shape,[]);groups.get(shape).push(drop);}for(const [shape,records] of groups){let geometry;if(shape==='coin')geometry=this.coinMesh.geometry.clone();else if(shape==='weapon')geometry=new THREE.BoxGeometry(.16,1.55,.12);else if(shape==='armor')geometry=new THREE.DodecahedronGeometry(.46,0);else geometry=new THREE.OctahedronGeometry(.43,1);const material=shape==='coin'?this.coinMesh.material.clone():new THREE.MeshStandardMaterial({roughness:.42,metalness:shape==='weapon'?.72:.3,vertexColors:false,emissive:'#111111'}),mesh=new THREE.InstancedMesh(geometry,material,records.length),color=new THREE.Color();mesh.userData.records=records;records.forEach((drop,i)=>{setDropMatrix(mesh,drop,i,shape,0);const item=itemById(drop.itemId);mesh.setColorAt(i,color.set(shape==='coin'?'#f2cf55':item?.color||'#a8d7cc'));});mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;mesh.name=`Ground loot · ${shape}`;this.scene.add(mesh);this.dropMeshes.push(mesh);}}
   syncStructures(){const structures=this.world?.structures||[],signature=JSON.stringify(structures.map(s=>[s.id,s.kind,s.surface,s.variant,s.position,s.rotation,s.hp,s.maxHp]));if(signature===this.structureSignature)return;this.structureSignature=signature;while(this.structureGroup.children.length){const child=this.structureGroup.children[0];child.removeFromParent();child.geometry?.dispose();child.material?.dispose();}const kinds=new Map();for(const structure of structures){const key=structure.kind+'|'+(structure.surface||'');if(!kinds.has(key))kinds.set(key,[]);kinds.get(key).push(structure);}for(const [key,list] of kinds){const kind=list[0].kind;if(kind==='tree'){this.addTreeInstances(list);continue;}if(kind==='house'){this.addHouseInstances(list);continue;}const dimensions=originalBuildSizes[kind]||[2,2,2],mesh=new THREE.InstancedMesh(buildGeometry(kind),buildMaterial(list[0].surface),list.length);list.forEach((structure,index)=>{const variant=structure.variant||0,temp=1+(variant%3)*.08;tempPosition.set(structure.position[0],structure.position[1]+dimensions[1]*temp/2,structure.position[2]);tempQuaternion.setFromEuler(new THREE.Euler(0,structure.rotation||0,0));tempScale.set(dimensions[0]*temp,dimensions[1]*temp,dimensions[2]);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);});mesh.instanceMatrix.needsUpdate=true;mesh.userData.records=list;mesh.userData.baseMatrices=list.map((_,i)=>{const m=new THREE.Matrix4();mesh.getMatrixAt(i,m);return m;});list.forEach((_,i)=>mesh.setColorAt(i,new THREE.Color('#ffffff')));mesh.instanceColor.needsUpdate=true;mesh.name=`${kind} structures`;this.structureGroup.add(mesh);}this.registerStructureMeshes();}
   registerStructureMeshes(){
@@ -249,7 +265,11 @@ export class TempleArena{
     this.presentation.beforeAnimation();this.adventure.beforeAnimation();for(const root of playerRoots.values())updateHitFlash(root,performance.now());
     this.clock=time;this.scene.userData.moonlitSky?.update(camera,time);this.grass?.update(time,playerRoots);for(const mixer of this.mixers)mixer.update(dt);if(this.dust){this.dust.rotation.y=time*.004;const positions=this.dust.geometry.attributes.position.array;for(let i=1;i<positions.length;i+=3){positions[i]+=dt*.025;if(positions[i]>22)positions[i]=0;}this.dust.geometry.attributes.position.needsUpdate=true;}if(this.water)this.water.material.opacity=.72+Math.sin(time*1.4)*.05;
     if(this.coinMesh&&this.world){PLATFORMS.forEach((p,i)=>{const available=this.world.coins?.[p.id]?.available;tempPosition.fromArray(p.coinPosition);const fly=this.coinFlights?.get(p.id);if(fly)fly.age+=dt;const t=fly?fly.age/.8:1;if(fly&&t>=1)this.coinFlights.delete(p.id);tempPosition.y=fly?fly.y+Math.min(1,t)*5:tempPosition.y+Math.sin(time*1.8+i)*.4;tempQuaternion.setFromEuler(new THREE.Euler(0,time*(fly?6:2)+i,0));tempScale.setScalar(fly?1.6*Math.max(0,1-t):available?1.6:0);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);this.coinMesh.setMatrixAt(i,tempMatrix);});this.coinMesh.instanceMatrix.needsUpdate=true;}
-    for(const mesh of this.dropMeshes){const shape=mesh.name.split(' · ')[1];mesh.userData.records.forEach((drop,i)=>setDropMatrix(mesh,drop,i,shape,time));mesh.instanceMatrix.needsUpdate=true;}
+    for(const mesh of this.heartDrops.values()){
+      const seed=mesh.userData.seed;mesh.position.y=mesh.userData.baseY+.32*Math.sin(time*2.1+seed);
+      mesh.rotation.set(.09*Math.sin(time*.9+seed),time*1.55+seed,.10*Math.sin(time*1.1+seed));
+     }
+     for(const mesh of this.dropMeshes){const shape=mesh.name.split(' · ')[1];mesh.userData.records.forEach((drop,i)=>setDropMatrix(mesh,drop,i,shape,time));mesh.instanceMatrix.needsUpdate=true;}
     for(let i=this.dropCoinFlights.length-1;i>=0;i--){
      const fly=this.dropCoinFlights[i];fly.age+=dt;
      const t=Math.min(1,fly.age/.8),ease=1-(1-t)*(1-t);
