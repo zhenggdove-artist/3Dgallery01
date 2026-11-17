@@ -49,7 +49,7 @@ export function createInitialWorld(now=Date.now()){
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],groundDrops:[],structures:[],plants:[],sceneCleanupVersion:1,
-    monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],audioSettings:{},
+    monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],audioSettings:{},musicVersion:0,
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
     activity:{coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0}
   };
@@ -63,7 +63,7 @@ export function migrateWorld(raw,now=Date.now()){
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
   // Old RELETTER farming data must not survive the removal of the Garden game mode.
   if(world.reletter?.garden)delete world.reletter.garden;
-  world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];world.audioSettings??={};
+  world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];world.audioSettings??={};world.musicVersion??=0;
   world.nextGroundDropAt??=now+ECONOMY.groundSpawnMinMs;
   return cleanLegacyScene(world);
 }
@@ -100,7 +100,7 @@ export function worldView(world,actorKey,now=Date.now()){
   const profile=world.profiles[actorKey];
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
-    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),
+    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000))};
 }
