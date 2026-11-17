@@ -92,9 +92,12 @@ test('pan explosion hits all victims once, recoils onto caster for exactly 15 HP
  assert.ok(p.hitReaction.vector[2]<0,'caster flies backwards away from explosion');
  assert.ok(v.hitReaction.vector[0]>0,'right-hand victim flies right');
  assert.ok(o.hitReaction.vector[0]<0,'left-hand victim flies left');
- const after={p:p.hp,v:v.hp,o:o.hp};
+ const panAttack=world.persistentAttacks.find(fx=>fx.weapon==='pan-1');
+ assert.equal(panAttack.areaResolved,true);
+ const afterHits=structuredClone(panAttack.hitTimes);
  tickWorld(world,{now:at+1400,actors:[caster,victim,other],activeFighters:0,rng:()=>.5});
- assert.deepEqual({p:p.hp,v:v.hp,o:o.hp},after,'single frying-pan explosion must not apply phantom repeat hits');
+ assert.deepEqual(panAttack.hitTimes,afterHits,'one-shot pan cannot inflict repeated blast damage');
+ assert.equal(p.hp,85,'the caster receives fixed self-damage exactly once');
 });
 
 test('high-platform falls pass authoritative gravity validation, horizontal teleports do not',()=>{
