@@ -23,7 +23,7 @@ export function scaleUltimateFootprint(stats,item=null){
   // The global 60% change remains in force. The frying-pan ultimate is
   // another 50% smaller; the whip ultimate is now another 80% smaller.
   // Use the item ID, not the family: the Chiang token is not a frying pan.
-  const pan=/^pan-[1-5]$/.test(item?.id||'');
+  const pan=/^(?:pan|swatter)-[1-5]$/.test(item?.id||'');
   const whip=/^whip-[1-5]$/.test(item?.id||'');
   const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:whip?.2:1);
   // Broaden only the whip's warning/hit radius; retain its travel distance.
@@ -40,7 +40,7 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  const radius=clamp(Number(stats?.radius)||2,.1,50);
  // Staff/clam streams are fired from the weapon, not an unrelated distant
  // round explosion. Other spell families retain their target-centred circles.
- const areaUltimate=!!stats?.ultimate&&/^(pan|whip)-[1-5]$/.test(item?.id||'');
+ const areaUltimate=!!stats?.ultimate&&/^(pan|whip|swatter)-[1-5]$/.test(item?.id||'');
  const mode=item?.id==='clam'?'sector':channel&&isChannelStaff(item)?'corridor':
   (areaUltimate||AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
  const defaultDistance=clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
@@ -50,7 +50,7 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  const [dx,dz]=flatDirection(direction);
  // Shift pan and whip centres forward by one CURRENT blast radius. This
  // single coordinate drives the warning, authoritative hitbox and VFX.
- const blastOffset=stats?.ultimate&&/^(?:pan|whip)-[1-5]$/.test(item?.id||'')?radius:0;
+ const blastOffset=stats?.ultimate&&/^(?:pan|whip|swatter)-[1-5]$/.test(item?.id||'')?radius:0;
  const centerDistance=travel+blastOffset;
  const x=origin[0]+(blastOffset?dx:dir[0])*centerDistance,
   z=origin[2]+(blastOffset?dz:dir[2])*centerDistance;
