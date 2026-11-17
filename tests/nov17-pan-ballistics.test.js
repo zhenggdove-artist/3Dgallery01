@@ -2,20 +2,27 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {PlayerController} from '../src/player-controller.js';
-import {PAN_BLAST_LAUNCH_SPEED,PAN_BLAST_BOUNCE_SPEEDS,PAN_BLAST_INITIAL_DURATION,
+import {PAN_BLAST_LAUNCH_SPEED,PAN_BLAST_GRAVITY,PAN_BLAST_BOUNCE_SPEEDS,
+ PAN_BLAST_BOUNCE_GRAVITY,PAN_BLAST_BOUNCE_TIME_SCALE,PAN_BLAST_BOUNCE_DURATION,PAN_BLAST_INITIAL_DURATION,
  samplePanBlastArc,samplePanBlastPosition,PAN_BLAST_TOTAL_DURATION} from '../src/shared/pan-blast-flight.js';
 import {createInitialWorld,ensureProfile,applyAction,tickWorld,validateState} from '../src/shared/temple-rules.js';
 
 test('sampled path has one high arc followed by exactly three decaying upward bounces',()=>{
  const v=[PAN_BLAST_LAUNCH_SPEED,...PAN_BLAST_BOUNCE_SPEEDS];
- const g=25,peaks=[];
+ const peaks=[];
  let start=0;
- for(const velocity of v){
-  const duration=2*velocity/g,peak=samplePanBlastArc((start+duration/2)*1000);
+ for(let i=0;i<v.length;i++){
+  const velocity=v[i],gravity=i===0?PAN_BLAST_GRAVITY:PAN_BLAST_BOUNCE_GRAVITY;
+  const duration=2*velocity/gravity,peak=samplePanBlastArc((start+duration/2)*1000);
   peaks.push(peak.height);
   assert.ok(peak.height>0,'every bounce must leave the ground');
   start+=duration;
  }
+ const oldBounceTime=2*(7.5+4.5+2.5)/PAN_BLAST_GRAVITY;
+ assert.ok(Math.abs(PAN_BLAST_BOUNCE_DURATION-oldBounceTime*.3)<1e-9,
+  'all three ground-bounce arcs finish in exactly 30% of their previous time');
+ assert.equal(PAN_BLAST_BOUNCE_TIME_SCALE,.3);
+ assert.ok(Math.abs(PAN_BLAST_TOTAL_DURATION-(PAN_BLAST_INITIAL_DURATION+PAN_BLAST_BOUNCE_DURATION))<1e-9);
  assert.ok(peaks[0]>peaks[1]&&peaks[1]>peaks[2]&&peaks[2]>peaks[3]);
  assert.ok(peaks[0]>=3,'initial blast must be a visible aerial launch, not a ground shove');
  assert.equal(samplePanBlastArc((PAN_BLAST_TOTAL_DURATION+.1)*1000).completed,true);
