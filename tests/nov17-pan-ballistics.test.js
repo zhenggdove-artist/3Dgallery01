@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import {PlayerController} from '../src/player-controller.js';
 import {PAN_BLAST_LAUNCH_SPEED,PAN_BLAST_BOUNCE_SPEEDS,PAN_BLAST_INITIAL_DURATION,
  samplePanBlastArc,samplePanBlastPosition,PAN_BLAST_TOTAL_DURATION} from '../src/shared/pan-blast-flight.js';
-import {createInitialWorld,ensureProfile,applyAction,tickWorld} from '../src/shared/temple-rules.js';
+import {createInitialWorld,ensureProfile,applyAction,tickWorld,validateState} from '../src/shared/temple-rules.js';
 
 test('sampled path has one high arc followed by exactly three decaying upward bounces',()=>{
  const v=[PAN_BLAST_LAUNCH_SPEED,...PAN_BLAST_BOUNCE_SPEEDS];
@@ -48,6 +48,16 @@ test('real player controller launches, flies horizontally, lands and bounces thr
  assert.ok(heights[0]>=3&&heights[0]>heights[1]&&heights[1]>heights[2]&&heights[2]>heights[3]);
  assert.ok(Math.abs(c.root.position.x-67)<.015,'launch carries victim exactly the explosion radius');
  assert.equal(c.root.position.y,0);assert.equal(c.grounded,true);assert.equal(c.panBlastFlight,null);
+});
+
+test('server authorizes a pan-launched fighter to clear a high deck but rejects unearned height',()=>{
+ const T=7_000_000,from={position:[75,30,0],rotation:0,animation:'idle'},
+  airborne={position:[75,33.5,0],rotation:0,animation:'jump'};
+ const mobility={hitReaction:{panBlast:true,time:T},stats:{speed:1}};
+ const allowed=validateState(from,airborne,250,'fighter',null,null,T+200,mobility);
+ assert.equal(allowed.error,undefined,'a genuine blast must not rubber-band at the ordinary 32m ceiling');
+ assert.equal(validateState(from,airborne,250,'fighter',null,null,T+200,null).error,'Invalid position');
+ assert.equal(validateState(from,airborne,250,'fighter',null,null,T+3600,mobility).error,'Invalid position');
 });
 
 test('server monster is NOT teleported and follows the same three airborne bounces',()=>{
