@@ -84,6 +84,8 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
  // Prefer a usable ability at distance: the outer mobs MUST engage at range.
  const choices=target.d>12?['beam','venom','charge']:target.d>6?['charge','beam','venom','stomp']:['swipe','stomp','venom','beam','charge'];
  const motion=choices[count%choices.length],config=SKILLS[motion];
+ // Even while preparing a warning the enemy continues to pursue its attacker.
+ if(target.d>3.2){move(target.a.position,(aggro?5:3.6)*(1-slow)*dt);monster.moving=true;}
  if(now>=(monster.nextAttackAt||0)&&target.d<=config.range){
   monster.attackCount=count+1;monster.aggroTarget=target.a.key;monster.aggroUntil=now+9000;
   const aim=[...target.a.position];aim[1]=0;
@@ -93,5 +95,5 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
   monster.nextAttackAt=now+1900+(monster.slot||0)*140;
   return;
  }
- if(target.d>4.2){move(target.a.position,(aggro?5:3.6)*(1-slow)*dt);monster.moving=true;}
+ // Movement is handled before windup to keep persistent aggro responsive.
 }
