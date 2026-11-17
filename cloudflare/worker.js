@@ -2,11 +2,13 @@ import {initializeArtMedia,uploadArtMedia,getArtMedia} from './art-media.js';
 import {recoverArtworks} from '../src/shared/artwork-recovery.js';
 import {resetPlayerArtworks} from '../src/shared/art-bomb.js';
 import {DurableObject} from 'cloudflare:workers';
-import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,releasePlayerWorldState,tickWorld,validateState,validColor,validName,worldView} from '../src/shared/temple-rules.js';
+import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,releasePlayerWorldState,tickWorld,validateState,validColor,validName,worldView,MAX_FIGHTERS,MAX_SPECTATORS} from '../src/shared/temple-rules.js';
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
 import {playerStats} from '../src/shared/player-stats.js';
 
 const ROOM_ID='temple-main-v1',SESSION_MS=24*60*60*1000,SAVE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const FIGHTER_SEATS=Array.from({length:MAX_FIGHTERS},(_,i)=>i);
+const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 
 export default {
   async fetch(request,env){
@@ -69,7 +71,7 @@ export class TempleRoom extends DurableObject{
   }
 
   async join(request){
-    const clientKey=request.headers.get('CF-Connecting-IP')||request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()||'local';if(!this.consumeRate(`join:${clientKey}`,30,60_000))return json({error:'Too many join attempts'},429);
+    const clientKey=request.headers.get('CF-Connecting-IP')||request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()||'local';if(!this.consumeRate(`join:${clientKey}`,120,60_000))return json({error:'Too many join attempts'},429);
     const body=await readBody(request,8_000);if(!validName(body.name)||!validColor(body.color))return json({error:'Choose a name and color'},400);
     const memory=String(body.memoryCode||body.saveCode||'').trim();
     const admin=body.name.trim()==='Ely'&&memory.length>0&&constantTime(memory,String(this.env.TEMPLE_ADMIN_KEY||''));
@@ -81,8 +83,8 @@ export class TempleRoom extends DurableObject{
     // One live identity at a time. Rejoining releases the previous seat and socket.
     for(const row of this.sql.exec('SELECT id FROM sessions WHERE profile_key=?',profileKey).toArray())this.disconnectSession(row.id);
     const occupied=this.sql.exec('SELECT role,seat FROM sessions WHERE expires>? ORDER BY seat',now).toArray(),fighterSeats=new Set(occupied.filter(r=>r.role==='fighter').map(r=>r.seat)),spectatorSeats=new Set(occupied.filter(r=>r.role==='spectator').map(r=>r.seat));
-    let role='fighter',seat=[0,1,2,3].find(i=>!fighterSeats.has(i));if(seat===undefined){role='spectator';seat=[4,5].find(i=>!spectatorSeats.has(i));}
-    if(seat===undefined)return json({error:'Temple is full (4 fighters + 2 spectators)'},409);
+    let role='fighter',seat=FIGHTER_SEATS.find(i=>!fighterSeats.has(i));if(seat===undefined){role='spectator';seat=SPECTATOR_SEATS.find(i=>!spectatorSeats.has(i));}
+    if(seat===undefined)return json({error:'Temple is full (4 fighters + 100 spectators)'},409);
     const id=crypto.randomUUID(),expires=now+SESSION_MS,world=this.world(),profile=ensureProfile(world,profileKey,saved?null:admin?'Ely':body.name,saved?null:body.color,now,admin);if(admin)profile.name='Ely';this.save(world);
     this.sql.exec('INSERT INTO sessions(id,profile_key,name,color,role,seat,expires,state,save_code,last_code_at) VALUES(?,?,?,?,?,?,?,?,?,0)',id,profileKey,profile.name,profile.color,role,seat,expires,null,saveCode||null);
     if(saved)this.sql.exec('UPDATE save_codes SET last_used=? WHERE code=?',now,saveCode);
@@ -99,7 +101,7 @@ export class TempleRoom extends DurableObject{
 
   async changeRole(request,session){
     const body=await readBody(request,2_000),target=body.role;if(!['fighter','spectator'].includes(target))return json({error:'Choose fighter or spectator'},400);if(target===session.role)return json({ok:true,role:session.role,seat:session.seat,self:this.self(session),players:this.roster()});
-    const occupied=this.sql.exec('SELECT role,seat FROM sessions WHERE expires>? AND id<>?',Date.now(),session.id).toArray(),seats=target==='fighter'?[0,1,2,3]:[4,5],used=new Set(occupied.filter(row=>row.role===target).map(row=>row.seat)),seat=seats.find(value=>!used.has(value));if(seat===undefined)return json({error:target==='fighter'?'All fighter seats are occupied':'All spectator seats are occupied'},409);
+    const occupied=this.sql.exec('SELECT role,seat FROM sessions WHERE expires>? AND id<>?',Date.now(),session.id).toArray(),seats=target==='fighter'?FIGHTER_SEATS:SPECTATOR_SEATS,used=new Set(occupied.filter(row=>row.role===target).map(row=>row.seat)),seat=seats.find(value=>!used.has(value));if(seat===undefined)return json({error:target==='fighter'?'All fighter seats are occupied':'All spectator seats are occupied'},409);
     this.sql.exec('UPDATE sessions SET role=?,seat=?,state=NULL,expires=? WHERE id=?',target,seat,Date.now()+SESSION_MS,session.id);for(const ws of this.ctx.getWebSockets(session.id)){const meta=ws.deserializeAttachment()||{};ws.serializeAttachment({...meta,role:target,seat});}
     const updated=this.session(session.id);this.broadcastRoster();return json({ok:true,role:target,seat,self:this.self(updated),players:this.roster(),world:worldView(this.world(),updated.profile_key)});
   }
@@ -107,6 +109,9 @@ export class TempleRoom extends DurableObject{
   async webSocketMessage(ws,message){
     const meta=ws.deserializeAttachment();if(!meta||this.closed.has(ws))return;const session=this.session(meta.sessionId);if(!session){this.closed.add(ws);ws.close(4001,'Session expired');return;}
     let event;try{event=JSON.parse(String(message));}catch{return;}if(event.type!=='state')return;
+    // Spectators move their free camera locally; only four fighters send
+    // authoritative pose streams. Do not fan out up to 100 viewer cameras.
+    if(session.role!=='fighter')return;
     const now=Date.now();if(now-meta.lastStateAt<70)return;const previous=session.state?JSON.parse(session.state):null,world=this.world(),profile=world.profiles[session.profile_key],mobility=profile?{stats:playerStats(world,profile,now),channeling:!!profile.channelWeapon,effects:profile.effects,hitReaction:profile.hitReaction,impulse:profile.impulse,lastRespawnAt:profile.lastRespawnAt,lastWriteLanding:profile.lastWriteLanding,lastWriteLandingAt:profile.lastWriteLandingAt}:null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],profile?.writeJourney,now,mobility);if(result.error){ws.send(JSON.stringify({type:'state-rejected',data:{error:result.error,state:result.state||previous||null}}));return;}
     meta.lastStateAt=now;ws.serializeAttachment(meta);this.sql.exec('UPDATE sessions SET state=?,expires=? WHERE id=?',JSON.stringify(result.state),now+SESSION_MS,session.id);
     this.broadcast('state',{id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,state:result.state},ws);await this.tick(true);
@@ -200,8 +205,20 @@ export class TempleRoom extends DurableObject{
   prune(){const now=Date.now();for(const row of this.sql.exec('SELECT id FROM sessions WHERE expires<=?',now).toArray())this.disconnectSession(row.id,false);this.sql.exec('DELETE FROM rate_limits WHERE window_start<?',now-3_600_000);}
   disconnectSession(id,broadcast=true){const row=this.sql.exec('SELECT profile_key FROM sessions WHERE id=?',id).toArray()[0];for(const ws of this.ctx.getWebSockets(id)){this.closed.add(ws);try{ws.close(1000,'Disconnected');}catch{}}this.sql.exec('DELETE FROM sessions WHERE id=?',id);if(row){const world=this.world();if(releasePlayerWorldState(world,row.profile_key,Date.now())){this.save(world);this.broadcastWorld(world);}}if(broadcast)this.broadcastRoster();}
   broadcast(type,data,except){const text=JSON.stringify({type,data});for(const ws of this.sockets())if(ws!==except)try{ws.send(text);}catch{this.closed.add(ws);}}
-  broadcastRoster(){this.broadcast('players',this.roster());}
-  broadcastWorld(world=this.world()){for(const ws of this.sockets()){const meta=ws.deserializeAttachment();if(meta)try{ws.send(JSON.stringify({type:'world',data:worldView(world,meta.profileKey)}));}catch{this.closed.add(ws);}}this.broadcastRoster();}
+  broadcastRoster(){this.lastRosterAt=Date.now();this.broadcast('players',this.roster());}
+  broadcastWorld(world=this.world()){
+    const now=Date.now(),updateViewers=now-(this.lastSpectatorWorldAt||0)>=350;
+    for(const ws of this.sockets()){
+      const meta=ws.deserializeAttachment();
+      if(!meta||(meta.role==='spectator'&&!updateViewers))continue;
+      try{ws.send(JSON.stringify({type:'world',data:worldView(world,meta.profileKey)}));}
+      catch{this.closed.add(ws);}
+    }
+    if(updateViewers)this.lastSpectatorWorldAt=now;
+    // Fighter HP/name bars need timely updates, but not 104 copies of the
+    // full roster on every 70ms weapon-effect tick.
+    if(now-(this.lastRosterAt||0)>=800)this.broadcastRoster();
+  }
   async tick(fromState=false){const now=Date.now();const world=this.world();const movingEffects=(world.persistentAttacks||[]).length>0;if(fromState&&now-this.lastTick<(movingEffects?70:500))return;this.lastTick=now;const actors=this.actors();if(tickWorld(world,{now,activeFighters:actors.filter(a=>a.role==='fighter').length,actors})){this.save(world);this.broadcastWorld(world);}await this.armAlarm();}
   async alarm(){this.prune();await this.tick();}
   async armAlarm(){if(this.roster().length)await this.ctx.storage.setAlarm(Date.now()+1_000);}
