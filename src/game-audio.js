@@ -5,7 +5,7 @@ import {WEAPONS} from './shared/catalog.js';
 const db=value=>10**(value/20);
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,Number(n)||0));
 const hash=str=>{let n=2166136261;for(const c of String(str)){n^=c.charCodeAt(0);n=Math.imul(n,16777619);}return n>>>0;};
-export const MUSIC_PATH='./sound/GGTEMPLE音樂.mp3';
+export const MUSIC_PATH='./sound/backgroundmusic.MP3';
 export const SOUND_PROFILES=Object.freeze({
  jump:{duration:.34,freq:340,end:780,shape:'triangle',noise:.25,gain:1},
  land:{duration:.23,freq:125,end:49,shape:'sine',noise:.72,gain:.9},
@@ -78,7 +78,7 @@ export class GameAudio{
  }
  setMusicUrl(url){
   if(!url||url===this.musicUrl)return;
-  this.musicUrl=url;
+  this.musicUrl=url;this.musicFailed=false;
   if(this.music){this.music.pause();this.music.src=url;this.music.load();this.music.play().catch(()=>{});}
  }
  applyMix(value){
