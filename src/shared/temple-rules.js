@@ -18,6 +18,7 @@ import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE} from './combat-balance.js';
+import {normalMeleeFootprint} from './melee-contact.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
@@ -394,6 +395,12 @@ function attack(world,profile,actor,body,context,now){
    // Restrict ordinary whip contacts to the visible, narrow forward-moving lash.
    if(weapon.family==='whip'&&!weapon.exotic&&!stats.ultimate){stats.range=+(Math.min(stats.range,4.7+(Math.max(1,weapon.tier||1)-1)*1.5)/3).toFixed(3);stats.radius=.16;}
     if(weapon.family==='swatter'&&!weapon.exotic&&!stats.ultimate){stats.range=Math.min(stats.range,1.55+(Math.max(1,weapon.tier||1)-1)*.2);stats.radius=.18;}
+   // Keep basic contact within each visible swing (+10px). Do not change
+   // saber range or charged area ultimates.
+   if(!stats.ultimate){
+    const contact=normalMeleeFootprint(weapon);
+    if(contact){stats.range=Math.min(stats.range,contact.range);stats.radius=Math.min(stats.radius,contact.radius);}
+   }
   // Jellybrella's giant spinning wheel is an area hazard, not a .3m point.
   // Scale the original authoritative area and its warning with the doubled wheel.
   if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);

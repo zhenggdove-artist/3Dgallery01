@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {MonsterAttackEffects} from './monster-attack-effects.js';
 import {islandModel,animateIslandModel} from './reletter/island-actors.js';
 import {createEnemySpellEffect,updateEnemySpellEffect} from './reletter/temple-spell-effects.js';
-import {ISLAND_ENEMIES,ENEMY_HEIGHT} from './shared/island-combat.js';
+import {ISLAND_ENEMIES,ENEMY_HEIGHT,monsterBeamEndpoint} from './shared/island-combat.js';
 import {MONSTER_PACK_SIZE} from './shared/monster-pack.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {samplePanBlastPosition} from './shared/pan-blast-flight.js';
@@ -52,6 +52,7 @@ export class IslandEnemies{
   root.userData.attackRestore=[];root.userData.pivot.rotation.x=0;root.userData.pivot.position.y=0;
   const skill=state.skills?.find(s=>s.motion&&s.phase==='active');
   animateIslandModel(root,{...state,moving:state.moving||skill?.motion==='charge',
+   patrolling:skill?.motion==='beam'?true:state.patrolling,
    leap:skill?.motion==='stomp',skills:skill?.motion==='charge'?[skill]:skill?[]:state.skills,
    lastHit:state.lastHitAt},dt,now);
   if(skill){
@@ -97,7 +98,8 @@ export class IslandEnemies{
   else root.position.lerp(target,1-Math.exp(-dt*10));
   const motion=state.skills?.find(s=>['charge','beam'].includes(s.motion)&&(s.phase==='warning'||s.phase==='active'));
   if(motion){
-   const delta=new THREE.Vector3(...motion.aim).sub(new THREE.Vector3(...motion.origin));
+   const end=motion.motion==='beam'?monsterBeamEndpoint(motion,now,state.position):motion.aim;
+   const delta=new THREE.Vector3(...end).sub(new THREE.Vector3(...state.position));
    if(delta.lengthSq()>.001)root.rotation.y=Math.atan2(delta.x,delta.z);
   }else{
    const delta=root.position.clone().sub(previous);

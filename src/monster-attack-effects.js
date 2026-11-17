@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {monsterBeamEndpoint} from './shared/island-combat.js';
 import pulseBeam from '../vendor/00gamedevs/pulse-beam.js';
 import venomPool from '../vendor/00gamedevs/venom-pool.js';
 import {ENEMY_HEIGHT} from './shared/island-combat.js';
@@ -12,6 +13,8 @@ const warningRect=new THREE.PlaneGeometry(1,1),warningCircle=new THREE.CircleGeo
 export class MonsterAttackEffects {
  constructor(scene){
   this.scene=scene;this.live=new Map();this.pool=new Map();this.completed=new Set();
+  this.scratch={mat:new THREE.Matrix4(),pos:new THREE.Vector3(),rot:new THREE.Quaternion(),
+   scale:new THREE.Vector3(),axis:new THREE.Vector3(.4,.8,.3).normalize()};this.failedSkills=new Set();
  }
  make(motion){
   const root=new THREE.Group();root.name='Monster skill '+motion;
@@ -70,10 +73,18 @@ export class MonsterAttackEffects {
   const target=new THREE.WebGLRenderTarget(32,32),before=renderer.getRenderTarget();
   try{
    for(const motion of ['beam','venom','charge','stomp','swipe']){
-    const count=motion==='beam'||motion==='venom'?3:2;
+    const count=motion==='stomp'?6:motion==='beam'?4:motion==='venom'?3:2;
     for(let i=0;i<count;i++){
      const e=this.make(motion),stage=new THREE.Scene();
      stage.add(e.root);e.native?.group&&(e.native.group.visible=true);
+      // Prewarm both the real 32-piece instanced rubble and the crack mesh.
+      // Hidden materials previously compiled when stomp first hit the floor.
+      if(e.rubble){
+       e.rubble.visible=true;e.fractures.visible=true;e.wave.visible=true;
+       const matrix=new THREE.Matrix4();
+       for(let j=0;j<e.rubble.count;j++)e.rubble.setMatrixAt(j,matrix);
+       e.rubble.instanceMatrix.needsUpdate=true;
+      }
      if(e.native&&motion==='beam')e.native.setEndpoints(new THREE.Vector3(0,7,0),new THREE.Vector3(10,7,6));
      e.native?.update(.016);
      await renderer.compileAsync(stage,camera);
@@ -84,7 +95,7 @@ export class MonsterAttackEffects {
    }
   }finally{renderer.setRenderTarget(before);target.dispose();}
  }
- updateEntry(e,s,now,mouth=null){
+ updateEntry(e,s,now,mouth=null,position=null){
   const {marker,fringe,wave,native}=e,aim=s.aim||s.origin,origin=s.origin;
   const dx=aim[0]-origin[0],dz=aim[2]-origin[2],length=Math.max(.01,Math.hypot(dx,dz));
   const warning=s.phase==='warning',active=s.phase==='active';
@@ -115,8 +126,7 @@ export class MonsterAttackEffects {
    if(stompLanded){
     const phase=Math.min(1,Math.max(0,(now-(s.start+(s.end-s.start)*.76))/Math.max(1,(s.end-s.start)*.24)));
     const origin=s.aim||s.origin;
-    const mat=new THREE.Matrix4(),pos=new THREE.Vector3(),rot=new THREE.Quaternion(),
-     scale=new THREE.Vector3(),axis=new THREE.Vector3(.4,.8,.3).normalize();
+    const {mat,pos,rot,scale,axis}=this.scratch;
     e.fractures.position.set(origin[0],.03,origin[2]);
     e.fractures.scale.setScalar(Math.max(.01,(s.radius||7)/7*Math.min(1,phase*5)));
     for(let j=0;j<32;j++){
@@ -135,7 +145,8 @@ export class MonsterAttackEffects {
   if(!active)return;
   if(s.motion==='beam'){
    const a=mouth?.isVector3?mouth:new THREE.Vector3(origin[0],ENEMY_HEIGHT*.86,origin[2]);
-   const b=new THREE.Vector3(aim[0],(aim[1]||0)+1.3,aim[2]);
+   const sweep=monsterBeamEndpoint(s,now,position||origin);
+   const b=new THREE.Vector3(sweep[0],sweep[1]+1.3,sweep[2]);
    native.group.position.set(0,0,0);native.group.quaternion.identity();
    native.setEndpoints(a,b);
   }else{
@@ -145,6 +156,11 @@ export class MonsterAttackEffects {
   }
   const dt=e.last?Math.min(.06,Math.max(.001,(now-e.last)/1000)):.016;
   e.last=now;native.update(dt);
+  if(s.motion==='beam'){
+   // The vendor clamps shader option size to 2. Double *world* thickness
+   // instead (after update/endpoints so it never accumulates exponentially).
+   native.group.scale.y=2;native.group.scale.z=2;
+  }
  }
  sync(states,now,mouthForState=()=>null){
   const needed=new Set();
@@ -155,7 +171,11 @@ export class MonsterAttackEffects {
     const key=state.id+':'+s.id;needed.add(key);
     let e=this.live.get(key);
     if(!e){e=this.take(s.motion);this.scene.add(e.root);this.live.set(key,e);}
-    this.updateEntry(e,s,now,s.motion==='beam'?mouthForState(state,s):null);
+    try{this.updateEntry(e,s,now,s.motion==='beam'?mouthForState(state,s):null,state.position);}
+    catch(error){
+     this.live.delete(key);this.put(e);needed.delete(key);
+     if(!this.failedSkills.has(s.motion)){this.failedSkills.add(s.motion);console.error('Monster VFX update failed',s.motion,error);}
+    }
    }
   }
   for(const [key,e] of this.live)if(!needed.has(key)){this.put(e);this.live.delete(key);}

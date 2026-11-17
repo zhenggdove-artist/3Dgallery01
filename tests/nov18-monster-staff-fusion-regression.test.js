@@ -16,6 +16,8 @@ test('monster beam lasts five seconds and damages on each second of contact with
  advanceIslandEnemy(monster,[target],NOW,opts);
  assert.equal(monster.skills[0]?.motion,'beam');
  const beam=monster.skills[0];
+ // On a near-to-far scan, first contact is inside the starting short ray.
+ target.position=[0,0,5];
  assert.ok(Math.abs(Math.hypot(beam.aim[0],beam.aim[2])-38)<.001);
  advanceIslandEnemy(monster,[target],NOW+800,opts);
  assert.equal(beam.phase,'active');
@@ -28,7 +30,7 @@ test('monster beam lasts five seconds and damages on each second of contact with
  advanceIslandEnemy(monster,[target],NOW+3000,opts);
  assert.equal(target.hits.length,3);
  assert.equal(monster.skills.length,1,'no concurrent skill during beam');
- assert.equal(MONSTER_SKILLS.beam.radius,2.475);
+ assert.equal(MONSTER_SKILLS.beam.radius,4.95);
 });
 
 test('charge telegraph has exact fixed 19m reach, even when target is closer',()=>{

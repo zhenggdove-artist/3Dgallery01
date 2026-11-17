@@ -14,7 +14,7 @@ export const ENEMY_RADIUS=.42*6; // Includes the sixfold humanoid's shoulders an
 const SKILLS=Object.freeze({
  swipe:{warning:480,active:500,range:4.8,radius:4.2},
  charge:{warning:850,active:1600,range:19,radius:2.35},
- beam:{warning:750,active:5000,range:38,radius:2.475},
+ beam:{warning:750,active:5000,range:38,radius:4.95},
  stomp:{warning:1000,active:1500,range:8,radius:7},
  venom:{warning:850,active:5100,range:27,radius:5.2}
 });
@@ -25,6 +25,15 @@ const segmentDistance=(p,a,b)=>{
  const t=l?Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[2]-a[2])*dz)/l)):0;
  return Math.hypot(p[0]-a[0]-t*dx,p[2]-a[2]-t*dz);
 };
+// Browser and server share the same near-to-far 5s sweep.
+export function monsterBeamEndpoint(skill,now,origin=skill.origin){
+ const dx=skill.aim[0]-skill.origin[0],dz=skill.aim[2]-skill.origin[2];
+ const length=Math.hypot(dx,dz)||1,ux=dx/length,uz=dz/length;
+ if(skill.phase!=='active')return [origin[0]+ux*length,origin[1]||0,origin[2]+uz*length];
+ const t=Math.max(0,Math.min(1,(now-skill.start)/Math.max(1,skill.end-skill.start)));
+ const reach=length*(.24+.76*t),pan=Math.sin(t*Math.PI*1.65)*.12*reach;
+ return [origin[0]+ux*reach-uz*pan,origin[1]||0,origin[2]+uz*reach+ux*pan];
+}
 export function monsterSkillContains(skill,p,now,origin=skill.origin){
  if(skill.phase!=='active'||now>=skill.end)return false;
  const config=SKILLS[skill.motion];if(!config)return false;
@@ -41,10 +50,9 @@ export function monsterSkillContains(skill,p,now,origin=skill.origin){
   const dx=p[0]-origin[0],dz=p[2]-origin[2],fx=skill.aim[0]-origin[0],fz=skill.aim[2]-origin[2];
   return Math.hypot(dx,dz)<=config.radius&&dx*fx+dz*fz>0;
  }
- if(skill.motion==='beam') {
-  // The ray starts at the giant monster's mouth and extends toward its locked aim.
-  const end=[skill.aim[0],0,skill.aim[2]];
-  return segmentDistance(p,skill.origin,end)<=config.radius;
+ if(skill.motion==='beam'){
+  // Same corridor as the rendered moving laser.
+  return segmentDistance(p,origin,monsterBeamEndpoint(skill,now,origin))<=config.radius;
  }
  return segmentDistance(p,skill.origin,skill.aim)<=config.radius;
 }
@@ -58,7 +66,16 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
   s.hit??=[];s.lastTick??={};
   if(s.phase==='warning'&&now>=s.end){s.phase='active';s.start=s.end;s.end=s.start+(SKILLS[s.motion]?.active||800);s.lastTick={};}
   if(s.phase!=='active'||now>=s.end)continue;
-  if(s.motion==='charge'){
+  if(s.motion==='beam'){
+    // Walking side-step while spraying, speed at most .85m/s.
+    const duration=Math.max(1,s.end-s.start),t=Math.max(0,Math.min(1,(now-s.start)/duration));
+    const dx=s.aim[0]-s.origin[0],dz=s.aim[2]-s.origin[2],len=Math.hypot(dx,dz)||1;
+    const offset=.9*Math.sin(t*Math.PI*2);
+    const position=[s.origin[0]-dz/len*offset,monster.position[1],s.origin[2]+dx/len*offset];
+    const remaining=flatDistance(monster.position,position);
+    if(remaining>.01&&dt>0){move(position,Math.min(remaining,.85*dt));monster.moving=true;monster.patrolling=true;}
+   }
+   if(s.motion==='charge'){
    // A fixed marked path, not homing after the warning has been shown.
    const duration=Math.max(.1,(s.end-s.start)/1000);
    const remaining=flatDistance(monster.position,s.aim);
@@ -69,7 +86,7 @@ export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,
   for(const target of targets){
    const key=target.key;
    if(s.motion==='venom'||s.motion==='beam'){
-    if(!monsterSkillContains(s,target.position,now))continue;
+    if(!monsterSkillContains(s,target.position,now,s.motion==='beam'?monster.position:s.origin))continue;
     // Continuous contact: one hit per second, never catch-up burst damage.
     const last=s.lastTick[key]??(s.start-1000);
     if(now-last>=1000){s.lastTick[key]=now;hit(target,s.motion==='venom'?5:s.damage,s);}
