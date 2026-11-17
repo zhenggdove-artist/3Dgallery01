@@ -51,7 +51,8 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  // charge range independently from the target-centre displacement.
  const whipOffset=stats?.ultimate&&/^whip-[1-5]$/.test(item?.id||'')?radius:0;
  const centerDistance=travel+whipOffset;
- const x=origin[0]+dx*centerDistance,z=origin[2]+dz*centerDistance;
+ const x=origin[0]+(whipOffset?dx:dir[0])*centerDistance,
+  z=origin[2]+(whipOffset?dz:dir[2])*centerDistance;
  const floor=Math.max(0,ground(x,z,origin[1]));
  const nearFloor=Math.max(0,ground(origin[0],origin[2],origin[1]));
  return {
