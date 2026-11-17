@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {attackStats} from './shared/catalog.js';
-import {chargedArea,spellGroundHeight,spellFootprint} from './shared/charge-area.js';
-import {weaponQuality,isChannelStaff,forwardCastRadius,channelReachMultiplier} from './shared/weapon-abilities.js';
+import {chargedArea,spellGroundHeight,spellFootprint,scaleUltimateFootprint} from './shared/charge-area.js';
+import {weaponQuality,isChannelStaff,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_RADIUS} from './shared/weapon-abilities.js';
 // These are the ORIGINAL source downloads from 00GameDevs; do not redraw them.
 import createSector from '../vendor/00gamedevs/source/spell-indicator-sector.js';
 import createRectangle from '../vendor/00gamedevs/source/spell-indicator-rectangle.js';
@@ -64,6 +64,9 @@ export class ChargeTargetPreview {
   // Use the same thin hit tube as server-owned continuous casting, rather
   // than the giant charged blast radius.
   stats.radius=forwardCastRadius(equipped,quality,stats.radius,isChannelStaff(equipped));
+   if(equipped.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
+   if(equipped.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
+   scaleUltimateFootprint(stats);
   const ground=(x,z,y)=>spellGroundHeight(arena?.world,x,z,y);
   const origin=Array.isArray(muzzle)&&muzzle.length===3&&muzzle.every(Number.isFinite)
    ?[...muzzle]:[root.position.x,root.position.y+1,root.position.z];

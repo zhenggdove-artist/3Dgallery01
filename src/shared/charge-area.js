@@ -16,11 +16,20 @@ const flatDirection=direction=>{
  return length>.0001?[d[0]/length,d[2]/length]:[0,1];
 };
 export const CLAM_SECTOR_ANGLE=90;
+export const ULTIMATE_FOOTPRINT_SCALE=.6;
+// Authoritative damage geometry and warning VFX always use identical dimensions.
+export function scaleUltimateFootprint(stats){
+ if(stats?.ultimate){
+  stats.range=+(Math.max(.5,Number(stats.range)||0)*ULTIMATE_FOOTPRINT_SCALE).toFixed(3);
+  stats.radius=+(Math.max(.1,Number(stats.radius)||0)*ULTIMATE_FOOTPRINT_SCALE).toFixed(3);
+ }
+ return stats;
+}
 
 export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=false){
  const dir=safeDirection(direction);
  const range=clamp(Number(stats?.range)||Number(item?.range)||8,2,100);
- const radius=clamp(Number(stats?.radius)||2,1,50);
+ const radius=clamp(Number(stats?.radius)||2,.1,50);
  // Staff/clam streams are fired from the weapon, not an unrelated distant
  // round explosion. Other spell families retain their target-centred circles.
  const mode=item?.id==='clam'?'sector':channel&&isChannelStaff(item)?'corridor':

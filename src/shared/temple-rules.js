@@ -1,6 +1,6 @@
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks} from './artwork-recovery.js';
-import {chargedArea,insideChargedArea,spellGroundHeight} from './charge-area.js';
+import {chargedArea,insideChargedArea,spellGroundHeight,scaleUltimateFootprint} from './charge-area.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {artworkLanding} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage} from './art-bomb.js';
@@ -344,6 +344,8 @@ function attack(world,profile,actor,body,context,now){
   // Jellybrella's giant spinning wheel is an area hazard, not a .3m point.
   // Scale the original authoritative area and its warning with the doubled wheel.
   if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
+   if(weapon.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
+   scaleUltimateFootprint(stats);
   const origin=[actor.position[0],actor.position[1]+1,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
@@ -360,7 +362,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:id(),kind:swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
       origin:[...origin],direction:[...direction],range:stats.range,
-      damage:stats.damage+bonus*.1,pvpDamage,radius:swimmingFish?GOLDFISH_SWIM_RADIUS*quality.visual:Math.max(2,stats.radius)*quality.radius,tier:quality.tier,
+      damage:stats.damage+bonus*.1,pvpDamage,radius:swimmingFish?stats.radius:Math.max(.3,stats.radius)*quality.radius,tier:quality.tier,
       createdAt:now,lastAt:now,expiresAt:now+duration,
       outHits:[],backHits:[],fanHits:{},fishHits:[]
     });
