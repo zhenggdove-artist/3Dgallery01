@@ -68,7 +68,7 @@ export class ChargeTargetPreview {
    if(equipped.id==='black-cat')stats.range=SNIPER_RANGE;
    if(equipped.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
    if(equipped.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
-   scaleUltimateFootprint(stats);
+   scaleUltimateFootprint(stats,equipped);
   const ground=(x,z,y)=>spellGroundHeight(arena?.world,x,z,y);
   const origin=Array.isArray(muzzle)&&muzzle.length===3&&muzzle.every(Number.isFinite)
    ?[...muzzle]:[root.position.x,root.position.y+1,root.position.z];
