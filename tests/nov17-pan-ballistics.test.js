@@ -40,7 +40,7 @@ test('real player controller launches, flies horizontally, lands and bounces thr
   const phase=c.panBlastFlight?.rebounds??3;
   c.update(.005);
   heights[phase]=Math.max(heights[phase],c.root.position.y);
-  if(lastY>.0001&&c.root.position.y===0)contacts++;
+  if(lastY>0&&c.root.position.y===0)contacts++;
   lastY=c.root.position.y;
   if(!c.panBlastFlight)break;
  }
