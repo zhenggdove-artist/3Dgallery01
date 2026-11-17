@@ -38,7 +38,13 @@ export class TempleUI extends EventTarget{
     $('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.dataset.action)this.emit(button.dataset.action);});
     $('build-confirm').onclick=()=>this.emit('build-confirm');$('build-rotate').onclick=()=>this.emit('build-rotate');$('build-cancel').onclick=()=>this.emit('build-cancel');
     this.content.addEventListener('click',event=>this.panelClick(event));this.content.addEventListener('submit',event=>this.panelSubmit(event));
-    this.content.addEventListener('change',event=>{const el=event.target.closest('[data-gm-volume]');if(!el||!this.self?.profile?.admin)return;const value=Math.max(0,Math.min(2,Number(el.value)||0));this.emit('gm-audio-setting',{key:el.dataset.gmVolume,value});});
+    this.content.addEventListener('change',event=>{
+       const input=event.target.closest('[data-gm-music-file]');
+       if(!input||!this.self?.profile?.admin||!input.files?.[0])return;
+       this.emit('gm-music-upload',input.files[0]);
+       input.value='';
+     });
+     this.content.addEventListener('change',event=>{const el=event.target.closest('[data-gm-volume]');if(!el||!this.self?.profile?.admin)return;const value=Math.max(0,Math.min(2,Number(el.value)||0));this.emit('gm-audio-setting',{key:el.dataset.gmVolume,value});});
      this.content.addEventListener('input',event=>{const el=event.target.closest('[data-gm-volume]');if(!el)return;const label=el.parentElement.querySelector('output');if(label)label.value=Math.round(Number(el.value)*100)+'%';});
      this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');});
     this.content.addEventListener('click',event=>{const b=event.target.closest('button');if(b?.dataset.unequip)this.emit('server-action',{action:'unequip',slot:b.dataset.unequip});if(b?.dataset.use)this.emit('use-item',b.dataset.use);});
@@ -154,7 +160,7 @@ export class TempleUI extends EventTarget{
         <button type="button" data-gm-action="help">編輯快捷鍵</button>
         <button type="button" data-gm-action="refresh">${this.gmPresenceLoading?'讀取中…':'重新整理紀錄'}</button>
       </div>
-      <h3>全服音效控制（GM）</h3><p>調整後放開滑桿即同步所有玩家。100% 為預設值。</p>
+      <h3>GM 背景音樂（MP3）</h3><p>上傳後取代所有玩家的背景音樂，循環播放。支援最大 7.5 MB。</p><label>選擇背景 MP3<input data-gm-music-file type="file" accept=".mp3,audio/mpeg"></label><small>${this.world?.musicVersion?'已上傳 · '+escape(new Date(this.world.musicVersion).toLocaleString('zh-TW')):'尚未上傳專用背景音樂，使用預設曲目'}</small><h3>全服音效控制（GM）</h3><p>調整後放開滑桿即同步所有玩家。100% 為預設值。</p>
       <details><summary>音效類型與背景音樂</summary>${soundControls}</details>
       <details><summary>每把武器的獨立音量</summary>${weaponControls}</details>
       <h3>目前在線（${online.length}）</h3>
