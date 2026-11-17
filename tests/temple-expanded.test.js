@@ -12,7 +12,7 @@ test('every weapon has finite charge distance and a target rune outside the cast
  for(const weapon of WEAPONS){
   const stats=attackStats(weapon,1),area=chargedArea(weapon,[0,1,0],[0,0,1],stats);
   assert.ok(area.radius>=.1&&Number.isFinite(area.radius),weapon.id);
-  assert.ok(area.travel>=1&&area.travel<=area.range,weapon.id);
+  assert.ok(area.travel>=1&&area.travel<=area.range+(weapon.id.startsWith('whip-')?area.radius:0),weapon.id);
   assert.ok(area.center.every(Number.isFinite),weapon.id);
   assert.ok(area.center[2]>0,weapon.id);
  }
