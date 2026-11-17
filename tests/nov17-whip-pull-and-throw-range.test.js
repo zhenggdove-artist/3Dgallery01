@@ -43,7 +43,7 @@ test('whip applies all quality-based pull durations on server-confirmed contact'
   const center=attack.attackEvent.area.center;
   victim.position=[center[0]+.2,center[1]-.12,center[2]];
   tickWorld(world,{now:at+650,actors:[caster,victim],activeFighters:0,rng:()=>.5});
-  assert.ok(target.hitReaction?.whipPull,weaponId+' actually pulls target');
+  assert.ok(target.hitReaction?.whipPull,weaponId+' actually pulls target: '+JSON.stringify({area:attack.attackEvent.area,attacks:world.persistentAttacks,position:victim.position,hp:target.hp,reaction:target.hitReaction}));
   assert.equal(target.hitReaction.whipPull.durationMs,whipPullDurationMs(tier),weaponId);
   assert.equal(target.hitReaction.whipPull.speed,WHIP_PULL_SPEED);
   assert.deepEqual(target.hitReaction.whipPull.center,[center[0],center[2]]);
