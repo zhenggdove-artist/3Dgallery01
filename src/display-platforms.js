@@ -83,7 +83,9 @@ export class DisplayPlatforms{
  }
  ground(x,z,y){
   let h=0;
-  for(const d of this.discs)if(y>=d.top-.5&&Math.hypot(x-d.position[0],z-d.position[2])<d.radius)h=Math.max(h,d.top);
+  // A disc only supports a foot at/above its top. The old half-metre
+  // underside tolerance could latch falling players back onto an edge.
+  for(const d of this.discs)if(y>=d.top-.06&&Math.hypot(x-d.position[0],z-d.position[2])<d.radius)h=Math.max(h,d.top);
   return h;
  }
 }
