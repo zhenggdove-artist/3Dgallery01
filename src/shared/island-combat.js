@@ -39,7 +39,7 @@ export function monsterSkillContains(skill,p,now,origin=skill.origin){
  if(skill.motion==='beam') {
   // The ray starts at the giant monster's mouth and extends toward its locked aim.
   const dx=skill.aim[0]-skill.origin[0],dz=skill.aim[2]-skill.origin[2],dist=Math.hypot(dx,dz)||1;
-  const end=[skill.origin[0]+dx/dist*38,0,skill.origin[2]+dz/dist*38];
+  const end=[skill.aim[0],0,skill.aim[2]];
   return segmentDistance(p,skill.origin,end)<=config.radius;
  }
  return segmentDistance(p,skill.origin,skill.aim)<=config.radius;
