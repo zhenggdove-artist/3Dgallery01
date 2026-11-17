@@ -19,7 +19,7 @@ export class MonsterAttackEffects {
   marker.rotation.x=-Math.PI/2;marker.position.y=.12;root.add(marker);
   const fringe=new THREE.Mesh(warningCircle,softMat('#ff242c'));
   fringe.rotation.x=-Math.PI/2;fringe.position.y=.125;root.add(fringe);
-  const native=motion==='beam'?pulseBeam({size:1.2,density:.48,color:'#80ffed',quantity:4}):
+  const native=motion==='beam'?pulseBeam({size:1.8,density:.48,color:'#80ffed',quantity:4}):
    motion==='venom'?venomPool({size:1.8,density:.5,color:'#b4f745',quantity:7}):null;
   if(native){native.group.visible=false;root.add(native.group);}
   const wave=new THREE.Mesh(new THREE.RingGeometry(.84,1,48),softMat('#ffe8ab'));
@@ -84,7 +84,7 @@ export class MonsterAttackEffects {
    }
   }finally{renderer.setRenderTarget(before);target.dispose();}
  }
- updateEntry(e,s,now){
+ updateEntry(e,s,now,mouth=null){
   const {marker,fringe,wave,native}=e,aim=s.aim||s.origin,origin=s.origin;
   const dx=aim[0]-origin[0],dz=aim[2]-origin[2],length=Math.max(.01,Math.hypot(dx,dz));
   const warning=s.phase==='warning',active=s.phase==='active';
@@ -102,17 +102,18 @@ export class MonsterAttackEffects {
    marker.scale.setScalar(r);marker.rotation.set(-Math.PI/2,0,0);
    fringe.position.copy(marker.position);fringe.scale.setScalar(r*1.02);
   }
-  wave.visible=active&&(s.motion==='stomp'||s.motion==='swipe');
+  const stompLanded=s.motion==='stomp'&&active&&now>=s.start+(s.end-s.start)*.76;
+  wave.visible=active&&(s.motion==='swipe'||stompLanded);
   if(wave.visible){
-   const t=Math.min(1,Math.max(0,(now-s.start)/Math.max(1,s.end-s.start)));
+   const t=Math.min(1,Math.max(0,(now-(s.motion==='stomp'?s.start+(s.end-s.start)*.76:s.start))/Math.max(1,(s.end-s.start)*(s.motion==='stomp'?.24:1))));
    const c=s.motion==='stomp'?aim:origin;
    wave.position.set(c[0],.20,c[2]);
    wave.scale.setScalar(Math.max(.01,r*t));wave.material.opacity=.90*(1-t);
   }
   if(e.rubble){
-   e.rubble.visible=active;e.fractures.visible=active;
-   if(active){
-    const phase=Math.min(1,Math.max(0,(now-s.start)/Math.max(1,s.end-s.start)));
+   e.rubble.visible=stompLanded;e.fractures.visible=stompLanded;
+   if(stompLanded){
+    const phase=Math.min(1,Math.max(0,(now-(s.start+(s.end-s.start)*.76))/Math.max(1,(s.end-s.start)*.24)));
     const origin=s.aim||s.origin;
     const mat=new THREE.Matrix4(),pos=new THREE.Vector3(),rot=new THREE.Quaternion(),
      scale=new THREE.Vector3(),axis=new THREE.Vector3(.4,.8,.3).normalize();
@@ -133,8 +134,8 @@ export class MonsterAttackEffects {
   native.group.visible=active;
   if(!active)return;
   if(s.motion==='beam'){
-   const a=new THREE.Vector3(origin[0],ENEMY_HEIGHT*.76,origin[2]);
-   const b=new THREE.Vector3(aim[0],(aim[1]||0)+1.2,aim[2]);
+   const a=mouth?.isVector3?mouth:new THREE.Vector3(origin[0],ENEMY_HEIGHT*.86,origin[2]);
+   const b=new THREE.Vector3(aim[0],(aim[1]||0)+1.3,aim[2]);
    native.group.position.set(0,0,0);native.group.quaternion.identity();
    native.setEndpoints(a,b);
   }else{
@@ -145,7 +146,7 @@ export class MonsterAttackEffects {
   const dt=e.last?Math.min(.06,Math.max(.001,(now-e.last)/1000)):.016;
   e.last=now;native.update(dt);
  }
- sync(states,now){
+ sync(states,now,mouthForState=()=>null){
   const needed=new Set();
   for(const state of states){
    if(!state?.active)continue;
@@ -154,7 +155,7 @@ export class MonsterAttackEffects {
     const key=state.id+':'+s.id;needed.add(key);
     let e=this.live.get(key);
     if(!e){e=this.take(s.motion);this.scene.add(e.root);this.live.set(key,e);}
-    this.updateEntry(e,s,now);
+    this.updateEntry(e,s,now,s.motion==='beam'?mouthForState(state,s):null);
    }
   }
   for(const [key,e] of this.live)if(!needed.has(key)){this.put(e);this.live.delete(key);}

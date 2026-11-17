@@ -37,6 +37,7 @@ export const SOUND_PROFILES=Object.freeze({
  earth:{duration:.58,freq:198,end:65,shape:'triangle',noise:.73,gain:1.06},
  venom:{duration:.57,freq:115,end:65,shape:'triangle',noise:.77,gain:.85},
  stomp:{duration:.65,freq:80,end:38,shape:'sawtooth',noise:.94,gain:1.04},
+  'ground-crack':{duration:.46,freq:450,end:40,shape:'sawtooth',noise:1,gain:1.2},
  smg:{duration:.13,freq:190,end:56,shape:'square',noise:.75,gain:.8},
  sniper:{duration:.65,freq:390,end:56,shape:'sawtooth',noise:.84,gain:1},
  jump:{duration:.34,freq:340,end:780,shape:'triangle',noise:.25,gain:1.0},
@@ -165,7 +166,7 @@ export class GameAudio{
   tone.frequency.exponentialRampToValueAtTime(Math.max(35,p.end*pitch),now+p.duration*.86);
   createVoice(tone,null,.34*amp);
   // Rich, pitched lower partial gives jumping and attacks physical weight.
-  if(['jump','land','saber','scatter','fire','ice','ultimate','explosion','stomp','sniper','smg','wind','water','wave','lightning','dark','light','plant','earth'].includes(key)){
+  if(['jump','land','saber','scatter','fire','ice','ultimate','explosion','stomp','ground-crack','sniper','smg','wind','water','wave','lightning','dark','light','plant','earth'].includes(key)){
    const sub=ctx.createOscillator();
    sub.type=key==='lightning'?'square':'sine';
    const harmonic=key==='light'?2.03:key==='ice'?2.41:key==='lightning'?3.2:
@@ -190,7 +191,7 @@ export class GameAudio{
    }
    createVoice(source,filter,(key==='fire'||key==='wind'||key==='explosion'?.55:.41)*p.noise*amp);
   }
-  if(['lightning','smg','sniper','ice','light','plant','explosion'].includes(key)){
+  if(['lightning','smg','sniper','ice','light','plant','explosion','ground-crack'].includes(key)){
    // A separate short transient produces electrical crackle or ballistic snap.
    const snap=ctx.createOscillator();snap.type='square';
    snap.frequency.setValueAtTime(key==='lightning'?3500:key==='ice'?2800:key==='light'?2200:key==='plant'?610:key==='explosion'?145:key==='sniper'?310:900,now);

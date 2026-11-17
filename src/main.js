@@ -121,7 +121,7 @@ network.addEventListener('state',event=>{const data=event.detail;if(data.key===s
 network.addEventListener('chat',event=>{ui.addChat(event.detail);showPlayerSpeech(event.detail);});
 network.addEventListener('artwork-throw',event=>showThrowPulse(event.detail));
 network.addEventListener('attack',event=>showAttack(event.detail));
-network.addEventListener('channel-stop',event=>{const root=roots.get(event.detail.owner);if(root)arena.presentation.vfx.stopChannel(root);});
+network.addEventListener('channel-stop',event=>{const root=roots.get(event.detail.owner);if(root){arena.presentation.vfx.stopChannel(root);root.userData.staffCastingUntil=0;}});
 network.addEventListener('structure-destroyed',event=>arena.showStructureBreak(event.detail));
 network.addEventListener('structure-hit',event=>arena.showStructureHit(event.detail));
 network.addEventListener('state-rejected',event=>{
@@ -274,7 +274,8 @@ function syncPlayers(){
 }
 function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root||!hit||root.userData.lastHitReaction===hit.id||Date.now()-hit.time>2500)return;root.userData.lastHitReaction=hit.id;audio.play('hit',root===localRoot?1:.35);root.userData.hitFlashUntil=performance.now()+250;
  if((hit.stunMs||0)>=900){const remaining=Math.max(0,hit.stunMs-(Date.now()-hit.time));root.userData.knockdown={start:performance.now(),duration:remaining};}if(root===localRoot){
-  controller.stunUntil=hit.whipPull?0:performance.now()+100;
+  controller.stunUntil=hit.whipPull?0:performance.now()+(hit.knockbackDurationMs||100);
+   if(hit.motion==='stomp')screenShakeUntil=performance.now()+350;
   if(hit.whipPull){
    controller.lastWhipPullId=hit.whipPull.id;
    controller.beginWhipPull(hit.whipPull);
@@ -285,8 +286,10 @@ function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root|
   }else if(Number(hit.knockbackDistance)>0){
    controller.knockback=new THREE.Vector3(...hit.vector).normalize();
    controller.knockbackRemaining=hit.knockbackDistance;
+   controller.knockbackSpeed=hit.knockbackDurationMs?hit.knockbackDistance/(hit.knockbackDurationMs/1000):0;
   }else{
    controller.knockbackRemaining=0;
+   controller.knockbackSpeed=0;
    controller.knockback=new THREE.Vector3(...hit.vector).multiplyScalar(hit.knockback||4);
   }
  }}
@@ -334,13 +337,15 @@ function performAttack(charge=0,phase=null){
  if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
  const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
  const shot=item.firstPerson?gun.shot():null;
- const direction=shot?.direction||attackDirection(controller,camera,arena,roots,item,charge);
  const muzzle=isChannelStaff(item)||item.family==='saber'||item.id==='calico-cat'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
+ const direction=shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
 }
 function performInteract(){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=arena.nearest(controller.root.position.toArray());if(!near){if(Math.hypot(controller.root.position.x,controller.root.position.z)<7)return ui.showPlantList();return;}if(near.type==='plant'){const plant=(world?.plants||[]).find(p=>p.id===near.id);if(plant)ui.showPlant(plant);return;}if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
 
+let screenShakeUntil=0;
+const heardStompLandings=new Set();
 function update(dt,time){
   damageNumbers.update(camera,innerWidth,innerHeight);vitalModels?.update(time,world?.profile?.hp||0,world?.profile?.maxHp||100);
   if(joined)minimap.update(time,roots,self?.key,world?.monster,world?.monsters||[]);
@@ -353,7 +358,19 @@ function update(dt,time){
       paralysis:(debuffs.paralysis?.until||0)>nowMs};
    if(controller.status.paralysis&&(attackHeld||staffChannel))ui.emit('attack-cancel');
    writer.update();plantHover.update();controller.castMoveFactor=staffChannel?CAST_MOVE_FACTOR:1;const wasGrounded=controller.grounded;const state=controller.update(dt);if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
-  statusVisuals.update(dt);arena.update(dt,time,camera,roots);updateKnockdowns();arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}updatePlayerSpeech();artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
+  statusVisuals.update(dt);
+  const castingItem=itemById(world?.profile?.equipment?.weapon);
+  if(localRoot){
+   localRoot.userData.staffCasting=!!(attackHeld&&isChannelStaff(castingItem));
+   localRoot.userData.staffAimDirection=camera.getWorldDirection(new THREE.Vector3()).toArray();
+  }
+  arena.update(dt,time,camera,roots);
+  for(const mob of [world?.monster,...(world?.monsters||[])])for(const skill of mob?.skills||[]){
+   if(skill.motion!=='stomp'||skill.phase!=='active'||nowMs<skill.start+(skill.end-skill.start)*.76||heardStompLandings.has(skill.id))continue;
+   heardStompLandings.add(skill.id);if(heardStompLandings.size>128)heardStompLandings.delete(heardStompLandings.values().next().value);
+   if(localRoot&&Math.hypot(localRoot.position.x-skill.aim[0],localRoot.position.z-skill.aim[2])<48){audio.play('stomp',.8);audio.play('ground-crack',.95);}
+  }
+  updateKnockdowns();arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}updatePlayerSpeech();artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
   const heldItem=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
   if(heldItem.firstPerson){attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;}
   if(attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&performance.now()-attackHoldStarted>=STAFF_TAP_MAX_MS){
@@ -398,14 +415,14 @@ function update(dt,time){
   arena.presentation.charging(localRoot,charge);
   const chargedWeapon=itemById(world?.profile?.equipment?.weapon);
   if(charge>.08&&!staffChannel&&chargedWeapon&&controller){
-   const direction=chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1);
    const muzzle=isChannelStaff(chargedWeapon)||chargedWeapon.family==='saber'?arena.presentation.vfx.channelMuzzle(localRoot,chargedWeapon):null;
+   const direction=chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1,muzzle);
    chargePreview.update(localRoot,chargedWeapon,charge,direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null,muzzle?.toArray(),dt);
   }else chargePreview.hide();
   const attackButton=document.getElementById('attack-button');attackButton.classList.toggle('charging',charge>0||!!staffChannel||artworkThrow.started!==null);attackButton.style.setProperty('--charge',`${(artworkThrow.started!==null?artworkThrow.progress:charge)*100}%`);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}
 }
 
-function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.05,elapsed/1000);last=now;if(!assetsReady)return;const started=performance.now();if(now>externalUntil)update(dt,now/1000);const updated=performance.now();refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view),arena.presentation.vfx.numberedEffects.hasFullScreenPostprocess());const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}}
+function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.05,elapsed/1000);last=now;if(!assetsReady)return;const started=performance.now();if(now>externalUntil)update(dt,now/1000);const updated=performance.now();refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);const shake=Math.max(0,(screenShakeUntil-performance.now())/350),savedPosition=shake>0?camera.position.clone():null;if(shake>0){camera.position.x+=(Math.random()-.5)*shake*.16;camera.position.y+=(Math.random()-.5)*shake*.10;}vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view),arena.presentation.vfx.numberedEffects.hasFullScreenPostprocess());if(savedPosition)camera.position.copy(savedPosition);const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}}
 requestAnimationFrame(frame);
 
 const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),gain=event.owner===self?.key?1:.38;audio.playWeapon(item,gain,!!event.ultimate);if(event.owner===self?.key&&(item?.firstPerson||item?.id==='calico-cat'))gun.kick(item);if(event.ultimate){audio.play('ultimate',gain*.45);if(['fire','pan','swatter','lightning','wave','beam','planter','palm'].includes(item?.family)||Number(event.area?.radius)>1.5)audio.play('explosion',gain*.95);}}arena.presentation.play(event,roots.get(event.owner));}
