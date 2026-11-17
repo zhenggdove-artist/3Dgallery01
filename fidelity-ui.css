@@ -27,7 +27,7 @@ input,textarea,[contenteditable=true]{user-select:text;-webkit-user-select:text;
 #dock #attack-button span{font-size:24px;font-weight:bold}
 #vitals #wallet{color:#ffe775;font-size:23px;font-weight:900;white-space:nowrap;text-shadow:0 1px #b69527,0 2px #9c741b,0 3px #705019,1px 4px 2px #000;animation:wallet-float 3s ease-in-out infinite}
 @keyframes wallet-float{50%{transform:translateY(-3px)}}
-#chat-hud{--chat-height:68px;bottom:max(7px,env(safe-area-inset-bottom) + 4px);height:var(--chat-height);width:clamp(150px,32vw,430px);display:flex;flex-direction:column}
+#chat-hud{--chat-height:118px;bottom:max(7px,env(safe-area-inset-bottom) + 4px);height:var(--chat-height);width:clamp(150px,32vw,430px);display:flex;flex-direction:column}
 #chat-resize{display:flex;align-items:center;height:20px;min-height:20px;cursor:ns-resize;font-size:10px}
 #chat-toggle{width:26px;height:20px;padding:0;border:0;background:#edd3e5;color:#412d44}
 #chat-messages{height:auto!important;min-height:0;flex:1;padding:2px 5px;font-size:11px}
@@ -188,3 +188,13 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
 #kill-notice[hidden]{display:none}
 #death #death-killer{font:700 clamp(15px,3vw,25px)/1.4 Arial,sans-serif;letter-spacing:.03em;color:#ffb4d0;max-width:90vw;overflow-wrap:anywhere}
 @media(max-width:720px),(pointer:coarse){#mobile-stick{width:105px;height:105px}#mobile-stick i{width:42px;height:42px;left:calc(50% - 21px);top:calc(50% - 21px)}#player-roster{top:calc(100% + 6px);left:0;right:auto;width:200px;gap:3px}.roster-player{padding:4px 6px}.roster-title{font-size:10px}#chat-hud{bottom:max(145px,env(safe-area-inset-bottom) + 131px)}}
+
+/* Initial chat view shows at least two lines without expanding the panel. */
+#chat-hud{min-height:110px}
+#chat-messages{line-height:1.45;overflow-y:auto;overflow-wrap:anywhere}
+#chat-speech-layer{position:fixed;inset:0;z-index:20;pointer-events:none;overflow:hidden}
+.player-chat-bubble{position:absolute;transform:translate(-50%,-100%);max-width:min(300px,65vw);width:max-content;white-space:pre-wrap;overflow-wrap:anywhere;
+ padding:7px 11px;border:1px solid #222;background:#fff;color:#000;font:600 13px/1.4 Arial,'Noto Sans TC',sans-serif;
+ box-shadow:0 2px 7px #0007;text-align:center;border-radius:7px}
+.player-chat-bubble::after{content:'';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%) rotate(45deg);width:11px;height:11px;background:#fff;border-right:1px solid #222;border-bottom:1px solid #222}
+.player-chat-bubble[hidden]{display:none}

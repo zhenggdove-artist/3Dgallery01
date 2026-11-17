@@ -50,6 +50,23 @@ arena.artFloat=settings.artFloat??.17;
 let vitalModels=null;
 let artBombUploading=false;let assetsReady=false,joined=false,self=null,world=null,players=[],controller=null,localRoot=null,wasDead=false,last=performance.now(),externalUntil=0,toastErrorAt=0,lastAutoCoinAt=0,frameSamples=[],fps=0,fpsFrames=0,fpsAt=performance.now(),buildPlacement=null,spectatorFollowIndex=-1;
 const roots=new Map(),remoteTargets=new Map(),effects=[];
+const speechLayer=document.getElementById('chat-speech-layer'),speechBubbles=new Map(),speechPoint=new THREE.Vector3();
+function showPlayerSpeech(message){
+ const key=String(message?.profileKey||''),root=roots.get(key);if(!key||!root||!message?.text)return;
+ let entry=speechBubbles.get(key);
+ if(!entry){const element=document.createElement('div');element.className='player-chat-bubble';speechLayer.append(element);entry={element,expires:0};speechBubbles.set(key,entry);}
+ entry.element.textContent=String(message.text);entry.expires=performance.now()+3000;
+}
+function updatePlayerSpeech(now=performance.now()){
+ for(const [key,entry] of speechBubbles){
+  const root=roots.get(key);if(now>=entry.expires||!root){entry.element.remove();speechBubbles.delete(key);continue;}
+  if(!root.visible){entry.element.hidden=true;continue;}
+  speechPoint.set(root.position.x,root.position.y+(root.userData.chatHeadY||2.8),root.position.z).project(camera);
+  const visible=speechPoint.z>=-1&&speechPoint.z<=1&&Math.abs(speechPoint.x)<=1.25&&Math.abs(speechPoint.y)<=1.25;
+  entry.element.hidden=!visible;
+  if(visible){entry.element.style.left=((speechPoint.x+1)*innerWidth/2)+'px';entry.element.style.top=((1-speechPoint.y)*innerHeight/2-8)+'px';}
+ }
+}
 const minimap=new Minimap();
 const damageNumbers=createDamageNumbers(THREE),statusVisuals=new ElementalStatusVisuals();
 const performanceSamples={logic:[],submit:[],frame:[]};
@@ -99,7 +116,7 @@ network.addEventListener('welcome',event=>{const data=event.detail;self={...self
 network.addEventListener('world',event=>{world=event.detail;ui.setWorld(world);syncWorld();});
 network.addEventListener('players',event=>{players=event.detail;ui.setPlayers(players);syncPlayers();});
 network.addEventListener('state',event=>{const data=event.detail;if(data.key===self?.key)return;let target=remoteTargets.get(data.key);if(!target){syncPlayers();target=remoteTargets.get(data.key);}if(target){target.position.fromArray(data.state.position);target.rotation=data.state.rotation;target.animation=data.state.animation;}});
-network.addEventListener('chat',event=>ui.addChat(event.detail));
+network.addEventListener('chat',event=>{ui.addChat(event.detail);showPlayerSpeech(event.detail);});
 network.addEventListener('artwork-throw',event=>showThrowPulse(event.detail));
 network.addEventListener('attack',event=>showAttack(event.detail));
 network.addEventListener('channel-stop',event=>{const root=roots.get(event.detail.owner);if(root)arena.presentation.vfx.stopChannel(root);});
@@ -126,14 +143,15 @@ ui.addEventListener('art-bomb-appearance',event=>sendAction('update-art-bomb-app
 ui.addEventListener('art-bomb-upload',async event=>{
  if(self?.role!=='fighter')return ui.toast('JOIN AS A FIGHTER TO PLACE ARTWORK');
  if(artBombUploading)return;
- const {files,size}=event.detail;
+ const {files,size,title}=event.detail;
+ if(!title?.trim())return ui.toast('請輸入作品名稱');
  if(!Number.isFinite(size)||size<1||size>3)return ui.toast('藝術品尺寸只能設定 1–3 倍');
  artBombUploading=true;
  const button=ui.content.querySelector('[data-form="art-bomb-upload"] button[type="submit"]');
  if(button)button.disabled=true;
  try{
   ui.toast('上傳中：驗證檔案並確認 Cloudflare 已儲存…');
-  const upload=await uploadArtwork(network,files,{maxBytes:8*1024*1024});
+  const upload={...await uploadArtwork(network,files,{maxBytes:8*1024*1024}),title:title.trim().slice(0,100)};
   ui.closePanel();
   startBuildPlacement('art-bomb',null,{...upload,size,previewFile:files.find(f=>f.type.startsWith('image/'))||null});
   arena.setBuildPreview('art-bomb',controller.buildPosition(3.2),controller.root.rotation.y,true,size,files.find(f=>f.type.startsWith('image/'))||null);
@@ -142,7 +160,7 @@ ui.addEventListener('art-bomb-upload',async event=>{
  }catch(error){ui.toast(error.message);}
  finally{artBombUploading=false;if(button)button.disabled=false;}
 });
-ui.addEventListener('upload-artwork',async event=>{if(!self?.profile?.admin)return;const button=ui.content.querySelector('[data-upload-submit]');if(button)button.disabled=true;try{ui.toast('正在驗證藝術品…');const upload=await uploadArtwork(network,event.detail,{maxBytes:32*1024*1024}),position=controller.buildPosition(4);position[1]+=2;const result=await sendAction('add-artwork',{artwork:{...upload,position,appearance:{}}});if(!result)throw Error('Artwork was not published. Retry after checking the connection.');await arena.loadCustomArtworks(world.customArtworks,network.base);ui.closePanel();artEditor.select(arena.artworks.get(result.artwork.id));ui.toast('藝術品已發布 · 可調整位置及表面');}catch(error){ui.toast(error.message);const status=ui.content.querySelector('[data-upload-status]');if(status)status.textContent=error.message;}finally{if(button)button.disabled=false;}});
+ui.addEventListener('upload-artwork',async event=>{if(!self?.profile?.admin)return;const button=ui.content.querySelector('[data-upload-submit]');if(button)button.disabled=true;try{ui.toast('正在驗證藝術品…');const upload={...await uploadArtwork(network,event.detail.files,{maxBytes:32*1024*1024}),title:event.detail.title.trim().slice(0,100)},position=controller.buildPosition(4);position[1]+=2;const result=await sendAction('add-artwork',{artwork:{...upload,position,appearance:{}}});if(!result)throw Error('Artwork was not published. Retry after checking the connection.');await arena.loadCustomArtworks(world.customArtworks,network.base);ui.closePanel();artEditor.select(arena.artworks.get(result.artwork.id));ui.toast('藝術品已發布 · 可調整位置及表面');}catch(error){ui.toast(error.message);const status=ui.content.querySelector('[data-upload-status]');if(status)status.textContent=error.message;}finally{if(button)button.disabled=false;}});
 ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(item&&controller)ui.toast('Use this material in BAG → FUSION');});
 ui.addEventListener('original-action',event=>sendAction(event.detail.action,event.detail));
 ui.addEventListener('jump',()=>controller?.jump());
@@ -298,7 +316,7 @@ function update(dt,time){
       paralysis:(debuffs.paralysis?.until||0)>nowMs};
    if(controller.status.paralysis&&(attackHeld||staffChannel))ui.emit('attack-cancel');
    writer.update();plantHover.update();controller.castMoveFactor=staffChannel?CAST_MOVE_FACTOR:1;const wasGrounded=controller.grounded;const state=controller.update(dt);if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
-  statusVisuals.update(dt);arena.update(dt,time,camera,roots);arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
+  statusVisuals.update(dt);arena.update(dt,time,camera,roots);arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}updatePlayerSpeech();artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
   const heldItem=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
   if(heldItem.firstPerson){attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;}
   if(attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&performance.now()-attackHoldStarted>=STAFF_TAP_MAX_MS){

@@ -3,7 +3,7 @@
 export function bindChatLayout(){
  const panel=document.getElementById('chat-hud'),handle=document.getElementById('chat-resize'),toggle=document.getElementById('chat-toggle');
  let active=null,timer=null,expanded=false;
- const resize=height=>{const h=Math.max(60,Math.min(innerHeight*.5,height));panel.style.setProperty('--chat-height',h+'px');};
+ const resize=height=>{const h=Math.max(Math.min(112,innerHeight*.5),Math.min(innerHeight*.5,height));panel.style.setProperty('--chat-height',h+'px');};
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
  const blocking=()=>['#attack-button','#mobile-stick','#dock [data-action=jump]','#dock [data-action=interact]']
   .map(q=>document.querySelector(q)).filter(el=>el&&getComputedStyle(el).display!=='none').map(el=>el.getBoundingClientRect());
@@ -20,7 +20,7 @@ export function bindChatLayout(){
   panel.style.bottom='auto';panel.style.transform='none';return true;
  }
  const save=()=>{const r=panel.getBoundingClientRect();localStorage.setItem('temple-chat-position',JSON.stringify({left:r.left,top:r.top}));};
- toggle.onclick=()=>{expanded=!expanded;resize(expanded?Math.min(240,innerHeight*.45):68);toggle.textContent=expanded?'−':'＋';toggle.setAttribute('aria-expanded',String(expanded));};
+ toggle.onclick=()=>{expanded=!expanded;resize(expanded?Math.min(240,innerHeight*.45):118);toggle.textContent=expanded?'−':'＋';toggle.setAttribute('aria-expanded',String(expanded));};
  handle.addEventListener('pointerdown',e=>{
   if(e.target.closest('button')||active)return;
   e.preventDefault();
@@ -46,7 +46,7 @@ export function bindChatLayout(){
  try{const saved=JSON.parse(localStorage.getItem('temple-chat-position')||'null');
   if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top))requestAnimationFrame(()=>{
    const key='temple-chat-raise-20261117',top=saved.top-(localStorage.getItem(key)?0:4);
-   for(let rise=0;rise<=120;rise+=4)if(relocate(saved.left,top-rise)){
+   for(let rise=0;rise<=240;rise+=4)if(relocate(saved.left,top-rise)){
     localStorage.setItem('temple-chat-position',JSON.stringify({left:saved.left,top:top-rise}));
     localStorage.setItem(key,'1');break;
    }
