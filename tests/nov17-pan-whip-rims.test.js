@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import {createInitialWorld,ensureProfile,applyAction,tickWorld,validateState} from '../src/shared/temple-rules.js';
 import {itemById,attackStats} from '../src/shared/catalog.js';
 import {chargedArea,scaleUltimateFootprint} from '../src/shared/charge-area.js';
+import {ChargeTargetPreview} from '../src/charge-target-preview.js';
 import {weaponQuality,forwardCastRadius} from '../src/shared/weapon-abilities.js';
 import {PlayerController} from '../src/player-controller.js';
 
@@ -34,6 +35,29 @@ test('every frying-pan and whip tier uses the same warning/authoritative AoE foo
  const original={ultimate:true,range:10,radius:4};
  scaleUltimateFootprint(original,spectral);
  assert.equal(original.radius,2.4,'the separate spectral token is unaffected by pan-only tuning');
+});
+
+test('every whip tier visual warning centre matches server-owned centre shifted one radius forward',()=>{
+ for(let tier=1;tier<=5;tier++){
+  const now=T+tier*10_000,world=createInitialWorld(now),caster=fighter('caster',[75,0,0]);
+  const profile=ensureProfile(world,'caster','caster','#ffffff',now);
+  const item=itemById('whip-'+tier);
+  profile.inventory.push(item.id);profile.equipment.weapon=item.id;
+  applyAction(world,caster,{action:'attack',phase:'charge'},{now:now+1000});
+  const shot=applyAction(world,caster,{action:'attack',direction:[0,0,1],charge:1},
+   {now:now+6000,actors:[caster]});
+  assert.equal(shot.error,undefined,item.id);
+  const scene=new THREE.Scene(),root=new THREE.Group();
+  root.position.set(...caster.position);
+  const preview=new ChargeTargetPreview(scene);
+  preview.update(root,item,1,[0,0,1],{world});
+  assert.equal(preview.footprint.shape,'circle',item.id);
+  assert.ok(Math.abs(preview.footprint.radius-shot.attackEvent.area.radius)<.002,item.id);
+  for(let i=0;i<3;i++)assert.ok(
+   Math.abs(preview.footprint.position[i]-shot.attackEvent.area.visualCenter[i])<.002,
+   item.id+' centre coordinate '+i);
+  preview.dispose();
+ }
 });
 
 test('pan explosion hits all victims once, recoils onto caster for exactly 15 HP regardless of armour and shield',()=>{
