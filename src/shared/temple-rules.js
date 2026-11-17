@@ -743,8 +743,10 @@ function tickPersistentAttacks(world,actors,now,rng){
        victim.whipPull=whipPull;
        // The whip's ordinary root debuff must not make resisting this
        // charged vortex impossible. Preserve other casters' status effects.
-       if(victim.effects?.root?.owner===fx.owner)delete victim.effects.root;
-       if(victim.effectLocks?.root)delete victim.effectLocks.root;
+       if(victim.effects?.root?.owner===fx.owner){
+        delete victim.effects.root;
+        if(victim.effectLocks?.root)delete victim.effectLocks.root;
+       }
        if(victim.hitReaction?.time===now)
         Object.assign(victim.hitReaction,{whipPull,stunMs:0});
        else victim.hitReaction={id:id(),time:now,stunMs:0,vector:[0,0,0],whipPull};
