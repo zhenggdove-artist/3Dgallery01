@@ -9,15 +9,16 @@ import {ultimateWorldScale,NumberedWeaponEffects} from '../src/numbered-weapon-e
 import {WEAPONS,itemById,attackStats} from '../src/shared/catalog.js';
 import {weaponQuality,isChannelStaff,channelReachMultiplier} from '../src/shared/weapon-abilities.js';
 
-test('all ultimate hitboxes reduce radius and forward reach to exactly 60%',()=>{
+test('ultimate footprint ratios: global 60%, pan another 50%, whip another 60%',()=>{
  assert.equal(ULTIMATE_FOOTPRINT_SCALE,.6);
  for(const weapon of WEAPONS){
   const normal=attackStats(weapon,1);
   assert.ok(normal.ultimate,weapon.id);
   const stats={...normal};
-  scaleUltimateFootprint(stats);
-  assert.ok(Math.abs(stats.range-normal.range*.6)<.001,weapon.id+' reach');
-  assert.ok(Math.abs(stats.radius-normal.radius*.6)<.001,weapon.id+' radius');
+  scaleUltimateFootprint(stats,weapon);
+  const extra=weapon.id.startsWith('pan-')?.5:weapon.id.startsWith('whip-')?.4:1;
+  assert.ok(Math.abs(stats.range-normal.range*.6*extra)<.001,weapon.id+' reach');
+  assert.ok(Math.abs(stats.radius-normal.radius*.6*extra)<.001,weapon.id+' radius');
  }
  const normal=attackStats(itemById('pan-1'),0);
  const before=structuredClone(normal);
@@ -36,28 +37,43 @@ test('every weapon receives a smaller warning with its quality multiplier',()=>{
   if(isChannelStaff(item))stats.range=Math.max(stats.range,item.id==='clam'?10:Math.min(18,item.range))*channelReachMultiplier(item);
   stats.range=+(stats.range*q.range).toFixed(2);
   if(item.id==='black-cat')stats.range=256;
-  scaleUltimateFootprint(stats);
+  scaleUltimateFootprint(stats,item);
   assert.ok(Math.abs(v.footprint.range-stats.range)<.001,item.id);
+  if(item.id.startsWith('pan-')||item.id.startsWith('whip-')){
+   assert.equal(v.footprint.shape,'circle',item.id+' blast telegraph');
+   assert.ok(Math.abs(v.footprint.radius-stats.radius)<.001,item.id+' blast radius');
+  }
  }
  v.dispose();
 });
-test('source #68 explosion expands at least 7.5x after the 60% warning scale',()=>{
+test('original #68 pan and #48 whip world geometry reduce by exactly 50% and 60%',()=>{
  const event={ultimate:true,channel:false,range:18,radius:3.6,area:{radius:3.6,center:[0,.1,9],visualCenter:[0,.16,9]},origin:[0,1,0],direction:[0,0,1],qualityScale:1};
  const fx=new NumberedWeaponEffects(new THREE.Scene());
  assert.ok(fx.play(event,itemById('pan-1'),null));
  const e=fx.active[0];
  assert.equal(e.spec.number,68);
- assert.ok(e.group.scale.x>=7.5);
+ assert.ok(e.group.scale.x>=3.75,'pan keeps at least half the enlarged original #68');
+ const panExpected=ultimateWorldScale(68,event,{size:e.options.size});
+ assert.ok(Math.abs(e.group.scale.x-panExpected)<1e-6);
  fx.update(.016);
- assert.ok(e.group.scale.x>=7.5,'native frame update must not reset the size');
+ assert.ok(Math.abs(e.group.scale.x-panExpected)<1e-6,'native frame update must not reset pan size');
  fx.dispose();
+ const whipping={...event,area:{...event.area,radius:2.88}};
+ const whip=new NumberedWeaponEffects(new THREE.Scene());
+ assert.ok(whip.play(whipping,itemById('whip-1'),null));
+ const we=whip.active[0];
+ assert.equal(we.spec.number,48);
+ assert.ok(Math.abs(we.group.scale.x-ultimateWorldScale(48,whipping,{size:we.options.size}))<1e-6);
+ const originalWhipScale=Math.max(2,Math.min(12,(2.88/.4)/Math.max(.25,we.options.size*.8)));
+ assert.ok(Math.abs(we.group.scale.x-originalWhipScale*.4)<1e-6);
+ whip.dispose();
  assert.ok(ultimateWorldScale(53,event,{size:.8})>1);
- assert.ok(ultimateWorldScale(48,event,{size:.8})>1);
 });
 test('raised displays have no side wall: the player can cross an edge and fall naturally',()=>{
  const controller=Object.create(PlayerController.prototype);
  controller.root=new THREE.Group();controller.root.position.set(0,5,0);
  controller.grounded=true;controller.velocityY=0;
+ controller.jumpVelocity=new THREE.Vector3();controller.speed=8.64;
  let blockCalls=0;
  controller.arena={groundHeight:(x,z)=>x>2?8:5,blocked:()=>{blockCalls++;return false;}};
  controller.stepHorizontal(3,0);
