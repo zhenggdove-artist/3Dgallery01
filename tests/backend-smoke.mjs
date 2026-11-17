@@ -39,6 +39,19 @@ assert.equal(join.self.profile.equipment.weapon,'white-cat','new players must sp
 assert.ok(join.world.profile.inventory.includes('white-cat'),'the starter SMG must be owned');
 const deniedGmHistory=await call('/api/gm/presence',undefined,token,{expectedStatus:403});
 assert.match(deniedGmHistory.error,/GM only/i,'regular players may not view private GM login history');
+if(process.env.TEMPLE_TEST_ADMIN_KEY){
+ const gm=await call('/api/join',{name:'Ely',color:'#43b59a',memoryCode:process.env.TEMPLE_TEST_ADMIN_KEY});
+ assert.equal(gm.self.profile.admin,true);
+ const history=await call('/api/gm/presence',undefined,gm.token);
+ assert.ok(history.online.some(p=>p.name===guest));
+ assert.ok(history.events.some(e=>e.name===guest&&e.event==='online'));
+ assert.ok(history.events.some(e=>e.name==='Ely'&&e.event==='online'));
+ await call('/api/disconnect',{},gm.token);
+ const gmAgain=await call('/api/join',{name:'Ely',color:'#43b59a',memoryCode:process.env.TEMPLE_TEST_ADMIN_KEY});
+ const historyAgain=await call('/api/gm/presence',undefined,gmAgain.token);
+ assert.ok(historyAgain.events.some(e=>e.name==='Ely'&&e.event==='offline'),'GM should see persisted logout events');
+ await call('/api/disconnect',{},gmAgain.token);
+}
 // The authoritative API deliberately refuses game actions until the player
 // opens the real socket and submits a validated initial position.
 const socket=new WebSocket(base.replace(/^http/,'ws')+'/api/socket?token='+encodeURIComponent(token));
