@@ -79,7 +79,11 @@ test('native full-screen post effects cannot override a VHS offscreen render tar
 test('monster pulse beam still uses vendor source with doubled physical diameter',()=>{
  const effects=new MonsterAttackEffects(new THREE.Scene());
  const beam=effects.make('beam');
- assert.equal(beam.native.settings.size,3.6);
+ assert.equal(beam.native.settings.size,1.8,'vendor shader size is capped, keep authored width');
+ effects.updateEntry(beam,{motion:'beam',phase:'active',origin:[0,0,0],
+  aim:[0,0,38],start:T,end:T+5000,radius:4.95},T+1000,null,[0,0,0]);
+ assert.equal(beam.native.group.scale.y,2);
+ assert.equal(beam.native.group.scale.z,2);
  assert.equal(beam.root.userData.vfxId,'pulse-beam');
  beam.native.dispose();
  beam.root.removeFromParent();

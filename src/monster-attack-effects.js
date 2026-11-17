@@ -22,7 +22,7 @@ export class MonsterAttackEffects {
   marker.rotation.x=-Math.PI/2;marker.position.y=.12;root.add(marker);
   const fringe=new THREE.Mesh(warningCircle,softMat('#ff242c'));
   fringe.rotation.x=-Math.PI/2;fringe.position.y=.125;root.add(fringe);
-  const native=motion==='beam'?pulseBeam({size:3.6,density:.48,color:'#80ffed',quantity:4}):
+  const native=motion==='beam'?pulseBeam({size:1.8,density:.48,color:'#80ffed',quantity:4}):
    motion==='venom'?venomPool({size:1.8,density:.5,color:'#b4f745',quantity:7}):null;
   if(native){native.group.visible=false;root.add(native.group);}
   const wave=new THREE.Mesh(new THREE.RingGeometry(.84,1,48),softMat('#ffe8ab'));
@@ -156,6 +156,11 @@ export class MonsterAttackEffects {
   }
   const dt=e.last?Math.min(.06,Math.max(.001,(now-e.last)/1000)):.016;
   e.last=now;native.update(dt);
+  if(s.motion==='beam'){
+   // The vendor clamps shader option size to 2. Double *world* thickness
+   // instead (after update/endpoints so it never accumulates exponentially).
+   native.group.scale.y=2;native.group.scale.z=2;
+  }
  }
  sync(states,now,mouthForState=()=>null){
   const needed=new Set();
