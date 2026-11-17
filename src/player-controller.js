@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import {ARENA_RADIUS,PLAYER_SPAWNS} from './shared/arena.js';
 import {PAN_BLAST_GRAVITY,PAN_BLAST_LAUNCH_SPEED,PAN_BLAST_BOUNCE_SPEEDS,PAN_BLAST_INITIAL_DURATION} from './shared/pan-blast-flight.js';
+import {WHIP_PULL_SPEED} from './shared/weapon-abilities.js';
 
 // RELETTER Explore's actual acceleration, camera, momentum and jump constants.
 export const RELETTER_MOVEMENT=Object.freeze({speed:8.64,acceleration:6,deceleration:12,gravity:25,jump:10});
 export class PlayerController{
   constructor({camera,canvas,arena,root,role='fighter',seat=0,mobileStick}){
-    Object.assign(this,{camera,canvas,arena,root,role,seat});this.enabled=false;this.keys=new Set();this.yaw=0;this.pitch=.2;this.distance=7;this.speed=0;this.velocityY=0;this.grounded=true;this.animation='idle';this.move=new THREE.Vector2();this.jumpVelocity=new THREE.Vector3();this.direction=new THREE.Vector3();this.target=new THREE.Vector3();this.drag=null;this.pointers=new Map();this.followTarget=null;this.stats={speed:1,jump:1,gravity:1};this.castMoveFactor=1;this.status={};
+    Object.assign(this,{camera,canvas,arena,root,role,seat});this.enabled=false;this.keys=new Set();this.yaw=0;this.pitch=.2;this.distance=7;this.speed=0;this.velocityY=0;this.grounded=true;this.animation='idle';this.move=new THREE.Vector2();this.jumpVelocity=new THREE.Vector3();this.direction=new THREE.Vector3();this.target=new THREE.Vector3();this.drag=null;this.pointers=new Map();this.followTarget=null;this.stats={speed:1,jump:1,gravity:1};this.castMoveFactor=1;this.status={};this.whipPull=null;
     root.position.fromArray(PLAYER_SPAWNS[seat]||PLAYER_SPAWNS[0]);root.position.y=arena.groundHeight(root.position.x,root.position.z);this.bind(mobileStick);this.updateCamera(1);
   }
   bind(stick){
@@ -22,12 +23,13 @@ export class PlayerController{
   setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();}}
   setRole(role){this.role=role;this.root.visible=role==='fighter';}
   setFollowTarget(root=null){this.followTarget=root;}
-  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.panBlastFlight=null;}
+  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.panBlastFlight=null;this.whipPull=null;}
   beginPanBlast(hit){
     if(!hit?.panBlast||!(Number(hit.knockbackDistance)>0))return false;
     const d=new THREE.Vector3(...hit.vector);d.y=0;
     if(d.lengthSq()<.0001)d.set(0,0,1);
     d.normalize();
+    this.whipPull=null;
     this.panBlastFlight={
       direction:d,remaining:hit.knockbackDistance,
       horizontalSpeed:hit.knockbackDistance/PAN_BLAST_INITIAL_DURATION,
@@ -38,6 +40,26 @@ export class PlayerController{
     this.velocityY=PAN_BLAST_LAUNCH_SPEED;this.grounded=false;this.fallStartY=this.root.position.y;
     this.speed=0;
     return true;
+  }
+  beginWhipPull(pull){
+    if(!Array.isArray(pull?.center)||pull.center.length!==2||!pull.center.every(Number.isFinite))return false;
+    const duration=Math.min(.8,Math.max(0,Number(pull.durationMs)||0)/1000);
+    if(!duration)return false;
+    this.whipPull={center:pull.center.slice(),speed:WHIP_PULL_SPEED,remaining:duration};
+    this.knockback=null;this.knockbackRemaining=0;
+    return true;
+  }
+  advanceWhipPull(dt){
+    const pull=this.whipPull;if(!pull)return;
+    const step=Math.min(Math.max(0,Number(dt)||0),pull.remaining);
+    pull.remaining=Math.max(0,pull.remaining-step);
+    const dx=pull.center[0]-this.root.position.x,dz=pull.center[1]-this.root.position.z;
+    const distance=Math.hypot(dx,dz);
+    if(distance>.0001&&step>0){
+      const movement=Math.min(distance,pull.speed*step);
+      this.stepHorizontal(dx/distance*movement,dz/distance*movement);
+    }
+    if(pull.remaining<=.000001)this.whipPull=null;
   }
   advancePanBlast(dt){
     let remaining=Math.max(0,Math.min(Number(dt)||0,.4));
@@ -139,6 +161,8 @@ export class PlayerController{
       this.root.position.y=floor;this.velocityY=0;this.grounded=true;
       this.walkOffMomentum=false;this.jumpVelocity.set(0,0,0);
      }}
+    // Apply suction after ordinary steering so outward input can resist it.
+    this.advanceWhipPull(dt);
     this.animation=!this.grounded?(this.velocityY<0&&this.fallStartY>=40&&!this.stats.impulse?'fall':'jump'):moving?'walk':'idle';this.updateCamera(dt);return this.state();
   }
   updateCamera(dt){if(this.cameraLocked)return;const focus=this.followTarget?.visible?this.followTarget.position:this.root.position;this.target.lerp(new THREE.Vector3(focus.x,focus.y+1.5,focus.z),Math.min(1,dt*4));this.camera.position.set(this.target.x+this.distance*Math.cos(this.pitch)*Math.sin(this.yaw),this.target.y+this.distance*Math.sin(this.pitch),this.target.z+this.distance*Math.cos(this.pitch)*Math.cos(this.yaw));if(this.pitch<0){this.camera.position.y=Math.max(this.camera.position.y,focus.y+.6);this.camera.lookAt(this.target.x-Math.sin(this.yaw)*20,this.camera.position.y+Math.tan(-this.pitch)*20,this.target.z-Math.cos(this.yaw)*20);}else this.camera.lookAt(this.target);}
