@@ -15,16 +15,39 @@ export class MonsterAttackEffects {
  }
  make(motion){
   const root=new THREE.Group();root.name='Monster skill '+motion;
-  const marker=new THREE.Mesh((motion==='charge'||motion==='beam')?warningRect:warningCircle,softMat(motion==='venom'?'#91ff28':motion==='beam'?'#45fbfd':'#ff3739'));
+  const marker=new THREE.Mesh((motion==='charge'||motion==='beam')?warningRect:warningCircle,softMat('#ff242c'));
   marker.rotation.x=-Math.PI/2;marker.position.y=.12;root.add(marker);
-  const fringe=new THREE.Mesh(warningCircle,softMat(motion==='venom'?'#6bd521':'#f64b44'));
+  const fringe=new THREE.Mesh(warningCircle,softMat('#ff242c'));
   fringe.rotation.x=-Math.PI/2;fringe.position.y=.125;root.add(fringe);
   const native=motion==='beam'?pulseBeam({size:1.2,density:.48,color:'#80ffed',quantity:4}):
    motion==='venom'?venomPool({size:1.8,density:.5,color:'#b4f745',quantity:7}):null;
   if(native){native.group.visible=false;root.add(native.group);}
   const wave=new THREE.Mesh(new THREE.RingGeometry(.84,1,48),softMat('#ffe8ab'));
   wave.rotation.x=-Math.PI/2;wave.position.y=.18;wave.visible=false;root.add(wave);
-  const entry={root,motion,marker,fringe,wave,native,last:0};
+  // Impact debris uses a single instanced mesh instead of dozens of draw calls.
+  let rubble=null,fractures=null;
+  if(motion==='stomp'){
+   rubble=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.18,0),
+    new THREE.MeshStandardMaterial({color:'#82776b',roughness:.95,flatShading:true}),32);
+   rubble.name='Stomp shattered rocks';rubble.frustumCulled=false;root.add(rubble);
+   const segments=[];
+   for(let ray=0;ray<18;ray++){
+    const angle=ray*TAU/18,tip=4.5+Math.sin(ray*23.71)*.55;
+    let x=0,z=0;
+    for(let step=1;step<=4;step++){
+     const f=step/4,offset=Math.sin(ray*17.7+step*2.8)*.26;
+     const nx=Math.cos(angle)*tip*f+Math.cos(angle+Math.PI/2)*offset;
+     const nz=Math.sin(angle)*tip*f+Math.sin(angle+Math.PI/2)*offset;
+     segments.push(x,.17,z,nx,.17,nz);x=nx;z=nz;
+    }
+   }
+   fractures=new THREE.LineSegments(
+    new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(segments,3)),
+    new THREE.LineBasicMaterial({color:'#382a2a',transparent:true,opacity:.9,depthWrite:false}));
+   fractures.name='Stomp branching floor cracks';root.add(fractures);
+   rubble.visible=false;fractures.visible=false;
+  }
+  const entry={root,motion,marker,fringe,wave,native,rubble,fractures,last:0};
   root.userData.weaponVfxSource=native?'00GameDevs':'Temple warning';
   root.userData.vfxId=motion==='beam'?'pulse-beam':motion==='venom'?'venom-pool':motion;
   this.scene.add(root);
@@ -85,6 +108,26 @@ export class MonsterAttackEffects {
    const c=s.motion==='stomp'?aim:origin;
    wave.position.set(c[0],.20,c[2]);
    wave.scale.setScalar(Math.max(.01,r*t));wave.material.opacity=.90*(1-t);
+  }
+  if(e.rubble){
+   e.rubble.visible=active;e.fractures.visible=active;
+   if(active){
+    const phase=Math.min(1,Math.max(0,(now-s.start)/Math.max(1,s.end-s.start)));
+    const origin=s.aim||s.origin;
+    const mat=new THREE.Matrix4(),pos=new THREE.Vector3(),rot=new THREE.Quaternion(),
+     scale=new THREE.Vector3(),axis=new THREE.Vector3(.4,.8,.3).normalize();
+    e.fractures.position.set(origin[0],.03,origin[2]);
+    e.fractures.scale.setScalar(Math.max(.01,(s.radius||7)/7*Math.min(1,phase*5)));
+    for(let j=0;j<32;j++){
+     const angle=j*2.3999632297,r=(.4+(j%11)/10)*Math.min(1,phase*4)*(s.radius||7)*.8;
+     const lift=Math.sin(Math.PI*phase)*(1+(j%7)*.34);
+     pos.set(origin[0]+Math.cos(angle)*r,.22+lift,origin[2]+Math.sin(angle)*r);
+     rot.setFromAxisAngle(axis,phase*(j%2?9:-7)+j);
+     scale.setScalar(.42+(j%5)*.22);
+     mat.compose(pos,rot,scale);e.rubble.setMatrixAt(j,mat);
+    }
+    e.rubble.instanceMatrix.needsUpdate=true;
+   }
   }
   if(!native)return;
   native.group.visible=active;
