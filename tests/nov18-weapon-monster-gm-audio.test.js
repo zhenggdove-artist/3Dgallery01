@@ -60,6 +60,8 @@ test('outer monsters cycle short melee, stomp and poison, with 5 HP/s venom tick
  assert.equal(venomHits.length,2);
  assert.ok(venomHits.every(([,amount])=>amount===5));
  assert.equal(Object.keys(MONSTER_SKILLS).length,5);
+ assert.ok(MONSTER_SKILLS.freeze);
+ assert.equal(MONSTER_SKILLS.charge,undefined);
  assert.equal(monsterSkillContains({phase:'active',end:2000,motion:'venom',aim:[2,0,0],origin:[0,0,0]},[2,10,0],1500),false);
 });
 
