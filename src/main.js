@@ -333,7 +333,7 @@ function performAttack(charge=0,phase=null){
  const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
  const shot=item.firstPerson?gun.shot():null;
  const direction=shot?.direction||attackDirection(controller,camera,arena,roots,item,charge);
- const muzzle=isChannelStaff(item)||item.family==='saber'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
+ const muzzle=isChannelStaff(item)||item.family==='saber'||item.id==='calico-cat'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
 }
@@ -406,7 +406,7 @@ function update(dt,time){
 function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.05,elapsed/1000);last=now;if(!assetsReady)return;const started=performance.now();if(now>externalUntil)update(dt,now/1000);const updated=performance.now();refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view),arena.presentation.vfx.numberedEffects.hasFullScreenPostprocess());const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}}
 requestAnimationFrame(frame);
 
-const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),gain=event.owner===self?.key?1:.38;audio.playWeapon(item,gain,!!event.ultimate);if(event.owner===self?.key&&item?.firstPerson)gun.kick(item);if(event.ultimate){audio.play('ultimate',gain*.45);if(['fire','pan','swatter','lightning','wave','beam','planter','palm'].includes(item?.family)||Number(event.area?.radius)>1.5)audio.play('explosion',gain*.95);}}arena.presentation.play(event,roots.get(event.owner));}
+const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),gain=event.owner===self?.key?1:.38;audio.playWeapon(item,gain,!!event.ultimate);if(event.owner===self?.key&&(item?.firstPerson||item?.id==='calico-cat'))gun.kick(item);if(event.ultimate){audio.play('ultimate',gain*.45);if(['fire','pan','swatter','lightning','wave','beam','planter','palm'].includes(item?.family)||Number(event.area?.radius)>1.5)audio.play('explosion',gain*.95);}}arena.presentation.play(event,roots.get(event.owner));}
 function showThrowPulse(event){artworkThrow.queue(event);}
 function applyEditorSettings(next){renderer.setPixelRatio(Math.min(devicePixelRatio,next.pixelRatio));renderer.setSize(innerWidth,innerHeight,false);scene.fog.density=next.fog;arena.artFloat=next.artFloat;}
 function loadEditorSettings(){try{return JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');}catch{return {};}}
