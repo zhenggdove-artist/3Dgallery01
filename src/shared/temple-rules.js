@@ -394,6 +394,11 @@ function attack(world,profile,actor,body,context,now){
       const radius=Math.max(.5,full.radius*sourceQuality.radius*.5);
       const range=Math.max(1,Math.min(stats.range,full.range*sourceQuality.range)*.5);
       const secondary={...full,range,radius};
+      // A fused pan/whip retains its 20% echo budget but inherits the
+      // same per-weapon footprint shrink as a separately equipped one.
+      const echoFactor=/^pan-[1-5]$/.test(source.id)?.5:/^whip-[1-5]$/.test(source.id)?.4:1;
+      secondary.range=+(secondary.range*echoFactor).toFixed(3);
+      secondary.radius=+(secondary.radius*echoFactor).toFixed(3);
       const echoArea=source.id==='goldfish'?null:chargedArea(source,origin,direction,secondary,groundForSpell,false);
       if(echoArea?.mode==='area'&&area?.visualCenter){
         echoArea.center=[...area.center];echoArea.visualCenter=[...area.visualCenter];
@@ -407,7 +412,7 @@ function attack(world,profile,actor,body,context,now){
       const echoPvP=+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,owner:actor.key,weapon:source.id,
-        origin:[...origin],direction:[...direction],range,radius,area:echoArea,
+        origin:[...origin],direction:[...direction],range:secondary.range,radius:secondary.radius,area:echoArea,
         damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*.2,
         tier:sourceQuality.tier,flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
@@ -415,7 +420,7 @@ function attack(world,profile,actor,body,context,now){
         createdAt:now,lastAt:now,expiresAt:now+duration});
       fusionEchoes.push({id:echoId,owner:actor.key,origin:[...origin],direction:[...direction],
         weapon:source.id,family:source.family,color:source.color,charge:1,ultimate:true,
-        range,radius,area:echoArea,qualityTier:sourceQuality.tier,
+        range:secondary.range,radius:secondary.radius,area:echoArea,qualityTier:sourceQuality.tier,
         qualityScale:sourceQuality.visual*.5,qualityDuration:sourceQuality.duration,
         pellets:secondaryPellets?.map(v=>v.direction)||null,
         fusionEcho:true,echoPower:.2,time:now});
@@ -443,19 +448,23 @@ function attack(world,profile,actor,body,context,now){
   return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
-function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false){
+function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false,fixedDamage=false){
   const target=world.profiles[targetActor.key];if(!target||target.hp<=0||target.deadUntil>now)return null;
-  const stats=refreshStats(world,target,now);if(target.admin){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
-  const armor=itemById(target.equipment.armor),reduction=Math.min(.65,(armor?.defense||0)/100);let damage=Math.max(1,+((amount)*(forceKill?1:1-reduction)*(forceKill?1:stats.defense)*(1+(effectActive(target,'soaked',now)?.power||0))).toFixed(1));
+  const stats=refreshStats(world,target,now);if(target.admin&&!fixedDamage){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
+  const armor=itemById(target.equipment.armor),reduction=Math.min(.65,(armor?.defense||0)/100);
+  // The frying pan's self-damage is exactly 15 HP, not armour/shield
+  // adjusted; it remains a genuine self-inflicted hazard even for the GM.
+  let damage=fixedDamage?Math.max(0,+Number(amount).toFixed(1)):
+    Math.max(1,+((amount)*(forceKill?1:1-reduction)*(forceKill?1:stats.defense)*(1+(effectActive(target,'soaked',now)?.power||0))).toFixed(1));
   if(forceKill)damage=Math.max(damage,target.hp); // A verified sniper headshot ignores armour and shields.
   if(shotgunPellet)damage=+Math.max(5,Math.min(20,damage)).toFixed(1); // Per pellet after armour; shields still absorb.
-   if(target.shield&&!forceKill){const absorbed=Math.min(target.shield.hp,damage);target.shield.hp-=absorbed;target.shield.lastHit=now;damage-=absorbed;}
+   if(target.shield&&!forceKill&&!fixedDamage){const absorbed=Math.min(target.shield.hp,damage);target.shield.hp-=absorbed;target.shield.lastHit=now;damage-=absorbed;}
   const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
   if(target.hp>0)return {target:targetActor.key,damage,defeated:false};
   target.deadUntil=now+5_000;target.lastKilledBy={key:sourceProfile?.key||null,name:sourceProfile?.name||'ENVIRONMENT',time:now};
   world.killEvents??=[];world.killEvents.push({id:id(),time:now,killerKey:sourceProfile?.key||null,killerName:target.lastKilledBy.name,victimKey:target.key,victimName:target.name||targetActor.name||'PLAYER',cause});if(world.killEvents.length>24)world.killEvents.splice(0,world.killEvents.length-24);
-  releasePlayerWorldState(world,targetActor.key,now);if(sourceProfile)addXp(sourceProfile,60);const lost=Math.floor(target.wallet*ECONOMY.deathCoinFraction);target.wallet-=lost;
+  releasePlayerWorldState(world,targetActor.key,now);if(sourceProfile&&sourceProfile.key!==target.key)addXp(sourceProfile,60);const lost=Math.floor(target.wallet*ECONOMY.deathCoinFraction);target.wallet-=lost;
   if(lost>0)world.groundDrops.push({id:id(),kind:'coin',amount:lost,position:[...dropPosition],owner:targetActor.key,ownerLockedUntil:now+2_000,createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});
   return {target:targetActor.key,damage,defeated:true,lostCoins:lost,cause};
 }
@@ -600,6 +609,15 @@ function structureRadius(structure){return structure.kind==='house'?3.4:structur
 function structureHeight(structure){return structure.kind==='house'?3.8:structure.kind==='tree'?4:structure.kind==='column'?4:structure.kind==='platform'?.7:2;}
 function structureEvent(structure,now){return {id:structure.id,kind:structure.kind,variant:structure.variant||0,position:[...structure.position],rotation:structure.rotation||0,surface:structure.surface||null,time:now};}
 
+// No horizontal side collider exists on a disc or stair. An impact impulse
+// is measured from the actual ground explosion centre, not from the caster.
+function blastDirection(center,position,fallback=[0,0,1]){
+ const dx=position[0]-center[0],dz=position[2]-center[2],length=Math.hypot(dx,dz);
+ if(length>.0001)return [dx/length,0,dz/length];
+ const fallbackLength=Math.hypot(fallback[0],fallback[2])||1;
+ return [-fallback[0]/fallbackLength,0,-fallback[2]/fallbackLength];
+}
+
 // Timed server-owned abilities: a returning giraffe can hit each target once
 // on the outward leg AND once on its return. Four independent fan vortices
 // wander for longer at higher qualities. Never trust a client hit report.
@@ -625,6 +643,7 @@ function tickPersistentAttacks(world,actors,now,rng){
   if(fx.kind==='projectile'){
    const weapon=itemById(fx.weapon);
    if(!weapon){fx.lastAt=now;continue;}
+   const panBlast=!fx.echo&&/^pan-[1-5]$/.test(weapon.id)&&fx.charge>=1;
    const alreadyHit=new Set(fx.hits||[]);
    const outcome=(target,position,impact,pellet=null,along=0)=>{
     const enemy=target.value,key=(enemy.id||enemy.key),isPlayer=target.kind==='player';
@@ -682,7 +701,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    // all travelled segments, so no damage can occur before contact.
    const lanes=fx.pellets||[{direction:fx.direction,radius:fx.radius}];
    const segmentLength=Math.max(0,(next-prev)*fx.range);
-   if(segmentLength>.00001&&fx.area?.mode!=='sector'){
+   if(segmentLength>.00001&&fx.area?.mode!=='sector'&&!panBlast){
     lanes.forEach((pellet,index)=>{
      const start=fx.origin.map((v,j)=>v+pellet.direction[j]*prev*fx.range);
      for(const target of targets){
@@ -731,14 +750,18 @@ function tickPersistentAttacks(world,actors,now,rng){
    }
    // Ground-targeted charged area explosions are evaluated only once their
    // visible travel has completed; targets that have moved away evade damage.
-   if(fx.area?.mode==='area'&&next>=1){
-     // No invisible early area damage at 70% travel. The server-owned
-     // collision sweep still handles the path, while remote AoE waits
-     // until the travelling spell reaches its endpoint.
-    fx.areaResolved=true;
-    for(const target of targets){
+   if(fx.area?.mode==='area'&&next>=1&&(!panBlast||!fx.areaResolved)){
+     // A pan is a single explosion, not a lingering invisible projectile.
+     // Its impact is resolved only when the visible travel reaches the
+     // authored ground target, once per ultimate.
+     fx.areaResolved=true;
+     const caster=panBlast?actors.find(a=>a.key===fx.owner&&a.role==='fighter'):null;
+     const blastTargets=caster&&!targets.some(t=>t.value.key===caster.key)
+      ?[...targets,{kind:'player',value:caster}]:targets;
+    for(const target of blastTargets){
      const enemy=target.value,key=enemy.id||enemy.key;
-     if(enemy.key===fx.owner)continue;
+     const self=panBlast&&enemy.key===fx.owner;
+     if(enemy.key===fx.owner&&!self)continue;
      const pos=target.kind==='player'
       ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]:
        [enemy.position[0],enemy.position[1]+ENEMY_HEIGHT*.5,enemy.position[2]];
@@ -746,8 +769,34 @@ function tickPersistentAttacks(world,actors,now,rng){
      // its legs first; testing only the torso centre at y=4.725 wrongly
      // rejects valid visible contact. Display digits on the torso instead.
      const groundContact=[pos[0],enemy.position[1]+(target.kind==='player'?1:1.25),pos[2]];
-     if(!insideChargedArea(fx.area,groundContact,target.kind==='player'?1.02:ENEMY_RADIUS))continue;
-     if(outcome(target,pos,groundContact,null,fx.area.travel))changed=true;
+     if(!self&&!insideChargedArea(fx.area,groundContact,target.kind==='player'?1.02:ENEMY_RADIUS))continue;
+     if(self){
+      // Detonation always recoils back onto the caster, even when the
+      // forward-placed explosion circle is beyond their current feet.
+      // This bypasses defence, shields and GM invulnerability by design.
+      const hit=damagePlayer(world,owner,enemy,15,now,'pan-self-blast',enemy.position,
+       'pan-self-blast',pos,false,false,true);
+      if(hit){
+       const reaction=world.profiles[enemy.key]?.hitReaction;
+       if(reaction)Object.assign(reaction,{vector:blastDirection(fx.area.center,enemy.position,fx.direction),
+        knockbackDistance:fx.area.radius,stunMs:100});
+       changed=true;
+      }
+     }else if(outcome(target,pos,groundContact,null,fx.area.travel)){
+      changed=true;
+      if(panBlast&&target.kind==='player'){
+       const reaction=world.profiles[enemy.key]?.hitReaction;
+       if(reaction)Object.assign(reaction,{vector:blastDirection(fx.area.center,enemy.position,fx.direction),
+        knockbackDistance:fx.area.radius,stunMs:100});
+      }else if(panBlast&&target.kind==='monster'&&enemy.active){
+       const [x,,z]=blastDirection(fx.area.center,enemy.position,fx.direction);
+       const nextPosition=[enemy.position[0]+x*fx.area.radius,enemy.position[1],
+        enemy.position[2]+z*fx.area.radius];
+       if(insideArena(nextPosition,-1)&&!insideArtSanctuary(nextPosition)){
+        enemy.lastPosition=[...enemy.position];enemy.position=nextPosition;
+       }
+      }
+     }
     }
    }
    // A persistent forward corridor remains dangerous only while its authored
