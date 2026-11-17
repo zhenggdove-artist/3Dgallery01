@@ -503,7 +503,8 @@ function attack(world,profile,actor,body,context,now){
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
- if(!player||player.admin||player.hp<=0||!player.hitReaction||!['charge','stomp'].includes(skill?.motion))return;
+ if(!player||player.admin||player.hp<=0||!['charge','stomp'].includes(skill?.motion))return;
+ if(!player.hitReaction||player.hitReaction.time!==now)player.hitReaction={id:id(),time:now,stunMs:100,vector:[0,0,0]};
  const charge=skill.motion==='charge',origin=charge?skill.origin:skill.aim;
  let dx=target.position[0]-origin[0],dz=target.position[2]-origin[2];
  if(Math.hypot(dx,dz)<.01){dx=skill.aim[0]-skill.origin[0];dz=skill.aim[2]-skill.origin[2];}
