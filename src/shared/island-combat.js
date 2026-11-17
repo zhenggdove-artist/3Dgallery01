@@ -46,7 +46,7 @@ export function monsterSkillContains(skill,p,now,origin=skill.origin){
 }
 export function advanceIslandEnemy(monster,targets,now,{move,hit,disabled=false,silenced=false,slow=0}){
  const dt=Math.min(.5,Math.max(0,(now-(monster.updatedAt??now-500))/1000));
- monster.updatedAt=now;monster.moving=false;monster.skills??=[];
+ monster.updatedAt=now;monster.moving=false;monster.patrolling=false;monster.skills??=[];
  if(disabled||silenced){monster.skills=[];return;}
  // Expired warnings become active on the server even if the room tick is late.
  for(const s of monster.skills){
