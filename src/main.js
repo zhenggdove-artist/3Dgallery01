@@ -235,7 +235,8 @@ ui.addEventListener('destroy-near',()=>{if(!controller)return;const position=con
 ui.addEventListener('chat',async event=>{const text=String(event.detail||'').trim();if(text==='/recovery'){await sendAction('recover-artworks');return;}if(/^\/reset$/i.test(text)){if(!self?.profile?.admin)return ui.toast('GM only');await sendAction('reset-player-artworks');return;}try{const result=await network.chat(text);if(result?.notice)ui.toast(result.notice);}catch(error){ui.toast(error.message);}});
 ui.addEventListener('plant',event=>writer.submit(event.detail));
 ui.addEventListener('save-code',async()=>{try{const data=await network.createSaveCode();self.saveCode=data.code;ui.self=self;ui.showSaveCode(data.code);ui.toast('存檔代碼已產生 · 請保存');}catch(error){ui.toast(error.message);}});
-ui.addEventListener('gm-presence-request',async()=>{if(!self?.profile?.admin)return;try{ui.setGmPresence(await network.gmPresence());}catch(error){ui.setGmPresenceError(error.message);}});
+ui.addEventListener('gm-audio-change',event=>{if(self?.profile?.admin)void sendAction('set-audio-level',event.detail);});
+ ui.addEventListener('gm-presence-request',async()=>{if(!self?.profile?.admin)return;try{ui.setGmPresence(await network.gmPresence());}catch(error){ui.setGmPresenceError(error.message);}});
 ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
 ui.addEventListener('panel',event=>{chargeStarted=null;attackHoldStarted=null;chargeRequest=null;if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
@@ -268,7 +269,16 @@ function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root|
    controller.knockback=new THREE.Vector3(...hit.vector).multiplyScalar(hit.knockback||4);
   }
  }}
-function syncWorld(){if(!world)return;arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));damageNumbers.receive(world.damageEvents);arena.sync(world,players);ui.setWorld(world);ui.showKillEvents(world.killEvents);
+const heardMonsterSkills=new Set();
+ function syncWorld(){if(!world)return;
+  audio.applyMix(world.audioMix);
+  for(const mob of [world.monster,...(world.monsters||[])])for(const skill of mob?.skills||[]){
+   if(skill.phase!=='active')continue;
+   const key=mob.id+':'+skill.id;if(heardMonsterSkills.has(key))continue;
+   heardMonsterSkills.add(key);if(heardMonsterSkills.size>256)heardMonsterSkills.delete(heardMonsterSkills.values().next().value);
+   const name={charge:'monster-dash',laser:'monster-beam',slam:'monster-slam',venom:'monster-venom'}[skill.motion];
+   if(name)audio.play(name,.45);
+  }arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));damageNumbers.receive(world.damageEvents);arena.sync(world,players);ui.setWorld(world);ui.showKillEvents(world.killEvents);
  for(const player of players){const root=roots.get(player.key);if(root)statusVisuals.sync(root,player.profile?.effects);}
  if(arena.monster)statusVisuals.sync(arena.monster,world.monster?.effects);
  for(const {root,state} of arena.islandEnemies.extraLive)statusVisuals.sync(root,state?.effects);const profile=world.profile,dead=profile?.deadUntil>Date.now();if(localRoot&&profile){arena.setPlayerEquipment(localRoot,profile.equipment);localRoot.userData.deadUntil=profile.deadUntil||0;applyHitReaction(localRoot,profile);
@@ -372,7 +382,7 @@ function update(dt,time){
 function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.05,elapsed/1000);last=now;if(!assetsReady)return;const started=performance.now();if(now>externalUntil)update(dt,now/1000);const updated=performance.now();refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view),arena.presentation.vfx.numberedEffects.hasFullScreenPostprocess());const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}}
 requestAnimationFrame(frame);
 
-const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),kind=item?.id==='calico-cat'?'scatter':item?.id==='accordion'?'accordion':item?.family||'shot',gain=event.owner===self?.key?1:.38;audio.play(kind,gain);if(event.owner===self?.key&&item?.firstPerson)gun.kick(item);if(event.ultimate)audio.play('ultimate',gain*.85);}arena.presentation.play(event,roots.get(event.owner));}
+const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),kind=item?.id==='calico-cat'?'scatter':item?.id==='accordion'?'accordion':item?.family||'shot',gain=event.owner===self?.key?1:.38;audio.playWeapon(item,gain,event.ultimate);if(event.owner===self?.key&&item?.firstPerson)gun.kick(item);if(event.ultimate)audio.play('ultimate',gain*.85);}arena.presentation.play(event,roots.get(event.owner));}
 function showThrowPulse(event){artworkThrow.queue(event);}
 function applyEditorSettings(next){renderer.setPixelRatio(Math.min(devicePixelRatio,next.pixelRatio));renderer.setSize(innerWidth,innerHeight,false);scene.fog.density=next.fog;arena.artFloat=next.artFloat;}
 function loadEditorSettings(){try{return JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');}catch{return {};}}
