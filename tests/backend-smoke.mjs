@@ -36,7 +36,7 @@ assert.equal(join.role,'fighter');
 const token=join.token;
 assert.ok(token);
 assert.equal(join.self.profile.equipment.weapon,'white-cat','new players must spawn equipped with the SMG');
-assert.ok(join.self.profile.inventory.includes('white-cat'),'the starter SMG must be owned');
+assert.ok(join.world.profile.inventory.includes('white-cat'),'the starter SMG must be owned');
 const deniedGmHistory=await call('/api/gm/presence',undefined,token,{expectedStatus:403});
 assert.match(deniedGmHistory.error,/GM only/i,'regular players may not view private GM login history');
 // The authoritative API deliberately refuses game actions until the player
