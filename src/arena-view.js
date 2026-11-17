@@ -15,6 +15,7 @@ import {IslandEnemies} from './island-enemies.js';
 import {createPlantInsects} from './reletter/plant-insects.js';
 import artworkDelivery from '../artwork-delivery.json' with {type:'json'};
 import {ARTWORK_DISCS,discGroundHeight} from './shared/artwork-discs.js';
+import {samplePanBlastPosition} from './shared/pan-blast-flight.js';
 import {originalBuildSizes,buildGeometry,buildMaterial} from './build-style.js';
 
 const touch=matchMedia('(pointer:coarse)').matches;
@@ -260,7 +261,13 @@ export class TempleArena{
     for(const p of artworkDefinitions(this.world)){const root=this.artworks.get(p.id),state=this.world?.artworks?.[p.id];if(!root||!state||root.userData.editing)continue;const layout=this.world?.artworkLayout?.[p.id]||this.defaultLayout[p.id]||{position:p.artPosition,rotation:[0,p.artYaw,0],scale:[1,1,1]};applyArtworkAppearance(root,layout.appearance);if(root.userData.video){const near=camera.position.distanceToSquared(root.position)<900;if(near&&!root.userData.videoPlaying){root.userData.videoPlaying=true;root.userData.video.play().catch(()=>{root.userData.videoPlaying=false;});}else if(!near&&root.userData.videoPlaying){root.userData.video.pause();root.userData.videoPlaying=false;}}const holder=state.holder&&playerRoots.get(state.holder);if(holder){root.visible=true;root.position.copy(holder.position).add(new THREE.Vector3(0,1.6,0));root.rotation.set(0,holder.rotation.y+Math.PI,Math.sin(time*2)*.05);root.scale.fromArray(layout.scale).multiplyScalar(.48);continue;}root.scale.fromArray(layout.scale);if(state.throwEvent&&root.userData.flightId!==state.throwEvent.id){root.userData.flightId=state.throwEvent.id;root.userData.flightLanding=artworkLanding(state.throwEvent,(x,z,y)=>this.groundHeight(x,z,y));}if(state.throwEvent&&Date.now()-state.throwEvent.time<root.userData.flightLanding.time*1000){const age=Math.max(0,(Date.now()-state.throwEvent.time)/1000),origin=state.throwEvent.origin,d=state.throwEvent.direction,power=state.throwEvent.power;root.visible=true;root.position.fromArray(artworkPosition(state.throwEvent,age));root.rotation.x+=dt*2.6;root.rotation.z+=dt*1.8;continue;}const available=Date.now()>=(state.availableAt||0);root.visible=available;if(available){root.position.fromArray(layout.position);root.position.y+=Math.sin(time*.72+p.index)*(this.artFloat??.17);root.rotation.set(...layout.rotation);}}
     if(this.monster?.visible&&this.world?.monster?.position){
       const before=this.monster.position.clone();
-      this.monster.position.lerp(tempPosition.fromArray(this.world.monster.position),1-Math.exp(-dt*8));
+      // Durable Object snapshots arrive much slower than the render loop.
+      // Sample the server-authored flight analytically every frame so all
+      // three decreasing rebounds remain visible instead of being skipped.
+      const flight=this.world.monster.panBlastFlight;
+      const position=flight?samplePanBlastPosition(flight,Date.now()).position:this.world.monster.position;
+      if(flight)this.monster.position.fromArray(position);
+      else this.monster.position.lerp(tempPosition.fromArray(position),1-Math.exp(-dt*8));
       const change=this.monster.position.clone().sub(before);
       const near=[...playerRoots.values()].filter(a=>a.position.distanceToSquared(this.monster.position)<18*18).sort((a,b)=>a.position.distanceToSquared(this.monster.position)-b.position.distanceToSquared(this.monster.position))[0];
       if(near)this.monster.rotation.y=Math.atan2(near.position.x-this.monster.position.x,near.position.z-this.monster.position.z);
