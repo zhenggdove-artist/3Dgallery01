@@ -38,7 +38,8 @@ export class TempleUI extends EventTarget{
     $('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.dataset.action)this.emit(button.dataset.action);});
     $('build-confirm').onclick=()=>this.emit('build-confirm');$('build-rotate').onclick=()=>this.emit('build-rotate');$('build-cancel').onclick=()=>this.emit('build-cancel');
     this.content.addEventListener('click',event=>this.panelClick(event));this.content.addEventListener('submit',event=>this.panelSubmit(event));
-    this.content.addEventListener('input',event=>{const slider=event.target.closest('[data-audio-volume]');if(slider&&this.panelName==='gm')slider.nextElementSibling.textContent=slider.value+'%';});
+    this.content.addEventListener('change',event=>{const file=event.target.closest('[data-gm-music-file]');if(file&&this.self?.profile?.admin&&file.files?.[0])this.emit('gm-music-upload',file.files[0]);});
+     this.content.addEventListener('input',event=>{const slider=event.target.closest('[data-audio-volume]');if(slider&&this.panelName==='gm')slider.nextElementSibling.textContent=slider.value+'%';});
      this.content.addEventListener('change',event=>{const slider=event.target.closest('[data-audio-volume]');if(!slider||!this.self?.profile?.admin)return;this.emit('gm-audio-change',{key:slider.dataset.audioVolume,volume:Number(slider.value)});});
      this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');});
     this.content.addEventListener('click',event=>{const b=event.target.closest('button');if(b?.dataset.unequip)this.emit('server-action',{action:'unequip',slot:b.dataset.unequip});if(b?.dataset.use)this.emit('use-item',b.dataset.use);});
@@ -150,7 +151,7 @@ export class TempleUI extends EventTarget{
      const families=[...new Set(WEAPONS.map(w=>w.family))];
      const weaponLevels=families.map(family=>`<details><summary>${escape(family.toUpperCase())} · ${WEAPONS.filter(w=>w.family===family).length} weapons</summary>${WEAPONS.filter(w=>w.family===family).map(w=>channel(w.id,w.name)).join('')}</details>`).join('');
      const globalLevels=Object.keys(SOUND_PROFILES).map(key=>channel(key,key)).join('');
-     const audioMarkup=`<div class="gm-audio-controls"><h3>聲音控制 · 全體玩家同步</h3>${channel('master','整體音量')}${channel('music','背景音樂')}${channel('sfx','所有音效')}<details><summary>一般音效與怪物技能</summary>${globalLevels}</details><details><summary>每把武器獨立音量</summary>${weaponLevels}</details></div>`;
+     const audioMarkup=`<div class="gm-audio-controls"><h3>聲音控制 · 全體玩家同步</h3>${channel('master','整體音量')}${channel('music','背景音樂')}${channel('sfx','所有音效')}<label>上傳 MP3 背景音樂（8 MB 以內）<input type="file" accept=".mp3,audio/mpeg" data-gm-music-file></label><p>目前版本：${mix.musicVersion?escape(new Date(mix.musicVersion).toLocaleString('zh-TW')):'尚未上傳'}</p><details><summary>一般音效與怪物技能</summary>${globalLevels}</details><details><summary>每把武器獨立音量</summary>${weaponLevels}</details></div>`;
     this.content.innerHTML=`<section class="gm-admin">
       <h3>GM 功能</h3><div class="gm-tools">
         <button type="button" data-gm-action="editor">作品與圓盤編輯</button>
