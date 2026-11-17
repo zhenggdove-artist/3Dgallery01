@@ -1,6 +1,12 @@
 const db=value=>10**(value/20);
 // Separate transient envelopes and timbres keep skills intelligible.
 export const SOUND_PROFILES=Object.freeze({
+ giraffe:{duration:.39,freq:278,end:148,shape:'triangle',noise:.39,gain:.95},
+ goldfish:{duration:.62,freq:235,end:74,shape:'sine',noise:1,gain:1},
+ clam:{duration:.39,freq:396,end:172,shape:'triangle',noise:.83,gain:.92},
+ telephone:{duration:.45,freq:680,end:380,shape:'square',noise:.23,gain:.82},
+ jellybrella:{duration:.65,freq:158,end:320,shape:'sine',noise:.91,gain:.9},
+ fan:{duration:.61,freq:110,end:750,shape:'sawtooth',noise:.88,gain:.87},
  wind:{duration:.65,freq:160,end:620,shape:'sine',noise:1,gain:.94},
  venom:{duration:.57,freq:115,end:65,shape:'triangle',noise:.77,gain:.85},
  stomp:{duration:.65,freq:80,end:38,shape:'sawtooth',noise:.94,gain:1.04},
@@ -71,7 +77,8 @@ export class GameAudio{
  playWeapon(item,volume=1){
   if(!item)return this.play('shot',volume);
   const id=String(item.id||''),family=String(item.family||'shot');
-  const key=id==='calico-cat'?'scatter':id==='accordion'?'accordion':id.includes('smg')||id.includes('submachine')?'smg':id.includes('sniper')?'sniper':family;
+  const odd={'white-cat':'smg','black-cat':'sniper','calico-cat':'scatter',accordion:'accordion',giraffe:'giraffe',goldfish:'goldfish',clam:'clam',fan:'fan',telephone:'telephone',jellybrella:'jellybrella'};
+  const key=odd[id]||family;
   const hash=[...id].reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,7);
   const pitch=.86+(hash%29)/100; // unique weapon intonation within its element
   return this.play(key,volume*(this.volumes['weapon-'+id]??1),pitch);
