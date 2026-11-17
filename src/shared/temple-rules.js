@@ -174,7 +174,7 @@ export function applyAction(world,actor,body,context={}){
    if(body.action==='gm-audio-setting'){
     if(!profile.admin)return {error:'GM only'};
     const key=String(body.key||'');const value=Number(body.value);
-    if(!/^(master|music|[a-z][a-z-]{0,40})$/.test(key)||!Number.isFinite(value)||value<0||value>2)return {error:'Invalid sound channel or volume'};
+    if(!/^[a-z][a-z0-9-]{0,60}$/.test(key)||!Number.isFinite(value)||value<0||value>2)return {error:'Invalid sound channel or volume'};
     world.audioSettings??={};world.audioSettings[key]=Math.round(value*100)/100;
     world.revision=(world.revision||0)+1;
     return {notice:'全服音量已同步',audioSettings:clone(world.audioSettings)};
