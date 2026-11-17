@@ -25,7 +25,7 @@ try {
  const initial=await page.evaluate(()=>{
   const t=templeTest;
   const e=document.querySelector('[data-action="interact"]');
-  const hidden=getComputedStyle(e).display==='none';
+  const hidden=!e||getComputedStyle(e).display==='none';
   const coarse=matchMedia('(pointer:coarse)').matches;
   if(!t.ui.world?.profile?.equipment)throw Error('World equipment unavailable');
   // The room pushes fresh authoritative world snapshots. Keep the gun

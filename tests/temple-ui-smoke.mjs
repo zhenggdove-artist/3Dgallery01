@@ -232,7 +232,7 @@ try{
   const overlaps=(a,b)=>a.left<b.right-2&&a.right>b.left+2&&a.top<b.bottom-2&&a.bottom>b.top+2;
   const controls={chat,attack,jump,stick};
   return {controls,collisions:Object.entries(controls).flatMap(([id,rect],i)=>Object.entries(controls).slice(i+1).filter(([,r])=>overlaps(rect,r)).map(([key])=>id+' / '+key)),
-   interactVisible:getComputedStyle(interactButton).display!=='none',
+   interactVisible:!!interactButton&&getComputedStyle(interactButton).display!=='none',
    chatInside:chat.left>=0&&chat.right<=innerWidth+1&&chat.top>=0&&chat.bottom<=innerHeight+1};
  });
  assert.equal(mobileControls.interactVisible,false,'mobile E must be removed (A handles context)');
