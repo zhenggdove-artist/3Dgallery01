@@ -200,7 +200,7 @@ export class WeaponSignatureEffects {
  }
  flower(event){
   const quality=event.qualityScale||1,origin=vec(event.origin),direction=vec(event.direction).normalize();
-  const key='flower:'+quality.toFixed(3),group=this.take(key)||new THREE.Group();
+  const key='flower',group=this.take(key)||new THREE.Group();
   let blossom=group.children[0],m=blossom?.material;
   if(!blossom){
   const num=2400,positions=new Float32Array(num*3),colors=new Float32Array(num*3);
@@ -209,9 +209,9 @@ export class WeaponSignatureEffects {
    const petal=i%9,angle=petal*TAU/9,rand=stable(i*3.7);
    const t=Math.sqrt(stable(i*17.3)),radius=.30+t*5.4;
    const lateral=(stable(i*23.7)*2-1)*(1.05+Math.sin(t*Math.PI)*1.9);
-   positions[i*3]=(Math.cos(angle)*radius-Math.sin(angle)*lateral)*quality;
-   positions[i*3+1]=(Math.sin(angle)*radius+Math.cos(angle)*lateral)*quality;
-   positions[i*3+2]=(Math.sin(t*Math.PI+angle)*.42+(rand-.5)*.75)*quality;
+   positions[i*3]=(Math.cos(angle)*radius-Math.sin(angle)*lateral);
+   positions[i*3+1]=(Math.sin(angle)*radius+Math.cos(angle)*lateral);
+   positions[i*3+2]=(Math.sin(t*Math.PI+angle)*.42+(rand-.5)*.75);
    const c=new THREE.Color(palette[petal%palette.length]);
    colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;
   }
@@ -222,6 +222,7 @@ export class WeaponSignatureEffects {
   blossom=new THREE.Points(g,m);group.add(blossom);
   }
   group.name='One enormous forward rotating translucent particle blossom';
+  blossom.scale.setScalar(quality);m.size=.15*quality;
   const orientation=qdir(direction);group.position.copy(origin);group.quaternion.copy(orientation);blossom.rotation.z=0;m.opacity=.9;
   const duration=3.3*(event.qualityDuration||1);
   this.add(group,duration,age=>{
@@ -280,16 +281,16 @@ export class WeaponSignatureEffects {
   const quality=event.qualityScale||1,origin=vec(event.origin),direction=vec(event.direction).normalize(),
     right=new THREE.Vector3(direction.z,0,-direction.x),range=event.range||20,tier=event.qualityTier||3,
     duration=(1400+tier*850)*(event.qualityDuration||1)/1000,
-    group=this.take('tornado:'+quality.toFixed(3))||new THREE.Group(),vortices=[...group.children];
+    group=this.take('tornado')||new THREE.Group(),vortices=[...group.children];
   group.name='Four independent wandering volumetric tornadoes';
   if(!vortices.length)for(let i=0;i<4;i++){
    const count=640,positions=new Float32Array(count*3),cols=new Float32Array(count*3);
    const tint=new THREE.Color(['#bffff3','#8feede','#d6f8f0','#a6d9ff'][i]);
    for(let j=0;j<count;j++){
     const y=(j%91)/90,angle=stable(j*11.73+i*9.7)*TAU;
-    const radius=(.28+y*2.0)*quality*(.7+stable(j*13.7+i)*.6);
+    const radius=(.28+y*2.0)*(.7+stable(j*13.7+i)*.6);
     positions[j*3]=Math.cos(angle)*radius;
-    positions[j*3+1]=y*10*quality;
+    positions[j*3+1]=y*10;
     positions[j*3+2]=Math.sin(angle)*radius;
     const brightness=.5+y*.5;
     cols[j*3]=tint.r*brightness;cols[j*3+1]=tint.g*brightness;cols[j*3+2]=tint.b*brightness;
@@ -300,7 +301,7 @@ export class WeaponSignatureEffects {
    group.add(v);vortices.push(v);
   }
   group.scale.setScalar(1);
-  for(const v of vortices){v.position.set(0,0,0);v.rotation.y=0;v.material.opacity=.8;}
+  for(const v of vortices){v.position.set(0,0,0);v.rotation.y=0;v.material.opacity=.8;v.material.size=.15*quality;v.scale.setScalar(quality);}
   this.add(group,duration,age=>{
    const t=Math.min(1,age/duration);
    vortices.forEach((v,i)=>{
@@ -310,11 +311,11 @@ export class WeaponSignatureEffects {
     v.rotation.y=age*(4.2+i*.85);
     v.material.opacity=.78*Math.min(1,age*5)*(1-Math.pow(t,4));
    });
-  },'tornado:'+quality.toFixed(3));
+  },'tornado');
  }
  giraffe(event,ownerRoot){
   const quality=event.qualityScale||1,origin=vec(event.origin),dir=vec(event.direction).normalize();
-  const key='giraffe:'+quality.toFixed(3),cached=this.take(key),
+  const key='giraffe',cached=this.take(key),
    group=cached||new THREE.Group(),giraffe=cached?.userData.giraffe||new THREE.Group(),
    model=cached?.userData.model||new THREE.Group(),electricBolts=cached?.userData.bolts||[];
   giraffe.name='Visible spinning yellow giraffe model, outbound and returning';
