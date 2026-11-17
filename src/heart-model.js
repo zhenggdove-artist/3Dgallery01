@@ -22,7 +22,7 @@ export function createHeart(){
  for(let k=0;k<vCount;k++)for(let j=0;j<uCount;j++){
   const next=(j+1)%uCount,a=k*uCount+j,b=k*uCount+next,
    c=(k+1)*uCount+next,d=(k+1)*uCount+j;
-  indices.push(a,d,b,b,d,c);
+  indices.push(a,b,d,b,c,d); // outward winding for correct exterior PBR highlights
  }
  const geometry=new THREE.BufferGeometry();
  geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
