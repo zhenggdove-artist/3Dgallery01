@@ -54,7 +54,7 @@ export function normaliseAudioMix(value){
  }
  return {master:Math.round(clamp(source.master??75,0,200)),
   music:Math.round(clamp(source.music??45,0,200)),
-  sfx:Math.round(clamp(source.sfx??100,0,200)),levels};
+  sfx:Math.round(clamp(source.sfx??100,0,200)),musicVersion:Number(source.musicVersion)||0,levels};
 }
 const familyFor=item=>{
  if(item.id==='calico-cat')return 'scatter';
@@ -70,11 +70,16 @@ const familyFor=item=>{
 };
 export class GameAudio{
  constructor(){
-  this.voices=0;this.played={};this.muted=false;this.mix=normaliseAudioMix(DEFAULT_AUDIO_MIX);
+  this.musicUrl=MUSIC_PATH;this.voices=0;this.played={};this.muted=false;this.mix=normaliseAudioMix(DEFAULT_AUDIO_MIX);
   this.music=null;this.musicFailed=false;
   if(typeof addEventListener==='function')
    for(const type of ['pointerdown','keydown','touchend'])
     addEventListener(type,()=>this.unlock(),{passive:true});
+ }
+ setMusicUrl(url){
+  if(!url||url===this.musicUrl)return;
+  this.musicUrl=url;
+  if(this.music){this.music.pause();this.music.src=url;this.music.load();this.music.play().catch(()=>{});}
  }
  applyMix(value){
   this.mix=normaliseAudioMix(value);
@@ -95,7 +100,7 @@ export class GameAudio{
    for(let i=0;i<n;i++)data[i]=Math.random()*2-1;
    this.noise=buffer;this.applyMix(this.mix);
    // Browsers prohibit autoplay. Both audio paths start only after a gesture.
-   this.music=new Audio(MUSIC_PATH);this.music.loop=true;this.music.preload='none';
+   this.music=new Audio(this.musicUrl);this.music.loop=true;this.music.preload='none';
    this.music.addEventListener('error',()=>{this.musicFailed=true;},{once:true});
    this.applyMix(this.mix);
   }
