@@ -18,7 +18,7 @@ import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE} from './combat-balance.js';
-import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
@@ -266,14 +266,14 @@ function throwArtwork(world,profile,actor,body,context,now){
   const ground=(x,z,y)=>{let h=discGroundHeight(x,z,y);for(const p of world.floatingPlatforms||[])if(y>=p.position[1]-.5&&Math.hypot(x-p.position[0],z-p.position[2])<p.radius*2)h=Math.max(h,p.position[1]);return h;};
   const landing=bomb?artworkLanding(event,ground):null,bombSize=world.artworkLayout?.[platformId]?.scale?.[0]||1;
   let hit=null;for(const target of context.actors||[]){if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(target.position))continue;
-    const along=project(origin,direction,target.position),ordinaryHit=along>0&&along<18*event.power&&perpendicular(origin,direction,target.position,along)<2.1;
+    const along=project(origin,direction,target.position),ordinaryHit=along>0&&along<90*event.power&&perpendicular(origin,direction,target.position,along)<2.1;
     const collision=bomb?projectileHitsActor(event,target.position,landing.time,bombSize):ordinaryHit;
     if(collision){const maxHp=world.profiles?.[target.key]?.maxHp||100,damage=bomb?artBombDamage(maxHp,context.rng??Math.random):34*event.power;hit=damagePlayer(world,profile,target,damage,now,bomb?'art-bomb':'artwork',actor.position);break;}
   }
   let monsterHit=null;for(const mob of [world.monster,...(world.monsters||[])]){
     if(!mob?.active)continue;
     const along=project(origin,direction,mob.position);
-    if(along>0&&along<18*event.power&&perpendicular(origin,direction,mob.position,along)<ENEMY_RADIUS+1){
+    if(along>0&&along<90*event.power&&perpendicular(origin,direction,mob.position,along)<ENEMY_RADIUS+1){
      monsterHit=damageMonster(world,profile,68*event.power,now,context.rng??Math.random,'artwork',mob);
      break;
     }
@@ -281,7 +281,7 @@ function throwArtwork(world,profile,actor,body,context,now){
   let structureDestroyed=null,structureHit=null;if(!hit&&!monsterHit){for(const structure of world.structures||[]){
     if(structure.owner==='temple')continue;
     const along=project(origin,direction,structure.position);
-    if(along>0&&along<18*event.power&&perpendicular(origin,direction,structure.position,along)<structureRadius(structure)){
+    if(along>0&&along<90*event.power&&perpendicular(origin,direction,structure.position,along)<structureRadius(structure)){
      structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
      const damage=Math.round(70*event.power);
      structure.hp=Math.max(0,structure.hp-damage);
@@ -404,7 +404,7 @@ function attack(world,profile,actor,body,context,now){
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
       radius:stats.radius,area,damage:stats.damage+bonus*.1,pvpDamage,charge,
-      qualityDuration:quality.duration,qualityScale:quality.visual,channel,
+      qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,
       flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
       hits:[],pelletHits:{},areaResolved:false,
       createdAt:now,lastAt:now,expiresAt:now+Math.max(duration,visualLifetime)
@@ -422,7 +422,7 @@ function attack(world,profile,actor,body,context,now){
       // same per-weapon footprint shrink as a separately equipped one.
       const echoFactor=/^pan-[1-5]$/.test(source.id)?.5:/^whip-[1-5]$/.test(source.id)?.2:1;
       secondary.range=+(secondary.range*echoFactor).toFixed(3);
-      secondary.radius=+(secondary.radius*echoFactor).toFixed(3);
+      secondary.radius=+(secondary.radius*echoFactor*(/^whip-[1-5]$/.test(source.id)?1.5:1)).toFixed(3);
       const echoArea=source.id==='goldfish'?null:chargedArea(source,origin,direction,secondary,groundForSpell,false);
       if(echoArea?.mode==='area'&&area?.visualCenter&&source.family!=='whip'){
         echoArea.center=[...area.center];echoArea.visualCenter=[...area.visualCenter];
@@ -785,10 +785,9 @@ function tickPersistentAttacks(world,actors,now,rng){
    }
    // Ground-targeted charged area explosions are evaluated only once their
    // visible travel has completed; targets that have moved away evade damage.
-   if(fx.area?.mode==='area'&&next>=1&&(!panBlast||!fx.areaResolved)){
-     // A pan is a single explosion, not a lingering invisible projectile.
-     // Its impact is resolved only when the visible travel reaches the
-     // authored ground target, once per ultimate.
+   if(fx.area?.mode==='area'&&next>=(panBlast?.5:1)&&(!panBlast||!fx.areaResolved)){
+     // The pan's explosion physically strikes midway through its expansion,
+     // not after the entire travelling animation. It resolves exactly once.
      fx.areaResolved=true;
      const caster=panBlast?actors.find(a=>a.key===fx.owner&&a.role==='fighter'):null;
      const blastTargets=caster&&!targets.some(t=>t.value.key===caster.key)
@@ -819,6 +818,16 @@ function tickPersistentAttacks(world,actors,now,rng){
       }
      }else if(outcome(target,pos,groundContact,null,fx.area.travel)){
       changed=true;
+      if(!fx.echo&&/^whip-[1-5]$/.test(weapon.id)&&fx.charge>=1&&target.kind==='player'){
+       const victim=world.profiles[enemy.key];
+       if(victim){
+        const whipPull={center:[fx.area.center[0],fx.area.center[2]],
+         durationMs:whipPullDurationMs(fx.tier||weapon.tier),speed:WHIP_PULL_SPEED};
+        // Shield-absorbed hits still pull; the victim can steer against it.
+        if(victim.hitReaction?.time===now)Object.assign(victim.hitReaction,{whipPull,stunMs:0});
+        else victim.hitReaction={id:id(),time:now,stunMs:0,vector:[0,0,0],whipPull};
+       }
+      }
       if(panBlast&&target.kind==='player'){
        const reaction=world.profiles[enemy.key]?.hitReaction;
        if(reaction)Object.assign(reaction,{vector:blastDirection(fx.area.center,enemy.position,fx.direction),
