@@ -90,6 +90,7 @@ export class GameAudio{
   if(now-(this.last?.[key]??-10)<.04)return;
   (this.last??={})[key]=now;this.played[key]=(this.played[key]||0)+1;
   const p=SOUND_PROFILES[key]||SOUND_PROFILES.shot,amp=Math.max(0,Math.min(1.6,volume))*(this.volumes[key]??1)*p.gain;
+  if(amp<=0)return; // An exact zero slider setting must be truly silent.
   const createVoice=(source,filter,amount)=>{
    const gain=ctx.createGain();gain.gain.setValueAtTime(.0001,now);
    gain.gain.exponentialRampToValueAtTime(Math.max(.002,amount),now+.012);
