@@ -18,12 +18,16 @@ test('every frying-pan and whip tier uses the same warning/authoritative AoE foo
    const stats={...base,range:+(base.range*q.range).toFixed(2),
     radius:forwardCastRadius(weapon,q,base.radius,false)};
    scaleUltimateFootprint(stats,weapon);
-   const relative=family==='pan'?.5:.4;
+   const relative=family==='pan'?.5:.2;
    assert.ok(Math.abs(stats.range-base.range*q.range*.6*relative)<.002,weapon.id);
    assert.ok(Math.abs(stats.radius-forwardCastRadius(weapon,q,base.radius,false)*.6*relative)<.002,weapon.id);
    const area=chargedArea(weapon,[75,1,0],[0,0,1],stats);
    assert.equal(area.mode,'area',weapon.id);
    assert.equal(area.radius,stats.radius,weapon.id);
+   if(family==='whip'){
+    const oldCenter=Math.min(Math.max(stats.range*.65,9),stats.range);
+    assert.ok(Math.abs(area.visualCenter[2]-(oldCenter+stats.radius))<.002,weapon.id+' shifted exactly one new radius');
+   }
   }
  }
  const spectral={id:'chiang-token',family:'pan'};
@@ -57,6 +61,7 @@ test('pan explosion hits all victims once, recoils onto caster for exactly 15 HP
  assert.ok(v.hp<100&&o.hp<100,'all overlapping enemies receive the blast');
  for(const target of [p,v,o]){
   assert.ok(Math.abs(target.hitReaction.knockbackDistance-radius)<.001);
+  assert.equal(target.hitReaction.panBlast,true,'all struck players, including caster, must launch');
   assert.ok(Math.abs(Math.hypot(target.hitReaction.vector[0],target.hitReaction.vector[2])-1)<.001);
  }
  assert.ok(p.hitReaction.vector[2]<0,'caster flies backwards away from explosion');
