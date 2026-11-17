@@ -181,6 +181,9 @@ export class MonsterAttackEffects {
   }
   const dt=e.last?Math.min(.06,Math.max(.001,(now-e.last)/1000)):.016;
   e.last=now;native.update(dt);
+  // Official frost scene rewrites root transforms while advancing.
+  // Reapply the authored world-scale only after the native simulation tick.
+  if(s.motion==='freeze')native.group.scale.setScalar(r/2.8);
   if(s.motion==='beam'){
    // The vendor clamps shader option size to 2. Double *world* thickness
    // instead (after update/endpoints so it never accumulates exponentially).
