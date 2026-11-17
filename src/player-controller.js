@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {ARENA_RADIUS,PLAYER_SPAWNS} from './shared/arena.js';
-import {PAN_BLAST_GRAVITY,PAN_BLAST_LAUNCH_SPEED,PAN_BLAST_BOUNCE_SPEEDS,PAN_BLAST_INITIAL_DURATION} from './shared/pan-blast-flight.js';
+import {PAN_BLAST_GRAVITY,PAN_BLAST_LAUNCH_SPEED,PAN_BLAST_BOUNCE_SPEEDS,PAN_BLAST_BOUNCE_GRAVITY,PAN_BLAST_INITIAL_DURATION} from './shared/pan-blast-flight.js';
 import {WHIP_PULL_SPEED} from './shared/weapon-abilities.js';
 
 // RELETTER Explore's actual acceleration, camera, momentum and jump constants.
@@ -76,7 +76,7 @@ export class PlayerController{
         if(travelled<.000001)flight.remaining=0;
       }
       const previousY=root.position.y;
-      this.velocityY-=PAN_BLAST_GRAVITY*step;
+      this.velocityY-=(flight.rebounds>0?PAN_BLAST_BOUNCE_GRAVITY:PAN_BLAST_GRAVITY)*step;
       root.position.y+=this.velocityY*step;
       const floor=this.arena.groundHeight(root.position.x,root.position.z,Math.max(previousY,root.position.y));
       if(this.velocityY<=0&&previousY>=floor-.05&&root.position.y<=floor){

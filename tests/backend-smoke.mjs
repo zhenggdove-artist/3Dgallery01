@@ -71,5 +71,26 @@ assert.equal(resized.artworkLayout.scale[0],2);
 const final=await call('/api/world',undefined,token);
 assert.ok(final.world.customArtworks.some(a=>a.id===build.artwork.id));
 assert.ok(final.world.artworkLayout[build.artwork.id].scale[0]===2);
-console.log(JSON.stringify({ok:true,guest,role:join.role,write:planted.plant.id,artwork:build.artwork.id,size:2}));
+// One room admits exactly 4 playable fighters and 100 camera-only viewers.
+// All 103 remaining entrants share the same simulated client IP, ensuring
+// the join throttle does not silently cap a school/gallery's shared network.
+const seats=new Set([join.seat]),watchers=[];
+for(let i=0;i<103;i++){
+ const entrant=await call('/api/join',{name:'Capacity-'+String(i).padStart(3,'0'),color:'#43b59a'});
+ assert.equal(entrant.role,i<3?'fighter':'spectator','four fighter seats are reserved');
+ assert.ok(!seats.has(entrant.seat),'every active session has a unique seat');
+ seats.add(entrant.seat);
+ if(entrant.role==='spectator')watchers.push(entrant);
+}
+assert.equal(seats.size,104);
+assert.equal(watchers.length,100);
+const blocked=await call('/api/join',{name:'Capacity-full',color:'#43b59a'},null,{expectedStatus:409});
+assert.match(blocked.error,/4 fighters \+ 100 spectators/);
+const noFighter=await call('/api/role',{role:'fighter'},watchers[0].token,{expectedStatus:409});
+assert.match(noFighter.error,/fighter seats/);
+await call('/api/disconnect',{},token);
+const promoted=await call('/api/role',{role:'fighter'},watchers[0].token);
+assert.equal(promoted.role,'fighter');
+assert.equal(promoted.seat,join.seat,'released fighter seat is available for promotion');
+console.log(JSON.stringify({ok:true,guest,role:join.role,write:planted.plant.id,artwork:build.artwork.id,size:2,capacity:104,spectators:100}));
 socket.close();

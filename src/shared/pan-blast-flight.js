@@ -4,21 +4,26 @@
 // the same launch velocities against the actual walkable ground below them.
 export const PAN_BLAST_GRAVITY=25;
 export const PAN_BLAST_LAUNCH_SPEED=13.5;
-export const PAN_BLAST_BOUNCE_SPEEDS=Object.freeze([7.5,4.5,2.5]);
+// Preserve each rebound's original peak height while compressing all three
+// ground-bounce arcs to 30% of their former combined duration.
+export const PAN_BLAST_BOUNCE_TIME_SCALE=.3;
+export const PAN_BLAST_BOUNCE_GRAVITY=PAN_BLAST_GRAVITY/(PAN_BLAST_BOUNCE_TIME_SCALE**2);
+export const PAN_BLAST_BOUNCE_SPEEDS=Object.freeze([7.5,4.5,2.5].map(speed=>speed/PAN_BLAST_BOUNCE_TIME_SCALE));
 export const PAN_BLAST_INITIAL_DURATION=2*PAN_BLAST_LAUNCH_SPEED/PAN_BLAST_GRAVITY;
-export const PAN_BLAST_TOTAL_DURATION=[
- PAN_BLAST_LAUNCH_SPEED,...PAN_BLAST_BOUNCE_SPEEDS
-].reduce((sum,v)=>sum+2*v/PAN_BLAST_GRAVITY,0);
+export const PAN_BLAST_BOUNCE_DURATION=PAN_BLAST_BOUNCE_SPEEDS.reduce(
+ (sum,v)=>sum+2*v/PAN_BLAST_BOUNCE_GRAVITY,0);
+export const PAN_BLAST_TOTAL_DURATION=PAN_BLAST_INITIAL_DURATION+PAN_BLAST_BOUNCE_DURATION;
 
 export function samplePanBlastArc(elapsedMs){
  const t=Math.max(0,Number(elapsedMs)||0)/1000;
  let remaining=t;
  const velocities=[PAN_BLAST_LAUNCH_SPEED,...PAN_BLAST_BOUNCE_SPEEDS];
  for(let index=0;index<velocities.length;index++){
-  const velocity=velocities[index],duration=2*velocity/PAN_BLAST_GRAVITY;
+  const velocity=velocities[index],gravity=index===0?PAN_BLAST_GRAVITY:PAN_BLAST_BOUNCE_GRAVITY;
+  const duration=2*velocity/gravity;
   if(remaining<duration){
    return {
-    height:Math.max(0,velocity*remaining-.5*PAN_BLAST_GRAVITY*remaining**2),
+    height:Math.max(0,velocity*remaining-.5*gravity*remaining**2),
     horizontalProgress:Math.min(1,t/PAN_BLAST_INITIAL_DURATION),
     bounceIndex:index,completed:false
    };

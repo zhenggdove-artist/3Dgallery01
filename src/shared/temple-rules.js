@@ -29,7 +29,7 @@ import {samplePanBlastPosition} from './pan-blast-flight.js';
 export const WORLD_VERSION=1;
 export const ARTWORK_RESPAWN_MS=30_000;
 export const MAX_FIGHTERS=4;
-export const MAX_SPECTATORS=2;
+export const MAX_SPECTATORS=100;
 const POSITION_LIMIT=60;
 
 const clone=value=>structuredClone(value);
@@ -553,27 +553,27 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
   if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
   if(activeFighters>0&&!world.monster.active&&now>=world.monster.nextSpawnAt){const spawn=MONSTER_SPAWNS[Math.floor(rng()*MONSTER_SPAWNS.length)],variant=['warden','drowned','signal'][Math.floor(rng()*3)],maxHp={warden:420,drowned:520,signal:360}[variant];world.monster={active:true,id:id(),variant,position:[...spawn],hp:maxHp,maxHp,generation:(world.monster.generation||0)+1,spawnedAt:now,nextAttackAt:now+2_000,nextSpawnAt:now+ECONOMY.monsterIntervalMs};changed=true;}
-  if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!monster.panBlastFlight||!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),silenced:!!effectActive(monster,'paralysis',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
+  if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!monster.panBlastFlight||!!monster.whipPull||!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),silenced:!!effectActive(monster,'paralysis',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
  const confused=effectActive(monster,'confuse',now);
  if(confused){
   const angle=(now/210+(monster.generation||0)*2.4)%(Math.PI*2);
   return moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],distance);
  }
  return moveMonster(world,monster,target,distance);
-},hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position)});if(!monster.panBlastFlight&&effectActive(monster,'confuse',now)){
+},hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position)});if(!monster.panBlastFlight&&!monster.whipPull&&effectActive(monster,'confuse',now)){
  const angle=(now/217+(monster.generation||0)*1.73)%(Math.PI*2);
  moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],.21);
-}else if(!monster.panBlastFlight&&!effectActive(monster,'root',now)&&!effectActive(monster,'freeze',now)&&
+}else if(!monster.panBlastFlight&&!monster.whipPull&&!effectActive(monster,'root',now)&&!effectActive(monster,'freeze',now)&&
  !monster.aggroTarget&&!fighters.some(a=>distance2d(a.position,monster.position)<18))
  patrolMonster(monster,now,rng,(target,distance)=>moveMonster(world,monster,target,distance));
- advancePanBlastMonster(monster,now);changed=true;}
+ advancePanBlastMonster(monster,now);advanceWhipPullMonster(world,monster,now);changed=true;}
   if(activeFighters>0){
    for(const mob of world.monsters||[]){
     if(!mob?.active)continue;
     if(insideArtSanctuary(mob.position)){mob.position=[...MONSTER_SPAWNS[(mob.slot||0)%MONSTER_SPAWNS.length]];}
     mob.bodyHeight=ENEMY_HEIGHT;mob.bodyRadius=ENEMY_RADIUS;
     const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));
-    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!mob.panBlastFlight||!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),silenced:!!effectActive(mob,'paralysis',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
+    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!mob.panBlastFlight||!!mob.whipPull||!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),silenced:!!effectActive(mob,'paralysis',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
      move:(target,distance)=>{
        const confused=effectActive(mob,'confuse',now);
        if(confused){
@@ -582,13 +582,13 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
        }
        return moveMonster(world,mob,target,distance);
       },hit:(target,amount)=>damagePlayer(world,null,target,amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position)});
-    if(!mob.panBlastFlight&&effectActive(mob,'confuse',now)){
+    if(!mob.panBlastFlight&&!mob.whipPull&&effectActive(mob,'confuse',now)){
  const angle=(now/217+(mob.slot||0)*1.73)%(Math.PI*2);
  moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],.21);
-}else if(!mob.panBlastFlight&&!effectActive(mob,'root',now)&&!effectActive(mob,'freeze',now)&&
+}else if(!mob.panBlastFlight&&!mob.whipPull&&!effectActive(mob,'root',now)&&!effectActive(mob,'freeze',now)&&
  !mob.aggroTarget&&!fighters.some(a=>distance2d(a.position,mob.position)<18))
  patrolMonster(mob,now,rng,(target,distance)=>moveMonster(world,mob,target,distance));
-    advancePanBlastMonster(mob,now);changed=true;
+    advancePanBlastMonster(mob,now);advanceWhipPullMonster(world,mob,now);changed=true;
    }
   }
   for(const profile of Object.values(world.profiles))if(profile.hp<=0&&profile.deadUntil<=now){profile.hp=profile.maxHp;profile.deadUntil=0;profile.lastRespawnAt=now;changed=true;}
@@ -643,6 +643,25 @@ function advancePanBlastMonster(mob,now){
  mob.lastPosition=[...mob.position];
  mob.position=sample.position;
  if(sample.completed)delete mob.panBlastFlight;
+ return true;
+}
+
+// A caught monster is moved by the same half-walk-speed vortex as players.
+// Use server elapsed time rather than render frames; never let AI overwrite it.
+function advanceWhipPullMonster(world,mob,now){
+ const pull=mob?.whipPull;
+ if(!pull||!mob.active)return false;
+ const until=pull.time+pull.durationMs;
+ const from=Math.max(pull.time,pull.updatedAt||pull.time);
+ const to=Math.min(now,until);
+ if(to>from){
+  const center=[pull.center[0],mob.position[1],pull.center[1]];
+  const distance=Math.hypot(center[0]-mob.position[0],center[2]-mob.position[2]);
+  if(distance>.0001)moveMonster(world,mob,center,
+   Math.min(distance,WHIP_PULL_SPEED*(to-from)/1000));
+ }
+ pull.updatedAt=to;
+ if(now>=until)delete mob.whipPull;
  return true;
 }
 
@@ -730,26 +749,28 @@ function tickPersistentAttacks(world,actors,now,rng){
       },now);
      }
     }
-    if(applied&&!applied.immune&&!fx.echo&&fx.charge>=1&&
-       /^whip-[1-5]$/.test(weapon.id)&&isPlayer&&fx.area?.mode==='area'&&
-       !(fx.pullHits||[]).includes(enemy.key)){
-      const victim=world.profiles[enemy.key];
+    if(applied&&!applied.immune&&!applied.defeated&&!fx.echo&&fx.charge>=1&&
+       /^whip-[1-5]$/.test(weapon.id)&&fx.area?.mode==='area'&&
+       !(fx.pullHits||[]).includes(key)){
+      const victim=isPlayer?world.profiles[enemy.key]:enemy;
       if(victim){
-       // One suction window per struck player per cast, never prolonged by
-       // the continuing hitbox's independent damage-over-time contacts.
-       fx.pullHits??=[];fx.pullHits.push(enemy.key);
+       // Exactly one tier-timed pull per player OR monster per cast; later
+       // damage-over-time contacts cannot refresh the suction window.
+       fx.pullHits??=[];fx.pullHits.push(key);
        const whipPull={id:id(),time:now,center:[fx.area.center[0],fx.area.center[2]],
         durationMs:whipPullDurationMs(fx.tier||weapon.tier),speed:WHIP_PULL_SPEED};
        victim.whipPull=whipPull;
-       // The whip's ordinary root debuff must not make resisting this
-       // charged vortex impossible. Preserve other casters' status effects.
+       // Preserve roots cast by OTHER players while clearing the whip's
+       // own root; monsters are pulled server-side despite their AI status.
        if(victim.effects?.root?.owner===fx.owner){
         delete victim.effects.root;
         if(victim.effectLocks?.root)delete victim.effectLocks.root;
        }
-       if(victim.hitReaction?.time===now)
-        Object.assign(victim.hitReaction,{whipPull,stunMs:0});
-       else victim.hitReaction={id:id(),time:now,stunMs:0,vector:[0,0,0],whipPull};
+       if(isPlayer){
+        if(victim.hitReaction?.time===now)
+         Object.assign(victim.hitReaction,{whipPull,stunMs:0});
+        else victim.hitReaction={id:id(),time:now,stunMs:0,vector:[0,0,0],whipPull};
+       }
       }
     }
     return !!applied;
@@ -807,7 +828,10 @@ function tickPersistentAttacks(world,actors,now,rng){
    }
    // Ground-targeted charged area explosions are evaluated only once their
    // visible travel has completed; targets that have moved away evade damage.
-   if(fx.area?.mode==='area'&&next>=(panBlast?.5:1)&&(!panBlast||!fx.areaResolved)){
+   // Begin pan launch 100ms earlier than the former halfway detonation.
+   // Damage and the authoritative flight impulse share that exact contact.
+   if(fx.area?.mode==='area'&&next>=(panBlast?Math.max(0,.5-100/flight):1)&&
+      (!panBlast||!fx.areaResolved)){
      // The pan's explosion physically strikes midway through its expansion,
      // not after the entire travelling animation. It resolves exactly once.
      fx.areaResolved=true;
@@ -852,6 +876,7 @@ function tickPersistentAttacks(world,actors,now,rng){
        // over the same original launch + three-bounce timeline as players.
        // Never teleport the monster to its landing point in one server tick.
        const safe=insideArena(nextPosition,-1)&&!insideArtSanctuary(nextPosition);
+       delete enemy.whipPull;
        enemy.panBlastFlight={
         origin:[...enemy.position],vector:[x,0,z],
         distance:safe?fx.area.radius:0,startAt:now
