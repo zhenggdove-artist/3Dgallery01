@@ -40,7 +40,7 @@ export function pvpShotDamage(weapon,stats,quality={tier:1}){
 // arbitrary instant-hit timer. Damage cannot precede projectile intersection.
 export function projectileFlightMs(weapon,charged=false,range=null){
  // All normal staff orbs move at the same 38 metres per second.
- if(!charged&&['water','ice','fire','lightning','beam','petal','wave'].includes(weapon?.family)&&weapon.id!=='clam')
+ if(!charged&&!weapon?.exotic&&['water','ice','fire','lightning','beam','petal','wave'].includes(weapon?.family)&&weapon.id!=='clam')
   return Math.round(Math.max(240,Math.min(3600,(Number(range)||weapon.range||12)/38*1000)));
  // Synchronize authoritative swept-hit travel with the visible, moving
  // 00GameDevs source. Doubling reach without flight time would silently

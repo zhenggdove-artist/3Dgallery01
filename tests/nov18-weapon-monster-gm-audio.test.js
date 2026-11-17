@@ -51,10 +51,10 @@ test('outer monsters cycle short melee, stomp and poison, with 5 HP/s venom tick
  advanceIslandEnemy(m,[target],4100,opt);
  assert.ok(strikes.some(([type])=>type==='stomp'));
  advanceIslandEnemy(m,[target],4700,opt);
- advanceIslandEnemy(m,[target],5200,opt);
+ advanceIslandEnemy(m,[target],5700,opt);
  assert.ok(m.skills.some(s=>s.motion==='venom'&&s.phase==='warning'));
- advanceIslandEnemy(m,[target],6100,opt);
- advanceIslandEnemy(m,[target],7200,opt);
+ advanceIslandEnemy(m,[target],6600,opt);
+ advanceIslandEnemy(m,[target],7700,opt);
  const venomHits=strikes.filter(([type])=>type==='venom');
  assert.equal(venomHits.length,2);
  assert.ok(venomHits.every(([,amount])=>amount===5));

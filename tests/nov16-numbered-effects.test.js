@@ -208,7 +208,7 @@ test('the original #70 ice shards detach from the staff and travel the full doub
  assert.ok(entry.cycles?.length===1);
  const origin=entry.cycles[0].start.clone();
  const baseSize=entry.cycles[0].fx.settings.size;
- assert.ok(Math.abs(baseSize-.6)<1e-7,'ice shards stay half-size');
+ assert.ok(Math.abs(baseSize-.9)<1e-7,'ice ultimate is 1.5x the previously halved shard size');
  assert.ok(Math.abs(entry.cycles[0].fx.settings.speed-2)<1e-7,'source animation stays 2x speed');
  fx.update(.65);
  assert.ok(entry.cycles[0].fx.group.position.z>origin.z+entry.range*.45,'ice shards travel world-space');
@@ -374,7 +374,7 @@ test('500ms A hold threshold is shared by tap vs charge and client and server ic
  assert.equal(channelReachMultiplier(ice),2);
  assert.equal(channelReachMultiplier(fire),1);
  const q=weaponQuality(ice),stats=attackStats(ice,1);
- const expected=+((+(Math.max(stats.range,Math.min(18,ice.range))*2*q.range).toFixed(2))*.6).toFixed(3);
+ const expected=+((+(Math.max(stats.range,Math.min(18,ice.range))*2*q.range).toFixed(2))*.9).toFixed(3);
  const scene=new THREE.Scene(),fx=new ChargeTargetPreview(scene),root=new THREE.Group();
  fx.update(root,ice,.7,[0,0,1],{world:{floatingPlatforms:[]}});
  assert.equal(fx.footprint.shape,'rectangle');

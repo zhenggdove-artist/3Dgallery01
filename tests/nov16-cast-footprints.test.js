@@ -37,7 +37,7 @@ test('original #58 points its apex from the actual clam muzzle and exactly spans
  const stats=attackStats(item,1),q=weaponQuality(item);
  stats.range=+(Math.max(stats.range,10)*q.range).toFixed(2);
  stats.radius=channelVisualRadius(item,q,stats.range);
- scaleUltimateFootprint(stats);
+ scaleUltimateFootprint(stats,item);
  const area=chargedArea(item,muzzle,direction,stats,()=>0,true);
  assert.equal(area.mode,'sector');
  assert.equal(insideChargedArea(area,[3.6,1,4.7+area.range*.8]),true);
@@ -56,7 +56,7 @@ test('original #59 is a full-length blue forward strip with exact server range a
  const q=weaponQuality(item),stats=attackStats(item,1);
  stats.range=+(Math.max(stats.range,Math.min(18,item.range))*q.range).toFixed(2);
  stats.radius=channelVisualRadius(item,q,stats.range);
- scaleUltimateFootprint(stats);
+ scaleUltimateFootprint(stats,item);
  nearly(fx.rectangle.settings.length*fx.rectangle.group.scale.x,stats.range,'full rectangle length');
  nearly(fx.rectangle.settings.width*fx.rectangle.group.scale.z,stats.radius*2,'full rectangle width');
  nearly(fx.rectangle.group.position.z,muzzle[2]+stats.range/2,'forward center');
@@ -78,7 +78,7 @@ test('all weapons have dimensional warning contracts derived from identical atta
   if(item.id==='black-cat')stats.range=256;
   if(item.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
   if(item.id==='goldfish'&&stats.ultimate)stats.radius=1.05*quality.visual;
-  scaleUltimateFootprint(stats);
+  scaleUltimateFootprint(stats,item);
   if(item.id==='clam'){
    assert.equal(a.shape,'sector',item.id);
    nearly(preview.sector.settings.size*preview.sector.group.scale.x,stats.range,item.id);
@@ -120,7 +120,7 @@ test('the blue #59 strip is narrower than old charged AoE and matches each staff
    stat.range=+(stat.range*q.range).toFixed(2);
    stat.radius=channelVisualRadius(item,q,stat.range);
 
-   scaleUltimateFootprint(stat);
+   scaleUltimateFootprint(stat,item);
 
    const width=2*stat.radius;
    nearly(v.footprint.width,width,item.id+' width');

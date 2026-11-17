@@ -6,13 +6,13 @@ import {chargedArea,scaleUltimateFootprint} from '../src/shared/charge-area.js';
 import {pvpShotDamage} from '../src/shared/combat-balance.js';
 import {weaponQuality,forwardCastRadius} from '../src/shared/weapon-abilities.js';
 
-test('all swatter ultimate warning radii and reaches match pan of the same tier',()=>{
+test('all swatter ultimate warning radii and reaches are 1.7x pan of the same tier',()=>{
  for(let tier=1;tier<=5;tier++){
   const pan=itemById('pan-'+tier),swatter=itemById('swatter-'+tier);
   const footprint=item=>{const stats=attackStats(item,1),q=weaponQuality(item);stats.range=+(stats.range*q.range).toFixed(2);stats.radius=forwardCastRadius(item,q,stats.radius,false);return scaleUltimateFootprint(stats,item);};
   const p=footprint(pan),s=footprint(swatter);
-  assert.equal(s.range,p.range,'reach, tier '+tier);
-  assert.equal(s.radius,p.radius,'radius, tier '+tier);
+  assert.ok(Math.abs(s.range-p.range*1.7)<.002,'reach, tier '+tier);
+  assert.ok(Math.abs(s.radius-p.radius*1.7)<.002,'radius, tier '+tier);
   assert.equal(chargedArea(swatter,[0,1.16,0],[0,0,1],s).mode,'area');
   if(tier>1)assert.ok(s.radius>footprint(itemById('swatter-'+(tier-1))).radius);
  }

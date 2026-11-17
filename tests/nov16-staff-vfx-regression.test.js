@@ -14,9 +14,10 @@ test('each ordinary elemental staff tap creates a 3D sphere spell, not a spray',
   assert.equal(vfx.staffOrbs.length,1,id);
   assert.equal(vfx.particleSkills.active.length,0,id);
   const orb=vfx.staffOrbs[0];
-  assert.match(orb.group.name,/Flying elemental/);
-  assert.ok(orb.group.children.some(c=>c.isMesh&&c.geometry.type==='SphereGeometry'),id);
-  assert.equal(orb.duration*1000,projectileFlightMs(item,false),id);
+  assert.match(orb.group.name,/Pulsing .* elemental orb/);
+  assert.ok(orb.group.children.some(c=>c.isMesh&&c.geometry.type==='IcosahedronGeometry'),id);
+  assert.equal(orb.duration*1000,projectileFlightMs(item,false,12),id);
+  assert.ok(orb.group.children.some(c=>c.isPoints),'outer cloud is a particle shell');
   vfx.update(orb.duration/2);
   assert.ok(Math.abs(orb.group.position.x-4)<.001&&Math.abs(orb.group.position.y-1)<.001,id);
   assert.ok(orb.group.position.z>7&&orb.group.position.z<19,id);

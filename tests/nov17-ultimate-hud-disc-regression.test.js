@@ -16,7 +16,7 @@ test('ultimate footprint ratios: unchanged reach, with 1.5x wider whip blast rad
   assert.ok(normal.ultimate,weapon.id);
   const stats={...normal};
   scaleUltimateFootprint(stats,weapon);
-  const extra=weapon.id.startsWith('pan-')?.5:weapon.id.startsWith('whip-')?.2:1;
+  const extra=weapon.id.startsWith('pan-')?.5:weapon.id.startsWith('swatter-')?.85:weapon.id.startsWith('whip-')?.2:weapon.family==='ice'?1.5:1;
   assert.ok(Math.abs(stats.range-normal.range*.6*extra)<.001,weapon.id+' reach');
   assert.ok(Math.abs(stats.radius-normal.radius*.6*extra*(weapon.id.startsWith('whip-')?1.5:1))<.001,weapon.id+' radius');
  }
@@ -70,7 +70,7 @@ test('original #68 pan and #48 whip world geometry reduce by exactly 50% and 80%
  const originalWhipScale=Math.max(2,Math.min(12,(oldWhipRadius/.2)/Math.max(.25,we.options.size*.8)));
  assert.ok(Math.abs(we.group.scale.x-originalWhipScale*.2)<1e-6);
  whip.dispose();
- assert.ok(ultimateWorldScale(53,event,{size:.8})>1);
+ assert.ok(ultimateWorldScale(53,event,{size:.8})>=.08,'swatter native scale is bounded and visible');
  assert.ok(ultimateWorldScale(48,event,{size:.8})>0,'tiny whip FX stays visible');
 });
 test('raised displays have no side wall: the player can cross an edge and fall naturally',()=>{
