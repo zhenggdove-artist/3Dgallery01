@@ -56,15 +56,7 @@ export class IslandEnemies{
    lastHit:state.lastHitAt},dt,now);
   if(skill){
    const t=Math.min(1,Math.max(0,(now-skill.start)/Math.max(1,skill.end-skill.start))),pulse=Math.sin(Math.PI*t);
-   root.userData.pivot.rotation.x=skill.motion==='stomp'?-.32*Math.sin(t*Math.PI*2):skill.motion==='charge'?.28:0;
-   if(skill.motion==='stomp'){
-     root.userData.pivot.position.y=pulse*6.6;
-     for(const name of ['LeftUpLeg','RightUpLeg','LeftLeg','RightLeg']){
-      const bone=root.userData.bones?.[name];if(!bone)continue;
-      root.userData.attackRestore.push([bone,bone.quaternion.clone()]);
-      bone.rotateX((name.endsWith('UpLeg')?-.56:1.15)*pulse);
-     }
-    }
+   root.userData.pivot.rotation.x=skill.motion==='charge'?.28:0;
    if(skill.motion==='swipe')root.traverse(b=>{
     if(b.isBone&&/RightArm$|RightForeArm$/i.test(b.name)){
      root.userData.attackRestore.push([b,b.quaternion.clone()]);
@@ -72,14 +64,39 @@ export class IslandEnemies{
     }
    });
   }
+   const stomp=state.skills?.find(s=>s.motion==='stomp'&&(s.phase==='warning'||s.phase==='active'));
+   if(stomp){
+    const t=Math.max(0,Math.min(1,(now-stomp.start)/Math.max(1,stomp.end-stomp.start)));
+    const windup=stomp.phase==='warning',rise=.64;
+    const crouch=windup?Math.min(1,t*1.7):t<.08?1-t/.08:t>.76?Math.min(1,(t-.76)/.24)*.35:0;
+    // Slow decelerating ascent; shorter, accelerating gravity-like fall.
+    const height=windup?0:t<=rise?6.6*(1-(1-t/rise)**2):6.6*(1-((t-rise)/(1-rise))**2);
+    root.userData.pivot.position.y=height-crouch*.30;
+    root.userData.pivot.rotation.x=-.22*crouch;
+    const bend=Math.max(crouch,!windup?Math.sin(Math.PI*t)*.38:0);
+    for(const name of ['LeftUpLeg','RightUpLeg','LeftLeg','RightLeg']){
+     const bone=root.userData.bones?.[name];if(!bone)continue;
+     root.userData.attackRestore.push([bone,bone.quaternion.clone()]);
+     bone.rotateX((name.endsWith('UpLeg')?-.68:1.18)*bend);
+    }
+   }
+ }
+ mouthWorld(root){
+  if(!root)return null;
+  root.updateWorldMatrix(true,true);
+  const bones=root.userData.bones||{},head=bones.Head||bones.head||bones.HeadTopEnd;
+  const mouth=head?head.getWorldPosition(new THREE.Vector3()):root.position.clone().add(new THREE.Vector3(0,ENEMY_HEIGHT*.84,0));
+  const facing=new THREE.Vector3(0,0,1).applyQuaternion(root.userData.pivot.getWorldQuaternion(new THREE.Quaternion()));
+  facing.y=0;if(facing.lengthSq()<.001)facing.set(0,0,1);facing.normalize();
+  return mouth.addScaledVector(facing,.56).add(new THREE.Vector3(0,-.12,0));
  }
  placeModel(root,state,dt,now){
   const previous=root.position.clone(),flight=state.panBlastFlight;
   const target=new THREE.Vector3(...(flight?samplePanBlastPosition(flight,now).position:state.position));
   if(flight)root.position.copy(target);
   else root.position.lerp(target,1-Math.exp(-dt*10));
-  const motion=state.skills?.find(s=>s.motion==='charge'&&s.phase==='active');
-  if(motion&&state.model==='uncle'){
+  const motion=state.skills?.find(s=>['charge','beam'].includes(s.motion)&&(s.phase==='warning'||s.phase==='active'));
+  if(motion){
    const delta=new THREE.Vector3(...motion.aim).sub(new THREE.Vector3(...motion.origin));
    if(delta.lengthSq()>.001)root.rotation.y=Math.atan2(delta.x,delta.z);
   }else{
@@ -99,7 +116,10 @@ export class IslandEnemies{
    sources.push(state);
   }
   const live=new Set();
-  this.attackEffects.sync(sources,now);
+  const modelById=new Map();
+  if(this.state?.active&&this.current)modelById.set(this.state.id,this.current);
+  for(const {root,state} of this.extraLive)if(state?.active)modelById.set(state.id,root);
+  this.attackEffects.sync(sources,now,state=>this.mouthWorld(modelById.get(state.id)));
   for(const state of sources){
    if(!state?.active)continue;
    for(const spell of state.skills||[]){
