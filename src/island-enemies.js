@@ -4,6 +4,7 @@ import {createEnemySpellEffect,updateEnemySpellEffect} from './reletter/temple-s
 import {ISLAND_ENEMIES,ENEMY_HEIGHT} from './shared/island-combat.js';
 import {MONSTER_PACK_SIZE} from './shared/monster-pack.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
+import {samplePanBlastPosition} from './shared/pan-blast-flight.js';
 
 const makeInvisible=root=>{root.visible=false;return root;};
 export class IslandEnemies{
@@ -65,8 +66,10 @@ export class IslandEnemies{
   this.updateModel(this.current,this.state,dt,now);
   const sources=[this.state?.active?this.state:null];
   for(const {root,state} of this.extraLive){
-   const previous=root.position.clone(),next=new THREE.Vector3(...state.position);
-   root.position.lerp(next,1-Math.exp(-dt*7));
+   const previous=root.position.clone(),flight=state.panBlastFlight;
+   const next=new THREE.Vector3(...(flight?samplePanBlastPosition(flight,now).position:state.position));
+   if(flight)root.position.copy(next);
+   else root.position.lerp(next,1-Math.exp(-dt*7));
    const displacement=next.sub(previous);
    if(displacement.lengthSq()>.00025)root.rotation.y=Math.atan2(displacement.x,displacement.z);
    this.updateModel(root,state,dt,now);
