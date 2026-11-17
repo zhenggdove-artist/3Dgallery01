@@ -82,7 +82,8 @@ jobs:
           cat /tmp/temple-browser-static.log || true
 
   safari-webkit-startup:
-    runs-on: ubuntu-latest
+    # Playwright WebKit currently has no Ubuntu 26.04 binary.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
