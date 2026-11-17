@@ -17,11 +17,11 @@ export class PlayerController{
     this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
     if(stick){let pointer=null;const knob=stick.firstElementChild;const move=e=>{if(e.pointerId!==pointer)return;const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,radius=Math.max(20,(r.width-knob.offsetWidth)/2-4),f=radius/Math.max(radius,Math.hypot(x,y));this.move.set(x*f/radius,y*f/radius);knob.style.transform=`translate(${x*f}px,${y*f}px)`;};stick.onpointerdown=e=>{e.preventDefault();if(pointer!==null)return;pointer=e.pointerId;stick.setPointerCapture(pointer);move(e);};stick.onpointermove=move;stick.onpointerup=stick.onpointercancel=stick.onlostpointercapture=e=>{if(e.pointerId!==pointer)return;pointer=null;this.move.set(0,0);knob.style.transform='';};}
   }
-  jump(){if(!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>38)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
+  jump(){if(!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>38)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
   setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();}}
   setRole(role){this.role=role;this.root.visible=role==='fighter';}
   setFollowTarget(root=null){this.followTarget=root;}
-  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.knockback=null;}
+  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;}
   stepHorizontal(dx,dz){
     const p=this.root.position,nx=p.x+dx,nz=p.z+dz;
     // All discs are walkable tops without invisible side colliders.
@@ -34,13 +34,31 @@ export class PlayerController{
     }
     if(this.grounded){
       const floor=this.arena.groundHeight(p.x,p.z,p.y);
-      if(p.y-floor>.5){this.fallStartY=p.y;this.grounded=false;this.velocityY=0;}
-      else p.y=floor;
+      if(p.y-floor>.5){
+       // Crossing the rim is not a wall. Carry walking velocity into
+       // free fall instead of instantly reducing lateral travel to 30%.
+       this.fallStartY=p.y;this.grounded=false;this.velocityY=0;
+       const length=Math.hypot(dx,dz);
+       if(length>.00001){this.jumpVelocity.set(dx/length*this.speed,0,dz/length*this.speed);this.walkOffMomentum=true;}
+      }else p.y=floor;
     }
   }
   update(dt){
     if(!this.enabled){this.updateCamera(dt);return this.state();}
-    if(this.knockback){this.stepHorizontal(this.knockback.x*dt,this.knockback.z*dt);this.knockback.multiplyScalar(Math.exp(-5*dt));if(this.knockback.lengthSq()<.001)this.knockback=null;}
+    if(this.knockback&&this.knockbackRemaining>0){
+     // Pan recoil follows the explosion radius unless a real obstacle
+     // intervenes, independent of the frame rate.
+     const speed=Math.max(16,this.knockbackRemaining*2),step=Math.min(this.knockbackRemaining,speed*dt);
+     const px=this.root.position.x,pz=this.root.position.z;
+     this.stepHorizontal(this.knockback.x*step,this.knockback.z*step);
+     const travelled=Math.hypot(this.root.position.x-px,this.root.position.z-pz);
+     this.knockbackRemaining=Math.max(0,this.knockbackRemaining-travelled);
+     if(travelled<.00001||this.knockbackRemaining<.0001){this.knockback=null;this.knockbackRemaining=0;}
+    }else if(this.knockback){
+     this.stepHorizontal(this.knockback.x*dt,this.knockback.z*dt);
+     this.knockback.multiplyScalar(Math.exp(-5*dt));
+     if(this.knockback.lengthSq()<.001)this.knockback=null;
+    }
     if(this.status.freeze){this.speed=0;this.animation='idle';this.updateCamera(dt);return this.state();}
     if(performance.now()<(this.stunUntil||0)){this.animation='idle';this.updateCamera(dt);return this.state();}
     const has=(a,b)=>this.keys.has(a)||this.keys.has(b);
@@ -54,7 +72,14 @@ export class PlayerController{
     if(this.grounded){const factor=this.castMoveFactor===.05 ? .05 : 1;
      this.speed=Math.min(this.speed,8.64*this.stats.speed*factor);
      this.speed=moving?Math.min(8.64*this.stats.speed*factor,this.speed+6*this.stats.speed*factor*dt):Math.max(0,this.speed-12*dt);if(moving){this.stepHorizontal(this.direction.x*this.speed*dt,this.direction.z*this.speed*dt);this.root.rotation.y=Math.atan2(this.direction.x,this.direction.z);}}
-    else{const previousY=this.root.position.y;this.velocityY-=25*this.stats.gravity*dt;this.root.position.y+=this.velocityY*dt;const airSpeed=(this.stats.impulse?8.64*this.stats.speed*.8:this.speed*.3)*(this.castMoveFactor===.05 ? .05 : 1);if(this.stats.impulse){this.jumpVelocity.multiplyScalar(Math.exp(-6*dt));if(moving)this.root.rotation.y=Math.atan2(this.direction.x,this.direction.z);}this.stepHorizontal((this.jumpVelocity.x+this.direction.x*airSpeed)*dt,(this.jumpVelocity.z+this.direction.z*airSpeed)*dt);const floor=this.arena.groundHeight(this.root.position.x,this.root.position.z,Math.max(previousY,this.root.position.y));if(this.root.position.y<=floor&&this.velocityY<=0){this.root.position.y=floor;this.velocityY=0;this.grounded=true;}}
+    else{const previousY=this.root.position.y;this.velocityY-=25*this.stats.gravity*dt;this.root.position.y+=this.velocityY*dt;const airSpeed=(this.stats.impulse?8.64*this.stats.speed*.8:this.speed*.3)*(this.castMoveFactor===.05 ? .05 : 1);if(this.stats.impulse){this.jumpVelocity.multiplyScalar(Math.exp(-6*dt));if(moving)this.root.rotation.y=Math.atan2(this.direction.x,this.direction.z);}
+     else if(this.walkOffMomentum)this.jumpVelocity.multiplyScalar(Math.exp(-2*dt));
+     this.stepHorizontal((this.jumpVelocity.x+this.direction.x*airSpeed)*dt,(this.jumpVelocity.z+this.direction.z*airSpeed)*dt);const floor=this.arena.groundHeight(this.root.position.x,this.root.position.z,Math.max(previousY,this.root.position.y));if(this.velocityY<=0&&previousY>=floor-.05&&this.root.position.y<=floor){
+      // Only land when falling THROUGH the top from above. A disc side
+      // must never snap a descending actor back onto the deck.
+      this.root.position.y=floor;this.velocityY=0;this.grounded=true;
+      this.walkOffMomentum=false;this.jumpVelocity.set(0,0,0);
+     }}
     this.animation=!this.grounded?(this.velocityY<0&&this.fallStartY>=40&&!this.stats.impulse?'fall':'jump'):moving?'walk':'idle';this.updateCamera(dt);return this.state();
   }
   updateCamera(dt){if(this.cameraLocked)return;const focus=this.followTarget?.visible?this.followTarget.position:this.root.position;this.target.lerp(new THREE.Vector3(focus.x,focus.y+1.5,focus.z),Math.min(1,dt*4));this.camera.position.set(this.target.x+this.distance*Math.cos(this.pitch)*Math.sin(this.yaw),this.target.y+this.distance*Math.sin(this.pitch),this.target.z+this.distance*Math.cos(this.pitch)*Math.cos(this.yaw));if(this.pitch<0){this.camera.position.y=Math.max(this.camera.position.y,focus.y+.6);this.camera.lookAt(this.target.x-Math.sin(this.yaw)*20,this.camera.position.y+Math.tan(-this.pitch)*20,this.target.z-Math.cos(this.yaw)*20);}else this.camera.lookAt(this.target);}
