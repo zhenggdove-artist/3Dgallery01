@@ -4,12 +4,42 @@ export class TempleNetwork extends EventTarget{
   }
   setBackend(url){this.base=String(url||'').trim().replace(/\/$/,'');localStorage.setItem('temple-backend-url',this.base);}
   ensureConfigured(){if(!/^https?:\/\//.test(this.base)||this.base.includes('REPLACE_WITH_ACCOUNT'))throw new Error('Temple backend URL has not been deployed yet');}
-  async join({name,color='#43b59a',memoryCode='',saveCode=''}){
-    this.ensureConfigured();const data=await this.request('/api/join',{method:'POST',body:{name,color,memoryCode,saveCode},auth:false});this.token=data.token;this.joinData=data;this.closedByUser=false;sessionStorage.setItem('temple-session-token',this.token);
+  async join({name,color='#43b59a',memoryCode='',saveCode='',oauthTicket=''}){
+    this.ensureConfigured();const data=await this.request('/api/join',{method:'POST',body:{name,color,memoryCode,saveCode,oauthTicket},auth:false});this.token=data.token;this.joinData=data;this.closedByUser=false;sessionStorage.setItem('temple-session-token',this.token);
     // The HTTP join response already contains world/player state. The live
     // socket must not hold the entry screen hostage while connecting.
     void this.connect().catch(error=>console.warn('Realtime socket pending',error));
     return data;
+  }
+  async oauthProviders(){this.ensureConfigured();return this.request('/api/oauth/providers',{auth:false});}
+  async oauthProfile(ticket){this.ensureConfigured();return this.request('/api/oauth/profile',{method:'POST',body:{ticket},auth:false});}
+  // Open synchronously in the click gesture to avoid popup blockers on iOS.
+  // Callback posts only a short-lived one-use ticket, never provider tokens.
+  beginOAuth(provider){
+    this.ensureConfigured();
+    if(!['google','apple','facebook'].includes(provider))return Promise.reject(Error('Unknown login provider'));
+    const address=this.base+'/api/oauth/start?provider='+encodeURIComponent(provider)+'&origin='+encodeURIComponent(location.origin);
+    const popup=window.open(address,'ggtemple-oauth','popup=yes,width=540,height=740');
+    if(!popup)return Promise.reject(Error('請允許登入彈出視窗後重新點擊'));
+    const expectedOrigin=new URL(this.base).origin;
+    return new Promise((resolve,reject)=>{
+      let settled=false,timer=null,watch=null;
+      const finish=(error,ticket)=>{
+        if(settled)return;settled=true;
+        clearTimeout(timer);clearInterval(watch);removeEventListener('message',onMessage);
+        if(error)reject(error);else resolve(ticket);
+        try{if(!popup.closed)popup.close();}catch{}
+      };
+      const onMessage=event=>{
+        if(event.origin!==expectedOrigin||event.source!==popup||event.data?.source!=='ggtemple-oauth')return;
+        if(event.data.error)return finish(Error(String(event.data.error)));
+        if(!/^[0-9a-f-]{36}$/i.test(String(event.data.ticket||'')))return finish(Error('Invalid account login result'));
+        finish(null,event.data.ticket);
+      };
+      addEventListener('message',onMessage);
+      timer=setTimeout(()=>finish(Error('登入逾時，請重新點擊')),10*60*1000);
+      watch=setInterval(()=>{if(popup.closed)finish(Error('登入視窗已關閉'));},700);
+    });
   }
   async connect(){
     if(!this.token)throw new Error('Join Temple first');if(this.socket){this.socket.onclose=null;this.socket.close();}
