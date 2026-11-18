@@ -292,7 +292,7 @@ export class TempleUI extends EventTarget{
     <div class="wing-gacha-machine" aria-label="Windows 98 翅膀扭蛋機">
       <div class="wing-gacha-dome"><span class="wing-gacha-shine"></span>${capsules}</div>
       <div class="wing-gacha-neck"><span class="wing-gacha-face">CAPSULE / 98</span></div>
-      <div class="wing-gacha-body"><button type="button" class="wing-gacha-crank" data-draw-wing aria-label="轉動扭蛋機">↻</button><div class="wing-gacha-slot" aria-hidden="true">▰</div><p>GGTEMPLE · CAPSULE 98</p></div>
+      <div class="wing-gacha-body"><button type="button" class="wing-gacha-crank" data-draw-wing aria-label="轉動扭蛋機" ${!profile.admin&&remaining===0?'disabled':''}>↻</button><div class="wing-gacha-slot" aria-hidden="true">▰</div><p>GGTEMPLE · CAPSULE 98</p></div>
       <div class="wing-gacha-feet"></div>
     </div><div class="win98-gacha-status" role="status">${profile.admin?'GM TEST MODE · ∞':`FREE TRIALS LEFT: ${remaining} / 5`}</div></div>
     <button class="panel-button wing-draw-button" type="button" data-draw-wing ${!profile.admin&&remaining===0?'disabled':''}>${profile.admin?'GM · 開始免費抽取':remaining>0?`轉動扭蛋機 · 剩餘 ${remaining} 次免費抽取`:'免費抽取次數已用完'}</button>
