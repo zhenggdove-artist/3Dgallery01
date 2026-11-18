@@ -16,7 +16,7 @@ export class PlayerController{
      // Mouse-look while holding a continuous staff cast, without pressing
      // another button. Only desktop mouse events are used; touch is unchanged.
      addEventListener('mousemove',e=>{
-      if(!this.channelAiming||!this.enabled||this.status.freeze||this.drag||e.buttons||
+      if(!this.channelAiming||!this.enabled||this.status.freeze||this.drag||
          e.sourceCapabilities?.firesTouchEvents||!e.movementX&&!e.movementY)return;
       this.yaw-=e.movementX/innerWidth*4;
       this.pitch=THREE.MathUtils.clamp(this.pitch+e.movementY/innerHeight*2,-1.15,1.4);
