@@ -135,7 +135,7 @@ test('inventory rerender preserves scroll and channel mouse-look can aim without
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.match(bag,/ui\.content\.scrollTop=scroll\.content/);
  assert.match(bag,/querySelector\('#bag-items'\)\.scrollTop=scroll\.items/);
- assert.match(controller,/addEventListener\('mousemove'/);
+ assert.match(controller,/document\.addEventListener\('pointermove'/);
  assert.match(controller,/this\.channelAiming/);
  assert.match(main,/controller\.channelAiming=!!/);
 });
