@@ -94,7 +94,7 @@ export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
     wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT,wings:admin?'wings-18':null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
     gmAllItemsGranted:!!admin,gmKnownCustomWingIds:[],collectorSoldArtworks:{},
-    fusion:{},wingTrialDraws:0,createdAt:now,updatedAt:now,lastAttackAt:0};
+    fusion:{},wingTrialDraws:0,wingPaidDraws:0,createdAt:now,updatedAt:now,lastAttackAt:0};
 }
 
 // Rebuild the authoritative safe-zone spawn on every revival, including
@@ -168,7 +168,7 @@ export function validName(value){return typeof value==='string'&&value.trim().le
 
 export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
-    level:profile.level,xp:profile.xp,wingTrialDraws:profile.wingTrialDraws||0,deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
+    level:profile.level,xp:profile.xp,wingTrialDraws:profile.wingTrialDraws||0,wingPaidDraws:Math.max(0,Number(profile.wingPaidDraws)||0),deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
     respawnPosition:clone(profile.respawnPosition||null),
     spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
@@ -257,17 +257,19 @@ export function applyAction(world,actor,body,context={}){
    // the server session, never a client-supplied admin or payment flag.
    if(typeof actor.key!=='string'||!actor.key.startsWith('firebase:'))return {error:'Google account required for wing trial'};
    if(profile.admin)return {error:'GM must use the preview draw'};
-   if(profile.wingTrialDraws>=FREE_WING_TRIAL_LIMIT)return {error:'Five free wing draws used. Payment is not enabled.'};
+   const freeRemaining=Math.max(0,FREE_WING_TRIAL_LIMIT-(profile.wingTrialDraws||0));
+   const paidRemaining=Math.max(0,Number(profile.wingPaidDraws)||0);
+   if(!freeRemaining&&!paidRemaining)return {error:'No wing draws remaining.'};
    const drawn=drawWing(profile,rng,world.customWings||[]);
    if(drawn.error)return drawn;
    appendInventoryInstance(profile,drawn.item.id);
-   profile.itemOrigins??={};profile.itemOrigins[drawn.item.id]='wing-free-trial';
-   profile.wingTrialDraws++;
+   profile.itemOrigins??={};profile.itemOrigins[drawn.item.id]=freeRemaining?'wing-free-trial':'wing-paid-draw';
+   if(freeRemaining)profile.wingTrialDraws++;else profile.wingPaidDraws=paidRemaining-1;
    profile.updatedAt=now;refreshStats(world,profile,now);
    world.revision=(world.revision||0)+1;
    return {wingDraw:{
     itemId:drawn.item.id,name:drawn.item.name,quality:drawn.quality,
-    remaining:drawn.remaining,drawsLeft:FREE_WING_TRIAL_LIMIT-profile.wingTrialDraws,mode:'free-trial'
+    remaining:drawn.remaining,drawsLeft:Math.max(0,FREE_WING_TRIAL_LIMIT-profile.wingTrialDraws)+Math.max(0,profile.wingPaidDraws||0),mode:freeRemaining?'free-trial':'paid-draw'
    },notice:'FREE WING DRAW · '+drawn.item.name,profile:publicProfile(profile)};
   }
   if(body.action==='gm-wing-draw'){
