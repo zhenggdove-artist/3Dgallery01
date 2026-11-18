@@ -237,3 +237,41 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
   height:calc(var(--temple-bag-row) - 10px);
  }
 }
+
+
+/* Entire chat panel compresses into the + button after a 1s long press. */
+#chat-hud.chat-minimized{
+ width:26px!important;min-width:0!important;max-width:26px!important;
+ height:26px!important;min-height:0!important;max-height:26px!important;
+ padding:0!important;border:0!important;overflow:visible!important;
+ box-shadow:none!important;background:transparent!important;
+}
+#chat-hud.chat-minimized #chat-messages,
+#chat-hud.chat-minimized #chat-form,
+#chat-hud.chat-minimized #chat-resize>span{display:none!important}
+#chat-hud.chat-minimized #chat-resize{
+ width:26px!important;height:26px!important;min-height:26px!important;
+ padding:0!important;margin:0!important;border:0!important;
+}
+#chat-hud.chat-minimized #chat-toggle{
+ display:block!important;width:26px!important;height:26px!important;
+ border:1px solid #a68eac;border-radius:6px;box-shadow:0 2px 9px #0006;
+}
+@media(max-width:720px),(pointer:coarse){
+ #chat-hud #chat-resize{touch-action:none}
+ #chat-hud #chat-messages{touch-action:pan-y}
+}
+/* Collector appraisal is a transparent, three-second, tap-to-dismiss dialog. */
+#collector-sale-overlay{
+ position:fixed;inset:0;z-index:110;display:grid;place-items:center;
+ background:rgba(10,14,28,.14);cursor:pointer;touch-action:manipulation;
+}
+#collector-sale-card{
+ width:min(440px,calc(100vw - 40px));padding:25px 27px;text-align:center;
+ border:1px solid rgba(255,244,198,.65);border-radius:16px;
+ background:rgba(17,22,41,.79);color:#fff9ed;
+ box-shadow:0 16px 70px rgba(0,0,0,.42);backdrop-filter:blur(10px);
+}
+#collector-sale-card small{font:700 12px/1.6 sans-serif;letter-spacing:.18em;color:#f5d9a2}
+#collector-sale-card p{font:500 clamp(18px,4vw,26px)/1.42 Georgia,serif;margin:16px 0 17px}
+#collector-sale-card strong{font:800 clamp(22px,6vw,31px)/1.2 sans-serif;color:#ffdc7b}

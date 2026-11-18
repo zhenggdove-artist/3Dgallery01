@@ -71,7 +71,7 @@ export const ECONOMY = Object.freeze({
   monsterIntervalMs:600_000,
   monsterCoinMin:280,
   monsterCoinMax:520,
-  fusionBaseCost:320,
+  fusionBaseCost:0,
   buildCosts:Object.freeze({cube:80,bar:110,cylinder:110,wall:80,column:110,platform:170,tree:95,house:240})
 });
 

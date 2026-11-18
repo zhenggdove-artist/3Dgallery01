@@ -136,6 +136,31 @@ export class TempleUI extends EventTarget{
     if(this.seenKillEvents.size>128)this.seenKillEvents.clear();
   }
   setNear(near,holding=false){this.near=near;const prompt=$('prompt');let text='';const touch=matchMedia('(pointer:coarse)').matches;if(this.platformDeleteMode)text='GM DELETE · CLICK A DISC → BLUE · DELETE · ESC';else if(this.buildKind)text=touch?'A · PLACE':'E · PLACE  R · ROTATE  ESC · CANCEL';else if(holding)text='HOLD A · CHARGE THROW';else if(near?.type==='coin'||near?.type==='drop')text='';else if(near?.type==='artwork')text='A · TAKE ARTWORK';else if(near?.type==='plant')text='';else if(near?.type==='structure')text='ATTACK · DAMAGE STRUCTURE';prompt.textContent=text;prompt.classList.toggle('visible',!!text);}
+  showCollectorSale(sale,key){
+   if(!sale||!key||sale.buyer!==key||this.seenCollectorSaleId===sale.id||
+      !Number.isFinite(sale.time)||Date.now()-sale.time>3500)return;
+   this.seenCollectorSaleId=sale.id;
+   this.collectorSaleOverlay?.remove();
+   clearTimeout(this.collectorSaleTimeout);
+   const overlay=document.createElement('div');
+   overlay.id='collector-sale-overlay';overlay.setAttribute('role','dialog');
+   overlay.setAttribute('aria-label','Collector appraisal');
+   const card=document.createElement('div');card.id='collector-sale-card';
+   const title=document.createElement('small');title.textContent='COLLECTOR · APPRAISAL';
+   const quote=document.createElement('p');quote.textContent=String(sale.review||'');
+   const reward=document.createElement('strong');
+   reward.textContent='+'+Number(sale.price||0).toLocaleString('en-US')+' COINS';
+   card.append(title,quote,reward);overlay.append(card);
+   overlay.addEventListener('pointerdown',e=>{
+    e.preventDefault();e.stopPropagation();overlay.remove();
+    if(this.collectorSaleOverlay===overlay)this.collectorSaleOverlay=null;
+    clearTimeout(this.collectorSaleTimeout);
+   });
+   document.body.append(overlay);this.collectorSaleOverlay=overlay;
+   this.collectorSaleTimeout=setTimeout(()=>{
+    overlay.remove();if(this.collectorSaleOverlay===overlay)this.collectorSaleOverlay=null;
+   },3000);
+  }
   toast(message){clearTimeout(this.toastTimer);const toast=$('toast');toast.textContent=message;toast.classList.add('visible');this.toastTimer=setTimeout(()=>toast.classList.remove('visible'),2200);}
   fusionFeedback(success,message=''){
     clearTimeout(this.fusionTimer);
