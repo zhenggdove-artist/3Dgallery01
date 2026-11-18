@@ -1,5 +1,6 @@
 import {EQUIPMENT,DEFAULT_WEAPON,attackStats as reletterAttackStats} from '../reletter/equipment-catalog.js';
 import {SNIPER_RANGE} from './combat-balance.js';
+import {normalMeleeFootprint} from './melee-contact.js';
 export const RARITIES = Object.freeze([
   {id:'common',name:'Common',color:'#d7d2c6',weight:50},
   {id:'uncommon',name:'Uncommon',color:'#76d59a',weight:28},
@@ -38,6 +39,12 @@ export function attackStats(item,charge=0){
  const result=reletterAttackStats(item,charge);
  if(item.id==='water')result.damage*=10;
  if(item.id==='black-cat'){result.range=SNIPER_RANGE;result.damage*=3;}
+ if(item.id==='accordion'&&!result.ultimate){
+  // The BAG label, aim preview and server hitbox must expose the SAME reach.
+  const contact=normalMeleeFootprint(item);
+  result.range=Math.min(result.range,contact.range);
+  result.radius=Math.min(result.radius,contact.radius);
+ }
  if(SPELL_FAMILIES.includes(item.family)&&!item.exotic)result.range=+(result.range/3).toFixed(3);
  // Keep the narrower #59 preview equal to the real server hit tube.
  // The sword fissure is now 60% of the previous full-charge reach.
