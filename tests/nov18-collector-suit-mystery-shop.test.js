@@ -51,7 +51,7 @@ test('buying Mystery weapons is rechecked against 5x server catalog price',()=>{
 
 test('shop places premium weapons only in the exclusive Mystery tab',()=>{
  const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
- assert.match(ui,/mystery:'神秘武器'/);
+ assert.match(ui,/mystery:'Mystery Weapons'/);
  assert.match(ui,/tab==='mystery'&&i\.mysteryWeapon/);
  assert.match(ui,/!i\.mysteryWeapon&&weaponRangeClass\(i\)===tab/);
 });

@@ -24,9 +24,10 @@ test('weapon can fuse only weapon; every other slot can fuse only its own slot',
  }
  for(const slot of ['weapon','head','outfit','wings','shield','armor'])
   assert.ok(groups.get(slot).length>=2,slot+' needs two items');
+ assert.equal(ITEMS.some(item=>item.slot==='material'),false,'deprecated material slot must not exist');
  for(const [a,b] of [['weapon','head'],['head','weapon'],['weapon','outfit'],['outfit','wings'],
-     ['wings','shield'],['armor','head'],['weapon','material']]){
-  const source=b==='material'?ITEMS.find(i=>i.slot==='material'):groups.get(b)[0],target=groups.get(a)[0];
+     ['wings','shield'],['armor','head']]){
+  const source=groups.get(b)[0],target=groups.get(a)[0];
   const inventory=[...gm.inventory],wallet=gm.wallet;
   const result=fuseTemple(world,gm,{sourceId:source.id,targetId:target.id,requestId:'reject-'+a+'-'+b},()=>0);
   assert.match(result.error,/matching equipment categories|same category/,a+' ← '+b);
