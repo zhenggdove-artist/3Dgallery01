@@ -1,9 +1,11 @@
 import {epicSpecimenCanvas,addEpicDust} from './epic-specimens.js';
+import {paintedWingCanvas} from './painted-wing-art.js';
 // Premium Papilio atlas: 20 individual, deterministic, transparent 2D
 // silhouettes applied to skinned 3D-character wing planes. Only create
 // canvases for actually visible wings; high detail is paint, not draw calls.
 const atlases=new Map();
 export function swallowtailCanvas(item){
+ if(item.design==='painted-wing')return paintedWingCanvas(item);
  if(atlases.has(item.id))return atlases.get(item.id);
  if(item.tier===4&&item.specimen){const art=epicSpecimenCanvas(item);atlases.set(item.id,art);return art;}
  const canvas=document.createElement('canvas');
