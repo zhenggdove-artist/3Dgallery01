@@ -58,7 +58,6 @@ export function poseOverheadStaff(root,blade,bones,restore,progress=1){
   if(!hand||!chain.length)return;
   chain.forEach(capture);
   for(let pass=0;pass<4;pass++)for(const bone of chain){
-   root.updateWorldMatrix(true,true);
    bone.getWorldPosition(joint);
    hand.getWorldPosition(handPos);
    actual.copy(handPos).sub(joint);
@@ -68,6 +67,8 @@ export function poseOverheadStaff(root,blade,bones,restore,progress=1){
    bone.parent.getWorldQuaternion(parentQ).invert();
    bone.getWorldQuaternion(worldQ);
    bone.quaternion.copy(parentQ.multiply(delta).multiply(worldQ)).normalize();
+   // Refresh only this joint and its descendants, not the entire skinned scene.
+   bone.updateWorldMatrix(true,true);
   }
  };
  solve('Right',rightTarget);
