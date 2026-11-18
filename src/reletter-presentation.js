@@ -8,6 +8,7 @@ import {makeHeldWeapon,attachHeldWeapon,setHeldTime} from './reletter/held-weapo
 import {attachHeadgear,disposeHeadgear} from './reletter/headgear-model.js';
 import {attachOutfit,disposeOutfit} from './reletter/outfit-model.js';
 import {attachWings,disposeGardenModel} from './reletter/garden-art.js';
+import {animateEpicDust} from './reletter/epic-specimens.js';
 import {sampleMeleePose,meleeDuration,meleeFamilies} from './reletter/melee-motion.js';
 import {animateOddWeapon,faceOddWeapon} from './reletter/odd-weapon-art.js';
 import {supportOffhand} from './reletter/offhand-pose.js';
@@ -75,6 +76,7 @@ export class ReletterPresentation{
          d.staffRaise=advanceStaffRaise(d.staffRaise||0,casting,dt);
          if(d.staffRaise>0)poseOverheadStaff(root,d.blade,d.bones,this.restore,d.staffRaise);
         }else d.staffRaise=0;if(d.blade.userData.exotic){if(camera)faceOddWeapon(THREE,d.blade,camera);animateOddWeapon(d.blade,time,d.attack?Math.sin(d.attack.age/d.attack.duration*Math.PI):0);}if(d.attack&&(['planter','palm'].includes(d.attack.data.family)||d.attack.combo===6&&d.attack.data.family==='saber')){for(const name of ['LeftForeArm','LeftArm']){const bone=d.bones?.get(name);if(bone)this.restore.push([bone,'quaternion',bone.quaternion.clone()]);}supportOffhand(d.model,d.blade.localToWorld(new THREE.Vector3(0,d.attack.data.family==='planter'?.25:.18,.02)),Math.sin(Math.min(1,d.attack.age/meleeDuration(d.attack.data.family,d.attack.combo))*Math.PI)*.8);}}if(d.shield)d.shield.material.uniforms.pulse.value=.8+Math.sin(time*2)*.2;if(d.wings)for(let i=0;i<d.wings.children.length;i++)d.wings.children[i].rotation.y=Math.sin(time*(d.current==='jump'||d.current==='fall'?11:2))* .24*(i?-1:1);
+      if(d.wings)animateEpicDust(d.wings,time);
     }
     this.vfx.update(dt,camera);
   }
