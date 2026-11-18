@@ -101,9 +101,9 @@ function makeStaffRig(){
 
 test('staff raise is a 100ms interpolation and the grip never leaves the real right hand',()=>{
  assert.equal(STAFF_RAISE_SECONDS,.1);
- assert.equal(advanceStaffRaise(0,true,.04),.4);
- assert.equal(advanceStaffRaise(.4,true,.06),1);
- assert.equal(advanceStaffRaise(1,false,.05),.5);
+ assert.ok(Math.abs(advanceStaffRaise(0,true,.04)-.4)<1e-12);
+ assert.ok(Math.abs(advanceStaffRaise(.4,true,.06)-1)<1e-12);
+ assert.ok(Math.abs(advanceStaffRaise(1,false,.05)-.5)<1e-12);
  for(const amount of [.2,.6,1]){
   const {root,bones,blade}=makeStaffRig(),restore=[];
   poseOverheadStaff(root,blade,bones,restore,amount);
