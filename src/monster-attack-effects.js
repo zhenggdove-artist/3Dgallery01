@@ -20,9 +20,9 @@ export class MonsterAttackEffects {
  }
  make(motion){
   const root=new THREE.Group();root.name='Monster skill '+motion;
-  const marker=new THREE.Mesh(motion==='beam'?warningRect:warningCircle,softMat(motion==='freeze'?'#93e7ff':'#ff242c'));
+  const marker=new THREE.Mesh(motion==='beam'?warningRect:warningCircle,softMat('#ff242c'));
   marker.rotation.x=-Math.PI/2;marker.position.y=.12;root.add(marker);
-  const fringe=new THREE.Mesh(warningCircle,softMat(motion==='freeze'?'#93e7ff':'#ff242c'));
+  const fringe=new THREE.Mesh(warningCircle,softMat('#ff242c'));
   fringe.rotation.x=-Math.PI/2;fringe.position.y=.125;root.add(fringe);
   const native=motion==='beam'?pulseBeam({size:1.8,density:.48,color:'#ff2020',quantity:4}):
    motion==='venom'?venomPool({size:1.8,density:.5,color:'#b4f745',quantity:7}):
