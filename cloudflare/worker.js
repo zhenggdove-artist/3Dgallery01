@@ -1,4 +1,5 @@
 import {initializeArtMedia,uploadArtMedia,getArtMedia} from './art-media.js';
+import {wingPaymentApi} from './ecpay-wing-payments.js';
 import {recoverArtworks} from '../src/shared/artwork-recovery.js';
 import {resetPlayerArtworks} from '../src/shared/art-bomb.js';
 import {DurableObject} from 'cloudflare:workers';
@@ -15,6 +16,7 @@ export default {
   async fetch(request,env){
     const url=new URL(request.url);
     if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:3,features:{artMediaUpload:true,artBombPlace:true,gmReset:true}}),env);
+    if(url.pathname.startsWith('/api/wing-pay/'))return withCors(request,await wingPaymentApi(request),env);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
   }
