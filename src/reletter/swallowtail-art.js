@@ -130,6 +130,8 @@ export function wingTextureScaleX(side,item){
 // purple and gold so simple white/green wings remain visibly austere.
 export function swallowtailModel(T,item){
  const root=new T.Group();root.userData.wingId=item.id;
+ // Runtime diagnostic: painted canvases map without inversion to local -X.
+ root.userData.wingCanvasSide=item.design==='painted-wing'?'left':'legacy';
  const texture=new T.CanvasTexture(swallowtailCanvas(item));
  texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=2;
  const material=new T.MeshPhysicalMaterial({
