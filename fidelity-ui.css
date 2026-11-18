@@ -209,3 +209,34 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
  box-shadow:0 2px 7px #0007;text-align:center;border-radius:7px}
 .player-chat-bubble::after{content:'';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%) rotate(45deg);width:11px;height:11px;background:#fff;border-right:1px solid #222;border-bottom:1px solid #222}
 .player-chat-bubble[hidden]{display:none}
+
+/* Desktop BAG: exactly 7 visible columns by 6 visible rows; additional
+   inventory scrolls vertically inside the grid. Mobile keeps existing UI. */
+@media (min-width:721px) and (pointer:fine) {
+ body.panel-open #panel:has(.original-bag){
+  inset:16px auto 16px 16px;
+  width:min(610px,calc(100vw - 32px));
+  max-height:calc(100dvh - 32px);
+ }
+ body #panel:has(.original-bag) .original-bag{
+  --bag-cell-height:clamp(34px,calc((100dvh - 300px)/6),56px);
+ }
+ body #panel:has(.original-bag) #bag-tabs{flex-wrap:nowrap;min-height:36px;}
+ body #panel:has(.original-bag) #bag-tabs button{flex:none;}
+ body #panel:has(.original-bag) #bag-items:not(.equipment-view){
+  flex:1 1 auto;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  grid-auto-rows:var(--bag-cell-height);
+  min-height:calc(var(--bag-cell-height)*6 + 20px + 6px);
+  overflow-y:auto;
+  overflow-x:hidden;
+ }
+ body #panel:has(.original-bag) #bag-items:not(.equipment-view) .bag-cell{
+  height:var(--bag-cell-height);
+  min-height:var(--bag-cell-height);
+  max-height:var(--bag-cell-height);
+ }
+ body #panel:has(.original-bag) #bag-items:not(.equipment-view) .bag-cell img{
+  height:calc(var(--bag-cell-height) - 10px);
+ }
+}
