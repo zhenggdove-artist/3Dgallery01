@@ -91,11 +91,19 @@ test('building cannot block spawns or artwork platforms and receives a server va
   assert.equal(valid.error,undefined);assert.equal(valid.structure.variant,3);
 });
 
-test('ground crafting materials keep duplicate value but cannot cross-fuse into equipment',()=>{
-  const now=11_000_000,world=createInitialWorld(now),profile=ensureProfile(world,'p1','p1','#abcdef',now);profile.wallet=2_000;profile.inventory.push('temple-resin','temple-resin','saber-1');
-  ensureProfile(world,'p1',null,null,now+1);assert.equal(profile.inventory.filter(id=>id==='temple-resin').length,2);
-  const result=applyAction(world,actor('p1',[10,0,0]),{action:'fuse',sourceId:'temple-resin',targetId:'saber-1',requestId:'material-fusion-1'},{now:now+2,rng:()=>0});
-  assert.match(result.error,/same category|matching equipment categories/);assert.equal(profile.fusion['saber-1'],undefined);assert.equal(profile.inventory.filter(id=>id==='temple-resin').length,2);
+test('deprecated crafting materials are permanently removed from player inventories',()=>{
+  const now=11_000_000,world=createInitialWorld(now),profile=ensureProfile(world,'p1','p1','#abcdef',now);
+  profile.wallet=2_000;profile.inventory.push('temple-resin','temple-resin','signal-wire','wet-stone','saber-1');
+  ensureProfile(world,'p1',null,null,now+1);
+  for(const id of ['temple-resin','signal-wire','wet-stone'])
+   assert.equal(profile.inventory.includes(id),false,id+' must not survive migration');
+  assert.equal(profile.inventory.includes('saber-1'),true);
+  const before=[...profile.inventory];
+  const result=applyAction(world,actor('p1',[10,0,0]),
+   {action:'fuse',sourceId:'temple-resin',targetId:'saber-1',requestId:'material-fusion-1'},
+   {now:now+2,rng:()=>0});
+  assert.match(result.error,/Select two owned|equippable/i);
+  assert.deepEqual(profile.inventory,before);
 });
 
 test('destroyed structures produce an authoritative synchronized debris event',()=>{
