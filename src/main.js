@@ -4,6 +4,7 @@ import {ChargeTargetPreview} from './charge-target-preview.js';
 import {bindPlantHover} from './plant-hover.js';
 import {ENEMY_HEIGHT} from './shared/island-combat.js';
 import {GoldenBursts} from './golden-burst.js';
+import {STAFF_RAISE_SECONDS} from './staff-raise-pose.js';
 import {GameAudio} from './game-audio.js';
 import {ArtworkThrow} from './artwork-throw.js';
 import {EquipmentPortraitViewport} from './equipment-portrait-view.js';
@@ -75,6 +76,7 @@ const damageNumbers=createDamageNumbers(THREE),statusVisuals=new ElementalStatus
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
 let staffChannel=null,staffChannelPromise=null,staffChannelBusy=false,staffChannelShotAt=0,staffChannelSerial=0;
+ let staffTapPending=false,staffTapSerial=0;
 const writer=new WriteCinematic({scene,controller:()=>controller,arena,ui,send:sendAction,audio,bursts,upload:file=>uploadMedia(network,file)});
 const plantHover=bindPlantHover({canvas,camera,arena,controller:()=>controller,ui});
 ui.addEventListener('write-start',()=>writer.begin());
@@ -187,7 +189,7 @@ ui.addEventListener('attack-start',()=>{
   const byPlant=!near&&Math.hypot(controller.root.position.x,controller.root.position.z)<7;
   if(canUse||byPlant){performInteract();return;}
  }
- if(chargeStarted!==null||staffChannel)return;
+ if(chargeStarted!==null||staffChannel||staffTapPending)return;
  attackHeld=true;
  attackHoldStarted=performance.now();
  chargeStarted=null;
@@ -219,14 +221,24 @@ ui.addEventListener('attack-release',async()=>{
  // A short tap casts one projectile (or clam melee). Releasing a partly
  // charged LONG hold casts nothing; a fully charged hold stops the channel.
  if(isChannelStaff(weapon)){
-  if(isStaffTap(weapon,heldMs))performAttack(0);
+  if(isStaffTap(weapon,heldMs)){
+   // A single 100ms raise, not two sequential lift gestures.
+   // Keep the same arm animation active during server acknowledgement.
+   const serial=++staffTapSerial;staffTapPending=true;
+   try{
+    const remaining=Math.max(0,STAFF_RAISE_SECONDS*1000-heldMs);
+    if(remaining>0)await new Promise(resolve=>setTimeout(resolve,remaining));
+    if(serial!==staffTapSerial||!controller?.enabled||ui.panelName)return;
+    await performAttack(0);
+   }finally{if(serial===staffTapSerial)staffTapPending=false;}
+  }
  }else{
   performAttack(heldMs<STAFF_TAP_MAX_MS?0:charge);
  }
 });
 ui.addEventListener('attack-cancel',()=>{
  gun.held=false;
- attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;artworkThrow.cancel();
+ attackHeld=false;staffTapPending=false;++staffTapSerial;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;artworkThrow.cancel();
  if(staffChannel){
   const pending=staffChannelPromise;
   staffChannel=null;++staffChannelSerial;
@@ -243,7 +255,7 @@ ui.addEventListener('save-code',async()=>{try{const data=await network.createSav
 ui.addEventListener('gm-presence-request',async()=>{if(!self?.profile?.admin)return;try{ui.setGmPresence(await network.gmPresence());}catch(error){ui.setGmPresenceError(error.message);}});
 ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
-ui.addEventListener('panel',event=>{chargeStarted=null;attackHoldStarted=null;chargeRequest=null;if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
+ui.addEventListener('panel',event=>{if(event.detail.open){staffTapPending=false;++staffTapSerial;}chargeStarted=null;attackHoldStarted=null;chargeRequest=null;if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
 ui.addEventListener('editor-settings',event=>applyEditorSettings(event.detail));
 ui.addEventListener('gm-audio-setting',event=>{if(!self?.profile?.admin)return;audio.setVolumes({[event.detail.key]:event.detail.value});void sendAction('gm-audio-setting',event.detail);});
  ui.addEventListener('gm-fusion-chance',event=>{if(!self?.profile?.admin)return;void sendAction('gm-fusion-chance',event.detail);});
@@ -375,7 +387,7 @@ function update(dt,time){
   statusVisuals.update(dt);
   const castingItem=itemById(world?.profile?.equipment?.weapon);
   if(localRoot){
-   localRoot.userData.staffCasting=!!(attackHeld&&isChannelStaff(castingItem));
+   localRoot.userData.staffCasting=!!((attackHeld||staffTapPending)&&isChannelStaff(castingItem));
    localRoot.userData.staffAimDirection=camera.getWorldDirection(new THREE.Vector3()).toArray();
   }
   arena.update(dt,time,camera,roots);
