@@ -611,7 +611,7 @@ function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosit
   const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
   if(target.hp>0)return {target:targetActor.key,damage,defeated:false};
-  target.deadUntil=now+5_000;target.lastKilledBy={key:sourceProfile?.key||null,name:sourceProfile?.name||'ENVIRONMENT',time:now};
+  target.deadUntil=now+5_000;target.lastKilledBy={key:sourceProfile?.key||null,name:sourceProfile?.name||(cause==='collector'?'COLLECTOR':'ENVIRONMENT'),time:now};
   world.killEvents??=[];world.killEvents.push({id:id(),time:now,killerKey:sourceProfile?.key||null,killerName:target.lastKilledBy.name,victimKey:target.key,victimName:target.name||targetActor.name||'PLAYER',cause});if(world.killEvents.length>24)world.killEvents.splice(0,world.killEvents.length-24);
   releasePlayerWorldState(world,targetActor.key,now);if(sourceProfile&&sourceProfile.key!==target.key)addXp(sourceProfile,60);const lost=Math.floor(target.wallet*ECONOMY.deathCoinFraction);target.wallet-=lost;
   if(lost>0)world.groundDrops.push({id:id(),kind:'coin',amount:lost,position:[...dropPosition],owner:targetActor.key,ownerLockedUntil:now+2_000,createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});
@@ -684,7 +684,14 @@ export function tickBloomChannelHeal(profile,now){
  return restored;
 }
 export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0,actors=[]}={}){
-  migrateWorld(world,now);let changed=tickCollector(world,actors,now,rng);
+  migrateWorld(world,now);
+  // The same authoritative damage/death/shield pipeline used by combat
+  // processes Collector bullets. Fixed 50 HP ignores armour and shields,
+  // but respects respawn protection and GM invincibility.
+  let changed=tickCollector(world,actors,now,rng,(actor,from,damage)=>
+   damagePlayer(world,null,actor,damage,now,'collector',from,'collector-shot',
+    [actor.position[0],actor.position[1]+1.15,actor.position[2]],false,false,true)
+  );
   for(const profile of Object.values(world.profiles||{}))
    changed=tickBloomChannelHeal(profile,now)>0||changed;
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
