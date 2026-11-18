@@ -39,19 +39,21 @@ test('GM edit rejects unauthorized updates, duplicate names, and retired wings',
  applyAction(world,actor(admin),{action:'gm-wing-remove',wingId:b},{now:T+5});
  assert.match(applyAction(world,actor(admin),{action:'gm-wing-update',wingId:b,wing:draft('Retired')},{now:T+6}).error,/已下架/);
 });
-test('paid-draw credits consume one unit only after the initial five Google trials',()=>{
+test('one paid design credit grants one private wing and ignores forged weapon stats',()=>{
  const world=createInitialWorld(T),profile=createProfile(player,'Tester','#aabbcc',T,false);
- world.profiles[player]=profile;profile.wingPaidDraws=5;
+ world.profiles[player]=profile;profile.wingDesignCredits=1;
  const size=profile.inventory.length;
- for(let i=0;i<10;i++){
-  const result=applyAction(world,actor(player),{action:'wing-draw',wingPaidDraws:2000},{now:T+i,rng:()=>0});
-  assert.equal(result.error,undefined);
-  assert.equal(result.wingDraw.mode,i<5?'free-trial':'paid-draw');
- }
- assert.equal(profile.inventory.length,size+10);
- assert.equal(profile.wingTrialDraws,5);
- assert.equal(profile.wingPaidDraws,0);
- assert.match(applyAction(world,actor(player),{action:'wing-draw'},{now:T+20}).error,/No paid wing draws remaining/);
+ const result=applyAction(world,actor(player),{action:'redeem-wing-design',
+  wing:{...draft('My One Wing',0),impulse:18,gravity:.2,ability:'guardian',tier:5}}, {now:T});
+ assert.equal(result.error,undefined);
+ assert.equal(profile.inventory.length,size+1);
+ assert.equal(profile.equipment.wings,result.personalWingId);
+ assert.equal(profile.wingDesignCredits,0);
+ assert.equal(itemById(result.personalWingId).personalWing,true);
+ assert.equal(itemById(result.personalWingId).tier,3);
+ assert.equal(itemById(result.personalWingId).ability,'glide');
+ assert.match(applyAction(world,actor(player),{action:'redeem-wing-design',
+  wing:draft('Again')},{now:T+20}).error,/No paid/);
 });
 test('fourteen material designs have deterministic motifs and epic detail independent of color',()=>{
  const blue=SWALLOWTAIL_WINGS.filter(w=>w.tier===3),gold=SWALLOWTAIL_WINGS.filter(w=>w.tier===5),purple=SWALLOWTAIL_WINGS.filter(w=>w.tier===4);
@@ -63,7 +65,7 @@ test('fourteen material designs have deterministic motifs and epic detail indepe
  assert.ok(new Set([...blue,...purple,...gold].map(w=>w.color)).size>=12);
 });
 test('forward channel beams, floating +1, wing thumbnail hydration and isolated payment are wired',()=>{
- const fx=read('src/numbered-weapon-effects.js'),ray=read('src/forward-channel-beam.js');
+ const fx=read('src/weapon-vfx.js'),ray=read('src/forward-channel-beam.js');
  const ui=read('src/ui.js'),main=read('src/main.js'),numbers=read('src/reletter/damage-numbers.js');
  assert.match(fx,/entry\.forwardBeam=new ForwardChannelBeam/);
  assert.match(fx,/e\.forwardBeam\.update/);
@@ -72,7 +74,7 @@ test('forward channel beams, floating +1, wing thumbnail hydration and isolated 
  assert.match(main,/staffChannel\?\.ready/);
  assert.match(ui,/data-wing-edit/);
  assert.match(ui,/data-start-wing-stage/);
- assert.match(ui,/root:null,rootMargin:'700px'/);
+ assert.match(ui,/data-wing-checkout/);
  const shop=ui.slice(ui.indexOf('  renderShop(profile){'),ui.indexOf('  renderWingShop(profile){'));
  assert.doesNotMatch(shop,/wing-shop-link/);
 });
