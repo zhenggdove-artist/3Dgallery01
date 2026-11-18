@@ -138,7 +138,7 @@ export function swallowtailModel(T,item){
   face.position.set(side*.70,.21,-.025);face.scale.x=side;
   // Fan the two wings slightly back so the silhouette is legible in profile.
   hinge.rotation.y=side*.11;hinge.add(face);root.add(hinge);
-  if(item.tier===4&&!item.specimen){
+  if(item.tier===4&&!item.specimen&&item.design!=='painted-wing'){
    const inner=new T.Mesh(new T.PlaneGeometry(1.08,1.22),material);
    inner.position.set(side*.38,-.24,-.13);inner.scale.x=side*.72;
    inner.rotation.z=side*.15;hinge.add(inner);
