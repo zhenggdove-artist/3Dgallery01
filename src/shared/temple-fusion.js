@@ -1,6 +1,7 @@
 import {itemById,ECONOMY} from './catalog.js';
 import {equippedItem} from './fusion-adapter.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
+import {sniperMaterialStat} from './fusion-balance.js';
 
 // Every attempt halves the non-GM chance, whether the previous attempt
 // succeeded or failed. Legacy items start at their successful fusion count.
@@ -68,7 +69,7 @@ export function fuseTemple(world,profile,body,rng=Math.random){
   if(target.slot==='weapon'&&['range','radius'].includes(key)&&
    (['whip','swatter','pan','planter','palm'].includes(target.family)||
     target.id==='accordion'))continue;
-  const a=sniperPower?Number(source[key]):Number(material[key]),b=Number(main[key])||0;
+  const a=sniperPower?sniperMaterialStat(source,key):Number(material[key]),b=Number(main[key])||0;
   if(!(a>0))continue;
   const cap=['range','chargeRange'].includes(key)?400:key==='radius'?80:key==='defense'?300:100000;
   stats[key]=+Math.min(cap,b+a*.3).toFixed(3);

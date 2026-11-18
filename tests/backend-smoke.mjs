@@ -98,7 +98,7 @@ assert.ok(worldAfterPlant.world.plants.some(p=>p.id===planted.plant.id));
 const png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9kAAAAASUVORK5CYII=','base64'));
 const uploaded=await call('/api/art-media',png,token,{raw:true,type:'image/png'});
 assert.ok(uploaded.id);
-const build=await act('publish-art-bomb',{artwork:{title:'Guest smoke art',mediaId:uploaded.id,position:[-17,1.5,22],appearance:{depth:.1}},size:1.5});
+const build=await act('publish-art-bomb',{artwork:{title:'Guest smoke art',mediaId:uploaded.id,position:[10,1.5,0],appearance:{depth:.1}},size:1.5});
 assert.ok(build.artwork?.bomb,JSON.stringify(build));
 assert.equal(build.artwork.owner,join.self.key);
 const resized=await act('resize-art-bomb',{id:build.artwork.id,size:2});

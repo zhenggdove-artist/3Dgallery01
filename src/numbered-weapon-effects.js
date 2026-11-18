@@ -233,7 +233,7 @@ export class NumberedWeaponEffects {
   const areaLocked=!!event.ultimate&&!event.channel&&![20,29,31,33,38,43].includes(spec.number)&&Array.isArray(event.area?.visualCenter);
   const target=areaLocked?vector(event.area.visualCenter,origin):origin.clone();
   const entry={
-   spec,fx,group:fx.group,root,item,direction,origin,target,options,
+   spec,fx,group:fx.group,root,item,direction,visualDirection:direction.clone(),origin,target,options,
    worldScale:ultimateWorldScale(spec.number,event,options),
    range:Math.max(.5,Number(event.range)||12),
    key,channel:!!event.channel,fusionEcho:!!event.fusionEcho,areaLocked,age:0,
@@ -278,12 +278,8 @@ export class NumberedWeaponEffects {
  }
  align(entry,fx=entry.fx) {
   const {spec,range}=entry;
-  let dir=entry.direction.clone();
-  if(entry.channel&&entry.root) {
-   // Keep the active stream attached to the changing weapon heading even
-   // between two server-authorised damage pulses.
-   dir.applyAxisAngle(UP,entry.root.rotation.y-entry.heading).normalize();
-  }
+  let dir=(entry.channel?entry.visualDirection:entry.direction).clone().normalize();
+  // Steer natively without quantisation to the character's walk rotation.
   const origin=this.muzzleAt(entry);
   if((spec.number===8||spec.number===29)&&typeof fx.setEndpoints==='function'){
    fx.group.position.set(0,0,0);
@@ -393,10 +389,7 @@ export class NumberedWeaponEffects {
   if(!entry.waves.length&&entry.channel)this.spawnClamWave(entry);
  }
  currentDirection(entry){
-  const dir=entry.direction.clone();
-  if(entry.channel&&entry.root)
-   dir.applyAxisAngle(UP,entry.root.rotation.y-entry.heading);
-  return dir.normalize();
+  return (entry.channel?entry.visualDirection:entry.direction).clone().normalize();
  }
  makeCycle(entry,fx){
   const moving=TRAVELLING_NATIVE.has(entry.spec.number);
@@ -425,6 +418,11 @@ export class NumberedWeaponEffects {
   for(const copy of [...entry.cycles]){
    copy.age+=dt;
    if(moving){
+    if(entry.channel){
+     copy.direction.lerp(entry.visualDirection,1-Math.exp(-dt*18)).normalize();
+     copy.fx.group.quaternion.setFromUnitVectors(
+      number===70?X_FORWARD:FORWARD,copy.direction);
+    }
     const duration=travelLifetime(number);
     const t=Math.min(1,copy.age/duration);
     const progress=t*t*(3-2*t);
@@ -472,6 +470,12 @@ export class NumberedWeaponEffects {
   for(const e of [...this.active]){
    try{
    e.age+=dt;
+   if(e.channel){
+    const ray=e.root?.userData?.staffAimDirection;
+    const target=Array.isArray(ray)&&ray.length===3&&ray.every(Number.isFinite)&&!e.fusionEcho?
+     new THREE.Vector3(...ray).normalize():e.direction;
+    e.visualDirection.lerp(target,1-Math.exp(-dt*28)).normalize();
+   }
    if(e.key&&now-e.lastPulse>Math.max(CHANNEL_GRACE_MS,Number(e.item.cooldown||700)*2+650)){
     this.remove(e);continue;
    }

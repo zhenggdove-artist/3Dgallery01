@@ -2,6 +2,8 @@ import {fuseEquipment} from '../reletter/server/fusion-rules.js';
 import {equipmentById} from '../reletter/equipment-catalog.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
 import {normalMeleeFootprint} from './melee-contact.js';
+import {sniperMaterialStat} from './fusion-balance.js';
+import {itemById} from './catalog.js';
 
 export function originalEquipmentGame(profile,world={}){
  const key=profile.key,instances=profile.inventory.filter(id=>equipmentById(id)).map(id=>{
@@ -30,6 +32,17 @@ export function equippedItem(profile,item){
   // The primary melee weapon's real model owns normal-attack reach; range
   // modifiers from a distant rifle ingredient must never turn it into a gun.
   if(normalMeleeFootprint(item)){fused.range=item.range;fused.radius=item.radius;}
+  // An old save can contain a sniper added as a third+ material before the
+  // balance change. Clamp only records that identify a stat-only sniper.
+  if(Array.isArray(record.sources)&&record.sources.some(v=>v.id==='black-cat'&&!v.echo))
+   for(const key of ['damage','chargeDamage']){
+    const base=Math.max(0,Number(item[key])||0);
+    const bonus=record.sources.filter(v=>!v.echo).reduce((sum,v)=>{
+     const ingredient=itemById(v.id);
+     return sum+sniperMaterialStat(ingredient,key)*.3;
+    },0);
+    if(Number.isFinite(fused[key]))fused[key]=Math.min(fused[key],base+bonus);
+   }
   return fused;
  }
  const raw=original.stats;if(!raw)return named;

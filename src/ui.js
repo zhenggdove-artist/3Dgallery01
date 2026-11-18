@@ -18,7 +18,20 @@ export class TempleUI extends EventTarget{
     super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
     bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
-    this.bind();$('gm-help').onclick=()=>this.openPanel('help');$('gm-menu').onclick=()=>this.openPanel('gm');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag')e.dataTransfer.setData('text/plain',cell.dataset.bagItem);});this.content.addEventListener('dragover',e=>{if(this.panelName==='bag')e.preventDefault();});this.content.addEventListener('drop',e=>{if(this.panelName!=='bag')return;e.preventDefault();const sourceId=e.dataTransfer.getData('text/plain'),targetId=e.target.closest('[data-bag-item]')?.dataset.bagItem;if(this.bagFusionMode&&sourceId&&targetId&&sourceId!==targetId)this.emit('server-action',{action:'fuse',sourceId,targetId,requestId:crypto.randomUUID()});});
+    this.bind();$('gm-help').onclick=()=>this.openPanel('help');$('gm-menu').onclick=()=>this.openPanel('gm');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag'&&cell.dataset.inventoryIndex!==undefined){
+     e.dataTransfer.setData('text/plain',cell.dataset.bagItem);
+     e.dataTransfer.setData('application/x-temple-slot',cell.dataset.inventoryIndex);
+     e.dataTransfer.effectAllowed=this.bagFusionMode?'copyMove':'move';
+    }});this.content.addEventListener('dragover',e=>{if(this.panelName==='bag')e.preventDefault();});this.content.addEventListener('drop',e=>{if(this.panelName!=='bag')return;e.preventDefault();
+    const target=e.target.closest('[data-inventory-index]');
+    const sourceIndex=Number(e.dataTransfer.getData('application/x-temple-slot'));
+    const from=e.dataTransfer.getData('application/x-temple-slot');
+    if(!target||!from||!Number.isInteger(sourceIndex))return;
+    const sourceId=this.world?.profile?.inventory?.[sourceIndex],targetId=target.dataset.bagItem;
+    if(this.bagFusionMode){
+     if(sourceId&&targetId&&sourceId!==targetId)this.emit('server-action',{action:'fuse',sourceId,targetId,requestId:crypto.randomUUID()});
+    }else this.emit('server-action',{action:'swap-inventory',fromIndex:sourceIndex,toIndex:Number(target.dataset.inventoryIndex)});
+   });
     $('function-toggle').onclick=()=>{const open=this.hud.classList.toggle('functions-open');$('function-toggle').setAttribute('aria-expanded',String(open));};
     // A single IME Return commits and sends the completed text.
     const chatInput=$('chat-input');let composing=false,imeEnter=false;

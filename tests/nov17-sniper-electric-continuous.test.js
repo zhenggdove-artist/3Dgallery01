@@ -29,9 +29,10 @@ function tick(room,at){
  return tickWorld(room.world,{now:at,rng:()=>.99,actors:[room.shooter,room.target],activeFighters:0});
 }
 
-test('new fighter spawns start outside central message sanctuary',()=>{
+test('new fighter spawns inside central message sanctuary without overlapping the tree',()=>{
  for(const p of PLAYER_SPAWNS){
-  assert.ok(Math.hypot(p[0]-SAFE_ZONE.x,p[2]-SAFE_ZONE.z)>SAFE_ZONE.radius+2);
+  assert.ok(Math.hypot(p[0]-SAFE_ZONE.x,p[2]-SAFE_ZONE.z)<SAFE_ZONE.radius);
+   assert.ok(Math.hypot(p[0]-SAFE_ZONE.x,p[2]-SAFE_ZONE.z)>3);
  }
 });
 

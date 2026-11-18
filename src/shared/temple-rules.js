@@ -13,6 +13,7 @@ import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-st
 import {playerStats,refreshStats} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
 import {fuseTemple} from './temple-fusion.js';
+import {fusionSniperEchoDamage} from './fusion-balance.js';
 import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './island-combat.js';
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
@@ -31,7 +32,7 @@ export const WORLD_VERSION=1;
 export const ARTWORK_RESPAWN_MS=30_000;
 export const MAX_FIGHTERS=4;
 export const MAX_SPECTATORS=100;
-const POSITION_LIMIT=60;
+export const RESPAWN_SHIELD_MS=3000;
 
 const clone=value=>structuredClone(value);
 const id=()=>crypto.randomUUID();
@@ -91,7 +92,10 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    if(current.admin&&typeof current.gmInvincible!=='boolean')current.gmInvincible=true;
    if(current.equipment.weapon&&!itemById(current.equipment.weapon))current.equipment.weapon=STARTER_LOADOUT.weapon;delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
   refreshStats(world,current,now);
-  if(current.deadUntil<=now&&current.hp<=0){current.hp=current.maxHp||100;current.deadUntil=0;}
+  if(current.deadUntil>0&&current.deadUntil<=now&&current.hp<=0){
+    current.hp=current.maxHp||100;current.deadUntil=0;
+    current.lastRespawnAt=now;current.spawnProtectedUntil=now+RESPAWN_SHIELD_MS;
+   }
   return current;
 }
 
@@ -100,7 +104,7 @@ export function validName(value){return typeof value==='string'&&value.trim().le
 
 export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
-    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
+    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
 
 export function worldView(world,actorKey,now=Date.now()){
@@ -130,7 +134,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
   const validPanHeight=authorizedPanFlight&&Array.isArray(next?.position)&&
    next.position.length===3&&next.position.every(Number.isFinite)&&
    Math.hypot(next.position[0],next.position[2])<=ARENA_RADIUS+2&&
-   next.position[1]>=-4&&next.position[1]<=36;
+   next.position[1]>=-4&&next.position[1]<=72;
   if(!next||!Array.isArray(next.position)||next.position.length!==3||!next.position.every(Number.isFinite)||
      !(insideArena(next.position,role==='spectator'?28:2)||validPanHeight)||!Number.isFinite(next.rotation))
     return {error:'Invalid position',state:previous||null};
@@ -252,13 +256,29 @@ export function applyAction(world,actor,body,context={}){
     case 'equip':result=equip(profile,body);break;
     case 'unequip':if(!EQUIPPABLE_SLOTS.includes(body.slot))return {error:'Invalid slot'};profile.equipment[body.slot]=null;result={notice:'Unequipped'};break;
     case 'fuse':result=fuse(world,profile,body,rng);break;
+     case 'swap-inventory':{
+      const from=body.fromIndex,to=body.toIndex;
+      if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||to<0||
+         from>=profile.inventory.length||to>=profile.inventory.length)
+       return {error:'Invalid inventory slot'};
+      if(from===to)return {notice:'Inventory unchanged'};
+      [profile.inventory[from],profile.inventory[to]]=
+       [profile.inventory[to],profile.inventory[from]];
+      result={inventoryReordered:true,fromIndex:from,toIndex:to};
+      break;
+     }
     case 'attack':result=attack(world,profile,actor,body,context,now);break;
     case 'monster-hit':return {error:'Use a directional weapon attack'};
     case 'build':result=build(world,profile,actor,body,now,rng);break;
     case 'destroy':result=destroy(world,profile,actor,body,now);break;
     case 'remove-structure':result=removeStructure(world,profile,actor,body,now);break;
     case 'plant':result=plant(world,profile,actor,body,now);break;
-    case 'respawn':profile.hp=profile.maxHp;profile.deadUntil=0;profile.lastRespawnAt=now;result={spawn:PLAYER_SPAWNS[context.seatIndex%4]};break;
+    case 'respawn':
+      if(profile.hp>0&&profile.deadUntil<=now)return {error:'Respawn unavailable while alive'};
+      if(profile.deadUntil>now)return {error:'Wait for respawn'};
+      profile.hp=profile.maxHp;profile.deadUntil=0;profile.lastRespawnAt=now;
+      profile.spawnProtectedUntil=now+RESPAWN_SHIELD_MS;
+      result={spawn:PLAYER_SPAWNS[(context.seatIndex||0)%PLAYER_SPAWNS.length]};break;
     default:return {error:'Unknown action'};
   }
   if(result?.error)return result;refreshStats(world,profile,now);profile.updatedAt=now;world.revision=(world.revision||0)+1;return {...result,profile:publicProfile(profile)};
@@ -427,7 +447,7 @@ function attack(world,profile,actor,body,context,now){
   // Scale the original authoritative area and its warning with the doubled wheel.
   if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
    if(weapon.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
-   scaleUltimateFootprint(stats,weapon);
+   scaleUltimateFootprint(stats,weapon,quality);
   const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
@@ -493,9 +513,9 @@ function attack(world,profile,actor,body,context,now){
         Math.max(flight,visibleCollisionLifetimeMs(source,true));
       // Sniper fusion echo must not exceed 30% of the original sniper
        // ultimate's damage; it also cannot cause instant-lethal headshots.
-       const sniperEchoFactor=source.id==='black-cat'?.3:.2;
-       const echoId=id(),echoDamage=+(full.damage*sniperEchoFactor).toFixed(3);
-      const echoPvP=+(pvpShotDamage(source,full,sourceQuality)*sniperEchoFactor).toFixed(3);
+       const balancedSniper=source.id==='black-cat'?fusionSniperEchoDamage(source):null;
+       const echoId=id(),echoDamage=balancedSniper?.damage??+(full.damage*.2).toFixed(3);
+      const echoPvP=balancedSniper?.pvpDamage??+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],range:secondary.range,radius:secondary.radius,area:echoArea,
@@ -535,7 +555,7 @@ function attack(world,profile,actor,body,context,now){
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
- if(!player||(player.admin&&player.gmInvincible!==false)||player.hp<=0)return;
+ if(!player||(player.admin&&player.gmInvincible!==false)||(player.spawnProtectedUntil||0)>now||player.hp<=0)return;
   if(skill?.motion==='freeze'){
    // Apply an authoritative 80% movement slow for precisely two seconds.
    // Never use the full immobilising "freeze" status for this ability.
@@ -557,6 +577,7 @@ function applyMonsterImpactReaction(player,target,skill,now){
 }
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false,fixedDamage=false){
   const target=world.profiles[targetActor.key];if(!target||target.hp<=0||target.deadUntil>now)return null;
+   if((target.spawnProtectedUntil||0)>now)return {target:targetActor.key,damage:0,defeated:false,immune:true};
   const stats=refreshStats(world,target,now);if(target.admin&&target.gmInvincible!==false){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
   const armor=itemById(target.equipment.armor),reduction=Math.min(.65,(armor?.defense||0)/100);
   // The frying pan's self-damage is exactly 15 HP, not armour/shield
@@ -650,7 +671,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
    if(expiry<now-2000)delete world.channelContactLocks[key];
   if(world.monster?.active)changed=tickStatus(world.monster,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng))||changed;
   for(const mob of world.monsters||[])if(mob?.active)changed=tickStatus(mob,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng,'status',mob))||changed;
-  for(const target of actors){const p=world.profiles[target.key];if(p&&!(p.admin&&p.gmInvincible!==false)&&p.hp>0)changed=tickStatus(p,now,(owner,amount)=>damagePlayer(world,world.profiles[owner],target,Math.min(amount,2),now,'status',target.position))||changed;}
+  for(const target of actors){const p=world.profiles[target.key];if(p&&!(p.admin&&p.gmInvincible!==false)&&(p.spawnProtectedUntil||0)<=now&&p.hp>0)changed=tickStatus(p,now,(owner,amount)=>damagePlayer(world,world.profiles[owner],target,Math.min(amount,2),now,'status',target.position))||changed;}
   world.groundDrops=world.groundDrops.filter(drop=>drop.expiresAt>now);if(world.groundDrops.length>ECONOMY.maxGroundDrops)world.groundDrops.splice(0,world.groundDrops.length-ECONOMY.maxGroundDrops);
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
   if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
@@ -693,7 +714,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
     advancePanBlastMonster(mob,now);advanceWhipPullMonster(world,mob,now);changed=true;
    }
   }
-  for(const profile of Object.values(world.profiles))if(profile.hp<=0&&profile.deadUntil<=now){profile.hp=profile.maxHp;profile.deadUntil=0;profile.lastRespawnAt=now;changed=true;}
+  for(const profile of Object.values(world.profiles))if(profile.hp<=0&&profile.deadUntil<=now){profile.hp=profile.maxHp;profile.deadUntil=0;profile.lastRespawnAt=now;profile.spawnProtectedUntil=now+RESPAWN_SHIELD_MS;changed=true;}
   if(changed)world.revision=(world.revision||0)+1;return changed;
 }
 
