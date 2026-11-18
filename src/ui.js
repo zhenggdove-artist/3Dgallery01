@@ -13,6 +13,7 @@ import {drawingForm,attachDrawing,mediaMarkup} from './media-ui.js';
 import {SWALLOWTAIL_WINGS} from './reletter/wing-catalog.js';
 import {wingIcon} from './reletter/garden-art.js';
 import {wingRarity,WING_QUALITY_NAMES,WING_QUALITY_COLORS} from './shared/wing-shop.js';
+import {mountWingPainter} from './gm-wing-painter.js';
 
 const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
@@ -74,7 +75,7 @@ export class TempleUI extends EventTarget{
   const invincible=event.target.closest('[data-gm-invincible]');
   if(invincible)this.emit('gm-invincible',{enabled:invincible.checked});
  });
-     this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');});
+     this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');else if(action==='wing-painter')this.openPanel('wing-painter');});
     this.content.addEventListener('click',event=>{const b=event.target.closest('button');if(b?.dataset.unequip)this.emit('server-action',{action:'unequip',slot:b.dataset.unequip});if(b?.dataset.use)this.emit('use-item',b.dataset.use);});
     this.content.addEventListener('click',event=>{const b=event.target.closest('[data-original]');if(!b)return;this.emit('original-action',{action:b.dataset.original,id:b.dataset.id,hole:b.dataset.hole,item:b.dataset.item,pond:b.dataset.pond});});
     addEventListener('keydown',event=>{if(event.code==='Escape'&&this.panelName){event.preventDefault();this.closePanel();return;}if(/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName))return;const code=event.code;if(this.buildKind){if(code==='KeyE'){event.preventDefault();this.emit('build-confirm');}if(code==='KeyR')this.emit('build-rotate');if(code==='Escape')this.emit('build-cancel');return;}if(code==='Tab'&&this.self?.role==='spectator'){event.preventDefault();this.emit('spectator-cycle');return;}if(code==='KeyJ')this.emit('attack');if(code==='KeyB')this.openPanel('bag');if(code==='KeyI')this.openPanel('shop');if(code==='KeyV')this.openPanel('build');if(code==='KeyC')this.openPanel('social');if(code==='Escape')this.closePanel();if(code==='KeyY'&&event.shiftKey){event.preventDefault();this.openPanel('editor');}});
@@ -184,10 +185,11 @@ export class TempleUI extends EventTarget{
     this.fusionTimer=setTimeout(()=>{box.remove();if(this.fusionIndicator===box)this.fusionIndicator=null;},1020);
   }
   death(until,killer=''){if(this.deathUntil===until&&this.deathKiller===killer)return;this.deathUntil=until;this.deathKiller=killer;clearTimeout(this.deathTimer);const overlay=$('death');$('death-killer').textContent=killer?'KILLED BY '+killer:'';if(!until||until<=Date.now()){overlay.hidden=true;return;}overlay.hidden=false;const update=()=>{const left=Math.max(0,Math.ceil((until-Date.now())/1000));$('respawn-count').textContent=left;if(left)this.deathTimer=setTimeout(update,200);else overlay.hidden=true;};update();}
-  openPanel(name,fromJourney=false){if(!this.self)return;if(['gm','wing-shop'].includes(name)&&!this.self.profile?.admin)return;if(name==='social'&&!fromJourney){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});if(name==='gm')this.requestGmPresence();}
+  openPanel(name,fromJourney=false){if(!this.self)return;if(['gm','wing-shop','wing-painter'].includes(name)&&!this.self.profile?.admin)return;if(name==='social'&&!fromJourney){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});if(name==='gm')this.requestGmPresence();}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;document.body.classList.remove('panel-open');this.panelName='';this.emit('panel',{open:false});}
-  renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','wing-shop':'WING SHOP · GM PREVIEW',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
+  renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','wing-shop':'WING SHOP · GM PREVIEW',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'GM 翅膀繪圖工作室',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
     if(this.panelName==='gm'){this.renderGm();return;}
+     if(this.panelName==='wing-painter'){mountWingPainter(this);return;}
     if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + D：圓盤刪除模式（點選變藍、DELETE 刪除、ESC 離開）<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(this.panelName==='shop')this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<hr><h3>建立漂浮圓盤</h3><form data-form="gm-platform">${['x','y','z'].map(k=>`<label>${k.toUpperCase()}<input name="${k}" type="number" value="${k==='y'?2:0}" step=".1" required></label>`).join('')}<label>半徑<input name="radius" type="number" value="2.5" min=".6" max="8" step=".1" required></label><button>建立並儲存圓盤</button></form><hr><h3>上傳藝術品</h3><form data-form="upload-artwork"><p>PNG／JPEG／WebP、MP4／WebM、GLB／glTF／FBX。模型貼圖與 BIN 檔請一起選取。轉換後上限 32 MB、50 萬三角面、200 個網格；保留圖片透明度，模型會打包成完整 GLB。</p><label>作品名稱<input name="title" type="text" maxlength="100" required placeholder="輸入作品名稱"></label><input name="artwork" type="file" accept="${ART_ACCEPT}" multiple required><button class="panel-button" data-upload-submit>驗證並發布</button><p data-upload-status role="status"></p></form>`);}
   }
   requestGmPresence(){
@@ -218,6 +220,7 @@ export class TempleUI extends EventTarget{
       <h3>GM 功能</h3><div class="gm-tools">
         <button type="button" data-gm-action="editor">作品與圓盤編輯</button>
         <button type="button" data-gm-action="help">編輯快捷鍵</button>
+        <button type="button" data-gm-action="wing-painter">畫翅膀／上架翅膀</button>
         <button type="button" data-gm-action="refresh">${this.gmPresenceLoading?'讀取中…':'重新整理紀錄'}</button>
       </div>
       <h3>GM 個人設定</h3>
@@ -241,49 +244,79 @@ export class TempleUI extends EventTarget{
   showSaveCode(code){this.saveCode=String(code||'');this.openPanel('save');this.content.querySelector('#save-code-output')?.select();}
   renderBag(profile){renderOriginalBag(this,profile);}
   renderShop(profile){const tab=this.shopTab||'near',tabs={near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',shield:'Shields',head:'Headwear',outfit:'Outfits',owned:'Owned'};const items=(tab==='owned'?(profile.inventory||[]).map(itemById).filter(Boolean):SHOP_ITEMS).filter(i=>tab==='owned'||(tab==='mystery'&&i.mysteryWeapon)||(['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab)||i.slot===tab);this.content.innerHTML=`<div class="armory-balance"><span>Equipment · collections</span><b>${profile.admin?'∞':profile.wallet} coins</b></div><nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>${profile.admin?'<button class="panel-button wing-shop-link" type="button" data-open-wing-shop>WING SHOP · GM PREVIEW →</button>':''}<div class="shop-items">${items.map(item=>{const owned=profile.inventory.includes(item.id),equipped=profile.equipment[item.slot]===item.id;return itemCard(item,`<button data-${owned?'equip':'buy'}="${item.id}" ${equipped||!owned&&!profile.admin&&profile.wallet<item.price?'disabled':''}>${equipped?'EQUIPPED':owned?'EQUIP':`BUY · ${item.price.toLocaleString('en-US')}`}</button>`);}).join('')||'<p>Your collection starts here. Earn coins by exploring the arena.</p>'}</div>`;}
+
   renderWingShop(profile){
    if(!profile?.admin){this.content.textContent='GM only';return;}
+   const wings=[...SWALLOWTAIL_WINGS,...(this.world?.customWings||[])];
    const owned=new Set(profile.inventory||[]);
-   const remaining=SWALLOWTAIL_WINGS.filter(wing=>!owned.has(wing.id)).length;
    const featured=this.lastWingDraw?.itemId?itemById(this.lastWingDraw.itemId):null;
+   const capsules=Array.from({length:15},(_,i)=>`<span class="gacha-capsule" style="--n:${i};--shade:${['#f0d6ad','#ec85a7','#83d8dd','#e3cb65','#ae96ed'][i%5]}"></span>`).join('');
    this.content.innerHTML=`<section class="wing-shop-panel">
-    <header class="wing-shop-hero"><small>GM PREVIEW · NOT FOR SALE</small>
-      <h3>PAPILIO · WING ATELIER</h3>
-      <p>20 handcrafted swallowtail wings · five quality tiers.<br>
-      Purple Epic wings have the most intricate iridescent patterns.</p>
-      <p>Owned: <strong>${20-remaining}/20</strong></p>
+    <header class="wing-shop-hero"><small>GM ONLY · NONCHARGING TEST</small>
+      <h3>THE SILLY BUTTERFLY GACHA</h3>
+      <p>翅膀品質用白／綠／藍／紫／金分級。紫色代表 Epic 品質，不限制蝶翼原色。</p>
+      <p>翅膀收錄：<strong>${wings.length}</strong> 款 · GM 自製：${(this.world?.customWings||[]).length}</p>
     </header>
-    <button class="panel-button wing-draw-button" type="button" data-draw-wing
-     ${remaining?'':'disabled'}>DRAW A WING · GM TEST · FREE</button>
-    <p class="wing-draw-odds">White 45 · Green 28 · Blue 17 · Purple 8 · Gold 2
-      (weighted per remaining unowned wing)</p>
-    ${featured?`<div class="wing-draw-result" role="status">
-      LAST DRAW · ${escape(featured.name)} · ${escape(WING_QUALITY_NAMES[wingRarity(featured)])}
-      </div>`:''}
-    <div class="wing-shop-gallery">${SWALLOWTAIL_WINGS.map(item=>{
-      const rarity=wingRarity(item),isOwned=owned.has(item.id),
-       color=WING_QUALITY_COLORS[rarity];
+    <div class="wing-gacha-machine" aria-label="可愛扭蛋機">
+      <div class="wing-gacha-dome"><span class="wing-gacha-shine"></span>${capsules}</div>
+      <div class="wing-gacha-neck"><span class="wing-gacha-face">◕‿◕</span></div>
+      <div class="wing-gacha-body"><div class="wing-gacha-crank">◉</div><div class="wing-gacha-slot">▰</div><p>1 PLAY · GM PREVIEW</p></div>
+      <div class="wing-gacha-feet"></div>
+    </div>
+    <button class="panel-button wing-draw-button" type="button" data-draw-wing>轉動扭蛋機 · 免費測試</button>
+    <p class="wing-draw-odds">單次品質機率：白 45% · 綠 30% · 藍 18% · <strong>紫 5%</strong> · 金 2%。
+    每次獨立抽樣，可重複抽到已持有翅膀。</p>
+    <button class="panel-button" type="button" data-open-wing-painter>GM 畫翅膀並上架</button>
+    ${featured?`<div class="wing-draw-result" role="status">上次開出：${escape(featured.name)} · ${escape(WING_QUALITY_NAMES[wingRarity(featured)])}</div>`:''}
+    <div class="wing-shop-gallery">${wings.map(item=>{
+      const rarity=wingRarity(item),isOwned=owned.has(item.id),color=WING_QUALITY_COLORS[rarity];
       return `<article class="wing-shop-card" style="--wing-quality:${color}" data-wing-id="${escape(item.id)}">
        <span class="wing-shop-rarity">${escape(WING_QUALITY_NAMES[rarity])}</span>
        <img alt="${escape(item.name)}" src="${wingIcon(item)}" loading="lazy">
        <strong>${escape(item.name)}</strong>
-       <small>${isOwned?'OWNED':'LOCKED · LOTTERY ONLY'}</small>
-       ${isOwned?`<button type="button" data-equip="${escape(item.id)}" 
-         ${profile.equipment.wings===item.id?'disabled':''}>${profile.equipment.wings===item.id?'EQUIPPED':'EQUIP'}</button>`:''}
+       <small>${isOwned?'OWNED':'LOTTERY ONLY'}</small>
+       ${isOwned?`<button type="button" data-equip="${escape(item.id)}"
+       ${profile.equipment.wings===item.id?'disabled':''}>${profile.equipment.wings===item.id?'EQUIPPED':'EQUIP'}</button>`:''}
       </article>`;
     }).join('')}</div>
-    <section class="wing-payment-preview">
-      <h3>ECPay · Apple Pay</h3>
-      <p>Payment integration is not enabled. No money is charged and
-       no payment can grant wings until secure verification is deployed.</p>
-      <button type="button" disabled>APPLE PAY · COMING SOON</button>
-    </section>
+    <section class="wing-payment-preview"><h3>Paying is disabled</h3>
+     <p>目前僅 GM 能操作扭蛋機，未開通信用卡／Apple Pay／真實貨幣付款。</p></section>
    </section>`;
+  }
+  beginWingDraw(){
+   if(this.gachaOverlay)return;
+   const overlay=document.createElement('div');
+   overlay.className='wing-gacha-overlay';
+   overlay.setAttribute('role','status');overlay.setAttribute('aria-live','polite');
+   overlay.innerHTML='<div class="gacha-animation"><div class="gacha-spinner">◕ᴗ◕</div><div class="gacha-pop-capsule">?</div><strong>GACHA GACHA…</strong><small>扭蛋正在轉圈圈</small></div>';
+   document.body.append(overlay);this.gachaOverlay=overlay;this.gachaStartedAt=performance.now();
+  }
+  cancelWingDraw(){
+   this.gachaOverlay?.remove();this.gachaOverlay=null;
   }
   showWingDraw(drawn){
    if(!drawn?.itemId)return;
    this.lastWingDraw=drawn;
-   if(this.panelName==='wing-shop')this.renderPanel();
+   const item=itemById(drawn.itemId),epic=drawn.quality==='epic';
+   if(!this.gachaOverlay)this.beginWingDraw();
+   const overlay=this.gachaOverlay;
+   const after=Math.max(0,1750-(performance.now()-(this.gachaStartedAt||0)));
+   setTimeout(()=>{
+    if(this.gachaOverlay!==overlay)return;
+    const confetti=epic?Array.from({length:70},(_,i)=>`<i class="wing-confetti" style="--i:${i};--h:${(i*47)%360}deg;--x:${(i*73)%100}vw;--d:${(i%11)*.035}s"></i>`).join(''):'';
+    overlay.classList.toggle('wing-epic-win',epic);
+    overlay.innerHTML=`<div class="gacha-animation gacha-result">${confetti}
+     <h3>${epic?'恭喜！PURPLE · EPIC！':'恭喜抽中翅膀'}</h3>
+     <div class="gacha-result-image">${item?`<img src="${wingIcon(item)}" alt="${escape(item.name)}">`:''}</div>
+     <strong>${escape(item?.name||drawn.itemId)}</strong>
+     <small>${escape(WING_QUALITY_NAMES[drawn.quality]||drawn.quality)} · 已加入背包</small>
+     <button type="button" class="panel-button" data-gacha-close>確定</button>
+    </div>`;
+    overlay.querySelector('[data-gacha-close]').onclick=()=>{
+      this.cancelWingDraw();if(this.panelName==='wing-shop')this.renderPanel();
+    };
+    setTimeout(()=>{if(this.gachaOverlay===overlay){this.cancelWingDraw();if(this.panelName==='wing-shop')this.renderPanel();}},11000);
+   },after);
   }
   renderBuild(profile){const ownBombs=(this.world?.customArtworks||[]).filter(a=>a.bomb&&a.owner===this.self?.key);
     const bombs=`<section class="item"><h3>UPLOAD YOUR ARTWORK BOMB</h3><p>PNG / WebP / JPEG, MP4 / WebM, GLB / glTF / FBX. Player uploads limited to 8 MB and four placed works. The artwork becomes a throwable weapon after PLACE. Direct hits deal a random 30–100% of the target's maximum health before defenses.</p><form data-form="art-bomb-upload"><label>作品名稱<input type="text" name="title" maxlength="100" required placeholder="輸入作品名稱"></label><label>YOUR ARTWORK<input type="file" name="artwork" accept="${ART_ACCEPT}" multiple required></label><label>ARTWORK SIZE (1–3×)<input type="number" name="size" value="1" min="1" max="3" step=".1" required></label><button class="panel-button" type="submit">UPLOAD → PLACE</button></form></section>${ownBombs.map(a=>{const scale=this.world?.artworkLayout?.[a.id]?.scale?.[0]||1;return `<form class="item" data-form="art-bomb-resize"><b>${escape(a.title)}</b><input type="hidden" name="id" value="${escape(a.id)}"><label>SIZE<input name="size" type="number" min="1" max="3" step=".1" value="${scale}" required></label><button class="panel-button" type="submit">SAVE SIZE</button></form>`;}).join('')}${ownBombs.map(a=>playerArtworkAppearanceMarkup(a,this.world?.artworkLayout?.[a.id],escape)).join('')}`;
@@ -293,9 +326,8 @@ export class TempleUI extends EventTarget{
   renderPlantList(){const plants=[...(this.world?.plants||[])].reverse().slice(0,100);this.content.innerHTML=`<h3>留言之樹 · ${this.world?.plants?.length||0} 則記錄</h3><p>點擊任一留言可閱讀內容及回覆。</p>${plants.map(p=>`<button class="panel-button plant-list-entry" data-open-plant="${escape(p.id)}"><b>${escape(p.author)}</b> · ${escape(p.text||'媒體留言').slice(0,140)}</button>`).join('')||'<p>尚無留言。請使用 WRITE 種下第一則記錄。</p>'}`;}
   renderPlant(){const plant=this.selectedPlant;if(!plant)return this.closePanel();const parent=plant.parentId&&(this.world?.plants||[]).find(entry=>entry.id===plant.parentId);this.content.innerHTML=`<article class="plant-message"><small>${new Date(plant.createdAt).toLocaleString()}</small><h3>${escape(plant.author)}</h3><p>${escape(plant.text)}</p>${mediaMarkup(plant.media,window.TEMPLE_CONFIG.backendUrl)}${parent?`<small>Reply to ${escape(parent.author)}：${escape(parent.text).slice(0,80)}</small>`:''}</article><h3>REPLY BRANCH</h3><form data-form="plant-reply"><textarea class="panel-input" name="text" maxlength="500" rows="4" placeholder="Grow a reply branch from this plant"></textarea><button class="panel-button">PLANT REPLY</button></form>`;}
   renderEditor(){const saved=JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');this.content.innerHTML=`<p><b>Shift + Y</b> 開啟編輯設定，可儲存或匯出 GitHub Pages 配置。</p><form data-form="editor"><label>解析度倍率上限<input class="panel-input" name="pixelRatio" type="number" min="0.6" max="2" step="0.05" value="${saved.pixelRatio||1.35}"></label><label>霧氣濃度<input class="panel-input" name="fog" type="number" min="0" max="0.04" step="0.0001" value="${saved.fog??.0008}"></label><label>作品漂浮幅度<input class="panel-input" name="artFloat" type="number" min="0" max="0.6" step="0.01" value="${saved.artFloat??.17}"></label><button class="panel-button">儲存編輯結果</button></form><button class="panel-button" data-export-layout>下載 temple-layout.json</button><p>${PLATFORMS.length} 件預設作品，配置由伺服器保存。</p>`;}
-  async panelClick(event){const button=event.target.closest('button');if(!button||button.disabled)return;if(button.dataset.openPlant){const plant=(this.world?.plants||[]).find(p=>p.id===button.dataset.openPlant);if(plant)this.showPlant(plant);return;}if(button.hasAttribute('data-open-wing-shop')){this.openPanel('wing-shop');return;}
-    if(button.hasAttribute('data-draw-wing')){if(this.self?.profile?.admin)
-      this.emit('server-action',{action:'gm-wing-draw'});return;}
+  async panelClick(event){const button=event.target.closest('button');if(!button||button.disabled)return;if(button.dataset.openPlant){const plant=(this.world?.plants||[]).find(p=>p.id===button.dataset.openPlant);if(plant)this.showPlant(plant);return;}if(button.hasAttribute('data-open-wing-shop')){this.openPanel('wing-shop');return;}if(button.hasAttribute('data-open-wing-painter')){this.openPanel('wing-painter');return;}
+    if(button.hasAttribute('data-draw-wing')){if(this.self?.profile?.admin){this.beginWingDraw();this.emit('server-action',{action:'gm-wing-draw'});}return;}
     if(button.dataset.bagTab){this.bagTab=button.dataset.bagTab;this.renderPanel();return;}if(button.dataset.shopTab){this.shopTab=button.dataset.shopTab;this.renderPanel();return;}try{if(button.dataset.buy)this.emit('server-action',{action:'buy',itemId:button.dataset.buy});if(button.dataset.equip)this.emit('server-action',{action:'equip',itemId:button.dataset.equip});if(button.dataset.sell)this.emit('server-action',{action:'sell',itemId:button.dataset.sell});if(button.dataset.build){this.buildKind=button.dataset.build;$('build-kind').textContent=this.buildKind.toUpperCase();$('build-mode').hidden=false;this.closePanel();this.emit('build-start',{kind:this.buildKind,file:this.content.querySelector('[data-build-skin]')?.files[0]});}if(button.dataset.role)this.emit('role-change',button.dataset.role);if(button.hasAttribute('data-follow'))this.emit('spectator-follow',button.dataset.follow);if(button.hasAttribute('data-destroy-near'))this.emit('destroy-near');if(button.dataset.removeStructure)this.emit('server-action',{action:'remove-structure',structureId:button.dataset.removeStructure});if(button.hasAttribute('data-save-code'))this.emit('save-code');if(button.hasAttribute('data-copy-save-code')){const value=this.saveCode||this.self?.saveCode;if(value){if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);else{this.content.querySelector('#save-code-output')?.select();document.execCommand('copy');}this.toast('已複製存檔代碼');}}if(button.hasAttribute('data-export-layout'))this.exportLayout();}catch(error){this.toast(error.message);}}
   async panelSubmit(event){event.preventDefault();const form=new FormData(event.target),kind=event.target.dataset.form;if(kind==='art-bomb-upload'){const files=[...event.target.querySelector('[name=artwork]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('art-bomb-upload',{files,title,size:Number(form.get('size'))});return;}if(kind==='art-bomb-resize'){this.emit('art-bomb-resize',{id:String(form.get('id')),size:Number(form.get('size'))});return;}if(kind==='art-bomb-appearance'){const appearance={depth:+form.get('depth'),brightness:+form.get('brightness'),contrast:+form.get('contrast'),saturation:+form.get('saturation'),blackPoint:+form.get('blackPoint'),tint:String(form.get('tint'))};this.emit('art-bomb-appearance',{id:String(form.get('id')),expectedRevision:Number(form.get('revision')),appearance});return;}if(kind==='gm-platform'){this.emit('create-platform',{position:['x','y','z'].map(k=>Number(form.get(k))),radius:Number(form.get('radius'))});return;}if(kind==='upload-artwork'){const files=[...event.target.querySelector('input[type=file]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('upload-artwork',{files,title});return;}if(kind==='fusion')this.emit('server-action',{action:'fuse',sourceId:form.get('source'),targetId:form.get('target'),requestId:crypto.randomUUID()});if(kind==='chat'){const text=String(form.get('text')||'').trim();if(text)this.emit('chat',text);event.target.reset();}if(kind==='plant'||kind==='plant-reply'){const text=String(form.get('text')||'').trim();let file=form.get('media');if(!file?.size)file=null;const drawing=event.target.querySelector('[data-drawing][data-used]');if(drawing)file=await new Promise(resolve=>drawing.toBlob(resolve,'image/webp',.8));if(text||file)this.emit('plant',{text,file,parentId:kind==='plant-reply'?this.selectedPlant?.id:null});}if(kind==='editor'){const settings={pixelRatio:+form.get('pixelRatio'),fog:+form.get('fog'),artFloat:+form.get('artFloat')};localStorage.setItem('temple-editor-settings',JSON.stringify(settings));this.emit('editor-settings',settings);this.toast('已儲存編輯結果');}}
   addChat(message){const row=document.createElement('div');row.textContent=`${message.name}: ${message.text}`;const log=$('chat-messages');log.append(row);while(log.children.length>40)log.firstElementChild.remove();log.scrollTop=log.scrollHeight;this.chat.push(message);if(this.chat.length>100)this.chat.shift();if(this.panelName==='social'){const log=this.content.querySelector('.chat-log');if(log){log.querySelector('small')?.remove();const line=document.createElement('div');line.className='chat-line';line.textContent=`${new Date(message.time).toLocaleTimeString()} ${message.name}: ${message.text}`;log.append(line);while(log.children.length>30)log.firstElementChild.remove();log.scrollTop=log.scrollHeight;}}}
