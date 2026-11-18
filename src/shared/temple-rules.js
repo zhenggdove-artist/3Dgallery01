@@ -29,6 +29,7 @@ import {replenishHearts} from './heart-pickups.js';
 import {cleanLegacyScene} from './scene-cleanup.js';
 import {samplePanBlastPosition,PAN_BLAST_DETONATION_ADVANCE_MS} from './pan-blast-flight.js';
 import {initialCollector,tickCollector} from './collector.js';
+import {drawGmWing} from './wing-shop.js';
 
 export const WORLD_VERSION=1;
 export const ARTWORK_RESPAWN_MS=30_000;
@@ -75,13 +76,13 @@ export function migrateWorld(raw,now=Date.now()){
   // original drop lifetime has not expired.
   world.groundDrops=world.groundDrops.filter(drop=>
    drop.kind!=='material'&&(!drop.itemId||
-    (itemById(drop.itemId)&&itemById(drop.itemId).slot!=='material')));
+    (itemById(drop.itemId)&&!['material','wings'].includes(itemById(drop.itemId).slot))));
   return cleanLegacyScene(world);
 }
 
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
-    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT,wings:admin?'wings-18':null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
+    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.filter(item=>!item.gmWingExclusive).map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT,wings:admin?'wings-18':null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
     fusion:{},createdAt:now,updatedAt:now,lastAttackAt:0};
 }
 
@@ -106,7 +107,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
   // GM equipment is granted once, not endlessly restored after its use as fusion material.
   if(current.admin&&!current.gmInventoryGranted){
-   if(!wasAdmin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
+   if(!wasAdmin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!item.gmWingExclusive&&!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
    current.gmInventoryGranted=true;
   }
   // Keep migrating old profiles to the SMG baseline, except after deliberate
@@ -213,7 +214,25 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
 }
 
 export function applyAction(world,actor,body,context={}){
-  const now=context.now??Date.now(),rng=context.rng??Math.random,profile=ensureProfile(world,actor.key,actor.name,actor.color,now,actor.admin);
+  const now=context.now??Date.now(),rng=context.rng??Math.random,
+   // The premium draw checks PERSISTED admin status before any ensureProfile
+   // mutation. Existing game/GM actions retain their original role semantics.
+   wingDrawAdmin=body.action==='gm-wing-draw'?world.profiles?.[actor.key]?.admin===true:null,
+   profile=ensureProfile(world,actor.key,actor.name,actor.color,now,
+    body.action==='gm-wing-draw'?wingDrawAdmin:actor.admin);
+  if(body.action==='gm-wing-draw'){
+   if(!wingDrawAdmin||!profile.admin)return {error:'GM only'};
+   const drawn=drawGmWing(profile,rng);
+   if(drawn.error)return drawn;
+   appendInventoryInstance(profile,drawn.item.id);
+   profile.itemOrigins??={};profile.itemOrigins[drawn.item.id]='gm-wing-draw';
+   profile.updatedAt=now;refreshStats(world,profile,now);
+   world.revision=(world.revision||0)+1;
+   return {wingDraw:{
+    itemId:drawn.item.id,name:drawn.item.name,quality:drawn.quality,
+    remaining:drawn.remaining,mode:drawn.mode
+   },notice:'GM WING DRAW · '+drawn.item.name,profile:publicProfile(profile)};
+  }
   if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
   if(body.action==='reset-player-artworks')return resetPlayerArtworks(world,profile.admin,now);
    if(body.action==='gm-audio-setting'){
@@ -328,6 +347,8 @@ function pickupDrop(world,profile,actor,body,now){
   const drop=world.groundDrops[index];if(drop.expiresAt<=now)return {error:'Drop expired'};
    if(drop.kind==='material'||drop.itemId&&!itemById(drop.itemId))
     return {error:'Obsolete material drops can no longer be collected'};
+   if(drop.itemId&&itemById(drop.itemId)?.slot==='wings')
+    return {error:'Wings are exclusive to premium shop; ground pickup disabled'};
    if(!near(actor,drop.position,3.2))return {error:'Move closer to the drop'};
   if(drop.owner===actor.key&&now<drop.ownerLockedUntil)return {error:'Drop is still settling'};
   world.groundDrops.splice(index,1);if(drop.kind==='coin')earn(profile,drop.amount,world);else if(drop.kind==='heart'){if(profile.hp>=profile.maxHp){world.groundDrops.splice(index,0,drop);return {error:'Health is full'};}profile.hp=Math.min(profile.maxHp,profile.hp+(drop.amount||25));}else{addItem(profile,drop.itemId);const item=itemById(drop.itemId);if(item&&EQUIPPABLE_SLOTS.includes(item.slot)&&!profile.equipment[item.slot])selectEquipmentInstance(profile,item.slot,profile.inventory.length-1);}

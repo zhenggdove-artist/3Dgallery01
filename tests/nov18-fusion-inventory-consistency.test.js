@@ -8,7 +8,7 @@ const count=(p,id)=>p.inventory.filter(x=>x===id).length;
 const T=42000000;
 test('GM fuse→equip→fuse consumes exactly the two material items without copies',()=>{
  const w=createInitialWorld(T),a=actor('gm',true),p=ensureProfile(w,'gm','gm','#abcdef',T,true);
- assert.ok(ITEMS.every(i=>p.inventory.includes(i.id)));
+ assert.ok(ITEMS.filter(i=>!i.gmWingExclusive).every(i=>p.inventory.includes(i.id)));
  assert.equal(applyAction(w,a,fuse('ember-1','frost-1','fusion-success-1'),{now:T+1,rng:()=>0}).fusion.success,true);
  assert.equal(count(p,'ember-1'),0);
  assert.equal(applyAction(w,a,{action:'equip',itemId:'frost-1'},{now:T+2}).error,undefined);
@@ -59,7 +59,7 @@ test('existing GM does not refill old spent equipment; promotion gives catalogue
  ensureProfile(w,'old','old','#abcdef',T+1,true);assert.equal(count(p,'ember-1'),0);
  const promoted=createProfile('new','new','#abcdef',T,false);w.profiles.new=promoted;
  ensureProfile(w,'new','new','#abcdef',T+2,true);
- assert.ok(ITEMS.every(i=>promoted.inventory.includes(i.id)));
+ assert.ok(ITEMS.filter(i=>!i.gmWingExclusive).every(i=>promoted.inventory.includes(i.id)));
  promoted.inventory=promoted.inventory.filter(id=>id!=='ember-1');
  ensureProfile(w,'new','new','#abcdef',T+3,true);assert.equal(count(promoted,'ember-1'),0);
 });

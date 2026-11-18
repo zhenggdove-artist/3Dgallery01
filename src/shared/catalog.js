@@ -95,12 +95,12 @@ export function groundDropRoll(rng=Math.random){
  ],rng).id;
  if(kind==='coin')return {kind,amount:20+Math.floor(rng()*41)};
  const pool=kind==='weapon'?WEAPONS.filter(item=>item.tier>0&&item.tier<=3&&!item.notForSale):
-  RELETTER_ITEMS.filter(item=>['head','outfit','shield','wings'].includes(item.slot)&&item.tier<=3);
+  RELETTER_ITEMS.filter(item=>['head','outfit','shield'].includes(item.slot)&&item.tier<=3);
  const weighted=pool.map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));
  return {kind,itemId:weightedChoice(weighted,rng).id};
 }
 
 export function monsterDropRoll(rng=Math.random){
-  const pool=RELETTER_ITEMS.filter(item=>['weapon','head','outfit','shield','wings'].includes(item.slot)&&item.tier>0).map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
+  const pool=RELETTER_ITEMS.filter(item=>['weapon','head','outfit','shield'].includes(item.slot)&&item.tier>0).map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
   return {kind:'equipment',itemId:weightedChoice(pool,rng).id};
 }
