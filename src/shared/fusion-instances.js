@@ -40,6 +40,23 @@ export function ensureFusionIdentity(profile){
   }
   profile.fusionIdentityMigrated=true;
  }
+ // Versioned, one-time repair for profiles that already migrated to stable
+ // instance UIDs under the former failure-count rule. Failure history must
+ // never reduce the success-only chance or appear as completed fusions.
+ if(!profile.fusionSuccessOnlyMigrated){
+  const seen=new Set();
+  for(const record of [...Object.values(profile.fusionByInstance),...Object.values(profile.fusion)]){
+   if(!record||typeof record!=='object'||seen.has(record))continue;
+   seen.add(record);
+   const completed=Math.max(0,Math.floor(Number(record.layer)||0));
+   const historical=Math.max(0,Math.floor(Number(record.attempts??completed)||0));
+   if(historical>completed)
+    record.legacyAttemptsBeforeRepair=Math.max(historical,
+     Number(record.legacyAttemptsBeforeRepair)||0);
+   record.attempts=completed;
+  }
+  profile.fusionSuccessOnlyMigrated=true;
+ }
  for(const [slot,itemId] of Object.entries(profile.equipment||{})){
   if(!itemId){delete profile.equippedInstanceIds[slot];continue;}
   const uid=profile.equippedInstanceIds[slot];
