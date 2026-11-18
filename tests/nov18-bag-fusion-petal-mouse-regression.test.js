@@ -79,6 +79,9 @@ test('flower crown channel restores one HP per second, capped, never on tap or a
  tickWorld(world,{now:started+1000,actors:[],activeFighters:0,rng:()=>.5});
  assert.equal(p.hp,92);
  assert.equal(tickBloomChannelHeal(p,started+1000),0,'repeat tick in same second cannot double heal');
+ const heartbeat=applyAction(world,a,{action:'attack',phase:'channel',direction:[0,0,1]},
+  {now:started+1750,actors:[a],rng:()=>.5});
+ assert.ok(heartbeat.attackEvent,'a live 1 HP/s channel sends authenticated attack pulses');
  assert.equal(tickBloomChannelHeal(p,started+2300),1);
  assert.equal(p.hp,93);
  p.hp=p.maxHp-.5;
