@@ -1,6 +1,7 @@
 import {itemById,ECONOMY} from './catalog.js';
 import {equippedItem} from './fusion-adapter.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
+import {weaponClass} from './weapon-info.js';
 
 // Every attempt halves the non-GM chance, whether the previous attempt
 // succeeded or failed. Legacy items start at their successful fusion count.
@@ -17,8 +18,8 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  profile.fusionReceipts??={};
  if(profile.fusionReceipts[requestId])return structuredClone(profile.fusionReceipts[requestId]);
  const equip=new Set(['weapon','head','armor','outfit','wings','shield']);
- if(!source||!target||!equip.has(target.slot)||!(equip.has(source.slot)||source.slot==='material'))
-  return {error:'Select any rarity of weapon or equipment, including shop purchases'};
+ if(!source||!target||!equip.has(target.slot)||source.slot!==target.slot)
+  return {error:'Fusion requires identical equipment types: weapon+weapon, head+head, outfit+outfit, wings+wings, armor+armor or shield+shield'};
  const sourceIndex=profile.inventory.indexOf(source.id),targetIndex=profile.inventory.indexOf(target.id);
  if(sourceIndex<0||targetIndex<0||(source.id===target.id&&profile.inventory.filter(id=>id===source.id).length<2))
   return {error:'Both items must be owned (identical IDs require two copies)'};
@@ -51,6 +52,9 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  const grantsEcho=target.slot==='weapon'&&source.slot==='weapon'&&effects.length<2;
  const keys=['damage','chargeDamage','range','chargeRange','radius','defense','capacity','impulse','speed','jump'];
  for(const key of keys){
+  // Normal melee geometry is an intrinsic property of the base weapon.
+  // Never inherit a ranged material's ordinary reach or contact width.
+  if(target.slot==='weapon'&&weaponClass(target)==='near'&&['range','radius'].includes(key))continue;
   const sniperPower=source.id==='black-cat'&&['damage','chargeDamage'].includes(key);
   // A sniper source may contribute 30% of its original shot EITHER as
   // its visible echo (first two slots) OR as stats (later slots), not both.
