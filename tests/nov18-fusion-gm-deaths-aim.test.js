@@ -38,7 +38,7 @@ test('fusion odds halve on each attempted fusion including failures; request ret
  assert.equal(player.fusion['ember-1'].layer,1);
  assert.equal(player.fusion['ember-1'].attempts,3);
  assert.equal(player.inventory.filter(x=>x==='frost-1').length,0);
- assert.ok(player.wallet<100000);
+ assert.equal(player.wallet,100000,'fusion only consumes source gear, never coins');
 });
 
 test('GM logs in with purple tier-six wings, independently selects 0–100% fusion chance and toggles god mode',()=>{
