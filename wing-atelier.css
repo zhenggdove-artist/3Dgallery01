@@ -1,0 +1,44 @@
+/* GM specimen atlas, toy capsule gacha and responsive wing paint studio. */
+.wing-shop-panel{--toy-ink:#332538;max-width:100%;color:#342a3a}
+.wing-shop-hero{text-align:center;border:2px solid #dcafc9;border-radius:15px;padding:12px;background:#fff3f4}
+.wing-shop-hero h3{margin:6px 0;font:900 21px system-ui;letter-spacing:.06em}
+.wing-gacha-machine{position:relative;width:min(238px,76vw);height:340px;margin:12px auto;filter:drop-shadow(0 10px 5px #4b273b44)}
+.wing-gacha-dome{position:absolute;top:6px;left:26px;width:186px;height:186px;border:8px solid #ef90a5;border-radius:47% 47% 38% 38%;overflow:hidden;background:radial-gradient(circle at 30% 20%,#fffefef4 5%,#baf5ffb8 55%,#92e3ecb0);box-shadow:inset -8px -12px 0 #7dc3d14d,inset 6px 9px 0 #ffffffad;z-index:2}
+.wing-gacha-shine{position:absolute;left:20px;top:9px;width:45px;height:77px;border-radius:50%;transform:rotate(-36deg);background:#ffffff8c;z-index:4}
+.gacha-capsule{position:absolute;left:calc(10px + mod(var(--n) * 43px, 147px));top:calc(100px + mod(var(--n) * 17px, 52px));width:45px;height:43px;border-radius:50%;background:linear-gradient(0deg,var(--shade) 45%,#fff7 47%,#fff8 54%,var(--shade) 55%);border:2px solid #876279;box-shadow:inset -5px -5px #0002;transform:rotate(calc(var(--n)*31deg))}
+.wing-gacha-neck{position:absolute;top:169px;left:35px;width:168px;height:57px;border-radius:14px 14px 4px 4px;background:#ffcfdf;border:6px solid #df8da9;text-align:center;z-index:3}
+.wing-gacha-face{display:block;font:900 24px system-ui;color:#6d405c;line-height:40px;transform:rotate(-5deg)}
+.wing-gacha-body{position:absolute;top:214px;left:37px;width:164px;height:107px;background:linear-gradient(115deg,#f8a5bd,#e77ba1);border:7px solid #c66b90;border-radius:12px 12px 18px 18px;z-index:3}
+.wing-gacha-crank{position:absolute;top:14px;left:23px;color:#80597a;background:#fff2bb;border:4px solid #865975;width:47px;height:47px;line-height:41px;text-align:center;font-size:30px;border-radius:50%}
+.wing-gacha-slot{position:absolute;right:17px;top:36px;width:42px;height:29px;border-radius:4px;background:#462c49;color:#f9e8d1;text-align:center;font-size:29px}
+.wing-gacha-body p{position:absolute;bottom:-7px;left:14px;font:700 9px system-ui;color:#66354c;letter-spacing:.1em}
+.wing-gacha-feet{position:absolute;bottom:0;left:40px;width:158px;height:25px;border-radius:6px;background:#cc779a}
+.wing-draw-odds{font:12px/1.5 system-ui;text-align:center;margin:7px 0 18px;color:#6e4a67}
+.wing-draw-odds strong{color:#733b91}
+.wing-gacha-overlay{position:fixed;inset:0;z-index:100500;display:grid;place-items:center;background:#241b37dc;backdrop-filter:blur(7px);pointer-events:auto}
+.gacha-animation{position:relative;width:min(90vw,440px);min-height:300px;border:7px ridge #f2d1ab;border-radius:24px;background:radial-gradient(circle at 40% 20%,#fff0dc,#f5b5d8 62%,#bf7fc2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:22px;text-align:center;overflow:hidden;box-shadow:0 0 70px #efc6f7a1;color:#5e2850}
+.gacha-spinner{font-size:88px;animation:gachaWobble .35s ease-in-out infinite alternate}
+.gacha-pop-capsule{width:92px;height:92px;display:grid;place-items:center;border-radius:50%;border:7px ridge #9e5e9a;background:linear-gradient(0deg,#76d4ec 48%,#fff4d8 50%,#e78aaf 52%);font:900 40px system-ui;animation:gachaBounce .52s ease-in-out infinite alternate}
+.gacha-animation>strong{font:800 18px system-ui;letter-spacing:.11em}
+.gacha-result h3{font:900 clamp(18px,5vw,30px) system-ui;margin:8px 0;text-shadow:0 2px #fff4}
+.gacha-result-image{width:210px;height:190px;display:grid;place-items:center;border-radius:45%;background:#fff9edb3}
+.gacha-result-image img{max-width:100%;max-height:100%;filter:drop-shadow(0 5px 6px #53364766);animation:gachaFloat 1.2s infinite alternate}
+.wing-epic-win .gacha-animation{border-color:#f9e38b;background:radial-gradient(circle,#fffcdc 15%,#ddc8ff 46%,#e4a7cc 80%);box-shadow:0 0 35px 10px #faffc7,0 0 100px 30px #dba3ff}
+.wing-confetti{position:absolute;pointer-events:none;left:var(--x);top:-15%;width:7px;height:17px;background:hsl(var(--h) 90% 65%);animation:wingConfetti 2.8s var(--d) ease-out forwards;z-index:9;transform:rotate(calc(var(--i)*42deg))}
+@keyframes gachaWobble{from{transform:rotate(-13deg)}to{transform:rotate(13deg) translateY(-4px)}}
+@keyframes gachaBounce{from{transform:translateY(-10px) rotate(-22deg)}to{transform:translateY(18px) rotate(35deg)}}
+@keyframes gachaFloat{from{transform:translateY(-8px) rotate(-4deg)}to{transform:translateY(6px) rotate(4deg)}}
+@keyframes wingConfetti{to{transform:translateY(105vh) rotate(1000deg);opacity:.2}}
+.wing-painter{display:grid;grid-template-columns:minmax(230px,270px) minmax(0,1fr);gap:16px;max-width:100%;min-height:65vh}
+.wing-painter-tools{display:flex;flex-direction:column;gap:8px;max-height:68vh;overflow-y:auto;padding:10px;background:#f0e9ec;border:1px solid #c5a9bd;border-radius:10px;font:12px system-ui}
+.wing-painter-tools>label{display:flex;align-items:center;justify-content:space-between;gap:7px}
+.wing-painter-tools input:not([type=checkbox]),.wing-painter-tools select{max-width:138px;min-width:0;color:#352335;background:white;border:1px solid #a895ab;border-radius:5px;padding:4px}
+.wing-painter-tools input[type=range]{width:122px}
+.wing-tools-row{display:flex;flex-wrap:wrap;gap:4px}.wing-tools-row button{flex:1;min-width:45px;border:1px solid #be96a7;background:#fff7f8;border-radius:6px;color:#352337;padding:6px;font:11px system-ui}
+.wing-tools-row button[aria-pressed=true]{background:#553f71;color:white}
+.wing-painter-stage{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;min-height:370px;overflow:hidden;background:#d8c6d4;border-radius:10px;padding:6px}
+.wing-painter-checker{width:100%;max-width:720px;aspect-ratio:768/640;display:flex;align-items:center;justify-content:center;overflow:hidden;background-color:#eee;background-image:linear-gradient(45deg,#c8c2cc 25%,transparent 25%),linear-gradient(-45deg,#c8c2cc 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#c8c2cc 75%),linear-gradient(-45deg,transparent 75%,#c8c2cc 75%);background-size:28px 28px;background-position:0 0,0 14px,14px -14px,-14px 0}
+.wing-painter-canvas{width:100%;height:100%;object-fit:contain;touch-action:none;cursor:crosshair;transform-origin:center center}
+.wing-painter-stage>small{padding:7px;color:#48333e}
+@media(max-width:700px){.wing-painter{grid-template-columns:1fr;gap:8px}.wing-painter-tools{max-height:34vh;overflow:auto}.wing-painter-stage{min-height:300px}.wing-painter-checker{max-height:50vh}}
+@media(prefers-reduced-motion:reduce){.gacha-animation *,.wing-confetti{animation-duration:.01ms!important}}
