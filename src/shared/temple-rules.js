@@ -13,6 +13,7 @@ import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-st
 import {playerStats,refreshStats} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
 import {fuseTemple} from './temple-fusion.js';
+import {ensureFusionIdentity,appendInventoryInstance,removeInventoryInstance,selectEquipmentInstance,swapInventoryInstances} from './fusion-instances.js';
 import {fusionSniperEchoDamage} from './fusion-balance.js';
 import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './island-combat.js';
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
@@ -105,6 +106,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    // Fusion itself clears the equipped material when the final copy is spent.
    if(current.equipment.weapon&&!itemById(current.equipment.weapon))current.equipment.weapon=STARTER_LOADOUT.weapon;
    delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
+  ensureFusionIdentity(current);
   refreshStats(world,current,now);
   if(current.deadUntil>0&&current.deadUntil<=now&&current.hp<=0){
     current.hp=current.maxHp||100;current.deadUntil=0;
@@ -127,7 +129,7 @@ export function worldView(world,actorKey,now=Date.now()){
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
+    profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -136,7 +138,7 @@ function requireAlive(profile,now){return profile.hp>0&&profile.deadUntil<=now?n
 function near(actor,position,radius){return distance2d(actor.position,position)<=radius&&Math.abs((actor.position?.[1]||0)-position[1])<=8;}
 function spend(profile,amount,world){if(profile.admin)return true;if(profile.wallet<amount)return false;profile.wallet-=amount;world.activity.coinBurned+=amount;return true;}
 function earn(profile,amount,world){if(!profile.admin)profile.wallet+=amount;world.activity.coinMinted+=amount;}
-function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>=600)return false;profile.inventory.push(itemId);return true;}
+function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>=600)return false;appendInventoryInstance(profile,itemId);return true;}
 
 export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,journey=null,now=Date.now(),mobility=null){
   const pose=journeyPose(journey,now);
@@ -269,7 +271,7 @@ export function applyAction(world,actor,body,context={}){
     case 'buy':result=buy(world,profile,body);break;
     case 'sell':result=sell(world,profile,body);break;
     case 'equip':result=equip(profile,body);break;
-    case 'unequip':if(!EQUIPPABLE_SLOTS.includes(body.slot))return {error:'Invalid slot'};profile.equipment[body.slot]=null;result={notice:'Unequipped'};break;
+    case 'unequip':if(!EQUIPPABLE_SLOTS.includes(body.slot))return {error:'Invalid slot'};profile.equipment[body.slot]=null;delete profile.equippedInstanceIds[body.slot];result={notice:'Unequipped'};break;
     case 'fuse':result=fuse(world,profile,body,rng);break;
      case 'swap-inventory':{
       const from=body.fromIndex,to=body.toIndex;
@@ -277,8 +279,7 @@ export function applyAction(world,actor,body,context={}){
          from>=profile.inventory.length||to>=profile.inventory.length)
        return {error:'Invalid inventory slot'};
       if(from===to)return {notice:'Inventory unchanged'};
-      [profile.inventory[from],profile.inventory[to]]=
-       [profile.inventory[to],profile.inventory[from]];
+      swapInventoryInstances(profile,from,to);
       result={inventoryReordered:true,fromIndex:from,toIndex:to};
       break;
      }
@@ -311,7 +312,7 @@ function pickupDrop(world,profile,actor,body,now){
   const index=world.groundDrops.findIndex(drop=>drop.id===body.dropId);if(index<0)return {error:'Drop is gone'};
   const drop=world.groundDrops[index];if(drop.expiresAt<=now)return {error:'Drop expired'};if(!near(actor,drop.position,3.2))return {error:'Move closer to the drop'};
   if(drop.owner===actor.key&&now<drop.ownerLockedUntil)return {error:'Drop is still settling'};
-  world.groundDrops.splice(index,1);if(drop.kind==='coin')earn(profile,drop.amount,world);else if(drop.kind==='heart'){if(profile.hp>=profile.maxHp){world.groundDrops.splice(index,0,drop);return {error:'Health is full'};}profile.hp=Math.min(profile.maxHp,profile.hp+(drop.amount||25));}else{addItem(profile,drop.itemId);const item=itemById(drop.itemId);if(item&&EQUIPPABLE_SLOTS.includes(item.slot)&&!profile.equipment[item.slot])profile.equipment[item.slot]=item.id;}
+  world.groundDrops.splice(index,1);if(drop.kind==='coin')earn(profile,drop.amount,world);else if(drop.kind==='heart'){if(profile.hp>=profile.maxHp){world.groundDrops.splice(index,0,drop);return {error:'Health is full'};}profile.hp=Math.min(profile.maxHp,profile.hp+(drop.amount||25));}else{addItem(profile,drop.itemId);const item=itemById(drop.itemId);if(item&&EQUIPPABLE_SLOTS.includes(item.slot)&&!profile.equipment[item.slot])selectEquipmentInstance(profile,item.slot,profile.inventory.length-1);}
   if(drop.itemId){profile.itemOrigins??={};profile.itemOrigins[drop.itemId]='monster';}world.activity.itemsClaimed++;return {notice:drop.kind==='coin'?`+${drop.amount} coins`:drop.kind==='heart'?'Health restored':`Picked up ${itemById(drop.itemId)?.name}`};
 }
 
@@ -376,9 +377,9 @@ function throwArtwork(world,profile,actor,body,context,now){
   return {throwEvent:event,hit,hits,monsterHit,monsterHits,structureHit,structureHits,structureDestroyed,structureDestroyedEvents,notice:monsterHit?.defeated?'Monster defeated · loot dropped':structureDestroyed?'Artwork shattered a structure':undefined};
 }
 
-function buy(world,profile,body){const item=SHOP_ITEMS.find(entry=>entry.id===body.itemId);if(!item)return {error:'Item is not sold'};if(profile.inventory.includes(item.id)&&item.slot!=='seed')return {error:'Already owned'};if(profile.inventory.length>=600)return {error:'Inventory full'};if(!spend(profile,item.price,world))return {error:'Not enough coins'};profile.inventory.push(item.id);profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';return {notice:`Purchased ${item.name}`};}
-function sell(world,profile,body){const item=itemById(body.itemId),index=profile.inventory.indexOf(body.itemId);if(!item||index<0)return {error:'Item is not owned'};if(item.id===STARTER_LOADOUT.weapon||Object.values(profile.equipment).includes(item.id))return {error:'Unequip this item before selling'};profile.inventory.splice(index,1);earn(profile,item.sell||Math.floor((item.price||0)*.25),world);return {notice:`Sold ${item.name} · +${item.sell||0} coins`};}
-function equip(profile,body){const item=itemById(body.itemId);if(!item||!profile.inventory.includes(item.id)||!EQUIPPABLE_SLOTS.includes(item.slot))return {error:'Item is not owned'};profile.equipment[item.slot]=item.id;return {notice:`Equipped ${item.name}`};}
+function buy(world,profile,body){const item=SHOP_ITEMS.find(entry=>entry.id===body.itemId);if(!item)return {error:'Item is not sold'};if(profile.inventory.includes(item.id)&&item.slot!=='seed')return {error:'Already owned'};if(profile.inventory.length>=600)return {error:'Inventory full'};if(!spend(profile,item.price,world))return {error:'Not enough coins'};appendInventoryInstance(profile,item.id);profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';return {notice:`Purchased ${item.name}`};}
+function sell(world,profile,body){const item=itemById(body.itemId),index=profile.inventory.indexOf(body.itemId);if(!item||index<0)return {error:'Item is not owned'};if(item.id===STARTER_LOADOUT.weapon||Object.values(profile.equipment).includes(item.id))return {error:'Unequip this item before selling'};removeInventoryInstance(profile,index);earn(profile,item.sell||Math.floor((item.price||0)*.25),world);return {notice:`Sold ${item.name} · +${item.sell||0} coins`};}
+function equip(profile,body){const item=itemById(body.itemId);if(!item||!profile.inventory.includes(item.id)||!EQUIPPABLE_SLOTS.includes(item.slot))return {error:'Item is not owned'};const index=Number.isInteger(body.inventoryIndex)?body.inventoryIndex:profile.inventory.indexOf(item.id);if(profile.inventory[index]!==item.id)return {error:'Inventory changed: choose the equipment again'};selectEquipmentInstance(profile,item.slot,index);return {notice:`Equipped ${item.name}`};}
 
 export function setArtworkLayout(world,profile,body,now=Date.now()){
   if(!profile.admin)return {error:'GM only'};

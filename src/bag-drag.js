@@ -13,9 +13,14 @@ export function bindBagDrag(ui){
  const exchange=(source,target)=>{
   if(!target||source.index===target.index)return;
   if(ui.bagFusionMode){
-   // Different occupied cells can hold identical IDs; only one physical copy is consumed.
+   // Send actual slot and immutable instance IDs. Retries/stale drags cannot
+   // inadvertently consume a different item with the same catalog ID.
+   const sourceIndex=source.index,targetIndex=Number(target.dataset.inventoryIndex);
+   const ids=ui.world?.profile?.inventoryInstances||[];
    ui.emit('server-action',{action:'fuse',sourceId:source.itemId,
-     targetId:target.dataset.bagItem,requestId:crypto.randomUUID()});
+    targetId:target.dataset.bagItem,sourceIndex,targetIndex,
+    sourceInstanceUid:ids[sourceIndex]?.uid,targetInstanceUid:ids[targetIndex]?.uid,
+    requestId:crypto.randomUUID()});
   }else{
    ui.emit('server-action',{action:'swap-inventory',fromIndex:source.index,
      toIndex:Number(target.dataset.inventoryIndex)});
