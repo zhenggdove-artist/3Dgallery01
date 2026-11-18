@@ -11,7 +11,7 @@ const T=18_500_000,actor=(key,role='fighter')=>({key,name:key,color:'#abcdef',ro
 test('twenty-one swallowtail wings, five Epic specimens and rarity-independent natural colors',()=>{
  assert.equal(SWALLOWTAIL_WINGS.length,21);
  assert.equal(WINGS.length,41);
- assert.equal(new Set(WINGS.map(w=>w.id)).size,40);
+ assert.equal(new Set(WINGS.map(w=>w.id)).size,41);
  for(let i=0;i<21;i++){
   const wing=SWALLOWTAIL_WINGS[i];
   assert.equal(wing.id,'wings-'+(i===16?41:i>16?i+20:i+21));
@@ -95,13 +95,13 @@ test('browser generates animated 3-D Papilio geometry and protected shop link',(
  assert.match(art,/new T\.MeshPhysicalMaterial/);
  assert.match(art,/if\(purple\)/);
  assert.match(art,/addEpicDust/);
- assert.match(garden,/item\?\.design==='swallowtail'/);
+ assert.match(garden,/painted-wing/);
  assert.match(ui,/renderWingShop\(profile\)/);
  assert.match(ui,/GM ONLY · NONCHARGING TEST/);
  assert.match(ui,/data-open-wing-painter/);
  assert.match(ui,/wing-gacha-machine/);
  assert.match(ui,/data-draw-wing/);
- assert.match(ui,/if\(\['gm','wing-shop'\]\.includes\(name\)&&!this\.self\.profile\?\.admin\)return/);
+ assert.match(ui,/if\(\['gm','wing-shop','wing-painter'\]\.includes\(name\)&&!this\.self\.profile\?\.admin\)return/);
  assert.match(index,/id="wing-shop-button" data-panel="wing-shop" hidden/);
  assert.match(css,/#dock #wing-shop-button\[hidden\]\{display:none!important\}/);
  assert.match(index,/src\/reletter\/swallowtail-art\.js/);
