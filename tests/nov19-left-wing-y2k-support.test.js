@@ -39,7 +39,8 @@ test('public SUPPORT never includes GM design/management controls or GM-facing d
  assert.match(editor,/gm-wing-workspace/);
  assert.match(editor,/data-gm-action="wing-painter"/);
  assert.match(editor,/data-gm-action="wing-manage"/);
- assert.match(ui,/if\(\['gm','wing-painter','wing-manage'\]\.includes\(name\)/);
+ assert.match(ui,/if\(\['gm','wing-manage'\]\.includes\(name\)/);
+ assert.match(ui,/wingDesignCredits>0/);
 });
 
 test('Y2K support shows guarded ECPay entitlement and does not invent paid success',()=>{
@@ -53,6 +54,6 @@ test('Y2K support shows guarded ECPay entitlement and does not invent paid succe
  assert.match(ui,/drawRatePct/);
  assert.match(html,/20261119-direct-wings-pay-r7/);
  const section=ui.slice(ui.indexOf('  renderWingShop(profile){'),ui.indexOf('  hydrateWingGalleryImages(){'));
- assert.match(section,/正式收款尚未啟用/);
+ assert.match(section,/正式收款所需綠界商家授權與伺服器金鑰尚未開通/);
  assert.match(section,/checkoutMode/,'backend status determines whether charging is enabled');
 });
