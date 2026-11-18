@@ -25,6 +25,7 @@ try{
   }));
   throw new Error('Temple never loaded: '+JSON.stringify(debug)+'; PAGEERRORS='+errors.join('; ').slice(0,2400),{cause:error});
  }
+ await page.locator('[data-legacy-login]').click();
  await page.locator('#player-name').fill('CIBrowser');
  await page.locator('#entry-form').evaluate(f=>f.requestSubmit());
  await page.locator('#hud').waitFor({state:'visible'});
