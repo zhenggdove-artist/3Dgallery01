@@ -156,8 +156,8 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    // Fusion itself clears the equipped material when the final copy is spent.
    if(current.equipment.weapon&&!itemById(current.equipment.weapon))current.equipment.weapon=STARTER_LOADOUT.weapon;
    // Remove all old wing IDs from BAG and clear obsolete equipped slots.
-   for(const [slot,equipped] of Object.entries(current.equipment))
-    if(equipped&&!current.inventory.includes(equipped))current.equipment[slot]=null;
+   if(current.equipment.wings&&!itemById(current.equipment.wings))
+    current.equipment.wings=null;
    delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
   ensureFusionIdentity(current);
   refreshStats(world,current,now);
