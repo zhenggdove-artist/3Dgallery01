@@ -6,7 +6,7 @@ export const SAFE_ZONE = Object.freeze({x:0,z:0,radius:9});
 export const insideArtSanctuary=position=>Math.hypot(position[0],position[2])<60;
 export const FISHING_POND = Object.freeze({x:-28,z:2,radius:7});
 export const PLAYER_SPAWNS = Object.freeze([
-  [-18,1,15],[18,1,15],[-18,1,-15],[18,1,-15],[0,9,34],[0,9,-34]
+  [4,0,3],[-4,0,3],[4,0,-3],[-4,0,-3],[0,0,5],[0,0,-5]
 ]);
 
 // One renderer and one server rule handle every platform; only data changes.
@@ -26,5 +26,5 @@ export const GROUND_DROP_POINTS = Object.freeze([
 export const MONSTER_SPAWNS = Object.freeze([[0,0,-72],[72,0,0],[0,0,72],[-72,0,0]]);
 
 export function distance2d(a,b){return Math.hypot((a?.[0]||0)-(b?.[0]||0),(a?.[2]||0)-(b?.[2]||0));}
-export function insideArena(position,pad=0){return Array.isArray(position)&&position.length===3&&position.every(Number.isFinite)&&Math.hypot(position[0],position[2])<=ARENA_RADIUS+pad&&position[1]>=-4&&position[1]<=32;}
+export function insideArena(position,pad=0){return Array.isArray(position)&&position.length===3&&position.every(Number.isFinite)&&Math.hypot(position[0],position[2])<=ARENA_RADIUS+pad&&position[1]>=-4&&position[1]<=64;}
 export function insideSafeZone(position){return distance2d(position,[SAFE_ZONE.x,0,SAFE_ZONE.z])<SAFE_ZONE.radius;}
