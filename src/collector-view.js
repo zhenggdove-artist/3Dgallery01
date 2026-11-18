@@ -64,6 +64,7 @@ export class CollectorView{
   this.gunBone=null;this.aimUntil=0;this.flashUntil=0;
   this.target=null;this.seenShots=new Set();this.tracers=[];
   this.tmpHand=new THREE.Vector3();this.tmpAim=new THREE.Vector3();
+  this.speech=null;this.speechUntil=0;this.speechPosition=new THREE.Vector3();
  }
  ensure(){
   if(this.root||!this.arena.characterAsset)return;
@@ -101,6 +102,7 @@ export class CollectorView{
   this.gun.visible=true;
   this.muzzle.visible=true;
   this.onShot?.(shot);
+  this.showTaunt(shot.taunt);
   const from=new THREE.Vector3(...shot.from),to=new THREE.Vector3(...shot.to);
   const offset=to.clone().sub(from),length=offset.length();
   if(length>.05){
@@ -113,6 +115,18 @@ export class CollectorView{
    this.scene.add(mesh);
    this.tracers.push({mesh,until:now+230});
   }
+ }
+ showTaunt(message){
+  if(!message||typeof document==='undefined')return;
+  this.speech?.remove();
+  const speech=document.createElement('div');
+  speech.className='collector-angry-speech';
+  speech.setAttribute('role','status');
+  speech.textContent=String(message);
+  speech.style.left='-9999px';speech.style.top='-9999px';
+  document.body.append(speech);
+  this.speech=speech;
+  this.speechUntil=performance.now()+3000;
  }
  sync(state){
   this.ensure();
@@ -132,8 +146,26 @@ export class CollectorView{
    if(Date.now()-shot.time<3500&&Date.now()>=shot.time-1000)this.showShot(shot);
   }
  }
- update(time){
+ update(time,camera=null){
   const now=performance.now();
+  if(this.speech){
+   if(!this.root?.visible||now>=this.speechUntil){
+    this.speech.remove();this.speech=null;
+   }else if(camera){
+    this.speechPosition.set(
+     this.root.position.x,
+     this.root.position.y+Math.max(3.4,(this.root.userData.chatHeadY||2.8)+1.25),
+     this.root.position.z
+    ).project(camera);
+    const p=this.speechPosition;
+    const visible=p.z>=-1&&p.z<=1&&Math.abs(p.x)<=1.2&&Math.abs(p.y)<=1.2;
+    this.speech.hidden=!visible;
+    if(visible){
+     this.speech.style.left=((p.x+1)*innerWidth/2)+'px';
+     this.speech.style.top=((1-p.y)*innerHeight/2-12)+'px';
+    }
+   }
+  }
   for(let i=this.tracers.length-1;i>=0;i--){
    const tracer=this.tracers[i];
    if(now>=tracer.until){
