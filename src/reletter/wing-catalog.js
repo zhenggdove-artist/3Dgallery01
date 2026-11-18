@@ -26,7 +26,7 @@ const newWings=[
  ['Golden Halo Seraph',5,'#ebd486','#f6aaca'],
  ['Dawnfire Amber Emperor',5,'#f7aa69','#ffeea4']
 ];
-export const SWALLOWTAIL_WINGS=Object.freeze(newWings.map(([name,tier,color,accent],index)=>Object.freeze({
+export const SWALLOWTAIL_WINGS=Object.freeze(newWings.map(([name,tier,color,accent],index)=>({
  id:'wings-'+(21+index),name,slot:'wings',family:'wings',
  design:'swallowtail',premiumWing:true,gmWingExclusive:true,
  style:index%4,patternVariant:index,tier,
