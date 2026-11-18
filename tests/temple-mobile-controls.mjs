@@ -17,9 +17,7 @@ try {
  await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});
  await page.waitForFunction(()=>document.body.classList.contains('ready')&&!!window.templeTest,
   null,{timeout:70000});
- await page.locator('[data-legacy-login]').click();
- await page.locator('#player-name').fill('TouchScopeCI');
- await page.locator('#entry-form').evaluate(form=>form.requestSubmit());
+ await page.evaluate(()=>templeTest.ui.emit('join',{name:'TouchScopeCI',color:'#43b59a',backendUrl:window.TEMPLE_CONFIG.backendUrl}));
  await page.locator('#hud').waitFor({state:'visible'});
  await page.waitForFunction(()=>templeTest.controller()?.enabled&&
   JSON.parse(window.render_game_to_text()).connected,null,{timeout:25000});
