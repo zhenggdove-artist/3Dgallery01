@@ -84,6 +84,8 @@ test('sniper as a fusion material applies only 30% of base ultimate damage; echo
  assert.equal(r.fusion.success,true);
  p.equipment.weapon='ember-1';
  assert.ok(p.fusion['ember-1'].effects.includes('black-cat'));
+ assert.equal(p.fusion['ember-1'].templeStats.damage,undefined,
+  'a first-two-slot sniper material must not add another 30% main damage on top of its 30% echo');
  const ch=applyAction(world,gm,{action:'attack',phase:'charge'},{now:T+2000});
  assert.ok(ch.charging);
  const shot=applyAction(world,gm,{action:'attack',direction:[0,0,1],charge:1},{now:T+5000,rng:()=>.5,actors:[gm]});
@@ -96,6 +98,17 @@ test('sniper as a fusion material applies only 30% of base ultimate damage; echo
  assert.equal(fx.echo,true);
  const server=readFileSync(new URL('../src/shared/temple-rules.js',import.meta.url),'utf8');
  assert.match(server,/lethalHeadshot=!fx\.echo&&/);
+});
+
+test('sniper material in a third fusion slot transfers only 30% of unfused sniper stats',()=>{
+ const world=createInitialWorld(T),gm=ensureProfile(world,'late-sniper','late-sniper','#abcdee',T,true);
+ gm.inventory.push('ember-1','black-cat');
+ gm.fusion['ember-1']={layer:2,attempts:2,effects:['frost-1','storm-1']};
+ const result=fuseTemple(world,gm,{targetId:'ember-1',sourceId:'black-cat',requestId:'late-sniper-3'},()=>0);
+ assert.equal(result.fusion.success,true);
+ assert.deepEqual(gm.fusion['ember-1'].effects,['frost-1','storm-1']);
+ assert.ok(Math.abs(gm.fusion['ember-1'].templeStats.damage-(
+  itemById('ember-1').damage+itemById('black-cat').damage*.3))<.001);
 });
 
 test('monster defeat emits a unique purely visual event, with no damage to nearby fighters',()=>{
