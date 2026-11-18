@@ -6,6 +6,7 @@ import {fuseTemple,fusionChance} from '../src/shared/temple-fusion.js';
 import {itemById,attackStats} from '../src/shared/catalog.js';
 import {weaponQuality} from '../src/shared/weapon-abilities.js';
 import {pvpShotDamage} from '../src/shared/combat-balance.js';
+import {fusionSniperEchoDamage,sniperMaterialStat} from '../src/shared/fusion-balance.js';
 
 const T=100000;
 const actor=(key,admin=false,position=[72,0,20])=>({key,name:key,color:'#abcdee',role:'fighter',admin,position});
@@ -77,7 +78,7 @@ test('invincibility switch controls GM actual monster combat damage',()=>{
  assert.ok(profile.hp<profile.maxHp,'GM becomes vulnerable to ordinary monster attacks');
 });
 
-test('sniper as a fusion material applies only 30% of base ultimate damage; echo cannot force-kill on headshot',()=>{
+test('sniper as fusion material is capped to conventional same-tier echo damage, not lethal headshots',()=>{
  const gm=actor('sniper-fuser',true),world=createInitialWorld(T),p=ensureProfile(world,gm.key,gm.name,gm.color,T,true);
  p.inventory.push('ember-1','black-cat');
  const r=fuseTemple(world,p,{sourceId:'black-cat',targetId:'ember-1',requestId:'sniper-echo-1'},()=>.5);
@@ -92,15 +93,17 @@ test('sniper as a fusion material applies only 30% of base ultimate damage; echo
  const echo=shot.attackEvent.fusionEchoes.find(e=>e.weapon==='black-cat');
  const fx=world.persistentAttacks.find(e=>e.id===echo.id);
  const sniper=itemById('black-cat'),full=attackStats(sniper,1),quality=weaponQuality(sniper);
- const reference=pvpShotDamage(sniper,full,quality);
- assert.ok(Math.abs(fx.damage-full.damage*.3)<.001);
- assert.ok(Math.abs(fx.pvpDamage-reference*.3)<.001);
+ const reference=fusionSniperEchoDamage(sniper);
+ assert.equal(fx.damage,reference.damage);
+ assert.equal(fx.pvpDamage,reference.pvpDamage);
+ assert.ok(fx.pvpDamage<6,'fused sniper should hit like other 20% echoes, not a standalone headshot');
+ assert.ok(fx.damage<full.damage*.2);
  assert.equal(fx.echo,true);
  const server=readFileSync(new URL('../src/shared/temple-rules.js',import.meta.url),'utf8');
  assert.match(server,/lethalHeadshot=!fx\.echo&&/);
 });
 
-test('sniper material in a third fusion slot transfers only 30% of unfused sniper stats',()=>{
+test('sniper material in third fusion slot transfers just 30% of a conventional weapon stat budget',()=>{
  const world=createInitialWorld(T),gm=ensureProfile(world,'late-sniper','late-sniper','#abcdee',T,true);
  gm.inventory.push('ember-1','black-cat');
  gm.fusion['ember-1']={layer:2,attempts:2,effects:['frost-1','storm-1']};
@@ -108,7 +111,7 @@ test('sniper material in a third fusion slot transfers only 30% of unfused snipe
  assert.equal(result.fusion.success,true);
  assert.deepEqual(gm.fusion['ember-1'].effects,['frost-1','storm-1']);
  assert.ok(Math.abs(gm.fusion['ember-1'].templeStats.damage-(
-  itemById('ember-1').damage+itemById('black-cat').damage*.3))<.001);
+  itemById('ember-1').damage+sniperMaterialStat(itemById('black-cat'),'damage')*.3))<.001);
 });
 
 test('monster defeat emits a unique purely visual event, with no damage to nearby fighters',()=>{
