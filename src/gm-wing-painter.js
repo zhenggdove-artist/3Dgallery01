@@ -71,7 +71,7 @@ export function mountWingPainter(ui){
    <label>跳躍推力<input data-wing-field="impulse" type="number" step=".1" min="5" max="18" value="${design.impulse}"></label>
    <label>重力係數<input data-wing-field="gravity" type="number" step=".01" min=".2" max="1" value="${design.gravity}"></label>
    <label>翅膀拍動間隔（ms）<input data-wing-field="flapMs" type="number" min="180" max="900" step="10" value="${design.flapMs}"></label>
-   <button type="button" class="panel-button" data-wing-publish>儲存、上架並自動裝備</button>
+   <button type="button" class="panel-button" data-wing-publish>${design.id?'儲存修改並重新上架':'儲存、上架並自動裝備'}</button>
    <small>以「自由畫輪廓」一筆畫出外形並放開自動閉合，之後可使用畫筆、橡皮擦、Undo／Redo 與清除重畫。滾輪縮放、拖曳畫布移動。上架後加入 GM 背包。</small>
   </div>
   <div class="wing-painter-stage"><div class="wing-left-wing-label"><strong>LEFT WING · 左翅原圖</strong><span>RIGHT WING · 自動鏡像</span></div><div class="wing-painter-checker">
@@ -134,7 +134,7 @@ export function mountWingPainter(ui){
    if(!Number.isFinite(input.drawRatePct)||input.drawRatePct<0||input.drawRatePct>100)
     return report('中獎率必須為 0–100%');
    if(input.strokes.length>90)return report('筆畫超出 90 筆，請使用 Undo 減少筆畫');
-   if(JSON.stringify({action:'gm-wing-publish',wing:input}).length>280000)
+   if(JSON.stringify({action:design.id?'gm-wing-update':'gm-wing-publish',wing:input}).length>280000)
     return report('繪圖資料超過上架容量，請減少筆畫');
    publishing=true;b.disabled=true;
    report('正在儲存翅膀至伺服器…');
@@ -146,12 +146,12 @@ export function mountWingPainter(ui){
     report('上架逾時；請至 SUPPORT → GM 翅膀管理確認是否已建立，再決定是否重試');
    },35000);
    ui.emit('wing-publish-request',{
-    wing:input,
+    wing:input,wingId:design.id||null,
     resolve:result=>{
      clearTimeout(timeout);
      if(!publishing)return;
      publishing=false;b.disabled=false;
-     report('已上架並自動裝備：'+(result?.wingName||input.name));
+     report((design.id?'已更新並上架：':'已上架並自動裝備：')+(result?.wingName||input.name));
      ui.wingDraft=null;
     },
     reject:error=>{

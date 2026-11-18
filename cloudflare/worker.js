@@ -1,5 +1,5 @@
 import {initializeArtMedia,uploadArtMedia,getArtMedia} from './art-media.js';
-import {wingPaymentApi} from './ecpay-wing-payments.js';
+import {initializeWingOrders,wingPaymentStatus,wingCheckoutApi,wingOrderStatus,wingNotifyApi} from './ecpay-wing-payments.js';
 import {verifyFirebaseIdToken,firebaseWebConfig,firebaseProfileKey,isFirebaseGm} from './firebase-auth.js';
 import {recoverArtworks} from '../src/shared/artwork-recovery.js';
 import {resetPlayerArtworks} from '../src/shared/art-bomb.js';
@@ -17,7 +17,7 @@ export default {
   async fetch(request,env){
     const url=new URL(request.url);
     if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:3,features:{artMediaUpload:true,artBombPlace:true,gmReset:true}}),env);
-    if(url.pathname.startsWith('/api/wing-pay/'))return withCors(request,await wingPaymentApi(request),env);
+    if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
   }
@@ -39,6 +39,7 @@ export class TempleRoom extends DurableObject{
        CREATE TABLE IF NOT EXISTS gm_music_chunks (version INTEGER NOT NULL, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(version,part));
     `);
     initializeArtMedia(this.sql);
+     initializeWingOrders(this.sql);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
   }
@@ -55,6 +56,7 @@ export class TempleRoom extends DurableObject{
     if(request.method==='OPTIONS')return withCors(request,new Response(null,{status:204}),this.env);
     if(!this.allowed(request))return withCors(request,json({error:'Origin is not allowed'},403),this.env);
     try{
+      if(path==='/api/wing-pay/notify')return withCors(request,await wingNotifyApi(this,request),this.env);
       if(path==='/api/firebase/config'&&request.method==='GET')
        return withCors(request,json(firebaseWebConfig(this.env)),this.env);
       if(path==='/api/firebase/profile'&&request.method==='POST'){
@@ -75,6 +77,12 @@ export class TempleRoom extends DurableObject{
         return withCors(request,media?new Response(media.data,{headers:{'Content-Type':media.type,'X-Content-Type-Options':'nosniff','Cache-Control':'public,max-age=31536000,immutable'}}):json({error:'Media missing'},404),this.env);
       }
       const token=this.token(request,url),session=this.session(token);if(!session)return withCors(request,json({error:'Session expired'},401),this.env);
+      if(path==='/api/wing-pay/status'&&request.method==='GET'){
+       const profile=this.world().profiles[session.profile_key];
+       return withCors(request,json(wingPaymentStatus(this.env,!!profile?.admin)),this.env);
+      }
+      if(path==='/api/wing-pay/checkout'&&request.method==='POST')return withCors(request,await wingCheckoutApi(this,request,session),this.env);
+      if(path==='/api/wing-pay/order'&&request.method==='GET')return withCors(request,wingOrderStatus(this,request,session),this.env);
       if(path==='/api/art-media'&&request.method==='POST')return withCors(request,await uploadArtMedia(request,session,this),this.env);
       if(path==='/api/socket')return this.connect(request,session,token);
       if(path==='/api/media'&&request.method==='POST')return withCors(request,await this.uploadMedia(request,session),this.env);
@@ -221,7 +229,7 @@ export class TempleRoom extends DurableObject{
      const next={position:[...newProfile.respawnPosition],rotation:0,animation:'idle',visible:true};
      this.sql.exec('UPDATE sessions SET state=? WHERE id=?',JSON.stringify(next),session.id);
     }
-    const response={ok:true,...result,world:worldView(world,session.profile_key,Date.now(),['gm-wing-publish','gm-wing-remove','gm-wing-set-rate'].includes(body.action))};
+    const response={ok:true,...result,world:worldView(world,session.profile_key,Date.now(),['gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate'].includes(body.action))};
     this.ctx.storage.transactionSync(()=>{
       this.save(world);
       if(body.action==='reset-player-artworks'&&Array.isArray(result.removedArtworkMediaIds)){

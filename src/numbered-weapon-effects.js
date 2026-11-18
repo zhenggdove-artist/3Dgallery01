@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {ForwardChannelBeam} from './forward-channel-beam.js';
 // These are byte-for-byte official 00GameDevs downloads. Their SHA-256 hashes,
 // source URLs and licenses are verified in vendor/00gamedevs/numbered-manifest.json.
 // Do not substitute hand-built primitives, screenshots or similar-looking shaders.
@@ -248,6 +249,12 @@ export class NumberedWeaponEffects {
   this.active.push(entry);
   if(this.active.length>14)this.remove(this.active.find(e=>!e.channel)||this.active[0]);
   this.align(entry);
+  // The native #08/#29 artwork may remain at its authored origin.
+  // Keep a separate physical ray attached to the moving/aiming staff muzzle.
+  if(entry.channel&&(spec.number===8||spec.number===29)){
+   entry.forwardBeam=new ForwardChannelBeam(this.scene,spec.number===8);
+   entry.forwardBeam.update(this.muzzleAt(entry),entry.visualDirection,entry.range,entry.age);
+  }
   if(entry.worldScale!=null)fx.group.scale.setScalar(entry.worldScale);
   // The vendor clamps 'size' at 2. Double the physical world-space group.
   if(spec.number===26)fx.group.scale.setScalar(entry.worldScale||2*quality);
@@ -490,6 +497,7 @@ export class NumberedWeaponEffects {
     continue;
    }
    if(e.cycles){this.updateNativeCycles(e,dt);continue;}
+    if(e.forwardBeam)e.forwardBeam.update(this.muzzleAt(e),e.visualDirection,e.range,e.age);
    if(e.singleTravel){
     const t=Math.min(1,e.age/travelLifetime(e.spec.number));
     const ease=t*t*(3-2*t);
@@ -542,6 +550,7 @@ export class NumberedWeaponEffects {
   const i=this.active.indexOf(e);
   if(i<0)return;
   this.active.splice(i,1);
+  e.forwardBeam?.dispose();
   if(e.palmLayers){
    for(const fx of e.palmLayers)this.recycle(e.spec,fx);
    e.palmLayers.length=0;return;

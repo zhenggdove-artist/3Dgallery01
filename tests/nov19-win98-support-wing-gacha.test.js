@@ -55,8 +55,9 @@ test('Win98 login, public SUPPORT, functioning crank and full viewport painter a
  assert.match(html,/id="wing-shop-button" data-panel="wing-shop"/);
  assert.match(html,/<span>SUPPORT<\/span>/);
  assert.doesNotMatch(html,/data-action="save-code"/);
- assert.match(ui,/data-draw-wing aria-label="轉動扭蛋機"/);
+ assert.match(ui,/data-draw-wing aria-label="開始扭蛋抽獎"/);
  assert.match(ui,/action:this\.self\?\.profile\?\.admin\?'gm-wing-draw':'wing-draw'/);
+ assert.match(ui,/>START<\/button>/);
  assert.match(main,/\['gm-wing-draw','wing-draw'\]\.includes\(action\)/);
  assert.match(css,/body\.panel-wing-painter #panel\{/);
  assert.match(css,/width:100vw!important;height:100dvh!important/);
