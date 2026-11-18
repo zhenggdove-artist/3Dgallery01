@@ -1,9 +1,11 @@
+import {epicSpecimenCanvas,addEpicDust} from './epic-specimens.js';
 // Premium Papilio atlas: 20 individual, deterministic, transparent 2D
 // silhouettes applied to skinned 3D-character wing planes. Only create
 // canvases for actually visible wings; high detail is paint, not draw calls.
 const atlases=new Map();
 export function swallowtailCanvas(item){
  if(atlases.has(item.id))return atlases.get(item.id);
+ if(item.tier===4&&item.specimen){const art=epicSpecimenCanvas(item);atlases.set(item.id,art);return art;}
  const canvas=document.createElement('canvas');
  canvas.width=768;canvas.height=640;
  const c=canvas.getContext('2d');
@@ -134,12 +136,13 @@ export function swallowtailModel(T,item){
   face.position.set(side*.70,.21,-.025);face.scale.x=side;
   // Fan the two wings slightly back so the silhouette is legible in profile.
   hinge.rotation.y=side*.11;hinge.add(face);root.add(hinge);
-  if(item.tier===4){
+  if(item.tier===4&&!item.specimen){
    const inner=new T.Mesh(new T.PlaneGeometry(1.08,1.22),material);
    inner.position.set(side*.38,-.24,-.13);inner.scale.x=side*.72;
    inner.rotation.z=side*.15;hinge.add(inner);
   }
  }
+ if(item.tier===4)addEpicDust(T,root);
  root.userData.texture=texture;
  return root;
 }
