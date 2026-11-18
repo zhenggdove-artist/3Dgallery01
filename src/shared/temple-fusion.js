@@ -47,6 +47,10 @@ export function fuseTemple(world,profile,body,rng=Math.random){
   return result;
  }
  const main=equippedItem(profile,target),material=equippedItem(profile,source),stats={...(old.templeStats||{})};
+ // Remove legacy inherited long-range stats so subsequent server saves no
+ // longer retain oversized normal collision dimensions.
+ if(target.slot==='weapon'&&(['whip','swatter','pan','planter','palm'].includes(target.family)||
+     target.id==='accordion')){delete stats.range;delete stats.radius;}
  // Affixes always accumulate; only ULTIMATE echoes have the two-source limit.
  const affixIds=[...new Set([...itemAffixes(main),...itemAffixes(material),
   ...itemAffixes(old),...itemAffixes(old.original)])];
