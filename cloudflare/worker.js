@@ -127,7 +127,7 @@ export class TempleRoom extends DurableObject{
     let existing=world.profiles?.[profileKey];
     // Preserve the original GM inventory/works/progression when the securely
     // configured Firebase GM UID logs in for the first time. Keep source copy.
-    if(identity&&admin&&!existing){
+    if(identity&&admin&&!existing?.admin){
       const oldEntry=Object.entries(world.profiles||{}).find(([key,p])=>
         key!==profileKey&&p?.admin===true&&p?.name==='Ely');
       if(oldEntry){
