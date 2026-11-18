@@ -140,7 +140,15 @@ export class TempleRoom extends DurableObject{
     const world=this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:state.position},actors=this.actors();
     delete body.verifiedArtMedia;if(body.action==='add-artwork'||body.action==='publish-art-bomb'){const media=this.sql.exec('SELECT id,type,owner FROM art_media WHERE id=?',String(body.artwork?.mediaId||'')).toArray()[0];if(!media||media.owner!==session.profile_key||body.action==='add-artwork'&&!actor.admin||body.action==='publish-art-bomb'&&session.role!=='fighter')return json({error:'Upload your own validated artwork with the required role first'},403);body.verifiedArtMedia={id:media.id,type:media.type};}
     if(body.media||body.surface){const mediaId=body.media?.id||body.surface,media=this.sql.exec('SELECT id,type,owner FROM plant_media WHERE id=?',mediaId).toArray()[0];if(!media||media.owner!==session.profile_key||body.surface&&!media.type.startsWith('image/'))return json({error:'Upload your own media first'},400);if(body.media)body.media={id:media.id,type:media.type};}
+    const previousRespawnAt=world.profiles[session.profile_key]?.lastRespawnAt||0;
     const result=applyAction(world,actor,body,{now:Date.now(),actors,seatIndex:session.seat});if(result.error)return json({error:result.error},400);
+    // Handle explicit or login-time revivals during an HTTP action too.
+    const newProfile=world.profiles[session.profile_key];
+    const didRespawn=(newProfile?.lastRespawnAt||0)>previousRespawnAt;
+    if(didRespawn){
+     const next={position:[...newProfile.respawnPosition],rotation:0,animation:'idle',visible:true};
+     this.sql.exec('UPDATE sessions SET state=? WHERE id=?',JSON.stringify(next),session.id);
+    }
     const response={ok:true,...result,world:worldView(world,session.profile_key)};
     this.ctx.storage.transactionSync(()=>{
       this.save(world);
@@ -153,7 +161,7 @@ export class TempleRoom extends DurableObject{
       this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,JSON.stringify(response),Date.now());
       this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);
     });
-    this.broadcastWorld(world);if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))this.broadcast('structure-hit',hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))this.broadcast('structure-destroyed',broken);await this.armAlarm();return json(response);
+    this.broadcastWorld(world);if(didRespawn)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))this.broadcast('structure-hit',hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))this.broadcast('structure-destroyed',broken);await this.armAlarm();return json(response);
   }
 
   async saveCode(session){
@@ -308,7 +316,32 @@ export class TempleRoom extends DurableObject{
     // full roster on every 70ms weapon-effect tick.
     if(now-(this.lastRosterAt||0)>=800)this.broadcastRoster();
   }
-  async tick(fromState=false){const now=Date.now();const world=this.world();const movingEffects=(world.persistentAttacks||[]).length>0;if(fromState&&now-this.lastTick<(movingEffects?70:500))return;this.lastTick=now;const actors=this.actors();if(tickWorld(world,{now,activeFighters:actors.filter(a=>a.role==='fighter').length,actors})){this.save(world);this.broadcastWorld(world);}await this.armAlarm();}
+  async tick(fromState=false){
+   const now=Date.now(),world=this.world(),movingEffects=(world.persistentAttacks||[]).length>0;
+   if(fromState&&now-this.lastTick<(movingEffects?70:500))return;
+   this.lastTick=now;
+   const actors=this.actors();
+   const previousRespawns=new Map(actors.map(actor=>[actor.key,world.profiles[actor.key]?.lastRespawnAt||0]));
+   if(tickWorld(world,{now,activeFighters:actors.filter(a=>a.role==='fighter').length,actors})){
+    // Do not leave remote replicas or the authoritative actor at the old
+    // death location. Move every newly revived fighter into the WRITE hub.
+    let respawned=false;
+    for(const actor of actors){
+     const profile=world.profiles[actor.key];
+     if(actor.role!=='fighter'||!profile?.lastRespawnAt||
+        profile.lastRespawnAt<=(previousRespawns.get(actor.key)||0))continue;
+     const position=profile.respawnPosition||PLAYER_SPAWNS[actor.seat%PLAYER_SPAWNS.length];
+     const state={position:[...position],rotation:0,animation:'idle',visible:true};
+     this.sql.exec('UPDATE sessions SET state=? WHERE id=?',JSON.stringify(state),actor.id);
+     this.broadcast('state',{id:actor.id,key:actor.key,name:actor.name,color:actor.color,
+      role:actor.role,seat:actor.seat,state});
+     respawned=true;
+    }
+    this.save(world);this.broadcastWorld(world);
+    if(respawned)this.broadcastRoster();
+   }
+   await this.armAlarm();
+  }
   async alarm(){this.prune();await this.tick();}
   async armAlarm(){if(this.roster().length)await this.ctx.storage.setAlarm(Date.now()+1_000);}
 }
