@@ -1,91 +1,97 @@
-# GGTEMPLE — Wing Shop / ECPay Apple Pay scaffold
+# GGTEMPLE — 2026-11-19 Wing Atelier and ECPay
 
-## Current status
-**GM-only preview, not a live payment service.** The WING SHOP is visible
-only to authenticated GMs, and its draw action is FREE for development.
-All checkout/payment fulfilment endpoints remain disabled. No real currency
-is charged or awarded and no client can activate payment by changing JS.
+## Product
+The gacha / random lottery has been completely retired on the server.
+Every successful real-money order (NT$30) purchases exactly **one** original
+personal wing drawing credit, **not** an item or five random draws.
 
-## Official ECPay sources
-- Apple Pay checkout: https://developers.ecpay.com.tw/7328/
-- Aio payment API: https://developers.ecpay.com.tw/2864/
-- Payment notification ReturnURL: https://developers.ecpay.com.tw/2878/
-- CheckMacValue verification: https://developers.ecpay.com.tw/2902/
-- 2025 Apple Pay update: https://www.ecpay.com.tw/announcement/DetailAnnouncement?nID=5599
+The logged-in player's left-hand dock shows the **GIFT** button only when
+`wingDesignCredits > 0`. It opens the same 768×640 freehand painter as GM.
+Saving calls `redeem-wing-design`; the server validates the submitted strokes,
+creates a personal `gm-wing-UUID`, inserts into the owner's BAG, equips it,
+and consumes exactly one verified credit in the same durable state write.
+The item does **not** enter `SHOP_ITEMS` or any public listing or draw pool.
+One credit can never be used twice. Cosmetic wing gameplay attributes are
+server-capped: tier 3, glide, impulse 10.15, gravity 0.585, flap 300ms.
+Do not trust client-supplied stats, credits, claimed payment success or price.
 
-Provider-hosted Apple Pay checkout is an HTTPS **form POST** to
-https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5 in testing,
-or https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5 for production.
-ECPay merchant activation and eligible buyer platform/browser are required.
+## Regular coin shop
+Exactly fourteen material wings:
+- BLUE: wooden planks, three balloons per side, tattered rags, scrap metal, adhesive tape.
+- GOLD: chicken feather, plastic sheet, furry, koi streamer.
+- PURPLE: peacock, swan, cyberpunk, steampunk, monster eyes.
 
-## Cloudflare Worker routes, active as disabled placeholders
-- GET /api/wing-pay/status: ECPay + ApplePay, currency TWD, enabled false.
-- POST /api/wing-pay/checkout: HTTP 503; no transaction.
-- POST /api/wing-pay/notify: HTTP 503; cannot grant wings.
+Quality refers to equipment tier/design complexity, **not actual color**.
+Legacy catalog `wings-1..20`, `wings-21..27` and other excluded designs are
+retired, including legacy ownership/equipment references on profile migration.
+All fourteen remaining wings are purchasable in the ordinary coin SHOP and
+do not drop from monsters or the ground.
 
-## Required work before a real-money launch
-1. Obtain merchant approval for ECPay and Apple Pay. Securely configure
-   MerchantID, HashKey and HashIV as **server-only Cloudflare secrets**.
-   Never put these in git, public JavaScript or website settings.
-2. Configure HTTPS merchant domain and server-to-server ReturnURL.
-3. Add a server-generated, unique MerchantTradeNo and durable SQL order
-   ledger: player ID, wing SKU or disclosed random draw offer, TWD amount,
-   pending/paid/refunded status, and idempotent fulfilment token.
-4. Build the server-side AioCheckOut fields and SHA256 CheckMacValue
-   EXACTLY as documented by ECPay. Redirect with an HTML form POST.
-5. Handle the authenticated ReturnURL on the server only. Verify
-   CheckMacValue, MerchantID, order number, original price, success code,
-   and duplicate notification before making an **atomic** wing grant.
-   Never trust a browser redirect, client-side price or any pay-success flag.
-6. Test end-to-end on ECPay stage. Implement refund/chargeback process and
-   explicit odds disclosure / review of applicable consumer and loot-box
-   policies before enabling a paid random lottery.
-7. Add and separately review a production checkout path; merely adding
-   credentials cannot enable charging in this fail-closed scaffold.
+## ECPay architecture
+Cloudflare Worker / Durable Object `TEMPLE_ROOM` provides:
+- `GET /api/wing-pay/status` (authenticated) — return allowed checkout mode.
+- `POST /api/wing-pay/checkout` (authenticated) — create a unique immutable
+  NT$30 order in Durable Object SQLite `wing_design_orders` and return
+  signed AioCheckOut/V5 fields.
+- `GET /api/wing-pay/order?id=<MerchantTradeNo>` — owner-only verification
+  after returning from ECPay; no browser-side entitlement assignment.
+- `POST /api/wing-pay/notify` — validate merchant ID, SHA256 CheckMacValue,
+  exact order number, correct price, transaction ID and RtnCode; reject
+  simulation callbacks and increment one server-side design credit once in
+  a Durable Object transaction. Repeated callbacks never double-grant.
 
-## Wing catalog and authority
-- Old wings-1 through wings-20 are preserved.
-- 20 ADDITIONAL premium Papilio designs: wings-21 to wings-40.
-- Four white Common / green Uncommon / blue Rare / purple Epic / gold Relic.
-- Purple has the most elaborate patterns and separate luminous wing sails;
-  white and green intentionally have simpler surfaces.
-- All 40 wings are excluded from environmental and monster loot.
-  Preexisting dropped wings are cleaned from the saved world.
-- All wings remain excluded from the ordinary coin shop.
-- GM preview is server-authorized: no paid access, no currency deductions,
-  no duplicates, server-chosen weighted rarity and a maximum 20 new wings.
-- Previously owned legitimate wings are not confiscated.
+The ECPay hosted checkout is a hidden HTML POST using `target="_self"`
+to avoid iOS popup blockers. The buyer returns to `TEMPLE_GAME_URL` with
+a `wingOrder` query identifier. The order is also saved in sessionStorage
+until an authenticated verification confirms payment.
 
-## ECPay sandbox checkout development branch (2026-11-19)
+### Production activation — not yet enabled
+Real payments **cannot** be enabled or verified in production without
+a real approved ECPay merchant account. These are **server-only** Cloudflare
+Worker secrets / settings (never commit or expose in GitHub Pages):
+- `ECPAY_MERCHANT_ID` — approved live MerchantID.
+- `ECPAY_HASH_KEY` — live production HashKey.
+- `ECPAY_HASH_IV` — live production HashIV.
+- `ECPAY_PRODUCTION_ENABLED=true` — explicit guarded production switch.
+- `TEMPLE_GAME_URL` — HTTPS URL where players return after checkout.
 
-Branch: feature/ecpay-wing-stage-only-20261119. NOT production enabled.
-The live GGTEMPLE remains unchanged until this branch is reviewed and merged.
-The Worker additionally requires ECPAY_WING_STAGE_ENABLED=true in an isolated
-sandbox Worker environment. Otherwise checkout always fails closed.
+The feature requires the ECPay merchant to be activated and authorized to
+sell the digital wing drawing entitlement, suitable real domain/return URLs,
+and a production merchant contract. Without the switch *and* all three
+credentials, `checkoutEnabled=false` and POST checkout fails 503.
+Do not silently switch to the public sandbox keys in production.
 
-- Uses only ECPay's public testing MerchantID/HashKey/HashIV from
-  https://developers.ecpay.com.tw/2856/ ; never use production keys.
-- NT$30 / five draws, restricted to authenticated Firebase GM sessions.
-- GET /api/wing-pay/status: session-authenticated sandbox availability.
-- POST /api/wing-pay/checkout: GM only, unique signed ECPay sandbox order;
-  stored in the existing Durable Object SQLite, not a new D1 database.
-- GET /api/wing-pay/order?id=...: owner-only order status.
-- POST /api/wing-pay/notify: validates SHA256 CheckMacValue, MerchantID,
-  order number, exact amount, positive payment status, and credits only once.
-  SimulatePaid=1 is ignored because simulation is NOT payment.
-- Stage credits persist in wingPaidDraws; non-admin wing draws spend the
-  initial five free draws first, then paid draw credits.
-- The SUPPORT panel shows a sandbox checkout button to the GM only.
-- The gateway is ECPay hosted test checkout, not embedded Apple Pay.
-- The sandbox switch CANNOT activate real-money payment.
+Production gateway:
+https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5
 
-BEFORE REAL-MONEY LAUNCH: get ECPay approval for the paid random virtual
-cosmetic category, publish actual wing probability tables, rotate any
-production HashKey/HashIV that appeared in screenshots, implement separately
-reviewed production reconciliation and refund/chargeback controls. Never use
-the stage switch as a production activation method.
+For an isolated staging Worker backed by a **different** Durable Object,
+`ECPAY_WING_STAGE_ENABLED=true` permits authenticated GM test transactions.
+Stage is never real-money and must not be connected to live player credits.
+Stage gateway:
+https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5
 
-Run npm run check and npm test. The unit tests cover ECPay's documented MAC
-test vector, tampering, order ownership and duplicate callback handling.
-For manual test, deploy a separate staging Worker with its own Durable Object
-and enable the stage switch ONLY there; do not point it at live player saves.
+**Before charging customers:** configure an approved merchant account, check
+the production callback endpoint from ECPay's servers, perform a real low-value
+purchase with authorized payment, verify exactly one gift appears and disappears
+after a save, and separately test refund/reversal, cancellation, reconciliation,
+and chargeback flows. These merchant-side tests cannot be done without the
+merchant credentials and payment approval. The code currently does not perform
+automatic credit reversal after refunds. Complete payment acceptance, consumer
+disclosures and refund handling before public production activation.
+
+Official ECPay documentation:
+- Aio payment: https://developers.ecpay.com.tw/2864/
+- ReturnURL: https://developers.ecpay.com.tw/2878/
+- CheckMacValue: https://developers.ecpay.com.tw/2902/
+- Test credentials: https://developers.ecpay.com.tw/2856/
+
+## Visual effects
+`WeaponVFX.forwardBeams` owns persistent long forward spell effects independent
+of the native 00GameDevs #08/#29 shader. The client draws an actual luminous
+cylinder core, shell, moving pulse and tendrils from the live staff muzzle along
+the attack direction and its server range, updating as the player aims. The
+visual effect does not change the server's hitbox or cause damage independently.
+
+## CI
+Run `npm run check` and `npm test`, then both Chromium browser and WebKit
+gameplay smoke. Test the physical ECPay gateway separately on a staging Worker.
