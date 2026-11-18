@@ -136,7 +136,7 @@ test('cross-rarity fusion works for shop-bought weapons and headwear',()=>{
  const now=31_000_000,w=createInitialWorld(now),person=actor('buyer',[75,0,0]);
  const p=ensureProfile(w,'buyer','Buyer','#abcdef',now);p.wallet=100000;
  for(const id of ['frost-1','ember-1','storm-1','temple-halo'])p.inventory.push(id);
- const fuse=(sourceId,targetId,requestId,at)=>applyAction(w,person,{action:'fuse',sourceId,targetId,requestId},{now:at});
+ const fuse=(sourceId,targetId,requestId,at)=>applyAction(w,person,{action:'fuse',sourceId,targetId,requestId},{now:at,rng:()=>0});
  assert.equal(fuse('frost-1','ember-1','fuse-echo-first',now+100).fusion.success,true);
  assert.equal(fuse('storm-1','ember-1','fuse-echo-second',now+200).fusion.success,true);
  assert.equal(fuse('temple-halo','ember-1','fuse-stats-third',now+300).fusion.success,true);
