@@ -6,7 +6,7 @@ export function bindChatLayout(){
  const handle=document.getElementById('chat-resize');
  const toggle=document.getElementById('chat-toggle');
  const mobile=matchMedia('(pointer:coarse)').matches;
- let active=null,timer=null,toggleTimer=null,expanded=false,minimized=false,ignoreClick=false;
+ let active=null,timer=null,toggleTimer=null,expanded=false,minimized=false,ignoreClick=false,minimizedAt=0;
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
  const resize=height=>{const h=limit(height,Math.min(112,innerHeight*.5),innerHeight*.5);panel.style.setProperty('--chat-height',h+'px');};
  const blocking=()=>['#attack-button','#mobile-stick','#dock [data-action=jump]','#dock [data-action=interact]']
@@ -35,12 +35,15 @@ export function bindChatLayout(){
  toggle.addEventListener('pointerdown',e=>{
   if(!mobile||e.pointerType==='mouse')return;
   clearTimeout(toggleTimer);
-  toggleTimer=setTimeout(()=>{ignoreClick=true;minimize(true);},1000);
+  toggleTimer=setTimeout(()=>{ignoreClick=true;minimizedAt=performance.now();minimize(true);},1000);
  });
  const clearToggle=()=>{clearTimeout(toggleTimer);toggleTimer=null;};
  for(const event of ['pointerup','pointercancel','pointerleave'])toggle.addEventListener(event,clearToggle);
  toggle.addEventListener('click',e=>{
-  if(ignoreClick){ignoreClick=false;e.preventDefault();return;}
+  // Some mobile browsers suppress the click following a long press.
+  // Do not swallow the user's next actual tap to restore the chat.
+  if(ignoreClick&&performance.now()-minimizedAt<350){ignoreClick=false;e.preventDefault();return;}
+  ignoreClick=false;
   if(minimized){minimize(false);return;}
   expanded=!expanded;resize(expanded?Math.min(240,innerHeight*.45):118);
   toggle.textContent=expanded?'−':'＋';toggle.setAttribute('aria-expanded',String(expanded));
