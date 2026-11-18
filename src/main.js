@@ -19,6 +19,7 @@ import {VitalModels} from './vital-models.js';
 import {createVHS} from './reletter-vhs.js';
 import {TempleArena} from './arena-view.js';
 import {TempleNetwork} from './network.js';
+import {beginWingStageCheckout} from './wing-payment-client.js';
 import {PlayerController} from './player-controller.js';
 import {STAFF_RAISE_SECONDS} from './staff-raise-pose.js';
 import {TempleUI} from './ui.js';
@@ -165,6 +166,7 @@ async function initializeGoogleAuth(){
     ui.setFirebaseLoginStatus(false,'Google 登入初始化失敗：'+(error?.message||'Unknown error'));
   }
 }
+ui.addEventListener('wing-payment-stage-checkout',()=>void beginWingStageCheckout(network,ui));
 ui.addEventListener('firebase-login',async()=>{
   try{
     // Firebase SDK is preloaded before clicking the button, keeping the popup

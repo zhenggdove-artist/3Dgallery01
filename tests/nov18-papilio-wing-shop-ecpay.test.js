@@ -5,7 +5,7 @@ import {SWALLOWTAIL_WINGS,WINGS} from '../src/reletter/wing-catalog.js';
 import {SHOP_ITEMS,groundDropRoll,monsterDropRoll,itemById} from '../src/shared/catalog.js';
 import {drawGmWing,wingRarity,WING_QUALITY_WEIGHTS,WING_QUALITY_NAMES} from '../src/shared/wing-shop.js';
 import {createInitialWorld,ensureProfile,applyAction,migrateWorld} from '../src/shared/temple-rules.js';
-import {ECPAY_GATEWAYS,wingPaymentStatus,wingPaymentApi} from '../cloudflare/ecpay-wing-payments.js';
+import {STAGE_GATEWAY,wingPaymentStatus} from '../cloudflare/ecpay-wing-payments.js';
 const T=18_500_000,actor=(key,role='fighter')=>({key,name:key,color:'#abcdef',role,position:[15,0,0]});
 
 test('twenty-one swallowtail wings, five Epic specimens and rarity-independent natural colors',()=>{
@@ -109,18 +109,13 @@ test('browser generates animated 3-D Papilio geometry and protected shop link',(
  assert.match(index,/<span>SUPPORT<\/span>/);
 });
 
-test('ECPay and Apple Pay integration is explicitly noncharging, fail-closed and stage-ready',async()=>{
- assert.equal(ECPAY_GATEWAYS.stage,'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5');
- assert.equal(ECPAY_GATEWAYS.production,'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5');
+test('ECPay remains sandbox-only, defaults disabled, and routes through durable signed fulfilment',()=>{
+ assert.equal(STAGE_GATEWAY,'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5');
  assert.equal(wingPaymentStatus().checkoutEnabled,false);
- const status=await wingPaymentApi(new Request('https://game.example/api/wing-pay/status'));
- assert.equal(status.status,200);
- assert.equal((await status.json()).currency,'TWD');
- for(const endpoint of ['checkout','notify']){
-  const response=await wingPaymentApi(new Request('https://game.example/api/wing-pay/'+endpoint,{method:'POST'}));
-  assert.equal(response.status,503,endpoint);
- }
+ assert.equal(wingPaymentStatus().currency,'TWD');
+ assert.equal(wingPaymentStatus({ECPAY_WING_STAGE_ENABLED:'true'},false).checkoutEnabled,false);
  const worker=readFileSync(new URL('../cloudflare/worker.js',import.meta.url),'utf8');
- assert.match(worker,/wingPaymentApi/);
+ assert.match(worker,/wingNotifyApi\(this,request\)/);
+ assert.match(worker,/wingCheckoutApi\(this,request,session\)/);
  assert.match(worker,/url\.pathname\.startsWith\('\/api\/wing-pay\/'\)/);
 });

@@ -279,7 +279,9 @@ export class TempleUI extends EventTarget{
 
   renderWingShop(profile){
    this.wingGalleryObserver?.disconnect();
-   const remaining=profile.admin?Infinity:Math.max(0,5-(profile.wingTrialDraws||0));
+   const freeRemaining=Math.max(0,5-(profile.wingTrialDraws||0));
+   const paidRemaining=Math.max(0,Number(profile.wingPaidDraws)||0);
+   const remaining=profile.admin?Infinity:freeRemaining+paidRemaining;
    const activeCustom=(this.world?.customWings||[]).filter(wing=>wing.retired!==true);
    const wings=[...SWALLOWTAIL_WINGS,...activeCustom];
    const owned=new Set(profile.inventory||[]);
@@ -296,7 +298,7 @@ export class TempleUI extends EventTarget{
         <div class="wing-gacha-body"><button type="button" class="wing-gacha-crank" data-draw-wing aria-label="轉動扭蛋機" ${!profile.admin&&remaining===0?'disabled':''}>↻</button><div class="wing-gacha-slot" aria-hidden="true">▰</div><p>GGTEMPLE · CAPSULE 98</p></div>
         <div class="wing-gacha-feet"></div>
        </div>
-       <div class="win98-gacha-status" role="status">${profile.admin?'GM TEST MODE · ∞':`FREE TRIALS LEFT: ${remaining} / 5`}</div>
+       <div class="win98-gacha-status" role="status">${profile.admin?'GM TEST MODE · ∞':`FREE: ${freeRemaining} / 5 · PURCHASED: ${paidRemaining}`}</div>
       </div>
       <div class="wing-support-controls">
        <header class="wing-shop-hero"><small>WINDOWS 98 · CAPSULE.EXE · SUPPORT</small>
@@ -311,7 +313,8 @@ export class TempleUI extends EventTarget{
        ${profile.admin?'<div class="wing-support-gm-tools"><button type="button" class="panel-button" data-open-wing-painter>GM 畫新翅膀</button><button type="button" class="panel-button" data-open-wing-manage>GM 管理上架翅膀／中獎率</button></div>':''}
        ${featured?`<div class="wing-draw-result" role="status">上次開出：${escape(featured.name)} · ${escape(WING_QUALITY_NAMES[wingRarity(featured)])}</div>`:''}
        <section class="wing-payment-preview"><h3>SUPPORT / PAYMENT STATUS</h3>
-        <p>Google 帳號提供五次免費試抽。每 NT$30 五抽的正式付費功能尚未啟用，沒有付款入口。</p></section>
+        <p>每 NT$30 對應 5 次抽獎。正式收款尚未開放，測試交易不會扣款。</p>
+        ${profile.admin?'<button type="button" class="panel-button" data-start-wing-stage>GM ONLY · TEST CHECKOUT (NT$30)</button><p>僅綠界測試環境，付款前會檢查 Worker 測試開關。</p>':'<p>正式購買功能尚未開放。</p>'}</section>
       </div>
     </div>
     <section class="wing-catalog-window"><h3>▣ WING COLLECTION — ${wings.length} WINGS</h3>
@@ -442,6 +445,7 @@ export class TempleUI extends EventTarget{
      if(!window.confirm('確定要將「'+wing.name+'」從抽獎池刪除？已取得的玩家仍可裝備。'))return;
      this.emit('server-action',{action:'gm-wing-remove',wingId});return;
     }
+    if(button.hasAttribute('data-start-wing-stage')){if(!this.self?.profile?.admin)return;this.emit('wing-payment-stage-checkout');return;}
     if(button.hasAttribute('data-draw-wing')){if(this.beginWingDraw())this.emit('server-action',{action:this.self?.profile?.admin?'gm-wing-draw':'wing-draw'});return;}
     if(button.dataset.bagTab){this.bagTab=button.dataset.bagTab;this.renderPanel();return;}if(button.dataset.shopTab){this.shopTab=button.dataset.shopTab;this.renderPanel();return;}try{if(button.dataset.buy)this.emit('server-action',{action:'buy',itemId:button.dataset.buy});if(button.dataset.equip)this.emit('server-action',{action:'equip',itemId:button.dataset.equip});if(button.dataset.sell)this.emit('server-action',{action:'sell',itemId:button.dataset.sell});if(button.dataset.build){this.buildKind=button.dataset.build;$('build-kind').textContent=this.buildKind.toUpperCase();$('build-mode').hidden=false;this.closePanel();this.emit('build-start',{kind:this.buildKind,file:this.content.querySelector('[data-build-skin]')?.files[0]});}if(button.dataset.role)this.emit('role-change',button.dataset.role);if(button.hasAttribute('data-follow'))this.emit('spectator-follow',button.dataset.follow);if(button.hasAttribute('data-destroy-near'))this.emit('destroy-near');if(button.dataset.removeStructure)this.emit('server-action',{action:'remove-structure',structureId:button.dataset.removeStructure});if(button.hasAttribute('data-save-code'))this.emit('save-code');if(button.hasAttribute('data-copy-save-code')){const value=this.saveCode||this.self?.saveCode;if(value){if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);else{this.content.querySelector('#save-code-output')?.select();document.execCommand('copy');}this.toast('已複製存檔代碼');}}if(button.hasAttribute('data-export-layout'))this.exportLayout();}catch(error){this.toast(error.message);}}
   async panelSubmit(event){event.preventDefault();const form=new FormData(event.target),kind=event.target.dataset.form;if(kind==='art-bomb-upload'){const files=[...event.target.querySelector('[name=artwork]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('art-bomb-upload',{files,title,size:Number(form.get('size'))});return;}if(kind==='art-bomb-resize'){this.emit('art-bomb-resize',{id:String(form.get('id')),size:Number(form.get('size'))});return;}if(kind==='art-bomb-appearance'){const appearance={depth:+form.get('depth'),brightness:+form.get('brightness'),contrast:+form.get('contrast'),saturation:+form.get('saturation'),blackPoint:+form.get('blackPoint'),tint:String(form.get('tint'))};this.emit('art-bomb-appearance',{id:String(form.get('id')),expectedRevision:Number(form.get('revision')),appearance});return;}if(kind==='gm-platform'){this.emit('create-platform',{position:['x','y','z'].map(k=>Number(form.get(k))),radius:Number(form.get('radius'))});return;}if(kind==='upload-artwork'){const files=[...event.target.querySelector('input[type=file]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('upload-artwork',{files,title});return;}if(kind==='fusion')this.emit('server-action',{action:'fuse',sourceId:form.get('source'),targetId:form.get('target'),requestId:crypto.randomUUID()});if(kind==='chat'){const text=String(form.get('text')||'').trim();if(text)this.emit('chat',text);event.target.reset();}if(kind==='plant'||kind==='plant-reply'){const text=String(form.get('text')||'').trim();let file=form.get('media');if(!file?.size)file=null;const drawing=event.target.querySelector('[data-drawing][data-used]');if(drawing)file=await new Promise(resolve=>drawing.toBlob(resolve,'image/webp',.8));if(text||file)this.emit('plant',{text,file,parentId:kind==='plant-reply'?this.selectedPlant?.id:null});}if(kind==='editor'){const settings={pixelRatio:+form.get('pixelRatio'),fog:+form.get('fog'),artFloat:+form.get('artFloat')};localStorage.setItem('temple-editor-settings',JSON.stringify(settings));this.emit('editor-settings',settings);this.toast('已儲存編輯結果');}}
