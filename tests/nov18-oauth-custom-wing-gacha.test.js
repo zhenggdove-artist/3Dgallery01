@@ -25,6 +25,7 @@ test('GM can publish a validated wing: catalog, persisted room and original inve
  assert.equal(gm.inventory.filter(i=>i===art.id).length,1);
  assert.equal(gm.itemOrigins[art.id],'gm-created');
  assert.equal(worldView(w,'gm',now).customWings[0].name,draft.name);
+ assert.equal(worldView(w,'gm',now,false).customWings,undefined);
  const restored=migrateWorld(structuredClone(w),now+1);
  registerCustomWings(restored.customWings);
  assert.equal(itemById(art.id).ability,'swift');
@@ -67,6 +68,11 @@ test('full UI, graphics and OAuth modules are wired to their entry points',()=>{
  assert.match(network,/beginOAuth\(provider\)/);
  assert.match(network,/oauthTicket/);
  assert.match(worker,/oauthTicket\(this\.sql/);
+ assert.match(worker,/path==='\/api\/oauth\/start'/);
+ assert.match(worker,/path==='\/api\/oauth\/callback'/);
+ assert.match(worker,/path==='\/api\/oauth\/profile'/);
+ assert.match(worker,/path==='\/api\/oauth\/providers'/);
+ assert.match(worker,/worldView\(world,meta\.profileKey,now,false\)/);
  assert.match(worker,/authMode/);
  assert.match(ui,/mountWingPainter\(this\)/);
  assert.match(ui,/wing-epic-win/);
