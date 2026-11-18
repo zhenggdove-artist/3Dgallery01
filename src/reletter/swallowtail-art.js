@@ -118,6 +118,14 @@ export function swallowtailCanvas(item){
  return canvas;
 }
 
+// The editor is a LEFT-wing canvas viewed from behind the avatar.
+// The previous side mapping (-1 mirrored, +1 original) reversed the
+// painted design. Only custom painted wings invert that mapping; legacy
+// Papilio/specimen textures retain their historical orientation.
+export function wingTextureScaleX(side,item){
+ if(side!==-1&&side!==1)throw new RangeError('Invalid wing side');
+ return item?.design==='painted-wing'?-side:side;
+}
 // A single texture per species; add a light-reflective second sail only for
 // purple and gold so simple white/green wings remain visibly austere.
 export function swallowtailModel(T,item){
@@ -135,7 +143,9 @@ export function swallowtailModel(T,item){
  for(const side of [-1,1]){
   const hinge=new T.Group();hinge.position.x=side*.09;
   const face=new T.Mesh(new T.PlaneGeometry(1.7+item.tier*.09,1.5+item.tier*.06),material);
-  face.position.set(side*.70,.21,-.025);face.scale.x=side;
+  face.position.set(side*.70,.21,-.025);
+  face.scale.x=wingTextureScaleX(side,item);
+  face.userData.wingSide=side<0?'left':'right';
   // Fan the two wings slightly back so the silhouette is legible in profile.
   hinge.rotation.y=side*.11;hinge.add(face);root.add(hinge);
   if(item.tier===4&&!item.specimen&&item.design!=='painted-wing'){

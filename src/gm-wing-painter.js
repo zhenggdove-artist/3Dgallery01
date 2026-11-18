@@ -46,7 +46,7 @@ export function mountWingPainter(ui){
    <label>品質<select data-wing-field="tier">${['White','Green','Blue','Purple · Epic','Gold'].map((s,i)=>`<option value="${i+1}" ${design.tier===i+1?'selected':''}>${s}</option>`).join('')}</select></label>
    <label>單次中獎率（%）<input data-wing-field="drawRatePct" type="number" min="0" max="100" step=".001" value="${design.drawRatePct??1}"></label>
    <small>此為全服每次抽獎的絕對機率；所有自訂翅膀合計不得超過 100%。0% 代表不會抽中。剩餘機率按基本品質抽取。</small>
-   <div class="wing-outline-note">自由輪廓：按住滑鼠左鍵或手指在畫布上繪製任意外形，放開自動連接起點與終點。</div>
+   <div class="wing-outline-note">左翅專用畫布：從角色背後觀看，繪製畫面原圖會顯示在角色左翅；右翅由系統自動左右鏡像。按住滑鼠左鍵或手指自由畫出輪廓，放開後自動閉合。</div>
    <button type="button" class="wing-clear-outline" data-wing-clear-outline>清除輪廓／重新繪製</button>
    <div class="wing-tools-row" role="toolbar" aria-label="畫筆工具">
     <button type="button" data-wing-tool="outline" aria-pressed="${tool==='outline'}">自由畫輪廓</button>
@@ -74,7 +74,7 @@ export function mountWingPainter(ui){
    <button type="button" class="panel-button" data-wing-publish>儲存、上架並自動裝備</button>
    <small>以「自由畫輪廓」一筆畫出外形並放開自動閉合，之後可使用畫筆、橡皮擦、Undo／Redo 與清除重畫。滾輪縮放、拖曳畫布移動。上架後加入 GM 背包。</small>
   </div>
-  <div class="wing-painter-stage"><div class="wing-painter-checker">
+  <div class="wing-painter-stage"><div class="wing-left-wing-label"><strong>LEFT WING · 左翅原圖</strong><span>RIGHT WING · 自動鏡像</span></div><div class="wing-painter-checker">
    <canvas class="wing-painter-canvas" width="768" height="640" aria-label="可繪畫的翅膀畫布"></canvas>
   </div><small data-wing-status>畫布 768 × 640 · 操作記錄上限 60 步</small></div>
  </section>`;

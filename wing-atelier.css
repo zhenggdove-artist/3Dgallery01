@@ -267,3 +267,315 @@ body.panel-wing-shop .wing-manage-retired{
  body.panel-wing-shop .wing-manage-row label{grid-column:1/-1}
  body.panel-wing-shop .wing-manage-row button{min-height:38px}
 }
+
+/* Y2K / WIN98 SUPPORT: chromed desktop shell, iridescent gacha and accessible controls.
+   Admin tools are intentionally absent from public SUPPORT markup. */
+body.panel-wing-shop .wing-support-app{
+ --y2k-deep:#161664;--y2k-aqua:#7ef4ee;--y2k-lilac:#b0a1ff;
+ color:#23184e;max-width:1300px;margin:auto;
+ font-family:Tahoma,"MS PGothic",Arial,sans-serif;
+ background:linear-gradient(125deg,#d6d5f2 0%,#bfcaff 26%,#e9dbff 60%,#b7f9ed 100%);
+ border:4px ridge #fcfbff;border-radius:0;
+ box-shadow:inset 0 0 0 2px #6969b3,5px 7px 0 #423d855c,0 0 35px #a1c7ffc4;
+ overflow:hidden;
+}
+body.panel-wing-shop .y2k-shell-header{
+ display:flex;justify-content:space-between;align-items:center;gap:12px;
+ padding:9px 14px;border-bottom:3px ridge #fff;
+ background:linear-gradient(100deg,#151566 0%,#4d45b8 34%,#b266f1 65%,#7dede5 100%);
+ color:white;
+}
+body.panel-wing-shop .y2k-shell-brand{display:flex;align-items:center;gap:10px;min-width:0}
+body.panel-wing-shop .y2k-shell-diamond{
+ display:grid;place-items:center;flex:none;width:44px;height:44px;
+ color:#dffffd;font:bold 39px/1 Georgia,serif;
+ text-shadow:0 0 9px #bbf8ff,0 0 22px #a7dfff;
+ transform:rotate(-12deg);
+}
+body.panel-wing-shop .y2k-shell-brand strong{
+ display:block;font:900 clamp(19px,3.2vw,28px)/1 Tahoma,Arial,sans-serif;letter-spacing:.075em;
+ text-shadow:1px 2px 0 #393993,0 0 10px #fff8;
+}
+body.panel-wing-shop .y2k-shell-brand em{font-style:normal;color:#aafbee}
+body.panel-wing-shop .y2k-shell-brand small{font:10px/1.8 monospace;letter-spacing:.15em}
+body.panel-wing-shop .y2k-shell-lights{display:flex;align-items:center;gap:6px;font:bold 11px monospace;white-space:nowrap}
+body.panel-wing-shop .y2k-shell-lights i{
+ width:11px;height:11px;border-radius:50%;
+ background:radial-gradient(circle at 30% 25%,white,#b6ffdb 42%,#1caa9d 70%);
+ box-shadow:0 0 9px #5cfff6;
+}
+body.panel-wing-shop .y2k-shell-lights i:nth-child(2){background:radial-gradient(circle at 30% 25%,#fff,#f5baff 38%,#ad62c8 80%);}
+body.panel-wing-shop .y2k-shell-lights i:nth-child(3){background:radial-gradient(circle at 30% 25%,#fff,#ffe8a1 38%,#f1b255 80%);}
+body.panel-wing-shop .y2k-shell-menu{
+ display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+ padding:6px 13px;background:linear-gradient(#fbfbff,#bcbad9);
+ border-bottom:3px ridge white;color:#2b235f;
+ font:12px Tahoma,Arial,sans-serif;
+}
+body.panel-wing-shop .y2k-shell-menu b{margin-left:auto;color:#4c2b92;font:700 11px monospace;letter-spacing:.08em}
+body.panel-wing-shop .wing-support-top{
+ position:relative;isolation:isolate;overflow:hidden;
+ background:
+ radial-gradient(ellipse at 27% 27%,#ffffffa3,transparent 40%),
+ repeating-linear-gradient(0deg,#ffffff16 0 1px,transparent 1px 26px),
+ repeating-linear-gradient(90deg,#ffffff24 0 1px,transparent 1px 26px),
+ linear-gradient(145deg,#b7f7fa 0%,#a4a5eb 42%,#d8a7eb 72%,#d4ffe2 100%);
+ border:0;border-bottom:3px ridge white;gap:24px;
+ padding:clamp(12px,3.2vw,32px);
+}
+body.panel-wing-shop .y2k-stage-glitter{position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
+body.panel-wing-shop .y2k-stage-glitter i{
+ position:absolute;font:48px Georgia,serif;font-style:normal;color:#fff9;
+ text-shadow:0 0 14px #fff,0 0 22px #84fff7;
+ animation:y2kTwinkle 3.8s ease-in-out infinite alternate;
+}
+body.panel-wing-shop .y2k-stage-glitter i:nth-child(1){left:5%;top:8%;font-size:35px}
+body.panel-wing-shop .y2k-stage-glitter i:nth-child(2){left:38%;top:30%;font-size:68px;animation-delay:-1.2s}
+body.panel-wing-shop .y2k-stage-glitter i:nth-child(3){right:6%;bottom:9%;font-size:36px;animation-delay:-2.5s}
+body.panel-wing-shop .y2k-stage-glitter i:nth-child(4){left:15%;bottom:8%;font-size:25px;animation-delay:-.9s}
+body.panel-wing-shop .wing-support-machine{
+ position:relative;z-index:1;overflow:visible;
+ border:5px ridge #f9ffff;border-radius:9px;
+ background:linear-gradient(133deg,#f8ffff 0%,#e1f4ff 25%,#b1b9e7 49%,#faf0ff 68%,#83f4ef 100%);
+ box-shadow:0 0 0 2px #6d6c98,7px 11px 0 #5c4b8744,0 0 30px #a3ffffb9,
+ inset 0 0 17px #ffffffb0;
+}
+body.panel-wing-shop .wing-support-machine::before{
+ content:"";position:absolute;inset:26px 5px 42px;z-index:0;pointer-events:none;
+ border:2px inset #fff;background:
+ repeating-linear-gradient(0deg,#ffffff23 0 2px,transparent 2px 5px),
+ radial-gradient(ellipse at 50% 31%,#c2fdff 0%,#9aa2f3 43%,#5f50af 100%);
+ border-radius:0 0 34px 34px;
+}
+body.panel-wing-shop .wing-support-machine .win98-gacha-title{
+ position:relative;z-index:4;min-height:27px;
+ background:linear-gradient(90deg,#161566 0%,#6762d8 55%,#9759ce 100%);
+ border:1px solid #fff7;padding:5px 8px;font:700 11px Tahoma,Arial,sans-serif;
+}
+body.panel-wing-shop .y2k-display-banner{
+ position:relative;z-index:2;display:grid;justify-items:center;gap:1px;
+ margin:13px 14px 2px;padding:10px 8px 8px;
+ color:#f9ffff;text-align:center;
+ border:3px ridge #f3feff;border-radius:22px;
+ background:linear-gradient(115deg,#25257a,#4c56b9 50%,#a166bc);
+ box-shadow:inset 0 0 14px #7fffe187,0 0 12px #fff9;
+}
+body.panel-wing-shop .y2k-display-banner strong{
+ font:900 clamp(20px,3.2vw,27px)/1.05 Tahoma,Arial,sans-serif;
+ letter-spacing:.11em;text-shadow:0 2px 0 #c668d6,0 0 12px #6efff3;
+}
+body.panel-wing-shop .y2k-display-banner small{font:10px monospace;letter-spacing:.19em;color:#d0fff4}
+body.panel-wing-shop .y2k-laser-circle{
+ position:absolute;left:12px;top:50%;transform:translateY(-50%);
+ color:#a7fff1;text-shadow:0 0 9px #9dffff;font:26px Georgia,serif;
+}
+body.panel-wing-shop .wing-support-machine .wing-gacha-machine{
+ z-index:2;margin:7px auto 6px;filter:drop-shadow(0 7px 5px #24155a77);
+}
+body.panel-wing-shop .y2k-machine-halo{
+ position:absolute;left:0;right:0;top:20px;margin:auto;width:235px;height:235px;
+ border-radius:50%;z-index:0;pointer-events:none;
+ background:radial-gradient(circle,#ffe2ff80 0 34%,#b6fff4b8 47%,#d0a8ffad 61%,transparent 73%);
+ animation:y2kAuraPulse 4s ease-in-out infinite alternate;
+}
+body.panel-wing-shop .y2k-machine-star{
+ position:absolute;z-index:5;pointer-events:none;font:38px Georgia,serif;color:#fff9e9;
+ text-shadow:0 0 7px white,0 0 20px #7fffee;
+ animation:y2kTwinkle 2.8s ease-in-out infinite alternate;
+}
+body.panel-wing-shop .y2k-star-a{top:18px;left:4px}
+body.panel-wing-shop .y2k-star-b{top:90px;right:0;animation-delay:-1.4s}
+body.panel-wing-shop .wing-support-machine .wing-gacha-dome{
+ border:10px ridge #f7fdff;border-radius:50% 50% 34% 34%;
+ background:
+ linear-gradient(145deg,#e9ffff8a,#a7d5ff66 30%,#5f90e889 62%,#ffe6fa8c),
+ radial-gradient(circle at 45% 35%,#d9fcff,#6e77cc);
+ box-shadow:inset 2px 5px 11px #fff, inset -7px -9px 17px #6c66a9b3,
+ 0 0 0 4px #9cb8d7,0 0 26px #f3efff;
+}
+body.panel-wing-shop .wing-support-machine .wing-gacha-shine{
+ width:42px;height:95px;background:#ffffff95;filter:blur(2px);transform:rotate(-25deg);
+}
+body.panel-wing-shop .y2k-dome-crest{
+ position:absolute;z-index:5;top:11px;left:24%;right:24%;text-align:center;
+ color:white;font:bold 10px Tahoma,Arial,sans-serif;letter-spacing:.14em;
+ text-shadow:0 0 6px #8a68bd,0 0 11px #5be9ff;
+}
+body.panel-wing-shop .wing-support-machine .gacha-capsule{
+ border:2px solid #fff;box-shadow:inset 0 5px 8px #ffffffb3,0 0 8px #c4a3ffb0;
+}
+body.panel-wing-shop .wing-support-machine .wing-gacha-neck{
+ border:6px ridge #fafbff;background:linear-gradient(100deg,#9ab8e2,#e8f7ff 48%,#b2abdf);
+ box-shadow:0 0 14px #c0ffff;
+}
+body.panel-wing-shop .wing-support-machine .wing-gacha-face{font:900 12px/42px Tahoma,Arial,sans-serif;color:#38338a;letter-spacing:.05em;text-shadow:1px 1px white}
+body.panel-wing-shop .wing-support-machine .wing-gacha-body{
+ border:7px ridge white;border-radius:16px 16px 20px 20px;
+ background:linear-gradient(125deg,#f9ffff,#bde7ed 28%,#b5a3e2 67%,#f8d4ff);
+ box-shadow:inset 0 0 20px #fff,0 0 14px #e0e9ff;
+}
+body.panel-wing-shop .wing-support-machine .wing-gacha-crank{
+ color:#372173;font:bold 37px Tahoma,Arial,sans-serif;
+ border:6px ridge #fff;border-radius:50%;
+ background:radial-gradient(circle at 34% 29%,white,#e2dbff 39%,#8ce0dc 77%,#6765bb);
+ box-shadow:0 0 0 3px #8b71ba,0 0 17px #fff;
+}
+body.panel-wing-shop .wing-support-machine .wing-gacha-slot{
+ background:linear-gradient(145deg,#24255c,#5a4981);border:4px inset #afbef2;
+ box-shadow:0 0 8px #cffcf6; color:#b8fff3;
+}
+body.panel-wing-shop .wing-support-machine .wing-gacha-body p{
+ font:bold 9px Tahoma,Arial,sans-serif;color:#393285;bottom:-5px;
+}
+body.panel-wing-shop .wing-support-machine .wing-gacha-feet{
+ background:linear-gradient(90deg,#8c80bd,#e8fcff 48%,#9380c9);border:5px ridge #fff;border-radius:7px;
+}
+body.panel-wing-shop .wing-support-machine .win98-gacha-status{
+ position:relative;z-index:3;margin:3px 12px 0;
+ background:linear-gradient(90deg,#222575,#604ca5);color:#c9fffb;
+ border:3px inset #d3ddff;font:bold 12px monospace;
+ letter-spacing:.05em;text-shadow:0 0 7px #83fbf3;
+}
+body.panel-wing-shop .y2k-machine-caption{
+ position:relative;z-index:2;display:flex;justify-content:space-between;
+ padding:8px 10px 3px;gap:10px;
+ color:#3e3388;font:700 9px monospace;letter-spacing:.07em;
+}
+body.panel-wing-shop .wing-support-controls{position:relative;z-index:1}
+body.panel-wing-shop .wing-support-controls .wing-shop-hero{
+ background:linear-gradient(136deg,#ffffffef,#e2f2ffec 48%,#ffdcf8e8);
+ border:3px ridge white;box-shadow:0 0 0 1px #7d6dbf,4px 5px 0 #6456a644;
+ padding:clamp(14px,3vw,24px);
+}
+body.panel-wing-shop .wing-shop-hero small{color:#5b449b;letter-spacing:.12em}
+body.panel-wing-shop .y2k-hero-eyebrow{display:block;margin:9px 0;color:#653aa8;font:700 10px/1.5 monospace;letter-spacing:.08em}
+body.panel-wing-shop .wing-shop-hero h3{
+ font:900 clamp(27px,4vw,51px)/1.04 Tahoma,Arial,sans-serif!important;
+ letter-spacing:.01em!important;color:#1b1b65!important;
+ text-shadow:2px 2px 0 #9ffbf4,4px 4px 0 #eab6f4;
+ margin:10px 0 15px!important;
+}
+body.panel-wing-shop .wing-shop-hero h3 span{
+ display:inline-block;color:#8555ce;
+ background:linear-gradient(130deg,#643eac,#d35ed8 44%,#56cad7 75%,#7b55ca);
+ background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+body.panel-wing-shop .y2k-hero-kicker{font:bold 11px monospace;color:#4b419a;letter-spacing:.13em}
+body.panel-wing-shop .y2k-stat-strip{
+ display:flex;flex-wrap:wrap;gap:6px;margin-top:15px;
+ border-top:2px solid #c8bfe5;padding-top:12px;
+}
+body.panel-wing-shop .y2k-stat-strip>span{
+ display:flex;gap:8px;align-items:center;justify-content:space-between;
+ background:#fff9;border:2px inset #efefff;min-height:34px;
+ padding:5px 8px;color:#433d83;font:700 10px monospace;
+}
+body.panel-wing-shop .y2k-stat-strip b{font:bold 14px monospace;color:#6638bc}
+body.panel-wing-shop .wing-support-controls .wing-draw-button{
+ position:relative;overflow:hidden;min-height:72px;
+ border:4px ridge #fff!important;border-radius:9px!important;
+ color:white!important;
+ background:linear-gradient(110deg,#5332b7,#9c5aca 34%,#30b8b9 70%,#4435aa 100%)!important;
+ font:900 clamp(12px,2vw,19px)/1.25 Tahoma,Arial,sans-serif!important;
+ text-shadow:0 1px 2px #2c1d73;
+ box-shadow:inset 0 4px 7px #ffffff77,0 6px 0 #433782,0 0 16px #a6fffd;
+ animation:y2kButtonGlow 3s ease-in-out infinite alternate;
+}
+body.panel-wing-shop .wing-support-controls .wing-draw-button::before{
+ content:"";position:absolute;inset:-100% auto -100% -18%;width:20%;pointer-events:none;
+ background:linear-gradient(90deg,transparent,#ffffff75,transparent);
+ transform:rotate(22deg);animation:y2kButtonSheen 4.7s ease-in-out infinite;
+}
+body.panel-wing-shop .wing-support-controls .wing-draw-button:disabled{opacity:.55;animation:none;box-shadow:none}
+body.panel-wing-shop .y2k-rarity-panel{
+ background:#e9eeffed;border:3px ridge white;box-shadow:inset 0 0 0 1px #b0a7d3;
+ color:#2a215e;padding:12px 14px;
+}
+body.panel-wing-shop .y2k-rarity-panel strong{
+ display:block;font:900 12px monospace;color:#3c398b;letter-spacing:.075em;margin-bottom:6px;
+}
+body.panel-wing-shop .wing-catalog-window{
+ background:linear-gradient(#eff3ff,#d6dbf1);
+ border-top:3px ridge #fff;margin:0;padding:15px;
+}
+body.panel-wing-shop .wing-catalog-window h3{
+ display:flex;justify-content:space-between;flex-wrap:wrap;gap:5px;
+ background:linear-gradient(100deg,#272178,#6855ab 58%,#8d85cf);
+ border:2px ridge white;box-shadow:0 3px 0 #3b2e8970;
+}
+body.panel-wing-shop .wing-catalog-window h3 span{font:700 10px monospace;letter-spacing:.12em;color:#c2fff8}
+body.panel-wing-shop .wing-shop-gallery{grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px}
+body.panel-wing-shop .wing-shop-card{
+ background:linear-gradient(150deg,#fffefb,#f1f0ff 55%,#e5f8ff);
+ border:3px ridge #fff;box-shadow:2px 3px 0 #7f78b966;
+}
+body.panel-wing-shop .wing-shop-card img{
+ border:2px inset #e3e5ff;
+ background:radial-gradient(ellipse,#c0b5f37d,#fff0 80%);
+}
+body.panel-wing-shop .y2k-taskbar{
+ display:flex;align-items:center;gap:12px;padding:5px 8px;
+ background:linear-gradient(#f6f6ff,#b7b6d1);border-top:3px ridge #fff;
+ color:#332b72;font:bold 11px Tahoma,Arial,sans-serif;
+}
+body.panel-wing-shop .y2k-start-button{
+ border:2px outset white;background:linear-gradient(90deg,#dadbef,#f8fdff);
+ color:#302775;padding:5px 11px;font:bold 13px Tahoma,Arial,sans-serif;
+}
+body.panel-wing-shop .y2k-taskbar-clock{margin-left:auto;font:10px monospace;color:#5736a0}
+body.panel-wing-shop .wing-gacha-overlay .gacha-animation{
+ border:6px ridge #fff;background:
+ radial-gradient(ellipse at 50% 28%,#fafaff,#ddd8ff 58%,#b6e8ec);
+ color:#27256c;box-shadow:0 0 40px #c0ffff,6px 7px 0 #524a9c88;
+}
+body.panel-wing-shop .wing-gacha-overlay .gacha-win98-bar{background:linear-gradient(100deg,#211b7a,#7962c2 60%,#7dd5d6)}
+body.panel-wing-shop .wing-gacha-overlay .gacha-result h3{color:#382b82;text-shadow:2px 2px 0 #cafefa}
+body.panel-wing-shop .wing-gacha-overlay.wing-epic-win .gacha-animation{
+ background:radial-gradient(circle at 50% 30%,#fffbe5,#d2b5ff 55%,#b8ffff);
+ box-shadow:0 0 45px #fff8cd,0 0 90px #bc9aff;
+}
+@keyframes y2kAuraPulse{from{opacity:.55;transform:scale(.94)}to{opacity:1;transform:scale(1.08)}}
+@keyframes y2kTwinkle{from{opacity:.25;transform:scale(.82) rotate(-10deg)}to{opacity:1;transform:scale(1.05) rotate(13deg)}}
+@keyframes y2kButtonGlow{from{filter:saturate(1);box-shadow:inset 0 4px 7px #ffffff77,0 6px 0 #433782,0 0 8px #a6fffd}to{filter:saturate(1.16);box-shadow:inset 0 4px 7px #ffffff77,0 6px 0 #433782,0 0 28px #a6fffd}}
+@keyframes y2kButtonSheen{0%,62%{left:-32%}90%,100%{left:128%}}
+@media(max-width:780px){
+ body.panel-wing-shop .y2k-shell-header{padding:7px 9px}
+ body.panel-wing-shop .y2k-shell-brand small{font-size:8px}
+ body.panel-wing-shop .y2k-shell-lights span{display:none}
+ body.panel-wing-shop .y2k-shell-menu{gap:11px;font-size:11px}
+ body.panel-wing-shop .y2k-shell-menu b{display:none}
+ body.panel-wing-shop .wing-support-top{padding:10px;gap:16px}
+ body.panel-wing-shop .wing-support-machine{margin:0 auto;max-width:370px}
+ body.panel-wing-shop .wing-support-controls .wing-shop-hero{padding:14px}
+ body.panel-wing-shop .wing-shop-hero h3{font-size:29px!important}
+ body.panel-wing-shop .y2k-taskbar-clock{font-size:8px}
+}
+@media(prefers-reduced-motion:reduce){
+ body.panel-wing-shop .y2k-machine-halo,body.panel-wing-shop .y2k-machine-star,
+ body.panel-wing-shop .y2k-stage-glitter i,body.panel-wing-shop .wing-draw-button,
+ body.panel-wing-shop .wing-draw-button::before{animation:none!important}
+}
+
+/* Back-of-character left-wing drafting guide and GM editor entry only. */
+body.panel-wing-painter .wing-left-wing-label{
+ display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;
+ padding:8px 10px;margin:0 0 6px;width:min(100%,calc((100dvh - 135px)*1.2));
+ background:#e6e8f7;border:2px inset white;color:#38326a;
+ font:bold 11px Tahoma,Arial,sans-serif;
+}
+body.panel-wing-painter .wing-left-wing-label strong{color:#20228b}
+body.panel-wing-painter .wing-left-wing-label span{color:#65617b}
+body.panel-wing-painter .wing-painter-checker{max-height:calc(100dvh - 176px);width:min(100%,calc((100dvh - 176px)*1.2))}
+#panel .gm-wing-workspace{
+ border:3px ridge #d8cdf6;padding:12px;margin:12px 0;
+ background:linear-gradient(145deg,#f2f0ff,#e9fcfa);
+ color:#362b62;
+}
+#panel .gm-wing-workspace h3{margin:0 0 5px;font:bold 17px Tahoma,Arial,sans-serif;color:#32266b}
+#panel .gm-wing-workspace p{font:12px/1.5 Tahoma,Arial,sans-serif;margin:0 0 9px}
+#panel .gm-wing-workspace .gm-tools{display:flex;gap:8px;flex-wrap:wrap}
+#panel .gm-wing-workspace button{min-height:40px;flex:1;border:2px outset white;background:#c7c3e9;color:#302668;font:700 12px Tahoma,Arial,sans-serif}
+@media(max-width:700px){
+ body.panel-wing-painter .wing-left-wing-label{width:100%;font-size:9px;padding:4px 5px;margin:0 0 3px}
+ body.panel-wing-painter .wing-painter-checker{max-height:calc(72dvh - 120px);width:min(100%,calc((72dvh - 120px)*1.2))}
+}

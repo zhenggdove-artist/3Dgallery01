@@ -81,6 +81,34 @@ jobs:
           cat /tmp/temple-browser-worker.log || true
           cat /tmp/temple-browser-static.log || true
 
+  support-y2k-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:cloud
+      - name: Start isolated SUPPORT staging servers
+        run: |
+          npx wrangler dev --local --port 8787 > /tmp/temple-support-worker.log 2>&1 &
+          npm run start > /tmp/temple-support-static.log 2>&1 &
+      - name: Verify actual Y2K SUPPORT desktop and mobile UI
+        run: node tests/temple-y2k-support-smoke.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: support-y2k-desktop-mobile-screenshots
+          path: output/support-y2k
+          if-no-files-found: ignore
+      - if: failure()
+        run: |
+          cat /tmp/temple-support-worker.log || true
+          cat /tmp/temple-support-static.log || true
+
   safari-webkit-startup:
     # Playwright WebKit currently has no Ubuntu 26.04 binary.
     runs-on: ubuntu-24.04

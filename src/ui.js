@@ -216,7 +216,7 @@ export class TempleUI extends EventTarget{
   renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','wing-shop':'SUPPORT · WING GACHA',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'GM 翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
     if(this.panelName==='gm'){this.renderGm();return;}
      if(this.panelName==='wing-painter'){mountWingPainter(this);return;}
-    if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + D：圓盤刪除模式（點選變藍、DELETE 刪除、ESC 離開）<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(this.panelName==='shop')this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='wing-manage')this.renderWingManage(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<hr><h3>建立漂浮圓盤</h3><form data-form="gm-platform">${['x','y','z'].map(k=>`<label>${k.toUpperCase()}<input name="${k}" type="number" value="${k==='y'?2:0}" step=".1" required></label>`).join('')}<label>半徑<input name="radius" type="number" value="2.5" min=".6" max="8" step=".1" required></label><button>建立並儲存圓盤</button></form><hr><h3>上傳藝術品</h3><form data-form="upload-artwork"><p>PNG／JPEG／WebP、MP4／WebM、GLB／glTF／FBX。模型貼圖與 BIN 檔請一起選取。轉換後上限 32 MB、50 萬三角面、200 個網格；保留圖片透明度，模型會打包成完整 GLB。</p><label>作品名稱<input name="title" type="text" maxlength="100" required placeholder="輸入作品名稱"></label><input name="artwork" type="file" accept="${ART_ACCEPT}" multiple required><button class="panel-button" data-upload-submit>驗證並發布</button><p data-upload-status role="status"></p></form>`);}
+    if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + D：圓盤刪除模式（點選變藍、DELETE 刪除、ESC 離開）<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(this.panelName==='shop')this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='wing-manage')this.renderWingManage(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<section class="gm-wing-workspace"><h3>GM 翅膀編輯工作區</h3><p>繪製、上架、設定中獎率及下架管理。</p><div class="gm-tools"><button type="button" data-gm-action="wing-painter">畫翅膀／上架</button><button type="button" data-gm-action="wing-manage">已上架翅膀／機率／下架</button></div></section><hr><h3>建立漂浮圓盤</h3><form data-form="gm-platform">${['x','y','z'].map(k=>`<label>${k.toUpperCase()}<input name="${k}" type="number" value="${k==='y'?2:0}" step=".1" required></label>`).join('')}<label>半徑<input name="radius" type="number" value="2.5" min=".6" max="8" step=".1" required></label><button>建立並儲存圓盤</button></form><hr><h3>上傳藝術品</h3><form data-form="upload-artwork"><p>PNG／JPEG／WebP、MP4／WebM、GLB／glTF／FBX。模型貼圖與 BIN 檔請一起選取。轉換後上限 32 MB、50 萬三角面、200 個網格；保留圖片透明度，模型會打包成完整 GLB。</p><label>作品名稱<input name="title" type="text" maxlength="100" required placeholder="輸入作品名稱"></label><input name="artwork" type="file" accept="${ART_ACCEPT}" multiple required><button class="panel-button" data-upload-submit>驗證並發布</button><p data-upload-status role="status"></p></form>`);}
   }
   requestGmPresence(){
     if(!this.self?.profile?.admin)return;
@@ -287,46 +287,50 @@ export class TempleUI extends EventTarget{
    const capsules=Array.from({length:15},(_,i)=>`<span class="gacha-capsule" style="--n:${i};--shade:${['#f0d6ad','#ec85a7','#83d8dd','#e3cb65','#ae96ed'][i%5]}"></span>`).join('');
    const assigned=activeCustom.reduce((v,w)=>v+Number(w.drawRatePct??1),0);
    this.content.innerHTML=`<section class="wing-shop-panel wing-support-app">
-    <div class="wing-support-top">
+    <div class="y2k-shell-header"><div class="y2k-shell-brand"><span class="y2k-shell-diamond">◇</span><div><strong>GGTEMPLE <em>98</em></strong><small>INTERNET WING LOTTERY SYSTEM</small></div></div><div class="y2k-shell-lights"><i></i><i></i><i></i><span>ONLINE ●</span></div></div>
+    <div class="y2k-shell-menu"><span>File</span><span>View</span><span>Favorites</span><span>Help</span><b>✦ CAPSULE MACHINE ✦</b></div>
+    <div class="wing-support-top"><div class="y2k-stage-glitter" aria-hidden="true"><i>✦</i><i>✧</i><i>✴</i><i>✦</i></div>
       <div class="win98-gacha-app wing-support-machine" aria-label="Win98 翅膀扭蛋機">
        <div class="win98-gacha-title"><span>▣ CAPSULE.EXE — GGTEMPLE SUPPORT</span><span>▁ □ ×</span></div>
-       <div class="wing-gacha-machine" aria-label="翅膀抽獎機">
-        <div class="wing-gacha-dome"><span class="wing-gacha-shine"></span>${capsules}</div>
-        <div class="wing-gacha-neck"><span class="wing-gacha-face">CAPSULE / 98</span></div>
+       <div class="y2k-display-banner"><span class="y2k-laser-circle" aria-hidden="true">✺</span><strong>WING GACHA</strong><small>LUCKY DRAW 2000</small></div>
+       <div class="wing-gacha-machine" aria-label="翅膀抽獎機"><span class="y2k-machine-halo" aria-hidden="true"></span><span class="y2k-machine-star y2k-star-a" aria-hidden="true">✦</span><span class="y2k-machine-star y2k-star-b" aria-hidden="true">✧</span>
+        <div class="wing-gacha-dome"><span class="wing-gacha-shine"></span><span class="y2k-dome-crest">✧ 2000 ✧</span>${capsules}</div>
+        <div class="wing-gacha-neck"><span class="wing-gacha-face">★ CAPSULE / 98 ★</span></div>
         <div class="wing-gacha-body"><button type="button" class="wing-gacha-crank" data-draw-wing aria-label="轉動扭蛋機" ${!profile.admin&&remaining===0?'disabled':''}>↻</button><div class="wing-gacha-slot" aria-hidden="true">▰</div><p>GGTEMPLE · CAPSULE 98</p></div>
         <div class="wing-gacha-feet"></div>
        </div>
-       <div class="win98-gacha-status" role="status">${profile.admin?'GM TEST MODE · ∞':`FREE TRIALS LEFT: ${remaining} / 5`}</div>
+       <div class="win98-gacha-status" role="status">FREE PLAYS LEFT: ${Number.isFinite(remaining)?remaining+' / 5':'∞'}</div><div class="y2k-machine-caption"><span>✦ LIMITED EDITION ✦</span><span>GGTEMPLE 2000</span></div>
       </div>
       <div class="wing-support-controls">
        <header class="wing-shop-hero"><small>WINDOWS 98 · CAPSULE.EXE · SUPPORT</small>
-        <h3>WING CAPSULE MACHINE</h3>
-        <p>點擊機台轉輪或下方按鈕抽取翅膀。翅膀品質與實際顏色分開計算。</p>
-        <p>目前上架 ${wings.length} 款 · GM 自製 ${activeCustom.length} 款</p>
+        <span class="y2k-hero-eyebrow">✧ WELCOME TO THE DIGITAL GARDEN ✧</span>
+        <h3>WING <span>CAPSULE</span> MACHINE</h3><p class="y2k-hero-kicker">YOUR LUCKY WINGS ARE WAITING.</p>
+        <p>轉動扭蛋機抽取翅膀。翅膀品質的稀有度與自身色彩分開計算。</p>
+        <div class="y2k-stat-strip"><span>WINGS ONLINE <b>${wings.length}</b></span><span>SPECIAL EDITIONS <b>${activeCustom.length}</b></span><span>SYSTEM <b>98.2K</b></span></div>
        </header>
-       <button class="panel-button wing-draw-button" type="button" data-draw-wing ${!profile.admin&&remaining===0?'disabled':''}>${profile.admin?'GM · 啟動抽獎機（免費測試）':remaining>0?`轉動扭蛋機 · 剩餘 ${remaining} 次免費抽取`:'免費抽取次數已用完'}</button>
-       <p class="wing-draw-odds">GM 自製翅膀合計：${assigned.toFixed(3)}%（各款為絕對中獎率）。
+       <button class="panel-button wing-draw-button" type="button" data-draw-wing ${!profile.admin&&remaining===0?'disabled':''}>${remaining>0?`✦ START LUCKY DRAW · ${Number.isFinite(remaining)?remaining+' PLAYS LEFT':'UNLIMITED PLAYS'} ✦`:'免費抽取次數已用完'}</button>
+       <div class="y2k-rarity-panel"><strong>✦ LUCKY DRAW INFORMATION ✦</strong><p class="wing-draw-odds">特別款總中獎率：${assigned.toFixed(3)}%。
         剩餘 ${Math.max(0,100-assigned).toFixed(3)}% 依基本品質分布：白45 / 綠30 / 藍18 / 紫5 / 金2。
-        同款可重複抽取。</p>
-       ${profile.admin?'<div class="wing-support-gm-tools"><button type="button" class="panel-button" data-open-wing-painter>GM 畫新翅膀</button><button type="button" class="panel-button" data-open-wing-manage>GM 管理上架翅膀／中獎率</button></div>':''}
+        同款可重複抽取。</p></div>
        ${featured?`<div class="wing-draw-result" role="status">上次開出：${escape(featured.name)} · ${escape(WING_QUALITY_NAMES[wingRarity(featured)])}</div>`:''}
        <section class="wing-payment-preview"><h3>SUPPORT / PAYMENT STATUS</h3>
         <p>Google 帳號提供五次免費試抽。每 NT$30 五抽的正式付費功能尚未啟用，沒有付款入口。</p></section>
       </div>
     </div>
-    <section class="wing-catalog-window"><h3>▣ WING COLLECTION — ${wings.length} WINGS</h3>
+    <section class="wing-catalog-window"><h3>▣ WING COLLECTION — ${wings.length} WINGS <span>✧ DIGITAL SPECIMENS ✧</span></h3>
      <div class="wing-shop-gallery">${wings.map(item=>{
       const rarity=wingRarity(item),isOwned=owned.has(item.id),color=WING_QUALITY_COLORS[rarity];
       return `<article class="wing-shop-card" style="--wing-quality:${color}" data-wing-id="${escape(item.id)}">
        <span class="wing-shop-rarity">${escape(WING_QUALITY_NAMES[rarity])}</span>
        <img alt="${escape(item.name)}" data-wing-icon="${escape(item.id)}" loading="lazy">
        <strong>${escape(item.name)}</strong>
-       <small>${item.design==='painted-wing'?`GM 特製 · ${Number(item.drawRatePct??1)}% 中獎率`:isOwned?'OWNED':'LOTTERY ONLY'}</small>
+       <small>${item.design==='painted-wing'?`SPECIAL EDITION · ${Number(item.drawRatePct??1)}% DROP`:isOwned?'OWNED':'LOTTERY ONLY'}</small>
        ${isOwned?`<button type="button" data-equip="${escape(item.id)}"
         ${profile.equipment.wings===item.id?'disabled':''}>${profile.equipment.wings===item.id?'EQUIPPED':'EQUIP'}</button>`:''}
       </article>`;
      }).join('')}</div>
     </section>
+    <footer class="y2k-taskbar"><span class="y2k-start-button">▣ Start</span><span>GGTEMPLE · SUPPORT</span><span class="y2k-taskbar-clock">✦ Y2K ONLINE ✦</span></footer>
    </section>`;
    this.hydrateWingGalleryImages();
   }
