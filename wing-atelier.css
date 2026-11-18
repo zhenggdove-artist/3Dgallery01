@@ -5,7 +5,7 @@
 .wing-gacha-machine{position:relative;width:min(238px,76vw);height:340px;margin:12px auto;filter:drop-shadow(0 10px 5px #4b273b44)}
 .wing-gacha-dome{position:absolute;top:6px;left:26px;width:186px;height:186px;border:8px solid #ef90a5;border-radius:47% 47% 38% 38%;overflow:hidden;background:radial-gradient(circle at 30% 20%,#fffefef4 5%,#baf5ffb8 55%,#92e3ecb0);box-shadow:inset -8px -12px 0 #7dc3d14d,inset 6px 9px 0 #ffffffad;z-index:2}
 .wing-gacha-shine{position:absolute;left:20px;top:9px;width:45px;height:77px;border-radius:50%;transform:rotate(-36deg);background:#ffffff8c;z-index:4}
-.gacha-capsule{position:absolute;left:calc(10px + mod(var(--n) * 43px, 147px));top:calc(100px + mod(var(--n) * 17px, 52px));width:45px;height:43px;border-radius:50%;background:linear-gradient(0deg,var(--shade) 45%,#fff7 47%,#fff8 54%,var(--shade) 55%);border:2px solid #876279;box-shadow:inset -5px -5px #0002;transform:rotate(calc(var(--n)*31deg))}
+.gacha-capsule{position:absolute;left:calc(8px + var(--n) * 8px);top:calc(98px + var(--n) * 3px);width:45px;height:43px;border-radius:50%;background:linear-gradient(0deg,var(--shade) 45%,#fff7 47%,#fff8 54%,var(--shade) 55%);border:2px solid #876279;box-shadow:inset -5px -5px #0002;transform:rotate(calc(var(--n)*31deg))}
 .wing-gacha-neck{position:absolute;top:169px;left:35px;width:168px;height:57px;border-radius:14px 14px 4px 4px;background:#ffcfdf;border:6px solid #df8da9;text-align:center;z-index:3}
 .wing-gacha-face{display:block;font:900 24px system-ui;color:#6d405c;line-height:40px;transform:rotate(-5deg)}
 .wing-gacha-body{position:absolute;top:214px;left:37px;width:164px;height:107px;background:linear-gradient(115deg,#f8a5bd,#e77ba1);border:7px solid #c66b90;border-radius:12px 12px 18px 18px;z-index:3}
@@ -42,3 +42,18 @@
 .wing-painter-stage>small{padding:7px;color:#48333e}
 @media(max-width:700px){.wing-painter{grid-template-columns:1fr;gap:8px}.wing-painter-tools{max-height:34vh;overflow:auto}.wing-painter-stage{min-height:300px}.wing-painter-checker{max-height:50vh}}
 @media(prefers-reduced-motion:reduce){.gacha-animation *,.wing-confetti{animation-duration:.01ms!important}}
+
+/* Account-first onboarding, with an explicit legacy GM fallback. */
+.temple-account-login{display:flex;flex-direction:column;gap:9px;max-width:100%;padding:10px 2px}
+.temple-account-login>strong{font:700 15px system-ui;color:#302438}
+.account-buttons{display:grid;grid-template-columns:1fr;gap:7px}
+.account-buttons button{display:block;min-height:40px;border:1px solid #989098;border-radius:8px;background:#fff;color:#322533;font:600 14px system-ui;cursor:pointer}
+.account-buttons button[data-login-provider=google]{border-color:#73a0e4}
+.account-buttons button[data-login-provider=apple]{background:#242329;color:#fff}
+.account-buttons button[data-login-provider=facebook]{border-color:#5379ca;background:#466ac2;color:#fff}
+.account-buttons button:disabled{opacity:.45;cursor:not-allowed}
+#account-login-status{font:12px/1.55 system-ui;white-space:normal;margin:1px 0;color:#6e4b66}
+.legacy-entry-toggle{background:none;color:#725d72;border:0;border-bottom:1px dotted #a58ca2;cursor:pointer;text-align:left;align-self:flex-start;padding:5px;font:12px system-ui}
+#entry-form[hidden],#legacy-memory-controls[hidden],#account-name-controls[hidden]{display:none!important}
+#entry-form:not([hidden]){display:flex;flex-direction:column;gap:8px;border-top:1px solid #cbb0bc;margin-top:10px;padding-top:12px}
+@media(max-width:420px){.wing-gacha-machine{transform:scale(.88);margin:-8px auto}}
