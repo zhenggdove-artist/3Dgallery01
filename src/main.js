@@ -1,4 +1,5 @@
 import {registerCustomWings} from './shared/catalog.js';
+import {prepareFirebase,existingGoogleToken,signInWithGoogle} from './firebase-login.js';
 import * as THREE from 'three';
 import {WriteCinematic} from './write-cinematic.js';
 import {ChargeTargetPreview} from './charge-target-preview.js';
@@ -133,21 +134,50 @@ boot();
 
 async function boot(){
   const started=performance.now(),timings=window.templeLoadTimings={};
-  try{const [published,layout]=await Promise.all([fetch('./temple-layout.json').then(r=>r.ok?r.json():{}),fetch('./temple-artwork-layout.json').then(r=>r.json())]);Object.assign(settings,published.settings||{},loadEditorSettings());arena.defaultLayout=layout.artworkLayout||{};timings.configMs=performance.now()-started;const assetStart=performance.now(),warmStart=performance.now(),warmTask=arena.presentation.vfx.warm(renderer,camera).then(result=>{timings.effects=result;timings.effectsMs=performance.now()-warmStart;});await Promise.all([arena.load((value,label)=>ui.setLoading(value,label)),document.fonts.load('bold 48px GoldenGirdle')]);vitalModels=new VitalModels(arena.coinMesh.geometry,arena.coinMesh.material);timings.assetsMs=performance.now()-assetStart;ui.setLoading(.9,'Preparing 00GameDevs weapon effects');await warmTask;ui.setLoading(.94,'Prewarming all monster jump and dash animations');try{timings.monsterRigs=await arena.islandEnemies.warmModels(renderer,camera);}catch(error){console.warn('Monster rig prewarm incomplete',error);}ui.setLoading(.95,'Prewarming monster landing shockwaves');try{await arena.islandEnemies.attackEffects.warm(renderer,camera);}catch(error){console.warn('Monster VFX shader prewarm incomplete',error);}applyEditorSettings({pixelRatio:settings.pixelRatio||(coarse?1:1.35),fog:settings.fog??.0008,artFloat:settings.artFloat??.17});camera.position.set(0,13,30);camera.lookAt(0,2,0);ui.setLoading(.99,'Preparing scene shaders');const compileStart=performance.now();await renderer.compileAsync(scene,camera);timings.sceneCompileMs=performance.now()-compileStart;timings.totalMs=performance.now()-started;ui.setLoading(1,'100% · Ready');assetsReady=true;ui.ready();void network.oauthProviders().then(providers=>ui.setOAuthProviders(providers)).catch(()=>ui.setOAuthProviders({}));}
+  try{const [published,layout]=await Promise.all([fetch('./temple-layout.json').then(r=>r.ok?r.json():{}),fetch('./temple-artwork-layout.json').then(r=>r.json())]);Object.assign(settings,published.settings||{},loadEditorSettings());arena.defaultLayout=layout.artworkLayout||{};timings.configMs=performance.now()-started;const assetStart=performance.now(),warmStart=performance.now(),warmTask=arena.presentation.vfx.warm(renderer,camera).then(result=>{timings.effects=result;timings.effectsMs=performance.now()-warmStart;});await Promise.all([arena.load((value,label)=>ui.setLoading(value,label)),document.fonts.load('bold 48px GoldenGirdle')]);vitalModels=new VitalModels(arena.coinMesh.geometry,arena.coinMesh.material);timings.assetsMs=performance.now()-assetStart;ui.setLoading(.9,'Preparing 00GameDevs weapon effects');await warmTask;ui.setLoading(.94,'Prewarming all monster jump and dash animations');try{timings.monsterRigs=await arena.islandEnemies.warmModels(renderer,camera);}catch(error){console.warn('Monster rig prewarm incomplete',error);}ui.setLoading(.95,'Prewarming monster landing shockwaves');try{await arena.islandEnemies.attackEffects.warm(renderer,camera);}catch(error){console.warn('Monster VFX shader prewarm incomplete',error);}applyEditorSettings({pixelRatio:settings.pixelRatio||(coarse?1:1.35),fog:settings.fog??.0008,artFloat:settings.artFloat??.17});camera.position.set(0,13,30);camera.lookAt(0,2,0);ui.setLoading(.99,'Preparing scene shaders');const compileStart=performance.now();await renderer.compileAsync(scene,camera);timings.sceneCompileMs=performance.now()-compileStart;timings.totalMs=performance.now()-started;ui.setLoading(1,'100% · Ready');assetsReady=true;ui.ready();void initializeGoogleAuth();}
   catch(error){console.error(error);ui.setLoading(0,'Loading failed · reload to retry: '+error.message);ui.joinError(error.message);}
 }
 
-ui.addEventListener('oauth-login',async event=>{
-  const provider=event.detail;
+async function completeFirebaseLogin(firebaseIdToken){
+  const account=await network.firebaseProfile(firebaseIdToken);
+  if(joined)return;
+  if(account.existing&&account.profile){
+    ui.emit('join',{
+      name:account.profile.name,color:account.profile.color,firebaseIdToken,
+      backendUrl:network.base
+    });
+  }else ui.selectFirebaseAccount(firebaseIdToken);
+}
+async function initializeGoogleAuth(){
   try{
     network.setBackend(window.TEMPLE_CONFIG.backendUrl);
-    const ticket=await network.beginOAuth(provider);
-    const account=await network.oauthProfile(ticket);
-    if(account.existing&&account.profile){
-      ui.emit('join',{name:account.profile.name,color:account.profile.color,
-        oauthTicket:ticket,backendUrl:network.base});
-    }else ui.selectOAuthAccount(ticket);
-  }catch(error){document.getElementById('account-login-status').textContent=error.message||'帳號登入失敗';ui.joinError(error.message);}
+    const config=await network.firebaseConfig();
+    if(!config.enabled){
+      ui.setFirebaseLoginStatus(false,'Firebase 尚未連結。需在 Cloudflare 設定 Firebase 專案資訊。');
+      return;
+    }
+    await prepareFirebase(config);
+    ui.setFirebaseLoginStatus(true,'使用 Google 帳號登入。下次將自動恢復角色。');
+    const remembered=await existingGoogleToken();
+    if(remembered&&!joined)await completeFirebaseLogin(remembered);
+  }catch(error){
+    console.warn('Firebase Google login setup:',error);
+    ui.setFirebaseLoginStatus(false,'Google 登入初始化失敗：'+(error?.message||'Unknown error'));
+  }
+}
+ui.addEventListener('firebase-login',async()=>{
+  try{
+    // Firebase SDK is preloaded before clicking the button, keeping the popup
+    // tied to the original user gesture on iOS Safari.
+    const token=await signInWithGoogle();
+    await completeFirebaseLogin(token);
+  }catch(error){
+    const message=error?.code==='auth/popup-closed-by-user'?'Google 登入視窗已關閉':
+      error?.code==='auth/popup-blocked'?'請允許瀏覽器開啟 Google 登入視窗':
+      error?.message||'Google 登入失敗';
+    ui.joinError(message);
+    ui.setFirebaseLoginStatus(true,message);
+  }
 });
 ui.addEventListener('join',async event=>{
   if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();
