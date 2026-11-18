@@ -61,6 +61,14 @@ export function attackStats(item,charge=0){
 }
 export const ITEMS = Object.freeze([...RELETTER_ITEMS,...ARMOR]);
 const INDEX = new Map(ITEMS.map(item=>[item.id,item]));
+const CUSTOM_IDS=new Set();
+// Rehydrate custom GM wings from authoritative room data before equipment lookup.
+export function registerCustomWings(wings=[]){
+ for(const id of CUSTOM_IDS)INDEX.delete(id);CUSTOM_IDS.clear();
+ for(const item of wings){if(!item?.id||!/^gm-wing-[0-9a-f-]{36}$/i.test(item.id)||item.design!=='painted-wing')continue;
+  INDEX.set(item.id,Object.freeze(item));CUSTOM_IDS.add(item.id);
+ }
+}
 export const itemById = id => INDEX.get(id) || null;
 
 export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>item.slot!=='material'&&!item.notForSale&&item.price>0));
