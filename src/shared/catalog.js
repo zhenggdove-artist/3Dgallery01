@@ -32,7 +32,7 @@ export const MATERIALS = Object.freeze([]);
 // Original RELETTER identity, range, cadence and effects; only Temple economy/HP scale differ.
 export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(original=>original.id!=='chiang-token'&&!['seed','harvest'].includes(original.slot)).map(original=>{
   const tier=Math.max(1,Math.min(5,original.tier||1));
-  const basePrice=original.notForSale||original.id==='water'?0:TIER_PRICES[tier-1]+Math.min(180,original.price||0);
+  const basePrice=original.shopWing?original.price:original.notForSale||original.id==='water'?0:TIER_PRICES[tier-1]+Math.min(180,original.price||0);
   const mysteryWeapon=isMysteryWeapon(original),price=basePrice*(mysteryWeapon?5:1);
   return Object.freeze({...original,price,mysteryWeapon,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*(original.id==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*(original.id==='white-cat'?.5:1),cooldown:original.id==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
 }));
