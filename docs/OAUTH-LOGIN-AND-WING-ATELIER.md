@@ -1,46 +1,51 @@
-# GGTEMPLE：社群帳號登入設定（Google／Apple／Facebook）
+# GGTEMPLE — Firebase Google 登入（唯一登入方式）
 
-前端和伺服器的登入流程已接通；**未提供第三方 OAuth Client ID／Secret 前，真實帳號登入不可啟用**。不要把金鑰放入 `index.html`、`temple-config.js` 或 GitHub 公開檔案。
+## 使用者登入流程
 
-## 架構
+首頁只顯示「使用 Google 帳號登入」。使用者選擇 Google 帳號並授權後，首次進入需設定角色名稱與衣服顏色；此後同一 Firebase Google 身份自動恢復伺服器儲存的角色（等級、金幣、裝備、融合、翅膀與背包）。不用 Apple、Facebook、Memory Code，也不需要 Firebase Firestore；玩家存檔仍儲存在現有 Cloudflare Durable Object。
 
-- 遊戲前端：GitHub Pages `https://zhenggdove-artist.github.io`。
-- OAuth Callback 及持久化資料：Cloudflare Worker Durable Object
-  `https://temple-arena.zhenggdove-artist.workers.dev/api/oauth/callback`
-  （若未來變更 Worker 正式域名，必須同步更改第三方平台的 Redirect URI）。
-- 使用者先點 Google／Apple／Facebook。伺服器產生 state、nonce 及 Google PKCE，完成身份驗證後發單次登入票據，再由玩家在初次登入時設定角色名與顏色。以後同帳號自動讀取原有角色。
-- 身份鍵使用「平台＋平台使用者 ID＋伺服器私密 pepper」衍生。第三方 OAuth token **不得**成為角色資料庫的 key，也不能由瀏覽器自行傳遞 user id。
-- 進度存於現有 Durable Object `world_state.profiles`，包括 LV、金幣、武器、背包、翅膀、融合記錄。
-- 既有 GM `Ely` + `TEMPLE_ADMIN_KEY` Memory Code 登入保留於「舊式 Memory Code／GM 登入」，未授權帳號絕不獲得 GM。
-- 舊式 4 碼進度**不會未經確認自動合併**到任何 OAuth 身份，避免存檔遭冒領。
+程式已導入 Firebase Auth JS SDK（Google-only），Cloudflare Worker 使用 Google 公鑰驗證 Firebase ID Token，驗證 `aud`、`iss`、`exp`、`iat`、`auth_time`、RS256 簽章，及 Firebase `sign_in_provider: google.com`。只有持有效 Google Firebase Token 的玩家能進入公開正式環境。單次登入交換後，遊戲沿用原 Cloudflare session/Socket；每次重返遊戲重新驗證 Google 身份，進度依 Firebase UID 綁定。
 
-## Cloudflare Worker 需設置的機密
+## 唯一需要的 Firebase 手動設定
 
-使用 Cloudflare Workers → temple-arena → Settings → Variables and Secrets（或現有部署機密管理流程），將以下設為 **Secret**：
+1. 打開 https://console.firebase.google.com/，以 Google 帳戶建立一個 Firebase project，例如 `ggtemple`。不需開啟 Analytics，也不用建立 Firestore。
+2. Firebase Console → **Build → Authentication → Get started → Sign-in method → Google → Enable → Save**。只有 Google 必須打開。
+3. Firebase Console → **Authentication → Settings → Authorized domains → Add domain**，加入 `zhenggdove-artist.github.io`（只填網域，不包含 `https://` 或路徑）。開發用 `localhost` 需另外加入。
+4. Firebase 專案 **Project settings（齒輪）→ General → Your apps → Web app（</>）→ Register app**。取出 `firebaseConfig` 中的四個值：
+    - `apiKey`
+    - `authDomain`
+    - `projectId`
+    - `appId`
+5. Cloudflare Dashboard → **Workers & Pages → temple-arena → Settings → Variables and Secrets**，新增下列四項，數值完全依照 Firebase 的 `firebaseConfig` 貼上：
 
-| Provider | Variables |
-| --- | --- |
-| 共用 | `TEMPLE_OAUTH_PEPPER`（長度至少 32 字元、固定不變的隨機值） |
-| Google | `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET` |
-| Apple | `APPLE_SERVICES_ID`、`APPLE_TEAM_ID`、`APPLE_KEY_ID`、`APPLE_PRIVATE_KEY`（ES256 私鑰，完整 PEM 格式） |
-| Facebook | `FACEBOOK_APP_ID`、`FACEBOOK_APP_SECRET` |
+| Cloudflare variable | Firebase web config |
+|---|---|
+| `FIREBASE_WEB_API_KEY` | `apiKey` |
+| `FIREBASE_AUTH_DOMAIN` | `authDomain` |
+| `FIREBASE_PROJECT_ID` | `projectId` |
+| `FIREBASE_WEB_APP_ID` | `appId` |
 
-Google Cloud Console 建立 OAuth Web application；Authorized redirect URI 填 Worker callback，JavaScript origins 按開發者設定填 GitHub Pages origin 或必要正式網站 origin。Google 的 Client ID 不等於 API Key。
+這四項屬於公開用 Firebase Web 設定，不是 Firebase 私密金鑰。**不要貼服務帳戶 JSON 或 Google 密碼。** Cloudflare 設好並部署後，開啟 `https://zhenggdove-artist.github.io/3Dgallery01/`。登入按鈕會啟用。
 
-Apple Developer 建立 Sign in with Apple 的 Services ID、完成域名及 Return URL 驗證；Return URL 指向相同 Worker callback。Apple 開發者帳號可能有年費。Apple 使用 `response_mode=form_post`。
+`wrangler.jsonc` 已設定 `keep_vars: true`，避免下次 GitHub 自動部署覆蓋 Dashboard 變數。
 
-Meta for Developers 建立 Facebook Login（Web）應用程式，Valid OAuth Redirect URI 指向相同 Worker callback，且按 Meta 平台規定完成正式環境權限與資料處理設定。開發模式通常只允許測試角色使用。
+## GM 唯一 Google 帳號
 
-OAuth 測試登入需使用 HTTPS 並確認 Worker 上 `TEMPLE_ALLOWED_ORIGINS` 含前端 origin（預設允許 GitHub Pages）。
+預設所有 Google 帳號皆為普通玩家。GM 必須靠已驗證 UID 指派，不能只靠名字 `Ely`。
 
-## 安全與上線限制
+使用預定當 GM 的 Google 帳戶在 Firebase 首次登入後，前往 Firebase Console → Authentication → Users 找到對應的 **User UID**。在 Cloudflare Worker Variables and Secrets 新增：
 
-- 原始第三方 token 只在 Worker 記憶體中進行 ID 驗證，不存進遊戲檔案或 Local Storage。
-- Callback 驗證簽章（Google/Apple）及應用程式歸屬（Facebook）；一次性 state、nonce、ticket 都有期限。
-- 目前使用 `window.open()` 回傳單次憑證；部分 iOS／瀏覽器隱私模式禁止彈窗時需允許彈出視窗。
-- 付款仍處於停用階段；GM 扭蛋只是免費測試，不應連結任何真實付款承諾。
-- 抽獎伺服器採 100 權重：[White 45, Green 30, Blue 18, Purple Epic 5, Gold 2]，所有抽獎獨立、有放回；重複抽到已有翅膀是預期行為。
+`FIREBASE_GM_UID` = 那個帳號的 Firebase UID
 
-## GM 繪製翅膀
+重新部署或套用 Cloudflare 設定後，使用同一 Google 帳號登入。系統會驗證該 UID，啟用 GM；首次啟用會從現有舊版 GM（Ely）存檔複製等級、裝備、背包、翅膀等，不刪除舊存檔。
 
-`S → GM 控制中心 → 畫翅膀／上架翅膀`，繪製輪廓、筆刷、鏡像、縮放及命名。上架後 Durable Object 保存 normalized vector 筆畫和能力，並立即入 GM 背包。自製翅膀上限 24 款，控制權由伺服器依已登入 GM 驗證；一般玩家看不到 Wing Shop。
+## 目前限制
+
+- 未設定四項 Firebase Web 變數前，正式網站的 Google 登入按鈕維持停用，公開 API 也拒絕匿名登入；不會擅自創造 Firebase 專案或憑證。
+- 由於 OAuth 身份體系不同，先前尚未綁定 Firebase UID 的**其他舊玩家** Memory Code 存檔不會自動合併，以免把別人的存檔交給錯誤帳號。
+- Firebase Google popup 可能遭瀏覽器封鎖；在 iPhone Safari 需允許登入視窗。SDK 先預熱，避免動態載入時失去使用者點擊手勢。
+- 不需要 Firebase Hosting：網頁仍由 GitHub Pages 發布，Worker 仍部署到 Cloudflare。付款功能仍停用。
+
+## GM 翅膀工作室
+
+`S → GM 控制中心 → 畫翅膀／上架翅膀`。繪圖、命名及設定屬性後可上架到只有 GM 能看見的測試扭蛋機，並直接加入 GM 背包。
