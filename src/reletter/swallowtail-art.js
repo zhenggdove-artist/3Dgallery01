@@ -144,7 +144,7 @@ export function swallowtailModel(T,item){
    inner.rotation.z=side*.15;hinge.add(inner);
   }
  }
- if(item.tier===4)addEpicDust(T,root);
+ if(item.tier===4||item.ability==='sparkle')addEpicDust(T,root);
  root.userData.texture=texture;
  return root;
 }
