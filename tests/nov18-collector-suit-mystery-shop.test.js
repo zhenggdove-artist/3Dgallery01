@@ -62,7 +62,7 @@ test('Collector retains native skinned player model and transparent purple name'
  assert.match(view,/this\.arena\.createPlayer\(/);
  assert.match(view,/attachOutfit\(THREE,root\.userData\.model,tailoredSuit,\{hood:false\}\)/);
  assert.match(view,/design:'suit'/);
- assert.doesNotMatch(view,/BoxGeometry/);
+ assert.doesNotMatch(view.slice(view.indexOf('function dressCollector(root){'),view.indexOf('function collectorLabel(){')),/BoxGeometry/,'Collector SUIT must use native skinned outfit; the pistol is permitted geometric parts');
  assert.match(outfit,/if\(d==='suit'\)/);
  assert.match(outfit,/if\(item\.design==='suit'\)/);
  assert.match(view,/ctx\.clearRect\(0,0,320,84\)/);

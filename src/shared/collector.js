@@ -2,6 +2,7 @@ import {ARENA_RADIUS,PLATFORMS,distance2d,insideArena,insideSafeZone} from './ar
 
 export const COLLECTOR_INTERVAL_MS=30_000;
 export const COLLECTOR_RADIUS=2.8;
+export const COLLECTOR_SHOT_DAMAGE=50;
 export const COLLECTOR_PRICES=Object.freeze([1000,2000,3000,4000,5000]);
 export const COLLECTOR_REVIEWS=Object.freeze([
  'An interesting idea, though it has yet to win me over.',
@@ -12,7 +13,7 @@ export const COLLECTOR_REVIEWS=Object.freeze([
 ]);
 
 export function initialCollector(now=Date.now()){
- return {active:false,position:null,spawnedAt:0,nextSpawnAt:now};
+ return {active:false,position:null,spawnedAt:0,nextSpawnAt:now,insideKeys:{},shots:[]};
 }
 
 function collectorPosition(world,rng){
@@ -32,10 +33,18 @@ function collectorPosition(world,rng){
 
 // The Durable Object decides proximity, ownership and payment. A client
 // never supplies an artwork ID, sale price, or minted currency.
-export function tickCollector(world,actors,now=Date.now(),rng=Math.random){
+export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoot=null){
  world.collector??=initialCollector(now);
  const collector=world.collector;
+ collector.insideKeys??={};
+ collector.shots??=[];
+ const oldShotCount=collector.shots.length;
+ // Preserve a short replicated visual history, even if other players enter
+ // the circle on the same server tick. No unbounded durable state growth.
+ collector.shots=collector.shots.filter(s=>now-s.time<6500).slice(-12);
+ let changed=collector.shots.length!==oldShotCount;
  if(collector.active&&Array.isArray(collector.position)){
+  const insideKeys={};
   for(const actor of actors){
    if(actor.role!=='fighter')continue;
    const profile=world.profiles?.[actor.key];
@@ -43,35 +52,61 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random){
    if(!Array.isArray(actor.position)||!insideArena(actor.position))continue;
    if(distance2d(actor.position,collector.position)>COLLECTOR_RADIUS||
       Math.abs(actor.position[1]-collector.position[1])>3.2)continue;
+   insideKeys[actor.key]=true;
    const entry=Object.entries(world.artworks||{}).find(([,art])=>art.holder===actor.key);
-   if(!entry)continue;
-   const [artworkId,art]=entry;
-   const price=COLLECTOR_PRICES[Math.min(4,Math.max(0,Math.floor((Number(rng())||0)*5)))];
-   if(!profile.admin)profile.wallet+=price;
-   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
-   world.activity.coinMinted+=price;
-   art.holder=null;
-   art.throwEvent=null;
-   // Sold art vanishes and follows the existing 30s art respawn cycle.
-   art.availableAt=now+30_000;
-   collector.active=false;
-   collector.position=null;
-   collector.nextSpawnAt=now+COLLECTOR_INTERVAL_MS;
-   world.lastCollectorSale={
-    id:crypto.randomUUID(),buyer:actor.key,artworkId,price,
-    review:COLLECTOR_REVIEWS[price/1000-1],time:now
-   };
-   return true;
+   if(entry){
+    const [artworkId,art]=entry;
+    const price=COLLECTOR_PRICES[Math.min(4,Math.max(0,Math.floor((Number(rng())||0)*5)))];
+    if(!profile.admin)profile.wallet+=price;
+    world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
+    world.activity.coinMinted+=price;
+    art.holder=null;art.throwEvent=null;
+    art.availableAt=now+30_000;
+    collector.active=false;collector.position=null;
+    collector.insideKeys={};
+    collector.nextSpawnAt=now+COLLECTOR_INTERVAL_MS;
+    world.lastCollectorSale={
+     id:crypto.randomUUID(),buyer:actor.key,artworkId,price,
+     review:COLLECTOR_REVIEWS[price/1000-1],time:now
+    };
+    return true;
+   }
+   // One shot when an empty-handed fighter ENTERS, not every 500ms while
+   // they stand in the circle. A new entry after leaving triggers anew.
+   if(!collector.insideKeys[actor.key]){
+    const result=onShoot?.(actor,collector.position,COLLECTOR_SHOT_DAMAGE);
+    const shot={
+     id:crypto.randomUUID(),target:actor.key,
+     from:[collector.position[0],collector.position[1]+1.52,collector.position[2]],
+     to:[actor.position[0],actor.position[1]+1.15,actor.position[2]],
+     damage:result?.damage??0,time:now
+    };
+    collector.shots.push(shot);
+    if(collector.shots.length>12)collector.shots.shift();
+    changed=true;
+   }
+  }
+  const previous=Object.keys(collector.insideKeys);
+  if(previous.length!==Object.keys(insideKeys).length||
+      previous.some(key=>!insideKeys[key])){
+   collector.insideKeys=insideKeys;
+   changed=true;
   }
  }
- // An unsatisfied Collector stays at the same spot indefinitely. Only an
- // actual purchase removes them and starts the 30-second respawn countdown.
+ // The Collector never relocates while awaiting a genuine art purchase.
  if(!collector.active&&now>=collector.nextSpawnAt){
   collector.active=true;
   collector.position=collectorPosition(world,rng);
   collector.spawnedAt=now;
   collector.nextSpawnAt=now+COLLECTOR_INTERVAL_MS;
+  // If the NPC happens to appear directly on an existing fighter, do not
+  // pretend they walked inside: require that fighter to leave and re-enter.
+  collector.insideKeys=Object.fromEntries(actors.filter(actor=>
+   actor.role==='fighter'&&Array.isArray(actor.position)&&
+   distance2d(actor.position,collector.position)<=COLLECTOR_RADIUS&&
+   Math.abs(actor.position[1]-collector.position[1])<=3.2
+  ).map(actor=>[actor.key,true]));
   return true;
  }
- return false;
+ return changed;
 }

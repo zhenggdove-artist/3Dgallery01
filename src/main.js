@@ -50,7 +50,7 @@ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,innerWidth/i
 camera.position.set(0,13,30);camera.lookAt(0,2,0);camera.updateMatrixWorld(true);
 const vhs=createVHS(renderer),audio=new GameAudio(),bursts=new GoldenBursts(scene),chargePreview=new ChargeTargetPreview(scene);
 const artworkThrow=new ArtworkThrow({scene,arena,controller:()=>controller,holderKey:()=>self?.key,send:sendAction,bursts,audio});
-const collectorView=new CollectorView(scene,arena);
+const collectorView=new CollectorView(scene,arena,()=>audio.play('shot',.9));
 arena.artFloat=settings.artFloat??.17;
 
 let vitalModels=null;
