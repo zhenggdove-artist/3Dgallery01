@@ -32,6 +32,8 @@ export function drawGmWing(profile,rng=Math.random,customWings=[]){
  const pool=[...SWALLOWTAIL_WINGS,...customWings].filter(item=>wingRarity(item)===quality);
  if(!pool.length)return {error:'No wings published in the selected tier'};
  const item=pool[Math.floor(number()*pool.length)];
+ const all=[...SWALLOWTAIL_WINGS,...customWings],ids=new Set(all.map(w=>w.id));
+ const uniqueOwned=new Set([...(profile.inventory||[]),item.id].filter(id=>ids.has(id)));
  return {item,quality,priceTwd:0,mode:'gm-preview',
-  remaining:SWALLOWTAIL_WINGS.length+customWings.length-new Set((profile.inventory||[]).filter(id=>pool.some(w=>w.id===id))).size};
+  remaining:all.length-uniqueOwned.size};
 }
