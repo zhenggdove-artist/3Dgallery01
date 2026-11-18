@@ -37,6 +37,7 @@ test('migrate old +1 weapon whose 9 apparent attempts produced only 1 upgrade',(
 test('different physical copies of same base weapon never share fusion attempts',()=>{
  const w=createInitialWorld(TIME),p=ensureProfile(w,'copies','copies','#aabbcc',TIME);
  p.inventory.push('ember-1','ember-1','frost-1','storm-1');
+ ensureProfile(w,'copies','copies','#aabbcc',TIME+1);
  const first=p.inventory.indexOf('ember-1'),second=first+1;
  const frost=p.inventory.indexOf('frost-1');
  const uidA=fuseIndexUid(p,first),uidB=fuseIndexUid(p,second);
@@ -67,6 +68,7 @@ test('duplicate request IDs, stale UIDs and invalid indexes cannot consume twice
  const w=createInitialWorld(TIME),actor=fighter('dup');
  const p=ensureProfile(w,'dup','dup','#bcaef0',TIME);
  p.inventory.push('ember-1','frost-1','storm-1');
+ ensureProfile(w,'dup','dup','#bcaef0',TIME+1);
  // This reconciles the test-created inventory and creates stable copy IDs.
  const ids=worldView(w,'dup',TIME).profile.inventoryInstances;
  const ember=p.inventory.indexOf('ember-1'),frost=p.inventory.indexOf('frost-1');
