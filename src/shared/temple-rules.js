@@ -252,6 +252,17 @@ export function applyAction(world,actor,body,context={}){
     case 'equip':result=equip(profile,body);break;
     case 'unequip':if(!EQUIPPABLE_SLOTS.includes(body.slot))return {error:'Invalid slot'};profile.equipment[body.slot]=null;result={notice:'Unequipped'};break;
     case 'fuse':result=fuse(world,profile,body,rng);break;
+     case 'swap-inventory':{
+      const from=body.fromIndex,to=body.toIndex;
+      if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||to<0||
+         from>=profile.inventory.length||to>=profile.inventory.length)
+       return {error:'Invalid inventory slot'};
+      if(from===to)return {notice:'Inventory unchanged'};
+      [profile.inventory[from],profile.inventory[to]]=
+       [profile.inventory[to],profile.inventory[from]];
+      result={inventoryReordered:true,fromIndex:from,toIndex:to};
+      break;
+     }
     case 'attack':result=attack(world,profile,actor,body,context,now);break;
     case 'monster-hit':return {error:'Use a directional weapon attack'};
     case 'build':result=build(world,profile,actor,body,now,rng);break;
