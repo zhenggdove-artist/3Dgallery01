@@ -13,6 +13,7 @@ import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-st
 import {playerStats,refreshStats} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
 import {fuseTemple} from './temple-fusion.js';
+import {fusionSniperEchoDamage} from './fusion-balance.js';
 import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './island-combat.js';
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
@@ -507,9 +508,9 @@ function attack(world,profile,actor,body,context,now){
         Math.max(flight,visibleCollisionLifetimeMs(source,true));
       // Sniper fusion echo must not exceed 30% of the original sniper
        // ultimate's damage; it also cannot cause instant-lethal headshots.
-       const sniperEchoFactor=source.id==='black-cat'?.3:.2;
-       const echoId=id(),echoDamage=+(full.damage*sniperEchoFactor).toFixed(3);
-      const echoPvP=+(pvpShotDamage(source,full,sourceQuality)*sniperEchoFactor).toFixed(3);
+       const balancedSniper=source.id==='black-cat'?fusionSniperEchoDamage(source):null;
+       const echoId=id(),echoDamage=balancedSniper?.damage??+(full.damage*.2).toFixed(3);
+      const echoPvP=balancedSniper?.pvpDamage??+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],range:secondary.range,radius:secondary.radius,area:echoArea,
