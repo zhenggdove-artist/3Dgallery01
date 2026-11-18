@@ -71,7 +71,7 @@ export function migrateWorld(raw,now=Date.now()){
 
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
-    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT},
+    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT,wings:admin?'wings-18':null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
     fusion:{},createdAt:now,updatedAt:now,lastAttackAt:0};
 }
 
@@ -83,7 +83,13 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
   if(current.admin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
   if(!current.inventory.includes(STARTER_LOADOUT.weapon))current.inventory.unshift(STARTER_LOADOUT.weapon);
-  current.equipment??={...STARTER_LOADOUT};if(current.equipment.weapon&&!itemById(current.equipment.weapon))current.equipment.weapon=STARTER_LOADOUT.weapon;delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
+  current.equipment??={...STARTER_LOADOUT};
+   if(current.admin&&!current.gmWingsInitialized){
+    if(!current.equipment.wings)current.equipment.wings='wings-18';
+    current.gmWingsInitialized=true;
+   }
+   if(current.admin&&typeof current.gmInvincible!=='boolean')current.gmInvincible=true;
+   if(current.equipment.weapon&&!itemById(current.equipment.weapon))current.equipment.weapon=STARTER_LOADOUT.weapon;delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
   refreshStats(world,current,now);
   if(current.deadUntil<=now&&current.hp<=0){current.hp=current.maxHp||100;current.deadUntil=0;}
   return current;
@@ -94,7 +100,7 @@ export function validName(value){return typeof value==='string'&&value.trim().le
 
 export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
-    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,effects:clone(profile.effects||{}),admin:profile.admin};
+    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
 
 export function worldView(world,actorKey,now=Date.now()){
@@ -103,7 +109,7 @@ export function worldView(world,actorKey,now=Date.now()){
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
-    reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000))};
+    reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
 function requireFighter(actor){return actor.role==='fighter'?null:{error:'Spectators cannot perform this action'};}
@@ -180,7 +186,22 @@ export function applyAction(world,actor,body,context={}){
     world.revision=(world.revision||0)+1;
     return {notice:'全服音量已同步',audioSettings:clone(world.audioSettings)};
    }
-  if(body.action==='create-platform'){if(!profile.admin)return {error:'僅限 GM'};const p=body.position,r=Number(body.radius);if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)||Math.hypot(p[0],p[2])>88||p[1]<0||p[1]>30||!Number.isFinite(r)||r<.6||r>8)return {error:'圓盤位置或半徑無效'};world.floatingPlatforms??=[];if(world.floatingPlatforms.length>=128)return {error:'已達 128 個圓盤上限'};const platform={id:id(),position:[...p],radius:r};world.floatingPlatforms.push(platform);world.revision++;return {platform,notice:'已建立漂浮圓盤，所有玩家皆可使用'};}
+  if(body.action==='gm-invincible'){
+    if(!profile.admin)return {error:'GM only'};
+    if(typeof body.enabled!=='boolean')return {error:'Invalid invincibility toggle'};
+    profile.gmInvincible=body.enabled;
+    if(body.enabled){profile.hp=profile.maxHp;profile.effects={};}
+    world.revision=(world.revision||0)+1;
+    return {notice:body.enabled?'GM 無敵已開啟':'GM 無敵已關閉',gmInvincible:body.enabled};
+   }
+   if(body.action==='gm-fusion-chance'){
+    if(!profile.admin)return {error:'GM only'};
+    if(typeof body.percent!=='number'||!Number.isFinite(body.percent)||body.percent<0||body.percent>100)return {error:'Invalid GM fusion chance (0–100)'};
+    profile.gmFusionChance=body.percent/100;
+    world.revision=(world.revision||0)+1;
+    return {notice:'GM 個人融合成功率 '+body.percent.toFixed(1)+'%',gmFusionChance:profile.gmFusionChance};
+   }
+   if(body.action==='create-platform'){if(!profile.admin)return {error:'僅限 GM'};const p=body.position,r=Number(body.radius);if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)||Math.hypot(p[0],p[2])>88||p[1]<0||p[1]>30||!Number.isFinite(r)||r<.6||r>8)return {error:'圓盤位置或半徑無效'};world.floatingPlatforms??=[];if(world.floatingPlatforms.length>=128)return {error:'已達 128 個圓盤上限'};const platform={id:id(),position:[...p],radius:r};world.floatingPlatforms.push(platform);world.revision++;return {platform,notice:'已建立漂浮圓盤，所有玩家皆可使用'};}
   if(body.action==='delete-platform'){
     if(!profile.admin)return {error:'僅限 GM 刪除圓盤'};
     const key=String(body.platformId||'');
@@ -345,7 +366,7 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
   return {notice:'ARTWORK DEFAULT SAVED · ALL PLAYERS',artworkLayout:clone(world.artworkLayout[platform.id])};
 }
 
-function fuse(world,profile,body,rng){return fuseTemple(world,profile,body);}
+function fuse(world,profile,body,rng){return fuseTemple(world,profile,body,rng);}
 
 function attack(world,profile,actor,body,context,now){
   // A release must clear server collision objects even while stunned, frozen,
@@ -469,8 +490,11 @@ function attack(world,profile,actor,body,context,now){
       const duration=exotic==='goldfish'?Math.round(GOLDFISH_SWIM_MS*sourceQuality.duration):
         exotic==='giraffe'?2300:exotic==='fan'?Math.round((1400+sourceQuality.tier*850)*sourceQuality.duration):
         Math.max(flight,visibleCollisionLifetimeMs(source,true));
-      const echoId=id(),echoDamage=+(full.damage*.2).toFixed(3);
-      const echoPvP=+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
+      // Sniper fusion echo must not exceed 30% of the original sniper
+       // ultimate's damage; it also cannot cause instant-lethal headshots.
+       const echoFactor=source.id==='black-cat'?.3:.2;
+       const echoId=id(),echoDamage=+(full.damage*echoFactor).toFixed(3);
+      const echoPvP=+(pvpShotDamage(source,full,sourceQuality)*echoFactor).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],range:secondary.range,radius:secondary.radius,area:echoArea,
@@ -510,7 +534,7 @@ function attack(world,profile,actor,body,context,now){
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
- if(!player||player.admin||player.hp<=0)return;
+ if(!player||(player.admin&&player.gmInvincible!==false)||player.hp<=0)return;
   if(skill?.motion==='freeze'){
    // Apply an authoritative 80% movement slow for precisely two seconds.
    // Never use the full immobilising "freeze" status for this ability.
@@ -532,7 +556,7 @@ function applyMonsterImpactReaction(player,target,skill,now){
 }
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false,fixedDamage=false){
   const target=world.profiles[targetActor.key];if(!target||target.hp<=0||target.deadUntil>now)return null;
-  const stats=refreshStats(world,target,now);if(target.admin&&!fixedDamage){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
+  const stats=refreshStats(world,target,now);if(target.admin&&target.gmInvincible!==false){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
   const armor=itemById(target.equipment.armor),reduction=Math.min(.65,(armor?.defense||0)/100);
   // The frying pan's self-damage is exactly 15 HP, not armour/shield
   // adjusted; it remains a genuine self-inflicted hazard even for the GM.
@@ -606,7 +630,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
    if(expiry<now-2000)delete world.channelContactLocks[key];
   if(world.monster?.active)changed=tickStatus(world.monster,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng))||changed;
   for(const mob of world.monsters||[])if(mob?.active)changed=tickStatus(mob,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng,'status',mob))||changed;
-  for(const target of actors){const p=world.profiles[target.key];if(p&&!p.admin&&p.hp>0)changed=tickStatus(p,now,(owner,amount)=>damagePlayer(world,world.profiles[owner],target,Math.min(amount,2),now,'status',target.position))||changed;}
+  for(const target of actors){const p=world.profiles[target.key];if(p&&!(p.admin&&p.gmInvincible!==false)&&p.hp>0)changed=tickStatus(p,now,(owner,amount)=>damagePlayer(world,world.profiles[owner],target,Math.min(amount,2),now,'status',target.position))||changed;}
   world.groundDrops=world.groundDrops.filter(drop=>drop.expiresAt>now);if(world.groundDrops.length>ECONOMY.maxGroundDrops)world.groundDrops.splice(0,world.groundDrops.length-ECONOMY.maxGroundDrops);
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
   if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
@@ -1067,7 +1091,11 @@ function tickPersistentAttacks(world,actors,now,rng){
  return changed||world.persistentAttacks.length!==old;
 }
 
-function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount*=1+(effectActive(monster,'soaked',now)?.power||0);const hpLost=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-hpLost);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng),material=MATERIALS[Math.floor(rng()*MATERIALS.length)];world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),kind:'material',itemId:material.id,position:[monster.position[0],.4,monster.position[2]+1.4],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=3;if(profile)addXp(profile,120);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
+function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount*=1+(effectActive(monster,'soaked',now)?.power||0);const hpLost=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-hpLost);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng),material=MATERIALS[Math.floor(rng()*MATERIALS.length)];world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),kind:'material',itemId:material.id,position:[monster.position[0],.4,monster.position[2]+1.4],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=3;
+ world.monsterDeathEvents??=[];
+ world.monsterDeathEvents.push({id:id(),monsterId:monster.id,time:now,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]]});
+ if(world.monsterDeathEvents.length>48)world.monsterDeathEvents.splice(0,world.monsterDeathEvents.length-48);
+ if(profile)addXp(profile,120);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
 function moveMonster(world,monster,target,distance){const dx=target[0]-monster.position[0],dz=target[2]-monster.position[2],angle=Math.atan2(dz,dx);for(const offset of [0,.68,-.68,1.2,-1.2]){const next=[monster.position[0]+Math.cos(angle+offset)*distance,monster.position[1],monster.position[2]+Math.sin(angle+offset)*distance];if(!insideArena(next,-2)||insideArtSanctuary(next)||(world.structures||[]).some(s=>distance2d(next,s.position)<structureRadius(s)+1.1))continue;monster.position[0]=next[0];monster.position[2]=next[2];return;}}
 function hashString(value){let hash=2166136261;for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return hash>>>0;}
 
