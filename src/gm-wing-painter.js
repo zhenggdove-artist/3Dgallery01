@@ -57,6 +57,14 @@ export function mountWingPainter(ui){
  const restore=value=>{Object.assign(design,copy(value));root.querySelectorAll('[data-wing-scale]').forEach(el=>el.value=design[el.dataset.wingScale]);draw();};
  function draw(){
   renderPaintedWing(canvas,design);
+  if(active?.tool==='outline'&&active.points.length){
+   ctx.save();ctx.lineWidth=4;ctx.strokeStyle='#16b7ff';ctx.fillStyle='#ffffff';ctx.setLineDash([9,5]);
+   ctx.beginPath();
+   active.points.forEach(([x,y],i)=>{if(!i)ctx.moveTo(x*canvas.width,y*canvas.height);else ctx.lineTo(x*canvas.width,y*canvas.height);});
+   ctx.stroke();ctx.setLineDash([]);
+   for(const [x,y] of active.points){ctx.beginPath();ctx.arc(x*canvas.width,y*canvas.height,2.5,0,Math.PI*2);ctx.fill();}
+   ctx.restore();
+  }
   canvas.style.transform=`translate(${pan[0]}px,${pan[1]}px) scale(${zoom})`;
   root.querySelector('[data-wing-zoom-label]').textContent=Math.round(zoom*100)+'%';
  }
