@@ -261,7 +261,7 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
  #chat-hud #chat-resize{touch-action:none}
  #chat-hud #chat-messages{touch-action:pan-y}
 }
-/* Collector appraisal is a transparent, three-second, tap-to-dismiss dialog. */
+/* Collector appraisal persists until a pointer tap anywhere on the screen. */
 #collector-sale-overlay{
  position:fixed;inset:0;z-index:110;display:grid;place-items:center;
  background:rgba(10,14,28,.14);cursor:pointer;touch-action:manipulation;
@@ -275,3 +275,5 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
 #collector-sale-card small{font:700 12px/1.6 sans-serif;letter-spacing:.18em;color:#f5d9a2}
 #collector-sale-card p{font:500 clamp(18px,4vw,26px)/1.42 Georgia,serif;margin:16px 0 17px}
 #collector-sale-card strong{font:800 clamp(22px,6vw,31px)/1.2 sans-serif;color:#ffdc7b}
+
+#collector-sale-card small:last-child{display:block;margin-top:18px;font-size:10px;opacity:.75;letter-spacing:.13em}
