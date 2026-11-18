@@ -1,53 +1,28 @@
 import * as THREE from 'three';
 import {COLLECTOR_RADIUS} from './shared/collector.js';
+import {attachOutfit} from './reletter/outfit-model.js';
 
-// Create a single copy of the real player avatar and procedurally tailor
-// a three-dimensional suit onto it. No new GLB or image assets are loaded.
+// Put a real outfit on the *skinned* Temple protagonist. The torso, arms
+// and legs remain the original animated avatar; no substitute cube body.
 function dressCollector(root){
- const coat=new THREE.MeshStandardMaterial({color:'#171d2b',roughness:.88,metalness:.06});
- const trim=new THREE.MeshStandardMaterial({color:'#343e53',roughness:.8});
- const shirt=new THREE.MeshStandardMaterial({color:'#faf8f3',roughness:.86});
- const tie=new THREE.MeshStandardMaterial({color:'#9e2733',roughness:.55});
- const shoes=new THREE.MeshStandardMaterial({color:'#101015',roughness:.65});
- const gold=new THREE.MeshStandardMaterial({color:'#d7b770',roughness:.4,metalness:.6});
- const suit=new THREE.Group();
- const height=new THREE.Box3().setFromObject(root.userData.model,true).getSize(new THREE.Vector3()).y;
- suit.scale.setScalar(Math.max(.25,height/2.1));
- // The original avatar faces local +X; build a suit facing +Z then rotate it.
- suit.rotation.y=Math.PI/2;
- const box=(w,h,d,x,y,z,material)=>{
-  const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);
-  mesh.position.set(x,y,z);suit.add(mesh);return mesh;
+ const tailoredSuit={
+  id:'collector-tailored-suit',name:'Collector Tailored Suit',slot:'outfit',
+  family:'outfit',design:'suit',pattern:0,tier:5,color:'#20293b'
  };
- box(.94,.99,.64,0,1.28,0,coat);
- box(.32,.78,.07,0,1.33,.355,shirt);
- for(const sign of [-1,1]){
-  const sleeve=box(.26,.82,.33,sign*.61,1.27,-.01,coat);
-  sleeve.rotation.z=sign*.13;
-  box(.36,.76,.42,sign*.23,.48,0,trim);
-  box(.40,.16,.65,sign*.23,.095,.14,shoes);
-  const lapel=new THREE.Shape();
-  lapel.moveTo(sign*.14,1.78);lapel.lineTo(sign*.49,1.75);
-  lapel.lineTo(sign*.27,1.26);lapel.lineTo(sign*.10,1.40);
-  lapel.closePath();
-  const face=new THREE.Mesh(new THREE.ShapeGeometry(lapel),trim);
-  face.position.z=.397;suit.add(face);
-  const button=new THREE.Mesh(new THREE.SphereGeometry(.028,8,6),gold);
-  button.position.set(sign*.13,1.02,.403);suit.add(button);
- }
- const knot=new THREE.Mesh(new THREE.ConeGeometry(.105,.17,3),tie);
- knot.rotation.z=Math.PI;knot.position.set(0,1.58,.416);suit.add(knot);
- const tail=new THREE.Mesh(new THREE.ConeGeometry(.085,.53,3),tie);
- tail.position.set(0,1.28,.414);suit.add(tail);
- root.add(suit);
+ const outfit=attachOutfit(THREE,root.userData.model,tailoredSuit,{hood:false});
+ if(!outfit)throw new Error('Collector: original character rig cannot wear an outfit');
+ root.userData.outfit=outfit;
 }
 
 function collectorLabel(){
  const canvas=document.createElement('canvas');canvas.width=320;canvas.height=84;
  const ctx=canvas.getContext('2d');
- ctx.fillStyle='rgba(13,17,30,.88)';ctx.fillRect(0,0,320,84);
- ctx.strokeStyle='#e8d6ac';ctx.lineWidth=4;ctx.strokeRect(3,3,314,78);
- ctx.fillStyle='#fff4d9';ctx.font='bold 47px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+ // Transparent canvas: the word floats above the model with no plaque.
+ ctx.clearRect(0,0,320,84);
+ ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 52px sans-serif';
+ ctx.lineWidth=2.5;ctx.strokeStyle='rgba(236,214,255,.95)';
+ ctx.strokeText('Collector',160,44);
+ ctx.fillStyle='#a74cff';ctx.shadowColor='#7f33de';ctx.shadowBlur=11;
  ctx.fillText('Collector',160,44);
  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
  const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false}));
