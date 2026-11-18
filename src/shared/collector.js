@@ -3,6 +3,18 @@ import {ARENA_RADIUS,PLATFORMS,distance2d,insideArena,insideSafeZone} from './ar
 export const COLLECTOR_INTERVAL_MS=30_000;
 export const COLLECTOR_RADIUS=2.8;
 export const COLLECTOR_SHOT_DAMAGE=50;
+export const COLLECTOR_ANGRY_LINES=Object.freeze([
+ 'Empty-handed? How embarrassingly predictable.',
+ 'You brought nothing. Not even a decent excuse?',
+ 'This is a collection, not a waiting room.',
+ 'I collect art, not wandering disappointments.',
+ 'Come back when your hands have better taste.',
+ 'No masterpiece? Then stop wasting my oxygen.',
+ 'An empty hand is a very poor introduction.',
+ 'Did you mistake my gallery for a charity?',
+ 'Your audacity is the only thing on display.',
+ 'Bring me art next time. I am not buying your presence.'
+]);
 export const COLLECTOR_PRICES=Object.freeze([1000,2000,3000,4000,5000]);
 export const COLLECTOR_REVIEWS=Object.freeze([
  'An interesting idea, though it has yet to win me over.',
@@ -79,7 +91,10 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoo
      id:crypto.randomUUID(),target:actor.key,
      from:[collector.position[0],collector.position[1]+1.52,collector.position[2]],
      to:[actor.position[0],actor.position[1]+1.15,actor.position[2]],
-     damage:result?.damage??0,time:now
+     damage:result?.damage??0,
+     taunt:COLLECTOR_ANGRY_LINES[Math.min(COLLECTOR_ANGRY_LINES.length-1,
+      Math.max(0,Math.floor((Number(rng())||0)*COLLECTOR_ANGRY_LINES.length)))],
+     time:now
     };
     collector.shots.push(shot);
     if(collector.shots.length>12)collector.shots.shift();
