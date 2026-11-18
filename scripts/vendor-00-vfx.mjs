@@ -99,3 +99,30 @@ console.log('Validated '+assets.length+' of '+Object.keys(numberedIds).length+' 
  },null,2)+'\n');
  console.log('Verified original monster effect '+id+' '+sha256);
 }
+
+
+// Use the byte-identical official ground-healing effect for flower-crown
+// channeling, independently of the existing #43 projectile bloom.
+{
+ const id='verdant-restoration';
+ const a=catalog.assets.find(v=>v.id===id&&v.kind==='effect');
+ if(!a||a.license!=='MIT'||a.integration?.type!=='scene-object'||!a.download?.url||!a.download?.sha256)
+  throw Error('Official verdant-restoration scene-object is unavailable');
+ const url=new URL(a.download.url,origin);
+ if(url.origin!==origin)throw Error('Unexpected verdant-restoration origin: '+url.href);
+ const response=await fetch(url);
+ if(!response.ok)throw Error('Official verdant-restoration download failed: '+response.status);
+ const bytes=Buffer.from(await response.arrayBuffer()),sha256=createHash('sha256').update(bytes).digest('hex');
+ if(sha256!==a.download.sha256)throw Error('Official verdant-restoration checksum mismatch');
+ const code=bytes.toString('utf8');
+ if(!code.includes('00GameDevs')||!code.includes('The MIT License'))
+  throw Error('Original verdant-restoration MIT license header missing');
+ await writeFile(dir+'/'+id+'.js',bytes);
+ await writeFile('vendor/00gamedevs/restoration-manifest.json',JSON.stringify({
+  origin,contentVersion:catalog.contentVersion,downloadedFrom:'official AI catalog v2',
+  packaging:'byte-identical original JavaScript, no imitation',
+  assets:[{id,url:url.href,sha256,byteLength:bytes.length,license:a.license,
+   integration:a.integration,defaultOptions:a.defaultOptions}]
+ },null,2)+'\n');
+ console.log('Verified original restoration effect '+id+' '+sha256);
+}
