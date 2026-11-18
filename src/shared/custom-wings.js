@@ -35,7 +35,7 @@ export function normalizePaintedWing(raw,id){
  return {id,name,tier,slot:'wings',family:'wings',design:'painted-wing',
   premiumWing:true,gmWingExclusive:true,notForSale:true,price:0,
   color:raw.color,ability:raw.ability,
-  outline:outline.map(normalizePoint),strokes:clean,shape:String(raw.shape||'swallowtail').slice(0,20),
+  outline:outline.map(normalizePoint),strokes:clean,shape:String(raw.shape||'freehand').slice(0,20),
   scaleX:Number(raw.scaleX),scaleY:Number(raw.scaleY),
   impulse:Number(raw.impulse),gravity:Number(raw.gravity),flapMs:Number(raw.flapMs),
   visualComplexity:clean.length,description:'GM-painted original collectible'};

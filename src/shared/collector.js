@@ -15,6 +15,13 @@ export const COLLECTOR_ANGRY_LINES=Object.freeze([
  'Your audacity is the only thing on display.',
  'Bring me art next time. I am not buying your presence.'
 ]);
+export const COLLECTOR_REPEAT_LINES=Object.freeze([
+ 'I already bought this work from you. Do you think I have no memory?',
+ 'Again? The same artwork? You insult my collection.',
+ 'You sold me this exact piece. Stop trying to deceive me.',
+ 'I remember every acquisition. This one is already mine.',
+ 'Your recycled masterpiece is not getting a second cheque.'
+]);
 export const COLLECTOR_MIN_PRICE=1;
 export const COLLECTOR_MAX_PRICE=9999;
 // Collector offer is an inclusive, server-authored integer [1, 9999].
@@ -66,15 +73,22 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoo
    if(!Array.isArray(actor.position)||!insideArena(actor.position))continue;
    if(distance2d(actor.position,collector.position)>COLLECTOR_RADIUS||
       Math.abs(actor.position[1]-collector.position[1])>3.2)continue;
-   insideKeys[actor.key]=true;
    const entry=Object.entries(world.artworks||{}).find(([,art])=>art.holder===actor.key);
-   if(entry){
-    const [artworkId,art]=entry;
+   const artworkId=entry?.[0];
+   const previouslySold=!!(artworkId&&profile.collectorSoldArtworks?.[artworkId]);
+   const encounter=previouslySold?'duplicate:'+artworkId:'empty';
+   insideKeys[actor.key]=encounter;
+   if(entry&&!previouslySold){
+    const [,art]=entry;
     const sample=Math.max(0,Math.min(.9999999999999999,Number(rng())||0));
     const price=COLLECTOR_MIN_PRICE+Math.floor(sample*(COLLECTOR_MAX_PRICE-COLLECTOR_MIN_PRICE+1));
     if(!profile.admin)profile.wallet+=price;
     world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
     world.activity.coinMinted+=price;
+    // Per-account/per-artwork durable receipt: sold artwork may respawn,
+    // but this same player can never sell its platform ID again.
+    profile.collectorSoldArtworks??={};
+    profile.collectorSoldArtworks[artworkId]=now;
     art.holder=null;art.throwEvent=null;
     art.availableAt=now+30_000;
     collector.active=false;collector.position=null;
@@ -87,17 +101,20 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoo
     };
     return true;
    }
-   // One shot when an empty-handed fighter ENTERS, not every 500ms while
-   // they stand in the circle. A new entry after leaving triggers anew.
-   if(!collector.insideKeys[actor.key]){
+   // Shoot once on entry or when the held artwork changes to an already-sold
+   // piece. Never repeatedly drain 50 HP on every server tick.
+   if(collector.insideKeys[actor.key]!==encounter){
     const result=onShoot?.(actor,collector.position,COLLECTOR_SHOT_DAMAGE);
     const shot={
      id:crypto.randomUUID(),target:actor.key,
      from:[collector.position[0],collector.position[1]+1.52,collector.position[2]],
      to:[actor.position[0],actor.position[1]+1.15,actor.position[2]],
      damage:result?.damage??0,
-     taunt:COLLECTOR_ANGRY_LINES[Math.min(COLLECTOR_ANGRY_LINES.length-1,
-      Math.max(0,Math.floor((Number(rng())||0)*COLLECTOR_ANGRY_LINES.length)))],
+     taunt:(previouslySold?COLLECTOR_REPEAT_LINES:COLLECTOR_ANGRY_LINES)[Math.min(
+      (previouslySold?COLLECTOR_REPEAT_LINES:COLLECTOR_ANGRY_LINES).length-1,
+      Math.max(0,Math.floor((Number(rng())||0)*(previouslySold?COLLECTOR_REPEAT_LINES:COLLECTOR_ANGRY_LINES).length)))],
+     reason:previouslySold?'already-collected':'empty-handed',
+     artworkId:previouslySold?artworkId:null,
      time:now
     };
     collector.shots.push(shot);
@@ -124,7 +141,11 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoo
    actor.role==='fighter'&&Array.isArray(actor.position)&&
    distance2d(actor.position,collector.position)<=COLLECTOR_RADIUS&&
    Math.abs(actor.position[1]-collector.position[1])<=3.2
-  ).map(actor=>[actor.key,true]));
+  ).map(actor=>{
+   const profile=world.profiles?.[actor.key];
+   const held=Object.keys(world.artworks||{}).find(id=>world.artworks[id]?.holder===actor.key);
+   return [actor.key,held&&profile?.collectorSoldArtworks?.[held]?'duplicate:'+held:'empty'];
+  }));
   return true;
  }
  return changed;

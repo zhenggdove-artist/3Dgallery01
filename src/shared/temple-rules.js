@@ -73,6 +73,14 @@ export function migrateWorld(raw,now=Date.now()){
   if(world.reletter?.garden)delete world.reletter.garden;
   world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];world.audioSettings??={};world.musicVersion??=0;
   world.collector??=initialCollector(now);world.lastCollectorSale??=null;
+  // Earlier releases retained only the last transaction; honor that
+  // receipt when upgrading a pre-existing persistent room.
+  const oldSale=world.lastCollectorSale;
+  if(oldSale?.buyer&&oldSale.artworkId&&world.profiles[oldSale.buyer]){
+   const owner=world.profiles[oldSale.buyer];
+   owner.collectorSoldArtworks??={};
+   owner.collectorSoldArtworks[oldSale.artworkId]??=oldSale.time||now;
+  }
   world.nextGroundDropAt??=now+ECONOMY.groundSpawnMinMs;
   // Purge persisted deprecated material loot immediately, even if its
   // original drop lifetime has not expired.
@@ -84,7 +92,8 @@ export function migrateWorld(raw,now=Date.now()){
 
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
-    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.filter(item=>!item.gmWingExclusive).map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT,wings:admin?'wings-18':null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
+    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT,wings:admin?'wings-18':null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
+    gmAllItemsGranted:!!admin,gmKnownCustomWingIds:[],collectorSoldArtworks:{},
     fusion:{},wingTrialDraws:0,createdAt:now,updatedAt:now,lastAttackAt:0};
 }
 
@@ -102,16 +111,36 @@ function reviveProfile(profile,now,seatIndex=0){
 
 export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   const current=world.profiles[key]??=createProfile(key,name,color,now,admin);
-  const wasAdmin=!!current.admin;
   if(name)current.name=String(name).slice(0,24);if(validColor(color))current.color=color;current.admin=!!admin;current.updatedAt=now;
   current.wallet=Number.isFinite(current.wallet)?Math.max(0,Math.floor(current.wallet)):0;
   current.level=Math.max(1,Math.floor(current.level||1));current.xp=Math.max(0,Math.floor(current.xp||0));
   current.wingTrialDraws=Number.isFinite(current.wingTrialDraws)?Math.max(0,Math.min(FREE_WING_TRIAL_LIMIT,Math.floor(current.wingTrialDraws))):0;
+  if(!current.collectorSoldArtworks||typeof current.collectorSoldArtworks!=='object'||Array.isArray(current.collectorSoldArtworks))
+   current.collectorSoldArtworks={};
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
-  // GM equipment is granted once, not endlessly restored after its use as fusion material.
-  if(current.admin&&!current.gmInventoryGranted){
-   if(!wasAdmin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!item.gmWingExclusive&&!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
+  // One-time migration supplies every base item, including all premium wings.
+  // Never replenish items removed later as fusion materials. Newly published
+  // custom wings are separately granted once, even to established GM accounts.
+  if(current.admin){
+   if(!current.gmAllItemsGranted){
+    const owned=new Set(current.inventory);
+    for(const item of ITEMS){
+     if(current.inventory.length>=600)break;
+     if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}
+    }
+    current.gmAllItemsGranted=true;
+   }
    current.gmInventoryGranted=true;
+   const known=new Set(Array.isArray(current.gmKnownCustomWingIds)?current.gmKnownCustomWingIds:[]);
+   const owned=new Set(current.inventory);
+   for(const wing of world.customWings||[]){
+    if(known.has(wing.id))continue;
+    if(!owned.has(wing.id)&&current.inventory.length<600){
+     current.inventory.push(wing.id);owned.add(wing.id);
+    }
+    known.add(wing.id);
+   }
+   current.gmKnownCustomWingIds=[...known];
   }
   // Keep migrating old profiles to the SMG baseline, except after deliberate
   // fusion consumption. This also repairs older missing/corrupt inventories.

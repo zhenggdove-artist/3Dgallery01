@@ -1,28 +1,54 @@
-import {renderPaintedWing,presetWingOutline} from './reletter/painted-wing-art.js';
+import {renderPaintedWing} from './reletter/painted-wing-art.js';
 
 // GM-only atelier. Each paint operation is stored in normalized image space.
 // Undo snapshots are bounded, so mobile Safari does not retain huge bitmaps.
 const safe=(v)=>String(v||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;'}[ch]));
 const copy=x=>structuredClone(x);
 const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+// Retain the characteristic silhouette of a freehand contour without
+// sending thousands of pointer samples to the durable room.
+export function simplifyFreehandOutline(points,maxPoints=96){
+ if(!Array.isArray(points)||points.length<=maxPoints)return points.map(p=>[...p]);
+ const keep=new Set([0,points.length-1]),segments=[[0,points.length-1]];
+ const deviation=(p,a,b)=>{
+  const dx=b[0]-a[0],dy=b[1]-a[1],len=dx*dx+dy*dy;
+  const t=len?clamp(((p[0]-a[0])*dx+(p[1]-a[1])*dy)/len,0,1):0;
+  return (p[0]-a[0]-t*dx)**2+(p[1]-a[1]-t*dy)**2;
+ };
+ while(keep.size<maxPoints){
+  let best=-1,bestScore=-1,bestSegment=-1;
+  for(let j=0;j<segments.length;j++){
+   const [from,to]=segments[j];if(to-from<=1)continue;
+   for(let i=from+1;i<to;i++){
+    const score=deviation(points[i],points[from],points[to]);
+    if(score>bestScore){bestScore=score;best=i;bestSegment=j;}
+   }
+  }
+  if(best<0)break;
+  const [from,to]=segments.splice(bestSegment,1)[0];
+  segments.push([from,best],[best,to]);keep.add(best);
+ }
+ return [...keep].sort((a,b)=>a-b).map(i=>[...points[i]]);
+}
 export function mountWingPainter(ui){
  if(!ui.self?.profile?.admin){ui.content.textContent='GM only';return;}
  const design=ui.wingDraft||{
-  name:'',tier:4,color:'#dfd1bc',ability:'glide',shape:'swallowtail',
-  outline:presetWingOutline(),strokes:[],scaleX:1,scaleY:1,
+  name:'',tier:4,color:'#dfd1bc',ability:'glide',shape:'freehand',
+  outline:[],strokes:[],scaleX:1,scaleY:1,
   impulse:11,gravity:.53,flapMs:300
  };
- ui.wingDraft=design;let tool='brush',material='ink',pen='#1b1b22',
+ ui.wingDraft=design;let tool=design.outline?.length>=3?'brush':'outline',material='ink',pen='#1b1b22',
   size=12,opacity=1,mirrorX=false,mirrorY=false,zoom=1,
   pan=[0,0],active=null,pointerId=null,history=[],redo=[],pointers=new Map();
  ui.content.innerHTML=`<section class="wing-painter" aria-label="GM wing painting editor">
   <div class="wing-painter-tools">
    <label>翅膀名稱<input data-wing-field="name" value="${safe(design.name)}" maxlength="50" placeholder="請命名翅膀"></label>
    <label>品質<select data-wing-field="tier">${['White','Green','Blue','Purple · Epic','Gold'].map((s,i)=>`<option value="${i+1}" ${design.tier===i+1?'selected':''}>${s}</option>`).join('')}</select></label>
-   <label>輪廓<select data-wing-shape><option value="swallowtail">燕尾蝶</option><option value="rounded">圓翅</option><option value="moth">飛蛾</option><option value="longtail">長尾</option></select></label>
+   <div class="wing-outline-note">自由輪廓：按住滑鼠左鍵或手指在畫布上繪製任意外形，放開自動連接起點與終點。</div>
+   <button type="button" class="wing-clear-outline" data-wing-clear-outline>清除輪廓／重新繪製</button>
    <div class="wing-tools-row" role="toolbar" aria-label="畫筆工具">
-    <button type="button" data-wing-tool="outline">畫輪廓</button>
-    <button type="button" data-wing-tool="brush" aria-pressed="true">畫筆</button>
+    <button type="button" data-wing-tool="outline" aria-pressed="${tool==='outline'}">自由畫輪廓</button>
+    <button type="button" data-wing-tool="brush" aria-pressed="${tool==='brush'}">畫筆</button>
     <button type="button" data-wing-tool="eraser">橡皮擦</button>
     <button type="button" data-wing-tool="pan">拖曳畫布</button>
     <button type="button" data-wing-undo>↶ Undo</button>
@@ -44,7 +70,7 @@ export function mountWingPainter(ui){
    <label>重力係數<input data-wing-field="gravity" type="number" step=".01" min=".2" max="1" value="${design.gravity}"></label>
    <label>翅膀拍動間隔（ms）<input data-wing-field="flapMs" type="number" min="180" max="900" step="10" value="${design.flapMs}"></label>
    <button type="button" class="panel-button" data-wing-publish>儲存並立即上架</button>
-   <small>先以「畫輪廓」圍成封閉形狀，再在輪廓內作畫。滾輪縮放，拖曳畫布工具移動；雙指縮放。儲存後自動加入 GM 背包。</small>
+   <small>以「自由畫輪廓」一筆畫出外形並放開自動閉合，之後可使用畫筆、橡皮擦、Undo／Redo 與清除重畫。滾輪縮放、拖曳畫布移動。上架後加入 GM 背包。</small>
   </div>
   <div class="wing-painter-stage"><div class="wing-painter-checker">
    <canvas class="wing-painter-canvas" width="768" height="640" aria-label="可繪畫的翅膀畫布"></canvas>
@@ -76,7 +102,17 @@ export function mountWingPainter(ui){
  draw();
  root.addEventListener('click',event=>{
   const b=event.target.closest('button');if(!b)return;
-  if(b.dataset.wingTool){tool=b.dataset.wingTool;root.querySelectorAll('[data-wing-tool]').forEach(el=>el.setAttribute('aria-pressed',el.dataset.wingTool===tool));return;}
+  if(b.dataset.wingTool){
+   if(!design.outline?.length&&b.dataset.wingTool!=='outline'&&b.dataset.wingTool!=='pan'){
+    report('請先使用「自由畫輪廓」在畫布上繪製完整輪廓');return;
+   }
+   tool=b.dataset.wingTool;root.querySelectorAll('[data-wing-tool]').forEach(el=>el.setAttribute('aria-pressed',el.dataset.wingTool===tool));return;
+  }
+  if(b.hasAttribute('data-wing-clear-outline')){
+   snapshot();design.outline=[];design.shape='freehand';tool='outline';
+   root.querySelectorAll('[data-wing-tool]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.wingTool===tool)));
+   report('輪廓已清除，按住並拖曳畫出新輪廓');draw();return;
+  }
   if(b.hasAttribute('data-wing-undo')){if(!history.length)return;redo.push(copy({outline:design.outline,strokes:design.strokes,scaleX:design.scaleX,scaleY:design.scaleY,shape:design.shape}));restore(history.pop());return;}
   if(b.hasAttribute('data-wing-redo')){if(!redo.length)return;history.push(copy({outline:design.outline,strokes:design.strokes,scaleX:design.scaleX,scaleY:design.scaleY,shape:design.shape}));restore(redo.pop());return;}
   if(b.dataset.wingZoom)setZoom(zoom*(b.dataset.wingZoom==='1'?1.25:.8));
@@ -107,13 +143,11 @@ export function mountWingPainter(ui){
    draw();}
   if(el.dataset.wingField==='color'){design.color=el.value;draw();}
  });
- root.querySelector('[data-wing-shape]').value=design.shape;
- root.querySelector('[data-wing-shape]').addEventListener('change',event=>{
-  snapshot();design.shape=event.target.value;design.outline=presetWingOutline(design.shape);draw();
- });
+ // No predefined shapes: freehand vertices are the authoritative silhouette.
  const start=e=>{
   if(pointers.size>1)return;pointerId=e.pointerId;canvas.setPointerCapture(e.pointerId);
   if(tool==='pan'){active={start:[e.clientX,e.clientY],pan:[...pan]};return;}
+  if(!design.outline?.length&&tool!=='outline'){report('請先畫出封閉輪廓');return;}
   snapshot();const point=imagePoint(e);
   if(tool==='outline')active={tool,points:[point]};
   else {const stroke={tool,color:pen,size,opacity,material,mirrorX,mirrorY,points:[point]};active=stroke;design.strokes.push(stroke);}
@@ -129,14 +163,22 @@ export function mountWingPainter(ui){
   if(tool==='pan'){pan=[active.pan[0]+e.clientX-active.start[0],active.pan[1]+e.clientY-active.start[1]];}
   else{
    const point=imagePoint(e),last=active.points.at(-1);
-   if(Math.hypot(point[0]-last[0],point[1]-last[1])>.002&&active.points.length<96)active.points.push(point);
+   if(Math.hypot(point[0]-last[0],point[1]-last[1])>.002&&active.points.length<(tool==='outline'?2048:96))active.points.push(point);
   }
   draw();
  });
  const stop=e=>{
   pointers.delete(e.pointerId);if(pointers.size<2)ui._pinchDistance=0;
   if(e.pointerId!==pointerId)return;
-  if(tool==='outline'&&active?.points.length>=3)design.outline=copy(active.points);
+  if(tool==='outline'){
+   if(active?.points.length>=3){
+    design.outline=simplifyFreehandOutline(active.points,96);
+    design.shape='freehand';
+    tool='brush';
+    root.querySelectorAll('[data-wing-tool]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.wingTool===tool)));
+    report('已完成自由輪廓（'+design.outline.length+' 個節點），可以開始上色或重新繪製');
+   }else report('輪廓過短，請按住並拖曳畫出完整外形');
+  }
   active=null;pointerId=null;draw();
  };
  canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);

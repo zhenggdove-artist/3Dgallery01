@@ -20,13 +20,21 @@ function collectorLabel(){
  // Transparent canvas: the word floats above the model with no plaque.
  ctx.clearRect(0,0,320,84);
  ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 52px sans-serif';
+ // Multilayer neon outline is baked once; only the sprite opacity animates
+ // each frame, avoiding expensive canvas texture reuploads on mobile.
+ ctx.shadowColor='#e08bff';ctx.shadowBlur=24;
+ ctx.lineWidth=11;ctx.strokeStyle='rgba(164,35,255,.63)';
+ ctx.strokeText('Collector',160,44);
+ ctx.shadowColor='#bb61ff';ctx.shadowBlur=15;
+ ctx.lineWidth=6;ctx.strokeStyle='#faf2ff';
+ ctx.strokeText('Collector',160,44);
  ctx.lineWidth=2.5;ctx.strokeStyle='rgba(236,214,255,.95)';
  ctx.strokeText('Collector',160,44);
  ctx.fillStyle='#a74cff';ctx.shadowColor='#7f33de';ctx.shadowBlur=11;
  ctx.fillText('Collector',160,44);
  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
- const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false}));
- sprite.scale.set(2.85,.75,1);sprite.renderOrder=20;return sprite;
+ const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false}));
+ sprite.scale.set(2.85*1.5,.75*1.5,1);sprite.renderOrder=20;return sprite;
 }
 
 // Compact semi-realistic handgun. It appears in the original avatar's right
@@ -87,7 +95,7 @@ export class CollectorView{
    if(o.isBone&&/(?:^|mixamorig)RightHand$/i.test(o.name))this.gunBone=o;
   });
   this.scene.add(root);root.visible=false;
-  this.root=root;this.ring=ring;this.gun=pistol;this.muzzle=muzzle;
+  this.root=root;this.ring=ring;this.gun=pistol;this.muzzle=muzzle;this.label=label;
  }
  showShot(shot){
   if(!this.root?.visible||!Array.isArray(shot.to)||!Array.isArray(shot.from))return;
@@ -175,6 +183,9 @@ export class CollectorView{
    }else tracer.mesh.material.opacity=.92*Math.max(0,(tracer.until-now)/230);
   }
   if(!this.root?.visible)return;
+  // High-frequency flicker over a slow neon pulse; no animation allocations.
+  if(this.label)this.label.material.opacity=Math.min(1,Math.max(.3,
+   .69+.23*Math.sin(time*5.2)+.11*Math.sin(time*29)*Math.sin(time*8.1)));
   this.ring.material.opacity=.55+Math.sin(time*2.5)*.16;
   this.ring.rotation.z=time*.10;
   const firing=now<this.aimUntil;

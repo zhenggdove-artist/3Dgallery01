@@ -66,7 +66,9 @@ export function renderPaintedWing(canvas,item){
  const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
  ctx.clearRect(0,0,w,h);
  const sx=clamp(Number(item.scaleX)||1,.35,2),sy=clamp(Number(item.scaleY)||1,.35,2);
- const outline=item.outline?.length>=3?item.outline:presetWingOutline(item.shape);
+ // A new freehand design starts with a blank transparent canvas, not a
+ // hidden template masquerading as a hand-drawn outline.
+ const outline=item.outline?.length>=3?item.outline:(item.shape==='freehand'?null:presetWingOutline(item.shape));
  ctx.save();
  ctx.translate(w/2,h/2);ctx.scale(sx,sy);ctx.translate(-w/2,-h/2);
  if(!pathFor(ctx,outline,w,h,1,1)){ctx.restore();return canvas;}
