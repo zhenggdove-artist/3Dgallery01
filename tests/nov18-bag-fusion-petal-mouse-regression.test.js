@@ -153,7 +153,7 @@ test('mouse camera rotates during held cast even when attack button captured the
 
 test('desktop BAG uses exactly seven visible columns and six grid rows; mobile layout remains separate',()=>{
  const css=readFileSync(new URL('../fidelity-ui.css',import.meta.url),'utf8');
- assert.match(css,/@media \(min-width: 840px\) and \(min-height: 540px\)/);
+ assert.match(css,/@media \(min-width: 840px\) and \(min-height: 650px\)/);
  assert.match(css,/grid-template-columns:repeat\(7,minmax\(0,1fr\)\)/);
  assert.match(css,/min-height:calc\(6 \* var\(--temple-bag-row\)/);
  assert.match(css,/#bag-items:not\(\.equipment-view\)/);
