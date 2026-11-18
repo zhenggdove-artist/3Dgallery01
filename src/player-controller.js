@@ -17,6 +17,7 @@ export class PlayerController{
      // another button. Only desktop mouse events are used; touch is unchanged.
      addEventListener('mousemove',e=>{
       if(!this.channelAiming||!this.enabled||this.status.freeze||this.drag||
+         (typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches)||
          e.sourceCapabilities?.firesTouchEvents||!e.movementX&&!e.movementY)return;
       this.yaw-=e.movementX/innerWidth*4;
       this.pitch=THREE.MathUtils.clamp(this.pitch+e.movementY/innerHeight*2,-1.15,1.4);
