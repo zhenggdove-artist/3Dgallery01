@@ -22,8 +22,8 @@ export function fuseOriginal(world,profile,body,rng){
  if(result.fusion.success){const instance=g.weaponInstances[key].find(i=>i.id===body.targetId);profile.fusion[body.targetId]={layer:instance.fusionCount,original:instance,effects:instance.fusionEffects||[]};}
  return result;
 }
-export function equippedItem(profile,item){
- const record=profile.fusion?.[item.id],original=record?.original||{};
+export function equippedItem(profile,item,instanceRecord=null){
+ const record=instanceRecord??profile.fusion?.[item.id],original=record?.original||{};
  const affixIds=[...new Set([...itemAffixes(item),...itemAffixes(original),...itemAffixes(record)])];
  const named={...item,affixId:affixIds[0]||null,affixIds};
  if(record?.templeStats){
