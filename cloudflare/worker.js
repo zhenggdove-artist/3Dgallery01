@@ -54,8 +54,22 @@ export class TempleRoom extends DurableObject{
   async fetch(request){
     const url=new URL(request.url),path=url.pathname;
     if(request.method==='OPTIONS')return withCors(request,new Response(null,{status:204}),this.env);
+    // Apple sends form_post from appleid.apple.com. Stored single-use state
+    // protects the callback, not a browser Origin header.
+    if(path==='/api/oauth/callback'&&['GET','POST'].includes(request.method))
+      return oauthCallback(request,this.env,this.sql);
     if(!this.allowed(request))return withCors(request,json({error:'Origin is not allowed'},403),this.env);
     try{
+      if(path==='/api/oauth/start'&&request.method==='GET')
+       return oauthStart(request,this.env,this.sql,originAllowed);
+      if(path==='/api/oauth/providers'&&request.method==='GET')
+       return withCors(request,json(oauthSettings(this.env)),this.env);
+      if(path==='/api/oauth/profile'&&request.method==='POST'){
+       const body=await readBody(request,2000),ticket=oauthTicket(this.sql,body.ticket);
+       if(!ticket)return withCors(request,json({error:'OAuth login ticket expired'},401),this.env);
+       const profile=this.world().profiles[ticket.profile_key];
+       return withCors(request,json({existing:!!profile,profile:profile?{name:profile.name,color:profile.color}:null}),this.env);
+      }
       if(path==='/health')return withCors(request,json({ok:true,service:'TempleRoom',database:'sqlite',players:this.roster().length,apiVersion:3,features:{artMediaUpload:true,artBombPlace:true,gmReset:true}}),this.env);
       if(path==='/api/join'&&request.method==='POST')return withCors(request,await this.join(request),this.env);
        if(path==='/api/gm/music'&&['GET','HEAD'].includes(request.method))return withCors(request,this.gmMusicResponse(request,url),this.env);
