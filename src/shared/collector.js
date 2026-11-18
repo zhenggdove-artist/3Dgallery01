@@ -104,15 +104,14 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoo
    // Shoot once on entry or when the held artwork changes to an already-sold
    // piece. Never repeatedly drain 50 HP on every server tick.
    if(collector.insideKeys[actor.key]!==encounter){
+    const taunts=previouslySold?COLLECTOR_REPEAT_LINES:COLLECTOR_ANGRY_LINES;
     const result=onShoot?.(actor,collector.position,COLLECTOR_SHOT_DAMAGE);
     const shot={
      id:crypto.randomUUID(),target:actor.key,
      from:[collector.position[0],collector.position[1]+1.52,collector.position[2]],
      to:[actor.position[0],actor.position[1]+1.15,actor.position[2]],
      damage:result?.damage??0,
-     taunt:(previouslySold?COLLECTOR_REPEAT_LINES:COLLECTOR_ANGRY_LINES)[Math.min(
-      (previouslySold?COLLECTOR_REPEAT_LINES:COLLECTOR_ANGRY_LINES).length-1,
-      Math.max(0,Math.floor((Number(rng())||0)*(previouslySold?COLLECTOR_REPEAT_LINES:COLLECTOR_ANGRY_LINES).length)))],
+     taunt:taunts[Math.min(taunts.length-1,Math.max(0,Math.floor((Number(rng())||0)*taunts.length)))],
      reason:previouslySold?'already-collected':'empty-handed',
      artworkId:previouslySold?artworkId:null,
      time:now

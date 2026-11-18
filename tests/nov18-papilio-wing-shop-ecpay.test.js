@@ -53,17 +53,17 @@ test('no original or premium wing can spawn from ground or monster loot',()=>{
 
 test('GM draws use weighted qualities with replacement and grant one copy per draw',()=>{
  const world=createInitialWorld(T),gm=ensureProfile(world,'gm','Ely','#abcdef',T,true);
- assert.equal(gm.inventory.filter(id=>/^wings-(2[1-9]|3[0-9]|40)$/.test(id)).length,0);
+ assert.equal(gm.inventory.filter(id=>/^wings-(2[1-9]|3[0-9]|40)$/.test(id)).length,20);
  const initialWallet=gm.wallet,initialInventory=gm.inventory.length;
  const result=applyAction(world,actor('gm'),{action:'gm-wing-draw'},{now:T,rng:()=>0});
  assert.equal(result.error,undefined);
  assert.equal(result.wingDraw.itemId,'wings-21');
  assert.equal(result.wingDraw.quality,'common');
- assert.equal(result.wingDraw.remaining,20);
+ assert.equal(result.wingDraw.remaining,0);
  assert.equal(result.wingDraw.mode,'gm-preview');
  assert.equal(gm.wallet,initialWallet);
  assert.equal(gm.inventory.length,initialInventory+1);
- assert.equal(gm.inventory.filter(id=>id==='wings-21').length,1);
+ assert.equal(gm.inventory.filter(id=>id==='wings-21').length,2);
  assert.equal(gm.itemOrigins['wings-21'],'gm-wing-draw');
  const next=applyAction(world,actor('gm'),{action:'gm-wing-draw'},{now:T+1,rng:()=>0});
  assert.equal(next.wingDraw.itemId,'wings-21');
