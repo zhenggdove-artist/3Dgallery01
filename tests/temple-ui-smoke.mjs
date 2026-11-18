@@ -25,9 +25,9 @@ try{
   }));
   throw new Error('Temple never loaded: '+JSON.stringify(debug)+'; PAGEERRORS='+errors.join('; ').slice(0,2400),{cause:error});
  }
- await page.locator('[data-legacy-login]').click();
- await page.locator('#player-name').fill('CIBrowser');
- await page.locator('#entry-form').evaluate(f=>f.requestSubmit());
+ // In isolated local test mode, inject a test profile through the UI event.
+ // Production entry exposes ONLY Google Firebase Auth.
+ await page.evaluate(()=>templeTest.ui.emit('join',{name:'CIBrowser',color:'#43b59a',backendUrl:window.TEMPLE_CONFIG.backendUrl}));
  await page.locator('#hud').waitFor({state:'visible'});
  await page.waitForFunction(()=>window.templeTest?.controller()&&JSON.parse(window.render_game_to_text()).connected);
  // FISH has been retired from both the dock and shop.
