@@ -166,7 +166,7 @@ export class PlayerController{
     if(this.status.root){x=0;z=0;this.speed=0;}
     const moving=Math.hypot(x,z)>.1;
     this.direction.set(x*Math.cos(this.yaw)+z*Math.sin(this.yaw),0,-x*Math.sin(this.yaw)+z*Math.cos(this.yaw)).normalize();
-    if(this.role==='spectator'){if(moving)this.followTarget=null;this.root.position.addScaledVector(this.direction,10*dt);this.root.position.y=THREE.MathUtils.clamp(this.root.position.y+((this.keys.has('KeyE')?1:0)-(this.keys.has('KeyQ')?1:0))*10*dt,2,28);const r=Math.hypot(this.root.position.x,this.root.position.z);if(r>ARENA_RADIUS+20){this.root.position.x*=(ARENA_RADIUS+20)/r;this.root.position.z*=(ARENA_RADIUS+20)/r;}this.updateCamera(dt);return this.state();}
+    if(this.role==='spectator'){if(moving)this.followTarget=null;this.root.position.addScaledVector(this.direction,10*dt);this.root.position.y=THREE.MathUtils.clamp(this.root.position.y+((this.keys.has('KeyE')?1:0)-(this.keys.has('KeyQ')?1:0))*10*dt,2,56);const r=Math.hypot(this.root.position.x,this.root.position.z);if(r>ARENA_RADIUS+20){this.root.position.x*=(ARENA_RADIUS+20)/r;this.root.position.z*=(ARENA_RADIUS+20)/r;}this.updateCamera(dt);return this.state();}
     if(this.grounded){const factor=this.castMoveFactor===.05 ? .05 : 1;
      this.speed=Math.min(this.speed,8.64*this.stats.speed*factor);
      this.speed=moving?Math.min(8.64*this.stats.speed*factor,this.speed+6*this.stats.speed*factor*dt):Math.max(0,this.speed-12*dt);if(moving){this.stepHorizontal(this.direction.x*this.speed*dt,this.direction.z*this.speed*dt);this.root.rotation.y=Math.atan2(this.direction.x,this.direction.z);}}
