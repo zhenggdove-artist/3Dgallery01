@@ -55,3 +55,37 @@ ECPay merchant activation and eligible buyer platform/browser are required.
 - GM preview is server-authorized: no paid access, no currency deductions,
   no duplicates, server-chosen weighted rarity and a maximum 20 new wings.
 - Previously owned legitimate wings are not confiscated.
+
+## ECPay sandbox checkout development branch (2026-11-19)
+
+Branch: feature/ecpay-wing-stage-only-20261119. NOT production enabled.
+The live GGTEMPLE remains unchanged until this branch is reviewed and merged.
+The Worker additionally requires ECPAY_WING_STAGE_ENABLED=true in an isolated
+sandbox Worker environment. Otherwise checkout always fails closed.
+
+- Uses only ECPay's public testing MerchantID/HashKey/HashIV from
+  https://developers.ecpay.com.tw/2856/ ; never use production keys.
+- NT$30 / five draws, restricted to authenticated Firebase GM sessions.
+- GET /api/wing-pay/status: session-authenticated sandbox availability.
+- POST /api/wing-pay/checkout: GM only, unique signed ECPay sandbox order;
+  stored in the existing Durable Object SQLite, not a new D1 database.
+- GET /api/wing-pay/order?id=...: owner-only order status.
+- POST /api/wing-pay/notify: validates SHA256 CheckMacValue, MerchantID,
+  order number, exact amount, positive payment status, and credits only once.
+  SimulatePaid=1 is ignored because simulation is NOT payment.
+- Stage credits persist in wingPaidDraws; non-admin wing draws spend the
+  initial five free draws first, then paid draw credits.
+- The SUPPORT panel shows a sandbox checkout button to the GM only.
+- The gateway is ECPay hosted test checkout, not embedded Apple Pay.
+- The sandbox switch CANNOT activate real-money payment.
+
+BEFORE REAL-MONEY LAUNCH: get ECPay approval for the paid random virtual
+cosmetic category, publish actual wing probability tables, rotate any
+production HashKey/HashIV that appeared in screenshots, implement separately
+reviewed production reconciliation and refund/chargeback controls. Never use
+the stage switch as a production activation method.
+
+Run npm run check and npm test. The unit tests cover ECPay's documented MAC
+test vector, tampering, order ownership and duplicate callback handling.
+For manual test, deploy a separate staging Worker with its own Durable Object
+and enable the stage switch ONLY there; do not point it at live player saves.
