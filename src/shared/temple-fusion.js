@@ -4,13 +4,15 @@ import {ensureFusionIdentity,fusionRecordAt,inventoryIndexFor,projectFusionForIn
 import {itemAffixes} from '../reletter/combat-traits.js';
 import {sniperMaterialStat} from './fusion-balance.js';
 
-// The odds halve with each REAL attempt on this physical target instance.
-// Duplicate request IDs return their receipt and do not count as attempts.
+// Only SUCCESSFUL fusions lower the odds for this physical target:
+// 0 successes -> 50%, 1 -> 25%, 2 -> 12.5% and so forth.
+// Failed rolls consume the ingredient but do not advance the upgrade tier.
+// Duplicate request IDs return their original receipt without another roll.
 export function fusionChance(profile,targetId,targetIndex){
  if(profile.admin)return Math.max(0,Math.min(1,Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1));
  const raw=fusionRecordForChance(profile,targetId,targetIndex);
- const attempts=Math.max(0,Math.floor(Number(raw.attempts??raw.layer)||0));
- return 2**(-(attempts+1));
+ const successfulFusions=Math.max(0,Math.floor(Number(raw.layer)||0));
+ return 2**(-(successfulFusions+1));
 }
 function fusionRecordForChance(profile,targetId,targetIndex){
  ensureFusionIdentity(profile);
@@ -58,12 +60,15 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  // Exactly one physical ingredient is consumed on success or failure.
  removeInventoryInstance(profile,sourceIndex,targetInstance.uid);
  if(source.id==='white-cat'&&!profile.inventory.includes(source.id))profile.spentStarterWeapon=true;
- const attempts=Math.max(0,Math.floor(Number(old.attempts??old.layer)||0))+1;
+ const completed=Math.max(0,Math.floor(Number(old.layer)||0));
  if(!(sample<chance)){
+  // Retain successful progress unchanged after a miss: no progression penalty.
+  // Normalize legacy 'attempts' so it never leaks the old failure counter to UI.
+  const attempts=completed;
   profile.fusionByInstance[targetInstance.uid]={...old,attempts};
   projectFusionForInstance(profile,target.id,targetInstance.uid);
   const result={notice:'FUSION FAILED · material consumed · '+(chance*100).toFixed(5)+'% chance',
-   fusion:{success:false,target:target.id,layer:old.layer||0,attempts,cost,chance,nextAttempt:attempts+1,nextChance:fusionChance(profile,target.id,profile.inventoryInstances.findIndex(row=>row.uid===targetInstance.uid))}};
+   fusion:{success:false,target:target.id,layer:completed,attempts,cost,chance,nextAttempt:completed+1,nextChance:fusionChance(profile,target.id,profile.inventoryInstances.findIndex(row=>row.uid===targetInstance.uid))}};
   profile.fusionReceipts[requestId]=structuredClone(result);
   const receipts=Object.keys(profile.fusionReceipts);
   if(receipts.length>64)delete profile.fusionReceipts[receipts[0]];
@@ -98,12 +103,14 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  }
  let bonus=Number(old.bonus)||0;
   if(grantsEcho)effects.push(source.id);
+ // A successful upgrade is the ONLY event advancing fusion progression.
+ const attempts=layer;
  profile.fusionByInstance[targetInstance.uid]={...old,layer,attempts,bonus,templeStats:stats,effects,affixIds,affixId:affixIds[0]||null,
   sources:[...(old.sources||[]),{id:source.id,name:source.name,statPercent:30,echo:grantsEcho}]};
  projectFusionForInstance(profile,target.id,targetInstance.uid);
  const result={notice:'FUSION SUCCESS · '+target.name+' +'+layer+
   (grantsEcho?' · ULTIMATE ECHO '+effects.length+'/2':' · STATS +30%'),
-  fusion:{success:true,target:target.id,layer,attempts,cost,chance,nextAttempt:attempts+1,nextChance:fusionChance(profile,target.id,profile.inventoryInstances.findIndex(row=>row.uid===targetInstance.uid)),effects:[...effects],affixIds:[...affixIds]}};
+  fusion:{success:true,target:target.id,layer,attempts,cost,chance,nextAttempt:layer+1,nextChance:fusionChance(profile,target.id,profile.inventoryInstances.findIndex(row=>row.uid===targetInstance.uid)),effects:[...effects],affixIds:[...affixIds]}};
  profile.fusionReceipts[requestId]=structuredClone(result);
  const receipts=Object.keys(profile.fusionReceipts);
  if(receipts.length>64)delete profile.fusionReceipts[receipts[0]];
