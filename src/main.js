@@ -17,6 +17,7 @@ import {createVHS} from './reletter-vhs.js';
 import {TempleArena} from './arena-view.js';
 import {TempleNetwork} from './network.js';
 import {PlayerController} from './player-controller.js';
+import {STAFF_RAISE_SECONDS} from './staff-raise-pose.js';
 import {TempleUI} from './ui.js';
 import {PLAYER_SPAWNS} from './shared/arena.js';
 import {canBuildAt,canPlaceArtworkAt} from './shared/temple-rules.js';
@@ -190,6 +191,11 @@ ui.addEventListener('attack-start',()=>{
  if(chargeStarted!==null||staffChannel)return;
  attackHeld=true;
  attackHoldStarted=performance.now();
+ if(isChannelStaff(weapon)&&localRoot){
+  // A single lift starts on button-down and stays raised until the
+  // acknowledged normal shot. No second pose-trigger from network latency.
+  localRoot.userData.staffCastingUntil=attackHoldStarted+1800;
+ }
  chargeStarted=null;
  chargeRequest=null;
 });
@@ -219,7 +225,15 @@ ui.addEventListener('attack-release',async()=>{
  // A short tap casts one projectile (or clam melee). Releasing a partly
  // charged LONG hold casts nothing; a fully charged hold stops the channel.
  if(isChannelStaff(weapon)){
-  if(isStaffTap(weapon,heldMs))performAttack(0);
+  if(isStaffTap(weapon,heldMs)){
+   // Only delay the shot for the remaining part of the original raise.
+   // Do not restart the model animation on button release or ACK.
+   if(localRoot)localRoot.userData.staffCastingUntil=performance.now()+1800;
+   const liftRemaining=Math.max(0,STAFF_RAISE_SECONDS*1000-heldMs);
+   if(liftRemaining>0)await new Promise(resolve=>setTimeout(resolve,liftRemaining));
+   if(world?.profile?.equipment?.weapon===weapon.id)await performAttack(0);
+   if(localRoot)localRoot.userData.staffCastingUntil=performance.now()+200;
+  }else if(localRoot)localRoot.userData.staffCastingUntil=0;
  }else{
   performAttack(heldMs<STAFF_TAP_MAX_MS?0:charge);
  }
@@ -370,7 +384,7 @@ function update(dt,time){
    if(controller.status.paralysis&&(attackHeld||staffChannel))ui.emit('attack-cancel');
    // Desktop channel casts steer the camera with relative mouse movement
     // even without holding a mouse button. Mobile touch remains unchanged.
-    controller.channelAiming=!!(staffChannel?.ready&&attackHeld&&isChannelStaff(itemById(world?.profile?.equipment?.weapon)));
+    controller.channelAiming=!!(attackHeld&&isChannelStaff(itemById(world?.profile?.equipment?.weapon)));
     writer.update();plantHover.update();controller.castMoveFactor=staffChannel?CAST_MOVE_FACTOR:1;const wasGrounded=controller.grounded;const state=controller.update(dt);if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
   statusVisuals.update(dt);
   const castingItem=itemById(world?.profile?.equipment?.weapon);
