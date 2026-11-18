@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(
 
 export class TempleUI extends EventTarget{
   constructor(){
-    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;
+    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.oauthTicket='';this.authMode='legacy';
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
     bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
     this.bind();$('gm-help').onclick=()=>this.openPanel('help');$('gm-menu').onclick=()=>this.openPanel('gm');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag'&&cell.dataset.inventoryIndex!==undefined){
@@ -48,7 +48,18 @@ export class TempleUI extends EventTarget{
   }
   bind(){
     document.addEventListener('contextmenu',event=>{if(event.target.closest?.('#game,#hud')&&!event.target.closest('input,textarea'))event.preventDefault();});
-    this.form.addEventListener('submit',event=>{event.preventDefault();$('entry-error').textContent='';this.emit('join',{name:$('player-name').value.trim(),color:$('clothing-color').value,memoryCode:$('memory-code').value.trim(),backendUrl:window.TEMPLE_CONFIG.backendUrl});});
+    this.entry.addEventListener('click',event=>{
+      const button=event.target.closest('[data-login-provider]');
+      if(!button||button.disabled)return;
+      this.oauthTicket='';$('account-login-status').textContent='正在連接 '+button.dataset.loginProvider+'…';
+      this.emit('oauth-login',button.dataset.loginProvider);
+     });
+     this.form.addEventListener('submit',event=>{
+      event.preventDefault();$('entry-error').textContent='';
+      this.emit('join',{name:$('player-name').value.trim(),color:$('clothing-color').value,
+       memoryCode:this.oauthTicket?'':$('memory-code').value.trim(),
+       oauthTicket:this.oauthTicket,backendUrl:window.TEMPLE_CONFIG.backendUrl});
+     });
     const charge=$('attack-button');let attackPointer=null;charge.onpointerdown=event=>{event.preventDefault();if(attackPointer!==null)return;attackPointer=event.pointerId;charge.setPointerCapture(event.pointerId);this.emit('attack-start');};const endAttack=(event,cancel=false)=>{if(event.pointerId!==attackPointer)return;attackPointer=null;this.emit(cancel?'attack-cancel':'attack-release');};charge.onpointerup=e=>endAttack(e);charge.onpointercancel=charge.onlostpointercapture=e=>endAttack(e,true);const jump=document.querySelector('[data-action=jump]');jump.onpointerdown=e=>{e.preventDefault();jump.setPointerCapture(e.pointerId);this.emit('jump');};jump.onclick=e=>{if(e.detail===0)this.emit('jump');e.stopPropagation();};
     addEventListener('keydown',event=>{if(this.self&&!this.panelName&&event.code==='KeyQ'&&!event.repeat&&!/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)){event.preventDefault();this.emit('attack-start');}});
     addEventListener('keyup',event=>{if(event.code==='KeyQ')this.emit('attack-release');});addEventListener('blur',()=>this.emit('attack-cancel'));
@@ -82,9 +93,18 @@ export class TempleUI extends EventTarget{
   }
   setLoading(progress,label){$('loading-fill').style.width=`${Math.round(progress*100)}%`;$('loading-detail').textContent=label;$('loading-percent').textContent=`${Math.round(progress*100)}%`;}
   ready(){document.body.classList.add('ready');document.body.classList.remove('booting');}
+  selectOAuthAccount(ticket){
+    this.oauthTicket=ticket;
+    $('account-login-status').textContent='帳號驗證成功。首次登入請設定角色名稱與服裝顏色。';
+    $('account-name-controls').hidden=false;
+    $('entry-form').hidden=false;
+    $('player-name').required=true;
+    $('player-name').focus();
+    $('memory-code').value='';
+  }
   joinBusy(value){$('enter-button').disabled=value;$('enter-button').textContent=value?'Connecting…':'Enter ↵';}
   joinError(message){$('entry-error').textContent=message;this.joinBusy(false);}
-  enter(data){document.activeElement?.blur();this.self=data.self;this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;$('memory-code').value='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;$('gm-menu').hidden=!data.self.profile?.admin;$('wing-shop-button').hidden=!data.self.profile?.admin;this.refreshHUD();this.joinBusy(false);}
+  enter(data){document.activeElement?.blur();this.self=data.self;this.authMode=data.authMode||'legacy';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;$('memory-code').value='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;$('gm-menu').hidden=!data.self.profile?.admin;$('wing-shop-button').hidden=!data.self.profile?.admin;this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;$('gm-menu').hidden=!this.self.profile?.admin;$('wing-shop-button').hidden=!this.self.profile?.admin;this.refreshHUD();if(this.panelName)this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
   setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','wing-shop'].includes(this.panelName)&&this.panelSignature!==JSON.stringify([world.profile.inventory,world.profile.equipment,world.profile.wallet,world.profile.fusion])&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
@@ -240,7 +260,12 @@ export class TempleUI extends EventTarget{
       <div class="gm-presence-list" role="log">${events.map(e=>`<div class="gm-presence-row"><strong>${escape(e.name)} · ${e.event==='online'?'上線':'下線'} · ${e.role==='fighter'?'玩家':'觀眾'}</strong><time>${escape(date(e.time))}</time></div>`).join('')||(this.gmPresenceLoading?'<p>正在取得紀錄…</p>':'<p>目前沒有可顯示的上下線紀錄。</p>')}</div>
     </section>`;
   }
-  renderSave(){const code=this.saveCode||this.self?.saveCode||'';this.content.innerHTML=`<h3>MEMORY CODE</h3><p>將目前的等級、裝備、背包與遊戲進度儲存至伺服器。重新進入遊戲時，在 Memorycode 欄位輸入代碼恢復。</p><label for="save-code-output">存檔代碼<input id="save-code-output" readonly autocomplete="off" spellcheck="false" class="panel-input" value="${escape(code)}" placeholder="尚未產生代碼"></label><button type="button" class="panel-button" data-save-code>產生／重新取得代碼</button><button type="button" class="panel-button" data-copy-save-code ${code?'':'disabled'}>複製存檔代碼</button><p>請妥善保管代碼。擁有代碼的人可能存取你的存檔。</p>`;}
+  renderSave(){
+    if(this.authMode==='oauth'){
+      this.content.innerHTML='<h3>帳號進度自動儲存</h3><p>使用 Google、Apple 或 Facebook 登入時，裝備、翅膀、等級、背包與遊戲進度都儲存在伺服器。下次使用相同帳號登入即可恢復，無需 Memory Code。</p>';
+      return;
+    }
+    const code=this.saveCode||this.self?.saveCode||'';this.content.innerHTML=`<h3>MEMORY CODE</h3><p>將目前的等級、裝備、背包與遊戲進度儲存至伺服器。重新進入遊戲時，在 Memorycode 欄位輸入代碼恢復。</p><label for="save-code-output">存檔代碼<input id="save-code-output" readonly autocomplete="off" spellcheck="false" class="panel-input" value="${escape(code)}" placeholder="尚未產生代碼"></label><button type="button" class="panel-button" data-save-code>產生／重新取得代碼</button><button type="button" class="panel-button" data-copy-save-code ${code?'':'disabled'}>複製存檔代碼</button><p>請妥善保管代碼。擁有代碼的人可能存取你的存檔。</p>`;}
   showSaveCode(code){this.saveCode=String(code||'');this.openPanel('save');this.content.querySelector('#save-code-output')?.select();}
   renderBag(profile){renderOriginalBag(this,profile);}
   renderShop(profile){const tab=this.shopTab||'near',tabs={near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',shield:'Shields',head:'Headwear',outfit:'Outfits',owned:'Owned'};const items=(tab==='owned'?(profile.inventory||[]).map(itemById).filter(Boolean):SHOP_ITEMS).filter(i=>tab==='owned'||(tab==='mystery'&&i.mysteryWeapon)||(['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab)||i.slot===tab);this.content.innerHTML=`<div class="armory-balance"><span>Equipment · collections</span><b>${profile.admin?'∞':profile.wallet} coins</b></div><nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>${profile.admin?'<button class="panel-button wing-shop-link" type="button" data-open-wing-shop>WING SHOP · GM PREVIEW →</button>':''}<div class="shop-items">${items.map(item=>{const owned=profile.inventory.includes(item.id),equipped=profile.equipment[item.slot]===item.id;return itemCard(item,`<button data-${owned?'equip':'buy'}="${item.id}" ${equipped||!owned&&!profile.admin&&profile.wallet<item.price?'disabled':''}>${equipped?'EQUIPPED':owned?'EQUIP':`BUY · ${item.price.toLocaleString('en-US')}`}</button>`);}).join('')||'<p>Your collection starts here. Earn coins by exploring the arena.</p>'}</div>`;}
