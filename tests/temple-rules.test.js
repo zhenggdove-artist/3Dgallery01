@@ -91,11 +91,11 @@ test('building cannot block spawns or artwork platforms and receives a server va
   assert.equal(valid.error,undefined);assert.equal(valid.structure.variant,3);
 });
 
-test('ground materials keep duplicate value and can strengthen a weapon',()=>{
+test('ground crafting materials keep duplicate value but cannot cross-fuse into equipment',()=>{
   const now=11_000_000,world=createInitialWorld(now),profile=ensureProfile(world,'p1','p1','#abcdef',now);profile.wallet=2_000;profile.inventory.push('temple-resin','temple-resin','saber-1');
   ensureProfile(world,'p1',null,null,now+1);assert.equal(profile.inventory.filter(id=>id==='temple-resin').length,2);
   const result=applyAction(world,actor('p1',[10,0,0]),{action:'fuse',sourceId:'temple-resin',targetId:'saber-1',requestId:'material-fusion-1'},{now:now+2,rng:()=>0});
-  assert.equal(result.fusion.success,true);assert.equal(profile.fusion['saber-1'].bonus,10);assert.equal(profile.inventory.filter(id=>id==='temple-resin').length,1);
+  assert.match(result.error,/same category|matching equipment categories/);assert.equal(profile.fusion['saber-1'],undefined);assert.equal(profile.inventory.filter(id=>id==='temple-resin').length,2);
 });
 
 test('destroyed structures produce an authoritative synchronized debris event',()=>{
