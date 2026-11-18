@@ -199,7 +199,7 @@ export class TempleRoom extends DurableObject{
      const next={position:[...newProfile.respawnPosition],rotation:0,animation:'idle',visible:true};
      this.sql.exec('UPDATE sessions SET state=? WHERE id=?',JSON.stringify(next),session.id);
     }
-    const response={ok:true,...result,world:worldView(world,session.profile_key)};
+    const response={ok:true,...result,world:worldView(world,session.profile_key,Date.now(),body.action==='gm-wing-publish')};
     this.ctx.storage.transactionSync(()=>{
       this.save(world);
       if(body.action==='reset-player-artworks'&&Array.isArray(result.removedArtworkMediaIds)){
@@ -211,6 +211,7 @@ export class TempleRoom extends DurableObject{
       this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,JSON.stringify(response),Date.now());
       this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);
     });
+    if(result.publishedWingId)this.broadcast('wing-catalog',{wings:world.customWings||[]});
     this.broadcastWorld(world);if(didRespawn)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))this.broadcast('structure-hit',hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))this.broadcast('structure-destroyed',broken);await this.armAlarm();return json(response);
   }
 
@@ -358,7 +359,7 @@ export class TempleRoom extends DurableObject{
     for(const ws of this.sockets()){
       const meta=ws.deserializeAttachment();
       if(!meta||(meta.role==='spectator'&&!updateViewers))continue;
-      try{ws.send(JSON.stringify({type:'world',data:worldView(world,meta.profileKey)}));}
+      try{ws.send(JSON.stringify({type:'world',data:worldView(world,meta.profileKey,now,false)}));}
       catch{this.closed.add(ws);}
     }
     if(updateViewers)this.lastSpectatorWorldAt=now;
