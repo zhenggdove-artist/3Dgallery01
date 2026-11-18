@@ -30,7 +30,7 @@ import {cleanLegacyScene} from './scene-cleanup.js';
 import {samplePanBlastPosition,PAN_BLAST_DETONATION_ADVANCE_MS} from './pan-blast-flight.js';
 import {initialCollector,tickCollector} from './collector.js';
 import {drawGmWing,drawWing,FREE_WING_TRIAL_LIMIT} from './wing-shop.js';
-import {MAX_PAINTED_WINGS,normalizePaintedWing} from './custom-wings.js';
+import {MAX_PAINTED_WINGS,normalizePaintedWing,validWingDrawRate,totalCustomWingRates} from './custom-wings.js';
 
 export const WORLD_VERSION=1;
 export const ARTWORK_RESPAWN_MS=30_000;
@@ -249,9 +249,9 @@ export function applyAction(world,actor,body,context={}){
   const now=context.now??Date.now(),rng=context.rng??Math.random,
    // The premium draw checks PERSISTED admin status before any ensureProfile
    // mutation. Existing game/GM actions retain their original role semantics.
-   wingDrawAdmin=['gm-wing-draw','gm-wing-publish'].includes(body.action)?world.profiles?.[actor.key]?.admin===true:null,
+   wingDrawAdmin=['gm-wing-draw','gm-wing-publish','gm-wing-remove','gm-wing-set-rate'].includes(body.action)?world.profiles?.[actor.key]?.admin===true:null,
    profile=ensureProfile(world,actor.key,actor.name,actor.color,now,
-    ['gm-wing-draw','gm-wing-publish'].includes(body.action)?wingDrawAdmin:actor.admin);
+    ['gm-wing-draw','gm-wing-publish','gm-wing-remove','gm-wing-set-rate'].includes(body.action)?wingDrawAdmin:actor.admin);
   if(body.action==='wing-draw'){
    // Public draws require a verified Firebase/Google profile key supplied by
    // the server session, never a client-supplied admin or payment flag.
@@ -286,16 +286,46 @@ export function applyAction(world,actor,body,context={}){
   if(body.action==='gm-wing-publish'){
    if(!wingDrawAdmin||!profile.admin)return {error:'GM only'};
    world.customWings??=[];
-   if(world.customWings.length>=MAX_PAINTED_WINGS)return {error:'Wing gallery is full'};
+   if(world.customWings.filter(wing=>wing.retired!==true).length>=MAX_PAINTED_WINGS)return {error:'Wing gallery is full'};
+   if(world.customWings.length>=160)return {error:'Wing archive is full (160 records)'};
    if(profile.inventory.length>=600)return {error:'Inventory full'};
    let wing;try{wing=normalizePaintedWing(body.wing,'gm-wing-'+crypto.randomUUID());}
    catch(error){return {error:error.message};}
-   if(world.customWings.some(entry=>entry.name.toLowerCase()===wing.name.toLowerCase()))
+   if(world.customWings.some(entry=>entry.retired!==true&&entry.name.toLowerCase()===wing.name.toLowerCase()))
     return {error:'Wing name already exists'};
+   if(totalCustomWingRates(world.customWings)+wing.drawRatePct>100+1e-8)
+    return {error:'所有上架翅膀的個別中獎率合計不可超過 100%'};
    world.customWings.push(wing);registerCustomWings(world.customWings);
-   appendInventoryInstance(profile,wing.id);profile.itemOrigins??={};profile.itemOrigins[wing.id]='gm-created';
+   appendInventoryInstance(profile,wing.id);
+   // Grant AND equip in the same authoritative state transaction: no
+   // intermediate inventory state that the client could lose on disconnect.
+   selectEquipmentInstance(profile,'wings',profile.inventory.length-1);
+   profile.itemOrigins??={};profile.itemOrigins[wing.id]='gm-created';
+   profile.gmKnownCustomWingIds??=[];
+   if(!profile.gmKnownCustomWingIds.includes(wing.id))profile.gmKnownCustomWingIds.push(wing.id);
    profile.updatedAt=now;refreshStats(world,profile,now);world.revision++;
-   return {publishedWingId:wing.id,notice:'翅膀已上架並加入 GM 背包：'+wing.name};
+   return {publishedWingId:wing.id,equippedWingId:wing.id,
+    notice:'已上架並自動裝備翅膀：'+wing.name};
+  }
+  if(body.action==='gm-wing-remove'){
+   if(!wingDrawAdmin||!profile.admin)return {error:'GM only'};
+   const target=(world.customWings||[]).find(wing=>wing.id===body.wingId&&wing.retired!==true);
+   if(!target)return {error:'翅膀不存在或已下架'};
+   target.retired=true;target.retiredAt=now;world.revision=(world.revision||0)+1;
+   // A published wing may already belong to a collector. Retire from the
+   // draw pool, but preserve catalog identity and existing equipment.
+   return {unpublishedWingId:target.id,notice:'已下架：'+target.name+'（不再參與抽獎）'};
+  }
+  if(body.action==='gm-wing-set-rate'){
+   if(!wingDrawAdmin||!profile.admin)return {error:'GM only'};
+   const target=(world.customWings||[]).find(wing=>wing.id===body.wingId&&wing.retired!==true);
+   if(!target)return {error:'翅膀不存在或已下架'};
+   const drawRatePct=body.drawRatePct;
+   if(!validWingDrawRate(drawRatePct))return {error:'中獎率必須為 0–100%，最多 3 位小數'};
+   const sum=totalCustomWingRates(world.customWings)-Number(target.drawRatePct??1)+drawRatePct;
+   if(sum>100+1e-8)return {error:'所有上架翅膀的個別中獎率合計不可超過 100%'};
+   target.drawRatePct=drawRatePct;world.revision=(world.revision||0)+1;
+   return {updatedWingId:target.id,notice:'已更新「'+target.name+'」中獎率為 '+drawRatePct+'%'};
   }
   if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
   if(body.action==='reset-player-artworks')return resetPlayerArtworks(world,profile.admin,now);

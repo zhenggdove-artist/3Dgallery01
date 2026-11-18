@@ -33,7 +33,7 @@ export function simplifyFreehandOutline(points,maxPoints=96){
 export function mountWingPainter(ui){
  if(!ui.self?.profile?.admin){ui.content.textContent='GM only';return;}
  const design=ui.wingDraft||{
-  name:'',tier:4,color:'#dfd1bc',ability:'glide',shape:'freehand',
+  name:'',tier:4,color:'#dfd1bc',ability:'glide',shape:'freehand',drawRatePct:1,
   outline:[],strokes:[],scaleX:1,scaleY:1,
   impulse:11,gravity:.53,flapMs:300
  };
@@ -44,6 +44,8 @@ export function mountWingPainter(ui){
   <div class="wing-painter-tools">
    <label>翅膀名稱<input data-wing-field="name" value="${safe(design.name)}" maxlength="50" placeholder="請命名翅膀"></label>
    <label>品質<select data-wing-field="tier">${['White','Green','Blue','Purple · Epic','Gold'].map((s,i)=>`<option value="${i+1}" ${design.tier===i+1?'selected':''}>${s}</option>`).join('')}</select></label>
+   <label>單次中獎率（%）<input data-wing-field="drawRatePct" type="number" min="0" max="100" step=".001" value="${design.drawRatePct??1}"></label>
+   <small>此為全服每次抽獎的絕對機率；所有自訂翅膀合計不得超過 100%。0% 代表不會抽中。剩餘機率按基本品質抽取。</small>
    <div class="wing-outline-note">自由輪廓：按住滑鼠左鍵或手指在畫布上繪製任意外形，放開自動連接起點與終點。</div>
    <button type="button" class="wing-clear-outline" data-wing-clear-outline>清除輪廓／重新繪製</button>
    <div class="wing-tools-row" role="toolbar" aria-label="畫筆工具">
@@ -69,7 +71,7 @@ export function mountWingPainter(ui){
    <label>跳躍推力<input data-wing-field="impulse" type="number" step=".1" min="5" max="18" value="${design.impulse}"></label>
    <label>重力係數<input data-wing-field="gravity" type="number" step=".01" min=".2" max="1" value="${design.gravity}"></label>
    <label>翅膀拍動間隔（ms）<input data-wing-field="flapMs" type="number" min="180" max="900" step="10" value="${design.flapMs}"></label>
-   <button type="button" class="panel-button" data-wing-publish>儲存並立即上架</button>
+   <button type="button" class="panel-button" data-wing-publish>儲存、上架並自動裝備</button>
    <small>以「自由畫輪廓」一筆畫出外形並放開自動閉合，之後可使用畫筆、橡皮擦、Undo／Redo 與清除重畫。滾輪縮放、拖曳畫布移動。上架後加入 GM 背包。</small>
   </div>
   <div class="wing-painter-stage"><div class="wing-painter-checker">
@@ -77,6 +79,7 @@ export function mountWingPainter(ui){
   </div><small data-wing-status>畫布 768 × 640 · 操作記錄上限 60 步</small></div>
  </section>`;
  const root=ui.content.querySelector('.wing-painter'),canvas=root.querySelector('canvas'),ctx=canvas.getContext('2d');
+ let publishing=false;
  root.querySelector('[data-wing-field=ability]').value=design.ability||'glide';
  const report=t=>{root.querySelector('[data-wing-status]').textContent=t;};
  const snapshot=()=>{history.push(copy({outline:design.outline,strokes:design.strokes,scaleX:design.scaleX,scaleY:design.scaleY,shape:design.shape}));if(history.length>60)history.shift();redo.length=0;};
@@ -118,14 +121,45 @@ export function mountWingPainter(ui){
   if(b.dataset.wingZoom)setZoom(zoom*(b.dataset.wingZoom==='1'?1.25:.8));
   if(b.hasAttribute('data-wing-reset-view')){pan=[0,0];setZoom(1);}
   if(b.hasAttribute('data-wing-publish')){
-   const input={...design};input.name=String(root.querySelector('[data-wing-field=name]').value||'').trim();
+   if(publishing)return;
+   const input=copy(design);
+   input.name=String(root.querySelector('[data-wing-field=name]').value||'').trim();
    input.tier=Number(root.querySelector('[data-wing-field=tier]').value);
    input.color=root.querySelector('[data-wing-field=color]').value;
    input.ability=root.querySelector('[data-wing-field=ability]').value;
+   input.drawRatePct=Number(root.querySelector('[data-wing-field=drawRatePct]').value);
    for(const field of ['impulse','gravity','flapMs'])input[field]=Number(root.querySelector(`[data-wing-field="${field}"]`).value);
    if(input.name.length<1)return report('請先命名翅膀');
    if(!input.outline||input.outline.length<3)return report('必須先繪製封閉輪廓');
-   report('正在儲存翅膀至伺服器…');ui.emit('server-action',{action:'gm-wing-publish',wing:input});
+   if(!Number.isFinite(input.drawRatePct)||input.drawRatePct<0||input.drawRatePct>100)
+    return report('中獎率必須為 0–100%');
+   if(input.strokes.length>90)return report('筆畫超出 90 筆，請使用 Undo 減少筆畫');
+   if(JSON.stringify({action:'gm-wing-publish',wing:input}).length>280000)
+    return report('繪圖資料超過上架容量，請減少筆畫');
+   publishing=true;b.disabled=true;
+   report('正在儲存翅膀至伺服器…');
+   // A one-way server-action left this text on screen forever on errors.
+   // Receive an explicit success/error callback and always unlock the button.
+   const timeout=setTimeout(()=>{
+    if(!publishing)return;
+    publishing=false;b.disabled=false;
+    report('上架逾時；請至 SUPPORT → GM 翅膀管理確認是否已建立，再決定是否重試');
+   },35000);
+   ui.emit('wing-publish-request',{
+    wing:input,
+    resolve:result=>{
+     clearTimeout(timeout);
+     if(!publishing)return;
+     publishing=false;b.disabled=false;
+     report('已上架並自動裝備：'+(result?.wingName||input.name));
+     ui.wingDraft=null;
+    },
+    reject:error=>{
+     clearTimeout(timeout);
+     publishing=false;b.disabled=false;
+     report('上架失敗：'+String(error?.message||error||'伺服器未回應'));
+    }
+   });
   }
  });
  root.addEventListener('input',event=>{

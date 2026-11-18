@@ -34,16 +34,29 @@ export class TempleNetwork extends EventTarget{
   }
   scheduleReconnect(){clearTimeout(this.reconnectTimer);const delay=Math.min(12_000,600*2**this.reconnectAttempt++);this.reconnectTimer=setTimeout(()=>this.connect().catch(()=>this.scheduleReconnect()),delay);}
   sendState(state){const now=performance.now();if(now-this.lastStateAt<90||this.socket?.readyState!==WebSocket.OPEN)return;this.lastStateAt=now;this.socket.send(JSON.stringify({type:'state',data:state}));}
-  async action(action,data={}){return this.request('/api/action',{method:'POST',body:{action,requestId:crypto.randomUUID(),...data}});}
+  async action(action,data={}){return this.request('/api/action',{
+    method:'POST',body:{action,requestId:crypto.randomUUID(),...data},
+    timeoutMs:action==='gm-wing-publish'?30000:0
+  });}
   async chat(text){return this.request('/api/chat',{method:'POST',body:{text}});}
   async chatHistory(){return this.request('/api/chat');}
   async createSaveCode(){return this.request('/api/save-code',{method:'POST',body:{}});}
   async gmPresence(){return this.request('/api/gm/presence');}
   async changeRole(role){return this.request('/api/role',{method:'POST',body:{role}});}
   async world(){return this.request('/api/world');}
-  async request(path,{method='GET',body,auth=true,identityToken=''}={}){
+  async request(path,{method='GET',body,auth=true,identityToken='',timeoutMs=0}={}){
     const headers={'Content-Type':'application/json'};if(identityToken)headers.Authorization=`Bearer ${identityToken}`;else if(auth&&this.token)headers.Authorization=`Bearer ${this.token}`;
-    let response;try{response=await fetch(this.base+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});}catch{throw new Error('Cannot reach the Temple server');}
+    const controller=timeoutMs>0?new AbortController():null;
+    const timer=controller?setTimeout(()=>controller.abort(),timeoutMs):null;
+    let response;
+    try{response=await fetch(this.base+path,{
+      method,headers,body:body===undefined?undefined:JSON.stringify(body),
+      ...(controller?{signal:controller.signal}:{})
+    });}
+    catch(error){
+      if(error?.name==='AbortError')throw new Error('伺服器上架回覆逾時；請確認上架清單後重試');
+      throw new Error('Cannot reach the Temple server');
+    }finally{if(timer!==null)clearTimeout(timer);}
     let data={};try{data=await response.json();}catch{}if(!response.ok)throw new Error(data.error||`Temple server ${response.status}`);return data;
   }
   dispatch(type,data){this.dispatchEvent(new CustomEvent(type,{detail:data}));}

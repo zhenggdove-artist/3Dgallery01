@@ -197,7 +197,7 @@ network.addEventListener('wing-catalog',event=>{
  const wings=Array.isArray(event.detail?.wings)?event.detail.wings:[];
  registerCustomWings(wings);
  if(world){world={...world,customWings:wings};arena.world=world;ui.setWorld(world);
-  if(ui.panelName==='wing-shop')ui.renderPanel();}
+  if(['wing-shop','wing-manage'].includes(ui.panelName))ui.renderPanel();}
 });
 network.addEventListener('players',event=>{players=event.detail;ui.setPlayers(players);syncPlayers();});
 network.addEventListener('state',event=>{const data=event.detail;if(data.key===self?.key)return;let target=remoteTargets.get(data.key);if(!target){syncPlayers();target=remoteTargets.get(data.key);}if(target){target.position.fromArray(data.state.position);target.rotation=data.state.rotation;target.animation=data.state.animation;}});
@@ -341,6 +341,24 @@ ui.addEventListener('attack-cancel',()=>{
   void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});
  }
 });
+ui.addEventListener('wing-publish-request',async event=>{
+ const {wing,resolve,reject}=event.detail;
+ if(!self?.profile?.admin){reject(new Error('僅 GM 可以上架翅膀'));return;}
+ try{
+  const result=await sendAction('gm-wing-publish',{wing},{throwOnError:true});
+  if(!result?.publishedWingId||result.equippedWingId!==result.publishedWingId)
+   throw new Error('伺服器沒有確認翅膀已上架並自動裝備');
+  if(world?.profile?.equipment?.wings!==result.publishedWingId)
+   throw new Error('翅膀已上架，但裝備狀態尚未同步；請重新進入 BAG 確認');
+  resolve({...result,wingName:wing.name});
+  ui.bagCategory='equipment';
+  ui.openPanel('bag');
+  ui.toast('翅膀已上架、加入背包並自動裝備：'+wing.name);
+ }catch(error){
+  reject(error);
+  ui.toast('上架失敗：'+(error?.message||'伺服器未回應'));
+ }
+});
 ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;
  if(action==='fuse'){
   if(ui.bagFusionPending)return;
@@ -466,7 +484,7 @@ if(localRoot&&profile){arena.setPlayerEquipment(localRoot,profile.equipment);loc
  wasDead=false;ui.toast('RESPAWNED · WRITE HUB');
 }if(!ui.panelName&&!artEditor.mode&&!writer.active&&!platformDelete.active)controller?.setEnabled(true);ui.death(0);}if(profile&&self)self.profile=profile;}
 
-async function sendAction(action,data={},options={}){if(!joined||!controller)return null;try{const result=await network.action(action,data);if(result.world)acceptWorldView(result.world);if(result.notice)ui.toast(result.notice);if(['gm-wing-draw','wing-draw'].includes(action)&&result.wingDraw)ui.showWingDraw(result.wingDraw);if(action==='gm-wing-publish'&&result.publishedWingId)ui.openPanel('wing-shop');if(action==='fuse'&&result.fusion){ui.fusionFeedback(!!result.fusion.success,result.notice);audio.play(result.fusion.success?'fusion-success':'fusion-fail',1);}if(result.attackEvent)showAttack(result.attackEvent);if(result.throwEvent)showThrowPulse(result.throwEvent);if(action==='pickup-coin'||action==='pickup-drop')audio.play('coin');for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))arena.showStructureHit(hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))arena.showStructureBreak(broken);if(result.hit?.defeated)ui.toast(`DEFEATED · ${result.hit.lostCoins} COINS DROPPED`);return result;}catch(error){if(['gm-wing-draw','wing-draw'].includes(action))ui.cancelWingDraw();if(options.throwOnError)throw error;if(action==='fuse')ui.fusionFeedback(false,error.message);if(!/^Move closer to (?:the )?(?:artwork|coin|drop)/i.test(error.message||'')&&performance.now()-toastErrorAt>400){toastErrorAt=performance.now();ui.toast(error.message);}return null;}}
+async function sendAction(action,data={},options={}){if(!joined||!controller)return null;try{const result=await network.action(action,data);if(result.world)acceptWorldView(result.world);if(result.notice)ui.toast(result.notice);if(['gm-wing-draw','wing-draw'].includes(action)&&result.wingDraw)ui.showWingDraw(result.wingDraw);if(['gm-wing-remove','gm-wing-set-rate'].includes(action)&&ui.panelName==='wing-manage')ui.renderPanel();if(action==='fuse'&&result.fusion){ui.fusionFeedback(!!result.fusion.success,result.notice);audio.play(result.fusion.success?'fusion-success':'fusion-fail',1);}if(result.attackEvent)showAttack(result.attackEvent);if(result.throwEvent)showThrowPulse(result.throwEvent);if(action==='pickup-coin'||action==='pickup-drop')audio.play('coin');for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))arena.showStructureHit(hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))arena.showStructureBreak(broken);if(result.hit?.defeated)ui.toast(`DEFEATED · ${result.hit.lostCoins} COINS DROPPED`);return result;}catch(error){if(['gm-wing-draw','wing-draw'].includes(action))ui.cancelWingDraw();if(options.throwOnError)throw error;if(action==='fuse')ui.fusionFeedback(false,error.message);if(!/^Move closer to (?:the )?(?:artwork|coin|drop)/i.test(error.message||'')&&performance.now()-toastErrorAt>400){toastErrorAt=performance.now();ui.toast(error.message);}return null;}}
 
 function startBuildPlacement(kind,surface=null,artwork=null){if(self?.role!=='fighter')return ui.toast('SPECTATORS CANNOT BUILD');buildPlacement={kind,surface,artwork,rotation:controller?.root.rotation.y||0,position:controller?.buildPosition(kind==='art-bomb'?3.2:5)||[0,0,0],valid:false};ui.buildKind=kind;document.getElementById('build-kind').textContent=kind==='art-bomb'?'YOUR ARTWORK':kind.toUpperCase();document.getElementById('build-mode').hidden=false;document.activeElement?.blur();if(!writer.active&&!artEditor.mode)controller?.setEnabled(true);ui.toast('MOVE WITH YOUR ARTWORK · R ROTATE · E / PLACE');}
 function rotateBuildPlacement(){if(!buildPlacement)return;buildPlacement.rotation+=Math.PI/4;}

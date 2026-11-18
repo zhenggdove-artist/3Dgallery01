@@ -221,7 +221,7 @@ export class TempleRoom extends DurableObject{
      const next={position:[...newProfile.respawnPosition],rotation:0,animation:'idle',visible:true};
      this.sql.exec('UPDATE sessions SET state=? WHERE id=?',JSON.stringify(next),session.id);
     }
-    const response={ok:true,...result,world:worldView(world,session.profile_key,Date.now(),body.action==='gm-wing-publish')};
+    const response={ok:true,...result,world:worldView(world,session.profile_key,Date.now(),['gm-wing-publish','gm-wing-remove','gm-wing-set-rate'].includes(body.action))};
     this.ctx.storage.transactionSync(()=>{
       this.save(world);
       if(body.action==='reset-player-artworks'&&Array.isArray(result.removedArtworkMediaIds)){
@@ -233,7 +233,8 @@ export class TempleRoom extends DurableObject{
       this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,JSON.stringify(response),Date.now());
       this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);
     });
-    if(result.publishedWingId)this.broadcast('wing-catalog',{wings:world.customWings||[]});
+    if(result.publishedWingId||result.unpublishedWingId||result.updatedWingId)
+      this.broadcast('wing-catalog',{wings:world.customWings||[]});
     this.broadcastWorld(world);if(didRespawn)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))this.broadcast('structure-hit',hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))this.broadcast('structure-destroyed',broken);await this.armAlarm();return json(response);
   }
 

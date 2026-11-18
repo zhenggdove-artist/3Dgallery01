@@ -101,7 +101,7 @@ test('browser generates animated 3-D Papilio geometry and protected shop link',(
  assert.match(ui,/data-open-wing-painter/);
  assert.match(ui,/wing-gacha-machine/);
  assert.match(ui,/data-draw-wing/);
- assert.match(ui,/if\(\['gm','wing-painter'\]\.includes\(name\)&&!this\.self\.profile\?\.admin\)return/);
+ assert.match(ui,/if\(\['gm','wing-painter','wing-manage'\]\.includes\(name\)&&!this\.self\.profile\?\.admin\)return/);
  assert.match(index,/id="wing-shop-button" data-panel="wing-shop"/);
  assert.match(css,/#dock #wing-shop-button\[hidden\]\{display:none!important\}/);
  assert.match(index,/src\/reletter\/swallowtail-art\.js/);

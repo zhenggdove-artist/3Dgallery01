@@ -30,6 +30,24 @@ try{
  await page.evaluate(()=>templeTest.ui.emit('join',{name:'CIBrowser',color:'#43b59a',backendUrl:window.TEMPLE_CONFIG.backendUrl}));
  await page.locator('#hud').waitFor({state:'visible'});
  await page.waitForFunction(()=>window.templeTest?.controller()&&JSON.parse(window.render_game_to_text()).connected);
+ // Real browser regression: SUPPORT must render a visible Windows 98 gacha,
+ // not only CSS or a hidden shop link buried below equipment inventory.
+ await page.evaluate(()=>templeTest.ui.openPanel('wing-shop'));
+ await page.locator('.wing-support-machine .wing-gacha-machine').waitFor({state:'visible'});
+ assert.equal(await page.locator('[data-draw-wing]').count(),2);
+ const support=await page.evaluate(()=>{
+  const panel=document.querySelector('#panel'),machine=document.querySelector('.wing-support-machine'),
+   top=document.querySelector('.win98-gacha-title'),control=document.querySelector('.wing-draw-button');
+  const r=machine.getBoundingClientRect(),p=panel.getBoundingClientRect();
+  return {panelWidth:p.width,panelHeight:p.height,machineWidth:r.width,machineHeight:r.height,
+   shown:getComputedStyle(machine).display!=='none',title:top?.textContent,
+   buttonEnabled:!control?.disabled};
+ });
+ assert.ok(support.panelWidth>1000&&support.panelHeight>740,support);
+ assert.ok(support.machineWidth>275&&support.machineHeight>330&&support.shown&&support.buttonEnabled,support);
+ assert.match(support.title,/CAPSULE\.EXE/);
+ await page.screenshot({path:output+'/win98-support-gacha.png'});
+ await page.locator('#panel-close').click();
  // FISH has been retired from both the dock and shop.
  assert.equal(await page.locator('[data-action="fish"]').count(),0);
  // Inventory categories, custom 3D spell preview, readable descriptions.

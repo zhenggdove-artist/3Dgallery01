@@ -5,6 +5,18 @@ const hex=x=>typeof x==='string'&&/^#[0-9a-f]{6}$/i.test(x);
 const finite=(n,a,b)=>Number.isFinite(n)&&n>=a&&n<=b;
 const ALLOWED_ABILITIES=new Set(['glide','swift','aerial','guardian','sparkle']);
 const ALLOWED_MATERIALS=new Set(['ink','airbrush','chalk','watercolor','metallic']);
+export const DEFAULT_CUSTOM_WING_RATE_PCT=1;
+export function wingDrawRatePercent(wing){
+ const raw=wing?.drawRatePct;
+ return raw===undefined||raw===null?DEFAULT_CUSTOM_WING_RATE_PCT:Number(raw);
+}
+export function validWingDrawRate(value){
+ return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=100&&Math.abs(Math.round(value*1000)-value*1000)<1e-7;
+}
+export function totalCustomWingRates(wings=[]){
+ return wings.filter(wing=>wing&&wing.retired!==true)
+  .reduce((total,wing)=>total+wingDrawRatePercent(wing),0);
+}
 export function normalizePaintedWing(raw,id){
  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Invalid wing');
  const name=String(raw.name||'').trim();
@@ -32,9 +44,11 @@ export function normalizePaintedWing(raw,id){
  for(const field of ['scaleX','scaleY'])if(!finite(Number(raw[field]),.35,2))throw Error('Invalid wing scale');
  if(!finite(Number(raw.impulse),5,18)||!finite(Number(raw.gravity),.2,1)||
   !finite(Number(raw.flapMs),180,900))throw Error('Invalid wing stats');
+ const drawRatePct=raw.drawRatePct===undefined?DEFAULT_CUSTOM_WING_RATE_PCT:Number(raw.drawRatePct);
+ if(!validWingDrawRate(drawRatePct))throw Error('Winning probability must be 0–100% (up to 3 decimals)');
  return {id,name,tier,slot:'wings',family:'wings',design:'painted-wing',
   premiumWing:true,gmWingExclusive:true,notForSale:true,price:0,
-  color:raw.color,ability:raw.ability,
+  color:raw.color,ability:raw.ability,drawRatePct,retired:false,
   outline:outline.map(normalizePoint),strokes:clean,shape:String(raw.shape||'freehand').slice(0,20),
   scaleX:Number(raw.scaleX),scaleY:Number(raw.scaleY),
   impulse:Number(raw.impulse),gravity:Number(raw.gravity),flapMs:Number(raw.flapMs),
