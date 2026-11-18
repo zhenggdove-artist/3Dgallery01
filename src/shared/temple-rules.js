@@ -492,9 +492,9 @@ function attack(world,profile,actor,body,context,now){
         Math.max(flight,visibleCollisionLifetimeMs(source,true));
       // Sniper fusion echo must not exceed 30% of the original sniper
        // ultimate's damage; it also cannot cause instant-lethal headshots.
-       const echoFactor=source.id==='black-cat'?.3:.2;
-       const echoId=id(),echoDamage=+(full.damage*echoFactor).toFixed(3);
-      const echoPvP=+(pvpShotDamage(source,full,sourceQuality)*echoFactor).toFixed(3);
+       const sniperEchoFactor=source.id==='black-cat'?.3:.2;
+       const echoId=id(),echoDamage=+(full.damage*sniperEchoFactor).toFixed(3);
+      const echoPvP=+(pvpShotDamage(source,full,sourceQuality)*sniperEchoFactor).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],range:secondary.range,radius:secondary.radius,area:echoArea,
