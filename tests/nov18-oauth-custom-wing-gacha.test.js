@@ -57,27 +57,31 @@ test('exact five-percent Epic band, independent of inventory',()=>{
  const filled=drawGmWing({admin:true,inventory:owned},()=>.945);
  assert.equal(filled.quality,'epic');
 });
-test('full UI, graphics and OAuth modules are wired to their entry points',()=>{
+test('Google-only Firebase entry and verified server route integration',()=>{
  const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
  const index=read('index.html'),ui=read('src/ui.js'),network=read('src/network.js'),
   worker=read('cloudflare/worker.js'),client=read('src/main.js'),
+  verifier=read('cloudflare/firebase-auth.js'),firebase=read('src/firebase-login.js'),
   atlas=read('src/reletter/epic-specimens.js'),painter=read('src/gm-wing-painter.js');
- assert.match(index,/data-login-provider="google"/);
- assert.match(index,/data-login-provider="apple"/);
- assert.match(index,/data-login-provider="facebook"/);
- assert.match(network,/beginOAuth\(provider\)/);
- assert.match(network,/oauthTicket/);
- assert.match(worker,/oauthTicket\(this\.sql/);
- assert.match(worker,/path==='\/api\/oauth\/start'/);
- assert.match(worker,/path==='\/api\/oauth\/callback'/);
- assert.match(worker,/path==='\/api\/oauth\/profile'/);
- assert.match(worker,/path==='\/api\/oauth\/providers'/);
- assert.match(worker,/worldView\(world,meta\.profileKey,now,false\)/);
- assert.match(worker,/authMode/);
+ assert.match(index,/data-google-login/);
+ assert.doesNotMatch(index,/data-login-provider="apple"/);
+ assert.doesNotMatch(index,/data-login-provider="facebook"/);
+ assert.doesNotMatch(index,/data-legacy-login/);
+ assert.match(network,/firebaseIdToken/);
+ assert.match(network,/firebaseProfile/);
+ assert.match(worker,/verifyFirebaseIdToken/);
+ assert.match(worker,/path==='\/api\/firebase\/config'/);
+ assert.match(worker,/path==='\/api\/firebase\/profile'/);
+ assert.match(worker,/authMode:identity\?'firebase'/);
+ assert.match(verifier,/securetoken\.google\.com/);
+ assert.match(verifier,/RSASSA-PKCS1-v1_5/);
+ assert.match(verifier,/sign_in_provider!=='google.com'/);
+ assert.match(firebase,/signInWithPopup/);
+ assert.match(firebase,/existingGoogleToken/);
+ assert.match(ui,/setFirebaseLoginStatus/);
  assert.match(ui,/mountWingPainter\(this\)/);
  assert.match(ui,/wing-epic-win/);
- assert.match(ui,/data-gacha-close/);
- assert.match(client,/ui\.addEventListener\('oauth-login'/);
+ assert.match(client,/ui\.addEventListener\('firebase-login'/);
  assert.match(atlas,/epicSpecimenCanvas/);
  assert.match(painter,/data-wing-mirror-x/);
 });
