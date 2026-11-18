@@ -88,17 +88,19 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    if(!wasAdmin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
    current.gmInventoryGranted=true;
   }
-  // A consumed starter weapon must not be recreated on the next action.
+  // Keep migrating old profiles to the SMG baseline, except after deliberate
+  // fusion consumption. This also repairs older missing/corrupt inventories.
+  if(!current.inventory.includes(STARTER_LOADOUT.weapon)&&!current.spentStarterWeapon)
+   current.inventory.unshift(STARTER_LOADOUT.weapon);
   current.equipment??={...STARTER_LOADOUT};
    if(current.admin&&!current.gmWingsInitialized){
     if(!current.equipment.wings)current.equipment.wings='wings-18';
     current.gmWingsInitialized=true;
    }
    if(current.admin&&typeof current.gmInvincible!=='boolean')current.gmInvincible=true;
-   // Equipment slots reference owned inventory; prevent phantom equipped items.
-   for(const slot of EQUIPPABLE_SLOTS){const equippedId=current.equipment[slot];
-    if(equippedId&&(!current.inventory.includes(equippedId)||itemById(equippedId)?.slot!==slot))current.equipment[slot]=null;
-   }
+   // Preserve legacy selected weapons while the inventory migration runs.
+   // Fusion itself clears the equipped material when the final copy is spent.
+   if(current.equipment.weapon&&!itemById(current.equipment.weapon))current.equipment.weapon=STARTER_LOADOUT.weapon;
    delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
   refreshStats(world,current,now);
   if(current.deadUntil>0&&current.deadUntil<=now&&current.hp<=0){
