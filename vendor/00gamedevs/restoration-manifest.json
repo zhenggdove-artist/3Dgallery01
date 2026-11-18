@@ -1,0 +1,42 @@
+{
+  "origin": "https://00gamedevs.com",
+  "contentVersion": "85f9efcbf6afd18f959638d15ee7f77e5b9340e59afd1516e0d7d5ea8e9932dd",
+  "downloadedFrom": "official AI catalog v2",
+  "packaging": "byte-identical original JavaScript, no imitation",
+  "assets": [
+    {
+      "id": "verdant-restoration",
+      "url": "https://00gamedevs.com/downloads/effects/verdant-restoration.js",
+      "sha256": "245234e9815f2434071c978cb4ce9ecbd22b4fdde6add5753e9dd79f199fe388",
+      "byteLength": 150283,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions",
+          "render",
+          "prepareRender",
+          "setLayer"
+        ],
+        "playback": "continuous",
+        "lifecycle": {
+          "start": 0.7,
+          "end": 0.85
+        },
+        "notes": "After all update(dt) calls, render once through any support effect in this scene, replacing renderer.render. The required shared three-scale glow preserves the original palette and 14 layer types: full-resolution scenes, half/quarter/eighth-size halos; display scene alone uses 4x MSAA. No external textures or gameplay logic. size/speed are the only appearance controls. Lightning endpoints use group-parent coordinates; reapply after changing size. See bilingual guide.",
+        "requiredRenderHook": "render(renderer,scene,camera)",
+        "layerTypes": 14
+      },
+      "defaultOptions": {
+        "size": 1,
+        "speed": 1
+      }
+    }
+  ]
+}
