@@ -1,4 +1,5 @@
 import {registerCustomWings} from './shared/catalog.js';
+import {beginWingStageCheckout} from './wing-payment-client.js';
 import {prepareFirebase,existingGoogleToken,signInWithGoogle} from './firebase-login.js';
 import * as THREE from 'three';
 import {WriteCinematic} from './write-cinematic.js';
@@ -78,6 +79,7 @@ function updatePlayerSpeech(now=performance.now()){
 }
 const minimap=new Minimap();
 const damageNumbers=createDamageNumbers(THREE),statusVisuals=new ElementalStatusVisuals();
+let previousHealHp=null,healVisualSeq=0;
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
 let pendingAInteraction=null,chargeDelayTimer=null,nextChargeRetryAt=0;
@@ -180,7 +182,7 @@ ui.addEventListener('firebase-login',async()=>{
   }
 });
 ui.addEventListener('join',async event=>{
-  if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();
+  if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;previousHealHp=null;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();
     void arena.loadCustomArtworks(data.world.customArtworks,network.base).catch(error=>console.warn('Deferred artwork loading',error));
     network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
   catch(error){ui.joinError(error.message);}
@@ -342,10 +344,16 @@ ui.addEventListener('attack-cancel',()=>{
  }
 });
 ui.addEventListener('wing-publish-request',async event=>{
- const {wing,resolve,reject}=event.detail;
+ const {wing,wingId,resolve,reject}=event.detail;
  if(!self?.profile?.admin){reject(new Error('僅 GM 可以上架翅膀'));return;}
  try{
-  const result=await sendAction('gm-wing-publish',{wing},{throwOnError:true});
+  const updating=!!wingId;
+  const result=await sendAction(updating?'gm-wing-update':'gm-wing-publish',{wing,wingId},{throwOnError:true});
+  if(updating){
+   if(result?.updatedWingId!==wingId)throw new Error('伺服器尚未確認原翅膀的編輯更新');
+   resolve({...result,wingName:wing.name});ui.openPanel('wing-manage');
+   ui.toast('翅膀已修改並重新上架：'+wing.name);return;
+  }
   if(!result?.publishedWingId||result.equippedWingId!==result.publishedWingId)
    throw new Error('伺服器沒有確認翅膀已上架並自動裝備');
   if(world?.profile?.equipment?.wings!==result.publishedWingId)
@@ -359,6 +367,7 @@ ui.addEventListener('wing-publish-request',async event=>{
   ui.toast('上架失敗：'+(error?.message||'伺服器未回應'));
  }
 });
+ui.addEventListener('wing-payment-stage-checkout',()=>{void beginWingStageCheckout(network,ui);});
 ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;
  if(action==='fuse'){
   if(ui.bagFusionPending)return;
@@ -453,6 +462,17 @@ function syncWorld(){if(!world)return;audio.setVolumes(world.audioSettings||{});
  for(const player of players){const root=roots.get(player.key);if(root)statusVisuals.sync(root,player.profile?.effects);}
  if(arena.monster)statusVisuals.sync(arena.monster,world.monster?.effects);
  for(const {root,state} of arena.islandEnemies.extraLive)statusVisuals.sync(root,state?.effects);const profile=world.profile,dead=profile?.deadUntil>Date.now();
+ // Only visualize a confirmed server-side HP increase during a flower channel.
+ if(profile&&localRoot){
+  const hp=Number(profile.hp);
+  const healing=Number.isFinite(hp)&&previousHealHp!==null&&hp>previousHealHp&&
+   staffChannel?.ready&&itemById(staffChannel.weapon)?.family==='petal'&&
+   Number(profile.maxHp)>previousHealHp;
+  if(healing)for(let i=0;i<Math.min(3,Math.round(hp-previousHealHp));i++)
+   damageNumbers.receive([{id:++healVisualSeq,time:Date.now(),
+    kind:'heal',amount:1,position:[localRoot.position.x,localRoot.position.y+2.15,localRoot.position.z]}]);
+  previousHealHp=Number.isFinite(hp)?hp:null;
+ }
 // Follow the SERVER's revive timestamp and spawn instead of relying on
 // wasDead: an iOS background tab may miss the five-second death overlay.
 if(controller&&!dead&&Number(profile?.lastRespawnAt)>lastAppliedRespawnAt){
