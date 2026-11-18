@@ -100,7 +100,7 @@ test('checkout button submits signed staging fields to ECPay only after server c
  const savedWindow=globalThis.window,savedDocument=globalThis.document;
  const posted=[],requests=[],alerts=[];let popupClosed=false;
  const fakePopup={close(){popupClosed=true;}};
- const form={children:[],append(node){this.children.push(node);},
+ const form={children:[],style:{},append(node){this.children.push(node);},
   submit(){posted.push({action:this.action,target:this.target,fields:Object.fromEntries(this.children.map(c=>[c.name,c.value]))});},
   remove(){}};
  const network={request:async(path,options)=>{
