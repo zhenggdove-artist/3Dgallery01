@@ -275,11 +275,11 @@ export class TempleUI extends EventTarget{
     const code=this.saveCode||this.self?.saveCode||'';this.content.innerHTML=`<h3>MEMORY CODE</h3><p>將目前的等級、裝備、背包與遊戲進度儲存至伺服器。重新進入遊戲時，在 Memorycode 欄位輸入代碼恢復。</p><label for="save-code-output">存檔代碼<input id="save-code-output" readonly autocomplete="off" spellcheck="false" class="panel-input" value="${escape(code)}" placeholder="尚未產生代碼"></label><button type="button" class="panel-button" data-save-code>產生／重新取得代碼</button><button type="button" class="panel-button" data-copy-save-code ${code?'':'disabled'}>複製存檔代碼</button><p>請妥善保管代碼。擁有代碼的人可能存取你的存檔。</p>`;}
   showSaveCode(code){this.saveCode=String(code||'');this.openPanel('save');this.content.querySelector('#save-code-output')?.select();}
   renderBag(profile){renderOriginalBag(this,profile);}
-  renderShop(profile){const tab=this.shopTab||'near',tabs={near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',shield:'Shields',head:'Headwear',outfit:'Outfits',owned:'Owned'};const items=(tab==='owned'?(profile.inventory||[]).map(itemById).filter(Boolean):SHOP_ITEMS).filter(i=>tab==='owned'||(tab==='mystery'&&i.mysteryWeapon)||(['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab)||i.slot===tab);this.content.innerHTML=`<div class="armory-balance"><span>Equipment · collections</span><b>${profile.admin?'∞':profile.wallet} coins</b></div><nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav><button class="panel-button wing-shop-link" type="button" data-open-wing-shop>SUPPORT · 翅膀扭蛋機</button><div class="shop-items">${items.map(item=>{const owned=profile.inventory.includes(item.id),equipped=profile.equipment[item.slot]===item.id;return itemCard(item,`<button data-${owned?'equip':'buy'}="${item.id}" ${equipped||!owned&&!profile.admin&&profile.wallet<item.price?'disabled':''}>${equipped?'EQUIPPED':owned?'EQUIP':`BUY · ${item.price.toLocaleString('en-US')}`}</button>`);}).join('')||'<p>Your collection starts here. Earn coins by exploring the arena.</p>'}</div>`;}
+  renderShop(profile){const tab=this.shopTab||'near',tabs={near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',shield:'Shields',head:'Headwear',outfit:'Outfits',owned:'Owned'};const items=(tab==='owned'?(profile.inventory||[]).map(itemById).filter(Boolean):SHOP_ITEMS).filter(i=>tab==='owned'||(tab==='mystery'&&i.mysteryWeapon)||(['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab)||i.slot===tab);this.content.innerHTML=`<div class="armory-balance"><span>Equipment · collections</span><b>${profile.admin?'∞':profile.wallet} coins</b></div><nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav><div class="shop-items">${items.map(item=>{const owned=profile.inventory.includes(item.id),equipped=profile.equipment[item.slot]===item.id;return itemCard(item,`<button data-${owned?'equip':'buy'}="${item.id}" ${equipped||!owned&&!profile.admin&&profile.wallet<item.price?'disabled':''}>${equipped?'EQUIPPED':owned?'EQUIP':`BUY · ${item.price.toLocaleString('en-US')}`}</button>`);}).join('')||'<p>Your collection starts here. Earn coins by exploring the arena.</p>'}</div>`;}
 
   renderWingShop(profile){
    this.wingGalleryObserver?.disconnect();
-   const remaining=profile.admin?Infinity:Math.max(0,5-(profile.wingTrialDraws||0));
+   const remaining=profile.admin?Infinity:Math.max(0,5-(profile.wingTrialDraws||0))+Math.max(0,Number(profile.wingPaidDraws)||0);
    const activeCustom=(this.world?.customWings||[]).filter(wing=>wing.retired!==true);
    const wings=[...SWALLOWTAIL_WINGS,...activeCustom];
    const owned=new Set(profile.inventory||[]);
@@ -296,10 +296,10 @@ export class TempleUI extends EventTarget{
        <div class="wing-gacha-machine" aria-label="翅膀抽獎機"><span class="y2k-machine-halo" aria-hidden="true"></span><span class="y2k-machine-star y2k-star-a" aria-hidden="true">✦</span><span class="y2k-machine-star y2k-star-b" aria-hidden="true">✧</span>
         <div class="wing-gacha-dome"><span class="wing-gacha-shine"></span><span class="y2k-dome-crest">✧ 2000 ✧</span>${capsules}</div>
         <div class="wing-gacha-neck"><span class="wing-gacha-face">★ CAPSULE / 98 ★</span></div>
-        <div class="wing-gacha-body"><button type="button" class="wing-gacha-crank" data-draw-wing aria-label="轉動扭蛋機" ${!profile.admin&&remaining===0?'disabled':''}>↻</button><div class="wing-gacha-slot" aria-hidden="true">▰</div><p>GGTEMPLE · CAPSULE 98</p></div>
+        <div class="wing-gacha-body"><button type="button" class="wing-gacha-crank" data-draw-wing aria-label="開始扭蛋抽獎" ${!profile.admin&&remaining===0?'disabled':''}>START</button><div class="wing-gacha-slot" aria-hidden="true">▰</div><p>GGTEMPLE · CAPSULE 98</p></div>
         <div class="wing-gacha-feet"></div>
        </div>
-       <div class="win98-gacha-status" role="status">FREE PLAYS LEFT: ${Number.isFinite(remaining)?remaining+' / 5':'∞'}</div><div class="y2k-machine-caption"><span>✦ LIMITED EDITION ✦</span><span>GGTEMPLE 2000</span></div>
+       <div class="win98-gacha-status" role="status">PLAYS LEFT: ${Number.isFinite(remaining)?remaining:'∞'}</div><div class="y2k-machine-caption"><span>✦ LIMITED EDITION ✦</span><span>GGTEMPLE 2000</span></div>
       </div>
       <div class="wing-support-controls">
        <header class="wing-shop-hero"><small>WINDOWS 98 · CAPSULE.EXE · SUPPORT</small>
@@ -314,7 +314,8 @@ export class TempleUI extends EventTarget{
         同款可重複抽取。</p></div>
        ${featured?`<div class="wing-draw-result" role="status">上次開出：${escape(featured.name)} · ${escape(WING_QUALITY_NAMES[wingRarity(featured)])}</div>`:''}
        <section class="wing-payment-preview"><h3>SUPPORT / PAYMENT STATUS</h3>
-        <p>Google 帳號提供五次免費試抽。每 NT$30 五抽的正式付費功能尚未啟用，沒有付款入口。</p></section>
+        <p>Google 帳號提供五次免費試抽，每 NT$30 對應五抽；正式收款尚未啟用。測試不會扣款。</p>
+         ${profile.admin?'<button type="button" class="panel-button" data-start-wing-stage>GM · 綠界測試付款 NT$30</button><p>僅獨立測試 Worker 啟用時可建立測試訂單。</p>':'<p>正式付款入口尚未開放。</p>'}<p></p></section>
       </div>
     </div>
     <section class="wing-catalog-window"><h3>▣ WING COLLECTION — ${wings.length} WINGS <span>✧ DIGITAL SPECIMENS ✧</span></h3>
@@ -339,19 +340,33 @@ export class TempleUI extends EventTarget{
    const images=[...this.content.querySelectorAll('img[data-wing-icon]')];
    const load=img=>{
     if(!img.isConnected||!img.dataset.wingIcon)return;
-    const item=itemById(img.dataset.wingIcon);
+    const id=img.dataset.wingIcon;
+    const item=itemById(id)||SWALLOWTAIL_WINGS.find(wing=>wing.id===id)||(this.world?.customWings||[]).find(wing=>wing.id===id);
+    if(!item)return;
     delete img.dataset.wingIcon;
-    if(item)setTimeout(()=>{if(img.isConnected)img.src=wingIcon(item);},0);
+    try{
+     const url=wingIcon(item);
+     if(!url||!url.startsWith('data:image/'))throw Error('Empty wing artwork');
+     img.onerror=()=>{
+      img.onerror=null;
+      const fallback=document.createElement('canvas');fallback.width=256;fallback.height=180;
+      const ctx=fallback.getContext('2d');ctx.fillStyle=item.color||'#cacadd';ctx.fillRect(18,30,220,120);
+      ctx.fillStyle='#262638';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+      ctx.fillText('WING ART PREVIEW',128,96);img.src=fallback.toDataURL('image/png');
+     };
+     img.src=url;
+    }catch(error){console.error('Wing preview failed',id,error);img.alt=item.name+' (preview unavailable)';}
    };
+   images.slice(0,16).forEach(load);
    if(typeof IntersectionObserver!=='undefined'){
     const observer=new IntersectionObserver(entries=>{
      for(const entry of entries)if(entry.isIntersecting){
       observer.unobserve(entry.target);load(entry.target);
      }
-    },{root:this.content,rootMargin:'120px'});
+    },{root:null,rootMargin:'700px'});
     this.wingGalleryObserver=observer;
-    images.forEach(img=>observer.observe(img));
-   }else images.slice(0,12).forEach(load);
+    images.slice(16).forEach(img=>observer.observe(img));
+   }else images.slice(16).forEach(load);
   }
   renderWingManage(profile){
    if(!profile?.admin){this.content.textContent='GM only';return;}
@@ -370,6 +385,7 @@ export class TempleUI extends EventTarget{
       <div class="wing-manage-meta"><strong>${escape(item.name)}</strong><small>${escape(WING_QUALITY_NAMES[wingRarity(item)])} · ${escape(item.id)}</small></div>
       <label>中獎率 % <input data-wing-rate type="number" min="0" max="100" step=".001" value="${Number(item.drawRatePct??1)}" aria-label="${escape(item.name)} 中獎率"></label>
       <button class="panel-button" type="button" data-wing-rate-save="${escape(item.id)}">儲存機率</button>
+       <button class="panel-button" type="button" data-wing-edit="${escape(item.id)}">編輯後重新上架</button>
       <button class="panel-button wing-remove-button" type="button" data-wing-remove="${escape(item.id)}">刪除上架</button>
      </article>`).join('')||'<p>目前沒有上架的 GM 自製翅膀。</p>'}</div>
     ${retired.length?`<details class="wing-manage-retired"><summary>已下架翅膀（${retired.length}）</summary>
@@ -428,7 +444,17 @@ export class TempleUI extends EventTarget{
   async panelClick(event){const button=event.target.closest('button');if(!button||button.disabled)return;if(button.dataset.openPlant){const plant=(this.world?.plants||[]).find(p=>p.id===button.dataset.openPlant);if(plant)this.showPlant(plant);return;}if(button.hasAttribute('data-open-wing-shop')){this.openPanel('wing-shop');return;}
     if(button.hasAttribute('data-open-wing-painter')){this.openPanel('wing-painter');return;}
     if(button.hasAttribute('data-open-wing-manage')){this.openPanel('wing-manage');return;}
-    if(button.hasAttribute('data-wing-rate-save')){
+    if(button.hasAttribute('data-wing-edit')){
+      if(!this.self?.profile?.admin)return;
+      const wing=(this.world?.customWings||[]).find(item=>item.id===button.dataset.wingEdit&&item.retired!==true);
+      if(!wing)return this.toast('找不到可以修改的翅膀');
+      this.wingDraft=structuredClone(wing);this.openPanel('wing-painter');return;
+     }
+     if(button.hasAttribute('data-start-wing-stage')){
+      if(!this.self?.profile?.admin)return;
+      this.emit('wing-payment-stage-checkout');return;
+     }
+     if(button.hasAttribute('data-wing-rate-save')){
      if(!this.self?.profile?.admin)return;
      const row=button.closest('.wing-manage-row'),field=row?.querySelector('[data-wing-rate]');
      const drawRatePct=Number(field?.value),wingId=button.dataset.wingRateSave;
