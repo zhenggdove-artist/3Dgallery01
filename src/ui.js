@@ -29,7 +29,7 @@ export class TempleUI extends EventTarget{
     if(!target||!from||!Number.isInteger(sourceIndex))return;
     const sourceId=this.world?.profile?.inventory?.[sourceIndex],targetId=target.dataset.bagItem;
     if(this.bagFusionMode){
-     if(sourceId&&targetId&&sourceId!==targetId)this.emit('server-action',{action:'fuse',sourceId,targetId,requestId:crypto.randomUUID()});
+     if(sourceId&&targetId&&sourceIndex!==Number(target.dataset.inventoryIndex))this.emit('server-action',{action:'fuse',sourceId,targetId,requestId:crypto.randomUUID()});
     }else this.emit('server-action',{action:'swap-inventory',fromIndex:sourceIndex,toIndex:Number(target.dataset.inventoryIndex)});
    });
     $('function-toggle').onclick=()=>{const open=this.hud.classList.toggle('functions-open');$('function-toggle').setAttribute('aria-expanded',String(open));};

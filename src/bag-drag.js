@@ -13,7 +13,7 @@ export function bindBagDrag(ui){
  const exchange=(source,target)=>{
   if(!target||source.index===target.index)return;
   if(ui.bagFusionMode){
-   if(source.itemId===target.dataset.bagItem)return;
+   // Different occupied cells can hold identical IDs; only one physical copy is consumed.
    ui.emit('server-action',{action:'fuse',sourceId:source.itemId,
      targetId:target.dataset.bagItem,requestId:crypto.randomUUID()});
   }else{

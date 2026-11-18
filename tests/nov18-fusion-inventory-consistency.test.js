@@ -1,0 +1,65 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createInitialWorld,createProfile,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
+import {ITEMS,STARTER_LOADOUT} from '../src/shared/catalog.js';
+const actor=(key,admin=false)=>({key,name:key,color:'#abcdef',role:'fighter',admin,position:[72,0,20]});
+const fuse=(src,dst,id)=>({action:'fuse',sourceId:src,targetId:dst,requestId:id});
+const count=(p,id)=>p.inventory.filter(x=>x===id).length;
+const T=42000000;
+test('GM fuse→equip→fuse consumes exactly the two material items without copies',()=>{
+ const w=createInitialWorld(T),a=actor('gm',true),p=ensureProfile(w,'gm','gm','#abcdef',T,true);
+ assert.ok(ITEMS.every(i=>p.inventory.includes(i.id)));
+ assert.equal(applyAction(w,a,fuse('ember-1','frost-1','fusion-success-1'),{now:T+1,rng:()=>0}).fusion.success,true);
+ assert.equal(count(p,'ember-1'),0);
+ assert.equal(applyAction(w,a,{action:'equip',itemId:'frost-1'},{now:T+2}).error,undefined);
+ assert.equal(count(p,'frost-1'),1);
+ assert.equal(count(p,'ember-1'),0);
+ assert.equal(applyAction(w,a,fuse('storm-1','frost-1','fusion-success-2'),{now:T+3,rng:()=>0}).fusion.success,true);
+ assert.equal(p.fusion['frost-1'].layer,2);
+ ensureProfile(w,a.key,a.name,a.color,T+4,true);
+ assert.equal(count(p,'storm-1'),0);
+ assert.equal(count(p,'ember-1'),0);
+ assert.equal(count(p,'frost-1'),1);
+});
+test('failure consumes a GM ingredient permanently, receipt replay cannot consume again',()=>{
+ const w=createInitialWorld(T),a=actor('gm-fail',true),p=ensureProfile(w,a.key,a.name,a.color,T,true);
+ p.gmFusionChance=0;
+ const failed=applyAction(w,a,fuse('ember-2','frost-2','fusion-fail-1'),{now:T+5,rng:()=>.5});
+ assert.equal(failed.fusion.success,false);
+ assert.equal(count(p,'ember-2'),0);
+ const retry=applyAction(w,a,fuse('ember-2','frost-2','fusion-fail-1'),{now:T+6,rng:()=>0});
+ assert.deepEqual(retry.fusion,failed.fusion);
+ assert.equal(applyAction(w,a,{action:'equip',itemId:'frost-2'},{now:T+7}).error,undefined);
+ assert.equal(count(p,'ember-2'),0);
+ p.gmFusionChance=1;
+ assert.equal(applyAction(w,a,fuse('storm-2','frost-2','fusion-after-failure'),{now:T+8,rng:()=>.9}).fusion.success,true);
+ assert.equal(count(p,'storm-2'),0);
+});
+test('normal starter can be consumed; equipped reference clears; no regrant',()=>{
+ const w=createInitialWorld(T),a=actor('user'),p=ensureProfile(w,a.key,a.name,a.color,T);
+ p.wallet=10000;p.inventory.push('ember-1','frost-1');
+ assert.equal(applyAction(w,a,fuse(STARTER_LOADOUT.weapon,'ember-1','starter-fusion'),{now:T+10,rng:()=>0}).fusion.success,true);
+ assert.equal(p.equipment.weapon,null);
+ ensureProfile(w,a.key,a.name,a.color,T+11);
+ assert.equal(count(p,STARTER_LOADOUT.weapon),0);
+ assert.equal(applyAction(w,a,{action:'equip',itemId:'ember-1'},{now:T+12}).error,undefined);
+ assert.equal(applyAction(w,a,fuse('frost-1','ember-1','next-fusion'),{now:T+13,rng:()=>0}).fusion.success,true);
+ assert.equal(count(p,'frost-1'),0);
+});
+test('two identical IDs in separate owned cells fuse exactly one copy',()=>{
+ const w=createInitialWorld(T),a=actor('twins'),p=ensureProfile(w,a.key,a.name,a.color,T);
+ p.wallet=10000;p.inventory.push('ember-1','ember-1');
+ assert.equal(applyAction(w,a,fuse('ember-1','ember-1','same-two-copies'),{now:T+20,rng:()=>0}).fusion.success,true);
+ assert.equal(count(p,'ember-1'),1);
+ assert.match(applyAction(w,a,fuse('ember-1','ember-1','same-one-copy'),{now:T+21,rng:()=>0}).error,/two copies/);
+});
+test('existing GM does not refill old spent equipment; promotion gives catalogue once',()=>{
+ const w=createInitialWorld(T),p=createProfile('old','old','#abcdef',T,true);
+ p.inventory=p.inventory.filter(id=>id!=='ember-1');w.profiles.old=p;
+ ensureProfile(w,'old','old','#abcdef',T+1,true);assert.equal(count(p,'ember-1'),0);
+ const promoted=createProfile('new','new','#abcdef',T,false);w.profiles.new=promoted;
+ ensureProfile(w,'new','new','#abcdef',T+2,true);
+ assert.ok(ITEMS.every(i=>promoted.inventory.includes(i.id)));
+ promoted.inventory=promoted.inventory.filter(id=>id!=='ember-1');
+ ensureProfile(w,'new','new','#abcdef',T+3,true);assert.equal(count(promoted,'ember-1'),0);
+});

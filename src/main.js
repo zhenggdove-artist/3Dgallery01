@@ -140,8 +140,12 @@ ui.addEventListener('join',async event=>{
   catch(error){ui.joinError(error.message);}
 });
 
-network.addEventListener('welcome',event=>{const data=event.detail;self={...self,...data.self};world=data.world;players=data.players;syncPlayers();syncWorld();});
-network.addEventListener('world',event=>{world=event.detail;ui.setWorld(world);syncWorld();});
+function acceptWorldView(next){
+ if(!next||(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&next.revision<world.revision))return false;
+ world=next;syncWorld();return true;
+}
+network.addEventListener('welcome',event=>{const data=event.detail;self={...self,...data.self};players=data.players;syncPlayers();acceptWorldView(data.world);});
+network.addEventListener('world',event=>{acceptWorldView(event.detail);});
 network.addEventListener('players',event=>{players=event.detail;ui.setPlayers(players);syncPlayers();});
 network.addEventListener('state',event=>{const data=event.detail;if(data.key===self?.key)return;let target=remoteTargets.get(data.key);if(!target){syncPlayers();target=remoteTargets.get(data.key);}if(target){target.position.fromArray(data.state.position);target.rotation=data.state.rotation;target.animation=data.state.animation;}});
 network.addEventListener('chat',event=>{ui.addChat(event.detail);showPlayerSpeech(event.detail);});
@@ -284,7 +288,13 @@ ui.addEventListener('attack-cancel',()=>{
   void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});
  }
 });
-ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;sendAction(action,data);});
+ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;
+ if(action==='fuse'){
+  if(ui.bagFusionPending)return;
+  ui.bagFusionPending=true;
+  void sendAction(action,data).finally(()=>{ui.bagFusionPending=false;});
+ }else void sendAction(action,data);
+});
 ui.addEventListener('build-start',async event=>{try{const d=event.detail;const media=d.file?await uploadMedia(network,d.file):null;startBuildPlacement(d.kind,media?.id);}catch(error){ui.clearBuildMode();ui.toast(error.message);}});ui.addEventListener('build-rotate',()=>rotateBuildPlacement());ui.addEventListener('build-confirm',()=>confirmBuildPlacement());ui.addEventListener('build-cancel',()=>cancelBuildPlacement());
 ui.addEventListener('destroy-near',()=>{if(!controller)return;const position=controller.root.position.toArray(),nearest=(world?.structures||[]).map(structure=>({structure,distance:distance2d3(position,structure.position)})).sort((a,b)=>a.distance-b.distance)[0];if(!nearest||nearest.distance>12)return ui.toast('NO STRUCTURE NEARBY');sendAction('destroy',{structureId:nearest.structure.id,direction:controller.aimDirection()});});
 ui.addEventListener('chat',async event=>{const text=String(event.detail||'').trim();if(text==='/recovery'){await sendAction('recover-artworks');return;}if(/^\/reset$/i.test(text)){if(!self?.profile?.admin)return ui.toast('GM only');await sendAction('reset-player-artworks');return;}try{const result=await network.chat(text);if(result?.notice)ui.toast(result.notice);}catch(error){ui.toast(error.message);}});
@@ -381,7 +391,7 @@ function syncWorld(){if(!world)return;audio.setVolumes(world.audioSettings||{});
  }
  controller.stats=profile.stats||{speed:1,jump:1,gravity:1};statusVisuals.sync(localRoot,profile.effects);if(profile.impulse&&controller.lastImpulse!==profile.impulse.id){controller.lastImpulse=profile.impulse.id;controller.knockback=new THREE.Vector3(...profile.impulse.vector).multiplyScalar(5);}}if(dead){if(!wasDead&&localRoot){bursts.play(localRoot.position,'death-'+self.key+'-'+profile.deadUntil);audio.play('explosion');}wasDead=true;controller?.setEnabled(false);ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}else if(joined){if(wasDead&&controller){controller.teleport(PLAYER_SPAWNS[self.seat]||PLAYER_SPAWNS[0]);wasDead=false;ui.toast('RESPAWNED');}if(!ui.panelName&&!artEditor.mode&&!writer.active&&!platformDelete.active)controller?.setEnabled(true);ui.death(0);}if(profile&&self)self.profile=profile;}
 
-async function sendAction(action,data={},options={}){if(!joined||!controller)return null;try{const result=await network.action(action,data);if(result.world){world=result.world;syncWorld();}if(result.notice)ui.toast(result.notice);if(action==='fuse'&&result.fusion){ui.fusionFeedback(!!result.fusion.success,result.notice);audio.play(result.fusion.success?'fusion-success':'fusion-fail',1);}if(result.attackEvent)showAttack(result.attackEvent);if(result.throwEvent)showThrowPulse(result.throwEvent);if(action==='pickup-coin'||action==='pickup-drop')audio.play('coin');for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))arena.showStructureHit(hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))arena.showStructureBreak(broken);if(result.hit?.defeated)ui.toast(`DEFEATED · ${result.hit.lostCoins} COINS DROPPED`);return result;}catch(error){if(options.throwOnError)throw error;if(action==='fuse')ui.fusionFeedback(false,error.message);if(!/^Move closer to (?:the )?(?:artwork|coin|drop)/i.test(error.message||'')&&performance.now()-toastErrorAt>400){toastErrorAt=performance.now();ui.toast(error.message);}return null;}}
+async function sendAction(action,data={},options={}){if(!joined||!controller)return null;try{const result=await network.action(action,data);if(result.world)acceptWorldView(result.world);if(result.notice)ui.toast(result.notice);if(action==='fuse'&&result.fusion){ui.fusionFeedback(!!result.fusion.success,result.notice);audio.play(result.fusion.success?'fusion-success':'fusion-fail',1);}if(result.attackEvent)showAttack(result.attackEvent);if(result.throwEvent)showThrowPulse(result.throwEvent);if(action==='pickup-coin'||action==='pickup-drop')audio.play('coin');for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))arena.showStructureHit(hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))arena.showStructureBreak(broken);if(result.hit?.defeated)ui.toast(`DEFEATED · ${result.hit.lostCoins} COINS DROPPED`);return result;}catch(error){if(options.throwOnError)throw error;if(action==='fuse')ui.fusionFeedback(false,error.message);if(!/^Move closer to (?:the )?(?:artwork|coin|drop)/i.test(error.message||'')&&performance.now()-toastErrorAt>400){toastErrorAt=performance.now();ui.toast(error.message);}return null;}}
 
 function startBuildPlacement(kind,surface=null,artwork=null){if(self?.role!=='fighter')return ui.toast('SPECTATORS CANNOT BUILD');buildPlacement={kind,surface,artwork,rotation:controller?.root.rotation.y||0,position:controller?.buildPosition(kind==='art-bomb'?3.2:5)||[0,0,0],valid:false};ui.buildKind=kind;document.getElementById('build-kind').textContent=kind==='art-bomb'?'YOUR ARTWORK':kind.toUpperCase();document.getElementById('build-mode').hidden=false;document.activeElement?.blur();if(!writer.active&&!artEditor.mode)controller?.setEnabled(true);ui.toast('MOVE WITH YOUR ARTWORK · R ROTATE · E / PLACE');}
 function rotateBuildPlacement(){if(!buildPlacement)return;buildPlacement.rotation+=Math.PI/4;}

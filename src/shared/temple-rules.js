@@ -78,19 +78,28 @@ export function createProfile(key,name,color,now=Date.now(),admin=false){
 
 export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   const current=world.profiles[key]??=createProfile(key,name,color,now,admin);
+  const wasAdmin=!!current.admin;
   if(name)current.name=String(name).slice(0,24);if(validColor(color))current.color=color;current.admin=!!admin;current.updatedAt=now;
   current.wallet=Number.isFinite(current.wallet)?Math.max(0,Math.floor(current.wallet)):0;
   current.level=Math.max(1,Math.floor(current.level||1));current.xp=Math.max(0,Math.floor(current.xp||0));
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
-  if(current.admin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
-  if(!current.inventory.includes(STARTER_LOADOUT.weapon))current.inventory.unshift(STARTER_LOADOUT.weapon);
+  // GM equipment is granted once, not endlessly restored after its use as fusion material.
+  if(current.admin&&!current.gmInventoryGranted){
+   if(!wasAdmin){const owned=new Set(current.inventory);for(const item of ITEMS)if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}}
+   current.gmInventoryGranted=true;
+  }
+  // A consumed starter weapon must not be recreated on the next action.
   current.equipment??={...STARTER_LOADOUT};
    if(current.admin&&!current.gmWingsInitialized){
     if(!current.equipment.wings)current.equipment.wings='wings-18';
     current.gmWingsInitialized=true;
    }
    if(current.admin&&typeof current.gmInvincible!=='boolean')current.gmInvincible=true;
-   if(current.equipment.weapon&&!itemById(current.equipment.weapon))current.equipment.weapon=STARTER_LOADOUT.weapon;delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
+   // Equipment slots reference owned inventory; prevent phantom equipped items.
+   for(const slot of EQUIPPABLE_SLOTS){const equippedId=current.equipment[slot];
+    if(equippedId&&(!current.inventory.includes(equippedId)||itemById(equippedId)?.slot!==slot))current.equipment[slot]=null;
+   }
+   delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
   refreshStats(world,current,now);
   if(current.deadUntil>0&&current.deadUntil<=now&&current.hp<=0){
     current.hp=current.maxHp||100;current.deadUntil=0;
