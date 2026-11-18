@@ -95,13 +95,15 @@ test('all weapons have dimensional warning contracts derived from identical atta
  assert.equal(s.children.length,0);
 });
 
-test('cat A down opens shoulder aim; first press never starts charge',async()=>{
+test('cat A tap cycles the camera; long A hold can now charge a firearm ultimate',async()=>{
  const main=await readFile(new URL('../src/main.js',import.meta.url),'utf8');
  const gun=await readFile(new URL('../src/gun-controller.js',import.meta.url),'utf8');
  const ui=await readFile(new URL('../src/ui.js',import.meta.url),'utf8');
  assert.match(ui,/charge\.onpointerdown=.*?emit\('attack-start'\)/s);
- assert.match(main,/if\(weapon\?\.firstPerson\)\s*\{gun\.cycle\(\);return;\}/);
- assert.match(main,/if\(itemById\(world\?\.profile\?\.equipment\?\.weapon\)\?\.firstPerson\)\{gun\.held=false;return;\}/);
+ assert.match(main,/if\(weapon\?\.firstPerson&&heldMs<STAFF_TAP_MAX_MS\)\{gun\.cycle\(\);return;\}/);
+ assert.match(main,/chargeDelayTimer=setTimeout\(/);
+ assert.match(main,/if\(artworkThrow\.started!==null\)\{[\s\S]*?return artworkThrow\.release\(\)/);
+ assert.doesNotMatch(main,/if\(itemById\(world\?\.profile\?\.equipment\?\.weapon\)\?\.firstPerson\)\{gun\.held=false;return;\}/);
  assert.match(gun,/if\(button\)return;/);
  assert.doesNotMatch(main,/else if\(weapon\.id==='white-cat'\)/);
  assert.match(gun,/ui\.emit\('gun-fire'\)/);
