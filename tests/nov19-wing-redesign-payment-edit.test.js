@@ -67,8 +67,8 @@ test('fourteen material designs have deterministic motifs and epic detail indepe
 test('forward channel beams, floating +1, wing thumbnail hydration and isolated payment are wired',()=>{
  const fx=read('src/weapon-vfx.js'),ray=read('src/forward-channel-beam.js');
  const ui=read('src/ui.js'),main=read('src/main.js'),numbers=read('src/reletter/damage-numbers.js');
- assert.match(fx,/entry\.forwardBeam=new ForwardChannelBeam/);
- assert.match(fx,/e\.forwardBeam\.update/);
+ assert.match(fx,/new ForwardChannelBeam/);
+ assert.match(fx,/entry\.visual\.update/);
  assert.match(ray,/reach=distance\*Math\.min/);
  assert.match(numbers,/data-kind=heal/);
  assert.match(main,/staffChannel\?\.ready/);
