@@ -214,7 +214,9 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
 }
 
 export function applyAction(world,actor,body,context={}){
-  const now=context.now??Date.now(),rng=context.rng??Math.random,profile=ensureProfile(world,actor.key,actor.name,actor.color,now,actor.admin);
+  const now=context.now??Date.now(),rng=context.rng??Math.random,
+   // Only server-persisted identity may authorize GM operations, never actor.admin.
+   profile=ensureProfile(world,actor.key,actor.name,actor.color,now,world.profiles?.[actor.key]?.admin===true);
   if(body.action==='gm-wing-draw'){
    if(!profile.admin)return {error:'GM only'};
    const drawn=drawGmWing(profile,rng);
