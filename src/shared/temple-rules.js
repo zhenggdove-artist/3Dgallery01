@@ -273,7 +273,12 @@ export function applyAction(world,actor,body,context={}){
     case 'destroy':result=destroy(world,profile,actor,body,now);break;
     case 'remove-structure':result=removeStructure(world,profile,actor,body,now);break;
     case 'plant':result=plant(world,profile,actor,body,now);break;
-    case 'respawn':profile.hp=profile.maxHp;profile.deadUntil=0;profile.lastRespawnAt=now;profile.spawnProtectedUntil=now+RESPAWN_SHIELD_MS;result={spawn:PLAYER_SPAWNS[context.seatIndex%PLAYER_SPAWNS.length]};break;
+    case 'respawn':
+      if(profile.hp>0&&profile.deadUntil<=now)return {error:'Respawn unavailable while alive'};
+      if(profile.deadUntil>now)return {error:'Wait for respawn'};
+      profile.hp=profile.maxHp;profile.deadUntil=0;profile.lastRespawnAt=now;
+      profile.spawnProtectedUntil=now+RESPAWN_SHIELD_MS;
+      result={spawn:PLAYER_SPAWNS[(context.seatIndex||0)%PLAYER_SPAWNS.length]};break;
     default:return {error:'Unknown action'};
   }
   if(result?.error)return result;refreshStats(world,profile,now);profile.updatedAt=now;world.revision=(world.revision||0)+1;return {...result,profile:publicProfile(profile)};
