@@ -1,5 +1,6 @@
 import {initializeArtMedia,uploadArtMedia,getArtMedia} from './art-media.js';
 import {wingPaymentApi} from './ecpay-wing-payments.js';
+import {initOAuth,oauthStart,oauthCallback,oauthTicket,oauthSettings} from './oauth.js';
 import {recoverArtworks} from '../src/shared/artwork-recovery.js';
 import {resetPlayerArtworks} from '../src/shared/art-bomb.js';
 import {DurableObject} from 'cloudflare:workers';
@@ -37,6 +38,7 @@ export class TempleRoom extends DurableObject{
        CREATE TABLE IF NOT EXISTS gm_music_meta (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, bytes INTEGER NOT NULL, chunks INTEGER NOT NULL);
        CREATE TABLE IF NOT EXISTS gm_music_chunks (version INTEGER NOT NULL, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(version,part));
     `);
+    initOAuth(this.sql);
     initializeArtMedia(this.sql);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
@@ -80,25 +82,57 @@ export class TempleRoom extends DurableObject{
   }
 
   async join(request){
-    const clientKey=request.headers.get('CF-Connecting-IP')||request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()||'local';if(!this.consumeRate(`join:${clientKey}`,120,60_000))return json({error:'Too many join attempts'},429);
-    const body=await readBody(request,8_000);if(!validName(body.name)||!validColor(body.color))return json({error:'Choose a name and color'},400);
+    const clientKey=request.headers.get('CF-Connecting-IP')||
+     request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()||'local';
+    if(!this.consumeRate('join:'+clientKey,120,60_000))return json({error:'Too many join attempts'},429);
+    const body=await readBody(request,8_000);
+    const oauth=body.oauthTicket?oauthTicket(this.sql,body.oauthTicket):null;
+    if(body.oauthTicket&&!oauth)return json({error:'Login ticket expired. Sign in again.'},401);
+    const existing=oauth?this.world().profiles[oauth.profile_key]:null;
+    const name=existing?.name||body.name,color=existing?.color||body.color;
+    if(!validName(name)||!validColor(color))return json({error:'Choose a name and color'},400);
     const memory=String(body.memoryCode||body.saveCode||'').trim();
-    const admin=body.name.trim()==='Ely'&&memory.length>0&&constantTime(memory,String(this.env.TEMPLE_ADMIN_KEY||''));
-    if(body.name.trim()==='Ely'&&!admin)return json({error:'Invalid name or memory code'},403);
-    if(!admin&&memory&&!/^[A-Za-z0-9]{4}$/.test(memory))return json({error:'Memory code must contain four letters or numbers'},400);
-    this.prune();const now=Date.now(),saveCode=admin?'':normalizeCode(memory),saved=saveCode?this.sql.exec('SELECT * FROM save_codes WHERE code=?',saveCode).toArray()[0]:null;
-    if(saveCode&&!saved){if(!this.consumeRate(`save:${clientKey}`,8,60_000))return json({error:'Too many save-code attempts'},429);return json({error:'Save code not found'},404);}
-    const profileKey=saved?.profile_key||`guest:${crypto.randomUUID()}`;
-    // One live identity at a time. Rejoining releases the previous seat and socket.
-    for(const row of this.sql.exec('SELECT id FROM sessions WHERE profile_key=?',profileKey).toArray())this.disconnectSession(row.id);
-    const occupied=this.sql.exec('SELECT role,seat FROM sessions WHERE expires>? ORDER BY seat',now).toArray(),fighterSeats=new Set(occupied.filter(r=>r.role==='fighter').map(r=>r.seat)),spectatorSeats=new Set(occupied.filter(r=>r.role==='spectator').map(r=>r.seat));
-    let role='fighter',seat=FIGHTER_SEATS.find(i=>!fighterSeats.has(i));if(seat===undefined){role='spectator';seat=SPECTATOR_SEATS.find(i=>!spectatorSeats.has(i));}
+    if(oauth&&!existing&&name.trim().toLowerCase()==='ely')
+     return json({error:'This name is reserved for the GM'},403);
+    const admin=!oauth&&name.trim()==='Ely'&&memory.length>0&&
+     constantTime(memory,String(this.env.TEMPLE_ADMIN_KEY||''));
+    if(!oauth&&name.trim()==='Ely'&&!admin)return json({error:'Invalid name or memory code'},403);
+    if(!oauth&&!admin&&memory&&!/^[A-Za-z0-9]{4}$/.test(memory))
+     return json({error:'Memory code must contain four letters or numbers'},400);
+    this.prune();
+    const now=Date.now(),saveCode=oauth?'':admin?'':normalizeCode(memory);
+    const saved=saveCode?this.sql.exec('SELECT * FROM save_codes WHERE code=?',saveCode).toArray()[0]:null;
+    if(saveCode&&!saved){
+     if(!this.consumeRate('save:'+clientKey,8,60_000))
+      return json({error:'Too many save-code attempts'},429);
+     return json({error:'Save code not found'},404);
+    }
+    const profileKey=oauth?.profile_key||saved?.profile_key||'guest:'+crypto.randomUUID();
+    const occupied=this.sql.exec('SELECT role,seat FROM sessions WHERE expires>? ORDER BY seat',now).toArray();
+    const fighterSeats=new Set(occupied.filter(r=>r.role==='fighter').map(r=>r.seat));
+    const spectatorSeats=new Set(occupied.filter(r=>r.role==='spectator').map(r=>r.seat));
+    let role='fighter',seat=FIGHTER_SEATS.find(i=>!fighterSeats.has(i));
+    if(seat===undefined){role='spectator';seat=SPECTATOR_SEATS.find(i=>!spectatorSeats.has(i));}
     if(seat===undefined)return json({error:'Temple is full (4 fighters + 100 spectators)'},409);
-    const id=crypto.randomUUID(),expires=now+SESSION_MS,world=this.world(),profile=ensureProfile(world,profileKey,saved?null:admin?'Ely':body.name,saved?null:body.color,now,admin);if(admin)profile.name='Ely';this.save(world);
-    this.sql.exec('INSERT INTO sessions(id,profile_key,name,color,role,seat,expires,state,save_code,last_code_at) VALUES(?,?,?,?,?,?,?,?,?,0)',id,profileKey,profile.name,profile.color,role,seat,expires,null,saveCode||null);
-    if(saved)this.sql.exec('UPDATE save_codes SET last_used=? WHERE code=?',now,saveCode);
+    const id=crypto.randomUUID(),expires=now+SESSION_MS,world=this.world();
+    const profile=ensureProfile(world,profileKey,existing||saved?null:admin?'Ely':name,
+     existing||saved?null:color,now,admin);
+    if(admin)profile.name='Ely';
+    // Only consume the one-time ticket once all checks succeed and a room seat
+    // is available. The profile key is never chosen by a browser payload.
+    this.ctx.storage.transactionSync(()=>{
+     if(oauth)oauthTicket(this.sql,body.oauthTicket,true);
+     for(const row of this.sql.exec('SELECT id FROM sessions WHERE profile_key=?',profileKey).toArray())
+      this.disconnectSession(row.id,false);
+     this.save(world);
+     this.sql.exec('INSERT INTO sessions(id,profile_key,name,color,role,seat,expires,state,save_code,last_code_at) VALUES(?,?,?,?,?,?,?,?,?,0)',
+      id,profileKey,profile.name,profile.color,role,seat,expires,null,saveCode||null);
+     if(saved)this.sql.exec('UPDATE save_codes SET last_used=? WHERE code=?',now,saveCode);
+    });
     this.recordPresence({name:profile.name,role},'online',now);
-    this.broadcastRoster();await this.armAlarm();return json({ok:true,token:id,role,seat,saveCode:saveCode||null,self:this.self(this.session(id)),world:worldView(world,profileKey),players:this.roster()});
+    this.broadcastRoster();await this.armAlarm();
+    return json({ok:true,token:id,role,seat,saveCode:saveCode||null,
+     self:this.self(this.session(id)),world:worldView(world,profileKey),players:this.roster()});
   }
 
   connect(request,session,token){
