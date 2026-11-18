@@ -3,6 +3,7 @@ import {equipmentById} from '../reletter/equipment-catalog.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {sniperMaterialStat} from './fusion-balance.js';
+import {itemById} from './catalog.js';
 
 export function originalEquipmentGame(profile,world={}){
  const key=profile.key,instances=profile.inventory.filter(id=>equipmentById(id)).map(id=>{
@@ -37,7 +38,7 @@ export function equippedItem(profile,item){
    for(const key of ['damage','chargeDamage']){
     const base=Math.max(0,Number(item[key])||0);
     const bonus=record.sources.filter(v=>!v.echo).reduce((sum,v)=>{
-     const ingredient=equipmentById(v.id);
+     const ingredient=itemById(v.id);
      return sum+sniperMaterialStat(ingredient,key)*.3;
     },0);
     if(Number.isFinite(fused[key]))fused[key]=Math.min(fused[key],base+bonus);
