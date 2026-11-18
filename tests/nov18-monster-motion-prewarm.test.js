@@ -29,11 +29,11 @@ test('ordinary monster positions interpolate without dash prediction',()=>{
  assert.ok(root.position.z>first&&first>0,'visual interpolation remains smooth');
 });
 
-test('loading renders real Jump, Run and Idle skinned poses and restores scene ownership',async()=>{
+test('loading compiles gameplay Jump, Walk, frost Kick and Idle poses, restoring scene ownership',async()=>{
  const scene=new THREE.Scene(),actors=new IslandEnemies(scene),root=new THREE.Group();
  const pivot=new THREE.Group(),model=new THREE.Group();root.add(pivot);pivot.add(model);
  const mixer=new THREE.AnimationMixer(model),actions={};
- for(const name of ['Jump','Run','Idle']){
+ for(const name of ['Jump','Walk','Kick','Idle']){
   actions[name]=mixer.clipAction(new THREE.AnimationClip(name,1,[]));
  }
  root.userData={pivot,bones:{},mixer,actions,clipYaw:{},materials:[],active:null};
@@ -46,7 +46,7 @@ test('loading renders real Jump, Run and Idle skinned poses and restores scene o
  };
  const count=await actors.warmModels(renderer,new THREE.PerspectiveCamera());
  assert.equal(count,1);
- assert.deepEqual(observed,['Jump','Run','Idle']);
+ assert.deepEqual(observed,['Jump','Walk','Kick','Idle']);
  assert.equal(root.parent,scene);
  assert.equal(root.visible,false);
  assert.deepEqual(root.position.toArray(),[0,0,0]);
