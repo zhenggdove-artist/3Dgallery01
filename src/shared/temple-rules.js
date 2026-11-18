@@ -935,7 +935,7 @@ function tickPersistentAttacks(world,actors,now,rng){
      if(self){
       // Detonation always recoils back onto the caster, even when the
       // forward-placed explosion circle is beyond their current feet.
-      // This bypasses defence, shields and GM invulnerability by design.
+      // This bypasses armour and shields, but an enabled GM god-mode remains immune.
       const hit=damagePlayer(world,owner,enemy,15,now,'pan-self-blast',enemy.position,
        'pan-self-blast',pos,false,false,true);
       if(hit){
