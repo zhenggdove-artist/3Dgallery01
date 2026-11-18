@@ -311,7 +311,8 @@ export function applyAction(world,actor,body,context={}){
    if(!wingDrawAdmin||!profile.admin)return {error:'GM only'};
    const target=(world.customWings||[]).find(wing=>wing.id===body.wingId&&wing.retired!==true);
    if(!target)return {error:'翅膀不存在或已下架'};
-   target.retired=true;target.retiredAt=now;world.revision=(world.revision||0)+1;
+   target.retired=true;target.retiredAt=now;registerCustomWings(world.customWings);
+   world.revision=(world.revision||0)+1;
    // A published wing may already belong to a collector. Retire from the
    // draw pool, but preserve catalog identity and existing equipment.
    return {unpublishedWingId:target.id,notice:'已下架：'+target.name+'（不再參與抽獎）'};
@@ -324,7 +325,8 @@ export function applyAction(world,actor,body,context={}){
    if(!validWingDrawRate(drawRatePct))return {error:'中獎率必須為 0–100%，最多 3 位小數'};
    const sum=totalCustomWingRates(world.customWings)-Number(target.drawRatePct??1)+drawRatePct;
    if(sum>100+1e-8)return {error:'所有上架翅膀的個別中獎率合計不可超過 100%'};
-   target.drawRatePct=drawRatePct;world.revision=(world.revision||0)+1;
+   target.drawRatePct=drawRatePct;registerCustomWings(world.customWings);
+   world.revision=(world.revision||0)+1;
    return {updatedWingId:target.id,notice:'已更新「'+target.name+'」中獎率為 '+drawRatePct+'%'};
   }
   if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
