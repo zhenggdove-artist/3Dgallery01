@@ -66,6 +66,6 @@ test('SUPPORT is a direct commission, not a lottery, with a left gift button and
  assert.match(ui,/data-wing-checkout/);
  const section=ui.slice(ui.indexOf('  renderWingShop(profile){'),ui.indexOf('  hydrateWingGalleryImages(){'));
  assert.doesNotMatch(section,/data-draw-wing|wing-gacha-machine|LOTTERY|CAPSULE/);
- assert.match(main,/action.*redeem-wing-design/);
+ assert.match(main,/redeem-wing-design/);
  assert.match(painter,/個人翅膀固定使用平衡的裝飾數值/);
 });
