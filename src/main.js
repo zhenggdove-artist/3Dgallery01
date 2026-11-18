@@ -1,5 +1,5 @@
 import {registerCustomWings} from './shared/catalog.js';
-import {beginWingStageCheckout} from './wing-payment-client.js';
+import {beginWingCheckout,resumeWingCheckout} from './wing-payment-client.js';
 import {prepareFirebase,existingGoogleToken,signInWithGoogle} from './firebase-login.js';
 import * as THREE from 'three';
 import {WriteCinematic} from './write-cinematic.js';
@@ -183,6 +183,7 @@ ui.addEventListener('firebase-login',async()=>{
 });
 ui.addEventListener('join',async event=>{
   if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;previousHealHp=null;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();
+    void resumeWingCheckout(network,ui);
     void arena.loadCustomArtworks(data.world.customArtworks,network.base).catch(error=>console.warn('Deferred artwork loading',error));
     network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
   catch(error){ui.joinError(error.message);}
@@ -344,11 +345,21 @@ ui.addEventListener('attack-cancel',()=>{
  }
 });
 ui.addEventListener('wing-publish-request',async event=>{
- const {wing,wingId,resolve,reject}=event.detail;
- if(!self?.profile?.admin){reject(new Error('僅 GM 可以上架翅膀'));return;}
+ const {wing,wingId,personal,resolve,reject}=event.detail;
+ if(!personal&&!self?.profile?.admin){reject(new Error('僅 GM 可以上架翅膀'));return;}
+ if(personal&&!world?.profile?.wingDesignCredits){reject(new Error('未取得已付款的繪圖權限'));return;}
  try{
-  const updating=!!wingId;
-  const result=await sendAction(updating?'gm-wing-update':'gm-wing-publish',{wing,wingId},{throwOnError:true});
+  const updating=!!wingId&&!personal;
+  const result=await sendAction(personal?'redeem-wing-design':updating?'gm-wing-update':'gm-wing-publish',{wing,wingId},{throwOnError:true});
+  if(personal){
+   if(!result?.personalWingId||result.equippedWingId!==result.personalWingId)
+    throw new Error('伺服器尚未確認個人翅膀已儲存');
+   if(world?.profile?.equipment?.wings!==result.personalWingId)
+    throw new Error('個人翅膀已存入背包，裝備資料仍在同步中');
+   resolve({...result,wingName:wing.name});
+   ui.wingDraft=null;ui.bagCategory='equipment';ui.openPanel('bag');
+   ui.toast('翅膀已存入 BAG 並自動裝備：'+wing.name);return;
+  }
   if(updating){
    if(result?.updatedWingId!==wingId)throw new Error('伺服器尚未確認原翅膀的編輯更新');
    resolve({...result,wingName:wing.name});ui.openPanel('wing-manage');
@@ -367,7 +378,11 @@ ui.addEventListener('wing-publish-request',async event=>{
   ui.toast('上架失敗：'+(error?.message||'伺服器未回應'));
  }
 });
-ui.addEventListener('wing-payment-stage-checkout',()=>{void beginWingStageCheckout(network,ui);});
+ui.addEventListener('wing-payment-status-request',async()=>{
+ try{ui.setWingPaymentStatus(await network.request('/api/wing-pay/status'));}
+ catch(error){ui.setWingPaymentStatus({checkoutEnabled:false,checkoutMode:'disabled'});ui.toast('無法確認綠界金流狀態');}
+});
+ui.addEventListener('wing-payment-checkout',()=>{void beginWingCheckout(network,ui);});
 ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;
  if(action==='fuse'){
   if(ui.bagFusionPending)return;
