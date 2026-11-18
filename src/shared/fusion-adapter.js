@@ -1,7 +1,7 @@
 import {fuseEquipment} from '../reletter/server/fusion-rules.js';
 import {equipmentById} from '../reletter/equipment-catalog.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
-import {weaponClass} from './weapon-info.js';
+import {weaponRangeClass} from '../reletter/odd-weapons.js';
 
 export function originalEquipmentGame(profile,world={}){
  const key=profile.key,instances=profile.inventory.filter(id=>equipmentById(id)).map(id=>{
@@ -28,7 +28,7 @@ export function equippedItem(profile,item){
    const merged={...named,...record.templeStats};
    // Repair legacy saves which already persisted absurd ranged reach on a
    // close-combat weapon. Charged ultimate metadata remains unmodified.
-   if(item.slot==='weapon'&&weaponClass(item)==='near'){
+   if(item.slot==='weapon'&&weaponRangeClass(item)==='near'){
     merged.range=item.range;merged.radius=item.radius;
    }
    return merged;
