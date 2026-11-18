@@ -1,7 +1,7 @@
 import {itemById,ECONOMY} from './catalog.js';
 import {equippedItem} from './fusion-adapter.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
-import {weaponClass} from './weapon-info.js';
+import {weaponRangeClass} from '../reletter/odd-weapons.js';
 
 // Every attempt halves the non-GM chance, whether the previous attempt
 // succeeded or failed. Legacy items start at their successful fusion count.
@@ -54,7 +54,7 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  for(const key of keys){
   // Normal melee geometry is an intrinsic property of the base weapon.
   // Never inherit a ranged material's ordinary reach or contact width.
-  if(target.slot==='weapon'&&weaponClass(target)==='near'&&['range','radius'].includes(key))continue;
+  if(target.slot==='weapon'&&weaponRangeClass(target)==='near'&&['range','radius'].includes(key))continue;
   const sniperPower=source.id==='black-cat'&&['damage','chargeDamage'].includes(key);
   // A sniper source may contribute 30% of its original shot EITHER as
   // its visible echo (first two slots) OR as stats (later slots), not both.
