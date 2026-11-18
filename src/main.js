@@ -76,6 +76,7 @@ const damageNumbers=createDamageNumbers(THREE),statusVisuals=new ElementalStatus
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
 let pendingAInteraction=null,chargeDelayTimer=null,nextChargeRetryAt=0;
+let sniperScopeAtPress=false; // Black Cat A-holds may charge only when already scoped.
 // Begin charging after the 500ms tap threshold without relying on render FPS.
 // After a stun/rejected request, retry only while the A/Q button is still held.
 function clearChargeDelay(){
@@ -85,8 +86,10 @@ function clearChargeDelay(){
 function startHeldCharge(){
  if(!attackHeld||attackHoldStarted===null||chargeStarted!==null||chargeRequest||staffChannel||
     !controller?.enabled||performance.now()<nextChargeRetryAt)return;
+ // Never begin a Black Cat charge while outside the actual sniper scope.
+ if(itemById(world?.profile?.equipment?.weapon)?.id==='black-cat'&&(!sniperScopeAtPress||gun.mode!==2))return;
  chargeStarted=performance.now();
- chargeRequest=sendAction('attack',{phase:'charge'}).then(result=>{
+ chargeRequest=sendAction('attack',{phase:'charge',...(sniperScopeAtPress?{scoped:true}:{})}).then(result=>{
   if(!result?.charging&&attackHeld){
    chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;
   }
@@ -199,13 +202,15 @@ ui.addEventListener('attack-start',()=>{
  // Query the live world as holdingArt can lag behind a pickup response.
  if(artworkThrow.started!==null||controller.holdingArt||
     Object.values(world?.artworks||{}).some(art=>art.holder===self.key)){
-  clearChargeDelay();pendingAInteraction=null;attackHeld=false;
+  clearChargeDelay();pendingAInteraction=null;attackHeld=false;sniperScopeAtPress=false;
   attackHoldStarted=null;chargeStarted=null;chargeRequest=null;
   artworkThrow.begin();return;
  }
  if(attackHeld||staffChannel)return;
  const weapon=itemById(world?.profile?.equipment?.weapon);
- // A tap picks up nearby items; holding must still charge any weapon.
+ // Record scope at key-down, so holding A before aiming can never charge/fire.
+ sniperScopeAtPress=weapon?.id==='black-cat'&&gun.mode===2;
+ // A tap picks up nearby items; holding must still charge any weapon except unscoped Black Cat.
  // For first-person guns a tap cycles the camera, while a hold charges.
  pendingAInteraction=null;
  if(!artworkThrow.started){
@@ -245,11 +250,15 @@ ui.addEventListener('attack-release',async()=>{
  const weapon=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
  const heldMs=performance.now()-attackHoldStarted;
  const charge=chargeProgress(heldMs,weapon?.chargeMs||1500);
+ const wasScopedAtPress=sniperScopeAtPress;sniperScopeAtPress=false;
  attackHoldStarted=null;chargeStarted=null;
  const pending=chargeRequest;chargeRequest=null;
  if(heldMs<STAFF_TAP_MAX_MS&&tapInteraction){
   performInteract(tapInteraction);return;
  }
+ // Outside the scope Black Cat A/Q only changes cameras, even on long holds.
+ // Fused weapons cannot turn this camera input into an ordinary or ultimate hit.
+ if(weapon?.id==='black-cat'&&!wasScopedAtPress){gun.cycle();return;}
  if(weapon?.firstPerson&&heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
  if(heldMs>=STAFF_TAP_MAX_MS&&pending)await pending;
  if(isChannelStaff(weapon)){
@@ -266,7 +275,7 @@ ui.addEventListener('attack-release',async()=>{
 });
 ui.addEventListener('attack-cancel',()=>{
  gun.held=false;
- attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();artworkThrow.cancel();
+ attackHeld=false;sniperScopeAtPress=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();artworkThrow.cancel();
  if(localRoot)localRoot.userData.staffCastingUntil=0;
  if(staffChannel){
   const pending=staffChannelPromise;
@@ -388,10 +397,13 @@ function performAttack(charge=0,phase=null){
  if(controller?.status?.freeze||world?.profile?.effects?.paralysis?.until>Date.now())return;
  if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
  const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
+ // Centralized guard covers UI A/Q, canvas clicks, auto-charge and fusion.
+ if(item.id==='black-cat'&&gun.mode!==2)return;
  const shot=item.firstPerson?gun.shot():null;
  const muzzle=isChannelStaff(item)||item.family==='saber'||item.id==='calico-cat'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
  const direction=shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
+  ...(item.id==='black-cat'?{scoped:true}:{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
 }
 function performInteract(target=null){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=target||arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}

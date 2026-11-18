@@ -22,7 +22,7 @@ function room(weapon,victimPosition=[75,0,30]){
  return {world,shooter,target,profile,victim};
 }
 function shoot(room,at,options={}){
- return applyAction(room.world,room.shooter,{action:'attack',direction:[0,0,1],...options},
+ return applyAction(room.world,room.shooter,{action:'attack',direction:[0,0,1],...(room.profile.equipment.weapon==='black-cat'?{scoped:true}:{}),...options},
   {now:at,rng:()=>.99,actors:[room.shooter,room.target]});
 }
 function tick(room,at){

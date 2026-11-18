@@ -403,6 +403,12 @@ function attack(world,profile,actor,body,context,now){
 
   if(profile.hitReaction&&now-profile.hitReaction.time<profile.hitReaction.stunMs)return {error:'Recovering from hit'};
   const weapon=equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon)),bonus=profile.fusion[weapon.id]?.bonus||0;
+  // The equipped PRIMARY Black Cat must be scoped, regardless of fusion stats
+  // or added weapon effects. Reject before charge state/cooldown/damage mutate.
+  if(weapon.id==='black-cat'&&body.scoped!==true){
+    profile.chargeStartedAt=0;
+    return {error:'Black Cat sniper requires scope'};
+  }
   if(body.phase==='channel-start'){
     if(!isChannelStaff(weapon))return {error:'Only staffs support continuous casting'};
     // A staff is silent during a hold. Continuous magic only becomes legal

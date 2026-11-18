@@ -13,8 +13,8 @@ test('server validates fully charged ultimates for melee, odd weapons and first-
   const world=createInitialWorld(NOW),profile=ensureProfile(world,actor.key,actor.name,actor.color,NOW);
   profile.inventory.push(id);profile.equipment.weapon=id;
   const weapon=itemById(id),pressed=NOW+1000;
-  assert.equal(applyAction(world,actor,{action:'attack',phase:'charge'},{now:pressed}).charging,true,id);
-  const result=applyAction(world,actor,{action:'attack',direction:[0,0,1],charge:1},
+  assert.equal(applyAction(world,actor,{action:'attack',phase:'charge',...(id==='black-cat'?{scoped:true}:{})},{now:pressed}).charging,true,id);
+  const result=applyAction(world,actor,{action:'attack',direction:[0,0,1],charge:1,...(id==='black-cat'?{scoped:true}:{})},
    {now:pressed+weapon.chargeMs+50});
   assert.equal(result.error,undefined,id+': '+result.error);
   assert.equal(result.attackEvent?.ultimate,true,id+' should cast an ultimate');

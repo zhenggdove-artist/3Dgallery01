@@ -72,7 +72,7 @@ export class GameAudio{
   this.voices=0;this.played={};this.volumes={};this.muted=false;this.trackSources=['./sound/backgroundmusic.MP3'];this.musicIndex=0; // Sound is ON by default.
   // A HEAD probe ensures an absent user MP3 never interrupts browser playback.
   // The file becomes the primary soundtrack automatically once present on Pages.
-  const preferred='./sound/GGTEMPLE%E9%9F%B3%E6%A8%82.mp3';
+  const preferred='./sound/GGTEMPLEMUSIC.mp3';
   this.musicProbe=fetch(preferred,{method:'HEAD',cache:'no-store'})
    .then(response=>{
     if(!response.ok||this.uploadedMusicUrl)return false;
