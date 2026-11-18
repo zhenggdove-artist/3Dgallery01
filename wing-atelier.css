@@ -72,3 +72,16 @@
 .wing-party-popper::after{content:'✦';position:absolute;top:-55px;left:-14px;color:#fffbd3;font-size:90px;text-shadow:-20px -15px #b9ffe4,22px 4px #e899ff,0 -33px #ff9c9f;animation:gachaFlash .5s ease-out 1}
 @keyframes gachaPopper{from{opacity:0;scale:.5}to{opacity:1;scale:1}}
 @keyframes gachaFlash{from{transform:scale(.1);opacity:0}to{transform:scale(1.2);opacity:1}}
+
+/* Google-only account entrance. Firebase project controls availability. */
+.account-buttons [data-google-login]{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  font-weight:700;background:#fff;color:#282833;border:1px solid #dadce0;
+  min-height:46px;border-radius:7px;
+}
+.account-buttons [data-google-login]::before{
+  content:'G';display:grid;place-items:center;width:25px;height:25px;
+  border-radius:50%;background:conic-gradient(#4285f4 0 32%,#34a853 32% 55%,#fbbc05 55% 75%,#ea4335 75% 90%,#4285f4 90%);
+  color:#fff;font:900 16px system-ui;
+}
+.account-buttons [data-google-login]:disabled{opacity:.55;cursor:not-allowed}
