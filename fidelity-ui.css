@@ -295,3 +295,28 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
  border:7px solid transparent;border-top-color:rgba(255,255,255,.78);
 }
 .collector-angry-speech[hidden]{display:none}
+
+/* Papilio wing atelier: private GM preview, no active payment controls. */
+#wing-shop-button[hidden]{display:none!important}
+.wing-shop-panel{display:grid;gap:14px;font:12px/1.48 sans-serif;color:#46304e}
+.wing-shop-hero{padding:14px 16px;border:1px solid #cbb0d8;border-radius:12px;background:linear-gradient(130deg,#fefaff,#e7d7f0)}
+.wing-shop-hero small{letter-spacing:.19em;color:#846298;font-weight:700}
+.wing-shop-hero h3{font:700 clamp(20px,5.2vw,27px)/1.2 Georgia,serif;letter-spacing:.05em;margin:8px 0;color:#573a79}
+.wing-shop-hero p{margin:5px 0}
+.wing-shop-panel button{cursor:pointer;border-radius:8px}
+.wing-shop-panel button:disabled{opacity:.6;cursor:default}
+.wing-draw-button{width:100%;min-height:56px;font:700 15px/1.2 sans-serif;letter-spacing:.06em;background:linear-gradient(135deg,#7c49a6,#b080e4)!important;color:#fff!important;border:1px solid #d8bbf6!important;box-shadow:0 6px 14px #744b9860}
+.wing-draw-odds{font:11px/1.5 monospace;text-align:center;color:#624d6f;margin:0}
+.wing-draw-result{padding:12px;background:#ebdaff;border-left:4px solid #9758dc;font-weight:700;color:#48305e}
+.wing-shop-link{margin:8px 0 14px;width:100%;padding:10px 12px;background:linear-gradient(120deg,#754d9a,#b384d0)!important;color:#fff!important;font-weight:700;letter-spacing:.08em}
+.wing-shop-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.wing-shop-card{display:grid;grid-template-rows:auto auto auto auto auto;align-content:start;gap:6px;min-width:0;overflow:hidden;padding:10px 8px;border:2px solid var(--wing-quality);border-radius:10px;background:linear-gradient(145deg,#fff9ff,#ede4f2);box-shadow:inset 0 0 0 1px #fff8}
+.wing-shop-card img{display:block;width:100%;height:116px;object-fit:contain;background:radial-gradient(ellipse,#d4c3e677,#fff0 74%);border-radius:6px}
+.wing-shop-card strong{font:600 12px/1.35 Georgia,serif;min-height:32px}
+.wing-shop-card small{font:10px sans-serif;color:#6e597c}
+.wing-shop-rarity{font:700 10px sans-serif;color:#51395f;letter-spacing:.045em}
+.wing-shop-card button{min-height:30px;background:var(--wing-quality);border:1px solid #ac8fbf;color:#33263c;font-weight:bold}
+.wing-payment-preview{padding:16px;border:1px dashed #b09ab9;border-radius:10px;background:#f5f0f6}
+.wing-payment-preview h3{margin:0 0 6px;font:700 16px Georgia,serif}
+.wing-payment-preview button{width:100%;min-height:38px;border:1px solid #d3c4d7;background:#e9e4ed}
+@media(max-width:370px){.wing-shop-gallery{grid-template-columns:1fr}.wing-shop-card img{height:140px}}
