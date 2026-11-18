@@ -94,18 +94,21 @@ export class TempleRoom extends DurableObject{
   async join(request){
     const clientKey=request.headers.get('CF-Connecting-IP')||
       request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()||'local';
-    if(!this.consumeRate('join:'+clientKey,100,60_000))
+    const firebaseEnabled=!!this.env.FIREBASE_PROJECT_ID;
+    const localHost=/^(localhost|127\.0\.0\.1)$/.test(new URL(request.url).hostname);
+    if(!firebaseEnabled&&!localHost)
+      return json({error:'Firebase Google 登入尚未設定，暫停公開登入'},503);
+    if(!this.consumeRate('join:'+clientKey,firebaseEnabled?40:240,60_000))
       return json({error:'Too many join attempts'},429);
     const body=await readBody(request,8_000);
-    const firebaseEnabled=!!this.env.FIREBASE_PROJECT_ID;
     let identity=null;
     if(firebaseEnabled){
       try{identity=await verifyFirebaseIdToken(this.token(request,new URL(request.url)),this.env);}
       catch(error){return json({error:'必須透過 Firebase Google 帳號登入：'+error.message},401);}
     }
-    // Legacy is deliberately allowed only while Firebase is not configured,
-    // for isolated CI regression tests and unreleased environments. Once the
-    // Firebase project is set, forged guest names/save codes never bypass auth.
+    // Guest entry is restricted to localhost only while Firebase has not been
+    // configured, so CI/local WebGL smoke tests keep working. Public entry
+    // always requires a verified Firebase Google identity.
     const memory=identity?'':String(body.memoryCode||body.saveCode||'').trim();
     const admin=identity?isFirebaseGm(identity,this.env):
       body.name==='Ely'&&memory.length>0&&
