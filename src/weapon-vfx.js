@@ -260,9 +260,15 @@ export class WeaponVFX{
     this.particleSkills.remove(entry);this.channelStreams.delete(key);continue;
    }
    entry.root.position.copy(this.channelMuzzle(entry.host,entry.weapon,entry.root.position));
-   const delta=entry.host.rotation.y-entry.heading,axis=new THREE.Vector3(0,1,0);
-   const aim=entry.direction.clone().applyAxisAngle(axis,delta).normalize();
-   entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),aim);
+   // The character does not necessarily rotate while standing still and
+   // aiming the mouse. Sample the active camera ray every frame, not a
+   // handful of server pulse headings or its old body orientation.
+   const ray=entry.host.userData?.staffAimDirection;
+   const target=Array.isArray(ray)&&ray.length===3&&ray.every(Number.isFinite)?
+    new THREE.Vector3(...ray).normalize():entry.direction;
+   entry.aimDirection??=entry.direction.clone();
+   entry.aimDirection.lerp(target,1-Math.exp(-dt*28)).normalize();
+   entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),entry.aimDirection);
    // No stale detached beam: the currently drawn particles remain weapon-bound.
   }
   // An exception in one animation subsystem must never abort the gameplay frame.
