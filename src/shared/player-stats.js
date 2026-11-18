@@ -14,10 +14,11 @@ export function playerStats(world,profile,now=Date.now()){
     fusedDefense+=Math.max(0,(Number(stats.defense)||0)-(Number(base.defense)||0));
   }
   const rawWing=itemById(profile.equipment.wings),wing=rawWing&&equippedItem(profile,rawWing);
+  const ability=wing?.design==='painted-wing'?wing.ability:null;
   return {maxHp:100+(profile.level-1)*4+traits.hp*10,
-    attack:(traits.attack+fusedAttack)*(1-(effectActive(profile,'weak',now)?.power||0)),speed:traits.speed*(1-(effectActive(profile,'slow',now)?.power||0))*(effectActive(profile,'stun',now)||effectActive(profile,'root',now)?0:1),
-    jump:traits.jump,defense:Math.max(.35,traits.defense*(1+(effectActive(profile,'expose',now)?.power||0))*(1-Math.min(.5,fusedDefense/300))),
-    gravity:wing?.gravity||1,impulse:wing?.impulse||0,flapMs:wing?.flapMs||0};
+    attack:(traits.attack+fusedAttack)*(1-(effectActive(profile,'weak',now)?.power||0)),speed:traits.speed*(ability==='swift'?1.1:1)*(1-(effectActive(profile,'slow',now)?.power||0))*(effectActive(profile,'stun',now)||effectActive(profile,'root',now)?0:1),
+    jump:traits.jump*(ability==='aerial'?1.15:1),defense:Math.max(.35,traits.defense*(ability==='guardian'?.9:1)*(1+(effectActive(profile,'expose',now)?.power||0))*(1-Math.min(.5,fusedDefense/300))),
+    gravity:(wing?.gravity||1)*(ability==='glide'?.85:1),impulse:wing?.impulse||0,flapMs:wing?.flapMs||0};
 }
 export function refreshStats(world,profile,now=Date.now()){
   const stats=playerStats(world,profile,now),oldMax=profile.maxHp||100;
