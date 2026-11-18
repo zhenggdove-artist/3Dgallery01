@@ -17,7 +17,7 @@ const newWings=[
  ['Fluffy Fur Wings',5,'#cba98c','#796451','fur'],
  ['Koinobori Streamer Wings',5,'#de5148','#315b93','koinobori']
 ];
-const ids=[28,29,30,31,32,33,34,35,36,41,38,39,40,37];
+const ids=[28,29,30,31,32,33,34,35,36,41,37,38,39,40];
 export const SWALLOWTAIL_WINGS=Object.freeze(newWings.map(([name,tier,color,accent,motif],index)=>({
  id:'wings-'+ids[index],name,slot:'wings',family:'wings',
  design:'crafted-wing',motif,style:index%4,patternVariant:index,
