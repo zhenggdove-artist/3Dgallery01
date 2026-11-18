@@ -17,8 +17,11 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  profile.fusionReceipts??={};
  if(profile.fusionReceipts[requestId])return structuredClone(profile.fusionReceipts[requestId]);
  const equip=new Set(['weapon','head','armor','outfit','wings','shield']);
- if(!source||!target||!equip.has(target.slot)||!(equip.has(source.slot)||source.slot==='material'))
-  return {error:'Select any rarity of weapon or equipment, including shop purchases'};
+ if(!source||!target||!equip.has(target.slot)||!equip.has(source.slot))
+  return {error:'Select two owned equippable items of the same category'};
+ // Weapon→weapon, head→head, outfit→outfit, wings→wings, and likewise
+ // for shield/armor. No cross-slot or raw crafting-material fusion.
+ if(source.slot!==target.slot)return {error:'Fusion requires matching equipment categories'};
  const sourceIndex=profile.inventory.indexOf(source.id),targetIndex=profile.inventory.indexOf(target.id);
  if(sourceIndex<0||targetIndex<0||(source.id===target.id&&profile.inventory.filter(id=>id===source.id).length<2))
   return {error:'Both items must be owned (identical IDs require two copies)'};
@@ -56,15 +59,18 @@ export function fuseTemple(world,profile,body,rng=Math.random){
   // its visible echo (first two slots) OR as stats (later slots), not both.
   // Also ignore any previously inflated stats on the consumed sniper.
   if(sniperPower&&grantsEcho)continue;
+  // Close-contact strikes retain the primary weapon's own contact reach.
+  // Weapon reach is determined by the actual held model, not the ingredient.
+  if(target.slot==='weapon'&&['range','radius'].includes(key)&&
+   (['whip','swatter','pan','planter','palm'].includes(target.family)||
+    target.id==='accordion'))continue;
   const a=sniperPower?Number(source[key]):Number(material[key]),b=Number(main[key])||0;
   if(!(a>0))continue;
   const cap=['range','chargeRange'].includes(key)?400:key==='radius'?80:key==='defense'?300:100000;
   stats[key]=+Math.min(cap,b+a*.3).toFixed(3);
  }
  let bonus=Number(old.bonus)||0;
- if(source.slot==='material'&&target.slot==='weapon')
-  bonus+=({'wet-stone':3.5,'signal-wire':6,'temple-resin':10}[source.id]||0);
- if(grantsEcho)effects.push(source.id);
+  if(grantsEcho)effects.push(source.id);
  profile.fusion[target.id]={...old,layer,attempts,bonus,templeStats:stats,effects,affixIds,affixId:affixIds[0]||null,
   sources:[...(old.sources||[]),{id:source.id,name:source.name,statPercent:30,echo:grantsEcho}]};
  const result={notice:'FUSION SUCCESS · '+target.name+' +'+layer+
