@@ -53,9 +53,10 @@ test('fire and water continuous casts retain straight-ahead particle recipes and
  assert.equal(particles.active[1].recipe,'tidal');
  particles.dispose();assert.equal(scene.children.length,0);
 });
-test('SAVE appears between BUILD and WRITE and clouds are varied translucent banks',()=>{
+test('SAVE is removed while BUILD and WRITE remain and clouds are varied translucent banks',()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- assert.match(html,/data-panel="build"[\s\S]*data-action="save-code"[\s\S]*data-panel="social"/);
+ assert.match(html,/data-panel="build"[\s\S]*data-panel="social"/);
+ assert.doesNotMatch(html,/data-action="save-code"/);
  const sky=readFileSync(new URL('../src/night-sky.js',import.meta.url),'utf8');
  for(const variant of ['broad','broken','wispy'])assert.ok(sky.includes(variant));
  assert.ok(sky.includes('length:12'));
