@@ -38,12 +38,32 @@ export class EquipmentPortraitViewport{
    if(/leftarm$/.test(name))bone.rotation.z+=.50;
    if(/rightarm$/.test(name))bone.rotation.z-=.50;
   });
+  // Temporarily detach cloned wings before portrait orientation: the
+  // original fallback must not select a horizontal axis because of wings.
+  const wings=[];
+  model.traverse(o=>{if(o.userData?.wingId&&o.parent)wings.push({root:o,parent:o.parent});});
+  for(const wing of wings)wing.root.removeFromParent();
   orientPortraitModel(model);
   // The actual Temple avatar's anatomical 'front' lies on the sideways
   // imported model's world +X, unlike the generic Mixamo landmark fallback.
   // Rotate around WORLD Y to put its face toward the portrait's +Z camera.
   model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(
    new THREE.Vector3(0,1,0),-Math.PI/2));
+  model.updateMatrixWorld(true);
+  const bodyBounds=new THREE.Box3().setFromObject(model,true);
+  const bodySize=bodyBounds.getSize(new THREE.Vector3());
+  // Restore wing meshes, but shrink only their width when they exceed the
+  // visible front-facing portrait. The model quaternion never changes here.
+  for(const wing of wings)wing.parent.add(wing.root);
+  const aspect=(this.canvas?.clientWidth||180)/(this.canvas?.clientHeight||320);
+  const maxWidth=Math.max(bodySize.x*1.15,bodySize.y*aspect*.83);
+  for(let attempt=0;attempt<7&&wings.length;attempt++){
+   model.updateMatrixWorld(true);
+   const width=new THREE.Box3().setFromObject(model,true).getSize(new THREE.Vector3()).x;
+   if(width<=maxWidth*1.005)break;
+   const reduction=Math.max(.30,Math.min(.95,maxWidth/Math.max(width,.00001)));
+   for(const wing of wings)wing.root.scale.multiplyScalar(reduction);
+  }
   this.scene.add(model);
   this.model=model;
   model.updateMatrixWorld(true);
