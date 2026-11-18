@@ -141,7 +141,7 @@ export class WeaponVFX{
  play(data,item,root){
   // Native ground healing ring is independent of #43's travelling blossom.
   // Repeated server pulses refresh ONE pooled ring, never spawn duplicates.
-  if(data.channel&&item.family==='petal'&&root)this.restoration.pulse(root);
+  if(data.channel&&!data.fusionEcho&&item.family==='petal'&&root)this.restoration.pulse(root);
   const id=effectFor(item,data.ultimate),direction=new THREE.Vector3(...(data.direction||[0,0,1])).normalize(),origin=new THREE.Vector3(...data.origin),range=Math.max(1,data.range||4),end=data.aimPoint?new THREE.Vector3(...data.aimPoint):data.impactPoint?new THREE.Vector3(...data.impactPoint):origin.clone().addScaledVector(direction,range);
   // Charged ground spells are placed on the *server validated impact area*.
   // Previously every non-projectile preset was spawned one metre below
