@@ -12,16 +12,20 @@ root.userData={mixer,actions,clipYaw,materials,pivot,bones,kind,nanganActor:true
 // Run and Idle, use an Idle-backed procedural leg/arm gait instead of Run.
 export function animateIslandModel(root,b,dt,now){
  animateChimera(root,now,b.moving&&!b.paused);
- const u=root.userData,skill=b.skills?.some(s=>s.phase==='active');
- const charging=b.skills?.some(s=>s.motion==='charge'&&s.phase==='active');
-  const walking=!!(b.patrolling&&b.moving&&!skill&&!b.leap);
-  const name=charging?'Run':b.leap?'Jump':skill?'Kick':b.moving?(b.patrolling?'Walk':'Run'):'Idle';
+ const u=root.userData,activeMotion=b.skills?.find(s=>s.phase==='active')?.motion;
+ const freezing=activeMotion==='freeze';
+ // Never select the imported Run clip at runtime: its uncle torso pitches
+ // forward and feet trail behind. Laser strafing uses the walk cycle; only
+ // the freezing attack can use Kick.
+ const walking=!b.leap&&!freezing&&(!!b.moving||activeMotion==='beam');
  const walk=u.actions.Walk||u.actions.walk||u.actions.Walking||u.actions.walking||u.actions.stroll;
  const idle=u.actions.Idle||u.actions.idle;
- const action=(walking&&!walk?idle:null)||u.actions[name]||u.actions[name.toLowerCase()]||
-  (walking?walk:null)||u.actions[b.moving?'chase':'idle']||Object.values(u.actions)[0];
+ const jump=u.actions.Jump||u.actions.jump;
+ const kick=u.actions.Kick||u.actions.kick;
+ const action=b.leap?(jump||idle||walk):freezing?(kick||idle||walk):
+  walking?(walk||idle):(idle||walk||Object.values(u.actions)[0]);
  if(action&&u.active!==action){
-  u.active?.stop();u.pivot.rotation.y=u.clipYaw[action.getClip().name]||0;
+  u.active?.fadeOut(.12);u.pivot.rotation.y=u.clipYaw[action.getClip().name]||0;
   action.reset().fadeIn(.12).play();u.active=action;u.mixer.update(.001);
  }
  if(u.active)u.active.setEffectiveTimeScale(1);

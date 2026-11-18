@@ -25,7 +25,7 @@ export class IslandEnemies{
    })())
   ]);
  }
- // Render each real skinned monster in Jump, Run and Idle poses during Loading.
+ // Prewarm every real gameplay pose: upright Walk, frost Kick, Jump, Idle.
  // Compiling invisible geometry alone does not initialize GPU vertex buffers.
  async warmModels(renderer,camera){
   const actors=[...this.models.values(),...this.extraModels].filter(Boolean);
@@ -39,10 +39,10 @@ export class IslandEnemies{
     const root=actors[i];root.position.set((i%4-1.5)*7,0,(Math.floor(i/4)-.5)*5);
     root.visible=true;stage.add(root);
    }
-   for(const pose of ['jump','run','idle']){
+   for(const pose of ['jump','walk','freeze','idle']){
     for(const root of actors)animateIslandModel(root,{
-     moving:pose==='run',leap:pose==='jump',patrolling:false,
-     skills:[],
+     moving:pose==='walk',leap:pose==='jump',patrolling:false,
+     skills:pose==='freeze'?[{motion:'freeze',phase:'active'}]:[],
     },.017,0);
     await renderer.compileAsync(stage,view);
     renderer.setRenderTarget(target);renderer.render(stage,view);
@@ -123,14 +123,24 @@ export class IslandEnemies{
     }
    }
  }
- mouthWorld(root){
+ mouthWorld(root,camera=null,viewportHeight=0){
   if(!root)return null;
   root.updateWorldMatrix(true,true);
   const bones=root.userData.bones||{},head=bones.Head||bones.head||bones.HeadTopEnd;
   const mouth=head?head.getWorldPosition(new THREE.Vector3()):root.position.clone().add(new THREE.Vector3(0,ENEMY_HEIGHT*.84,0));
   const facing=new THREE.Vector3(0,0,1).applyQuaternion(root.userData.pivot.getWorldQuaternion(new THREE.Quaternion()));
   facing.y=0;if(facing.lengthSq()<.001)facing.set(0,0,1);facing.normalize();
-  return mouth.addScaledVector(facing,.56).add(new THREE.Vector3(0,-.12,0));
+  mouth.addScaledVector(facing,.56).y-=.12;
+  // Keep the beam on the rig's head/mouth socket, moved upward by 4
+  // projected CSS pixels, independent of camera zoom and pixel density.
+  const cssHeight=typeof innerHeight==='number'?innerHeight:viewportHeight;
+  if(camera?.isPerspectiveCamera&&cssHeight>0){
+   camera.updateWorldMatrix(true,false);
+   const view=mouth.clone().applyMatrix4(camera.matrixWorldInverse);
+   const depth=Math.max(.1,Math.abs(view.z));
+   mouth.y+=8*depth*Math.tan(THREE.MathUtils.degToRad(camera.fov)*.5)/cssHeight;
+  }
+  return mouth;
  }
  placeModel(root,state,dt,now){
   const previous=root.userData.previousMonsterPosition??=new THREE.Vector3();
@@ -167,7 +177,7 @@ export class IslandEnemies{
   const modelById=new Map();
   if(this.state?.active&&this.current)modelById.set(this.state.id,this.current);
   for(const {root,state} of this.extraLive)if(state?.active)modelById.set(state.id,root);
-  this.attackEffects.sync(sources,now,state=>this.mouthWorld(modelById.get(state.id)));
+  this.attackEffects.sync(sources,now,state=>this.mouthWorld(modelById.get(state.id),camera,viewport));
   for(const state of sources){
    if(!state?.active)continue;
    for(const spell of state.skills||[]){
