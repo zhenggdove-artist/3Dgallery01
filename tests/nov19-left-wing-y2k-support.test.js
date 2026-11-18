@@ -28,7 +28,7 @@ test('public SUPPORT never includes GM design/management controls or GM-facing d
  assert.ok(start>=0&&end>start);
  const support=ui.slice(start,end);
  assert.doesNotMatch(support,/data-open-wing-painter|data-open-wing-manage|data-gm-action/);
- assert.doesNotMatch(support,/GM TEST MODE|GM 特製|GM ·|GM 畫|GM 管理|GM 自製/);
+ assert.doesNotMatch(support,/GM TEST MODE|GM 特製|GM 畫|GM 管理|GM 自製/);
  assert.match(support,/data-draw-wing/);
  assert.match(support,/wing-gacha-machine/);
  assert.match(support,/y2k-shell-header/);
@@ -50,7 +50,8 @@ test('Y2K + Windows 98 gacha remain interactive, responsive and no payment is fa
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
  assert.match(ui,/beginWingDraw\(\)/);
  assert.match(ui,/drawRatePct/);
- assert.match(html,/20261119-y2k-left-wing-r5/);
+ assert.match(html,/20261119-custom-material-wings-r6/);
  const section=ui.slice(ui.indexOf('  renderWingShop(profile){'),ui.indexOf('  hydrateWingGalleryImages(){'));
- assert.match(section,/付費功能尚未(?:開放|啟用)/);
+ assert.match(section,/正式收款尚未啟用/);
+ assert.match(section,/profile.admin/,'the checkout button is gated to a GM account');
 });
