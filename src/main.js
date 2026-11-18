@@ -7,6 +7,7 @@ import {GoldenBursts} from './golden-burst.js';
 import {GameAudio} from './game-audio.js';
 import {ArtworkThrow} from './artwork-throw.js';
 import {EquipmentPortraitViewport} from './equipment-portrait-view.js';
+import {CollectorView} from './collector-view.js';
 import {ElementalStatusVisuals} from './elemental-status-visuals.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {attackDirection} from './aiming.js';
@@ -49,6 +50,7 @@ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,innerWidth/i
 camera.position.set(0,13,30);camera.lookAt(0,2,0);camera.updateMatrixWorld(true);
 const vhs=createVHS(renderer),audio=new GameAudio(),bursts=new GoldenBursts(scene),chargePreview=new ChargeTargetPreview(scene);
 const artworkThrow=new ArtworkThrow({scene,arena,controller:()=>controller,holderKey:()=>self?.key,send:sendAction,bursts,audio});
+const collectorView=new CollectorView(scene,arena);
 arena.artFloat=settings.artFloat??.17;
 
 let vitalModels=null;
@@ -372,7 +374,7 @@ function updateKnockdowns(){
   model.rotation.z=model.userData.knockdownBase-Math.PI*.39*collapsed;
  }
 }
-function syncWorld(){if(!world)return;audio.setVolumes(world.audioSettings||{});if(world.musicVersion)audio.setUploadedMusic(network.base,world.musicVersion);arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));damageNumbers.receive(world.damageEvents);arena.sync(world,players);ui.setWorld(world);ui.showKillEvents(world.killEvents);
+function syncWorld(){if(!world)return;audio.setVolumes(world.audioSettings||{});if(world.musicVersion)audio.setUploadedMusic(network.base,world.musicVersion);arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));damageNumbers.receive(world.damageEvents);arena.sync(world,players);collectorView.sync(world.collector);ui.setWorld(world);ui.showCollectorSale(world.collectorSale,self?.key);ui.showKillEvents(world.killEvents);
   // Monster deaths use the SAME purely visual golden burst as thrown artwork.
   // Server-issued IDs prevent repeats on sync/reconnect; no attack collider.
   for(const death of world.monsterDeathEvents||[]){
@@ -435,6 +437,7 @@ function update(dt,time){
     // even without holding a mouse button. Mobile touch remains unchanged.
     controller.channelAiming=!!(attackHeld&&isChannelStaff(itemById(world?.profile?.equipment?.weapon)));
     writer.update();plantHover.update();controller.castMoveFactor=staffChannel?CAST_MOVE_FACTOR:1;const wasGrounded=controller.grounded;const state=controller.update(dt);if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
+  collectorView.update(time);
   statusVisuals.update(dt);
   const castingItem=itemById(world?.profile?.equipment?.weapon);
   if(localRoot){
