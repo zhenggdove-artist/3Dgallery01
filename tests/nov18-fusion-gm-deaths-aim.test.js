@@ -65,9 +65,9 @@ test('GM logs in with purple tier-six wings, independently selects 0–100% fusi
 
 test('invincibility switch controls GM actual monster combat damage',()=>{
  const gm=actor('toggle-god',true,[72,0,20]),world=createInitialWorld(T),profile=ensureProfile(world,gm.key,gm.name,gm.color,T,true);
- const makeSwipe=(id,now)=>({id,motion:'swipe',phase:'active',origin:[72,0,20],aim:[72,0,20],
+ const makeSwipe=(id,now)=>({id,motion:'swipe',phase:'active',origin:[72,0,19],aim:[72,0,22],
   start:now-50,end:now+500,hit:[],radius:4.2,damage:12});
- world.monster={id:'gm-test-monster',model:'uncle',active:true,hp:500,maxHp:500,position:[72,0,20],
+ world.monster={id:'gm-test-monster',model:'uncle',active:true,hp:500,maxHp:500,position:[72,0,19],
   skills:[makeSwipe('s1',T+100)],updatedAt:T,nextAttackAt:T+10000};
  tickWorld(world,{now:T+100,actors:[gm],activeFighters:0,rng:()=>.5});
  assert.equal(profile.hp,profile.maxHp);
