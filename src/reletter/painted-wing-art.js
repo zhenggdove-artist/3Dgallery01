@@ -67,7 +67,9 @@ export function renderPaintedWing(canvas,item){
  ctx.clearRect(0,0,w,h);
  const sx=clamp(Number(item.scaleX)||1,.35,2),sy=clamp(Number(item.scaleY)||1,.35,2);
  const outline=item.outline?.length>=3?item.outline:presetWingOutline(item.shape);
- ctx.save();if(!pathFor(ctx,outline,w,h,sx,sy)){ctx.restore();return canvas;}
+ ctx.save();
+ ctx.translate(w/2,h/2);ctx.scale(sx,sy);ctx.translate(-w/2,-h/2);
+ if(!pathFor(ctx,outline,w,h,1,1)){ctx.restore();return canvas;}
  ctx.fillStyle=item.color||'#e3cbb5';ctx.fill();
  ctx.strokeStyle='#26242a';ctx.lineWidth=8;ctx.stroke();ctx.clip();
  for(const stroke of item.strokes||[])strokeOn(ctx,stroke,w,h);
