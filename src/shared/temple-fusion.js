@@ -12,13 +12,16 @@ export function fusionChance(profile,targetId){
  return 2**(-(attempts+1));
 }
 // Only the server mutates inventory, spending, fusion properties and ultimate echoes.
+const EQUIPMENT_FUSION_SLOTS=new Set(['weapon','head','armor','outfit','wings','shield']);
+export function canFuseEquipment(source,target){
+ return !!source&&!!target&&source.slot===target.slot&&EQUIPMENT_FUSION_SLOTS.has(target.slot);
+}
 export function fuseTemple(world,profile,body,rng=Math.random){
  const source=itemById(body.sourceId),target=itemById(body.targetId),requestId=String(body.requestId||'');
  if(requestId.length<8||requestId.length>80)return {error:'Missing fusion request ID'};
  profile.fusionReceipts??={};
  if(profile.fusionReceipts[requestId])return structuredClone(profile.fusionReceipts[requestId]);
- const equip=new Set(['weapon','head','armor','outfit','wings','shield']);
- if(!source||!target||!equip.has(target.slot)||source.slot!==target.slot)
+ if(!canFuseEquipment(source,target))
   return {error:'Fusion requires identical equipment types: weapon+weapon, head+head, outfit+outfit, wings+wings, armor+armor or shield+shield'};
  const sourceIndex=profile.inventory.indexOf(source.id),targetIndex=profile.inventory.indexOf(target.id);
  if(sourceIndex<0||targetIndex<0||(source.id===target.id&&profile.inventory.filter(id=>id===source.id).length<2))
