@@ -113,7 +113,7 @@ export class GameAudio{
   const url=String(backendUrl).replace(/\/$/,'')+'/api/gm/music?v='+encodeURIComponent(version);
   if(url===this.uploadedMusicUrl)return;
   this.uploadedMusicUrl=url;
-  this.trackSources=[url,'./sound/backgroundmusic.MP3'];
+  this.trackSources=[url,'./sound/GGTEMPLEMUSIC.mp3','./sound/backgroundmusic.MP3'];
   this.musicIndex=0;
   if(this.music){
    this.music.pause();this.music.src=url;this.music.load();
