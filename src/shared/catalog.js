@@ -25,11 +25,9 @@ export const ARMOR = Object.freeze([
   ['temple-halo','Temple Halo','head','#e4c467',4,4400,24]
 ].map(([id,name,slot,color,tier,price,defense])=>Object.freeze({id,name,slot,color,tier,design:({'pilgrim-mask':'hockey','glass-crown':'crown','temple-halo':'angel'})[id],rarity:RARITIES[tier-1].id,price,sell:Math.floor(price*.25),defense})));
 
-export const MATERIALS = Object.freeze([
-  {id:'wet-stone',name:'Wet Stone',slot:'material',color:'#7695a0',price:70,sell:18},
-  {id:'signal-wire',name:'Signal Wire',slot:'material',color:'#d1a35e',price:125,sell:32},
-  {id:'temple-resin',name:'Temple Resin',slot:'material',color:'#bc77bd',price:260,sell:65}
-]);
+// Material-type pickups are retired. Keep an empty named export for existing
+// consumers; the three legacy IDs are no longer in the catalog or inventory.
+export const MATERIALS = Object.freeze([]);
 
 // Original RELETTER identity, range, cadence and effects; only Temple economy/HP scale differ.
 export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(original=>original.id!=='chiang-token'&&!['seed','harvest'].includes(original.slot)).map(original=>{
@@ -61,7 +59,7 @@ export function attackStats(item,charge=0){
  }
  return result;
 }
-export const ITEMS = Object.freeze([...RELETTER_ITEMS,...ARMOR,...MATERIALS]);
+export const ITEMS = Object.freeze([...RELETTER_ITEMS,...ARMOR]);
 const INDEX = new Map(ITEMS.map(item=>[item.id,item]));
 export const itemById = id => INDEX.get(id) || null;
 
@@ -90,12 +88,16 @@ export function weightedChoice(entries,rng=Math.random){
 }
 
 export function groundDropRoll(rng=Math.random){
-  const kind=weightedChoice([{id:'coin',weight:42},{id:'material',weight:25},{id:'weapon',weight:20},{id:'equipment',weight:13}],rng).id;
-  if(kind==='coin')return {kind,amount:20+Math.floor(rng()*41)};
-  if(kind==='material')return {kind,itemId:MATERIALS[Math.floor(rng()*MATERIALS.length)].id};
-  const pool=kind==='weapon'?WEAPONS.filter(item=>item.tier>0&&item.tier<=3&&!item.notForSale):RELETTER_ITEMS.filter(item=>['head','outfit','shield','wings'].includes(item.slot)&&item.tier<=3);
-  const weighted=pool.map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));
-  return {kind,itemId:weightedChoice(weighted,rng).id};
+ // Only coins and equippable gear may spawn. Former material weight is
+ // redistributed to the gear categories rather than creating dead pickups.
+ const kind=weightedChoice([
+  {id:'coin',weight:42},{id:'weapon',weight:35},{id:'equipment',weight:23}
+ ],rng).id;
+ if(kind==='coin')return {kind,amount:20+Math.floor(rng()*41)};
+ const pool=kind==='weapon'?WEAPONS.filter(item=>item.tier>0&&item.tier<=3&&!item.notForSale):
+  RELETTER_ITEMS.filter(item=>['head','outfit','shield','wings'].includes(item.slot)&&item.tier<=3);
+ const weighted=pool.map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));
+ return {kind,itemId:weightedChoice(weighted,rng).id};
 }
 
 export function monsterDropRoll(rng=Math.random){
