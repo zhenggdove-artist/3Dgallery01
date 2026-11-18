@@ -53,6 +53,7 @@ const artworkThrow=new ArtworkThrow({scene,arena,controller:()=>controller,holde
 const collectorView=new CollectorView(scene,arena,()=>audio.play('shot',.9));
 arena.artFloat=settings.artFloat??.17;
 
+let lastAppliedRespawnAt=0;
 let vitalModels=null;
 let artBombUploading=false;let assetsReady=false,joined=false,self=null,world=null,players=[],controller=null,localRoot=null,wasDead=false,last=performance.now(),externalUntil=0,toastErrorAt=0,lastAutoCoinAt=0,frameSamples=[],fps=0,fpsFrames=0,fpsAt=performance.now(),buildPlacement=null,spectatorFollowIndex=-1;
 const roots=new Map(),remoteTargets=new Map(),effects=[];
@@ -383,7 +384,22 @@ function syncWorld(){if(!world)return;audio.setVolumes(world.audioSettings||{});
   }
  for(const player of players){const root=roots.get(player.key);if(root)statusVisuals.sync(root,player.profile?.effects);}
  if(arena.monster)statusVisuals.sync(arena.monster,world.monster?.effects);
- for(const {root,state} of arena.islandEnemies.extraLive)statusVisuals.sync(root,state?.effects);const profile=world.profile,dead=profile?.deadUntil>Date.now();if(localRoot&&profile){arena.setPlayerEquipment(localRoot,profile.equipment);localRoot.userData.deadUntil=profile.deadUntil||0;applyHitReaction(localRoot,profile);
+ for(const {root,state} of arena.islandEnemies.extraLive)statusVisuals.sync(root,state?.effects);const profile=world.profile,dead=profile?.deadUntil>Date.now();
+// Follow the SERVER's revive timestamp and spawn instead of relying on
+// wasDead: an iOS background tab may miss the five-second death overlay.
+if(controller&&!dead&&Number(profile?.lastRespawnAt)>lastAppliedRespawnAt){
+ lastAppliedRespawnAt=Number(profile.lastRespawnAt);
+ if(Date.now()-lastAppliedRespawnAt<30_000){
+  const spawn=Array.isArray(profile.respawnPosition)&&profile.respawnPosition.length===3
+   ?profile.respawnPosition:(PLAYER_SPAWNS[self?.seat]||PLAYER_SPAWNS[0]);
+  controller.teleport(spawn);
+  // Flush the previous (dead-at-edge) client state immediately. The room
+  // updates its own session position to the same hub coordinates on revival.
+  network.lastStateAt=0;
+  if(self?.role==='fighter')network.sendState(controller.state());
+ }
+}
+if(localRoot&&profile){arena.setPlayerEquipment(localRoot,profile.equipment);localRoot.userData.deadUntil=profile.deadUntil||0;applyHitReaction(localRoot,profile);
  if(profile.whipPull?.id&&profile.whipPull.id!==controller.lastWhipPullId&&
     Date.now()-(profile.whipPull.time||0)<profile.whipPull.durationMs+400){
   // A new poison/bleed hit can replace hitReaction; the pull has its OWN
@@ -391,7 +407,14 @@ function syncWorld(){if(!world)return;audio.setVolumes(world.audioSettings||{});
   controller.lastWhipPullId=profile.whipPull.id;
   controller.stunUntil=0;controller.beginWhipPull(profile.whipPull);
  }
- controller.stats=profile.stats||{speed:1,jump:1,gravity:1};statusVisuals.sync(localRoot,profile.effects);if(profile.impulse&&controller.lastImpulse!==profile.impulse.id){controller.lastImpulse=profile.impulse.id;controller.knockback=new THREE.Vector3(...profile.impulse.vector).multiplyScalar(5);}}if(dead){if(!wasDead&&localRoot){bursts.play(localRoot.position,'death-'+self.key+'-'+profile.deadUntil);audio.play('explosion');}wasDead=true;controller?.setEnabled(false);ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}else if(joined){if(wasDead&&controller){controller.teleport(PLAYER_SPAWNS[self.seat]||PLAYER_SPAWNS[0]);wasDead=false;ui.toast('RESPAWNED');}if(!ui.panelName&&!artEditor.mode&&!writer.active&&!platformDelete.active)controller?.setEnabled(true);ui.death(0);}if(profile&&self)self.profile=profile;}
+ controller.stats=profile.stats||{speed:1,jump:1,gravity:1};statusVisuals.sync(localRoot,profile.effects);if(profile.impulse&&controller.lastImpulse!==profile.impulse.id){controller.lastImpulse=profile.impulse.id;controller.knockback=new THREE.Vector3(...profile.impulse.vector).multiplyScalar(5);}}if(dead){if(!wasDead&&localRoot){bursts.play(localRoot.position,'death-'+self.key+'-'+profile.deadUntil);audio.play('explosion');}wasDead=true;controller?.setEnabled(false);ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}else if(joined){if(wasDead&&controller){
+ const spawn=Array.isArray(profile?.respawnPosition)?profile.respawnPosition:
+  (PLAYER_SPAWNS[self.seat]||PLAYER_SPAWNS[0]);
+ controller.teleport(spawn);
+ network.lastStateAt=0;
+ if(self?.role==='fighter')network.sendState(controller.state());
+ wasDead=false;ui.toast('RESPAWNED · WRITE HUB');
+}if(!ui.panelName&&!artEditor.mode&&!writer.active&&!platformDelete.active)controller?.setEnabled(true);ui.death(0);}if(profile&&self)self.profile=profile;}
 
 async function sendAction(action,data={},options={}){if(!joined||!controller)return null;try{const result=await network.action(action,data);if(result.world)acceptWorldView(result.world);if(result.notice)ui.toast(result.notice);if(action==='fuse'&&result.fusion){ui.fusionFeedback(!!result.fusion.success,result.notice);audio.play(result.fusion.success?'fusion-success':'fusion-fail',1);}if(result.attackEvent)showAttack(result.attackEvent);if(result.throwEvent)showThrowPulse(result.throwEvent);if(action==='pickup-coin'||action==='pickup-drop')audio.play('coin');for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))arena.showStructureHit(hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))arena.showStructureBreak(broken);if(result.hit?.defeated)ui.toast(`DEFEATED · ${result.hit.lostCoins} COINS DROPPED`);return result;}catch(error){if(options.throwOnError)throw error;if(action==='fuse')ui.fusionFeedback(false,error.message);if(!/^Move closer to (?:the )?(?:artwork|coin|drop)/i.test(error.message||'')&&performance.now()-toastErrorAt>400){toastErrorAt=performance.now();ui.toast(error.message);}return null;}}
 
