@@ -47,9 +47,16 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  // Affixes always accumulate; only ULTIMATE echoes have the two-source limit.
  const affixIds=[...new Set([...itemAffixes(main),...itemAffixes(material),
   ...itemAffixes(old),...itemAffixes(old.original)])];
+ const effects=(old.effects||[]).filter(id=>itemById(id)?.slot==='weapon').slice(0,2);
+ const grantsEcho=target.slot==='weapon'&&source.slot==='weapon'&&effects.length<2;
  const keys=['damage','chargeDamage','range','chargeRange','radius','defense','capacity','impulse','speed','jump'];
  for(const key of keys){
-  const a=Number(material[key]),b=Number(main[key])||0;
+  const sniperPower=source.id==='black-cat'&&['damage','chargeDamage'].includes(key);
+  // A sniper source may contribute 30% of its original shot EITHER as
+  // its visible echo (first two slots) OR as stats (later slots), not both.
+  // Also ignore any previously inflated stats on the consumed sniper.
+  if(sniperPower&&grantsEcho)continue;
+  const a=sniperPower?Number(source[key]):Number(material[key]),b=Number(main[key])||0;
   if(!(a>0))continue;
   const cap=['range','chargeRange'].includes(key)?400:key==='radius'?80:key==='defense'?300:100000;
   stats[key]=+Math.min(cap,b+a*.3).toFixed(3);
@@ -57,8 +64,6 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  let bonus=Number(old.bonus)||0;
  if(source.slot==='material'&&target.slot==='weapon')
   bonus+=({'wet-stone':3.5,'signal-wire':6,'temple-resin':10}[source.id]||0);
- const effects=(old.effects||[]).filter(id=>itemById(id)?.slot==='weapon').slice(0,2);
- const grantsEcho=target.slot==='weapon'&&source.slot==='weapon'&&effects.length<2;
  if(grantsEcho)effects.push(source.id);
  profile.fusion[target.id]={...old,layer,attempts,bonus,templeStats:stats,effects,affixIds,affixId:affixIds[0]||null,
   sources:[...(old.sources||[]),{id:source.id,name:source.name,statPercent:30,echo:grantsEcho}]};
