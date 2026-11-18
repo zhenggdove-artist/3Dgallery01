@@ -40,13 +40,19 @@ try{
  const mobile=await page.evaluate(()=>{
   const r=document.querySelector('.wing-support-machine').getBoundingClientRect();
   const p=document.querySelector('#panel-content').getBoundingClientRect();
-  const button=document.querySelector('.wing-support-controls .wing-draw-button').getBoundingClientRect();
+  const action=document.querySelector('.wing-support-controls .wing-draw-button'),
+   button=action.getBoundingClientRect();
   return {machineW:r.width,left:r.left,right:r.right,panelW:p.width,buttonW:button.width,
+   buttonTop:button.top,buttonBottom:button.bottom,buttonPosition:getComputedStyle(action).position,
+   buttonBackground:getComputedStyle(action).backgroundImage,
    overflow:document.documentElement.scrollWidth>innerWidth+2};
  });
  assert.ok(mobile.machineW>=260&&mobile.machineW<=390,JSON.stringify(mobile));
  assert.ok(mobile.left>=-2&&mobile.right<=392,JSON.stringify(mobile));
  assert.ok(mobile.buttonW>=250,JSON.stringify(mobile));
+ assert.equal(mobile.buttonPosition,'fixed','mobile draw button must remain visible on the first screen');
+ assert.ok(mobile.buttonTop>=0&&mobile.buttonBottom<=844,JSON.stringify(mobile));
+ assert.match(mobile.buttonBackground,/linear-gradient/,JSON.stringify(mobile));
  assert.equal(mobile.overflow,false);
  await page.screenshot({path:folder+'/support-mobile-y2k.png',animations:'disabled'});
  assert.deepEqual(errors,[]);

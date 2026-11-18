@@ -50,7 +50,7 @@ test('Y2K + Windows 98 gacha remain interactive, responsive and no payment is fa
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
  assert.match(ui,/beginWingDraw\(\)/);
  assert.match(ui,/drawRatePct/);
- assert.match(html,/20261119-y2k-left-wing-r4/);
+ assert.match(html,/20261119-y2k-left-wing-r5/);
  const section=ui.slice(ui.indexOf('  renderWingShop(profile){'),ui.indexOf('  hydrateWingGalleryImages(){'));
  assert.match(section,/付費功能尚未(?:開放|啟用)/);
 });
