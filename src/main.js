@@ -184,9 +184,8 @@ ui.addEventListener('attack-start',()=>{
  if(weapon?.firstPerson){gun.cycle();return;}
  if(!artworkThrow.started){
   const near=arena.nearest(controller.root.position.toArray());
-  const canUse=near&&['artwork','coin','drop','plant'].includes(near.type);
-  const byPlant=!near&&Math.hypot(controller.root.position.x,controller.root.position.z)<7;
-  if(canUse||byPlant){performInteract();return;}
+  const canUse=near&&['artwork','coin','drop'].includes(near.type);
+  if(canUse){performInteract();return;}
  }
  if(chargeStarted!==null||staffChannel)return;
  attackHeld=true;
@@ -368,7 +367,7 @@ function performAttack(charge=0,phase=null){
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
 }
-function performInteract(){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=arena.nearest(controller.root.position.toArray());if(!near){if(Math.hypot(controller.root.position.x,controller.root.position.z)<7)return ui.showPlantList();return;}if(near.type==='plant'){const plant=(world?.plants||[]).find(p=>p.id===near.id);if(plant)ui.showPlant(plant);return;}if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
+function performInteract(){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
 
 let screenShakeUntil=0;
 const heardStompLandings=new Set();
