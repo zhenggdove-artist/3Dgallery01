@@ -5,7 +5,7 @@ import {SWALLOWTAIL_WINGS,WINGS} from '../src/reletter/wing-catalog.js';
 import {SHOP_ITEMS,groundDropRoll,monsterDropRoll,itemById} from '../src/shared/catalog.js';
 import {drawGmWing,wingRarity,WING_QUALITY_WEIGHTS,WING_QUALITY_NAMES} from '../src/shared/wing-shop.js';
 import {createInitialWorld,ensureProfile,applyAction,migrateWorld} from '../src/shared/temple-rules.js';
-import {ECPAY_GATEWAYS,wingPaymentStatus,wingPaymentApi} from '../cloudflare/ecpay-wing-payments.js';
+import {STAGE_GATEWAY,wingPaymentStatus,stageCheckoutFields} from '../cloudflare/ecpay-wing-payments.js';
 const T=18_500_000,actor=(key,role='fighter')=>({key,name:key,color:'#abcdef',role,position:[15,0,0]});
 
 test('twenty-one swallowtail wings, five Epic specimens and rarity-independent natural colors',()=>{
@@ -16,18 +16,20 @@ test('twenty-one swallowtail wings, five Epic specimens and rarity-independent n
   const wing=SWALLOWTAIL_WINGS[i];
   assert.equal(wing.id,'wings-'+(i===16?41:i>16?i+20:i+21));
   assert.equal(wing.slot,'wings');
-  assert.equal(wing.design,'swallowtail');
+  assert.equal(wing.design,i<7?'swallowtail':'crafted-wing');
   assert.equal(wing.premiumWing,true);
   assert.equal(wing.notForSale,true);
   assert.ok(wing.impulse>0);
-  assert.equal(wingRarity(wing),i<4?'common':i<8?'uncommon':i<12?'rare':i<17?'epic':'relic');
+  assert.equal(wingRarity(wing),i<4?'common':i<7?'uncommon':i<12?'rare':i<17?'epic':'relic');
   assert.equal(itemById(wing.id).name,wing.name);
  }
  assert.deepEqual(Object.entries(WING_QUALITY_WEIGHTS).map(x=>x[1]),[45,30,18,5,2]);
  assert.ok(WING_QUALITY_NAMES.epic.includes('PURPLE'));
  assert.ok(SWALLOWTAIL_WINGS[12].visualComplexity>SWALLOWTAIL_WINGS[17].visualComplexity);
  assert.equal(SWALLOWTAIL_WINGS.filter(w=>wingRarity(w)==='epic').length,5);
- assert.ok(SWALLOWTAIL_WINGS.slice(12,17).every(w=>w.specimen&& !/^#(?:b36dff|9b57ee|d07df4)$/i.test(w.color)));
+ assert.deepEqual(SWALLOWTAIL_WINGS.slice(12,17).map(w=>w.motif),['peacock','swan','cyberpunk','steampunk','monster']);
+  assert.deepEqual(SWALLOWTAIL_WINGS.slice(7,12).map(w=>w.motif),['wood','balloon','rag','tin','tape']);
+  assert.deepEqual(SWALLOWTAIL_WINGS.slice(17,21).map(w=>w.motif),['chicken','plastic','fur','koinobori']);
  assert.ok(SWALLOWTAIL_WINGS[12].visualComplexity>SWALLOWTAIL_WINGS[4].visualComplexity);
  assert.ok(!SHOP_ITEMS.some(i=>i.slot==='wings'),'no paid wings can be purchased with earned coins');
 });
@@ -109,18 +111,19 @@ test('browser generates animated 3-D Papilio geometry and protected shop link',(
  assert.match(index,/<span>SUPPORT<\/span>/);
 });
 
-test('ECPay and Apple Pay integration is explicitly noncharging, fail-closed and stage-ready',async()=>{
- assert.equal(ECPAY_GATEWAYS.stage,'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5');
- assert.equal(ECPAY_GATEWAYS.production,'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5');
+test('ECPay is GM-only stage checkout and fails closed without stage Worker flag',async()=>{
+ assert.equal(STAGE_GATEWAY,'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5');
  assert.equal(wingPaymentStatus().checkoutEnabled,false);
- const status=await wingPaymentApi(new Request('https://game.example/api/wing-pay/status'));
- assert.equal(status.status,200);
- assert.equal((await status.json()).currency,'TWD');
- for(const endpoint of ['checkout','notify']){
-  const response=await wingPaymentApi(new Request('https://game.example/api/wing-pay/'+endpoint,{method:'POST'}));
-  assert.equal(response.status,503,endpoint);
- }
+ assert.equal(wingPaymentStatus({ECPAY_WING_STAGE_ENABLED:'true'},false).checkoutEnabled,false);
+ assert.equal(wingPaymentStatus({ECPAY_WING_STAGE_ENABLED:'true'},true).checkoutMode,'stage-only');
+ const fields=await stageCheckoutFields('GW261119123456789012',
+  'https://example.org/api/wing-pay/notify','https://example.org/');
+ assert.equal(fields.TotalAmount,'30');
+ assert.equal(fields.ChoosePayment,'Credit');
+ assert.ok(fields.CheckMacValue);
  const worker=readFileSync(new URL('../cloudflare/worker.js',import.meta.url),'utf8');
- assert.match(worker,/wingPaymentApi/);
+ assert.match(worker,/initializeWingOrders/);
+ assert.match(worker,/wingCheckoutApi/);
+ assert.match(worker,/wingNotifyApi/);
  assert.match(worker,/url\.pathname\.startsWith\('\/api\/wing-pay\/'\)/);
 });
