@@ -30,10 +30,11 @@ try{
   throw new Error('WebKit startup failed: '+JSON.stringify(diagnostic)+' ERRORS: '+messages.slice(0,12).join(' | '),{cause:error});
  }
  assert.equal(await page.locator('#loading').isVisible(),false);
- assert.ok(await page.locator('[data-login-provider="google"]').isVisible());
- assert.ok(!(await page.locator('#entry-form').isVisible()),'New visitors select a provider before creating a character');
- await page.locator('[data-legacy-login]').click();
- assert.ok(await page.locator('#entry-form').isVisible());
+ assert.ok(await page.locator('[data-google-login]').isVisible());
+ assert.equal(await page.locator('[data-login-provider="apple"]').count(),0);
+ assert.equal(await page.locator('[data-login-provider="facebook"]').count(),0);
+ assert.ok(!(await page.locator('#entry-form').isVisible()),
+  'Character naming is gated behind Google authentication');
  const loaded=await page.evaluate(()=>window.templeLoadTimings);
  console.log('WebKit Safari module graph booted: '+JSON.stringify({timings:loaded,errorCount:messages.length}));
  await page.screenshot({path:'output/temple-safari-startup/success.png'});
