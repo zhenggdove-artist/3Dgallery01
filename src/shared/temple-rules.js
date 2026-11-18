@@ -259,7 +259,7 @@ export function applyAction(world,actor,body,context={}){
    if(profile.admin)return {error:'GM must use the preview draw'};
    const freeRemaining=Math.max(0,FREE_WING_TRIAL_LIMIT-(profile.wingTrialDraws||0));
    const paidRemaining=Math.max(0,Number(profile.wingPaidDraws)||0);
-   if(!freeRemaining&&!paidRemaining)return {error:'No wing draws remaining.'};
+   if(!freeRemaining&&!paidRemaining)return {error:'Five free wing draws used. No paid wing draws remaining.'};
    const drawn=drawWing(profile,rng,world.customWings||[]);
    if(drawn.error)return drawn;
    appendInventoryInstance(profile,drawn.item.id);
