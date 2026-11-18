@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createInitialWorld,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
+import {itemById} from '../src/shared/catalog.js';
 
 const NOW=27_000_000;
 const actor={key:'sniper-test',name:'Sniper',role:'fighter',color:'#fff',position:[75,0,0]};
@@ -41,13 +42,14 @@ test('scoped Black Cat still fires, and scoped full charges preserve intentional
  assert.equal(fired.attackEvent.ultimate,false);
  assert.equal(fired.attackEvent.fusionEchoes.length,0);
  assert.equal(act(world,first+3000,{phase:'charge',scoped:true}).charging,true);
- const charged=act(world,first+5200,{direction:[0,0,1],scoped:true,charge:1});
+ const chargedAt=first+3000+itemById('black-cat').chargeMs+150;
+ const charged=act(world,chargedAt,{direction:[0,0,1],scoped:true,charge:1});
  assert.equal(charged.error,undefined);
  assert.equal(charged.attackEvent.ultimate,true);
  assert.ok(charged.attackEvent.fusionEchoes.length>0);
  // Leaving scope cancels an in-progress charged sniper rather than firing it.
- assert.equal(act(world,first+7500,{phase:'charge',scoped:true}).charging,true);
- const blocked=act(world,first+9500,{direction:[0,0,1],charge:1});
+ assert.equal(act(world,chargedAt+2500,{phase:'charge',scoped:true}).charging,true);
+ const blocked=act(world,chargedAt+2500+itemById('black-cat').chargeMs+150,{direction:[0,0,1],charge:1});
  assert.match(blocked.error,/scope/i);
  assert.equal(profile.chargeStartedAt,0);
 });

@@ -86,7 +86,7 @@ test('heart pickups render once and never overlap, including older persisted dup
 
 test('uploaded GGTEMPLE MP3 is selected only after a successful HEAD probe',()=>{
  const audio=readFileSync(new URL('../src/game-audio.js',import.meta.url),'utf8');
- assert.match(audio,/GGTEMPLE%E9%9F%B3%E6%A8%82\.mp3/);
+ assert.match(audio,/GGTEMPLEMUSIC\.mp3/);
  assert.match(audio,/method:'HEAD'/);
  assert.match(audio,/if\(!response\.ok\|\|this\.uploadedMusicUrl\)return false/);
  assert.match(audio,/backgroundmusic\.MP3/);

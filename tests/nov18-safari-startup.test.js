@@ -22,7 +22,7 @@ test('failed module imports report the underlying exception rather than a generi
 });
 
 test('missing soundtrack must not abort first page load',()=>{
- assert.match(audio,/sound\/GGTEMPLE%E9%9F%B3%E6%A8%82\.mp3/);
+ assert.match(audio,/sound\/GGTEMPLEMUSIC\.mp3/);
  assert.match(audio,/method:'HEAD'/);
  assert.match(audio,/if\(!response\.ok\|\|this\.uploadedMusicUrl\)return false/);
  assert.match(audio,/sound\/backgroundmusic\.MP3/);

@@ -17,7 +17,7 @@ function scenario(weapon='clam',position=[75,0,6]){
  return {w,caster,victim,a,b};
 }
 function fire(w,caster,time,extra={}){
- return applyAction(w,caster,{action:'attack',direction:[0,0,1],...extra},{now:time,rng:()=>.94,actors:[caster]});
+ return applyAction(w,caster,{action:'attack',direction:[0,0,1],...(w.profiles[caster.key]?.equipment?.weapon==='black-cat'?{scoped:true}:{}),...extra},{now:time,rng:()=>.94,actors:[caster]});
 }
 function advance(w,time,actors,rng=()=>.94){
  tickWorld(w,{now:time,actors,activeFighters:0,rng});
@@ -128,7 +128,7 @@ test('black-cat rifle retains slow high-damage long-range shots unlike regular 8
  assert.equal(fire(w,caster,at+500).error,'Weapon is recovering');
  assert.equal(fire(w,caster,at+3700).error,undefined);
  const {w:charged,caster:c,victim:v,b:target}=scenario('black-cat',[75,0,30]);
- assert.ok(applyAction(charged,c,{action:'attack',phase:'charge'},{now:T+1000}).charging);
+ assert.ok(applyAction(charged,c,{action:'attack',phase:'charge',scoped:true},{now:T+1000}).charging);
  const ultimate=fire(charged,c,T+4000,{charge:1});
  assert.equal(ultimate.attackEvent.ultimate,true);
  advance(charged,T+4500,[c,v]);
