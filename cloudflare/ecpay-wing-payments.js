@@ -91,7 +91,7 @@ export async function wingNotifyApi(room,request){
  const row=room.sql.exec('SELECT * FROM wing_payment_orders WHERE merchant_trade_no=?',fields.MerchantTradeNo).toArray()[0];
  if(!row||String(fields.TradeAmt)!==String(row.amount)||row.draws!==WING_DRAWS_PER_ORDER)
   return new Response('0|ORDER_MISMATCH',{status:400});
- if(fields.RtnCode!=='1')return new Response('1|OK');
+ if(fields.RtnCode!=='1'||fields.SimulatePaid==='1')return new Response('1|OK');
  if(!fields.TradeNo||!/^\d{6,20}$/.test(fields.TradeNo))return new Response('0|INVALID_TRADE',{status:400});
  if(row.status==='paid')return new Response('1|OK');
  // Sandbox transaction credits GM only; an order can be fulfilled only once.
