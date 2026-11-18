@@ -228,7 +228,7 @@ ui.addEventListener('attack-release',async()=>{
   if(isStaffTap(weapon,heldMs)){
    // Only delay the shot for the remaining part of the original raise.
    // Do not restart the model animation on button release or ACK.
-   if(localRoot)localRoot.userData.staffCastingUntil=performance.now()+1800;
+   if(localRoot)localRoot.userData.staffCastingUntil=Infinity;
    const liftRemaining=Math.max(0,STAFF_RAISE_SECONDS*1000-heldMs);
    if(liftRemaining>0)await new Promise(resolve=>setTimeout(resolve,liftRemaining));
    if(world?.profile?.equipment?.weapon===weapon.id)await performAttack(0);
@@ -241,6 +241,7 @@ ui.addEventListener('attack-release',async()=>{
 ui.addEventListener('attack-cancel',()=>{
  gun.held=false;
  attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;artworkThrow.cancel();
+ if(localRoot)localRoot.userData.staffCastingUntil=0;
  if(staffChannel){
   const pending=staffChannelPromise;
   staffChannel=null;++staffChannelSerial;
