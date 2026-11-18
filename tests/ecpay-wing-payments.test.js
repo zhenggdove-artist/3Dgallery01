@@ -94,3 +94,48 @@ test('disabled sandbox and ordinary player cannot create orders',async()=>{
  const player=fakeRoom(true,false);
  assert.equal((await wingCheckoutApi(player.room,new Request('https://gg.example/api/wing-pay/checkout',{method:'POST'}),{profile_key:player.profileKey})).status,403);
 });
+
+test('checkout button submits signed staging fields to ECPay only after server confirms test mode',async()=>{
+ const {beginWingStageCheckout}=await import('../src/wing-payment-client.js');
+ const savedWindow=globalThis.window,savedDocument=globalThis.document;
+ const posted=[],requests=[],alerts=[];let popupClosed=false;
+ const fakePopup={close(){popupClosed=true;}};
+ const form={children:[],append(node){this.children.push(node);},
+  submit(){posted.push({action:this.action,target:this.target,fields:Object.fromEntries(this.children.map(c=>[c.name,c.value]))});},
+  remove(){}};
+ const network={request:async(path,options)=>{
+  requests.push(path);
+  if(path==='/api/wing-pay/status')return {checkoutEnabled:true,checkoutMode:'stage-only'};
+  if(path==='/api/wing-pay/checkout')return {
+   gateway:STAGE_GATEWAY,stage:true,amount:30,draws:5,fields:{
+    MerchantID:'3002607',MerchantTradeNo:'GW261119123456789012',TotalAmount:'30',
+    CheckMacValue:'AUTHORIZED-BY-SERVER'
+   }};
+  throw Error('Unexpected endpoint');
+ }};
+ const ui={toast:text=>alerts.push(text)};
+ try{
+  globalThis.window={open:()=>fakePopup};
+  globalThis.document={
+   createElement(tag){
+    if(tag==='form')return form;
+    if(tag==='input')return {type:'',name:'',value:''};
+    throw Error('Unexpected DOM element: '+tag);
+   },body:{append(node){assert.equal(node,form);}}
+  };
+  await beginWingStageCheckout(network,ui);
+  assert.deepEqual(requests,['/api/wing-pay/status','/api/wing-pay/checkout']);
+  assert.equal(posted.length,1);
+  assert.equal(posted[0].action,STAGE_GATEWAY);
+  assert.equal(posted[0].target,'GGTEMPLE_ECPAY_STAGE');
+  assert.equal(posted[0].fields.TotalAmount,'30');
+  assert.equal(popupClosed,false);
+  requests.length=0;posted.length=0;
+  network.request=async()=>({checkoutEnabled:false});
+  await beginWingStageCheckout(network,ui);
+  assert.equal(posted.length,0,'disabled Worker must never post to gateway');
+  assert.equal(popupClosed,true);
+ }finally{
+  globalThis.window=savedWindow;globalThis.document=savedDocument;
+ }
+});
