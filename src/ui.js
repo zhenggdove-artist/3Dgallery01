@@ -100,6 +100,20 @@ export class TempleUI extends EventTarget{
   }
   setLoading(progress,label){$('loading-fill').style.width=`${Math.round(progress*100)}%`;$('loading-detail').textContent=label;$('loading-percent').textContent=`${Math.round(progress*100)}%`;}
   ready(){document.body.classList.add('ready');document.body.classList.remove('booting');}
+  setOAuthProviders(providers){
+    const configured=providers&&typeof providers==='object'?providers:{};
+    let enabled=0;
+    for(const provider of ['google','apple','facebook']){
+      const button=this.entry.querySelector('[data-login-provider="'+provider+'"]');
+      if(!button)continue;
+      button.disabled=!configured[provider];
+      button.title=configured[provider]?'':provider+' login needs developer credentials';
+      if(configured[provider])enabled++;
+    }
+    if(!enabled){
+      $('account-login-status').textContent='第三方帳號登入尚待設定開發者憑證；目前使用下方舊式 Memory Code／GM 登入。';
+    }
+  }
   selectOAuthAccount(ticket){
     this.oauthTicket=ticket;
     $('account-login-status').textContent='帳號驗證成功。首次登入請設定角色名稱與服裝顏色。';
