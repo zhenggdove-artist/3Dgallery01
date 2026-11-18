@@ -103,21 +103,15 @@ try {
   return t.controller().enabled;
  });
  assert.equal(setup,true);
+ // The central writing garden is the NEW spawn. A must keep its combat
+ // purpose instead of automatically opening a message window near plants.
  await button.tap();
- try {await page.waitForFunction(()=>templeTest.ui.panelName==='plant',null,{timeout:8000});}
- catch(error){
-  const trace=await page.evaluate(()=>({panel:templeTest.ui.panelName,
-   weapon:templeTest.ui.world?.profile?.equipment?.weapon,
-   near:templeTest.arena.nearest(templeTest.controller().root.position.toArray()),
-   plantExists:templeTest.ui.world?.plants?.some(p=>p.id==='ci-touch-plant'),
-   enabled:templeTest.controller()?.enabled,holdingArt:templeTest.controller()?.holdingArt,
-   aEvents:window.mobileAEvents,gunMode:templeTest.gun.mode}));
-  throw new Error('Contextual touch A did not trigger E: '+JSON.stringify(trace),{cause:error});
- }
- assert.equal(await page.locator('#panel').isVisible(),true,'mobile A performs E near an interactable');
- assert.equal(await page.locator('#panel-title').innerText(),'MESSAGE PLANT');
- assert.equal(await page.evaluate(()=>window.mobileTestShots),1,'contextual A never fires a gun');
- await page.screenshot({path:output+'/mobile-a-interact.png'});
+ await page.waitForFunction(()=>window.mobileTestShots===2,null,{timeout:8000});
+ assert.equal(await page.evaluate(()=>templeTest.ui.panelName),'',
+  'Touch A near the central message tree must NOT open the writing panel');
+ assert.equal(await page.evaluate(()=>window.mobileTestShots),2,
+  'A near a writing plant should still send one normal attack');
+ await page.screenshot({path:output+'/mobile-a-near-writing-tree.png'});
  assert.deepEqual(errors,[],errors.join('; '));
- console.log(JSON.stringify({mobileA:true,scope:true,dedicatedScopeFire:true,interact:true,eButtonHidden:true}));
+ console.log(JSON.stringify({mobileA:true,scope:true,dedicatedScopeFire:true,writingTreeAStaysCombat:true,eButtonHidden:true}));
 } finally {await browser.close();}
