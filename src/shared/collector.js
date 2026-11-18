@@ -15,7 +15,9 @@ export const COLLECTOR_ANGRY_LINES=Object.freeze([
  'Your audacity is the only thing on display.',
  'Bring me art next time. I am not buying your presence.'
 ]);
-export const COLLECTOR_PRICES=Object.freeze([1000,2000,3000,4000,5000]);
+export const COLLECTOR_MIN_PRICE=1;
+export const COLLECTOR_MAX_PRICE=9999;
+// Collector offer is an inclusive, server-authored integer [1, 9999].
 export const COLLECTOR_REVIEWS=Object.freeze([
  'An interesting idea, though it has yet to win me over.',
  'There is something genuinely compelling about this piece.',
@@ -68,7 +70,8 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoo
    const entry=Object.entries(world.artworks||{}).find(([,art])=>art.holder===actor.key);
    if(entry){
     const [artworkId,art]=entry;
-    const price=COLLECTOR_PRICES[Math.min(4,Math.max(0,Math.floor((Number(rng())||0)*5)))];
+    const sample=Math.max(0,Math.min(.9999999999999999,Number(rng())||0));
+    const price=COLLECTOR_MIN_PRICE+Math.floor(sample*(COLLECTOR_MAX_PRICE-COLLECTOR_MIN_PRICE+1));
     if(!profile.admin)profile.wallet+=price;
     world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
     world.activity.coinMinted+=price;
@@ -79,7 +82,8 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoo
     collector.nextSpawnAt=now+COLLECTOR_INTERVAL_MS;
     world.lastCollectorSale={
      id:crypto.randomUUID(),buyer:actor.key,artworkId,price,
-     review:COLLECTOR_REVIEWS[price/1000-1],time:now
+     review:COLLECTOR_REVIEWS[Math.min(COLLECTOR_REVIEWS.length-1,
+      Math.floor((Number(rng())||0)*COLLECTOR_REVIEWS.length))],time:now
     };
     return true;
    }
