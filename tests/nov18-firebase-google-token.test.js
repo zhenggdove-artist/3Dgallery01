@@ -46,8 +46,10 @@ test('Worker verifies signed Firebase ID token, Google provider and correct proj
   assert.equal(user.uid,'firebase-uid-123');
   assert.equal(user.email,'example@gmail.com');
   await assert.rejects(()=>verifyFirebaseIdToken(token,{FIREBASE_PROJECT_ID:'wrong-firebase-project'}),/claims/);
-  await assert.rejects(()=>verifyFirebaseIdToken(mint({...payload,firebase:{sign_in_provider:'facebook.com'}}),config),/provider claims/);
-  await assert.rejects(()=>verifyFirebaseIdToken(mint({...payload,exp:now-1}),config),/claims/);
+  const nonGoogle=await mint({...payload,firebase:{sign_in_provider:'facebook.com'}});
+  const expired=await mint({...payload,exp:now-1});
+  await assert.rejects(()=>verifyFirebaseIdToken(nonGoogle,config),/provider claims/);
+  await assert.rejects(()=>verifyFirebaseIdToken(expired,config),/claims/);
   const segments=token.split('.'),signature=segments[2];
   segments[2]=(signature[0]==='A'?'B':'A')+signature.slice(1);
   await assert.rejects(()=>verifyFirebaseIdToken(segments.join('.'),config),/signature invalid/);
