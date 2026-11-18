@@ -320,3 +320,6 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
 .wing-payment-preview h3{margin:0 0 6px;font:700 16px Georgia,serif}
 .wing-payment-preview button{width:100%;min-height:38px;border:1px solid #d3c4d7;background:#e9e4ed}
 @media(max-width:370px){.wing-shop-gallery{grid-template-columns:1fr}.wing-shop-card img{height:140px}}
+
+/* Override the generic 68px top-level panel header for the Atelier card. */
+#panel .wing-shop-hero{height:auto;display:block;align-items:initial;padding:14px 16px}
