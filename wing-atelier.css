@@ -57,3 +57,18 @@
 #entry-form[hidden],#legacy-memory-controls[hidden],#account-name-controls[hidden]{display:none!important}
 #entry-form:not([hidden]){display:flex;flex-direction:column;gap:8px;border-top:1px solid #cbb0bc;margin-top:10px;padding-top:12px}
 @media(max-width:420px){.wing-gacha-machine{transform:scale(.88);margin:-8px auto}}
+
+/* The entire dispenser buckles when its comically oversized crank turns. */
+.wing-gacha-machine.is-spinning{animation:gachaDispenserWiggle .25s ease-in-out infinite alternate}
+.wing-gacha-machine.is-spinning .wing-gacha-crank{animation:gachaCrankTurn .6s linear infinite}
+.wing-gacha-machine.is-spinning .gacha-capsule{animation:gachaCapsuleRattle .28s ease-in-out infinite alternate}
+@keyframes gachaDispenserWiggle{from{transform:rotate(-4deg)}to{transform:rotate(4deg) translateY(-5px)}}
+@keyframes gachaCrankTurn{to{transform:rotate(360deg)}}
+@keyframes gachaCapsuleRattle{from{transform:translate(-3px,5px) rotate(-12deg)}to{transform:translate(4px,-8px) rotate(15deg)}}
+/* Burst cones, then 70 colored streamers fall independently over the prize. */
+.wing-party-popper{position:absolute;bottom:15%;width:56px;height:90px;z-index:10;transform-origin:bottom center;animation:gachaPopper .45s cubic-bezier(.1,1.5,.6,1) forwards}
+.wing-party-left{left:5%;transform:rotate(-40deg)}.wing-party-right{right:5%;transform:rotate(40deg)}
+.wing-party-popper::before{content:'';position:absolute;bottom:0;left:7px;width:0;height:0;border-left:22px solid transparent;border-right:22px solid transparent;border-bottom:83px solid #f5bc4e;filter:drop-shadow(0 0 8px #fff08c)}
+.wing-party-popper::after{content:'✦';position:absolute;top:-55px;left:-14px;color:#fffbd3;font-size:90px;text-shadow:-20px -15px #b9ffe4,22px 4px #e899ff,0 -33px #ff9c9f;animation:gachaFlash .5s ease-out 1}
+@keyframes gachaPopper{from{opacity:0;scale:.5}to{opacity:1;scale:1}}
+@keyframes gachaFlash{from{transform:scale(.1);opacity:0}to{transform:scale(1.2);opacity:1}}
