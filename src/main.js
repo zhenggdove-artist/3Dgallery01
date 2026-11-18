@@ -158,10 +158,17 @@ ui.addEventListener('join',async event=>{
 
 function acceptWorldView(next){
  if(!next||(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&next.revision<world.revision))return false;
- world=next;syncWorld();return true;
+ const wings=Array.isArray(next.customWings)?next.customWings:(world?.customWings||[]);
+ registerCustomWings(wings);world={...next,customWings:wings};syncWorld();return true;
 }
 network.addEventListener('welcome',event=>{const data=event.detail;self={...self,...data.self};players=data.players;syncPlayers();acceptWorldView(data.world);});
 network.addEventListener('world',event=>{acceptWorldView(event.detail);});
+network.addEventListener('wing-catalog',event=>{
+ const wings=Array.isArray(event.detail?.wings)?event.detail.wings:[];
+ registerCustomWings(wings);
+ if(world){world={...world,customWings:wings};arena.world=world;ui.setWorld(world);
+  if(ui.panelName==='wing-shop')ui.renderPanel();}
+});
 network.addEventListener('players',event=>{players=event.detail;ui.setPlayers(players);syncPlayers();});
 network.addEventListener('state',event=>{const data=event.detail;if(data.key===self?.key)return;let target=remoteTargets.get(data.key);if(!target){syncPlayers();target=remoteTargets.get(data.key);}if(target){target.position.fromArray(data.state.position);target.rotation=data.state.rotation;target.animation=data.state.animation;}});
 network.addEventListener('chat',event=>{ui.addChat(event.detail);showPlayerSpeech(event.detail);});
