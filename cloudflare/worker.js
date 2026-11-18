@@ -120,10 +120,10 @@ export class TempleRoom extends DurableObject{
     if(admin)profile.name='Ely';
     // Only consume the one-time ticket once all checks succeed and a room seat
     // is available. The profile key is never chosen by a browser payload.
+    for(const row of this.sql.exec('SELECT id FROM sessions WHERE profile_key=?',profileKey).toArray())
+     this.disconnectSession(row.id,false);
     this.ctx.storage.transactionSync(()=>{
      if(oauth)oauthTicket(this.sql,body.oauthTicket,true);
-     for(const row of this.sql.exec('SELECT id FROM sessions WHERE profile_key=?',profileKey).toArray())
-      this.disconnectSession(row.id,false);
      this.save(world);
      this.sql.exec('INSERT INTO sessions(id,profile_key,name,color,role,seat,expires,state,save_code,last_code_at) VALUES(?,?,?,?,?,?,?,?,?,0)',
       id,profileKey,profile.name,profile.color,role,seat,expires,null,saveCode||null);
@@ -131,7 +131,7 @@ export class TempleRoom extends DurableObject{
     });
     this.recordPresence({name:profile.name,role},'online',now);
     this.broadcastRoster();await this.armAlarm();
-    return json({ok:true,token:id,role,seat,saveCode:saveCode||null,
+    return json({ok:true,token:id,role,seat,saveCode:saveCode||null,authMode:oauth?'oauth':'legacy',
      self:this.self(this.session(id)),world:worldView(world,profileKey),players:this.roster()});
   }
 
