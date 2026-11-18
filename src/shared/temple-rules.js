@@ -5,7 +5,7 @@ import {discGroundHeight} from './artwork-discs.js';
 import {artworkLanding} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
-import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,groundDropRoll,monsterDropRoll} from './catalog.js';
+import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
@@ -30,6 +30,7 @@ import {cleanLegacyScene} from './scene-cleanup.js';
 import {samplePanBlastPosition,PAN_BLAST_DETONATION_ADVANCE_MS} from './pan-blast-flight.js';
 import {initialCollector,tickCollector} from './collector.js';
 import {drawGmWing} from './wing-shop.js';
+import {MAX_PAINTED_WINGS,normalizePaintedWing} from './custom-wings.js';
 
 export const WORLD_VERSION=1;
 export const ARTWORK_RESPAWN_MS=30_000;
@@ -145,7 +146,7 @@ export function worldView(world,actorKey,now=Date.now()){
   const profile=world.profiles[actorKey];
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
-    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
+    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:clone(world.customWings||[]),floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
@@ -217,12 +218,12 @@ export function applyAction(world,actor,body,context={}){
   const now=context.now??Date.now(),rng=context.rng??Math.random,
    // The premium draw checks PERSISTED admin status before any ensureProfile
    // mutation. Existing game/GM actions retain their original role semantics.
-   wingDrawAdmin=body.action==='gm-wing-draw'?world.profiles?.[actor.key]?.admin===true:null,
+   wingDrawAdmin=['gm-wing-draw','gm-wing-publish'].includes(body.action)?world.profiles?.[actor.key]?.admin===true:null,
    profile=ensureProfile(world,actor.key,actor.name,actor.color,now,
-    body.action==='gm-wing-draw'?wingDrawAdmin:actor.admin);
+    ['gm-wing-draw','gm-wing-publish'].includes(body.action)?wingDrawAdmin:actor.admin);
   if(body.action==='gm-wing-draw'){
    if(!wingDrawAdmin||!profile.admin)return {error:'GM only'};
-   const drawn=drawGmWing(profile,rng);
+   const drawn=drawGmWing(profile,rng,world.customWings||[]);
    if(drawn.error)return drawn;
    appendInventoryInstance(profile,drawn.item.id);
    profile.itemOrigins??={};profile.itemOrigins[drawn.item.id]='gm-wing-draw';
@@ -232,6 +233,20 @@ export function applyAction(world,actor,body,context={}){
     itemId:drawn.item.id,name:drawn.item.name,quality:drawn.quality,
     remaining:drawn.remaining,mode:drawn.mode
    },notice:'GM WING DRAW · '+drawn.item.name,profile:publicProfile(profile)};
+  }
+  if(body.action==='gm-wing-publish'){
+   if(!wingDrawAdmin||!profile.admin)return {error:'GM only'};
+   world.customWings??=[];
+   if(world.customWings.length>=MAX_PAINTED_WINGS)return {error:'Wing gallery is full'};
+   if(profile.inventory.length>=600)return {error:'Inventory full'};
+   let wing;try{wing=normalizePaintedWing(body.wing,'gm-wing-'+crypto.randomUUID());}
+   catch(error){return {error:error.message};}
+   if(world.customWings.some(entry=>entry.name.toLowerCase()===wing.name.toLowerCase()))
+    return {error:'Wing name already exists'};
+   world.customWings.push(wing);registerCustomWings(world.customWings);
+   appendInventoryInstance(profile,wing.id);profile.itemOrigins??={};profile.itemOrigins[wing.id]='gm-created';
+   profile.updatedAt=now;refreshStats(world,profile,now);world.revision++;
+   return {publishedWingId:wing.id,notice:'翅膀已上架並加入 GM 背包：'+wing.name};
   }
   if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
   if(body.action==='reset-player-artworks')return resetPlayerArtworks(world,profile.admin,now);
