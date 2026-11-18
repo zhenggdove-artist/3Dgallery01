@@ -85,3 +85,78 @@
   color:#fff;font:900 16px system-ui;
 }
 .account-buttons [data-google-login]:disabled{opacity:.55;cursor:not-allowed}
+
+
+/* 2026-11-19: real Win98 chrome for account onboarding and playable gacha. */
+#entry .notepad-window{border-radius:0;background:#c0c0c0;border:2px outset #f6f6f6;box-shadow:2px 2px 0 #003d3d,6px 8px 0 #0005;max-height:calc(100dvh - 58px);overflow:auto}
+#entry .notepad-page{background:#c0c0c0;padding:18px 22px 13px;border:1px inset #dedede;margin:2px 0 0}
+#entry .win98-titlebar{font:700 12px Tahoma,Arial,sans-serif;min-height:25px;background:linear-gradient(90deg,#000080,#087cca);padding:3px 5px}
+#entry .notepad-page h1{font:700 clamp(22px,4.8vw,34px)/1.1 Tahoma,Arial,sans-serif!important;letter-spacing:.04em!important;color:#111!important;text-shadow:none!important;-webkit-text-stroke:0!important;margin:12px 0 18px;text-align:left}
+.win98-login-intro{display:flex;align-items:center;gap:15px;padding:4px 0 12px;border-bottom:1px solid #858585;font:13px Tahoma,Arial,sans-serif}
+.win98-login-intro strong{display:block;color:#090909;font-size:15px}
+.win98-login-intro small{display:block;font-size:11px;color:#333;margin-top:5px}
+.win98-login-computer{width:58px;height:50px;background:linear-gradient(#ddd,#999);border:3px outset #fff;box-shadow:inset 0 0 0 5px #777;color:#000080;font:bold 31px/40px Tahoma;text-align:center;flex-shrink:0}
+#entry .temple-account-login{display:block;padding:12px 0 0;font:12px Tahoma,Arial,sans-serif}
+#entry .win98-login-group{min-width:0;margin:0;padding:13px 12px 10px;border:2px groove #efefef;color:#111}
+#entry .win98-login-group legend{font-weight:bold;padding:0 5px}
+#entry .win98-login-group p{font:12px/1.55 Tahoma,Arial,sans-serif;margin:0 0 11px;color:#202020}
+#entry .account-buttons{display:block}
+#entry .account-buttons button[data-google-login]{min-height:40px;width:100%;display:flex;border:2px outset #fff;border-radius:0;background:#c0c0c0;color:#101010;font:bold 12px Tahoma,Arial,sans-serif;justify-content:center;box-shadow:none;padding:5px 10px}
+#entry .account-buttons button[data-google-login]::before{font-size:15px;width:21px;height:21px;border:1px solid #555}
+#entry .account-buttons button[data-google-login]:active:not(:disabled){border-style:inset}
+#entry #account-login-status{min-height:26px;margin:12px 0 0;padding:6px 8px;border:2px inset #fff;background:#f4f4f4;color:#222;font:11px/1.45 Tahoma,Arial,sans-serif;overflow-wrap:anywhere}
+#entry #entry-form:not([hidden]){gap:9px;padding:12px 0 0;border:0}
+#entry #entry-form label{font:12px Tahoma,Arial,sans-serif;color:#171717}
+#entry #entry-form input{margin:5px 0 2px;width:100%;min-height:32px;height:32px;border:2px inset #fff;background:white;padding:4px 7px;color:#111;font:14px Tahoma,Arial,sans-serif}
+#entry #entry-form input[type=color]{width:95px;height:36px;padding:3px}
+#entry .win98-profile-heading{font:bold 12px Tahoma,Arial,sans-serif;color:#080867;margin:2px 0}
+#entry #enter-button{width:100%;min-height:38px;justify-self:stretch;background:#c0c0c0!important;border:2px outset #fff!important;color:#111!important;border-radius:0;font:bold 12px Tahoma,Arial,sans-serif;letter-spacing:0}
+#entry #enter-button:active:not(:disabled){border-style:inset!important}
+.win98-login-footer{display:flex;justify-content:space-between;gap:8px;padding:9px 0 0;margin-top:13px;border-top:1px solid #8e8e8e;font:10px Tahoma,Arial,sans-serif;color:#303030}
+@media(max-width:430px){#entry .notepad-page{padding:12px}#entry .win98-login-group{padding:10px}#entry .win98-login-intro{gap:9px}}
+
+.win98-gacha-app{width:min(100%,380px);margin:0 auto;padding:4px 4px 10px;background:#c0c0c0;border:3px outset white;color:#101010;box-shadow:3px 4px 0 #5a5164;overflow:hidden}
+.win98-gacha-title,.gacha-win98-bar{display:flex;align-items:center;justify-content:space-between;gap:9px;padding:5px 7px;background:linear-gradient(90deg,#000080,#167abb);color:#fff;font:bold 11px Tahoma,Arial,sans-serif;text-align:left}
+.win98-gacha-title span:last-child,.gacha-win98-bar span{background:#c0c0c0;color:#111;border:2px outset white;padding:0 5px;white-space:nowrap}
+.win98-gacha-app .wing-gacha-machine{margin:10px auto 4px;filter:drop-shadow(2px 3px 0 #6665)}
+.win98-gacha-app .wing-gacha-dome{border:8px ridge #dadada;border-radius:9px 9px 3px 3px;background:linear-gradient(140deg,#d7f5fa,#6fb6db 75%);box-shadow:inset 0 0 0 3px #555,inset 0 0 24px #27477d75}
+.win98-gacha-app .wing-gacha-shine{border-radius:12px;background:#fff8}
+.win98-gacha-app .wing-gacha-neck{border:5px outset #eee;background:#b8b8b8;border-radius:0}
+.win98-gacha-app .wing-gacha-face{font:700 15px/42px 'Courier New',monospace;color:#000080;transform:none}
+.win98-gacha-app .wing-gacha-body{background:#bfbfbf;border:6px outset white;border-radius:0;box-shadow:inset 0 0 0 1px #444}
+.win98-gacha-app .wing-gacha-crank{display:grid;place-items:center;line-height:1;border:4px outset #fff;border-radius:0;background:#dedede;color:#000080;font:bold 35px Tahoma,Arial,sans-serif;cursor:pointer;padding:0;min-width:47px;min-height:47px;z-index:4;touch-action:manipulation}
+.win98-gacha-app .wing-gacha-crank:active{border-style:inset}
+.win98-gacha-app .wing-gacha-slot{border:3px inset #aaa;background:#151515;border-radius:0;color:#e4e4e4}
+.win98-gacha-app .wing-gacha-body p{font:700 9px Tahoma,Arial,sans-serif;color:#111}
+.win98-gacha-app .wing-gacha-feet{background:#a8a8a8;border:3px outset #eee;border-radius:0}
+.win98-gacha-status{margin:2px 9px 0;padding:7px 8px;background:#fff;border:2px inset #eee;text-align:center;font:bold 12px 'Courier New',monospace;color:#000080}
+#panel .wing-shop-panel .wing-draw-button{border:3px outset #fff!important;background:#c0c0c0!important;color:#080808!important;box-shadow:none;border-radius:0;font:bold 14px Tahoma,Arial,sans-serif}
+#panel .wing-shop-panel .wing-draw-button:active:not(:disabled){border-style:inset!important}
+#panel .wing-shop-hero{border:2px inset #ddd;border-radius:0;background:#e6e6e6;text-align:left}
+#panel .wing-shop-panel .wing-shop-hero h3{font:bold 23px Tahoma,Arial,sans-serif;color:#000080}
+.wing-gacha-overlay{background:#0000809c;backdrop-filter:none}
+.gacha-animation{border:4px outset white;border-radius:0;background:#c0c0c0;box-shadow:4px 5px 0 #29213f;color:#111;min-height:360px;padding:45px 15px 18px}
+.gacha-win98-bar{position:absolute;top:0;left:0;right:0}
+.gacha-pop-capsule{border-radius:0;border:6px outset #fff;background:linear-gradient(#c6e6f5 49%,#ef8aa8 50%);color:#000080}
+.gacha-result-image{border:2px inset #fff;border-radius:0;background:#fff}
+.gacha-result h3{font:bold 21px Tahoma,Arial,sans-serif;margin:4px}
+.wing-epic-win .gacha-animation{background:#d6c6ee;box-shadow:0 0 28px 10px #f7d5ff,4px 5px 0 #29213f}
+@media(max-width:420px){.win98-gacha-app .wing-gacha-machine{transform:scale(.9);margin:-1px auto -13px}}
+
+ /* Full-viewport GM atelier: the drawing stage occupies all space left by tools. */
+body.panel-wing-painter #panel{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;border-radius:0!important;display:flex!important;flex-direction:column;background:#c0c0c0!important;border:3px outset white!important;box-shadow:none!important;overflow:hidden}
+body.panel-wing-painter #panel>header{height:42px;min-height:42px;padding:5px 12px;background:linear-gradient(90deg,#000080,#167abb);color:white;border-bottom:2px solid #555;flex-shrink:0}
+body.panel-wing-painter #panel>header h2{font:bold 16px Tahoma,Arial,sans-serif!important;color:white;margin:0}
+body.panel-wing-painter #panel>header small{color:#efefef}
+body.panel-wing-painter #panel-close{color:#111;background:#c0c0c0;border:2px outset white;border-radius:0;width:32px;height:28px;font:700 21px/20px Tahoma;text-align:center}
+body.panel-wing-painter #panel-content{flex:1;min-height:0;height:auto;overflow:hidden;padding:7px}
+body.panel-wing-painter .wing-painter{grid-template-columns:clamp(264px,24vw,355px) minmax(0,1fr);gap:7px;width:100%;height:100%;min-height:0;max-height:none}
+body.panel-wing-painter .wing-painter-tools{height:100%;max-height:none;overflow:auto;border:2px inset white;border-radius:0;background:#d1d1d1;padding:11px}
+body.panel-wing-painter .wing-painter-tools>label{min-height:29px;gap:12px;font:12px Tahoma,Arial,sans-serif}
+body.panel-wing-painter .wing-painter-tools input:not([type=checkbox]),body.panel-wing-painter .wing-painter-tools select{border-radius:0;background:#fff;border:2px inset #ddd}
+body.panel-wing-painter .wing-tools-row button{border-radius:0;background:#c0c0c0;border:2px outset #fff}
+body.panel-wing-painter .wing-painter-stage{min-width:0;min-height:0;height:100%;padding:8px;background:#929292;border:2px inset white;border-radius:0;overflow:hidden}
+body.panel-wing-painter .wing-painter-checker{width:min(100%,calc((100dvh - 135px)*1.2));max-width:none;max-height:calc(100dvh - 135px);height:auto;aspect-ratio:768/640;border:3px inset #fff;flex:none}
+body.panel-wing-painter .wing-painter-canvas{width:100%;height:100%;object-fit:fill;touch-action:none;display:block}
+body.panel-wing-painter .wing-painter-stage>small{font:11px Tahoma,Arial,sans-serif;color:#111}
+@media(max-width:700px){body.panel-wing-painter #panel-content{padding:4px}body.panel-wing-painter .wing-painter{grid-template-columns:1fr;grid-template-rows:minmax(135px,28dvh) minmax(0,1fr);gap:4px}body.panel-wing-painter .wing-painter-tools{max-height:none;height:100%;padding:7px}body.panel-wing-painter .wing-painter-stage{height:100%;padding:3px}body.panel-wing-painter .wing-painter-checker{width:min(100%,calc((72dvh - 90px)*1.2));max-height:calc(72dvh - 90px)}body.panel-wing-painter .wing-painter-stage>small{font-size:9px}}

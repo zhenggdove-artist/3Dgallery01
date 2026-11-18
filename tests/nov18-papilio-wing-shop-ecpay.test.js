@@ -97,15 +97,16 @@ test('browser generates animated 3-D Papilio geometry and protected shop link',(
  assert.match(art,/addEpicDust/);
  assert.match(garden,/painted-wing/);
  assert.match(ui,/renderWingShop\(profile\)/);
- assert.match(ui,/GM ONLY · NONCHARGING TEST/);
+ assert.match(ui,/WINDOWS 98 · CAPSULE.EXE · SUPPORT/);
  assert.match(ui,/data-open-wing-painter/);
  assert.match(ui,/wing-gacha-machine/);
  assert.match(ui,/data-draw-wing/);
- assert.match(ui,/if\(\['gm','wing-shop','wing-painter'\]\.includes\(name\)&&!this\.self\.profile\?\.admin\)return/);
- assert.match(index,/id="wing-shop-button" data-panel="wing-shop" hidden/);
+ assert.match(ui,/if\(\['gm','wing-painter'\]\.includes\(name\)&&!this\.self\.profile\?\.admin\)return/);
+ assert.match(index,/id="wing-shop-button" data-panel="wing-shop"/);
  assert.match(css,/#dock #wing-shop-button\[hidden\]\{display:none!important\}/);
  assert.match(index,/src\/reletter\/swallowtail-art\.js/);
  assert.match(index,/src\/shared\/wing-shop\.js/);
+ assert.match(index,/<span>SUPPORT<\/span>/);
 });
 
 test('ECPay and Apple Pay integration is explicitly noncharging, fail-closed and stage-ready',async()=>{

@@ -29,7 +29,7 @@ import {replenishHearts} from './heart-pickups.js';
 import {cleanLegacyScene} from './scene-cleanup.js';
 import {samplePanBlastPosition,PAN_BLAST_DETONATION_ADVANCE_MS} from './pan-blast-flight.js';
 import {initialCollector,tickCollector} from './collector.js';
-import {drawGmWing} from './wing-shop.js';
+import {drawGmWing,drawWing,FREE_WING_TRIAL_LIMIT} from './wing-shop.js';
 import {MAX_PAINTED_WINGS,normalizePaintedWing} from './custom-wings.js';
 
 export const WORLD_VERSION=1;
@@ -85,7 +85,7 @@ export function migrateWorld(raw,now=Date.now()){
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
     wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.filter(item=>!item.gmWingExclusive).map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT,wings:admin?'wings-18':null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
-    fusion:{},createdAt:now,updatedAt:now,lastAttackAt:0};
+    fusion:{},wingTrialDraws:0,createdAt:now,updatedAt:now,lastAttackAt:0};
 }
 
 // Rebuild the authoritative safe-zone spawn on every revival, including
@@ -106,6 +106,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   if(name)current.name=String(name).slice(0,24);if(validColor(color))current.color=color;current.admin=!!admin;current.updatedAt=now;
   current.wallet=Number.isFinite(current.wallet)?Math.max(0,Math.floor(current.wallet)):0;
   current.level=Math.max(1,Math.floor(current.level||1));current.xp=Math.max(0,Math.floor(current.xp||0));
+  current.wingTrialDraws=Number.isFinite(current.wingTrialDraws)?Math.max(0,Math.min(FREE_WING_TRIAL_LIMIT,Math.floor(current.wingTrialDraws))):0;
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
   // GM equipment is granted once, not endlessly restored after its use as fusion material.
   if(current.admin&&!current.gmInventoryGranted){
@@ -138,7 +139,7 @@ export function validName(value){return typeof value==='string'&&value.trim().le
 
 export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
-    level:profile.level,xp:profile.xp,deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
+    level:profile.level,xp:profile.xp,wingTrialDraws:profile.wingTrialDraws||0,deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
     respawnPosition:clone(profile.respawnPosition||null),
     spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
@@ -222,6 +223,24 @@ export function applyAction(world,actor,body,context={}){
    wingDrawAdmin=['gm-wing-draw','gm-wing-publish'].includes(body.action)?world.profiles?.[actor.key]?.admin===true:null,
    profile=ensureProfile(world,actor.key,actor.name,actor.color,now,
     ['gm-wing-draw','gm-wing-publish'].includes(body.action)?wingDrawAdmin:actor.admin);
+  if(body.action==='wing-draw'){
+   // Public draws require a verified Firebase/Google profile key supplied by
+   // the server session, never a client-supplied admin or payment flag.
+   if(typeof actor.key!=='string'||!actor.key.startsWith('firebase:'))return {error:'Google account required for wing trial'};
+   if(profile.admin)return {error:'GM must use the preview draw'};
+   if(profile.wingTrialDraws>=FREE_WING_TRIAL_LIMIT)return {error:'Five free wing draws used. Payment is not enabled.'};
+   const drawn=drawWing(profile,rng,world.customWings||[]);
+   if(drawn.error)return drawn;
+   appendInventoryInstance(profile,drawn.item.id);
+   profile.itemOrigins??={};profile.itemOrigins[drawn.item.id]='wing-free-trial';
+   profile.wingTrialDraws++;
+   profile.updatedAt=now;refreshStats(world,profile,now);
+   world.revision=(world.revision||0)+1;
+   return {wingDraw:{
+    itemId:drawn.item.id,name:drawn.item.name,quality:drawn.quality,
+    remaining:drawn.remaining,drawsLeft:FREE_WING_TRIAL_LIMIT-profile.wingTrialDraws,mode:'free-trial'
+   },notice:'FREE WING DRAW · '+drawn.item.name,profile:publicProfile(profile)};
+  }
   if(body.action==='gm-wing-draw'){
    if(!wingDrawAdmin||!profile.admin)return {error:'GM only'};
    const drawn=drawGmWing(profile,rng,world.customWings||[]);

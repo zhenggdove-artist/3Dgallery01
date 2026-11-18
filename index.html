@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="./gun.css">
   <link rel="stylesheet" href="./sketch-hud.css">
   <link rel="stylesheet" href="./fidelity-ui.css?v=20261118-atelier-r12">
-  <link rel="stylesheet" href="./wing-atelier.css?v=20261118-firebase-google-r1">
+  <link rel="stylesheet" href="./wing-atelier.css?v=20261119-win98-support-gacha-r1">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
   <script src="./temple-config.js"></script>
@@ -28,7 +28,7 @@
     // Stable for one deployment: 15-second URL rotation previously defeated Safari cache
     // and forced every 4G reload to download the whole large module graph.
     // Bump this token when changing the boot graph or deployed JS modules.
-    const release = '20261118-firebase-google-r1';
+    const release = '20261119-win98-support-gacha-r1';
     const imports = {
       "three": "./vendor/three/build/three.module.js",
       "three/addons/": "./vendor/three/examples/jsm/"
@@ -42,7 +42,7 @@
   // Import/link failures happen before main.js can enter its boot try/catch.
   (() => {
     let moduleFailure = "";
-    window.templeStartupDiagnostics = {release: "20261118-firebase-google-r1", failures: []};
+    window.templeStartupDiagnostics = {release: "20261119-win98-support-gacha-r1", failures: []};
     function displayFailure(message) {
       if (!message || document.body?.classList.contains("ready")) return;
       // Do not replace the original module/import error with a later timeout.
@@ -85,21 +85,25 @@
 
   <main id="entry" aria-labelledby="entry-title">
     <section class="notepad-window">
-    <header class="win98-titlebar"><span>▤ GGTEMPLE - Notepad</span><span aria-hidden="true">▁ ▣ ×</span></header>
+    <header class="win98-titlebar"><span>▣ GGTEMPLE.EXE - Account Login</span><span aria-hidden="true">▁ ▣ ×</span></header>
     <div class="notepad-page"><h1 id="entry-title" class="reletter-wordmark">GGTEMPLE</h1>
+    <div class="win98-login-intro"><div class="win98-login-computer" aria-hidden="true">▣</div><div><strong>Welcome to GGTEMPLE</strong><small>Windows 98 Edition · Account Setup</small></div></div>
     <div id="account-login" class="temple-account-login" aria-label="Google 帳號登入">
-      <strong>GOOGLE ACCOUNT LOGIN</strong>
-      <div class="account-buttons">
-        <button type="button" data-google-login disabled>使用 Google 帳號登入</button>
-      </div>
-      <p id="account-login-status" role="status">正在準備 Google 登入…</p>
+      <fieldset class="win98-login-group"><legend>帳號登入 / Sign in</legend>
+        <p>使用 Google 帳號登入，所有角色、裝備及翅膀紀錄由伺服器自動保存。</p>
+        <div class="account-buttons">
+          <button type="button" data-google-login disabled>使用 Google 帳號登入</button>
+        </div>
+        <p id="account-login-status" role="status">正在準備 Google 登入…</p>
+      </fieldset>
     </div>
-    <form id="entry-form" hidden>
+    <form id="entry-form" hidden><div class="win98-profile-heading">▣ PLAYER PROFILE · 角色設定</div>
       <label>角色名稱：<input id="player-name" name="name" maxlength="24" autocomplete="nickname" required></label>
       <label>服裝顏色：<input id="clothing-color" type="color" value="#43b59a" aria-label="服裝顏色（不影響膚色）"></label>
       <button id="enter-button" type="submit">建立角色並進入遊戲 ↵</button><p id="entry-error" role="alert"></p>
     </form>
-    </div></section><div class="win98-taskbar" aria-hidden="true"><span>▤ Start</span><span>▤ GGTEMPLE - Notepad</span></div>
+    <div class="win98-login-footer"><span>● 系統狀態：需要 Google 驗證</span><span>GGTEMPLE 98</span></div>
+    </div></section><div class="win98-taskbar" aria-hidden="true"><span>▤ Start</span><span>▣ GGTEMPLE.EXE</span></div>
   </main>
 
   <section id="hud" hidden>
@@ -117,9 +121,8 @@
       <button data-action="jump" title="Jump (Space)"><b>↑</b><span>JUMP</span></button>
       <button data-panel="bag"><b>B</b><span>BAG</span></button>
       <button data-panel="shop"><b>I</b><span>SHOP</span></button>
-      <button id="wing-shop-button" data-panel="wing-shop" hidden><b>W</b><span>WING SHOP</span></button>
+      <button id="wing-shop-button" data-panel="wing-shop"><b>W</b><span>SUPPORT</span></button>
       <button data-panel="build"><b>V</b><span>BUILD</span></button>
-      <button data-action="save-code"><b>S</b><span>SAVE</span></button>
       <button data-panel="social"><b>C</b><span>WRITE</span></button>
     </nav>
     <div id="mobile-stick" aria-hidden="true"><i></i></div>

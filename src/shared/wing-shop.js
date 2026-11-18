@@ -1,9 +1,10 @@
 import {SWALLOWTAIL_WINGS} from '../reletter/wing-catalog.js';
 
-// This catalog is a future paid cosmetic catalogue. Only authenticated GMs
-// have preview/draw permission. No currency, ECPay or real-money paths may
-// mint wings until a separately reviewed payment fulfilment is implemented.
-export const WING_SHOP_VERSION=2;
+// Public Google accounts get five lifetime free trial draws. The server owns
+// the draw counter and prize. No payment or external checkout is represented
+// as successful until a verified payment fulfilment exists.
+export const WING_SHOP_VERSION=3;
+export const FREE_WING_TRIAL_LIMIT=5;
 export const WING_QUALITY_WEIGHTS=Object.freeze({
  common:45,uncommon:30,rare:18,epic:5,relic:2
 });
@@ -23,7 +24,11 @@ export function wingRarity(item){
 // number of previously collected wings. Repeats can occur as in real gacha.
 export function drawGmWing(profile,rng=Math.random,customWings=[]){
  if(!profile?.admin)return {error:'GM only'};
- if((profile.inventory||[]).length>=600)return {error:'Inventory full'};
+ const drawn=drawWing(profile,rng,customWings);
+ return drawn.error?drawn:{...drawn,mode:'gm-preview'};
+}
+export function drawWing(profile,rng=Math.random,customWings=[]){
+ if((profile?.inventory||[]).length>=600)return {error:'Inventory full'};
  const number=()=>{const value=Number(rng());return Number.isFinite(value)?Math.min(.9999999999999999,Math.max(0,value)):0;};
  let roll=number()*100,quality='relic';
  for(const [name,weight] of Object.entries(WING_QUALITY_WEIGHTS)){
@@ -34,6 +39,6 @@ export function drawGmWing(profile,rng=Math.random,customWings=[]){
  const item=pool[Math.floor(number()*pool.length)];
  const all=[...SWALLOWTAIL_WINGS,...customWings],ids=new Set(all.map(w=>w.id));
  const uniqueOwned=new Set([...(profile.inventory||[]),item.id].filter(id=>ids.has(id)));
- return {item,quality,priceTwd:0,mode:'gm-preview',
+ return {item,quality,priceTwd:0,mode:'free-trial',
   remaining:all.length-uniqueOwned.size};
 }
