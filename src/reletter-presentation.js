@@ -12,6 +12,7 @@ import {sampleMeleePose,meleeDuration,meleeFamilies} from './reletter/melee-moti
 import {animateOddWeapon,faceOddWeapon} from './reletter/odd-weapon-art.js';
 import {supportOffhand} from './reletter/offhand-pose.js';
 import {oddWeapon} from './reletter/odd-weapons.js';
+import {poseOverheadStaff,advanceStaffRaise} from './staff-raise-pose.js';
 
 export function buildReletterEnvironment(scene,renderer){
   renderer.toneMappingExposure=1.3;
@@ -27,40 +28,6 @@ export function buildReletterEnvironment(scene,renderer){
 export function reletterPlatformMaterial(){return new THREE.MeshPhysicalMaterial({color:'#E84887',roughness:.2,metalness:.1,clearcoat:1,clearcoatRoughness:.15,iridescence:1,iridescenceIOR:1.3,iridescenceThicknessRange:[100,800],specularIntensity:.9,specularColor:new THREE.Color('#FFB0D0'),sheen:.6,sheenColor:new THREE.Color('#FF6B9D'),envMapIntensity:1.4,emissive:'#E84887',emissiveIntensity:.08});}
 export function disposeVisual(root){if(!root)return;const geometry=new Set(),materials=new Set();root.traverse(o=>{if(o.geometry)geometry.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);});geometry.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());root.removeFromParent();}
 
-// Raise both hands to the same staff grip and keep its real tip aligned with aim.
-function poseOverheadStaff(root,blade,bones,restore){
- const angle=root.rotation.y,forward=new THREE.Vector3(Math.sin(angle),0,Math.cos(angle));
- const right=new THREE.Vector3(Math.cos(angle),0,-Math.sin(angle));
- const grip=root.localToWorld(new THREE.Vector3(0,2.04,.48));
- for(const side of ['Right','Left']){
-  const hand=bones?.get(side+'Hand'),chain=[bones?.get(side+'ForeArm'),bones?.get(side+'Arm')].filter(Boolean);
-  if(!hand||!chain.length)continue;
-  // Both hands clasp one upright staff shaft, with a staggered vertical grip.
-  const target=grip.clone().addScaledVector(right,side==='Right'?.06:-.06)
-   .add(new THREE.Vector3(0,side==='Right'?.08:-.10,0));
-  for(const bone of chain)restore.push([bone,'quaternion',bone.quaternion.clone()]);
-  root.updateWorldMatrix(true,true);
-  for(let pass=0;pass<2;pass++)for(const bone of chain){
-   const joint=bone.getWorldPosition(new THREE.Vector3()),actual=hand.getWorldPosition(new THREE.Vector3()).sub(joint),desired=target.clone().sub(joint);
-   if(actual.lengthSq()<1e-8||desired.lengthSq()<1e-8)continue;
-   const delta=new THREE.Quaternion().setFromUnitVectors(actual.normalize(),desired.normalize());
-   const parent=bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
-   const world=bone.getWorldQuaternion(new THREE.Quaternion());
-   bone.quaternion.copy(parent.multiply(delta).multiply(world));
-   bone.updateWorldMatrix(true,true);
-  }
- }
- const source=Array.isArray(root.userData.staffAimDirection)?new THREE.Vector3(...root.userData.staffAimDirection):forward;
- const aim=source.lengthSq()>.001?source.normalize():forward;
- // The reticle controls the emitted ray, NOT the staff shaft's orientation.
- const upright=new THREE.Vector3(aim.x*.06,1,aim.z*.06).normalize();
- root.updateWorldMatrix(true,true);
- blade.position.copy(root.worldToLocal(grip.clone()));
- blade.quaternion.copy(root.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(
-  new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),upright)));
- blade.updateWorldMatrix(true,true);
-}
-
 export class ReletterPresentation{
   removeOdd(f){f.root.removeFromParent();if(!f.root.geometry.userData.sharedOdd)f.root.geometry.dispose();f.root.material.dispose();}
   removeGuardian(f){f.root.removeFromParent();f.root.traverse(o=>{if(o.geometry&&!o.geometry.userData.sharedGuardian)o.geometry.dispose();o.material?.dispose();});}
@@ -68,7 +35,7 @@ export class ReletterPresentation{
   equipment(root,equipment={}){
     const d=root.userData;this.players.add(root);d.equipment=equipment;
     const weapon=itemById(equipment.weapon),signature=JSON.stringify(equipment);if(d.equipmentSignature===signature)return;d.equipmentSignature=signature;
-    if(d.blade)disposeVisual(d.blade);d.blade=null;if(weapon&&(weapon.exotic||weapon.id==='chiang-token'||meleeFamilies.includes(weapon.family)||isSpellWeapon(weapon))){d.blade=isSpellWeapon(weapon)?makeSpellEquipment(weapon):makeHeldWeapon(weapon);root.add(d.blade);}d.weaponId=weapon?.id;
+    if(d.blade)disposeVisual(d.blade);d.blade=null;if(weapon&&(weapon.exotic||weapon.id==='chiang-token'||meleeFamilies.includes(weapon.family)||isSpellWeapon(weapon))){d.blade=isSpellWeapon(weapon)?makeSpellEquipment(weapon):makeHeldWeapon(weapon);root.add(d.blade);}d.weaponId=weapon?.id;d.staffRaise=0;
     if(d.headgear)disposeHeadgear(d.headgear);d.headgear=equipment.head?attachHeadgear(THREE,d.model,itemById(equipment.head)):null;
     if(d.outfit)disposeOutfit(d.outfit);d.outfit=equipment.outfit?attachOutfit(THREE,d.model,itemById(equipment.outfit),{hood:!equipment.head}):null;
     if(d.wings)disposeGardenModel(d.wings);d.wings=equipment.wings?attachWings(THREE,d.model,itemById(equipment.wings)):null;
@@ -76,7 +43,8 @@ export class ReletterPresentation{
     d.bones=new Map();d.model.traverse(o=>{if(o.isBone)d.bones.set(o.name.replace(/[^a-z0-9]/gi,'').replace(/^mixamorig\d*/,''),o);});
   }
   beforeAnimation(){for(let i=this.restore.length-1;i>=0;i--){const [object,property,value]=this.restore[i];object[property].copy(value);}this.restore.length=0;}
-  play(event,root){if(!event||this.seen.has(event.id))return;this.seen.add(event.id);if(this.seen.size>100)this.seen.delete(this.seen.values().next().value);const item=itemById(event.weapon);if(!item)return;const data={...item,...event,charge:event.charge||0};if(root&&event.channel)root.userData.staffCastingUntil=performance.now()+Math.max(1700,(item.cooldown||700)*3);if(root&&meleeFamilies.includes(item.family))root.userData.attack={age:0,duration:meleeDuration(item.family,event.combo||0),combo:event.combo||0,data};
+  play(event,root){if(!event||this.seen.has(event.id))return;this.seen.add(event.id);if(this.seen.size>100)this.seen.delete(this.seen.values().next().value);const item=itemById(event.weapon);if(!item)return;const data={...item,...event,charge:event.charge||0};if(root&&isSpellWeapon(item))root.userData.staffCastingUntil=performance.now()+
+     (event.channel?Math.max(1700,(item.cooldown||700)*3):230);if(root&&meleeFamilies.includes(item.family))root.userData.attack={age:0,duration:meleeDuration(item.family,event.combo||0),combo:event.combo||0,data};
     this.vfx.play(data,item,root);
     // Each bonus uses its real source weapon's ultimate and matched server collider.
     for(const echo of (event.fusionEchoes||[]).slice(0,2)){
@@ -102,7 +70,11 @@ export class ReletterPresentation{
   charging(root,progress){this.vfx.charging(root,progress,itemById(root?.userData.weaponId));}
   update(dt,time,camera){
     setHeldTime(time);for(const root of this.players){if(!root.parent){this.players.delete(root);continue;}const d=root.userData,fx=d.attack;if(d.deadUntil>Date.now()){d.deathLean=Math.min(Math.PI/2,(d.deathLean||0)+dt*4);this.restore.push([d.model,'quaternion',d.model.quaternion.clone()]);d.model.rotateZ(d.deathLean);}else d.deathLean=0;if(fx){fx.age+=dt;if(fx.age<fx.duration){const pose=sampleMeleePose(fx.data.family,fx.combo,fx.age);this.restore.push([d.model,'position',d.model.position.clone()],[d.model,'quaternion',d.model.quaternion.clone()]);d.model.position.add(new THREE.Vector3(...pose.offset).applyAxisAngle(new THREE.Vector3(0,1,0),d.model.rotation.y));d.model.rotateY(pose.turn);d.model.rotateX(pose.bones.Spine2[0]*.35);d.model.rotateZ(pose.bones.Spine2[2]*.3);for(const [name,angles] of Object.entries(pose.bones)){const bone=d.bones?.get(name);if(bone){this.restore.push([bone,'quaternion',bone.quaternion.clone()]);bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...angles)));}}}else d.attack=null;}
-      if(d.blade){attachHeldWeapon({model:d.model,character:root.uuid},root,d.blade,d.attack);if(d.blade.userData.spell&&(d.staffCasting||performance.now()<(d.staffCastingUntil||0)))poseOverheadStaff(root,d.blade,d.bones,this.restore);if(d.blade.userData.exotic){if(camera)faceOddWeapon(THREE,d.blade,camera);animateOddWeapon(d.blade,time,d.attack?Math.sin(d.attack.age/d.attack.duration*Math.PI):0);}if(d.attack&&(['planter','palm'].includes(d.attack.data.family)||d.attack.combo===6&&d.attack.data.family==='saber')){for(const name of ['LeftForeArm','LeftArm']){const bone=d.bones?.get(name);if(bone)this.restore.push([bone,'quaternion',bone.quaternion.clone()]);}supportOffhand(d.model,d.blade.localToWorld(new THREE.Vector3(0,d.attack.data.family==='planter'?.25:.18,.02)),Math.sin(Math.min(1,d.attack.age/meleeDuration(d.attack.data.family,d.attack.combo))*Math.PI)*.8);}}if(d.shield)d.shield.material.uniforms.pulse.value=.8+Math.sin(time*2)*.2;if(d.wings)for(let i=0;i<d.wings.children.length;i++)d.wings.children[i].rotation.y=Math.sin(time*(d.current==='jump'||d.current==='fall'?11:2))* .24*(i?-1:1);
+      if(d.blade){attachHeldWeapon({model:d.model,character:root.uuid},root,d.blade,d.attack);if(d.blade.userData.spell){
+         const casting=!!(d.staffCasting||performance.now()<(d.staffCastingUntil||0));
+         d.staffRaise=advanceStaffRaise(d.staffRaise||0,casting,dt);
+         if(d.staffRaise>0)poseOverheadStaff(root,d.blade,d.bones,this.restore,d.staffRaise);
+        }else d.staffRaise=0;if(d.blade.userData.exotic){if(camera)faceOddWeapon(THREE,d.blade,camera);animateOddWeapon(d.blade,time,d.attack?Math.sin(d.attack.age/d.attack.duration*Math.PI):0);}if(d.attack&&(['planter','palm'].includes(d.attack.data.family)||d.attack.combo===6&&d.attack.data.family==='saber')){for(const name of ['LeftForeArm','LeftArm']){const bone=d.bones?.get(name);if(bone)this.restore.push([bone,'quaternion',bone.quaternion.clone()]);}supportOffhand(d.model,d.blade.localToWorld(new THREE.Vector3(0,d.attack.data.family==='planter'?.25:.18,.02)),Math.sin(Math.min(1,d.attack.age/meleeDuration(d.attack.data.family,d.attack.combo))*Math.PI)*.8);}}if(d.shield)d.shield.material.uniforms.pulse.value=.8+Math.sin(time*2)*.2;if(d.wings)for(let i=0;i<d.wings.children.length;i++)d.wings.children[i].rotation.y=Math.sin(time*(d.current==='jump'||d.current==='fall'?11:2))* .24*(i?-1:1);
     }
     this.vfx.update(dt);
   }
