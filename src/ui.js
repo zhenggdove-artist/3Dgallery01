@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(
 
 export class TempleUI extends EventTarget{
   constructor(){
-    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.oauthTicket='';this.authMode='legacy';
+    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.firebaseIdToken='';this.authMode='firebase';
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
     bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
     this.bind();$('gm-help').onclick=()=>this.openPanel('help');$('gm-menu').onclick=()=>this.openPanel('gm');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag'&&cell.dataset.inventoryIndex!==undefined){
@@ -49,24 +49,17 @@ export class TempleUI extends EventTarget{
   bind(){
     document.addEventListener('contextmenu',event=>{if(event.target.closest?.('#game,#hud')&&!event.target.closest('input,textarea'))event.preventDefault();});
     this.entry.addEventListener('click',event=>{
-      const legacy=event.target.closest('[data-legacy-login]');
-      if(legacy){
-       this.oauthTicket='';this.form.hidden=false;
-       $('legacy-memory-controls').hidden=false;
-       $('account-login-status').textContent='舊式登入使用名稱與存檔代碼；GM 仍需輸入專用管理密鑰。';
-       return;
-      }
-      const button=event.target.closest('[data-login-provider]');
+      const button=event.target.closest('[data-google-login]');
       if(!button||button.disabled)return;
-      this.oauthTicket='';$('account-login-status').textContent='正在連接 '+button.dataset.loginProvider+'…';
-      this.emit('oauth-login',button.dataset.loginProvider);
-     });
-     this.form.addEventListener('submit',event=>{
+      $('account-login-status').textContent='正在開啟 Google 登入視窗…';
+      this.emit('firebase-login');
+    });
+    this.form.addEventListener('submit',event=>{
       event.preventDefault();$('entry-error').textContent='';
+      if(!this.firebaseIdToken)return this.joinError('請先使用 Google 帳號登入');
       this.emit('join',{name:$('player-name').value.trim(),color:$('clothing-color').value,
-       memoryCode:this.oauthTicket?'':$('memory-code').value.trim(),
-       oauthTicket:this.oauthTicket,backendUrl:window.TEMPLE_CONFIG.backendUrl});
-     });
+        firebaseIdToken:this.firebaseIdToken,backendUrl:window.TEMPLE_CONFIG.backendUrl});
+    });
     const charge=$('attack-button');let attackPointer=null;charge.onpointerdown=event=>{event.preventDefault();if(attackPointer!==null)return;attackPointer=event.pointerId;charge.setPointerCapture(event.pointerId);this.emit('attack-start');};const endAttack=(event,cancel=false)=>{if(event.pointerId!==attackPointer)return;attackPointer=null;this.emit(cancel?'attack-cancel':'attack-release');};charge.onpointerup=e=>endAttack(e);charge.onpointercancel=charge.onlostpointercapture=e=>endAttack(e,true);const jump=document.querySelector('[data-action=jump]');jump.onpointerdown=e=>{e.preventDefault();jump.setPointerCapture(e.pointerId);this.emit('jump');};jump.onclick=e=>{if(e.detail===0)this.emit('jump');e.stopPropagation();};
     addEventListener('keydown',event=>{if(this.self&&!this.panelName&&event.code==='KeyQ'&&!event.repeat&&!/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)){event.preventDefault();this.emit('attack-start');}});
     addEventListener('keyup',event=>{if(event.code==='KeyQ')this.emit('attack-release');});addEventListener('blur',()=>this.emit('attack-cancel'));
@@ -100,33 +93,24 @@ export class TempleUI extends EventTarget{
   }
   setLoading(progress,label){$('loading-fill').style.width=`${Math.round(progress*100)}%`;$('loading-detail').textContent=label;$('loading-percent').textContent=`${Math.round(progress*100)}%`;}
   ready(){document.body.classList.add('ready');document.body.classList.remove('booting');}
-  setOAuthProviders(providers){
-    const configured=providers&&typeof providers==='object'?providers:{};
-    let enabled=0;
-    for(const provider of ['google','apple','facebook']){
-      const button=this.entry.querySelector('[data-login-provider="'+provider+'"]');
-      if(!button)continue;
-      button.disabled=!configured[provider];
-      button.title=configured[provider]?'':provider+' login needs developer credentials';
-      if(configured[provider])enabled++;
-    }
-    if(!enabled){
-      $('account-login-status').textContent='第三方帳號登入尚待設定開發者憑證；目前使用下方舊式 Memory Code／GM 登入。';
-    }
+  setFirebaseLoginStatus(enabled,message=''){
+    const button=this.entry.querySelector('[data-google-login]');
+    if(button)button.disabled=!enabled;
+    $('account-login-status').textContent=message||(
+      enabled?'使用 Google 帳號登入，角色進度自動儲存。':
+      '尚未設定 Firebase 專案。Google 登入暫未開放。'
+    );
   }
-  selectOAuthAccount(ticket){
-    this.oauthTicket=ticket;
-    $('account-login-status').textContent='帳號驗證成功。首次登入請設定角色名稱與服裝顏色。';
-    $('account-name-controls').hidden=false;
-    $('legacy-memory-controls').hidden=true;
-    $('entry-form').hidden=false;
+  selectFirebaseAccount(token){
+    this.firebaseIdToken=token;
+    $('account-login-status').textContent='Google 驗證成功。設定角色名稱與服裝顏色。';
+    this.form.hidden=false;
     $('player-name').required=true;
     $('player-name').focus();
-    $('memory-code').value='';
   }
   joinBusy(value){$('enter-button').disabled=value;$('enter-button').textContent=value?'Connecting…':'Enter ↵';}
   joinError(message){$('entry-error').textContent=message;this.joinBusy(false);}
-  enter(data){document.activeElement?.blur();this.self=data.self;this.authMode=data.authMode||'legacy';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;$('memory-code').value='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;$('gm-menu').hidden=!data.self.profile?.admin;$('wing-shop-button').hidden=!data.self.profile?.admin;this.refreshHUD();this.joinBusy(false);}
+  enter(data){document.activeElement?.blur();this.self=data.self;this.authMode=data.authMode||'firebase';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;$('gm-menu').hidden=!data.self.profile?.admin;$('wing-shop-button').hidden=!data.self.profile?.admin;this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;$('gm-menu').hidden=!this.self.profile?.admin;$('wing-shop-button').hidden=!this.self.profile?.admin;this.refreshHUD();if(this.panelName)this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
   setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','wing-shop'].includes(this.panelName)&&this.panelSignature!==JSON.stringify([world.profile.inventory,world.profile.equipment,world.profile.wallet,world.profile.fusion])&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
@@ -283,8 +267,8 @@ export class TempleUI extends EventTarget{
     </section>`;
   }
   renderSave(){
-    if(this.authMode==='oauth'){
-      this.content.innerHTML='<h3>帳號進度自動儲存</h3><p>使用 Google、Apple 或 Facebook 登入時，裝備、翅膀、等級、背包與遊戲進度都儲存在伺服器。下次使用相同帳號登入即可恢復，無需 Memory Code。</p>';
+    if(this.authMode==='firebase'){
+      this.content.innerHTML='<h3>帳號進度自動儲存</h3><p>使用 Firebase Google 登入時，裝備、翅膀、等級、背包與遊戲進度都儲存在伺服器。下次使用相同帳號登入即可恢復，無需 Memory Code。</p>';
       return;
     }
     const code=this.saveCode||this.self?.saveCode||'';this.content.innerHTML=`<h3>MEMORY CODE</h3><p>將目前的等級、裝備、背包與遊戲進度儲存至伺服器。重新進入遊戲時，在 Memorycode 欄位輸入代碼恢復。</p><label for="save-code-output">存檔代碼<input id="save-code-output" readonly autocomplete="off" spellcheck="false" class="panel-input" value="${escape(code)}" placeholder="尚未產生代碼"></label><button type="button" class="panel-button" data-save-code>產生／重新取得代碼</button><button type="button" class="panel-button" data-copy-save-code ${code?'':'disabled'}>複製存檔代碼</button><p>請妥善保管代碼。擁有代碼的人可能存取你的存檔。</p>`;}
