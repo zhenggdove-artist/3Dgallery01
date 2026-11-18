@@ -112,7 +112,12 @@ test('staff raise is a 100ms interpolation and the grip never leaves the real ri
   assert.ok(hand.distanceTo(grip)<.00001,'right palm and staff grip must coincide mid-animation');
   assert.ok(Number.isFinite(blade.quaternion.w));
   const axis=new THREE.Vector3(0,1,0).applyQuaternion(blade.getWorldQuaternion(new THREE.Quaternion()));
-  if(amount===1)assert.ok(axis.y>.95,'staff must remain nearly vertical at full raise');
+  if(amount===1){
+   assert.ok(axis.y>.95,'staff must remain nearly vertical at full raise');
+   const left=bones.get('LeftHand').getWorldPosition(new THREE.Vector3());
+   const lowerGrip=blade.localToWorld(new THREE.Vector3(0,-.15,0));
+   assert.ok(left.distanceTo(lowerGrip)<.24,'left palm must stay near the same staff shaft');
+  }
   assert.equal(restore.length,4,'all two-hand arm joints are restored before mixer update');
  }
 });
