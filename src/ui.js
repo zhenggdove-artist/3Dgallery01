@@ -318,6 +318,7 @@ export class TempleUI extends EventTarget{
   }
   beginWingDraw(){
    if(this.gachaOverlay)return;
+   this.content.querySelector('.wing-gacha-machine')?.classList.add('is-spinning');
    const overlay=document.createElement('div');
    overlay.className='wing-gacha-overlay';
    overlay.setAttribute('role','status');overlay.setAttribute('aria-live','polite');
@@ -325,6 +326,7 @@ export class TempleUI extends EventTarget{
    document.body.append(overlay);this.gachaOverlay=overlay;this.gachaStartedAt=performance.now();
   }
   cancelWingDraw(){
+   this.content.querySelector('.wing-gacha-machine')?.classList.remove('is-spinning');
    this.gachaOverlay?.remove();this.gachaOverlay=null;
   }
   showWingDraw(drawn){
@@ -337,8 +339,9 @@ export class TempleUI extends EventTarget{
    setTimeout(()=>{
     if(this.gachaOverlay!==overlay)return;
     const confetti=epic?Array.from({length:70},(_,i)=>`<i class="wing-confetti" style="--i:${i};--h:${(i*47)%360}deg;--x:${(i*73)%100}vw;--d:${(i%11)*.035}s"></i>`).join(''):'';
+    const poppers=epic?'<span class="wing-party-popper wing-party-left"></span><span class="wing-party-popper wing-party-right"></span>':'';
     overlay.classList.toggle('wing-epic-win',epic);
-    overlay.innerHTML=`<div class="gacha-animation gacha-result">${confetti}
+    overlay.innerHTML=`<div class="gacha-animation gacha-result">${confetti}${poppers}
      <h3>${epic?'恭喜！PURPLE · EPIC！':'恭喜抽中翅膀'}</h3>
      <div class="gacha-result-image">${item?`<img src="${wingIcon(item)}" alt="${escape(item.name)}">`:''}</div>
      <strong>${escape(item?.name||drawn.itemId)}</strong>
