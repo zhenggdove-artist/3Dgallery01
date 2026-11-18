@@ -1,6 +1,7 @@
 import {fuseEquipment} from '../reletter/server/fusion-rules.js';
 import {equipmentById} from '../reletter/equipment-catalog.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
+import {weaponClass} from './weapon-info.js';
 
 export function originalEquipmentGame(profile,world={}){
  const key=profile.key,instances=profile.inventory.filter(id=>equipmentById(id)).map(id=>{
@@ -23,7 +24,15 @@ export function equippedItem(profile,item){
  const record=profile.fusion?.[item.id],original=record?.original||{};
  const affixIds=[...new Set([...itemAffixes(item),...itemAffixes(original),...itemAffixes(record)])];
  const named={...item,affixId:affixIds[0]||null,affixIds};
- if(record?.templeStats)return {...named,...record.templeStats};
+ if(record?.templeStats){
+   const merged={...named,...record.templeStats};
+   // Repair legacy saves which already persisted absurd ranged reach on a
+   // close-combat weapon. Charged ultimate metadata remains unmodified.
+   if(item.slot==='weapon'&&weaponClass(item)==='near'){
+    merged.range=item.range;merged.radius=item.radius;
+   }
+   return merged;
+  }
  const raw=original.stats;if(!raw)return named;
  return {...named,...raw,damage:raw.damage===undefined?item.damage:raw.damage*10,
   chargeDamage:raw.chargeDamage===undefined?item.chargeDamage:raw.chargeDamage*10};
