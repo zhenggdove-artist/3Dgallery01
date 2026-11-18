@@ -57,14 +57,15 @@ test('real player controller launches, flies horizontally, lands and bounces thr
  assert.equal(c.root.position.y,0);assert.equal(c.grounded,true);assert.equal(c.panBlastFlight,null);
 });
 
-test('server authorizes a pan-launched fighter to clear a high deck but rejects unearned height',()=>{
+test('doubled 64m ceiling permits normal flight to 33.5m and rejects heights beyond 64m',()=>{
  const T=7_000_000,from={position:[75,30,0],rotation:0,animation:'idle'},
   airborne={position:[75,33.5,0],rotation:0,animation:'jump'};
  const mobility={hitReaction:{panBlast:true,time:T},stats:{speed:1}};
  const allowed=validateState(from,airborne,250,'fighter',null,null,T+200,mobility);
  assert.equal(allowed.error,undefined,'a genuine blast must not rubber-band at the ordinary 32m ceiling');
- assert.equal(validateState(from,airborne,250,'fighter',null,null,T+200,null).error,'Invalid position');
- assert.equal(validateState(from,airborne,250,'fighter',null,null,T+3600,mobility).error,'Invalid position');
+ assert.equal(validateState(from,airborne,250,'fighter',null,null,T+200,null).error,undefined);
+ assert.equal(validateState(from,airborne,250,'fighter',null,null,T+3600,mobility).error,undefined);
+ assert.equal(validateState(from,{...airborne,position:[75,65,0]},250,'fighter',null,null,T+200,null).error,'Invalid position');
 });
 
 test('server monster is NOT teleported and follows the same three airborne bounces',()=>{
