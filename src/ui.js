@@ -49,6 +49,13 @@ export class TempleUI extends EventTarget{
   bind(){
     document.addEventListener('contextmenu',event=>{if(event.target.closest?.('#game,#hud')&&!event.target.closest('input,textarea'))event.preventDefault();});
     this.entry.addEventListener('click',event=>{
+      const legacy=event.target.closest('[data-legacy-login]');
+      if(legacy){
+       this.oauthTicket='';this.form.hidden=false;
+       $('legacy-memory-controls').hidden=false;
+       $('account-login-status').textContent='舊式登入使用名稱與存檔代碼；GM 仍需輸入專用管理密鑰。';
+       return;
+      }
       const button=event.target.closest('[data-login-provider]');
       if(!button||button.disabled)return;
       this.oauthTicket='';$('account-login-status').textContent='正在連接 '+button.dataset.loginProvider+'…';
@@ -97,6 +104,7 @@ export class TempleUI extends EventTarget{
     this.oauthTicket=ticket;
     $('account-login-status').textContent='帳號驗證成功。首次登入請設定角色名稱與服裝顏色。';
     $('account-name-controls').hidden=false;
+    $('legacy-memory-controls').hidden=true;
     $('entry-form').hidden=false;
     $('player-name').required=true;
     $('player-name').focus();
