@@ -630,7 +630,8 @@ function validBuildPosition(world,actor,position){return canBuildAt(world,actor.
 export function tickBloomChannelHeal(profile,now){
  const item=itemById(profile?.channelWeapon);
  if(!item||item.family!=='petal'||!isChannelStaff(item)||
-    !profile.channelStartedAt||now-(profile.lastChannelPulseAt||0)>6000||
+    profile.equipment?.weapon!==item.id||
+    !profile.channelStartedAt||now-(profile.lastChannelPulseAt||0)>Math.max(2100,item.cooldown*2+200)||
     profile.hp<=0||profile.deadUntil>now)return 0;
  const since=Number(profile.lastBloomHealAt)||now;
  const pulses=Math.max(0,Math.floor((now-since)/1000));
