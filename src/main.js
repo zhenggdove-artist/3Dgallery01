@@ -75,6 +75,25 @@ const minimap=new Minimap();
 const damageNumbers=createDamageNumbers(THREE),statusVisuals=new ElementalStatusVisuals();
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
+let pendingAInteraction=null,chargeDelayTimer=null,nextChargeRetryAt=0;
+// Begin charging after the 500ms tap threshold without relying on render FPS.
+// After a stun/rejected request, retry only while the A/Q button is still held.
+function clearChargeDelay(){
+ if(chargeDelayTimer!==null)clearTimeout(chargeDelayTimer);
+ chargeDelayTimer=null;
+}
+function startHeldCharge(){
+ if(!attackHeld||attackHoldStarted===null||chargeStarted!==null||chargeRequest||staffChannel||
+    !controller?.enabled||performance.now()<nextChargeRetryAt)return;
+ chargeStarted=performance.now();
+ chargeRequest=sendAction('attack',{phase:'charge'}).then(result=>{
+  if(!result?.charging&&attackHeld){
+   chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;
+  }
+  return result;
+ });
+ audio.play('charge',.62);
+}
 let staffChannel=null,staffChannelPromise=null,staffChannelBusy=false,staffChannelShotAt=0,staffChannelSerial=0;
 const writer=new WriteCinematic({scene,controller:()=>controller,arena,ui,send:sendAction,audio,bursts,upload:file=>uploadMedia(network,file)});
 const plantHover=bindPlantHover({canvas,camera,arena,controller:()=>controller,ui});
@@ -176,38 +195,46 @@ ui.addEventListener('jump',()=>controller?.jump());
 ui.addEventListener('attack-start',()=>{
  if(!controller?.enabled||self?.role!=='fighter')return;
  if(coarse&&buildPlacement){confirmBuildPlacement();return;}
- if(controller.holdingArt){artworkThrow.begin();return;}
- // Artwork pickup always wins over weapon camera cycling, including rifles.
- const nearbyArt=arena.nearest(controller.root.position.toArray());
- if(nearbyArt?.type==='artwork'){performInteract();return;}
- const weapon=itemById(world?.profile?.equipment?.weapon);
- if(weapon?.firstPerson){gun.cycle();return;}
- if(!artworkThrow.started){
-  const near=arena.nearest(controller.root.position.toArray());
-  const canUse=near&&['artwork','coin','drop'].includes(near.type);
-  if(canUse){performInteract();return;}
+ // A held artwork overrides the currently equipped firearm/camera mode.
+ // Query the live world as holdingArt can lag behind a pickup response.
+ if(artworkThrow.started!==null||controller.holdingArt||
+    Object.values(world?.artworks||{}).some(art=>art.holder===self.key)){
+  clearChargeDelay();pendingAInteraction=null;attackHeld=false;
+  attackHoldStarted=null;chargeStarted=null;chargeRequest=null;
+  artworkThrow.begin();return;
  }
- if(chargeStarted!==null||staffChannel)return;
+ if(attackHeld||staffChannel)return;
+ const weapon=itemById(world?.profile?.equipment?.weapon);
+ // A tap picks up nearby items; holding must still charge any weapon.
+ // For first-person guns a tap cycles the camera, while a hold charges.
+ pendingAInteraction=null;
+ if(!artworkThrow.started){
+  const nearbyArt=arena.nearest(controller.root.position.toArray());
+  if(nearbyArt?.type==='artwork'||['coin','drop'].includes(nearbyArt?.type))
+   pendingAInteraction=nearbyArt;
+ }
  attackHeld=true;
  attackHoldStarted=performance.now();
- if(isChannelStaff(weapon)&&localRoot){
-  // A single lift starts on button-down and stays raised until the
-  // acknowledged normal shot. No second pose-trigger from network latency.
-  localRoot.userData.staffCastingUntil=attackHoldStarted+1800;
- }
- chargeStarted=null;
- chargeRequest=null;
+ chargeStarted=null;chargeRequest=null;nextChargeRetryAt=0;
+ clearChargeDelay();
+ chargeDelayTimer=setTimeout(()=>{chargeDelayTimer=null;startHeldCharge();},STAFF_TAP_MAX_MS);
+ if(isChannelStaff(weapon)&&localRoot)localRoot.userData.staffCastingUntil=attackHoldStarted+1800;
 });
 ui.addEventListener('attack-release',async()=>{
- if(itemById(world?.profile?.equipment?.weapon)?.firstPerson){gun.held=false;return;}
- attackHeld=false;
- if(artworkThrow.started!==null)return artworkThrow.release();
+ // This check must precede gun handling. The initial SMG previously left
+ // artwork charging forever because the firearm early return skipped release.
+ if(artworkThrow.started!==null){
+  gun.held=false;attackHeld=false;clearChargeDelay();pendingAInteraction=null;
+  chargeStarted=null;attackHoldStarted=null;chargeRequest=null;
+  return artworkThrow.release();
+ }
+ gun.held=false;attackHeld=false;clearChargeDelay();
+ const tapInteraction=pendingAInteraction;pendingAInteraction=null;
  if(staffChannel){
   const pending=staffChannelPromise;
   staffChannel=null;++staffChannelSerial;
   arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;
   chargeStarted=null;attackHoldStarted=null;chargeRequest=null;
-  // Local VFX stops on pointer-up, before any queued server response.
   void sendAction('attack',{phase:'channel-stop'});
   void Promise.resolve(pending).then(result=>{
    if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});
@@ -220,13 +247,13 @@ ui.addEventListener('attack-release',async()=>{
  const charge=chargeProgress(heldMs,weapon?.chargeMs||1500);
  attackHoldStarted=null;chargeStarted=null;
  const pending=chargeRequest;chargeRequest=null;
- if(heldMs>=STAFF_TAP_MAX_MS)await pending;
- // A short tap casts one projectile (or clam melee). Releasing a partly
- // charged LONG hold casts nothing; a fully charged hold stops the channel.
+ if(heldMs<STAFF_TAP_MAX_MS&&tapInteraction){
+  performInteract(tapInteraction);return;
+ }
+ if(weapon?.firstPerson&&heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
+ if(heldMs>=STAFF_TAP_MAX_MS&&pending)await pending;
  if(isChannelStaff(weapon)){
   if(isStaffTap(weapon,heldMs)){
-   // Only delay the shot for the remaining part of the original raise.
-   // Do not restart the model animation on button release or ACK.
    if(localRoot)localRoot.userData.staffCastingUntil=Infinity;
    const liftRemaining=Math.max(0,STAFF_RAISE_SECONDS*1000-heldMs);
    if(liftRemaining>0)await new Promise(resolve=>setTimeout(resolve,liftRemaining));
@@ -239,7 +266,7 @@ ui.addEventListener('attack-release',async()=>{
 });
 ui.addEventListener('attack-cancel',()=>{
  gun.held=false;
- attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;artworkThrow.cancel();
+ attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();artworkThrow.cancel();
  if(localRoot)localRoot.userData.staffCastingUntil=0;
  if(staffChannel){
   const pending=staffChannelPromise;
@@ -257,7 +284,7 @@ ui.addEventListener('save-code',async()=>{try{const data=await network.createSav
 ui.addEventListener('gm-presence-request',async()=>{if(!self?.profile?.admin)return;try{ui.setGmPresence(await network.gmPresence());}catch(error){ui.setGmPresenceError(error.message);}});
 ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
-ui.addEventListener('panel',event=>{chargeStarted=null;attackHoldStarted=null;chargeRequest=null;if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
+ui.addEventListener('panel',event=>{chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
 ui.addEventListener('editor-settings',event=>applyEditorSettings(event.detail));
 ui.addEventListener('gm-audio-setting',event=>{if(!self?.profile?.admin)return;audio.setVolumes({[event.detail.key]:event.detail.value});void sendAction('gm-audio-setting',event.detail);});
  ui.addEventListener('gm-fusion-chance',event=>{if(!self?.profile?.admin)return;void sendAction('gm-fusion-chance',event.detail);});
@@ -367,7 +394,7 @@ function performAttack(charge=0,phase=null){
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
 }
-function performInteract(){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
+function performInteract(target=null){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=target||arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
 
 let screenShakeUntil=0;
 const heardStompLandings=new Set();
@@ -400,12 +427,8 @@ function update(dt,time){
   }
   updateKnockdowns();arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}updatePlayerSpeech();artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
   const heldItem=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
-  if(heldItem.firstPerson){attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;}
-  if(attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&performance.now()-attackHoldStarted>=STAFF_TAP_MAX_MS){
-   chargeStarted=performance.now();
-   chargeRequest=sendAction('attack',{phase:'charge'});
-   audio.play('charge',.62);
-  }
+  if(attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&
+     performance.now()-attackHoldStarted>=STAFF_TAP_MAX_MS)startHeldCharge();
   const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
   // First 500ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
   // the charging window; the very first sustained pulse is the ultimate.
