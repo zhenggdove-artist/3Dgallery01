@@ -1,6 +1,6 @@
 import {initializeArtMedia,uploadArtMedia,getArtMedia} from './art-media.js';
 import {wingPaymentApi} from './ecpay-wing-payments.js';
-import {initOAuth,oauthStart,oauthCallback,oauthTicket,oauthSettings} from './oauth.js';
+import {verifyFirebaseIdToken,firebaseWebConfig,firebaseProfileKey,isFirebaseGm} from './firebase-auth.js';
 import {recoverArtworks} from '../src/shared/artwork-recovery.js';
 import {resetPlayerArtworks} from '../src/shared/art-bomb.js';
 import {DurableObject} from 'cloudflare:workers';
@@ -38,7 +38,6 @@ export class TempleRoom extends DurableObject{
        CREATE TABLE IF NOT EXISTS gm_music_meta (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, bytes INTEGER NOT NULL, chunks INTEGER NOT NULL);
        CREATE TABLE IF NOT EXISTS gm_music_chunks (version INTEGER NOT NULL, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(version,part));
     `);
-    initOAuth(this.sql);
     initializeArtMedia(this.sql);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
@@ -54,21 +53,18 @@ export class TempleRoom extends DurableObject{
   async fetch(request){
     const url=new URL(request.url),path=url.pathname;
     if(request.method==='OPTIONS')return withCors(request,new Response(null,{status:204}),this.env);
-    // Apple sends form_post from appleid.apple.com. Stored single-use state
-    // protects the callback, not a browser Origin header.
-    if(path==='/api/oauth/callback'&&['GET','POST'].includes(request.method))
-      return oauthCallback(request,this.env,this.sql);
     if(!this.allowed(request))return withCors(request,json({error:'Origin is not allowed'},403),this.env);
     try{
-      if(path==='/api/oauth/start'&&request.method==='GET')
-       return oauthStart(request,this.env,this.sql,originAllowed);
-      if(path==='/api/oauth/providers'&&request.method==='GET')
-       return withCors(request,json(oauthSettings(this.env)),this.env);
-      if(path==='/api/oauth/profile'&&request.method==='POST'){
-       const body=await readBody(request,2000),ticket=oauthTicket(this.sql,body.ticket);
-       if(!ticket)return withCors(request,json({error:'OAuth login ticket expired'},401),this.env);
-       const profile=this.world().profiles[ticket.profile_key];
-       return withCors(request,json({existing:!!profile,profile:profile?{name:profile.name,color:profile.color}:null}),this.env);
+      if(path==='/api/firebase/config'&&request.method==='GET')
+       return withCors(request,json(firebaseWebConfig(this.env)),this.env);
+      if(path==='/api/firebase/profile'&&request.method==='POST'){
+       let account;try{
+        account=await verifyFirebaseIdToken(this.token(request,url),this.env);
+       }catch(error){return withCors(request,json({error:'Google 登入驗證失敗：'+error.message},401),this.env);}
+       const profile=this.world().profiles[firebaseProfileKey(account)];
+       return withCors(request,json({
+        existing:!!profile,profile:profile?{name:profile.name,color:profile.color}:null
+       }),this.env);
       }
       if(path==='/health')return withCors(request,json({ok:true,service:'TempleRoom',database:'sqlite',players:this.roster().length,apiVersion:3,features:{artMediaUpload:true,artBombPlace:true,gmReset:true}}),this.env);
       if(path==='/api/join'&&request.method==='POST')return withCors(request,await this.join(request),this.env);
@@ -97,56 +93,79 @@ export class TempleRoom extends DurableObject{
 
   async join(request){
     const clientKey=request.headers.get('CF-Connecting-IP')||
-     request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()||'local';
-    if(!this.consumeRate('join:'+clientKey,120,60_000))return json({error:'Too many join attempts'},429);
+      request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()||'local';
+    if(!this.consumeRate('join:'+clientKey,100,60_000))
+      return json({error:'Too many join attempts'},429);
     const body=await readBody(request,8_000);
-    const oauth=body.oauthTicket?oauthTicket(this.sql,body.oauthTicket):null;
-    if(body.oauthTicket&&!oauth)return json({error:'Login ticket expired. Sign in again.'},401);
-    const existing=oauth?this.world().profiles[oauth.profile_key]:null;
-    const name=existing?.name||body.name,color=existing?.color||body.color;
-    if(!validName(name)||!validColor(color))return json({error:'Choose a name and color'},400);
-    const memory=String(body.memoryCode||body.saveCode||'').trim();
-    if(oauth&&!existing&&name.trim().toLowerCase()==='ely')
-     return json({error:'This name is reserved for the GM'},403);
-    const admin=!oauth&&name.trim()==='Ely'&&memory.length>0&&
-     constantTime(memory,String(this.env.TEMPLE_ADMIN_KEY||''));
-    if(!oauth&&name.trim()==='Ely'&&!admin)return json({error:'Invalid name or memory code'},403);
-    if(!oauth&&!admin&&memory&&!/^[A-Za-z0-9]{4}$/.test(memory))
-     return json({error:'Memory code must contain four letters or numbers'},400);
-    this.prune();
-    const now=Date.now(),saveCode=oauth?'':admin?'':normalizeCode(memory);
+    const firebaseEnabled=!!this.env.FIREBASE_PROJECT_ID;
+    let identity=null;
+    if(firebaseEnabled){
+      try{identity=await verifyFirebaseIdToken(this.token(request,new URL(request.url)),this.env);}
+      catch(error){return json({error:'必須透過 Firebase Google 帳號登入：'+error.message},401);}
+    }
+    // Legacy is deliberately allowed only while Firebase is not configured,
+    // for isolated CI regression tests and unreleased environments. Once the
+    // Firebase project is set, forged guest names/save codes never bypass auth.
+    const memory=identity?'':String(body.memoryCode||body.saveCode||'').trim();
+    const admin=identity?isFirebaseGm(identity,this.env):
+      body.name==='Ely'&&memory.length>0&&
+      constantTime(memory,String(this.env.TEMPLE_ADMIN_KEY||''));
+    const saveCode=identity||admin?'':normalizeCode(memory);
+    if(!identity&&saveCode==='INVALID')return json({error:'Invalid legacy save code'},400);
     const saved=saveCode?this.sql.exec('SELECT * FROM save_codes WHERE code=?',saveCode).toArray()[0]:null;
     if(saveCode&&!saved){
-     if(!this.consumeRate('save:'+clientKey,8,60_000))
-      return json({error:'Too many save-code attempts'},429);
-     return json({error:'Save code not found'},404);
+      if(!this.consumeRate('save:'+clientKey,8,60_000))
+        return json({error:'Too many save-code attempts'},429);
+      return json({error:'Save code not found'},404);
     }
-    const profileKey=oauth?.profile_key||saved?.profile_key||'guest:'+crypto.randomUUID();
-    const occupied=this.sql.exec('SELECT role,seat FROM sessions WHERE expires>? ORDER BY seat',now).toArray();
+    const profileKey=identity?firebaseProfileKey(identity):
+      saved?.profile_key||'guest:'+crypto.randomUUID();
+    const world=this.world();
+    let existing=world.profiles?.[profileKey];
+    // Preserve the original GM inventory/works/progression when the securely
+    // configured Firebase GM UID logs in for the first time. Keep source copy.
+    if(identity&&admin&&!existing){
+      const oldEntry=Object.entries(world.profiles||{}).find(([key,p])=>
+        key!==profileKey&&p?.admin===true&&p?.name==='Ely');
+      if(oldEntry){
+        world.profiles[profileKey]={...structuredClone(oldEntry[1]),key:profileKey,admin:true};
+        existing=world.profiles[profileKey];
+      }
+    }
+    const name=admin?'Ely':existing?.name||body.name;
+    const color=existing?.color||body.color;
+    if(!validName(name)||!validColor(color))
+      return json({error:'首次登入請先設定角色名稱和顏色'},400);
+    if(!admin&&name.trim().toLowerCase()==='ely')
+      return json({error:'This name is reserved for the GM'},403);
+    this.prune();
+    const now=Date.now(),occupied=this.sql.exec(
+      'SELECT role,seat FROM sessions WHERE expires>? ORDER BY seat',now).toArray();
     const fighterSeats=new Set(occupied.filter(r=>r.role==='fighter').map(r=>r.seat));
     const spectatorSeats=new Set(occupied.filter(r=>r.role==='spectator').map(r=>r.seat));
     let role='fighter',seat=FIGHTER_SEATS.find(i=>!fighterSeats.has(i));
     if(seat===undefined){role='spectator';seat=SPECTATOR_SEATS.find(i=>!spectatorSeats.has(i));}
     if(seat===undefined)return json({error:'Temple is full (4 fighters + 100 spectators)'},409);
-    const id=crypto.randomUUID(),expires=now+SESSION_MS,world=this.world();
-    const profile=ensureProfile(world,profileKey,existing||saved?null:admin?'Ely':name,
-     existing||saved?null:color,now,admin);
+    const id=crypto.randomUUID(),expires=now+SESSION_MS;
+    const profile=ensureProfile(world,profileKey,existing?null:name,
+      existing?null:color,now,admin);
     if(admin)profile.name='Ely';
-    // Only consume the one-time ticket once all checks succeed and a room seat
-    // is available. The profile key is never chosen by a browser payload.
     for(const row of this.sql.exec('SELECT id FROM sessions WHERE profile_key=?',profileKey).toArray())
-     this.disconnectSession(row.id,false);
+      this.disconnectSession(row.id,false);
     this.ctx.storage.transactionSync(()=>{
-     if(oauth)oauthTicket(this.sql,body.oauthTicket,true);
-     this.save(world);
-     this.sql.exec('INSERT INTO sessions(id,profile_key,name,color,role,seat,expires,state,save_code,last_code_at) VALUES(?,?,?,?,?,?,?,?,?,0)',
-      id,profileKey,profile.name,profile.color,role,seat,expires,null,saveCode||null);
-     if(saved)this.sql.exec('UPDATE save_codes SET last_used=? WHERE code=?',now,saveCode);
+      this.save(world);
+      this.sql.exec(
+       'INSERT INTO sessions(id,profile_key,name,color,role,seat,expires,state,save_code,last_code_at) VALUES(?,?,?,?,?,?,?,?,?,0)',
+       id,profileKey,profile.name,profile.color,role,seat,expires,null,saveCode||null);
+      if(saved)this.sql.exec('UPDATE save_codes SET last_used=? WHERE code=?',now,saveCode);
     });
     this.recordPresence({name:profile.name,role},'online',now);
     this.broadcastRoster();await this.armAlarm();
-    return json({ok:true,token:id,role,seat,saveCode:saveCode||null,authMode:oauth?'oauth':'legacy',
-     self:this.self(this.session(id)),world:worldView(world,profileKey),players:this.roster()});
+    return json({
+      ok:true,token:id,role,seat,saveCode:saveCode||null,
+      authMode:identity?'firebase':'legacy',
+      self:this.self(this.session(id)),world:worldView(world,profileKey),players:this.roster()
+    });
   }
 
   connect(request,session,token){
