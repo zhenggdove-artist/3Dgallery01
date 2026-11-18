@@ -1,5 +1,6 @@
 import {discGroundHeight} from './artwork-discs.js';
-import {isChannelStaff} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,forwardCastRadius} from './weapon-abilities.js';
+import {itemById,attackStats} from './catalog.js';
 
 // All coordinates and dimensions are world metres, shared by client previews
 // and the authoritative attack. Never apply a separate cosmetic range bonus.
@@ -18,7 +19,7 @@ const flatDirection=direction=>{
 export const CLAM_SECTOR_ANGLE=90;
 export const ULTIMATE_FOOTPRINT_SCALE=.6;
 // Authoritative damage geometry and warning VFX always use identical dimensions.
-export function scaleUltimateFootprint(stats,item=null){
+export function scaleUltimateFootprint(stats,item=null,quality=null){
  if(stats?.ultimate){
   // The global 60% change remains in force. The frying-pan ultimate is
   // another 50% smaller; the whip ultimate is now another 80% smaller.
@@ -31,6 +32,16 @@ export function scaleUltimateFootprint(stats,item=null){
   const radiusFactor=rangeFactor*(whip?1.5:1);
   stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);
   stats.radius=+(Math.max(.1,Number(stats.radius)||0)*radiusFactor).toFixed(3);
+  if(item?.id==='telephone'){
+   // The screaming handset's ultimate warning AND hit area are exactly
+   // the same diameter as the matching-quality frying-pan ultimate.
+   const grade=quality||weaponQuality(item);
+   const pan=itemById('pan-'+Math.min(5,Math.max(1,grade.tier)));
+   const panQuality=weaponQuality(pan);
+   const panNormal=attackStats(pan,1);
+   const panRadius=forwardCastRadius(pan,panQuality,panNormal.radius,false);
+   stats.radius=+(panRadius*ULTIMATE_FOOTPRINT_SCALE*.5).toFixed(3);
+  }
  }
  return stats;
 }
