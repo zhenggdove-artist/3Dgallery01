@@ -28,10 +28,10 @@ async function googleKeys(){
 export function firebaseWebConfig(env){
  const projectId=String(env.FIREBASE_PROJECT_ID||'').trim(),
   apiKey=String(env.FIREBASE_WEB_API_KEY||'').trim(),
-  appId=String(env.FIREBASE_WEB_APP_ID||'').trim();
- const enabled=/^[a-z0-9-]{5,80}$/.test(projectId)&&apiKey.length>10&&appId.length>10;
- return enabled?{enabled:true,projectId,apiKey,appId,
-   authDomain:String(env.FIREBASE_AUTH_DOMAIN||projectId+'.firebaseapp.com')}:{enabled:false};
+  appId=String(env.FIREBASE_WEB_APP_ID||'').trim(),
+  authDomain=String(env.FIREBASE_AUTH_DOMAIN||'').trim();
+ const enabled=/^[a-z0-9-]{5,80}$/.test(projectId)&&apiKey.length>10&&appId.length>10&&/^[a-z0-9.-]+$/.test(authDomain)&&authDomain.length>5;
+ return enabled?{enabled:true,projectId,apiKey,appId,authDomain}:{enabled:false};
 }
 export async function verifyFirebaseIdToken(value,env){
  const projectId=String(env.FIREBASE_PROJECT_ID||'').trim();
