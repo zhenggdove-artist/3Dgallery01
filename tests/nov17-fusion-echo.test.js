@@ -7,7 +7,7 @@ import {applyStatus,applyElementalHit} from '../src/shared/combat-status.js';
 
 const NOW=41_000_000;
 const person=(key,position=[75,0,0])=>({key,name:key,role:'fighter',color:'#abcdef',position});
-const act=(world,who,now,body)=>applyAction(world,who,body,{now,rng:()=>.91,actors:[who]});
+const act=(world,who,now,body)=>applyAction(world,who,body,{now,rng:()=>body.action==='fuse'?0:.91,actors:[who]});
 
 test('five rarity tiers have distinctly larger charged hitboxes',()=>{
  const weapon=itemById('ember-1');
