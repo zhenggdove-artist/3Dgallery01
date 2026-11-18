@@ -45,7 +45,19 @@ export class TempleUI extends EventTarget{
        input.value='';
      });
      this.content.addEventListener('change',event=>{const el=event.target.closest('[data-gm-volume]');if(!el||!this.self?.profile?.admin)return;const value=Math.max(0,Math.min(2,Number(el.value)||0));this.emit('gm-audio-setting',{key:el.dataset.gmVolume,value});});
-     this.content.addEventListener('input',event=>{const el=event.target.closest('[data-gm-volume]');if(!el)return;const label=el.parentElement.querySelector('output');if(label)label.value=Math.round(Number(el.value)*100)+'%';});
+     this.content.addEventListener('input',event=>{
+  const el=event.target.closest('[data-gm-volume],[data-gm-fusion-chance]');
+  if(!el)return;
+  const label=el.parentElement.querySelector('output');
+  if(label)label.value=el.hasAttribute('data-gm-fusion-chance')?el.value+'%':Math.round(Number(el.value)*100)+'%';
+ });
+ this.content.addEventListener('change',event=>{
+  if(!this.self?.profile?.admin)return;
+  const chance=event.target.closest('[data-gm-fusion-chance]');
+  if(chance){this.emit('gm-fusion-chance',{percent:Number(chance.value)});return;}
+  const invincible=event.target.closest('[data-gm-invincible]');
+  if(invincible)this.emit('gm-invincible',{enabled:invincible.checked});
+ });
      this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');});
     this.content.addEventListener('click',event=>{const b=event.target.closest('button');if(b?.dataset.unequip)this.emit('server-action',{action:'unequip',slot:b.dataset.unequip});if(b?.dataset.use)this.emit('use-item',b.dataset.use);});
     this.content.addEventListener('click',event=>{const b=event.target.closest('[data-original]');if(!b)return;this.emit('original-action',{action:b.dataset.original,id:b.dataset.id,hole:b.dataset.hole,item:b.dataset.item,pond:b.dataset.pond});});
@@ -160,7 +172,13 @@ export class TempleUI extends EventTarget{
         <button type="button" data-gm-action="help">編輯快捷鍵</button>
         <button type="button" data-gm-action="refresh">${this.gmPresenceLoading?'讀取中…':'重新整理紀錄'}</button>
       </div>
-      <h3>GM 背景音樂（MP3）</h3><p>上傳後取代所有玩家的背景音樂，循環播放。支援最大 7.5 MB。</p><label>選擇背景 MP3<input data-gm-music-file type="file" accept=".mp3,audio/mpeg"></label><small>${this.world?.musicVersion?'已上傳 · '+escape(new Date(this.world.musicVersion).toLocaleString('zh-TW')):'尚未上傳專用背景音樂，使用預設曲目'}</small><h3>全服音效控制（GM）</h3><p>調整後放開滑桿即同步所有玩家。100% 為預設值。</p>
+      <h3>GM 個人設定</h3>
+       <label style="display:flex;gap:10px;align-items:center"><input data-gm-invincible type="checkbox" ${this.world?.profile?.gmInvincible!==false?'checked':''}>自身無敵（可關閉以接受正常傷害）</label>
+       <label style="display:grid;grid-template-columns:7em 1fr 4em;align-items:center;gap:8px">合成成功率
+         <input data-gm-fusion-chance type="range" min="0" max="100" step="1" value="${Math.round((this.world?.profile?.gmFusionChance??1)*100)}">
+         <output>${Math.round((this.world?.profile?.gmFusionChance??1)*100)}%</output>
+       </label><small>僅影響 GM 自己的合成；其他玩家每次嘗試 50% / 25% / 12.5% 依次減半。失敗消耗素材。</small>
+       <h3>GM 背景音樂（MP3）</h3><p>上傳後取代所有玩家的背景音樂，循環播放。支援最大 7.5 MB。</p><label>選擇背景 MP3<input data-gm-music-file type="file" accept=".mp3,audio/mpeg"></label><small>${this.world?.musicVersion?'已上傳 · '+escape(new Date(this.world.musicVersion).toLocaleString('zh-TW')):'尚未上傳專用背景音樂，使用預設曲目'}</small><h3>全服音效控制（GM）</h3><p>調整後放開滑桿即同步所有玩家。100% 為預設值。</p>
       <details><summary>音效類型與背景音樂</summary>${soundControls}</details>
       <details><summary>每把武器的獨立音量</summary>${weaponControls}</details>
       <h3>目前在線（${online.length}）</h3>
