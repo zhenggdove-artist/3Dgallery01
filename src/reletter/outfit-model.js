@@ -1,5 +1,16 @@
 // Clothing uses the original skinned surface, preserving animation and exposed face/hands.
-function fabric(T,item){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');x.fillStyle=item.color;x.fillRect(0,0,512,512);x.strokeStyle='#f6eee2';x.fillStyle='#f3eadb';x.lineWidth=5;const p=item.pattern;
+function fabric(T,item){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');x.fillStyle=item.color;x.fillRect(0,0,512,512);
+ // The Collector's suit uses a restrained pinstripe rather than the ordinary
+ // playful outfit print. This texture is applied to the original skinned body.
+ if(item.design==='suit'){
+  x.fillStyle='#c6c9dc';x.globalAlpha=.10;
+  for(let px=15;px<512;px+=27)x.fillRect(px,0,1,512);
+  x.globalAlpha=1;
+  const texture=new T.CanvasTexture(c);
+  texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;
+  texture.anisotropy=2;return texture;
+ }
+ x.strokeStyle='#f6eee2';x.fillStyle='#f3eadb';x.lineWidth=5;const p=item.pattern;
  if(p===0){for(let i=-512;i<1024;i+=48){x.beginPath();x.moveTo(i,0);x.lineTo(i+512,512);x.stroke();}}
  if(p===2){x.globalAlpha=.3;for(let i=0;i<512;i+=64){x.fillRect(i,0,22,512);x.fillRect(0,i,512,22);}x.globalAlpha=1;}
  for(let y=32;y<512;y+=96)for(let xx=32;xx<512;xx+=96){x.save();x.translate(xx+(y%192?20:0),y);x.fillStyle=(xx+y)%192?'#eee4d8':'#756b85';x.globalAlpha=.7;if(p===1||p===4){x.beginPath();for(let k=0;k<10;k++){const a=k*Math.PI/5-Math.PI/2,r=k%2?6:15;x.lineTo(Math.cos(a)*r,Math.sin(a)*r);}x.closePath();x.fill();}else if(p===3){for(const [a,b,r]of [[0,0,12],[-9,-11,6],[9,-11,6]]){x.beginPath();x.arc(a,b,r,0,Math.PI*2);x.fill();}}else{x.beginPath();x.ellipse(0,0,11,7,-.4,0,Math.PI*2);x.fill();}x.restore();}
@@ -16,6 +27,35 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
  // Soft collar and front fastening define the garment rather than merely recolouring skin.
  for(const side of [-1,1]){const lapel=ball(chest,[side*.2,.1,.3],[.24,.09,.1],cream);lapel.rotation.z=side*.4;}
  for(let i=0;i<3;i++)ball(chest,[0,-.15-i*.22,.44],[.035,.035,.025],trim);
+ // Tailored Collector suit: the native skinned torso/arms/legs carry the
+ // jacket fabric, while slim lapels, shirt and tie follow the actual Spine2
+ // bone. These details never replace the animated character with boxes.
+ if(d==='suit'){
+  const offwhite=mat('#fbf9f0'),lapel=mat('#3d4558'),silk=mat('#85253d'),
+   oxford=mat('#171824');
+  function flat(points,material,z){
+   const shape=new T.Shape();
+   shape.moveTo(...points[0]);
+   for(const point of points.slice(1))shape.lineTo(...point);
+   shape.closePath();
+   const surface=new T.Mesh(new T.ShapeGeometry(shape),material);
+   surface.position.z=z;surface.material.side=T.DoubleSide;chest.add(surface);
+   return surface;
+  }
+  flat([[-.18,.29],[.18,.29],[.12,-.28],[0,-.46],[-.12,-.28]],offwhite,.44);
+  for(const sign of [-1,1]){
+   flat([[sign*.14,.32],[sign*.43,.28],[sign*.33,.03],[sign*.21,-.16],[sign*.08,.14]],lapel,.47);
+   ball(chest,[sign*.23,-.32,.48],[.025,.025,.015],trim);
+   const sleeve=anchor(sign===-1?'LeftForeArm':'RightForeArm');
+   ball(sleeve,[0,-.22,.12],[.19,.055,.17],offwhite);
+   const foot=anchor(sign===-1?'LeftFoot':'RightFoot');
+   ball(foot,[0,-.06,.18],[.23,.14,.34],oxford);
+  }
+  flat([[-.075,.20],[.075,.20],[.035,.07],[-.035,.07]],silk,.49);
+  flat([[-.035,.08],[.035,.08],[.085,-.28],[0,-.44],[-.085,-.28]],silk,.495);
+  flat([[-.37,-.03],[-.24,-.03],[-.305,.05]],offwhite,.515);
+ }
+
  if(d==='pajamas'||d==='silk'){box(chest,[.23,-.25,.41],[.23,.22,.035],cream);for(const side of ['LeftFoot','RightFoot']){const foot=anchor(side);ball(foot,[0,0,.15],[.22,.14,.37],main);ball(foot,[0,.09,.4],[.15,.08,.12],cream);}if(hood){const h=anchor('Head'),cap=cone(h,[.03,.94,-.06],.5,.75,main);cap.rotation.z=.3;ball(h,[-.1,1.3,-.06],[.12,.12,.12],cream);}}
  if(d==='fuzzy'){for(const side of ['LeftLeg','RightLeg']){const foot=anchor(side);ball(foot,[0,-.15,.04],[.24,.32,.25],cream);const fur=new T.InstancedMesh(new T.ConeGeometry(.025,.18,4),cream,160),dummy=new T.Object3D();for(let i=0;i<160;i++){const a=i*2.39996,y=(i%17)/17*.6-.45;dummy.position.set(Math.cos(a)*.23,y,Math.sin(a)*.24);dummy.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),new T.Vector3(Math.cos(a),.4,Math.sin(a)).normalize());dummy.updateMatrix();fur.setMatrixAt(i,dummy.matrix);}foot.add(fur);}for(let i=0;i<10+t;i++)ball(chest,[Math.sin(i*.5)*.4,.1,Math.cos(i*.5)*.25],[.12,.12,.12],cream);}
  if(d==='pig'){tube(hips,[[0,0,-.25],[0,.05,-.6],[.15,.13,-.7],[.2,.25,-.6],[.05,.25,-.55]],.055,pink);if(hood){const h=anchor('Head');ball(h,[0,.45,.02],[.68,.54,.59],main);for(const side of [-1,1]){const ear=cone(h,[side*.5,.95,0],.24,.4,pink);ear.rotation.z=side*.35;ball(h,[side*.24,.5,.57],[.08,.09,.04],dark);}ball(h,[0,.3,.64],[.29,.19,.14],pink);for(const side of [-1,1])ball(h,[side*.1,.3,.77],[.04,.06,.025],dark);}}

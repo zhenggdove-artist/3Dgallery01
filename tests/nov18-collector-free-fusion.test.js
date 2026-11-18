@@ -66,13 +66,14 @@ test('no purchase for spectators, empty hands or vertical-distance cheats',()=>{
  assert.equal(COLLECTOR_RADIUS,2.8);
 });
 
-test('collector relocates every 30 seconds when no one sells',()=>{
+test('collector stays at the same spot indefinitely without a purchase',()=>{
  const w=createInitialWorld(NOW);
  tickWorld(w,{now:NOW,actors:[],rng:()=>.15});
  const first=[...w.collector.position],spawned=w.collector.spawnedAt;
- tickWorld(w,{now:NOW+29_999,actors:[],rng:()=>.8});
- assert.deepEqual(w.collector.position,first);
- tickWorld(w,{now:NOW+30_000,actors:[],rng:()=>.8});
- assert.equal(w.collector.spawnedAt,spawned+COLLECTOR_INTERVAL_MS);
- assert.notDeepEqual(w.collector.position,first);
+ for(const elapsed of [29_999,30_000,60_000,1_800_000]){
+  tickWorld(w,{now:NOW+elapsed,actors:[],rng:()=>.8});
+  assert.deepEqual(w.collector.position,first);
+  assert.equal(w.collector.spawnedAt,spawned);
+  assert.equal(w.collector.active,true);
+ }
 });

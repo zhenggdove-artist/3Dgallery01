@@ -64,8 +64,9 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random){
    return true;
   }
  }
- // If no artwork was sold, relocate to a new random spot every 30s.
- if(now>=collector.nextSpawnAt){
+ // An unsatisfied Collector stays at the same spot indefinitely. Only an
+ // actual purchase removes them and starts the 30-second respawn countdown.
+ if(!collector.active&&now>=collector.nextSpawnAt){
   collector.active=true;
   collector.position=collectorPosition(world,rng);
   collector.spawnedAt=now;
