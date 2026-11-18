@@ -25,7 +25,7 @@ export function epicSpecimenCanvas(item){
   c.bezierCurveTo(682,377,698,399,652,438);
   c.bezierCurveTo(661,475,652,486,609,494);
   c.bezierCurveTo(644,538,621,612,longTail?565:601,longTail?635:534);
-  c.bezierCurveTo(longTail?554:560,longTail?556:515,550,481);
+  c.quadraticCurveTo(longTail?554:560,longTail?556:515,550,481);
   c.bezierCurveTo(507,521,492,529,456,496);
   c.bezierCurveTo(380,539,322,511,290,486);
   c.bezierCurveTo(209,496,124,451,65,384);c.closePath();
