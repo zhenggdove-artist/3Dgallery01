@@ -6,6 +6,7 @@ import {SaberImpact} from './saber-impact.js';
 import {WeaponParticleEffects} from './weapon-particle-effects.js';
 import {WeaponSignatureEffects} from './weapon-signature-effects.js';
 import {NumberedWeaponEffects} from './numbered-weapon-effects.js';
+import {VerdantRestorationChannel} from './verdant-restoration-channel.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
@@ -38,7 +39,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -50,6 +51,7 @@ export class WeaponVFX{
   try{await this.particleSkills.warm(renderer,camera);}catch(error){console.warn('Particle shader prewarm incomplete',error);}
   try{await this.signatureEffects.warm(renderer,camera);}catch(error){console.warn('Signature shader prewarm incomplete',error);}
   try{await this.warmStaffOrbs(renderer,camera);}catch(error){console.warn('Orb GPU warmup incomplete',error);}
+  try{await this.restoration.warm(renderer,camera);}catch(error){console.warn('Original Verdant Restoration warmup incomplete',error);}
   return {source:'00GameDevs',effects:fxs.length,numbered};
  }
  acquire(id,options={}){
@@ -75,6 +77,7 @@ export class WeaponVFX{
   return root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,1.1,0));
  }
  stopChannel(root){
+  this.restoration.stop(root);
   this.numberedEffects.stop(root);
   for(const [key,entry] of [...this.channelStreams])if(entry.host===root){
    this.particleSkills.remove(entry);this.channelStreams.delete(key);
@@ -136,6 +139,9 @@ export class WeaponVFX{
   finally{renderer.setRenderTarget(previous);target.dispose();for(const entry of entries)this.releaseStaffOrb(entry);}
  }
  play(data,item,root){
+  // Native ground healing ring is independent of #43's travelling blossom.
+  // Repeated server pulses refresh ONE pooled ring, never spawn duplicates.
+  if(data.channel&&!data.fusionEcho&&item.family==='petal'&&root)this.restoration.pulse(root);
   const id=effectFor(item,data.ultimate),direction=new THREE.Vector3(...(data.direction||[0,0,1])).normalize(),origin=new THREE.Vector3(...data.origin),range=Math.max(1,data.range||4),end=data.aimPoint?new THREE.Vector3(...data.aimPoint):data.impactPoint?new THREE.Vector3(...data.impactPoint):origin.clone().addScaledVector(direction,range);
   // Charged ground spells are placed on the *server validated impact area*.
   // Previously every non-projectile preset was spawned one metre below
@@ -243,7 +249,8 @@ export class WeaponVFX{
   this.aura.charging(root,progress,item);
  }
 
- update(dt){
+ update(dt,camera=null){
+  this.restoration.update(dt,camera);
   for(const [key,entry] of [...this.channelStreams]){
    if(!this.particleSkills.active.includes(entry)||!entry.host?.parent){
     this.channelStreams.delete(key);continue;
@@ -315,7 +322,7 @@ export class WeaponVFX{
   this.failedAnimations.add(id);
   console.error('Weapon animation failed; quarantined this instance',id,error);
  }
- dispose(){this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
+ dispose(){this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
   for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }

@@ -12,18 +12,25 @@ export class PlayerController{
   }
   bind(stick){
     addEventListener('keydown',e=>{if(!this.enabled||/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName))return;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();this.keys.add(e.code);if(e.code==='Space'&&!e.repeat)this.jump();});
-    addEventListener('keyup',e=>this.keys.delete(e.code));addEventListener('blur',()=>{this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();this.channelAiming=false;});
-     // Mouse-look while holding a continuous staff cast, without pressing
-     // another button. Only desktop mouse events are used; touch is unchanged.
-     addEventListener('mousemove',e=>{
-      if(!this.channelAiming||!this.enabled||this.status.freeze||this.drag||
-         (typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches)||
-         e.sourceCapabilities?.firesTouchEvents||!e.movementX&&!e.movementY)return;
-      this.yaw-=e.movementX/innerWidth*4;
-      this.pitch=THREE.MathUtils.clamp(this.pitch+e.movementY/innerHeight*2,-1.15,1.4);
-     });
+    addEventListener('keyup',e=>this.keys.delete(e.code));addEventListener('blur',()=>{this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();this.channelAiming=false;this.channelMouseLast=null;});
+     // A-button pointer capture delivers mouse movement to the document,
+     // NOT to the game canvas. Listen in CAPTURE phase even when LMB is held.
+     // Only one camera handler runs; canvas drag is suppressed while channeling.
+     this.channelMouseLast=null;
+     document.addEventListener('pointermove',e=>{
+      if(!this.channelAiming||!this.enabled||this.status.freeze||
+         e.pointerType!=='mouse'||(typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches)){
+       this.channelMouseLast=null;return;
+      }
+      const last=this.channelMouseLast;
+      const dx=Number(e.movementX)||(!last?0:e.clientX-last.x);
+      const dy=Number(e.movementY)||(!last?0:e.clientY-last.y);
+      this.channelMouseLast={x:e.clientX,y:e.clientY};
+      this.yaw-=dx/innerWidth*4;
+      this.pitch=THREE.MathUtils.clamp(this.pitch+dy/innerHeight*2,-1.15,1.4);
+     },true);
     this.canvas.addEventListener('pointerdown',e=>{if(!this.enabled||this.status.freeze||e.button>0)return;this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});this.canvas.setPointerCapture(e.pointerId);this.drag={id:e.pointerId,x:e.clientX,y:e.clientY,yaw:this.yaw,pitch:this.pitch};if(this.pointers.size===2){const [a,b]=[...this.pointers.values()];this.pinch={span:Math.hypot(a.x-b.x,a.y-b.y),distance:this.distance};}});
-    this.canvas.addEventListener('pointermove',e=>{if(!this.enabled||this.status.freeze||!this.pointers.has(e.pointerId))return;this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(this.pointers.size===2){const [a,b]=[...this.pointers.values()];this.distance=THREE.MathUtils.clamp(this.pinch.distance*this.pinch.span/Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),3,50);return;}if(this.drag?.id!==e.pointerId)return;this.yaw=this.drag.yaw-(e.clientX-this.drag.x)/innerWidth*4;this.pitch=THREE.MathUtils.clamp(this.drag.pitch+(e.clientY-this.drag.y)/innerHeight*2,-1.15,1.4);});
+    this.canvas.addEventListener('pointermove',e=>{if(!this.enabled||this.status.freeze||!this.pointers.has(e.pointerId))return;this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(this.pointers.size===2){const [a,b]=[...this.pointers.values()];this.distance=THREE.MathUtils.clamp(this.pinch.distance*this.pinch.span/Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),3,50);return;}if(this.drag?.id!==e.pointerId)return;if(this.channelAiming&&e.pointerType==='mouse')return;this.yaw=this.drag.yaw-(e.clientX-this.drag.x)/innerWidth*4;this.pitch=THREE.MathUtils.clamp(this.drag.pitch+(e.clientY-this.drag.y)/innerHeight*2,-1.15,1.4);});
     const release=e=>{this.pointers.delete(e.pointerId);this.drag=null;};this.canvas.addEventListener('pointerup',release);this.canvas.addEventListener('pointercancel',release);
     this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
     if(stick){let pointer=null;const knob=stick.firstElementChild;const move=e=>{if(e.pointerId!==pointer)return;const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,radius=Math.max(20,(r.width-knob.offsetWidth)/2-4),f=radius/Math.max(radius,Math.hypot(x,y));this.move.set(x*f/radius,y*f/radius);knob.style.transform=`translate(${x*f}px,${y*f}px)`;};stick.onpointerdown=e=>{e.preventDefault();if(pointer!==null)return;pointer=e.pointerId;stick.setPointerCapture(pointer);move(e);};stick.onpointermove=move;stick.onpointerup=stick.onpointercancel=stick.onlostpointercapture=e=>{if(e.pointerId!==pointer)return;pointer=null;this.move.set(0,0);knob.style.transform='';};}

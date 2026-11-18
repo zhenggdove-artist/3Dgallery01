@@ -1,6 +1,7 @@
 import {fuseEquipment} from '../reletter/server/fusion-rules.js';
 import {equipmentById} from '../reletter/equipment-catalog.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
+import {normalMeleeFootprint} from './melee-contact.js';
 
 export function originalEquipmentGame(profile,world={}){
  const key=profile.key,instances=profile.inventory.filter(id=>equipmentById(id)).map(id=>{
@@ -23,7 +24,14 @@ export function equippedItem(profile,item){
  const record=profile.fusion?.[item.id],original=record?.original||{};
  const affixIds=[...new Set([...itemAffixes(item),...itemAffixes(original),...itemAffixes(record)])];
  const named={...item,affixId:affixIds[0]||null,affixIds};
- if(record?.templeStats)return {...named,...record.templeStats};
+ if(record?.templeStats){
+  const fused={...named,...record.templeStats};
+  // Migrate legacy cross-class records at read time without deleting bonuses.
+  // The primary melee weapon's real model owns normal-attack reach; range
+  // modifiers from a distant rifle ingredient must never turn it into a gun.
+  if(normalMeleeFootprint(item)){fused.range=item.range;fused.radius=item.radius;}
+  return fused;
+ }
  const raw=original.stats;if(!raw)return named;
  return {...named,...raw,damage:raw.damage===undefined?item.damage:raw.damage*10,
   chargeDamage:raw.chargeDamage===undefined?item.chargeDamage:raw.chargeDamage*10};

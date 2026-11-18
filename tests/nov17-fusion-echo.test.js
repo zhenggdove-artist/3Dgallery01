@@ -19,10 +19,10 @@ test('five rarity tiers have distinctly larger charged hitboxes',()=>{
 
 test('shop-purchased materials fuse and only two sources provide ultimate echoes',()=>{
  const world=createInitialWorld(NOW),shooter=person('shooter'),p=ensureProfile(world,'shooter','shooter','#abcdef',NOW);
- p.wallet=100_000;p.inventory.push('ember-1','storm-1','temple-halo');
+ p.wallet=100_000;p.inventory.push('ember-1','storm-1','tide-2');
  const bought=act(world,shooter,NOW+100,{action:'buy',itemId:'frost-1'});
  assert.ok(!bought.error,'purchased frost staff must be a legitimate fusion material');
- for(const [sourceId,key,i] of [['frost-1','echo-1',0],['storm-1','echo-2',1],['temple-halo','stats-only-3',2]]){
+ for(const [sourceId,key,i] of [['frost-1','echo-1',0],['storm-1','echo-2',1],['tide-2','stats-only-3',2]]){
   const fusion=act(world,shooter,NOW+300+i*150,{action:'fuse',sourceId,targetId:'ember-1',requestId:key+'-unique'});
   assert.ok(!fusion.error,JSON.stringify(fusion));
   assert.equal(fusion.fusion.success,true);

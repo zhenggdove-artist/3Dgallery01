@@ -91,11 +91,11 @@ test('building cannot block spawns or artwork platforms and receives a server va
   assert.equal(valid.error,undefined);assert.equal(valid.structure.variant,3);
 });
 
-test('ground materials keep duplicate value and can strengthen a weapon',()=>{
+test('ground crafting materials keep duplicate value but cannot cross-fuse into equipment',()=>{
   const now=11_000_000,world=createInitialWorld(now),profile=ensureProfile(world,'p1','p1','#abcdef',now);profile.wallet=2_000;profile.inventory.push('temple-resin','temple-resin','saber-1');
   ensureProfile(world,'p1',null,null,now+1);assert.equal(profile.inventory.filter(id=>id==='temple-resin').length,2);
   const result=applyAction(world,actor('p1',[10,0,0]),{action:'fuse',sourceId:'temple-resin',targetId:'saber-1',requestId:'material-fusion-1'},{now:now+2,rng:()=>0});
-  assert.equal(result.fusion.success,true);assert.equal(profile.fusion['saber-1'].bonus,10);assert.equal(profile.inventory.filter(id=>id==='temple-resin').length,1);
+  assert.match(result.error,/same category|matching equipment categories/);assert.equal(profile.fusion['saber-1'],undefined);assert.equal(profile.inventory.filter(id=>id==='temple-resin').length,2);
 });
 
 test('destroyed structures produce an authoritative synchronized debris event',()=>{
@@ -135,13 +135,13 @@ test('WRITE survives a stale 201m WebSocket position at landing and commits one 
 test('cross-rarity fusion works for shop-bought weapons and headwear',()=>{
  const now=31_000_000,w=createInitialWorld(now),person=actor('buyer',[75,0,0]);
  const p=ensureProfile(w,'buyer','Buyer','#abcdef',now);p.wallet=100000;
- for(const id of ['frost-1','ember-1','storm-1','temple-halo'])p.inventory.push(id);
+ for(const id of ['frost-1','ember-1','storm-1','tide-2'])p.inventory.push(id);
  const fuse=(sourceId,targetId,requestId,at)=>applyAction(w,person,{action:'fuse',sourceId,targetId,requestId},{now:at,rng:()=>0});
  assert.equal(fuse('frost-1','ember-1','fuse-echo-first',now+100).fusion.success,true);
  assert.equal(fuse('storm-1','ember-1','fuse-echo-second',now+200).fusion.success,true);
- assert.equal(fuse('temple-halo','ember-1','fuse-stats-third',now+300).fusion.success,true);
+ assert.equal(fuse('tide-2','ember-1','fuse-stats-third',now+300).fusion.success,true);
  assert.deepEqual(p.fusion['ember-1'].effects,['frost-1','storm-1']);
  assert.equal(p.fusion['ember-1'].layer,3);
  assert.ok(p.fusion['ember-1'].templeStats.damage>itemById('ember-1').damage);
- assert.equal(p.inventory.includes('temple-halo'),false);
+ assert.equal(p.inventory.includes('tide-2'),false);
 });

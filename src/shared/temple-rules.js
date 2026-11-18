@@ -373,7 +373,7 @@ function attack(world,profile,actor,body,context,now){
   // or inside the previous hit-reaction recovery window.
   if(body.phase==='channel-stop'){
    profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;
-   profile.lastChannelPulseAt=0;
+   profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
    world.persistentAttacks=(world.persistentAttacks||[]).filter(
     fx=>!(fx.owner===actor.key&&fx.channel));
    return {channeling:false,channelStopped:{owner:actor.key,time:now}};
@@ -392,6 +392,7 @@ function attack(world,profile,actor,body,context,now){
     profile.channelWeapon=weapon.id;
     profile.channelStartedAt=profile.chargeStartedAt;
     profile.lastChannelPulseAt=now;
+    profile.lastBloomHealAt=weapon.family==='petal'?now:0;
     return {channeling:true};
   }
 
@@ -623,8 +624,27 @@ export function canBuildAt(world,actorPosition,position){
 
 function validBuildPosition(world,actor,position){return canBuildAt(world,actor.position,position);}
 
+// Authoritative 1 HP/s while flower-crown's authenticated sustained cast
+// is active. No free HP from ordinary attacks, inactive/expired channels,
+// repeated network packets, or from visuals and client-side clocks.
+export function tickBloomChannelHeal(profile,now){
+ const item=itemById(profile?.channelWeapon);
+ if(!item||item.family!=='petal'||!isChannelStaff(item)||
+    profile.equipment?.weapon!==item.id||
+    !profile.channelStartedAt||now-(profile.lastChannelPulseAt||0)>Math.max(2100,item.cooldown*2+200)||
+    profile.hp<=0||profile.deadUntil>now)return 0;
+ const since=Number(profile.lastBloomHealAt)||now;
+ const pulses=Math.max(0,Math.floor((now-since)/1000));
+ if(!pulses)return 0;
+ profile.lastBloomHealAt=since+pulses*1000;
+ const restored=Math.min(pulses,Math.max(0,profile.maxHp-profile.hp));
+ profile.hp+=restored;
+ return restored;
+}
 export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0,actors=[]}={}){
   migrateWorld(world,now);let changed=false;
+  for(const profile of Object.values(world.profiles||{}))
+   changed=tickBloomChannelHeal(profile,now)>0||changed;
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
   if(world.channelContactLocks)for(const [key,expiry] of Object.entries(world.channelContactLocks))
    if(expiry<now-2000)delete world.channelContactLocks[key];

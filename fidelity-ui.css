@@ -209,3 +209,31 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
  box-shadow:0 2px 7px #0007;text-align:center;border-radius:7px}
 .player-chat-bubble::after{content:'';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%) rotate(45deg);width:11px;height:11px;background:#fff;border-right:1px solid #222;border-bottom:1px solid #222}
 .player-chat-bubble[hidden]{display:none}
+
+/* Desktop BAG: exactly seven columns with six immediately visible rows.
+   Keep the EQUIP paper-doll layout and touch layout unchanged. */
+@media (min-width: 840px) and (min-height: 650px){
+ body.panel-open #panel:has(.original-bag):not(:has(.equipment-view)){
+  width:min(610px,calc(100vw - 32px));
+ }
+ #panel:has(.original-bag):not(:has(.equipment-view)) #bag-tabs{
+  flex-wrap:nowrap;overflow-x:auto;min-height:30px;
+ }
+ #panel:has(.original-bag):not(:has(.equipment-view)) #bag-tabs button{
+  flex:none;min-height:30px;padding:2px 6px;
+ }
+ #panel:has(.original-bag):not(:has(.equipment-view)) #bag-detail{max-height:48px;min-height:24px;}
+ #panel:has(.original-bag):not(:has(.equipment-view)) #bag-feedback{max-height:36px;overflow-y:auto;}
+ #panel:has(.original-bag) #bag-items:not(.equipment-view){
+  --temple-bag-row:clamp(42px,calc((100dvh - 380px)/6),60px);
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  grid-auto-rows:var(--temple-bag-row);
+  min-height:calc(6 * var(--temple-bag-row) + 20px + 6px);
+ }
+ #panel:has(.original-bag) #bag-items:not(.equipment-view) .bag-cell{
+  height:var(--temple-bag-row);min-height:var(--temple-bag-row);max-height:var(--temple-bag-row);
+ }
+ #panel:has(.original-bag) #bag-items:not(.equipment-view) .bag-cell img{
+  height:calc(var(--temple-bag-row) - 10px);
+ }
+}
