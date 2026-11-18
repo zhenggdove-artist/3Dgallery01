@@ -24,7 +24,7 @@ export class MonsterAttackEffects {
   marker.rotation.x=-Math.PI/2;marker.position.y=.12;root.add(marker);
   const fringe=new THREE.Mesh(warningCircle,softMat(motion==='freeze'?'#93e7ff':'#ff242c'));
   fringe.rotation.x=-Math.PI/2;fringe.position.y=.125;root.add(fringe);
-  const native=motion==='beam'?pulseBeam({size:1.8,density:.48,color:'#80ffed',quantity:4}):
+  const native=motion==='beam'?pulseBeam({size:1.8,density:.48,color:'#ff2020',quantity:4}):
    motion==='venom'?venomPool({size:1.8,density:.5,color:'#b4f745',quantity:7}):
    motion==='freeze'?groundFreezeStudy({size:1,speed:1,bloom:1.1,color:'#d4e8ed'}):null;
   if(native){native.group.visible=false;root.add(native.group);}
