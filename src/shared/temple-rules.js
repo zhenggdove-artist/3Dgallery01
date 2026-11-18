@@ -215,10 +215,13 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
 
 export function applyAction(world,actor,body,context={}){
   const now=context.now??Date.now(),rng=context.rng??Math.random,
-   // Only server-persisted identity may authorize GM operations, never actor.admin.
-   profile=ensureProfile(world,actor.key,actor.name,actor.color,now,world.profiles?.[actor.key]?.admin===true);
+   // The premium draw checks PERSISTED admin status before any ensureProfile
+   // mutation. Existing game/GM actions retain their original role semantics.
+   wingDrawAdmin=body.action==='gm-wing-draw'?world.profiles?.[actor.key]?.admin===true:null,
+   profile=ensureProfile(world,actor.key,actor.name,actor.color,now,
+    body.action==='gm-wing-draw'?wingDrawAdmin:actor.admin);
   if(body.action==='gm-wing-draw'){
-   if(!profile.admin)return {error:'GM only'};
+   if(!wingDrawAdmin||!profile.admin)return {error:'GM only'};
    const drawn=drawGmWing(profile,rng);
    if(drawn.error)return drawn;
    appendInventoryInstance(profile,drawn.item.id);
