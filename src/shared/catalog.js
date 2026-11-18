@@ -10,6 +10,10 @@ export const RARITIES = Object.freeze([
 ]);
 
 const TIER_PRICES = [240,620,1450,3300,7600];
+// Only the specified five quality tiers and Black Cat belong to Mystery.
+// Family labels alone are insufficient: many unrelated exotics are 'pan'.
+export const isMysteryWeapon=item=>!!item&&item.slot==='weapon'&&
+ (item.id==='black-cat'||/^(whip|pan|swatter)-[1-5]$/.test(item.id));
 
 export const ARMOR = Object.freeze([
   ['moss-guard','Moss Guard','armor','#73936c',1,310,14],
@@ -29,8 +33,10 @@ export const MATERIALS = Object.freeze([
 
 // Original RELETTER identity, range, cadence and effects; only Temple economy/HP scale differ.
 export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(original=>original.id!=='chiang-token'&&!['seed','harvest'].includes(original.slot)).map(original=>{
-  const tier=Math.max(1,Math.min(5,original.tier||1)),price=original.notForSale||original.id==='water'?0:TIER_PRICES[tier-1]+Math.min(180,original.price||0);
-  return Object.freeze({...original,price,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*(original.id==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*(original.id==='white-cat'?.5:1),cooldown:original.id==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
+  const tier=Math.max(1,Math.min(5,original.tier||1));
+  const basePrice=original.notForSale||original.id==='water'?0:TIER_PRICES[tier-1]+Math.min(180,original.price||0);
+  const mysteryWeapon=isMysteryWeapon(original),price=basePrice*(mysteryWeapon?5:1);
+  return Object.freeze({...original,price,mysteryWeapon,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*(original.id==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*(original.id==='white-cat'?.5:1),cooldown:original.id==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
 }));
 export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'));
 export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','armor','head','outfit','shield','wings']);
