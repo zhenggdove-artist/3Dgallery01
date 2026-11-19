@@ -361,6 +361,7 @@ export class WeaponSignatureEffects {
  giraffe(event,ownerRoot){
   const quality=event.qualityScale||1,origin=vec(event.origin),dir=vec(event.direction).normalize();
   const key='giraffe',cached=this.take(key),group=cached||new THREE.Group();
+  group.name='Visible spinning yellow giraffe model, outbound and returning';
   if(!cached){
    const model=new THREE.Group(),giraffe=createFlexibleGiraffe(THREE);
    giraffe.name='Airborne fully skinned flexible giraffe baton';
@@ -375,7 +376,7 @@ export class WeaponSignatureEffects {
    group.userData.nativeElectric=nativeElectric;
   }
   const giraffe=group.userData.giraffe,model=group.userData.model;
-  const scale=4.9*quality,rodMid=.92;
+  const scale=3.9*quality,rodMid=1.15;
   giraffe.scale.setScalar(scale);giraffe.position.set(0,-rodMid*scale,0);
   // Reused GPU resources must be reset, never allocated each attack.
   const nativeElectric=group.userData.nativeElectric;
