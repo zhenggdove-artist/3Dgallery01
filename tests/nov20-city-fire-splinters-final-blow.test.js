@@ -120,6 +120,18 @@ test('diagonal roof corners visibly shear meters without moving the physical roo
  assert.ok(edge<roof[1],'Worker collision tracks lowered oblique corner');
 });
 
+test('a late final blow never moves a building from the fully ruined tier back to tier nine',()=>{
+ const city=Object.create(OuterCity.prototype),called=[];
+ city.renderedTiers=new Map([[lot.index,10]]);
+ city.collapseAnimations=new Map();
+ city.prepareChunks=()=>{throw new Error('already-visible ruin must not prepare a replay');};
+ city.createChunks=(...args)=>called.push(args);
+ city.beginCollapse(lot,9,10,{id:'delayed-hit'});
+ assert.equal(city.collapseAnimations.size,0,'must not animate backwards');
+ assert.equal(called.length,1,'ensure low rubble exists without a full-height replay');
+ assert.deepEqual(called[0],[lot,3,false]);
+});
+
 test('the fatal hit only reveals low grounded rubble and never respawns original-height floors',()=>{
  const city=Object.create(OuterCity.prototype),root=new THREE.Group();
  city.root=root;city.chunks=new Map();city.preparedChunks=new Map();city.preparingChunks=new Map();city.chunkBuildQueue=[];
