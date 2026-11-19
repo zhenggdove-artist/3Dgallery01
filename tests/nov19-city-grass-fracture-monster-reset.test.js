@@ -55,6 +55,7 @@ test('GM message reset clears the central garden and bumps revision',()=>{
 test('ruined city has surface-integrated cracks, detached architectural fittings, animated smoke and no visible ochre ground',()=>{
  const city=source('src/outer-city.js'),vfx=source('src/city-ruins-vfx.js'),grass=source('src/grass-field.js');
  assert.match(city,/installFacadeCracks\(this\.walls\)/);
+ assert.doesNotMatch(city,/\bfront\+/,'bare undefined front variable must never block boot');
  assert.match(city,/buildDetachableFixture\(lot,part/);
  assert.match(city,/buildBrokenStructure\(lot,index/);
  assert.match(city,/emitFireSmoke\(/);
