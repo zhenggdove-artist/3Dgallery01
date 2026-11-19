@@ -544,7 +544,10 @@ export class OuterCity{
   if(shake){shake.age=0;shake.power=Math.min(.42,shake.power+.07);}
   else this.shakes.set(lot.index,{age:0,power:.19});
  }
- eject(lot,part,point,detached=false,fractureTier=0){
+ eject(lot,part,point,detached=false){
+  // Preserve the existing public four-argument interface. Threshold
+  // animation optionally supplies the 5th argument for a masonry fracture.
+  const fractureTier=arguments.length>4?arguments[4]:0;
   // All bursts remain visible, but dozens of overlapping area-of-effect
   // hits cannot synchronously extrude dozens of architectural assemblies.
   this.pendingEjections.push({lot,part,point:point?.slice?.()||null,detached,fractureTier});
