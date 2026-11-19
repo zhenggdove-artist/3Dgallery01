@@ -56,12 +56,12 @@ test('giraffe charged collision is wider than the visible revolving rod and deal
 
 test('artwork does not damage fighters or collapse buildings until actual ballistic collision',()=>{
  const world=createInitialWorld(T),caster=fighter('caster',[45,0,0]),
-  victim=fighter('victim',[45,0,30]);
+  victim=fighter('victim',[45,0,45]);
  const from=ensureProfile(world,'caster','caster','#aaaaaa',T),
   to=ensureProfile(world,'victim','victim','#aaaaaa',T);
  to.spawnProtectedUntil=0;
  const id=Object.keys(world.artworks)[0];world.artworks[id].holder='caster';
- world.structures=[{id:'nearby-house',kind:'house',position:[45,0,30],
+ world.structures=[{id:'nearby-house',kind:'house',position:[45,0,45],
   rotation:0,owner:'player',hp:120,maxHp:120}];
  const fired=applyAction(world,caster,{action:'throw-artwork',direction:[0,0,1],power:1},
   {now:T+4000,actors:[caster,victim],rng:()=>.8});
@@ -70,11 +70,11 @@ test('artwork does not damage fighters or collapse buildings until actual ballis
  assert.equal(to.hp,100);
  assert.equal(world.structures[0].hp,120);
  assert.equal(world.pendingArtworkFlights.length,1);
- assert.equal(Math.round(artworkPosition(fired.throwEvent,.6)[2]),30);
+ assert.equal(Math.round(artworkPosition(fired.throwEvent,.9)[2]),45);
  tickWorld(world,{now:T+4250,actors:[caster,victim],activeFighters:0,rng:()=>.8});
  assert.equal(to.hp,100,'victim must not react to a distant thrown artwork');
  assert.equal(world.structures[0].hp,120,'house must not collapse before contact');
- tickWorld(world,{now:T+4700,actors:[caster,victim],activeFighters:0,rng:()=>.8});
+ tickWorld(world,{now:T+5000,actors:[caster,victim],activeFighters:0,rng:()=>.8});
  assert.ok(to.hp<100,'fighter damage begins after actual flight crosses target');
  assert.ok(world.structures[0].hp<120,'building damage begins at impact, not launch');
  assert.ok(world.pendingArtworkVisualEvents.some(e=>e.kind==='structure-hit'));
