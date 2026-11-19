@@ -205,8 +205,21 @@ export class TempleRoom extends DurableObject{
     // Spectators move their free camera locally; only four fighters send
     // authoritative pose streams. Do not fan out up to 100 viewer cameras.
     if(session.role!=='fighter')return;
-    const now=Date.now();if(now-meta.lastStateAt<70)return;const previous=session.state?JSON.parse(session.state):null,world=this.world(),profile=world.profiles[session.profile_key],mobility=profile?{stats:playerStats(world,profile,now),channeling:!!profile.channelWeapon,effects:profile.effects,hitReaction:profile.hitReaction,impulse:profile.impulse,lastRespawnAt:profile.lastRespawnAt,lastWriteLanding:profile.lastWriteLanding,lastWriteLandingAt:profile.lastWriteLandingAt,cityDamage:world.cityDamage}:null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],profile?.writeJourney,now,mobility);if(result.error){ws.send(JSON.stringify({type:'state-rejected',data:{error:result.error,state:result.state||previous||null}}));return;}
+    const now=Date.now();if(now-meta.lastStateAt<70)return;const previous=session.state?JSON.parse(session.state):null,world=this.world(),profile=world.profiles[session.profile_key],mobility=profile?{stats:playerStats(world,profile,now),channeling:!!profile.channelWeapon,effects:profile.effects,hitReaction:profile.hitReaction,impulse:profile.impulse,lastRespawnAt:profile.lastRespawnAt,lastWriteLanding:profile.lastWriteLanding,lastWriteLandingAt:profile.lastWriteLandingAt,cityDamage:world.cityDamage}:null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],profile?.writeJourney,now,mobility);
+    const seq=Number.isSafeInteger(event.data?.seq)&&event.data.seq>0?event.data.seq:0;
+    if(result.error){
+      // Reject the specific input sample, not an unspecified older pose:
+      // delayed responses otherwise snap a player back every few strides.
+      ws.send(JSON.stringify({type:'state-rejected',data:{error:result.error,state:result.state||previous||null,seq,serverTime:now}}));
+      return;
+    }
     meta.lastStateAt=now;ws.serializeAttachment(meta);this.sql.exec('UPDATE sessions SET state=?,expires=? WHERE id=?',JSON.stringify(result.state),now+SESSION_MS,session.id);
+    // Send a lightweight acknowledgement directly to this fighter. The
+    // normal state broadcast still excludes its sender, as before.
+    if(seq)ws.send(JSON.stringify({type:'state-ack',data:{seq,serverTime:now,
+      corrected:Array.isArray(result.state?.position)&&Array.isArray(event.data?.position)&&
+      Math.hypot(...result.state.position.map((v,i)=>v-event.data.position[i]))>.18,
+      position:result.state.position}}));
     this.broadcast('state',{id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,state:result.state},ws);await this.tick(true);
   }
   webSocketClose(ws){this.releaseClosedSocket(ws);this.broadcastRoster();}
