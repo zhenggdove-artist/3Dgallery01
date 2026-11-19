@@ -29,10 +29,10 @@ test('all eight audible elements have distinct profiles and their own GM level',
  for(const weapon of WEAPONS)assert.ok(SOUND_PROFILES[weaponSoundKey(weapon)],weapon.id);
 });
 
-test('prism family uses the real, bundled 00GameDevs charged-beam module in all modes',()=>{
+test('prism held cast uses authentic charged-beam; normal and ultimate taps fire yellow orbs',()=>{
  for(const event of [{channel:false,ultimate:false},{channel:true},{channel:false,ultimate:true}]){
   const spec=requestedEffect({id:'prism-4',family:'beam'},event);
-  assert.equal(spec?.asset,'charged-beam');
+  assert.equal(spec?.asset,event.channel?'charged-beam':undefined);
  }
  const mod=readFileSync(new URL('../src/numbered-weapon-effects.js',import.meta.url),'utf8');
  const original=readFileSync(new URL('../vendor/00gamedevs/charged-beam.js',import.meta.url),'utf8');
