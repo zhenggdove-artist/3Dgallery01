@@ -35,7 +35,7 @@ test('intact homes obstruct players and weapon rays; stage three clears the coll
  assert.equal(cityStage(CITY_MAX_HP*.2),2);
  assert.equal(cityStage(0),3);
  const wreck={[lot.id]:{hp:0,maxHp:CITY_MAX_HP}};
- assert.equal(cityBlocked(lot.x,lot.z,0,wreck),false);
+ assert.equal(cityBlocked(lot.x,lot.z,0,wreck),true,'destroyed houses retain a solid rubble base');
  const dir=[-Math.cos(lot.angle),0,-Math.sin(lot.angle)];
  const origin=[lot.x+Math.cos(lot.angle)*18,lot.height*.4,lot.z+Math.sin(lot.angle)*18];
  const hit=cityRaycast(origin,dir,23,{});
@@ -69,12 +69,13 @@ test('fragmented structural facades stay solid, synchronized and restore all dam
  assert.match(render,/installFacadeCracks/);
  assert.doesNotMatch(render,/cityLots\(912744,mobile/);
 });
-test('entry copy is entirely English and SUPPORT has no fake OS or artist prompt',()=>{
+test('entry clearly discloses Google verification in Chinese and SUPPORT has no fake OS text',()=>{
  const html=source('index.html'),ui=source('src/ui.js'),main=source('src/main.js');
  const login=html.slice(html.indexOf('<main id="entry"'),html.indexOf('<section id="hud"'));
- assert.doesNotMatch(login,/[\u3400-\u9fff]/);
- assert.match(login,/Sign in with Google/);
- assert.match(login,/Create Character & Enter/);
+ assert.match(login,/選擇 Google 帳號/);
+ assert.match(login,/不會讀取 Gmail/);
+ assert.match(login,/entry-profile-heading/);
+ assert.doesNotMatch(login,/Account Setup · Secure Login/);
  const start=ui.indexOf('  renderWingShop(profile){');
  const end=ui.indexOf('  hydrateWingGalleryImages(){',start);
  const support=ui.slice(start,end);
