@@ -97,18 +97,7 @@ function clearChargeDelay(){
 }
 function scheduleBeamChannelStart(delay){
  if(beamStartTimer!==null)clearTimeout(beamStartTimer);
- beamStartTimer=setTimeout(()=>{
-  beamStartTimer=null;
-  beginStaffChannel();
-  // Rendering can stall during native WebGL compilation. A one-shot timer
-  // leaves a fully charged staff without any beam if the first attempt was
-  // rejected, interrupted by a snapshot, or made while input was disabled.
-  // Retry only while the original A press is live; damage is never predicted.
-  const item=itemById(world?.profile?.equipment?.weapon);
-  if(attackHeld&&chargeStarted!==null&&!staffChannel&&
-     ['lightning','beam'].includes(item?.family))
-   scheduleBeamChannelStart(240);
- },Math.max(0,delay));
+ beamStartTimer=setTimeout(()=>{beamStartTimer=null;beginStaffChannel();},Math.max(0,delay));
 }
 function startHeldCharge(){
  if(!attackHeld||attackHoldStarted===null||chargeStarted!==null||chargeRequest||staffChannel||
