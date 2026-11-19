@@ -615,13 +615,18 @@ export class OuterCity{
    const maxHp=record.maxHp||CITY_MAX_HP;
    const tier=cityDamageTier(record.hp,maxHp),stage=cityStage(record.hp,maxHp);
    const knownTier=this.damage[lot.id]?.tier??0;
-   if(tier>knownTier&&!firstSnapshot)this.beginCollapse(lot,knownTier,tier,
-    {position:[lot.x,Math.min(lot.height*.65,5),lot.z+lot.depth*.5]});
+   // A world snapshot is state, not an attack animation. On initial join
+   // an empty placeholder snapshot often precedes the real damaged-city
+   // snapshot; replaying all historical tiers here launched hundreds of
+   // debris bursts and the whole district visibly flew apart at login.
+   // Only applyDamageEvent() starts animated debris on a real live hit.
+   const staticChange=!firstSnapshot&&tier!==knownTier
+    &&!this.collapseAnimations.has(lot.index);
    this.damage[lot.id]={hp:record.hp,stage,tier};
    this.facade.set(lot.index,record.hp,maxHp);
    for(const [part,hp] of Object.entries(record.parts||{}))
     if(hp<=0&&part!=='masonry')this.hidePart(lot.index,part);
-   if(firstSnapshot){
+   if(firstSnapshot||staticChange){
     this.collapseLot(lot.index,tier);
     if(tier>=3){
      const range=this.signs.userData.lotRanges?.get(lot.index);
