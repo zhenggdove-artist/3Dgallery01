@@ -44,7 +44,7 @@ test('fire and smoke are fully re-seeded without new geometry or particle materi
 
 test('complex rubble clones preserve every mesh but share expensive shader and geometry allocations',()=>{
  const lot=CITY_LOTS[0];
- const template=buildBrokenStructure(lot,19,.35,.46,.18,lot.detail);
+ const template=buildBrokenStructure(lot,18,.35,.46,.18,lot.detail);
  const clone=template.clone(true);
  const meshes=root=>{const out=[];root.traverse(o=>{if(o.isMesh)out.push(o);});return out;};
  const original=meshes(template),copy=meshes(clone);
