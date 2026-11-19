@@ -535,11 +535,19 @@ export class OuterCity{
  // Strong weapons can cross multiple boundaries in one hit; animate all rapidly.
  beginCollapse(lot,previousTier,nextTier,event=null){
   if(nextTier<=previousTier)return;
-  this.prepareChunks(lot);
+  const visible=this.renderedTiers.get(lot.index)??previousTier;
   let motion=this.collapseAnimations.get(lot.index);
+  // Out-of-order snapshots may already have displayed the fully collapsed
+  // structure before the late final-hit event. Never animate BACKWARDS and
+  // temporarily regrow a storey that has already vanished.
+  if(!motion&&visible>=nextTier-.001){
+   if(nextTier===10)this.createChunks(lot,3,false);
+   return;
+  }
+  this.prepareChunks(lot);
   if(!motion){
-   const start=Math.min(previousTier,this.renderedTiers.get(lot.index)??previousTier);
-   motion={tier:Math.max(0,Math.floor(start)),elapsed:0,target:nextTier,triggered:0,event};
+   const start=Math.max(previousTier,Math.floor(visible));
+   motion={tier:Math.max(0,start),elapsed:0,target:nextTier,triggered:0,event};
    this.collapseAnimations.set(lot.index,motion);
   }else{
    motion.target=Math.max(nextTier,motion.target);
