@@ -7,7 +7,7 @@ import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
-import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityBlocked,cityWallPoint,CITY_PAINT_WALLS} from './city-layout.js';
+import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
@@ -1032,7 +1032,9 @@ function damageCityLot(world,lot,part,damage,now,position=null){
  const previous=world.cityDamage[lot.id];
  if(previous?.hp===0)return null;
  const state=previous||{hp:CITY_MAX_HP,maxHp:CITY_MAX_HP,parts:{}};
+ const previousHp=state.hp;
  const previousStage=cityStage(state.hp,CITY_MAX_HP);
+ const previousTier=cityDamageTier(state.hp,CITY_MAX_HP);
  const base=String(part||'masonry').split('-')[0];
  const kind=Object.hasOwn(CITY_PART_HEALTH,base)?String(part):'masonry';
  const hp=state.parts[kind]??CITY_PART_HEALTH[base in CITY_PART_HEALTH?base:'masonry'];
@@ -1041,8 +1043,9 @@ function damageCityLot(world,lot,part,damage,now,position=null){
  state.hp=Math.max(0,state.hp-damage);
  world.cityDamage[lot.id]=state;
  const stage=cityStage(state.hp,CITY_MAX_HP);
+ const tier=cityDamageTier(state.hp,CITY_MAX_HP);
  const event={id:id(),structureId:lot.id,cityLotIndex:lot.index,kind:'city-house',part:kind,
-  partDestroyed,stage,previousStage,
+  partDestroyed,stage,previousStage,previousHp,previousTier,tier,
   position:position||[lot.x,Math.min(2,lot.height*.5),lot.z],
   hp:state.hp,maxHp:CITY_MAX_HP,damage,time:now};
  return {event,destroyed:stage===3?{...event,id:lot.id,rotation:lot.yaw}:null};
