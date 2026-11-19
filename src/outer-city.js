@@ -342,47 +342,80 @@ export class OuterCity{
   const mesh=new THREE.Mesh(this.cube,material);mesh.position.set(lot.x,lot.height/2,lot.z);mesh.rotation.y=-lot.yaw;
   mesh.scale.set(lot.width+.1,lot.height+.1,lot.depth+.1);this.root.add(mesh);this.flashes.push({mesh,age:0});
  }
- eject(lot,part,point){
-  const palette=part==='windows'?['#859a9f','#c9d3d3']:part==='sheets'?['#6f7573','#9a5e45']:
-   part==='pillars'?['#6b5950','#aa8c63']:['#77736b','#ab8462','#66594b'];
+ eject(lot,part,point,detached=false){
   const r=random(lot.index*1259+Math.floor(performance.now())),root=new THREE.Group(),pieces=[];
-  root.position.set(point?.[0]??lot.x,point?.[1]??1.7,point?.[2]??lot.z);
-  for(let i=0;i<(this.mobile?5:10);i++){
-   const mesh=new THREE.Mesh(this.cube,new THREE.MeshStandardMaterial({color:palette[i%palette.length],roughness:.95}));
-   mesh.scale.set(.2+r()*.5,.16+r()*.65,.16+r()*.55);
-   root.add(mesh);pieces.push({mesh,velocity:new THREE.Vector3((r()-.5)*7,3+r()*4,(r()-.5)*7),spin:new THREE.Vector3(r()*4,r()*5,r()*4)});
+  root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
+  root.name='Real mounted windows, water pipes, steel awnings and chipped facade';
+  const add=(mesh,speed=1)=>{
+   root.add(mesh);pieces.push({mesh,velocity:new THREE.Vector3((r()-.5)*5*speed,2.5+r()*4*speed,(r()-.5)*5*speed),
+    spin:new THREE.Vector3((r()-.5)*3,(r()-.5)*4,(r()-.5)*3)});
+  };
+  if(detached){
+   // First unfasten the architectural fixture from its actual mounted position.
+   add(buildDetachableFixture(lot,part,lot.index+Math.floor(performance.now())),1.15);
+  }
+  const local=point?this.toLocal(lot,point):[0,Math.min(2,lot.height*.5),lot.depth*.5];
+  for(let i=0;i<(this.mobile?3:6);i++){
+   const fragment=buildBrokenStructure(lot,18+i,.15+r()*.36,.2+r()*.45,.12+r()*.13,
+    i%3===0?'#87979c':i%2?lot.trim:lot.detail);
+   fragment.position.set(local[0]+(r()-.5)*.5,local[1]+(r()-.5)*.6,local[2]+(r()-.5)*.4);
+   fragment.scale.setScalar(.38+r()*.35);add(fragment,.75);
   }
   this.root.add(root);this.debris.push({root,pieces,age:0});
-  if(this.debris.length>40)this.removeDebris(this.debris.shift());
+  if(this.debris.length>35)this.removeDebris(this.debris.shift());
+ }
+ toLocal(lot,point){
+  const dx=point[0]-lot.x,dz=point[2]-lot.z,c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
+  return [dx*c-dz*s,point[1],dx*s+dz*c];
  }
  removeDebris(effect){
-  effect.root.traverse(object=>{if(object.isMesh)object.material.dispose();});
+  effect.root.traverse(object=>{object.geometry?.dispose();if(object.material)
+   for(const mat of Array.isArray(object.material)?object.material:[object.material])mat.dispose();});
   effect.root.removeFromParent();
  }
  applyDamageEvent(event){
   const lot=this.lots[event?.cityLotIndex];if(!lot)return;
   const stage=cityStage(event.hp,event.maxHp||CITY_MAX_HP);
-  const prev=this.damage[lot.id]?.stage??0;
-  this.damage[lot.id]={hp:event.hp,stage};
-  this.flash(lot);this.eject(lot,event.part||'masonry',event.position);
+  this.damage[lot.id]={hp:event.hp,stage};this.facade.set(lot.index,event.hp,event.maxHp||CITY_MAX_HP);
+  this.flash(lot);this.eject(lot,event.part||'masonry',event.position,!!event.partDestroyed);
+  const plume=emitFireSmoke(this.root,event.position||[lot.x,1.5,lot.z],
+   this.plumeResources,this.mobile,lot.index+Math.floor(performance.now()));
+  this.plumes.push(plume);if(this.plumes.length>22)disposePlume(this.plumes.shift());
   if(event.partDestroyed)this.hidePart(lot.index,event.part);
-  if(stage>=2){this.hideLot(lot.index);this.createChunks(lot,stage,true);}
-  else if(stage===1&&prev===0){
-   // Stage 1: surface shear, jagged heavy masonry begins falling.
-   this.hidePart(lot.index,'masonry');
-  }
+  // Retain the battered original wall. Only after total collapse is it
+  // replaced by jagged, windowed, rebar-filled fragments instead of cubes.
+  if(stage===3){this.hideLot(lot.index);this.createChunks(lot,stage,true);}
+  else if(stage===2)this.createChunks(lot,stage,true);
  }
  syncDamage(damage={}){
-  if(damage===this.lastDamage)return;this.lastDamage=damage;
+  if(damage===this.lastDamage)return;
+  if(!Object.keys(damage).length&&Object.keys(this.damage).length)this.resetBuildings();
+  this.lastDamage=damage;
   for(const lot of this.lots){
    const record=damage[lot.id];if(!record)continue;
    const stage=cityStage(record.hp,record.maxHp||CITY_MAX_HP);
-   const prev=this.damage[lot.id]?.stage??0;
-   this.damage[lot.id]={hp:record.hp,stage};
+   this.damage[lot.id]={hp:record.hp,stage};this.facade.set(lot.index,record.hp,record.maxHp||CITY_MAX_HP);
    for(const [part,hp] of Object.entries(record.parts||{}))if(hp<=0)this.hidePart(lot.index,part);
-   if(stage>=1&&prev===0)this.hidePart(lot.index,'masonry');
-   if(stage>=2){this.hideLot(lot.index);this.createChunks(lot,stage,false);}
+   if(stage===3){this.hideLot(lot.index);this.createChunks(lot,stage,false);}
+   else if(stage===2)this.createChunks(lot,stage,false);
   }
+ }
+ resetBuildings(){
+  this.damage={};this.lastDamage=null;this.hidden.clear();this.partsHidden.clear();this.facade.reset();
+  for(const mesh of [this.walls,this.signs,this.graffiti]){
+   const attr=mesh.geometry.attributes.position,original=mesh.userData.originalPositions;
+   if(original){attr.array.set(original);attr.needsUpdate=true;}
+  }
+  for(const effect of this.chunks.values()){
+   effect.root.traverse(obj=>{obj.geometry?.dispose();if(obj.material)
+    for(const mat of Array.isArray(obj.material)?obj.material:[obj.material])mat.dispose();});
+   effect.root.removeFromParent();
+  }
+  this.chunks.clear();
+  for(const effect of this.debris)this.removeDebris(effect);this.debris=[];
+  for(const effect of this.plumes)disposePlume(effect);this.plumes=[];
+  for(const effect of this.flashes){effect.mesh.material.dispose();effect.mesh.removeFromParent();}
+  this.flashes=[];
  }
  blocked(x,z,y=0){return cityBlocked(x,z,y,this.damage);}
  update(time,dt=1/60){
@@ -406,6 +439,9 @@ export class OuterCity{
   for(let i=this.flashes.length-1;i>=0;i--){
    const effect=this.flashes[i];effect.age+=dt;effect.mesh.material.opacity=.5*Math.max(0,1-effect.age/.35);
    if(effect.age>.35){effect.mesh.material.dispose();effect.mesh.removeFromParent();this.flashes.splice(i,1);}
+  }
+  for(let i=this.plumes.length-1;i>=0;i--)if(updateFireSmoke(this.plumes[i],dt)){
+   disposePlume(this.plumes[i]);this.plumes.splice(i,1);
   }
   for(let i=this.debris.length-1;i>=0;i--){
    const effect=this.debris[i];effect.age+=dt;
@@ -437,6 +473,8 @@ export class OuterCity{
  }
  dispose(){
   for(const effect of this.debris)this.removeDebris(effect);
+  for(const effect of this.plumes)disposePlume(effect);
+  this.plumeResources.flame.dispose();this.plumeResources.smoke.dispose();this.facade.texture.dispose();
   this.root.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material]){m.map?.dispose();m.dispose();}});
   this.cube.dispose();this.root.removeFromParent();
  }
