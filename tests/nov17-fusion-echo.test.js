@@ -66,5 +66,5 @@ test('fusion echo status requires its own impact and is 20% strength, never a fu
  assert.equal(target.effects.slow,undefined,'full-strength legacy ice slow must never proc on primary contact');
  assert.equal(target.effects.freeze,undefined,'fused ice cannot freeze before its own projectile hits');
  applyElementalHit(target,source,itemById('frost-1'),NOW+1020,.2);
- assert.equal(target.effects.freeze.until-(NOW+1020),200,'fused ice duration is 20% of full 1000ms');
+ assert.equal(target.effects.freeze.until-(NOW+1020),600,'fused ice duration is 20% of full 3000ms');
 });
