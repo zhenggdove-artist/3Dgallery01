@@ -3,8 +3,8 @@ import {cityPaintHit} from './shared/city-layout.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 export class CityWallPainter{
- constructor({canvas,camera,arena,controller,role,ui,send}){
-  Object.assign(this,{canvas,camera,arena,controller,role,ui,send});
+ constructor({canvas,camera,arena,controller,role,ui,send,beforeStart=()=>{}}){
+  Object.assign(this,{canvas,camera,arena,controller,role,ui,send,beforeStart});
   this.active=false;this.tool='brush';this.color='#e73b33';this.size=.17;
   this.pointer=null;this.stroke=null;this.pending=Promise.resolve();
   this.button=document.getElementById('paint-button');
@@ -43,6 +43,7 @@ export class CityWallPainter{
   if(active&&this.role()!=='fighter'){this.ui.toast('Enter the arena to paint');return;}
   if(this.active===active)return;
   if(!active)this.finish();
+  if(active)this.beforeStart();
   this.active=active;
   if(this.toolbar)this.toolbar.hidden=!active;
   this.button?.setAttribute('aria-pressed',String(active));
