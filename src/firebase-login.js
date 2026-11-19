@@ -19,12 +19,11 @@ export async function prepareFirebase(config){
   });
   auth=module.getAuth(app);
   authModule=module;
+  // A cached Firebase session is *not* a gameplay login. The entry screen
+  // always requires a deliberate click and Google's account chooser.
+  // Do not migrate authentication persistence or sign out during SDK setup:
+  // doing so can break the popup/redirect hand-off (especially iOS Safari).
   await auth.authStateReady();
-  // Never restore an old role/account into a new visit. Firebase defaults to
-  // persistent storage, which bypasses the account chooser on return visits.
-  // Use session-memory only, and discard any previously persisted identity.
-  await module.setPersistence(auth,module.inMemoryPersistence);
-  if(auth.currentUser)await module.signOut(auth);
   return auth;
  })().catch(error=>{pending=null;throw error;});
  return pending;
