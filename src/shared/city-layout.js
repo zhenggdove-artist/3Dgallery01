@@ -232,9 +232,13 @@ export function cityCollapsePosition(lot,x,y,z,tier,isRoof=false){
  const transient=Math.sin(Math.PI*amount);
  const roofRim=isRoof?Math.min(1,Math.hypot(lx/Math.max(1,lot.width),lz/Math.max(1,lot.depth))*2):1;
  const sheer=sideShear*transient*factor;
- return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*amount+sheer,
-  y+(ruinedY-y)*amount-Math.min(lot.height*.18,localizedDrop)*transient*roofRim,
-  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*amount-sheer*.7];
+ // Individual facades and corners fold at different speeds. Only the roof's
+ // support surface preserves its exact deterministic collision height.
+ const skew=(Math.sin(lx*.64+lot.index*.91+y*.42)+Math.cos(lz*.83-y*.57+lot.index*.17))*.5;
+ const unevenAmount=isRoof?amount:Math.max(0,Math.min(1,amount*(1+.72*skew*transient)));
+ return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*unevenAmount+sheer,
+  y+(ruinedY-y)*unevenAmount-Math.min(lot.height*.18,localizedDrop)*transient*roofRim,
+  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*unevenAmount-sheer*.7];
 }
 function cityFootprint(lot,x,z,margin=0){
  const dx=x-lot.x,dz=z-lot.z;
