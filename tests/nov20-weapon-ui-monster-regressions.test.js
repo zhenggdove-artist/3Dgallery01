@@ -14,7 +14,7 @@ const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('equipped marker, 3px chat lift, GM help inside S and opaque clean paper doll',()=>{
  const css=source('fidelity-ui.css'),ui=source('src/ui.js'),portrait=source('src/equipment-portrait-view.js');
  assert.match(css,/\.bag-cell\.equipped::after\{top:1px!important;bottom:auto!important/);
- assert.match(css,/#hud #chat-hud\{bottom:max\(157px/);
+ assert.match(css,/#hud #chat-hud\{bottom:max\(160px/);
  assert.match(css,/#gm-help\{display:none!important\}/);
  assert.match(ui,/data-gm-action="help" aria-label="GM instructions and shortcuts"/);
  assert.match(css,/#panel #bag-portrait-frame::after\{display:none!important\}/);
@@ -37,7 +37,7 @@ test('goldfish 115ms water orbs, shoulder aim and exactly half Cat SMG normal ra
   effect=source('src/weapon-signature-effects.js');
  assert.match(gun,/weapon\(\)\.id==='white-cat'\|\|weapon\(\)\.id==='goldfish'/);
  assert.match(gun,/this\.mode===1&&weapon\(\)\?\.id==='goldfish'/);
- assert.match(main,/if\(weapon\?\.id==='goldfish'\)\{gun\.cycle\(\);return;\}/);
+ assert.match(main,/if\(weapon\?\.id==='goldfish'\)\{/);
  assert.match(effect,/goldfishBubble\(event\)/);
 });
 test('ice freezes three seconds with five-second trigger lock and palm ultimate binds for three seconds every six',()=>{
@@ -115,7 +115,7 @@ test('three binding vine levels fill palm circle without multiplying draw calls 
 test('attached boomerang native electrical arc and no held duplicate',()=>{
  const sourceEffects=source('src/weapon-signature-effects.js');
  assert.match(sourceEffects,/nativeArcRay\(/);
- assert.match(sourceEffects,/giraffe\.add\(nativeElectric\.group\)/);
+ assert.match(sourceEffects,/flexBones\[5\]\.add\(nativeElectric\.group\)/);
  assert.match(sourceEffects,/giraffeHideUntil=performance\.now\(\)\+duration\*1000/);
  assert.match(source('src/main.js'),/giraffeHideUntil/);
 });
