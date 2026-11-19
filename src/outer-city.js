@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
- cityLots,cityStage,cityDamageTier,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
+ cityLots,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume} from './city-ruins-vfx.js';
 import {CityWallPaint} from './city-wall-paint.js';
@@ -257,6 +257,72 @@ export function markPositionRangeDirty(attribute,start,end){
  if(typeof attribute.addUpdateRange==='function')attribute.addUpdateRange(start*3,(end-start)*3);
  attribute.needsUpdate=true;
 }
+// The 77cb8c5 dirty-range GPU upload is retained. The remaining spike was
+// calculating 5+ trigonometric functions and many per-vertex arrays on EVERY
+// animation frame. Factor the exact original shear / roof / corner formulas
+// into coefficients once, and update the damaged lot with multiplications.
+const clamp01=v=>Math.max(0,Math.min(1,v));
+export function buildCityDeformationBasis(lot,original,start,end,roofRanges=[]){
+ const count=end-start,base=new Float32Array(count*3),
+  cut=new Float32Array(count*3),corner=new Uint8Array(count);
+ const cs=Math.cos(lot.yaw),sn=Math.sin(lot.yaw);
+ const survivor=(lot.height/lot.floors)*(lot.floors===1?.32:.76);
+ const length=Math.max(1,lot.height-survivor);
+ const roofCollapse=(lot.height/lot.floors)*(lot.floors===1?.32:.76);
+ const ruinRoof=roofCollapse+(lot.height+.13-roofCollapse)*.10;
+ const width=lot.width*.5,depth=lot.depth*.5;
+ for(let i=start;i<end;i++){
+  const o=i*3,k=(i-start)*3,x=original[o],y=original[o+1],z=original[o+2];
+  let isRoof=false;
+  for(let j=0;j<roofRanges.length;j++){
+   if(i>=roofRanges[j][0]&&i<roofRanges[j][1]){isRoof=true;break;}
+  }
+  const dx=x-lot.x,dz=z-lot.z,lx=dx*cs-dz*sn,lz=dx*sn+dz*cs;
+  const edge=Math.min(1,(Math.abs(lx)/width+Math.abs(lz)/depth)*.5);
+  const weight=isRoof?1:.38+.62*edge;
+  const rise=Math.max(0,y-survivor),factor=Math.min(1,rise/length);
+  const noise=Math.sin(lot.index*.73+x*.81+z*.59+y*1.13);
+  const compression=.08+.075*(.5+.5*noise);
+  const ruinedY=isRoof?ruinRoof+(y-(lot.height+.13))*.16:
+   y<=survivor?y:survivor+rise*compression;
+  base[k]=Math.sin(y*1.9+lot.index*.9)*factor*.35*weight;
+  base[k+1]=(ruinedY-y)*weight;
+  base[k+2]=Math.cos(y*1.5+lot.index*.7)*factor*.35*weight;
+  const diagonal=clamp01((Math.abs(lx)/width+Math.abs(lz)/depth-1.02)/.98);
+  const upper=clamp01((y-lot.height*.15)/Math.max(.2,lot.height*.85));
+  const intensity=diagonal*upper;
+  if(intensity<=0)continue;
+  const sx=lx>=0?1:-1,sz=lz>=0?1:-1;
+  const id=(sx<0?1:0)+(sz<0?2:0);
+  corner[i-start]=1+((id-(lot.index&3)+4)&3);
+  const insideX=-sx*Math.min(2.65,lot.width*.39)*intensity;
+  const insideZ=-sz*Math.min(2.65,lot.depth*.39)*intensity;
+  cut[k]=cs*insideX+sn*insideZ;
+  cut[k+1]=-Math.min(isRoof?2.15:4.2,lot.height*(isRoof?.31:.49))*intensity;
+  cut[k+2]=-sn*insideX+cs*insideZ;
+ }
+ return {base,cut,corner};
+}
+function cornerTiers(tier){
+ const strength=new Float32Array(5);
+ for(let first=1;first<=4;first++){
+  const hits=clamp01(tier-first+1)+clamp01(tier-first-3)+clamp01(tier-first-7);
+  strength[first]=Math.min(1,hits*.82);
+ }
+ return strength;
+}
+export function applyCityDeformationBasis(original,positions,start,end,basis,tier,shakeX=0,shakeZ=0){
+ const amount=cityCollapseProgress(tier),strength=cornerTiers(tier);
+ const {base,cut,corner}=basis;
+ for(let i=start;i<end;i++){
+  const j=i*3,k=(i-start)*3;
+  if(positions[j+1]<-50)continue; // Detached fixtures never grow back.
+  const f=strength[corner[i-start]];
+  positions[j]=original[j]+base[k]*amount+cut[k]*f+shakeX;
+  positions[j+1]=original[j+1]+base[k+1]*amount+cut[k+1]*f;
+  positions[j+2]=original[j+2]+base[k+2]*amount+cut[k+2]*f+shakeZ;
+ }
+}
 function chunkDescriptions(lot){
   const floorH=lot.height/lot.floors;
   const descriptions=[
@@ -286,6 +352,8 @@ export class OuterCity{
   this.splinters=new CitySplinterField(this.root,mobile);
   this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
   this.pendingEjections=[];
+  this.deformationBasis=new Map();this.basisIdleQueue=[];this.basisIdleHandle=null;
+  this.basisLastNearby=0;this.basisDisposed=false;
   this.cube=new THREE.BoxGeometry(1,1,1);
   // Build detailed chipped plaster, framed glass, reinforcement and brick
   // templates at scene load rather than extruding dozens of shapes PER HIT.
@@ -350,30 +418,75 @@ export class OuterCity{
   for(let i=start;i<end;i++)attr.array[i*3+1]=-120;
   markPositionRangeDirty(attr,start,end);
  }
+ // Reuse the native detailed geometry from 77cb8c5. Cache its unchanged
+ // collapse + diagonal-shatter coefficients once per lot, with a small LRU.
+ getLotBasis(index){
+  const lot=this.lots[index];if(!lot)return null;
+  let coefficients=this.deformationBasis.get(index);
+  if(!coefficients){
+   const roofRanges=[
+    ...(this.walls.userData.partRanges?.get(index+':sheets-roof')||[]),
+    ...(this.walls.userData.partRanges?.get(index+':roof-foundation')||[])
+   ];
+   coefficients=[this.walls,this.signs,this.graffiti].map(mesh=>{
+    const range=mesh.userData.lotRanges?.get(index),original=mesh.userData.originalPositions;
+    return range&&original?buildCityDeformationBasis(lot,original,...range,
+     mesh===this.walls?roofRanges:[]):null;
+   });
+  }
+  this.deformationBasis.delete(index);this.deformationBasis.set(index,coefficients);
+  while(this.deformationBasis.size>(this.mobile?12:32))
+   this.deformationBasis.delete(this.deformationBasis.keys().next().value);
+  return coefficients;
+ }
+ // Populate likely attack targets during idle time, never during a skill
+ // or while the 77cb8c5 per-frame rubble/ejection scheduler is busy.
+ queueNearbyBasis(camera){
+  if(!camera?.position||typeof requestIdleCallback!=='function')return;
+  if(this.collapseAnimations.size||this.pendingEjections.length||this.debris.length)return;
+  const now=performance.now();
+  if(now-this.basisLastNearby<1500)return;
+  this.basisLastNearby=now;
+  const x=camera.position.x,z=camera.position.z;
+  const nearest=this.lots.map(lot=>({index:lot.index,dist:(lot.x-x)**2+(lot.z-z)**2}))
+   .sort((a,b)=>a.dist-b.dist).slice(0,this.mobile?12:32);
+  this.basisIdleQueue=nearest.map(item=>item.index)
+   .filter(index=>!this.deformationBasis.has(index));
+  this.scheduleIdleBasisWarmup();
+ }
+ scheduleIdleBasisWarmup(){
+  if(this.basisDisposed||this.basisIdleHandle!==null||!this.basisIdleQueue.length||
+   typeof requestIdleCallback!=='function')return;
+  this.basisIdleHandle=requestIdleCallback(deadline=>{
+   this.basisIdleHandle=null;
+   if(this.basisDisposed)return;
+   if(this.collapseAnimations.size||this.pendingEjections.length||this.debris.length){
+    // Leave the main thread completely free while attacks are active.
+    this.basisIdleQueue.length=0;return;
+   }
+   let built=0;
+   while(deadline.timeRemaining()>5&&this.basisIdleQueue.length&&built<2){
+    const index=this.basisIdleQueue.shift();
+    if(!this.deformationBasis.has(index)){this.getLotBasis(index);built++;}
+   }
+   this.scheduleIdleBasisWarmup();
+  });
+ }
  collapseLot(index,tier=10,shakeX=0,shakeZ=0){
   const lot=this.lots[index];if(!lot)return;
   const stamp=[tier.toFixed(4),shakeX.toFixed(4),shakeZ.toFixed(4)].join(':');
   if(this.poseCache.get(index)===stamp)return;
   this.poseCache.set(index,stamp);this.renderedTiers.set(index,tier);
   if(tier>=10)this.hidden.add(index);else this.hidden.delete(index);
-  const roofRanges=[
-   ...(this.walls.userData.partRanges?.get(index+':sheets-roof')||[]),
-   ...(this.walls.userData.partRanges?.get(index+':roof-foundation')||[])
-  ];
-  for(const mesh of [this.walls,this.signs,this.graffiti]){
+  // Each animated frame applies exact precomputed diagonal geometry,
+  // keeping all mesh, sign, window, paint and roof details intact.
+  const coefficients=this.getLotBasis(index);
+  for(const [meshIndex,mesh] of [this.walls,this.signs,this.graffiti].entries()){
    const range=mesh.userData.lotRanges?.get(index),original=mesh.userData.originalPositions;
-   if(!range||!original)continue;
-   const attr=mesh.geometry.attributes.position,positions=attr.array;
-   for(let i=range[0];i<range[1];i++){
-    const j=i*3;
-    // Once a real fixture has detached, never silently grow it back.
-    if(positions[j+1]<-50)continue;
-    const roof=mesh===this.walls&&roofRanges.some(([a,b])=>i>=a&&i<b);
-    const point=cityCollapsePosition(lot,original[j],original[j+1],original[j+2],tier,roof);
-    positions[j]=point[0]+shakeX;
-    positions[j+1]=point[1];
-    positions[j+2]=point[2]+shakeZ;
-   }
+   const basis=coefficients[meshIndex];
+   if(!range||!original||!basis)continue;
+   const attr=mesh.geometry.attributes.position;
+   applyCityDeformationBasis(original,attr.array,...range,basis,tier,shakeX,shakeZ);
    markPositionRangeDirty(attr,range[0],range[1]);
   }
   if(tier>=10&&shakeX===0&&shakeZ===0)this.wallPaint?.collapseLot(index);
@@ -629,7 +742,9 @@ export class OuterCity{
  resetBuildings(){
   this.damage={};this.lastDamage=null;this.hidden.clear();this.partsHidden.clear();this.facade.reset();
   this.fireField?.reset();this.splinters?.reset();
-  this.renderedTiers.clear();this.poseCache.clear();this.collapseAnimations.clear();this.shakes.clear();this.seenCityEvents.clear();
+  this.renderedTiers.clear();this.poseCache.clear();this.deformationBasis?.clear();
+  this.basisIdleQueue.length=0;this.basisLastNearby=0;
+  this.collapseAnimations.clear();this.shakes.clear();this.seenCityEvents.clear();
   this.wallPaint?.resetBuildings();
   for(const mesh of [this.walls,this.signs,this.graffiti]){
    const attr=mesh.geometry.attributes.position,original=mesh.userData.originalPositions;
@@ -644,14 +759,14 @@ export class OuterCity{
   for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
   for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
   this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
-  this.pendingEjections=[];
+  this.pendingEjections=[];this.deformationBasis?.clear();
   for(const effect of this.debris)this.removeDebris(effect);this.debris=[];
   for(const effect of this.plumes)this.recyclePlume(effect);this.plumes=[];
   // Hit tints are stored in the shared damage texture and have no overlay meshes.
   this.flashes=[];
  }
  blocked(x,z,y=0){return cityBlocked(x,z,y,this.damage);}
- update(time,dt=1/60){
+ update(time,dt=1/60,camera=null){
   const tmp=new THREE.Object3D();
   for(let i=0;i<this.bagRecords.length;i++){
    const p=this.bagRecords[i];tmp.position.set(p.x,.18+Math.abs(Math.sin(time+p.phase))*.1,p.z);
@@ -711,6 +826,7 @@ export class OuterCity{
   }
   this.fireField?.update(time);
   this.splinters?.update(dt);
+  this.queueNearbyBasis(camera);
   for(let i=this.plumes.length-1;i>=0;i--)if(updateFireSmoke(this.plumes[i],dt)){
    this.recyclePlume(this.plumes[i]);this.plumes.splice(i,1);
   }
@@ -733,6 +849,10 @@ export class OuterCity{
   // falling motion without iterating through every destroyed house each frame.
  }
  dispose(){
+  this.basisDisposed=true;this.basisIdleQueue.length=0;
+  if(this.basisIdleHandle!==null&&typeof cancelIdleCallback==='function')
+   cancelIdleCallback(this.basisIdleHandle);
+  this.basisIdleHandle=null;this.deformationBasis.clear();
   this.fireField?.dispose();this.splinters?.dispose();
   for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
   for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);

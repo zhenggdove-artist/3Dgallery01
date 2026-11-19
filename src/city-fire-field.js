@@ -12,22 +12,34 @@ uniform float uSmoke;
 varying float vOpacity;
 void main(){
  float power=aBurn.x;
- float present=step(aFlow.z,power)*step(.001,power);
  float age=max(0.,uTime-aBurn.y);
  float lifetime=mix(4.6,8.,uSmoke);
  float ending=mix(1.,clamp(1.-age/lifetime,0.,1.),step(.5,aBurn.z));
+ // Critically, zero-damage and fully extinguished houses create NO pixel
+ // fragments. All 432 houses share two batches but only active fire emits
+ // actual rasterized quads. This is vital when enlarging smoke fivefold.
+ if(power<=.0001 || power<aFlow.z || ending<=.0001){
+  gl_Position=vec4(2.,2.,2.,1.);
+  gl_PointSize=0.;
+  vOpacity=0.;
+  return;
+ }
  float t=fract(uTime*aFlow.y+aFlow.x);
  float seed=aFlow.x*37.7;
+ // At the 10%-HP peak, both the upward plume and its sideways billowing
+ // envelope are exactly five times their previous size. No particles are
+ // removed, and per-house density still grows continuously with damage.
+ float spread=1.+4.*power;
  vec3 p=position;
- p.x+=sin(t*5.6+seed)*t*(.15+power*.68);
- p.z+=cos(t*6.3+seed)*t*(.13+power*.54);
- p.y+=t*mix(1.35+power*.9,2.2+power*3.8,uSmoke);
+ p.x+=sin(t*5.6+seed)*t*(.15+power*.68)*spread;
+ p.z+=cos(t*6.3+seed)*t*(.13+power*.54)*spread;
+ p.y+=t*mix(1.35+power*.9,2.2+power*3.8,uSmoke)*spread;
  vec4 view=modelViewMatrix*vec4(p,1.);
  gl_Position=projectionMatrix*view;
  float size=mix(aFlow.w,.99+aFlow.w*1.25,uSmoke)*(1.+power*.42);
- gl_PointSize=clamp(size*260./max(1.,-view.z),0.,83.);
- vOpacity=present*ending*mix(.89,.82,uSmoke)
-  *max(0.,power)*(1.-smoothstep(.72,1.,t))*smoothstep(0.,.10,t);
+ gl_PointSize=clamp(size*spread*260./max(1.,-view.z),0.,156.);
+ vOpacity=ending*mix(1.,1.2,uSmoke)*max(0.,power)
+  *(1.-smoothstep(.72,1.,t))*smoothstep(0.,.10,t);
 }`;
 const fragmentShader=`
 uniform sampler2D uMap;
@@ -35,9 +47,11 @@ uniform float uSmoke;
 varying float vOpacity;
 void main(){
  vec4 texel=texture2D(uMap,gl_PointCoord);
- float alpha=texel.a*vOpacity;
+ // Higher smoke alpha and soot contrast remain perceptible even when
+ // the plume is spread over five times the former area.
+ float alpha=min(.96,texel.a*vOpacity*mix(1.,1.7,uSmoke));
  if(alpha<.012)discard;
- vec3 tint=mix(vec3(1.,.94,.81),vec3(.53,.50,.49),uSmoke);
+ vec3 tint=mix(vec3(1.,.94,.81),vec3(.33,.31,.30),uSmoke);
  gl_FragColor=vec4(texel.rgb*tint,alpha);
 }`;
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
