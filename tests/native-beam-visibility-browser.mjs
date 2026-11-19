@@ -75,7 +75,16 @@ try{
  await page.evaluate(()=>{
   const t=templeTest;
   t.network.close(); // prevent remote world updates from overwriting test equipment
-  window.beamActions=[];window.beamChannelEvents=[];
+  window.beamActions=[];window.beamChannelEvents=[];window.nativeChannelRemovals=[];
+  const native=t.arena.presentation.vfx.numberedEffects;
+  const actualRemove=native.remove.bind(native);
+  native.remove=function(entry){
+   window.nativeChannelRemovals.push({weapon:entry?.item?.id,channel:entry?.channel,
+    liveKey:entry?.key,age:entry?.age,time:performance.now(),
+    stack:new Error('Native channel removed').stack?.slice(0,1100)});
+   if(window.nativeChannelRemovals.length>12)window.nativeChannelRemovals.shift();
+   return actualRemove(entry);
+  };
   t.network.action=async(action,data)=>{
    window.beamActions.push({action,phase:data?.phase||'',direction:data?.direction});
    if(action==='attack'&&data?.phase==='charge')return {charging:true};
@@ -159,6 +168,7 @@ try{
     staffCasting:controller.root.userData.staffCasting,
     staffCastingUntil:controller.root.userData.staffCastingUntil,
     failedEffects:[...(native.failedEffects||[])],
+    channelRemovals:window.nativeChannelRemovals,
     active:native.active.map(e=>({weapon:e.item?.id,channel:e.channel,
      key:e.key,age:e.age,elapsed:performance.now()-e.lastPulse,
      rootSame:e.root===controller.root}))
