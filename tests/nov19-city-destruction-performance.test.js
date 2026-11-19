@@ -72,3 +72,44 @@ test('debris cleanup preserves shared prefabs while disposing detached one-off f
  assert.equal(ownedDisposals,1);
  sharedGeo.dispose();sharedMat.dispose();
 });
+
+test('full detailed collapse is preassembled a piece per frame and activated only after the final tier',()=>{
+ const city=Object.create(OuterCity.prototype);
+ city.chunks=new Map();city.preparedChunks=new Map();city.preparingChunks=new Map();
+ city.chunkBuildQueue=[];city.root=new THREE.Group();city.mobile=false;
+ const lot=CITY_LOTS[1];
+ city.prepareChunks(lot);
+ const job=city.preparingChunks.get(lot.index);
+ assert.ok(job);
+ assert.equal(job.pieces.length,0);
+ city.stepChunkPreparation();
+ assert.equal(job.pieces.length,1);
+ assert.equal(job.root.parent,null,'hidden preassembly cannot leak into the current city');
+ const expected=lot.floors+5;
+ for(let i=1;i<expected;i++)city.stepChunkPreparation();
+ assert.equal(city.chunkBuildQueue.length,0);
+ assert.equal(city.preparingChunks.size,0);
+ assert.equal(city.preparedChunks.get(lot.index)?.pieces.length,expected);
+ city.createChunks(lot,3,true);
+ const animated=city.chunks.get(lot.index);
+ assert.equal(animated.pieces.length,expected);
+ assert.equal(animated.root.parent,city.root);
+ assert.ok(animated.pieces.every(piece=>piece.moving&&!piece.settled));
+ city.disposePreparedChunks(animated);
+});
+
+test('one-hit destruction schedules complete sculptural detail without blocking its event',()=>{
+ const city=Object.create(OuterCity.prototype);
+ city.chunks=new Map();city.preparedChunks=new Map();city.preparingChunks=new Map();
+ city.chunkBuildQueue=[];city.root=new THREE.Group();city.mobile=true;
+ const lot=CITY_LOTS[2];
+ city.createChunks(lot,3,true);
+ assert.equal(city.chunks.size,0,'do not synchronously extrude every heavy piece on impact');
+ const job=city.preparingChunks.get(lot.index);
+ assert.equal(job.activate,true);
+ const expected=lot.floors+5;
+ for(let i=0;i<expected;i++)city.stepChunkPreparation();
+ assert.equal(city.chunks.get(lot.index)?.pieces.length,expected);
+ assert.equal(city.chunks.get(lot.index).root.parent,city.root);
+ city.disposePreparedChunks(city.chunks.get(lot.index));
+});
