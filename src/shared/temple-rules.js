@@ -353,6 +353,20 @@ export function applyAction(world,actor,body,context={}){
    world.revision=(world.revision||0)+1;
    return {updatedWingId:target.id,notice:'已更新「'+target.name+'」中獎率為 '+drawRatePct+'%'};
   }
+  if(body.action==='reset-buildings'){
+   if(!profile.admin)return {error:'GM only'};
+   const count=Object.keys(world.cityDamage||{}).length;
+   world.cityDamage={};world.revision=(world.revision||0)+1;
+   return {notice:'已修復全部 '+count+' 棟受損房屋',resetBuildings:true,restoredBuildings:count};
+  }
+  if(body.action==='reset-messages'){
+   if(!profile.admin)return {error:'GM only'};
+   const count=(world.plants||[]).length;
+   const clearedMediaIds=(world.plants||[]).map(p=>p.media?.id).filter(Boolean);
+   world.plants=[];world.revision=(world.revision||0)+1;
+   return {notice:'已清空中央留言區與聊天室（'+count+' 則永久留言）',
+    resetMessages:true,clearedMediaIds};
+  }
   if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
   if(body.action==='reset-player-artworks')return resetPlayerArtworks(world,profile.admin,now);
    if(body.action==='gm-audio-setting'){
