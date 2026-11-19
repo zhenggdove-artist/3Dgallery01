@@ -397,9 +397,15 @@ export class OuterCity{
   this.root.add(root);this.chunks.set(lot.index,{root,pieces,stage,age:0,animateStarted:animate});
  }
  flash(lot){
-  const material=new THREE.MeshBasicMaterial({color:'#f01422',transparent:true,opacity:.55,depthWrite:false,side:THREE.BackSide});
-  const mesh=new THREE.Mesh(this.cube,material);mesh.position.set(lot.x,lot.height/2,lot.z);mesh.rotation.y=-lot.yaw;
-  mesh.scale.set(lot.width+.1,lot.height+.1,lot.depth+.1);this.root.add(mesh);this.flashes.push({mesh,age:0});
+  // The actual facade, roof, shop sign and graffiti flash crimson, without
+  // an exterior-invisible BackSide box.
+  this.facade.pulse(lot.index,1);
+  const existing=this.flashes.find(hit=>hit.index===lot.index);
+  if(existing)existing.age=0;
+  else this.flashes.push({index:lot.index,age:0});
+  const shake=this.shakes.get(lot.index);
+  if(shake){shake.age=0;shake.power=Math.min(.42,shake.power+.07);}
+  else this.shakes.set(lot.index,{age:0,power:.19});
  }
  eject(lot,part,point,detached=false){
   const r=random(lot.index*1259+Math.floor(performance.now())),root=new THREE.Group(),pieces=[];
@@ -414,14 +420,14 @@ export class OuterCity{
    add(buildDetachableFixture(lot,part,lot.index+Math.floor(performance.now())),1.15);
   }
   const local=point?this.toLocal(lot,point):[0,Math.min(2,lot.height*.5),lot.depth*.5];
-  for(let i=0;i<(this.mobile?3:6);i++){
+  for(let i=0;i<(this.mobile?2:4);i++){
    const fragment=buildBrokenStructure(lot,18+i,.15+r()*.36,.2+r()*.45,.12+r()*.13,
     i%3===0?'#87979c':i%2?lot.trim:lot.detail);
    fragment.position.set(local[0]+(r()-.5)*.5,local[1]+(r()-.5)*.6,local[2]+(r()-.5)*.4);
    fragment.scale.setScalar(.38+r()*.35);add(fragment,.75);
   }
   this.root.add(root);this.debris.push({root,pieces,age:0});
-  if(this.debris.length>35)this.removeDebris(this.debris.shift());
+  if(this.debris.length>(this.mobile?18:32))this.removeDebris(this.debris.shift());
  }
  toLocal(lot,point){
   const dx=point[0]-lot.x,dz=point[2]-lot.z,c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
@@ -429,38 +435,92 @@ export class OuterCity{
  }
  removeDebris(effect){
   effect.root.traverse(object=>{object.geometry?.dispose();if(object.material)
-   for(const mat of Array.isArray(object.material)?object.material:[object.material])mat.dispose();});
+   for(const mat of Array.isArray(object.material)?object.material:[object.material]){
+    mat.map?.dispose();mat.dispose();
+   }});
   effect.root.removeFromParent();
+ }
+ // Each 10%-HP boundary causes an independent structural drop and debris burst.
+ // Strong weapons can cross multiple boundaries in one hit; animate all rapidly.
+ beginCollapse(lot,previousTier,nextTier,event=null){
+  if(nextTier<=previousTier)return;
+  let motion=this.collapseAnimations.get(lot.index);
+  if(!motion){
+   const start=Math.min(previousTier,this.renderedTiers.get(lot.index)??previousTier);
+   motion={tier:Math.max(0,Math.floor(start)),elapsed:0,target:nextTier,triggered:0,event};
+   this.collapseAnimations.set(lot.index,motion);
+  }else{
+   motion.target=Math.max(nextTier,motion.target);
+   if(event)motion.event=event;
+  }
+ }
+ emitCollapseStep(lot,tier,event){
+  const sequence=['windows-0-0','pipes','sign','sheets-awning','timber',
+   'tiles',`windows-${Math.min(1,lot.floors-1)}-2`,'pillars-0','sheets-roof','stone'];
+  const part=sequence[Math.min(9,tier-1)];
+  const impact=event?.position||[lot.x,Math.min(lot.height*.65,5),lot.z+lot.depth*.5];
+  this.eject(lot,part,impact,true);
+  if(part==='sign'){
+   const range=this.signs.userData.lotRanges?.get(lot.index);
+   if(range)this.hideRange(this.signs,...range);
+  }
+  if(part==='sheets-awning')this.hidePart(lot.index,part);
+  const plume=emitFireSmoke(this.root,impact,this.plumeResources,this.mobile,
+   lot.index*131+tier*499);
+  this.plumes.push(plume);
+  if(this.plumes.length>(this.mobile?15:24))disposePlume(this.plumes.shift());
  }
  applyDamageEvent(event){
   const lot=this.lots[event?.cityLotIndex];if(!lot)return;
-  const stage=cityStage(event.hp,event.maxHp||CITY_MAX_HP);
-  this.damage[lot.id]={hp:event.hp,stage};this.facade.set(lot.index,event.hp,event.maxHp||CITY_MAX_HP);
-  this.flash(lot);this.eject(lot,event.part||'masonry',event.position,!!event.partDestroyed);
-  const plume=emitFireSmoke(this.root,event.position||[lot.x,1.5,lot.z],
-   this.plumeResources,this.mobile,lot.index+Math.floor(performance.now()));
-  this.plumes.push(plume);if(this.plumes.length>22)disposePlume(this.plumes.shift());
+  if(event.id&&this.seenCityEvents.has(event.id))return;
+  if(event.id){this.seenCityEvents.add(event.id);if(this.seenCityEvents.size>200)
+   this.seenCityEvents.delete(this.seenCityEvents.values().next().value);}
+  const maxHp=event.maxHp||CITY_MAX_HP,existing=this.damage[lot.id];
+  const oldHp=Number.isFinite(event.previousHp)?event.previousHp:
+   existing?.hp??Math.min(maxHp,event.hp+Math.max(0,event.damage||0));
+  const from=Number.isFinite(event.previousTier)?event.previousTier:cityDamageTier(oldHp,maxHp);
+  const tier=cityDamageTier(event.hp,maxHp),stage=cityStage(event.hp,maxHp);
+  this.damage[lot.id]={hp:event.hp,stage,tier};
+  this.facade.set(lot.index,event.hp,maxHp);
+  this.flash(lot);
+  // Non-threshold hits still throw fine chips, smoke and shake the building.
+  if(tier===from){
+   this.eject(lot,event.part||'masonry',event.position,!!event.partDestroyed);
+   const plume=emitFireSmoke(this.root,event.position||[lot.x,1.5,lot.z],
+    this.plumeResources,this.mobile,lot.index+Math.floor(performance.now()));
+   this.plumes.push(plume);if(this.plumes.length>22)disposePlume(this.plumes.shift());
+  }else this.beginCollapse(lot,from,tier,event);
   if(event.partDestroyed&&event.part!=='masonry')this.hidePart(lot.index,event.part);
-  // Mid-health: keep the detailed original facade and grow shader-native
-  // cracks; a second full-size overlapping shell looked like plain blocks.
-  // Total destruction folds the old decorated mesh into rubble and adds
-  // jagged physical fragments, never substitutes an undecorated cube.
-  if(stage===3){this.collapseLot(lot.index);this.createChunks(lot,stage,true);}
  }
  syncDamage(damage={}){
   if(damage===this.lastDamage)return;
   if(!Object.keys(damage).length&&Object.keys(this.damage).length)this.resetBuildings();
+  const firstSnapshot=this.lastDamage===null;
   this.lastDamage=damage;
   for(const lot of this.lots){
    const record=damage[lot.id];if(!record)continue;
-   const stage=cityStage(record.hp,record.maxHp||CITY_MAX_HP);
-   this.damage[lot.id]={hp:record.hp,stage};this.facade.set(lot.index,record.hp,record.maxHp||CITY_MAX_HP);
-   for(const [part,hp] of Object.entries(record.parts||{}))if(hp<=0&&part!=='masonry')this.hidePart(lot.index,part);
-   if(stage===3){this.collapseLot(lot.index);this.createChunks(lot,stage,false);}
+   const maxHp=record.maxHp||CITY_MAX_HP;
+   const tier=cityDamageTier(record.hp,maxHp),stage=cityStage(record.hp,maxHp);
+   const knownTier=this.damage[lot.id]?.tier??0;
+   if(tier>knownTier&&!firstSnapshot)this.beginCollapse(lot,knownTier,tier,
+    {position:[lot.x,Math.min(lot.height*.65,5),lot.z+lot.depth*.5]});
+   this.damage[lot.id]={hp:record.hp,stage,tier};
+   this.facade.set(lot.index,record.hp,maxHp);
+   for(const [part,hp] of Object.entries(record.parts||{}))
+    if(hp<=0&&part!=='masonry')this.hidePart(lot.index,part);
+   if(firstSnapshot){
+    this.collapseLot(lot.index,tier);
+    if(tier>=3){
+     const range=this.signs.userData.lotRanges?.get(lot.index);
+     if(range)this.hideRange(this.signs,...range);
+    }
+    if(stage===3)this.createChunks(lot,stage,false);
+   }
   }
  }
  resetBuildings(){
   this.damage={};this.lastDamage=null;this.hidden.clear();this.partsHidden.clear();this.facade.reset();
+  this.renderedTiers.clear();this.poseCache.clear();this.collapseAnimations.clear();this.shakes.clear();this.seenCityEvents.clear();
   this.wallPaint?.resetBuildings();
   for(const mesh of [this.walls,this.signs,this.graffiti]){
    const attr=mesh.geometry.attributes.position,original=mesh.userData.originalPositions;
@@ -474,7 +534,7 @@ export class OuterCity{
   this.chunks.clear();
   for(const effect of this.debris)this.removeDebris(effect);this.debris=[];
   for(const effect of this.plumes)disposePlume(effect);this.plumes=[];
-  for(const effect of this.flashes){effect.mesh.material.dispose();effect.mesh.removeFromParent();}
+  // Hit tints are stored in the shared damage texture and have no overlay meshes.
   this.flashes=[];
  }
  blocked(x,z,y=0){return cityBlocked(x,z,y,this.damage);}
@@ -496,9 +556,45 @@ export class OuterCity{
    tmp.position.set(x-.3*Math.sin(a),.15,z-.3*Math.cos(a));tmp.scale.set(1,1,1);tmp.rotation.set(.7,a,0);tmp.updateMatrix();this.tails.setMatrixAt(i,tmp.matrix);
   }
   this.rats.instanceMatrix.needsUpdate=this.tails.instanceMatrix.needsUpdate=true;
+  // Flash and deformation apply to the actual building geometry and decals.
   for(let i=this.flashes.length-1;i>=0;i--){
-   const effect=this.flashes[i];effect.age+=dt;effect.mesh.material.opacity=.5*Math.max(0,1-effect.age/.35);
-   if(effect.age>.35){effect.mesh.material.dispose();effect.mesh.removeFromParent();this.flashes.splice(i,1);}
+   const flash=this.flashes[i];flash.age+=dt;
+   this.facade.pulse(flash.index,Math.pow(Math.max(0,1-flash.age/.34),1.15));
+   if(flash.age>=.34)this.flashes.splice(i,1);
+  }
+  const animated=new Set([...this.collapseAnimations.keys(),...this.shakes.keys()]);
+  for(const index of animated){
+   const lot=this.lots[index],motion=this.collapseAnimations.get(index),shake=this.shakes.get(index);
+   if(!lot)continue;
+   let visibleTier=this.renderedTiers.get(index)??this.damage[lot.id]?.tier??0;
+   if(motion){
+    const remaining=motion.target-motion.tier;
+    const duration=Math.max(.095,.22-Math.min(8,remaining)*.013);
+    if(remaining>0){
+     if(motion.triggered!==motion.tier+1){
+      motion.triggered=motion.tier+1;this.emitCollapseStep(lot,motion.tier+1,motion.event);
+     }
+     motion.elapsed+=Math.min(dt,.1);
+     const t=Math.min(1,motion.elapsed/duration),ease=t*t*(3-2*t);
+     visibleTier=motion.tier+ease;
+     if(t>=1){
+      motion.tier++;motion.elapsed=0;visibleTier=motion.tier;
+      if(motion.tier>=motion.target){
+       this.collapseAnimations.delete(index);
+       if(motion.tier===10)this.createChunks(lot,3,true);
+      }
+     }
+    }else this.collapseAnimations.delete(index);
+   }
+   let shakeX=0,shakeZ=0;
+   if(shake){
+    shake.age+=dt;
+    const fade=Math.pow(Math.max(0,1-shake.age/.45),2);
+    shakeX=Math.sin(shake.age*97+index)*shake.power*fade;
+    shakeZ=Math.cos(shake.age*87+index*.17)*shake.power*fade;
+    if(shake.age>=.45)this.shakes.delete(index);
+   }
+   this.collapseLot(index,visibleTier,shakeX,shakeZ);
   }
   for(let i=this.plumes.length-1;i>=0;i--)if(updateFireSmoke(this.plumes[i],dt)){
    disposePlume(this.plumes[i]);this.plumes.splice(i,1);
