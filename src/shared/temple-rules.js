@@ -1449,12 +1449,12 @@ function tickPersistentAttacks(world,actors,now,rng){
     for(const target of targets){
      const value=target.value;if(value.key===fx.owner||seen.includes(value.id||value.key))continue;
      if(target.kind==='player'&&insideSafeZone(value.position))continue; // only the protected 9m WRITE hub is immune
-     if(now<(fx.hitTimes?.[value.id||value.key]||0))continue;
+     // A distinct outbound or returning physical contact gets one hit per pass.
      const contact=target.kind==='monster'?monsterRayDistance(a,direction,length,value,1.35*fx.radius):
       rayCylinderDistance(a,direction,length,value.position,1+fx.radius,2.35);
      if(contact===null)continue;
      seen.push(value.id||value.key);
-     fx.hitTimes??={};fx.hitTimes[value.id||value.key]=now+contactDamageIntervalMs({id:'giraffe'});
+     // Each leg has its own seen set, preventing repeated hits while allowing both passes.
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
      const hit=target.kind==='monster'
       ?damageMonster(world,owner,fx.damage*.53,now,rng,leg==='out'?'boomerang-out':'boomerang-return',value,center)
