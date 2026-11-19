@@ -163,9 +163,16 @@ for(const lot of CITY_LOTS){
 // checks and Worker-side authoritative collision remain unchanged. Large
 // custom margins can fall back to the full list without risking missed hits.
 export function cityCollisionCandidates(x,z,margin=0){
- if(!Number.isFinite(x)||!Number.isFinite(z)||margin>2.0)return CITY_LOTS;
- return CITY_COLLISION_CELLS.get(cityCellKey(
+ if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(margin)||margin>48)return CITY_LOTS;
+ if(margin<=2)return CITY_COLLISION_CELLS.get(cityCellKey(
   Math.floor(x/CITY_COLLISION_CELL),Math.floor(z/CITY_COLLISION_CELL)))||[];
+ // Large swinging weapons query nearby indexed cells, not all 432 homes
+ // for every swept collision sample. Deduplicate blocks shared by cells.
+ const found=new Set(),radius=Math.max(0,margin);
+ for(let cx=Math.floor((x-radius)/CITY_COLLISION_CELL);cx<=Math.floor((x+radius)/CITY_COLLISION_CELL);cx++)
+  for(let cz=Math.floor((z-radius)/CITY_COLLISION_CELL);cz<=Math.floor((z+radius)/CITY_COLLISION_CELL);cz++)
+   for(const lot of CITY_COLLISION_CELLS.get(cityCellKey(cx,cz))||[])found.add(lot);
+ return [...found];
 }
 export const CITY_MAX_HP=240;
 export function cityStage(hp,maxHp=CITY_MAX_HP){

@@ -2,12 +2,12 @@ import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,spellGroundHeight,scaleUltimateFootprint} from './charge-area.js';
 import {discGroundHeight} from './artwork-discs.js';
-import {artworkLanding} from './artwork-flight.js';
+import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
-import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS} from './city-layout.js';
+import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
@@ -55,7 +55,7 @@ export function createInitialWorld(now=Date.now()){
     profiles:{},customWings:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
-    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
+    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
     monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],audioSettings:{},musicVersion:0,
     collector:initialCollector(now),lastCollectorSale:null,
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
@@ -67,7 +67,7 @@ export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
   world.profiles??={};world.customWings??=[];registerCustomWings(world.customWings);
-  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
+  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.pendingArtworkFlights??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
   // Old RELETTER farming data must not survive the removal of the Garden game mode.
@@ -557,56 +557,17 @@ function throwArtwork(world,profile,actor,body,context,now){
   // ballistic landing, with the same radius as the purple frying pan.
   const landing=artworkLanding(event,ground),bombSize=world.artworkLayout?.[platformId]?.scale?.[0]||1;
   event.blastRadius=ARTWORK_BLAST_RADIUS;
-  const rng=context.rng??Math.random,blastTouches=position=>artworkBlastHits(landing.position,position);
-  let hit=null;const hits=[];
-  for(const target of context.actors||[]){
-   if(target.key===actor.key||target.role!=='fighter'||insideSafeZone(target.position))continue;
-   const collision=projectileHitsActor(event,target.position,landing.time,bombSize)||
-    blastTouches([target.position[0],target.position[1]+1,target.position[2]]);
-   if(!collision)continue;
-   const maxHp=world.profiles?.[target.key]?.maxHp||100,damage=artBombDamage(maxHp,rng);
-   const result=damagePlayer(world,profile,target,damage,now,bomb?'art-bomb':'artwork',
-    actor.position,'art-explosion',[target.position[0],target.position[1]+1,target.position[2]],damage>=maxHp);
-   if(result){hit??=result;hits.push(result);}
-  }
-  let monsterHit=null;const monsterHits=[];
-  for(const mob of [world.monster,...(world.monsters||[])]){
-   if(!mob?.active)continue;
-   const collision=projectileHitsActor(event,mob.position,landing.time,Math.max(bombSize,ENEMY_RADIUS))||
-    blastTouches([mob.position[0],mob.position[1]+1.25,mob.position[2]]);
-   if(!collision)continue;
-   const damage=rng()<.5?mob.hp:68*event.power;
-   const result=damageMonster(world,profile,damage,now,rng,'artwork',mob);
-   if(result){monsterHit??=result;monsterHits.push(result);}
-  }
-  let structureDestroyed=null,structureHit=null;const structureHits=[],structureDestroyedEvents=[];
-  for(const structure of [...(world.structures||[])]){
-   if(structure.owner==='temple')continue;
-   const along=project(origin,direction,structure.position);
-   const direct=along>0&&along<90*event.power&&
-    perpendicular(origin,direction,structure.position,along)<structureRadius(structure);
-   const splash=artworkBlastHits(landing.position,structure.position,ARTWORK_BLAST_RADIUS,structureRadius(structure));
-   if(!direct&&!splash)continue;
-   structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
-   const damage=Math.round(70*event.power);
-   structure.hp=Math.max(0,structure.hp-damage);
-   const record={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
-   structureHit??=record;structureHits.push(record);
-   if(structure.hp<=0){
-    const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;
-    structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);
-   }
-  }
-  // Artwork blast affects tangible houses and detaches three-dimensional components.
- for(const lot of CITY_LOTS){
-  if((world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
-  const point=[lot.x,Math.min(1.5,lot.height/3),lot.z];
-  if(!artworkBlastHits(landing.position,point,ARTWORK_BLAST_RADIUS,Math.max(lot.width,lot.depth)*.5))continue;
-  const result=damageCityLot(world,lot,'masonry',Math.round(70*event.power),now,point);
-  if(result){structureHit??=result.event;structureHits.push(result.event);
-   if(result.destroyed){structureDestroyed??=result.destroyed;structureDestroyedEvents.push(result.destroyed);}}
- }
- return {throwEvent:event,hit,hits,monsterHit,monsterHits,structureHit,structureHits,structureDestroyed,structureDestroyedEvents,notice:monsterHit?.defeated?'Monster defeated · loot dropped':structureDestroyed?'Artwork shattered a structure':undefined};
+  // Throw validation is immediate, collision consequences are NOT. The
+  // authoritative Worker samples the visible ballistic flight during ticks;
+  // no player/monster/house loses HP merely because A was released.
+  world.pendingArtworkFlights??=[];
+  world.pendingArtworkFlights.push({
+   event,landing:{time:landing.time,position:[...landing.position]},bombSize,
+   lastAt:now,hitActors:[],hitMonsters:[],hitStructures:[],hitCity:[]
+  });
+  if(world.pendingArtworkFlights.length>20)world.pendingArtworkFlights.splice(0,world.pendingArtworkFlights.length-20);
+  return {throwEvent:event};
+
 }
 
 function buy(world,profile,body){const item=SHOP_ITEMS.find(entry=>entry.id===body.itemId);if(!item)return {error:'Item is not sold'};if(profile.inventory.includes(item.id)&&item.slot!=='seed')return {error:'Already owned'};if(profile.inventory.length>=600)return {error:'Inventory full'};if(!spend(profile,item.price,world))return {error:'Not enough coins'};appendInventoryInstance(profile,item.id);profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';return {notice:`Purchased ${item.name}`};}
@@ -702,6 +663,15 @@ function attack(world,profile,actor,body,context,now){
   if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
    if(weapon.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
    scaleUltimateFootprint(stats,weapon,quality);
+   if(weapon.id==='giraffe'&&stats.ultimate){
+    // Preserve the explicitly doubled 56m boomerang reach: the generic
+    // ultimate footprint shrink must not undo the item's charged range.
+    stats.range=+(weapon.chargedRange*quality.range).toFixed(2);
+    // Three times the previous ultimate power. The skinned, spinning rod
+    // sweeps a 5.9m-per-quality collision radius while tumbling.
+    stats.damage=+(stats.damage*3).toFixed(3);
+    stats.radius=Math.max(stats.radius,5.9*quality.visual);
+   }
   const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
@@ -797,7 +767,7 @@ function attack(world,profile,actor,body,context,now){
    const inside=area&&['area','sector'].includes(area.mode)?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<(weapon.pattern==='scatter'?.65+along*(stats.ultimate?.56:.32):stats.radius)+structureRadius(v);
    return {v,along,inside};
   }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
-  for(const {v:structure} of (area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
+  for(const {v:structure} of (returningGiraffe?[]:area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
    const damage=Math.max(8,Math.round((stats.damage+bonus*.1)*.7));
    structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
    structure.hp=Math.max(0,structure.hp-damage);
@@ -808,7 +778,7 @@ function attack(world,profile,actor,body,context,now){
   // The city's structural impact follows weapon damage and charged strength,
   // without changing PvP damage or displaying health numbers on the building.
   const structuralDamage=Math.max(8,Math.round((stats.damage+bonus*.1)*(charge>=1?1.5:1.1)));
-  const city=cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
+  const city=returningGiraffe?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
@@ -922,7 +892,133 @@ export function tickBloomChannelHeal(profile,now){
  profile.hp+=restored;
  return restored;
 }
+
+/**
+ * Swept, server-authoritative artwork impacts. A flight's visible event.time
+ * is identical to this simulation epoch. Every 45ms segment is checked
+ * before applying HP, knockback, city damage, shake and destroyed events.
+ * Each distinct target is affected only once per physical throw.
+ */
+export function tickArtworkFlights(world,actors=[],now=Date.now(),rng=Math.random){
+ const flights=world.pendingArtworkFlights||[];
+ if(!flights.length)return false;
+ let changed=false;
+ world.pendingArtworkVisualEvents??=[];
+ for(const flight of [...flights]){
+  const {event,landing}=flight,elapsed=Math.max(0,(now-event.time)/1000);
+  const until=Math.min(landing.time,elapsed);
+  const from=Math.min(until,Math.max(0,((flight.lastAt||event.time)-event.time)/1000));
+  const owner=world.profiles?.[event.owner]||null,bomb=!!event.bomb;
+  const size=Math.max(1,Math.min(3,Number(flight.bombSize)||1));
+  // A sphere fitted to the thrown art meets real upright player/monster
+  // capsules. Never use the previous generous 2.5m centre-to-centre
+  // proximity sphere, which displayed HP damage before visible contact.
+  const artRadius=.65+size*.20;
+  const tracked=(field,key)=>flight[field]?.includes(key);
+  const mark=(field,key)=>{flight[field]??=[];flight[field].push(key);};
+  const hitPlayer=(target)=>{
+   if(tracked('hitActors',target.key)||target.key===event.owner||
+      target.role!=='fighter'||insideSafeZone(target.position))return;
+   const maxHp=world.profiles?.[target.key]?.maxHp||100;
+   const damage=artBombDamage(maxHp,rng);
+   const hit=damagePlayer(world,owner,target,damage,now,bomb?'art-bomb':'artwork',
+    event.origin,'art-explosion',[target.position[0],target.position[1]+1,target.position[2]],damage>=maxHp);
+   mark('hitActors',target.key);if(hit)changed=true;
+  };
+  const hitMonster=(mob)=>{
+   if(!mob?.active||tracked('hitMonsters',mob.id))return;
+   const damage=rng()<.5?mob.hp:68*event.power;
+   const hit=damageMonster(world,owner,damage,now,rng,'artwork',mob);
+   mark('hitMonsters',mob.id);if(hit)changed=true;
+  };
+  const hitStructure=(structure)=>{
+   if(structure.owner==='temple'||tracked('hitStructures',structure.id))return;
+   mark('hitStructures',structure.id);
+   structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
+   const damage=Math.round(70*event.power);
+   structure.hp=Math.max(0,structure.hp-damage);
+   const hit={id:id(),structureId:structure.id,kind:structure.kind,
+    position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
+   world.pendingArtworkVisualEvents.push({kind:'structure-hit',event:hit});changed=true;
+   if(structure.hp<=0){const destroyed=structureEvent(structure,now);
+    world.pendingArtworkVisualEvents.push({kind:'structure-destroyed',event:destroyed});
+    world.structures.splice(world.structures.indexOf(structure),1);}
+  };
+  const hitCity=(lot,point)=>{
+   if(tracked('hitCity',lot.id)||(world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)return;
+   mark('hitCity',lot.id);
+   const result=damageCityLot(world,lot,'masonry',Math.round(70*event.power),now,point);
+   if(!result)return;
+   world.pendingArtworkVisualEvents.push({kind:'structure-hit',event:result.event});
+   if(result.destroyed)world.pendingArtworkVisualEvents.push({kind:'structure-destroyed',event:result.destroyed});
+   changed=true;
+  };
+  const check=(p,blast=false)=>{
+   const point=Array.isArray(p)?p:[...p];
+   for(const target of actors){
+    if(tracked('hitActors',target.key)||target.key===event.owner||target.role!=='fighter')continue;
+    const centre=[target.position[0],target.position[1]+1,target.position[2]];
+    const horizontal=Math.max(0,Math.hypot(point[0]-target.position[0],
+      point[2]-target.position[2])-1.02);
+    const vertical=Math.max(0,target.position[1]-point[1],
+      point[1]-(target.position[1]+2.35));
+    const touching=blast?artworkBlastHits(point,centre):
+     Math.hypot(horizontal,vertical)<=artRadius;
+    if(touching)hitPlayer(target);
+   }
+   for(const mob of [world.monster,...(world.monsters||[])]){
+    if(!mob?.active||tracked('hitMonsters',mob.id))continue;
+    const centre=[mob.position[0],mob.position[1]+1.25,mob.position[2]];
+    const monsterRadius=Math.max(.5,Number(mob.bodyRadius)||ENEMY_RADIUS);
+    const monsterHeight=Math.max(1,Number(mob.bodyHeight)||ENEMY_HEIGHT);
+    const horizontal=Math.max(0,Math.hypot(point[0]-mob.position[0],
+      point[2]-mob.position[2])-monsterRadius);
+    const vertical=Math.max(0,mob.position[1]-point[1],
+      point[1]-(mob.position[1]+monsterHeight));
+    const touching=blast?artworkBlastHits(point,centre):
+     Math.hypot(horizontal,vertical)<=artRadius;
+    if(touching)hitMonster(mob);
+   }
+   for(const structure of [...(world.structures||[])]){
+    if(structure.owner==='temple'||tracked('hitStructures',structure.id))continue;
+    const vertical=point[1]>=structure.position[1]-artRadius&&
+     point[1]<=structure.position[1]+structureHeight(structure)+artRadius;
+    const touching=blast?artworkBlastHits(point,structure.position,ARTWORK_BLAST_RADIUS,structureRadius(structure)):
+     vertical&&Math.hypot(point[0]-structure.position[0],point[2]-structure.position[2])<=
+       structureRadius(structure)+artRadius;
+    if(touching)hitStructure(structure);
+   }
+   const lots=blast?CITY_LOTS:cityCollisionCandidates(point[0],point[2],artRadius);
+   for(const lot of lots){
+    if(tracked('hitCity',lot.id)||(world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
+    const hp=world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP,roof=cityRoofHeightAtHp(lot,hp);
+    const [u,v]=cityLocal(lot,point[0],point[2]);
+    const touching=blast?artworkBlastHits(point,
+      [lot.x,Math.min(1.5,lot.height/3),lot.z],ARTWORK_BLAST_RADIUS,Math.max(lot.width,lot.depth)*.5):
+      Math.abs(u)<=lot.width*.5+artRadius&&Math.abs(v)<=lot.depth*.5+artRadius&&
+      point[1]>=-artRadius&&point[1]<=roof+artRadius;
+    if(touching)hitCity(lot,[point[0],Math.max(.1,Math.min(roof,point[1])),point[2]]);
+   }
+  };
+  // Catch up through the interval if the DO alarm or a WebGL client stalls.
+  if(until>from){
+   const steps=Math.max(1,Math.ceil((until-from)/.045));
+   for(let i=1;i<=steps;i++)check(artworkPosition(event,from+(until-from)*i/steps));
+  }
+  if(elapsed>=landing.time){
+   check(landing.position,true); // blast begins only AFTER visible landing
+   flights.splice(flights.indexOf(flight),1);changed=true;
+  }else{
+   flight.lastAt=event.time+until*1000;
+   changed=true; // persist collision progress and per-target de-duplication
+  }
+ }
+ return changed;
+}
+
 export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0,actors=[]}={}){
+  // Apply damage strictly when the server-observed artwork touches a collider.
+  const artworkChanged=tickArtworkFlights(world,actors,now,rng);
   migrateWorld(world,now);
   // The same authoritative damage/death/shield pipeline used by combat
   // processes Collector bullets. Fixed 50 HP ignores armour and shields,
@@ -930,7 +1026,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   let changed=tickCollector(world,actors,now,rng,(actor,from,damage)=>
    damagePlayer(world,null,actor,damage,now,'collector',from,'collector-shot',
     [actor.position[0],actor.position[1]+1.15,actor.position[2]],false,false,true)
-  );
+  )||artworkChanged;
   for(const profile of Object.values(world.profiles||{}))
    changed=tickBloomChannelHeal(profile,now)>0||changed;
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
@@ -1352,13 +1448,13 @@ function tickPersistentAttacks(world,actors,now,rng){
     const direction=ray.map(v=>v/length),seen=leg==='out'?fx.outHits:fx.backHits;
     for(const target of targets){
      const value=target.value;if(value.key===fx.owner||seen.includes(value.id||value.key))continue;
-     if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
-     if(now<(fx.hitTimes?.[value.id||value.key]||0))continue;
+     if(target.kind==='player'&&insideSafeZone(value.position))continue; // only the protected 9m WRITE hub is immune
+     // A distinct outbound or returning physical contact gets one hit per pass.
      const contact=target.kind==='monster'?monsterRayDistance(a,direction,length,value,1.35*fx.radius):
       rayCylinderDistance(a,direction,length,value.position,1+fx.radius,2.35);
      if(contact===null)continue;
      seen.push(value.id||value.key);
-     fx.hitTimes??={};fx.hitTimes[value.id||value.key]=now+contactDamageIntervalMs({id:'giraffe'});
+     // Each leg has its own seen set, preventing repeated hits while allowing both passes.
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
      const hit=target.kind==='monster'
       ?damageMonster(world,owner,fx.damage*.53,now,rng,leg==='out'?'boomerang-out':'boomerang-return',value,center)
@@ -1367,6 +1463,53 @@ function tickPersistentAttacks(world,actors,now,rng){
       target.kind==='monster'?value:world.profiles[value.key],owner,
       {family:'lightning',element:'electric'},now,fx.echo?.2:1);
      changed=true;
+    }
+    // The revolving soft rod can also strike the real building footprint.
+    // Check along the identical sine-wave outbound/return path, rather
+    // than damaging houses at the instant the player presses A.
+    const stepCount=Math.max(1,Math.ceil(length/.75));
+    fx.structureHitIds??=[];fx.cityHitIds??=[];
+    for(let j=0;j<=stepCount;j++){
+     const t=j/stepCount,point=a.map((v,i)=>v+(b[i]-v)*t);
+     for(const structure of [...(world.structures||[])]){
+      if(structure.owner==='temple'||fx.structureHitIds.includes(structure.id))continue;
+      if(Math.abs(point[1]-(structure.position[1]+structureHeight(structure)*.5))>
+        structureHeight(structure)*.5+fx.radius)continue;
+      if(Math.hypot(point[0]-structure.position[0],point[2]-structure.position[2])>
+        fx.radius+structureRadius(structure))continue;
+      fx.structureHitIds.push(structure.id);
+      structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
+      const damage=Math.max(8,Math.round(fx.damage*.5));
+      structure.hp=Math.max(0,structure.hp-damage);
+      const hit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],
+       hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
+      world.pendingArtworkVisualEvents??=[];
+      world.pendingArtworkVisualEvents.push({kind:'structure-hit',event:hit});
+      if(structure.hp<=0){
+       const destroyed=structureEvent(structure,now);
+       world.pendingArtworkVisualEvents.push({kind:'structure-destroyed',event:destroyed});
+       world.structures.splice(world.structures.indexOf(structure),1);
+      }
+      changed=true;
+     }
+     // Broadphase prevents a 432-house scan during each boomerang step.
+     for(const lot of cityCollisionCandidates(point[0],point[2],fx.radius)){
+      if(fx.cityHitIds.includes(lot.id)||(world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
+      const [u,v]=cityLocal(lot,point[0],point[2]);
+      const hp=world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP;
+      if(Math.abs(u)>lot.width*.5+fx.radius||Math.abs(v)>lot.depth*.5+fx.radius||
+       point[1]<-fx.radius||point[1]>cityRoofHeightAtHp(lot,hp)+fx.radius)continue;
+      fx.cityHitIds.push(lot.id);
+      const hitPoint=[point[0],Math.max(.1,Math.min(point[1],lot.height)),point[2]];
+      const impact=damageCityLot(world,lot,'masonry',Math.max(8,Math.round(fx.damage*.5)),now,hitPoint);
+      if(impact){
+       world.pendingArtworkVisualEvents??=[];
+       world.pendingArtworkVisualEvents.push({kind:'structure-hit',event:impact.event});
+       if(impact.destroyed)
+        world.pendingArtworkVisualEvents.push({kind:'structure-destroyed',event:impact.destroyed});
+       changed=true;
+      }
+     }
     }
    }
   }else if(fx.kind==='goldfish'){

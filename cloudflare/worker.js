@@ -438,12 +438,15 @@ export class TempleRoom extends DurableObject{
     if(now-(this.lastRosterAt||0)>=800)this.broadcastRoster();
   }
   async tick(fromState=false){
-   const now=Date.now(),world=this.world(),movingEffects=(world.persistentAttacks||[]).length>0;
+   const now=Date.now(),world=this.world(),movingEffects=(world.persistentAttacks||[]).length>0||(world.pendingArtworkFlights||[]).length>0;
    if(fromState&&now-this.lastTick<(movingEffects?70:500))return;
    this.lastTick=now;
    const actors=this.actors();
    const previousRespawns=new Map(actors.map(actor=>[actor.key,world.profiles[actor.key]?.lastRespawnAt||0]));
    if(tickWorld(world,{now,activeFighters:actors.filter(a=>a.role==='fighter').length,actors})){
+    // Artwork impacts are created by the authoritative time-stepped flight,
+    // never by the initial throw action. Deliver shakes/collapse only now.
+    const artworkVisualEvents=world.pendingArtworkVisualEvents?.splice(0)||[];
     // Do not leave remote replicas or the authoritative actor at the old
     // death location. Move every newly revived fighter into the WRITE hub.
     let respawned=false;
@@ -459,6 +462,9 @@ export class TempleRoom extends DurableObject{
      respawned=true;
     }
     this.save(world);this.broadcastWorld(world);
+    for(const impact of artworkVisualEvents)
+      if(impact?.kind==='structure-hit'||impact?.kind==='structure-destroyed')
+       this.broadcast(impact.kind,impact.event);
     if(respawned)this.broadcastRoster();
    }
    await this.armAlarm();

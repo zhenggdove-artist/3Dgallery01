@@ -1,3 +1,4 @@
+import {createFlexibleGiraffe,animateFlexibleGiraffe} from './reletter/flexible-giraffe.js';
 import * as THREE from 'three';
 import {itemById} from './shared/catalog.js';
 import {oddParts} from './reletter/odd-weapon-art.js';
@@ -359,75 +360,42 @@ export class WeaponSignatureEffects {
  }
  giraffe(event,ownerRoot){
   const quality=event.qualityScale||1,origin=vec(event.origin),dir=vec(event.direction).normalize();
-  const key='giraffe',cached=this.take(key),
-   group=cached||new THREE.Group(),giraffe=cached?.userData.giraffe||new THREE.Group(),
-   model=cached?.userData.model||new THREE.Group(),electricBolts=cached?.userData.bolts||[];
-  giraffe.name='Visible spinning yellow giraffe model, outbound and returning';
+  const key='giraffe',cached=this.take(key),group=cached||new THREE.Group();
+  group.name='Visible spinning yellow giraffe model, outbound and returning';
   if(!cached){
-  for(const p of oddParts('giraffe')){
-   const g=p.shape==='box'?geomBox:p.shape==='cone'?geomCone:sphere;
-   const m=new THREE.Mesh(g,material(p.color));m.position.set(p.x,p.y,p.z);m.scale.set(p.sx,p.sy,p.sz);giraffe.add(m);
+   const model=new THREE.Group(),giraffe=createFlexibleGiraffe(THREE);
+   giraffe.name='Airborne fully skinned flexible giraffe baton';
+   // Recenter the rod about its midpoint BEFORE axial spin: the swept
+   // collision radius is calibrated to the same outer end of this model.
+   model.add(giraffe);group.add(model);
+   const nativeElectric=nativeArcRay({color:'#bd76ff',size:.42,density:.78,quantity:4});
+   nativeElectric.group.name='00GameDevs arc ray following articulated giraffe spine';
+   nativeElectric.setEndpoints(new THREE.Vector3(0,-.16,0),new THREE.Vector3(0,.43,0));
+   giraffe.userData.flexBones[5].add(nativeElectric.group);
+   group.userData.giraffe=giraffe;group.userData.model=model;
+   group.userData.nativeElectric=nativeElectric;
   }
-  // It must read as ONE recognizable yellow giraffe, not a V-shaped dust trail.
-  model.add(giraffe);
-  group.name='Visible spinning yellow giraffe model, outbound and returning';group.add(model);
-  giraffe.scale.setScalar(5.4*quality);
-  // Purple electricity is physically attached to the spinning giraffe mesh,
-  // so every bolt follows the SAME boomerang trajectory and rotation.
-  for(let j=0;j<10;j++){
-   const points=[];
-   for(let k=0;k<9;k++){
-    const f=k/8,y=-.23+f*1.75,side=j%2?1:-1;
-    points.push(new THREE.Vector3(
-     side*(.08+.13*Math.sin(f*10.7+j*.81))+.045*Math.sin(j*3.7+k*7.1),
-     y,
-     (j%5-2)*.08+.06*Math.sin(j*2.3+k*5.1)
-    ));
-   }
-   const path=new THREE.CatmullRomCurve3(points);
-   const makeBolt=(radius,color,opacity)=>{
-    const bolt=new THREE.Mesh(new THREE.TubeGeometry(path,32,radius,5,false),
-     new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,
-      blending:THREE.AdditiveBlending,toneMapped:false}));
-    giraffe.add(bolt);return bolt;
-   };
-   electricBolts.push({core:makeBolt(.012,j%2?'#eac0ff':'#be6bff',.92),
-    glow:makeBolt(.027,'#7e32f3',.30),phase:j*1.73});
-  }
-  // Project already bundles the actual MIT-licensed 00GameDevs Arc Ray
-  // generator. Layer it directly on the returning giraffe body; the
-  // requested Sustained Arc source was not included in the vendor package.
-  const nativeElectric=nativeArcRay({color:'#bd76ff',size:.42,density:.78,quantity:4});
-  nativeElectric.group.name='00GameDevs arc ray bound to giraffe boomerang';
-  nativeElectric.setEndpoints(new THREE.Vector3(0,-.16,0),new THREE.Vector3(0,1.58,0));
-  giraffe.add(nativeElectric.group);
-  group.userData.nativeElectric=nativeElectric;group.userData.nativeElectricAge=0;
-  group.userData.giraffe=giraffe;group.userData.model=model;group.userData.bolts=electricBolts;
-  }
-  giraffe.scale.setScalar(5.4*quality);group.scale.setScalar(1);
-  if(group.userData.nativeElectric){
-   group.userData.nativeElectric.reset();
-   group.userData.nativeElectricAge=0;
-   group.userData.nativeElectric.setEndpoints(
-    new THREE.Vector3(0,-.16,0),new THREE.Vector3(0,1.58,0));
-  }
+  const giraffe=group.userData.giraffe,model=group.userData.model;
+  const scale=3.9*quality,rodMid=1.15;
+  giraffe.scale.setScalar(scale);giraffe.position.set(0,-rodMid*scale,0);
+  // Reused GPU resources must be reset, never allocated each attack.
+  const nativeElectric=group.userData.nativeElectric;
+  nativeElectric?.reset();nativeElectric?.setEndpoints(
+   new THREE.Vector3(0,-.16,0),new THREE.Vector3(0,.43,0));
+  group.userData.nativeElectricAge=0;
   const orientation=qdir(dir),duration=2.3;
   if(ownerRoot)ownerRoot.userData.giraffeHideUntil=performance.now()+duration*1000;
   this.add(group,duration,age=>{
    const t=Math.min(1,age/duration),distance=Math.sin(t*Math.PI)*(event.range||28);
-   group.position.copy(origin).addScaledVector(dir,distance); // identical server-owned sin(πt) route
+   group.position.copy(origin).addScaledVector(dir,distance);
    group.quaternion.copy(orientation);
    model.rotation.z=age*15.5;
    model.rotation.x=Math.sin(age*13)*.25;
-   if(group.userData.nativeElectric){
+   animateFlexibleGiraffe(giraffe,age,1,true);
+   if(nativeElectric){
     const delta=Math.max(0,age-(group.userData.nativeElectricAge||0));
     group.userData.nativeElectricAge=age;
-    group.userData.nativeElectric.update(Math.min(.11,delta));
-   }
-   for(const bolt of electricBolts){
-    const brightness=.48+.52*Math.abs(Math.sin(age*31+bolt.phase));
-    bolt.core.material.opacity=.92*brightness;
-    bolt.glow.material.opacity=.37*brightness;
+    nativeElectric.update(Math.min(.11,delta));
    }
   },key);
  }

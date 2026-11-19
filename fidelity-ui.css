@@ -488,9 +488,9 @@ body.sniper-scoped #chat-hud{visibility:hidden!important;pointer-events:none!imp
 
 /* 2026-11-20: HUD corrections. Keep the full three-state chat interaction. */
 #bag-items .bag-cell.equipped::after{top:1px!important;bottom:auto!important;right:1px!important}
-#hud #chat-hud{bottom:max(157px,env(safe-area-inset-bottom) + 143px)!important}
-@media(max-height:520px){#hud #chat-hud{bottom:115px!important}}
-@media(max-width:720px),(pointer:coarse){#hud #chat-hud{bottom:max(127px,env(safe-area-inset-bottom) + 113px)!important}}
+#hud #chat-hud{bottom:max(160px,env(safe-area-inset-bottom) + 146px)!important}
+@media(max-height:520px){#hud #chat-hud{bottom:118px!important}}
+@media(max-width:720px),(pointer:coarse){#hud #chat-hud{bottom:max(130px,env(safe-area-inset-bottom) + 116px)!important}}
 /* The GM exclamation mark lives inside the S panel; it never blocks the HP bar. */
 #gm-help{display:none!important}
 /* Clear, stable portrait backdrop; remove the translucent stacked checker/scanline layers. */

@@ -102,9 +102,9 @@ function scheduleBeamChannelStart(delay){
 function startHeldCharge(){
  if(!attackHeld||attackHoldStarted===null||chargeStarted!==null||chargeRequest||staffChannel||
     !controller?.enabled||performance.now()<nextChargeRetryAt)return;
- // Goldfish A/Q is strictly a shoulder-camera toggle; all water bullets
- // are fired by touch/mouse on the playfield at the weapon's rapid cadence.
- if(itemById(world?.profile?.equipment?.weapon)?.id==='goldfish')return;
+ // Goldfish changes camera on a tap, but its original giant red fish
+ // ultimate must remain chargeable ONLY before entering shoulder mode.
+ if(itemById(world?.profile?.equipment?.weapon)?.id==='goldfish'&&gun.mode!==0)return;
  // Never begin a Black Cat charge while outside the actual sniper scope.
  if(itemById(world?.profile?.equipment?.weapon)?.id==='black-cat'&&(!sniperScopeAtPress||gun.mode!==2))return;
  chargeStarted=performance.now();
@@ -423,7 +423,14 @@ ui.addEventListener('attack-release',async()=>{
  }
  // Outside the scope Black Cat A/Q only changes cameras, even on long holds.
  // Fused weapons cannot turn this camera input into an ordinary or ultimate hit.
- if(weapon?.id==='goldfish'){gun.cycle();return;}
+ if(weapon?.id==='goldfish'){
+  if(gun.mode===1){gun.cycle();return;} // scoped A remains camera-only
+  if(heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
+  if(pending)await pending;
+  if(charge>=1)await performAttack(1); // original full-size red fish
+  else void sendAction('attack',{phase:'channel-stop'}); // clear interrupted charge
+  return;
+ }
  if(weapon?.id==='black-cat'&&!wasScopedAtPress){gun.cycle();return;}
  if(weapon?.firstPerson&&heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
  if(heldMs>=STAFF_TAP_MAX_MS&&pending)await pending;
@@ -648,7 +655,7 @@ function performAttack(charge=0,phase=null){
  const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
  // Centralized guard covers UI A/Q, canvas clicks, auto-charge and fusion.
  if(item.id==='black-cat'&&gun.mode!==2)return;
- if(item.id==='goldfish'&&gun.mode!==1)return;
+ if(item.id==='goldfish'&&gun.mode!==1&&charge<1)return;
  const shot=item.firstPerson?gun.shot():null;
  const muzzle=isChannelStaff(item)||item.family==='saber'||item.id==='calico-cat'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
  const direction=shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
