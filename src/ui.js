@@ -276,7 +276,7 @@ export class TempleUI extends EventTarget{
     this.content.innerHTML=`<section class="gm-admin">
       <h3>GM 功能</h3><div class="gm-tools">
         <button type="button" data-gm-action="editor">作品與圓盤編輯</button>
-        <button type="button" data-gm-action="help">編輯快捷鍵</button>
+        <button type="button" data-gm-action="help" aria-label="GM instructions and shortcuts">！ GM 說明與快捷鍵</button>
         <button type="button" data-gm-action="wing-painter">畫翅膀／上架翅膀</button>
         <button type="button" data-gm-action="wing-manage">翅膀上架管理／刪除／中獎率</button>
         <button type="button" data-gm-action="reset-buildings">/reset building · 復原所有房屋（保留塗鴉）</button>

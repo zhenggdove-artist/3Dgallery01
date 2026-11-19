@@ -4,6 +4,7 @@ import {oddParts} from './reletter/odd-weapon-art.js';
 import {calicoPellets,CALICO_PELLET_COUNT} from './shared/calico-pellets.js';
 import {GOLDFISH_SWIM_MS} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
+import nativeArcRay from '../vendor/00gamedevs/arc-ray.js';
 
 const TAU=Math.PI*2;
 const sphere=new THREE.SphereGeometry(1,16,12);
@@ -63,6 +64,42 @@ export class WeaponSignatureEffects {
   }finally{
    for(const e of [...this.active])this.remove(e);
   }
+ }
+ goldfishBubble(event){
+  const key='goldfish-bubble',group=this.take(key)||new THREE.Group();
+  if(!group.children.length){
+   group.name='High-rate translucent goldfish water cannon ball';
+   const core=new THREE.Mesh(sphere,new THREE.MeshStandardMaterial({
+    color:'#79e5ff',transparent:true,opacity:.71,metalness:.12,roughness:.08,
+    emissive:'#319fdb',emissiveIntensity:.65,depthWrite:false
+   }));
+   const shell=new THREE.Mesh(sphere,new THREE.MeshBasicMaterial({
+    color:'#c7f9ff',transparent:true,opacity:.29,depthWrite:false,
+    blending:THREE.AdditiveBlending
+   }));
+   const geometry=new THREE.BufferGeometry(),points=new Float32Array(42*3);
+   for(let i=0;i<42;i++){
+    const a=i*2.39996323,y=1-2*(i+.5)/42,r=Math.sqrt(1-y*y);
+    points[i*3]=r*Math.cos(a);points[i*3+1]=y;points[i*3+2]=r*Math.sin(a);
+   }
+   geometry.setAttribute('position',new THREE.BufferAttribute(points,3));
+   const sparkle=new THREE.Points(geometry,new THREE.PointsMaterial({
+    color:'#ffffff',size:.09,transparent:true,opacity:.9,
+    blending:THREE.AdditiveBlending,depthWrite:false
+   }));
+   group.add(core,shell,sparkle);
+   group.userData.ball={core,shell,sparkle};
+  }
+  const origin=vec(event.origin),direction=vec(event.direction).normalize();
+  const range=Math.max(1,Math.min(11,Number(event.range)||11)),duration=.39;
+  this.add(group,duration,age=>{
+   const t=Math.min(1,age/duration);
+   group.position.copy(origin).addScaledVector(direction,t*range);
+   const wobble=.92+.09*Math.sin(age*47);
+   group.scale.setScalar(.35*wobble*(1-.40*Math.pow(t,5)));
+   group.rotation.y=age*16;
+   group.userData.ball.shell.material.opacity=.32*(1-t*.4);
+  },key);
  }
  shotgun(event){
   const source=vec(event.origin),full=!!event.ultimate,scale=event.qualityScale||1,
@@ -238,7 +275,10 @@ export class WeaponSignatureEffects {
  }
  thorns(event){
    const quality=event.qualityScale||1;
-   const scale=Math.max(quality,(Number(event.area?.radius)||Number(event.radius)||3.6)/1.95);
+   // Match the now-halved authoritative area: the whole thorn tree,
+  // leaves and vine branches shrink together rather than keeping a
+  // minimum visual size at a previous quality-scaled radius.
+   const scale=Math.max(.2,(Number(event.area?.radius)||Number(event.radius)||3.6)/1.95);
    const center=vec(event.area?.center||event.impactPoint||event.origin);
   center.y=Math.max(.05,center.y);
   const key='thorns:'+scale.toFixed(3),group=this.take(key)||new THREE.Group();
@@ -354,16 +394,36 @@ export class WeaponSignatureEffects {
    electricBolts.push({core:makeBolt(.012,j%2?'#eac0ff':'#be6bff',.92),
     glow:makeBolt(.027,'#7e32f3',.30),phase:j*1.73});
   }
+  // Project already bundles the actual MIT-licensed 00GameDevs Arc Ray
+  // generator. Layer it directly on the returning giraffe body; the
+  // requested Sustained Arc source was not included in the vendor package.
+  const nativeElectric=nativeArcRay({color:'#bd76ff',size:.42,density:.78,quantity:4});
+  nativeElectric.group.name='00GameDevs arc ray bound to giraffe boomerang';
+  nativeElectric.setEndpoints(new THREE.Vector3(0,-.16,0),new THREE.Vector3(0,1.58,0));
+  giraffe.add(nativeElectric.group);
+  group.userData.nativeElectric=nativeElectric;group.userData.nativeElectricAge=0;
   group.userData.giraffe=giraffe;group.userData.model=model;group.userData.bolts=electricBolts;
   }
   giraffe.scale.setScalar(5.4*quality);group.scale.setScalar(1);
+  if(group.userData.nativeElectric){
+   group.userData.nativeElectric.reset();
+   group.userData.nativeElectricAge=0;
+   group.userData.nativeElectric.setEndpoints(
+    new THREE.Vector3(0,-.16,0),new THREE.Vector3(0,1.58,0));
+  }
   const orientation=qdir(dir),duration=2.3;
+  if(ownerRoot)ownerRoot.userData.giraffeHideUntil=performance.now()+duration*1000;
   this.add(group,duration,age=>{
    const t=Math.min(1,age/duration),distance=Math.sin(t*Math.PI)*(event.range||28);
    group.position.copy(origin).addScaledVector(dir,distance); // identical server-owned sin(πt) route
    group.quaternion.copy(orientation);
    model.rotation.z=age*15.5;
    model.rotation.x=Math.sin(age*13)*.25;
+   if(group.userData.nativeElectric){
+    const delta=Math.max(0,age-(group.userData.nativeElectricAge||0));
+    group.userData.nativeElectricAge=age;
+    group.userData.nativeElectric.update(Math.min(.11,delta));
+   }
    for(const bolt of electricBolts){
     const brightness=.48+.52*Math.abs(Math.sin(age*31+bolt.phase));
     bolt.core.material.opacity=.92*brightness;
@@ -372,6 +432,7 @@ export class WeaponSignatureEffects {
   },key);
  }
  play(event,item,ownerRoot){
+  if(item.id==='goldfish'&&!event.ultimate)return this.goldfishBubble(event),true;
   if(item.id==='calico-cat')return this.shotgun(event),true;
   if(!event.ultimate)return false;
   if(item.id==='giraffe')return this.giraffe(event,ownerRoot),true;

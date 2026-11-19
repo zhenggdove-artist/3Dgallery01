@@ -6,6 +6,7 @@ import {ISLAND_ENEMIES,ENEMY_HEIGHT,monsterBeamEndpoint} from './shared/island-c
 import {MONSTER_PACK_SIZE} from './shared/monster-pack.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {samplePanBlastPosition} from './shared/pan-blast-flight.js';
+import {cityBlocked} from './shared/city-layout.js';
 
 const makeInvisible=root=>{root.visible=false;return root;};
 export class IslandEnemies{
@@ -150,8 +151,19 @@ export class IslandEnemies{
   if(flight)target.fromArray(samplePanBlastPosition(flight,now).position);
   else target.fromArray(state.position);
   // Keep rendering motion continuous between discrete authoritative packets.
-  if(flight)root.position.copy(target);
-  else root.position.lerp(target,1-Math.exp(-dt*10));
+  const next=flight?target:root.position.clone().lerp(target,1-Math.exp(-dt*10));
+  const damage=this.cityDamage||{};
+  // Server uses swept city collision. Client interpolation must respect the
+  // same walls; otherwise two valid packet endpoints can visually cut through
+  // a house during a dash.
+  const blocked=(x,z)=>cityBlocked(x,z,next.y,damage,.58);
+  if(!blocked(next.x,next.z)||blocked(root.position.x,root.position.z)){
+   root.position.copy(next);
+  }else{
+   if(!blocked(next.x,root.position.z))root.position.x=next.x;
+   if(!blocked(root.position.x,next.z))root.position.z=next.z;
+   root.position.y=next.y;
+  }
   const motion=state.skills?.find(s=>s.motion==='beam'&&(s.phase==='warning'||s.phase==='active'));
   if(motion){
    const end=motion.motion==='beam'?monsterBeamEndpoint(motion,now,state.position):motion.aim;

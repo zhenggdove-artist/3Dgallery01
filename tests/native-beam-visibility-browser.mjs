@@ -75,7 +75,16 @@ try{
  await page.evaluate(()=>{
   const t=templeTest;
   t.network.close(); // prevent remote world updates from overwriting test equipment
-  window.beamActions=[];window.beamChannelEvents=[];
+  window.beamActions=[];window.beamChannelEvents=[];window.nativeChannelRemovals=[];
+  const native=t.arena.presentation.vfx.numberedEffects;
+  const actualRemove=native.remove.bind(native);
+  native.remove=function(entry){
+   window.nativeChannelRemovals.push({weapon:entry?.item?.id,channel:entry?.channel,
+    liveKey:entry?.key,age:entry?.age,time:performance.now(),
+    stack:new Error('Native channel removed').stack?.slice(0,1100)});
+   if(window.nativeChannelRemovals.length>12)window.nativeChannelRemovals.shift();
+   return actualRemove(entry);
+  };
   t.network.action=async(action,data)=>{
    window.beamActions.push({action,phase:data?.phase||'',direction:data?.direction});
    if(action==='attack'&&data?.phase==='charge')return {charging:true};
@@ -95,13 +104,16 @@ try{
  for(const name of ['storm-3','prism-3']){
   const setup=await page.evaluate(id=>{
    const t=templeTest;
-   const world={...t.ui.world,profile:{...t.ui.world.profile,equipment:{...t.ui.world.profile.equipment,weapon:id}}};
+   const world={...t.ui.world,revision:(Number(t.ui.world.revision)||0)+1000,profile:{...t.ui.world.profile,equipment:{...t.ui.world.profile.equipment,weapon:id}}};
    t.network.dispatchEvent(new CustomEvent('world',{detail:world}));
    const item=t.items.find(x=>x.id===id);
    t.arena.setPlayerEquipment(t.controller().root,{weapon:id});
    t.controller().pitch=-.35;
    return {item:item?.id,chargeMs:item?.chargeMs,channelItem:item?.family};
   },name);
+  // The real socket's pending initial snapshot can otherwise overwrite the
+  // fixture before the next animation frame, reverting to white-cat.
+  await page.waitForFunction(id=>templeTest.ui.world?.profile?.equipment?.weapon===id,name,{timeout:12000});
   await page.evaluate(()=>templeTest.ui.emit('attack-start'));
   await page.waitForTimeout(Math.max(5300,(setup.chargeMs||1500)+2900));
   const snapshot=await page.evaluate(()=>{
@@ -153,7 +165,18 @@ try{
    const t=templeTest,scene=t.arena.scene,renderer=t.renderer,camera=t.camera;
    const controller=t.controller(),native=t.arena.presentation.vfx.numberedEffects;
    const entry=native.active.find(e=>e.item?.id===id&&e.channel);
-   const oldPitch=controller.pitch,oldDirection=entry?.visualDirection.clone();
+   if(!entry)return {
+    error:'Previously confirmed native channel is no longer active',
+    weapon:id,channel:t.channelDebug(),equipment:controller.root.userData.equipment,
+    staffCasting:controller.root.userData.staffCasting,
+    staffCastingUntil:controller.root.userData.staffCastingUntil,
+    failedEffects:[...(native.failedEffects||[])],
+    channelRemovals:window.nativeChannelRemovals,
+    active:native.active.map(e=>({weapon:e.item?.id,channel:e.channel,
+     key:e.key,age:e.age,elapsed:performance.now()-e.lastPulse,
+     rootSame:e.root===controller.root}))
+   };
+   const oldPitch=controller.pitch,oldDirection=entry.visualDirection.clone();
    const originalTarget=renderer.getRenderTarget(),rt=new THREE.WebGLRenderTarget(440,300);
    const absent=new Uint8Array(440*300*4),present=new Uint8Array(440*300*4);
    try{

@@ -1183,7 +1183,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       const targetStatus=isPlayer?world.profiles[enemy.key]:enemy;
       if(fx.echo)applyElementalHit(targetStatus,owner,weapon,now,.2);
       else applyStatus(world,owner,targetStatus,weapon,{
-       direction:fx.direction,charge:fx.charge,
+       direction:fx.direction,charge:fx.charge,ultimate:fx.charge>=1,
        damage:isPlayer?Math.min(12,fx.pvpDamage):fx.damage,
        qualityDuration:fx.qualityDuration
       },now);
@@ -1454,7 +1454,44 @@ function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.
  world.monsterDeathEvents.push({id:id(),monsterId:monster.id,time:now,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]]});
  if(world.monsterDeathEvents.length>48)world.monsterDeathEvents.splice(0,world.monsterDeathEvents.length-48);
  if(profile)addXp(profile,120);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
-function moveMonster(world,monster,target,distance){const dx=target[0]-monster.position[0],dz=target[2]-monster.position[2],angle=Math.atan2(dz,dx);for(const offset of [0,.68,-.68,1.2,-1.2]){const next=[monster.position[0]+Math.cos(angle+offset)*distance,monster.position[1],monster.position[2]+Math.sin(angle+offset)*distance];if(!insideArena(next,-2)||insideArtSanctuary(next)||(world.structures||[]).some(s=>distance2d(next,s.position)<structureRadius(s)+1.1))continue;monster.position[0]=next[0];monster.position[2]=next[2];return;}}
+// Both ambient patrol and combat pathfinding share these server-owned solid
+// house colliders. Sweep each stride to prevent tunnelling across thin walls;
+// deterministic sliding preserves movement without entering a facade.
+export function moveMonster(world,monster,target,distance){
+ const position=monster.position,dx=target[0]-position[0],dz=target[2]-position[2];
+ if(Math.hypot(dx,dz)<1e-6||distance<=0)return false;
+ const angle=Math.atan2(dz,dx),radius=Math.max(.35,Math.min(1.2,(monster.bodyRadius||.65)*.8));
+ const valid=(x,z)=>{
+  const p=[x,position[1]||0,z];
+  if(!insideArena(p,-2)||insideArtSanctuary(p)||
+   cityBlocked(x,z,p[1],world.cityDamage||{},radius))return false;
+  return !(world.structures||[]).some(s=>distance2d(p,s.position)<structureRadius(s)+1.1);
+ };
+ const startX=position[0],startZ=position[2];
+ // Historical saves/spawn locations may already sit inside a house. Move
+ // an embedded monster to the nearest reachable exterior before pathing.
+ if(!valid(startX,startZ)){
+  for(let r=1;r<=18;r+=.75){
+   let recovered=false;
+   for(let a=0;a<16;a++){
+    const theta=a*Math.PI/8,ex=startX+Math.cos(theta)*r,ez=startZ+Math.sin(theta)*r;
+    if(valid(ex,ez)){position[0]=ex;position[2]=ez;recovered=true;break;}
+   }
+   if(recovered)break;
+  }
+  if(!valid(position[0],position[2]))return false;
+ }
+ for(const offset of [0,.68,-.68,1.2,-1.2,Math.PI]){
+  const dirX=Math.cos(angle+offset),dirZ=Math.sin(angle+offset);
+  const steps=Math.max(1,Math.ceil(distance/.5));
+  let safe=true;
+  for(let j=1;j<=steps;j++)if(!valid(position[0]+dirX*distance*j/steps,
+    position[2]+dirZ*distance*j/steps)){safe=false;break;}
+  if(!safe)continue;
+  position[0]+=dirX*distance;position[2]+=dirZ*distance;return true;
+ }
+ return false;
+}
 function hashString(value){let hash=2166136261;for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return hash>>>0;}
 
 export const CATALOG_VIEW=Object.freeze(ITEMS.map(item=>Object.freeze({...item})));

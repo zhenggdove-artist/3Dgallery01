@@ -27,7 +27,8 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
   const pan=/^pan-[1-5]$/.test(item?.id||'');
   const swatter=/^swatter-[1-5]$/.test(item?.id||'');
   const whip=/^whip-[1-5]$/.test(item?.id||'');
-  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:item?.family==='ice'?1.5:1);
+  const planter=/^planter-[1-5]$/.test(item?.id||'');
+  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:item?.family==='ice'?1.5:1);
   // Broaden only the whip's warning/hit radius; retain its travel distance.
   const radiusFactor=rangeFactor*(whip?1.5:1);
   stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);
@@ -52,7 +53,7 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  const radius=clamp(Number(stats?.radius)||2,.1,50);
  // Staff/clam streams are fired from the weapon, not an unrelated distant
  // round explosion. Other spell families retain their target-centred circles.
- const areaUltimate=!!stats?.ultimate&&/^(pan|whip|swatter)-[1-5]$/.test(item?.id||'');
+ const areaUltimate=!!stats?.ultimate&&/^(pan|whip|swatter|palm)-[1-5]$/.test(item?.id||'');
  const mode=item?.id==='clam'?'sector':channel&&isChannelStaff(item)?'corridor':
   (areaUltimate||AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
  const defaultDistance=clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
@@ -109,7 +110,7 @@ export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
   return {shape:'sector',position:[origin[0],at(origin[0],origin[2]),origin[2]],
    yaw,radius:range,angleDeg:CLAM_SECTOR_ANGLE,range,width};
  }
- if(isChannelStaff(item)||item?.firstPerson||item?.family==='saber'||item?.family==='palm'||item?.pattern==='scatter'||item?.id==='goldfish'){
+ if(isChannelStaff(item)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||item?.id==='goldfish'){
   const x=origin[0]+dx*range*.5,z=origin[2]+dz*range*.5;
   return {shape:'rectangle',position:[x,at(x,z),z],yaw,length:range,width,range};
  }

@@ -103,10 +103,12 @@ export class EquipmentPortraitViewport{
   if(canvas!==this.canvas||!this.renderer){
    this.close();this.canvas=canvas;
    this.renderer=new THREE.WebGLRenderer({
-    canvas,alpha:true,antialias:true,powerPreference:'low-power',
+    canvas,alpha:false,antialias:true,powerPreference:'low-power',
     preserveDrawingBuffer:true
    });
-   this.renderer.setClearColor(0x000000,0);
+   // Opaque neutral backing prevents translucent layered squares/old arena pixels
+    // from leaking into a freshly opened EQUIP WebGL canvas.
+    this.renderer.setClearColor(0xe9e8ed,1);
    this.renderer.outputColorSpace=THREE.SRGBColorSpace;
    this.renderer.toneMapping=THREE.NoToneMapping;
    this.scene=new THREE.Scene();
