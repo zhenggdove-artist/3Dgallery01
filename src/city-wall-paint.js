@@ -90,9 +90,9 @@ export class CityWallPaint{
   const slot=this.slot(stroke.lotId,stroke.wall);if(!slot)return;
   slot.preview=stroke;this.draw(slot);
  }
- endPreview(lotId,wall){
+ endPreview(lotId,wall,stroke=null){
   const slot=this.surfaces.get(this.key(lotId,wall));
-  if(slot){slot.preview=null;this.draw(slot);}
+  if(slot&&(!stroke||slot.preview===stroke)){slot.preview=null;this.draw(slot);}
  }
  sync(data={},revision=0){
   if(revision===this.revision)return;
