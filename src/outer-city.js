@@ -69,12 +69,16 @@ function batchGeometry(lots,mobile){
   }
   box(lot,0,.19,0,w+.4,.38,d+.4,lot.trim);
   category='pillars';
-  for(const side of [-1,1])box(lot,side*(w/2-.18),h/2,frontage+.1,.22,h,.25,lot.trim);
+  for(const side of [-1,1]){
+   category='pillars-'+(side<0?0:1);
+   box(lot,side*(w/2-.18),h/2,frontage+.1,.22,h,.25,lot.trim);
+  }
   category='windows';
   for(let level=0;level<lot.floors;level++){
    const y=level*floorH+floorH*.49;
-   const count=mobile?2:3;
+   const count=3;
    for(let k=0;k<count;k++){
+    category='windows-'+level+'-'+k;
     const x=(k-(count-1)/2)*w/(count+1);
     const windowColor=(k+level+lot.index)%4===0?'#6b5547':'#313a3a';
     box(lot,x,y,frontage+.06,w/(count+2),Math.min(1.3,floorH*.53),.13,windowColor);
@@ -86,7 +90,7 @@ function batchGeometry(lots,mobile){
   box(lot,0,1.1,frontage+.17,w*.83,1.8,.18,lot.trim);
   box(lot,-w*.24,.96,frontage+.32,w*.27,1.5,.06,'#303c3a');
   box(lot,w*.20,1.12,frontage+.31,w*.32,1.18,.09,'#41504c');
-  category='sheets';
+  category='sheets-awning';
   box(lot,0,2.58,frontage+.58,w*1.03,.17,1.1,lot.style[3]);
   for(let k=0;k<(mobile?4:8);k++){
    box(lot,-w*.44+k*w*.12,2.52,frontage+1.04,w*.11,.12,.24,k%2?lot.detail:lot.style[3]);
@@ -94,6 +98,7 @@ function batchGeometry(lots,mobile){
   for(let k=0;k<(mobile?2:5);k++){
    box(lot,(r()-.5)*w,h+.12+r()*.15,(r()-.5)*d,.18,.08,1+r()*3,scraps[(lot.index+k)%scraps.length]);
   }
+  category='sheets-roof';
   box(lot,0,h+.06,0,w+.4,.14,d+.36,lot.roof);
   category='masonry';
   // Material-specific relief (timber planks, irregular stone and brick courses)
@@ -272,7 +277,7 @@ export class OuterCity{
   this.partsHidden??=new Set();if(this.partsHidden.has(key))return;
   this.partsHidden.add(key);
   for(const [a,b] of this.walls.userData.partRanges?.get(key)||[])this.hideRange(this.walls,a,b);
-  if(part==='sheets')this.hideRange(this.signs,...this.signs.userData.lotRanges.get(index));
+  if(part.startsWith('sheets-'))this.hideRange(this.signs,...this.signs.userData.lotRanges.get(index));
   if(part==='masonry')this.hideRange(this.graffiti,...this.graffiti.userData.lotRanges.get(index));
  }
  createChunks(lot,stage,animate=false){
