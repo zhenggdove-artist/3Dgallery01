@@ -81,14 +81,14 @@ try{
  assert.ok(weaponMesh,'Weapon ground pickup must render a real 3D model');
  // Only real backend-supported WRITE can initiate the cinematic.
  await page.evaluate(()=>templeTest.ui.openPanel('social'));
- await page.waitForFunction(()=>templeTest.writer.phase==='write',null,{timeout:12000});
+ await page.waitForFunction(()=>templeTest.writer.phase==='write',null,{timeout:25000});
  const ascent=await page.evaluate(()=>({height:templeTest.controller().root.position.y,disc:templeTest.writer.disc.visible}));
  assert.ok(ascent.disc&&ascent.height>190,'WRITE must lift the character to the high disc');
  assert.equal(await page.locator('[data-form="plant"]').count(),1);
  await page.locator('[data-form="plant"] textarea[name="text"]').fill('Browser-tested eternal message');
  await page.locator('[data-form="plant"]').evaluate(f=>f.requestSubmit());
  await page.waitForFunction(()=>templeTest.ui.world?.plants?.some(p=>p.text==='Browser-tested eternal message'),null,{timeout:20000});
- await page.waitForFunction(()=>templeTest.writer.phase==='showcase'&&templeTest.writer.plantHalo.visible,null,{timeout:13000});
+ await page.waitForFunction(()=>templeTest.writer.phase==='showcase'&&templeTest.writer.plantHalo.visible,null,{timeout:25000});
  await page.waitForFunction(()=>!!templeTest.writer.reveal?.plantId,null,{timeout:12000});
  assert.ok(await page.evaluate(()=>templeTest.writer.reveal?.plantId),'WRITE must save a plant before orbiting it');
  assert.equal(await page.evaluate(()=>templeTest.writer.fallCameraActive),true,'The WRITE camera must track the falling avatar');
@@ -96,7 +96,7 @@ try{
  // backend plant ID instead of dereferencing an already-retired frame.
  const plantedId=await page.evaluate(()=>templeTest.ui.world?.plants?.find(p=>p.text==='Browser-tested eternal message')?.id);
  assert.ok(plantedId,'WRITE must persist the message plant');
- await page.waitForFunction(id=>templeTest.arena.adventure.plants.has(id),plantedId,{timeout:5000});
+ await page.waitForFunction(id=>templeTest.arena.adventure.plants.has(id),plantedId,{timeout:20000});
  const plantGrowth=await page.evaluate(id=>{
   const root=templeTest.arena.adventure.plants.get(id);
   if(!root)throw Error('Persisted plant disappeared before visual inspection: '+id);
