@@ -19,11 +19,16 @@ export function spawnMonsterPack(world,now=Date.now(),rng=Math.random){
   // Persisted Durable Object rooms may still contain animals or auntie from
   // older deployments. Convert those active slots in place on the next tick.
   if(old?.active){
+   // Reject invalid persisted coordinates instead of hiding an entire slot indefinitely.
+   if(!Array.isArray(old.position)||old.position.length!==3||!old.position.every(Number.isFinite)){
+    old.active=false;changed=true;
+   }else{
    const model=ISLAND_ENEMIES[i%ISLAND_ENEMIES.length];
    if(!ISLAND_ENEMIES.includes(old.model)||old.model!==model||old.variant!==model){
     old.model=model;old.variant=model;old.skills=[];old.patrolTarget=null;changed=true;
    }
    continue;
+   }
   }
   // Respawn a fallen creature at another safe perimeter position. Each slot
   // retains its model identity to avoid loading duplicate 6x asset variants.
