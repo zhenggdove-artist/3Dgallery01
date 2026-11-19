@@ -34,7 +34,7 @@ test('sand district doubles usable surface area while the central grass remains 
  assert.ok(Math.abs((CITY_OUTER_RADIUS**2-CITY_INNER_RADIUS**2)/(184**2-92**2)-2)<1e-9);
  assert.match(source('src/grass-field.js'),/new THREE\.CircleGeometry\(CITY_INNER_RADIUS,128\)/);
  assert.match(source('src/arena-view.js'),/this\.outerCity=new OuterCity/);
- assert.match(source('src/arena-view.js'),/this\.outerCity\?\.blocked\(x,z,y\)/);
+ assert.match(source('src/arena-view.js'),/cityBlocked\(x,z,y,this\.world\?\.cityDamage/);
 });
 
 test('shopfront city is deterministic, varied, bilingual, non-repeating and mobile-safe',()=>{
