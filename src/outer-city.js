@@ -256,7 +256,21 @@ export function markPositionRangeDirty(attribute,start,end){
  attribute.needsUpdate=true;
 }
 function chunkDescriptions(lot){
-  const descriptions=chunkDescriptions(lot);
+  const floorH=lot.height/lot.floors;
+  const descriptions=[
+   [0,.22,0,lot.width+.15,.44,lot.depth+.15,lot.trim],
+   ...Array.from({length:lot.floors},(_,level)=>{
+    const taper=level&&lot.silhouette%3===0?.79:1;
+    const shift=level?lot.offset*(level%2?1:-.4):0;
+    const setback=level&&lot.silhouette%4===0?(level%2?.8:-.4):0;
+    return [shift,(level+.5)*floorH,setback,lot.width*taper,floorH*.97,
+      lot.depth*(level&&lot.silhouette%5===0?.86:1),level&&lot.silhouette%4===1?lot.detail:lot.color];
+   }),
+   [0,lot.height+.09,0,lot.width+.4,.24,lot.depth+.36,lot.roof],
+   [-lot.width*.36,lot.height*.52,lot.depth*.43,.24,Math.max(.7,lot.height*.75),.3,lot.trim],
+   [lot.width*.37,lot.height*.46,-lot.depth*.45,.3,Math.max(.7,lot.height*.74),.35,lot.detail],
+   [0,.3,lot.depth*.53,lot.width*.72,.52,.44,lot.color]
+  ];
  return descriptions;
 }
 export class OuterCity{
@@ -401,21 +415,7 @@ export class OuterCity{
   }
   const root=new THREE.Group();root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
   root.name='Solid volumetric collapse '+lot.id;
-  const floorH=lot.height/lot.floors;
-  const descriptions=[
-   [0,.22,0,lot.width+.15,.44,lot.depth+.15,lot.trim],
-   ...Array.from({length:lot.floors},(_,level)=>{
-    const taper=level&&lot.silhouette%3===0?.79:1;
-    const shift=level?lot.offset*(level%2?1:-.4):0;
-    const setback=level&&lot.silhouette%4===0?(level%2?.8:-.4):0;
-    return [shift,(level+.5)*floorH,setback,lot.width*taper,floorH*.97,
-      lot.depth*(level&&lot.silhouette%5===0?.86:1),level&&lot.silhouette%4===1?lot.detail:lot.color];
-   }),
-   [0,lot.height+.09,0,lot.width+.4,.24,lot.depth+.36,lot.roof],
-   [-lot.width*.36,lot.height*.52,lot.depth*.43,.24,Math.max(.7,lot.height*.75),.3,lot.trim],
-   [lot.width*.37,lot.height*.46,-lot.depth*.45,.3,Math.max(.7,lot.height*.74),.35,lot.detail],
-   [0,.3,lot.depth*.53,lot.width*.72,.52,.44,lot.color]
-  ];
+  const descriptions=chunkDescriptions(lot);
   const r=random(900+lot.index*73),pieces=[];
   descriptions.forEach(([x,y,z,w,h,d,c],index)=>{
    const mesh=buildBrokenStructure(lot,index,w,h,d,c);
