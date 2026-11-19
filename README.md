@@ -1,6 +1,6 @@
 # Temple
 
-Temple is a server-authoritative multiplayer Three.js art arena rebuilt from the Gallery artwork collection and isolated RELETTER gameplay patterns.
+Temple is a server-authoritative multiplayer Three.js art arena built around the Gallery artwork collection.
 
 - 4 active fighters + 2 spectators per room
 - 13 original Gallery artworks on data-driven platforms
