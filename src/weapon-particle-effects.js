@@ -144,7 +144,7 @@ void main(){
        sin(a+spin*.37)*spread*.66+crest+sin(front*.91-uAge*11.)*.31,
        front+position.z*.14+sin(sweep)*crest*.13);
      alpha*=smoothstep(0.,.09,stream)*(1.-smoothstep(.78,1.,stream));
-     tint=mix(tint,vec3(.91,.98,1.),smoothstep(.52,1.25,crest)*.67);
+     color=mix(color,vec3(.91,.98,1.),smoothstep(.52,1.25,crest)*.67);
 
    }else if(uStyle<1.5){ // ice: tall swirls of icy shatter
      p=vec3(position.x*.8+sin(spin*.9)*.4,
