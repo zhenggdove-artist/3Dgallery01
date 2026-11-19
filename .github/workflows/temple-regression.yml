@@ -29,6 +29,29 @@ jobs:
       - name: Verify production Google Auth config, CORS and profile readiness
         run: node tests/firebase-live-config.mjs
 
+  firebase-google-login-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:cloud
+      - name: Start isolated browser + Worker for Google login regression
+        run: |
+          npx wrangler dev --local --port 8787 > /tmp/temple-login-worker.log 2>&1 &
+          npm run start > /tmp/temple-login-static.log 2>&1 &
+      - name: Test Google account selection, existing GM profile and new player entry
+        run: node tests/temple-google-login-browser.mjs
+      - name: Print login backend errors
+        if: failure()
+        run: |
+          cat /tmp/temple-login-worker.log || true
+          cat /tmp/temple-login-static.log || true
+
   unit-and-syntax:
     runs-on: ubuntu-latest
     timeout-minutes: 15
