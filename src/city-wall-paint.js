@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {CITY_LOTS,cityFacadeFloor,cityRoofHeight} from './shared/city-layout.js';
+import {CITY_LOTS,cityFacadeFloor} from './shared/city-layout.js';
 
 const WALLS=['front','back','left','right'];
 const SIZE=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches?256:512;

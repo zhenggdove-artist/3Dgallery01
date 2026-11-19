@@ -221,6 +221,7 @@ export class TempleRoom extends DurableObject{
   async action(request,session){
     const body=await readBody(request,320_000),requestId=String(body.requestId||'');if(!/^[A-Za-z0-9:_-]{8,100}$/.test(requestId))return json({error:'Valid requestId required'},400);
     const receipt=this.sql.exec('SELECT response FROM request_receipts WHERE session_id=? AND request_id=?',session.id,requestId).toArray()[0];if(receipt)return json(JSON.parse(receipt.response));
+     if(body.action==='paint-building'&&!this.consumeRate('paint:'+session.profile_key,180,60_000))return json({error:'Painting rate limit reached'},429);
     const state=session.state?JSON.parse(session.state):null;if(!state?.position)return json({error:'Connect and enter the Temple first'},409);
     const world=this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:state.position},actors=this.actors();
     delete body.verifiedArtMedia;if(body.action==='add-artwork'||body.action==='publish-art-bomb'){const media=this.sql.exec('SELECT id,type,owner FROM art_media WHERE id=?',String(body.artwork?.mediaId||'')).toArray()[0];if(!media||media.owner!==session.profile_key||body.action==='add-artwork'&&!actor.admin||body.action==='publish-art-bomb'&&session.role!=='fighter')return json({error:'Upload your own validated artwork with the required role first'},403);body.verifiedArtMedia={id:media.id,type:media.type};}
