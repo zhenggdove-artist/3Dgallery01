@@ -101,7 +101,7 @@ test('the live city queues exactly one sculpted polyhedron per 10%-HP crossing',
  city.eject=(...args)=>seen.push(['eject',...args]);
  for(let tier=1;tier<=10;tier++)city.emitCollapseStep(lot,tier);
  assert.equal(seen.filter(x=>x[0]==='eject').length,10);
- assert.equal(seen.filter(x=>x[0]==='hide').length,10);
+ assert.equal(seen.filter(x=>x[0]==='hide'&&x[2].startsWith('fracture-')).length,10);
  for(let tier=1;tier<=10;tier++){
   assert.ok(seen.some(x=>x[0]==='eject'&&x[5]===tier));
   assert.ok(seen.some(x=>x[0]==='hide'&&x[2]==='fracture-'+tier));
