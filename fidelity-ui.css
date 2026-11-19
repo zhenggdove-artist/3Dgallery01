@@ -412,3 +412,15 @@ body.sniper-scoped #chat-hud{visibility:hidden!important;pointer-events:none!imp
  #entry .temple-entry-header{padding-bottom:10px;margin-bottom:12px}
  #entry .temple-entry-privacy{margin-top:10px}
 }
+
+/* The Collector's floating dialogue must remain readable at the same 2x
+   emphasis as the enlarged world-space NPC and its "Collector" nameplate.
+   This changes only speech presentation, never trade/combat targeting. */
+.collector-angry-speech{
+ max-width:min(520px,90vw);
+ padding:18px 26px;
+ font:600 clamp(22px,5.4vw,28px)/1.4 Arial,sans-serif;
+}
+@media(max-width:420px){
+ .collector-angry-speech{max-width:88vw;padding:13px 16px;}
+}
