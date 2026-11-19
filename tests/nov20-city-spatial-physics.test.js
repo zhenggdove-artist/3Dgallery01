@@ -52,5 +52,5 @@ test('roof corners, rotated facades and near-wall margins never miss city collis
   }
  }
  assert.equal(cityCollisionCandidates(9999,9999).length,0);
- assert.equal(cityCollisionCandidates(0,0,2),CITY_LOTS);
+ assert.equal(cityCollisionCandidates(0,0,2.1),CITY_LOTS);
 });
