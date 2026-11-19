@@ -664,8 +664,11 @@ function attack(world,profile,actor,body,context,now){
    if(weapon.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
    scaleUltimateFootprint(stats,weapon,quality);
    if(weapon.id==='giraffe'&&stats.ultimate){
-    // Three times the previous ultimate power. A centred 4.9x skinned
-    // baton sweeps a 5.9m-per-quality outer radius while tumbling.
+    // Preserve the explicitly doubled 56m boomerang reach: the generic
+    // ultimate footprint shrink must not undo the item's charged range.
+    stats.range=+(weapon.chargedRange*quality.range).toFixed(2);
+    // Three times the previous ultimate power. The skinned, spinning rod
+    // sweeps a 5.9m-per-quality collision radius while tumbling.
     stats.damage=+(stats.damage*3).toFixed(3);
     stats.radius=Math.max(stats.radius,5.9*quality.visual);
    }
