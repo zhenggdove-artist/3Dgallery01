@@ -4,6 +4,33 @@ import {CITY_MAX_HP} from './shared/city-layout.js';
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const random=seed=>{let s=seed>>>0;return ()=>((s=(Math.imul(s,1664525)+1013904223)>>>0)/4294967296);};
 const surface=(color,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness:.92,metalness});
+// Rubble uses the original house colour but receives native shader weathering.
+// The cracks are evaluated in each fragment's object-space surface, so they
+// cannot float away when a wall fragment spins, drops or bounces.
+function scarredSurface(color,seed=0){
+ const material=surface(color);
+ material.onBeforeCompile=shader=>{
+  shader.uniforms.uPieceScarSeed={value:seed%997};
+  shader.vertexShader='varying vec3 vPieceSurface;\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
+   '#include <begin_vertex>\nvPieceSurface=position;');
+  shader.fragmentShader='varying vec3 vPieceSurface;\nuniform float uPieceScarSeed;\n'+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+  vec2 p=vPieceSurface.xy+vec2(uPieceScarSeed*.013,uPieceScarSeed*.037);
+  float warp=sin(p.y*2.1+sin(p.x*3.7)*.9);
+  float crackA=1.-smoothstep(.017,.105,abs(sin(p.x*3.35+warp*1.6)));
+  float crackB=1.-smoothstep(.016,.09,abs(sin(p.y*4.6+sin(p.x*2.8)*1.3)));
+  float hairline=1.-smoothstep(.018,.065,abs(sin(p.x*14.3+p.y*6.2+warp)));
+  float grit=fract(sin(dot(floor(p*11.),vec2(127.1,311.7)))*43758.5453);
+  float flake=smoothstep(.67,.83,grit);
+  float weather=clamp(max(crackA*crackB,hairline*.23)+flake*.27,0.,.78);
+  diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.055,.041,.033),weather);
+  diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.32,.28,.24),flake*.12);
+`);
+ };
+ material.customProgramCacheKey=()=> 'city-rubble-surface-cracks-v1';
+ return material;
+}
 const FRAME='#454b4b',GLASS='#71858b',STEEL='#5d615d';
 function box(group,x,y,z,w,h,d,color,metal=0){
  const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),surface(color,metal));
@@ -25,7 +52,7 @@ function brokenPlate(group,w,h,depth,color,seed=1){
  shape.lineTo(w*.1,-h*.47);
  shape.closePath();
  const geometry=new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:false,curveSegments:1,steps:1});
- const mesh=new THREE.Mesh(geometry,surface(color));group.add(mesh);return mesh;
+ const mesh=new THREE.Mesh(geometry,scarredSurface(color,seed));group.add(mesh);return mesh;
 }
 function windowAssembly(group,w,h,seed,frameColor=FRAME){
  const thickness=.09;
@@ -112,9 +139,11 @@ export function buildBrokenStructure(lot,index,w,h,d,color){
  tube(group,[[w*.13,-h*.45,.02],[w*.09,h*.22,.07],[w*.27,h*.35,.1]],.022,'#615a4e');
  if(index%2===0){
   const framed=buildDetachableFixture(lot,'windows-'+Math.min(lot.floors-1,index%lot.floors)+'-1',index+lot.index);
-  const cloned=framed.children;
-  // Reparent the actual window pieces so they travel with the broken facade.
-  while(cloned.length){const child=cloned[0];group.add(child);child.position.x+=w*.11;child.position.y-=h*.08;child.scale.multiplyScalar(.5);}
+  // Keep the glazing, mullions and sill as ONE assembly attached to a
+  // fractured wall. Reparenting each child previously scattered the frame.
+  framed.position.set(w*.1,-h*.08,d*.24);
+  framed.scale.setScalar(Math.min(.7,Math.max(.18,w/lot.width)));
+  group.add(framed);
  }
  if(index%3===0){
   const sheet=box(group,(r()-.5)*w*.3,h*.3,.18,w*.38,.045,d*.28,'#77685e',.4);
