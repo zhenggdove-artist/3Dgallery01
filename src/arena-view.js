@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {GrassField} from './grass-field.js';
+import {OuterCity} from './outer-city.js';
 import {DisplayPlatforms} from './display-platforms.js';
 import {artworkPosition,artworkLanding,artworkRenderFlight} from './shared/artwork-flight.js';
 import {artworkDefinitions} from './shared/artwork-library.js';
@@ -40,7 +41,7 @@ export class TempleArena{
     this.insects=createPlantInsects(this.scene);
     buildReletterEnvironment(this.scene,this.renderer);
     const rings=new THREE.Mesh(new THREE.RingGeometry(SAFE_ZONE.radius-1,SAFE_ZONE.radius,64),new THREE.MeshBasicMaterial({color:'#b9ac70',transparent:true,opacity:.34,side:THREE.DoubleSide,depthWrite:false}));rings.rotation.x=-Math.PI/2;rings.position.y=.025;this.scene.add(rings);
-    this.buildPlatforms();this.buildDust();this.grass=new GrassField(this.scene,{mobile:touch});
+    this.buildPlatforms();this.buildDust();this.grass=new GrassField(this.scene,{mobile:touch});this.outerCity=new OuterCity(this.scene,{mobile:touch});
     for(let i=0;i<(touch?3:5);i++){const light=new THREE.PointLight('#e6d49a',i?18:24,18,2);light.visible=false;this.scene.add(light);this.lightPool.push(light);}
   }
   buildCentralPlant(){
@@ -263,7 +264,7 @@ export class TempleArena{
   syncMonster(){this.islandEnemies.sync(this.world?.monster,this.world?.monsters||[]);this.monster=this.islandEnemies.current;}
   update(dt,time,camera,playerRoots=new Map()){
     this.presentation.beforeAnimation();this.adventure.beforeAnimation();for(const root of playerRoots.values())updateHitFlash(root,performance.now());
-    this.clock=time;this.scene.userData.moonlitSky?.update(camera,time);this.grass?.update(time,playerRoots);for(const mixer of this.mixers)mixer.update(dt);if(this.dust){this.dust.rotation.y=time*.004;const positions=this.dust.geometry.attributes.position.array;for(let i=1;i<positions.length;i+=3){positions[i]+=dt*.025;if(positions[i]>22)positions[i]=0;}this.dust.geometry.attributes.position.needsUpdate=true;}if(this.water)this.water.material.opacity=.72+Math.sin(time*1.4)*.05;
+    this.clock=time;this.scene.userData.moonlitSky?.update(camera,time);this.grass?.update(time,playerRoots);this.outerCity?.update(time);for(const mixer of this.mixers)mixer.update(dt);if(this.dust){this.dust.rotation.y=time*.004;const positions=this.dust.geometry.attributes.position.array;for(let i=1;i<positions.length;i+=3){positions[i]+=dt*.025;if(positions[i]>22)positions[i]=0;}this.dust.geometry.attributes.position.needsUpdate=true;}if(this.water)this.water.material.opacity=.72+Math.sin(time*1.4)*.05;
     if(this.coinMesh&&this.world){PLATFORMS.forEach((p,i)=>{const available=this.world.coins?.[p.id]?.available;tempPosition.fromArray(p.coinPosition);const fly=this.coinFlights?.get(p.id);if(fly)fly.age+=dt;const t=fly?fly.age/.8:1;if(fly&&t>=1)this.coinFlights.delete(p.id);tempPosition.y=fly?fly.y+Math.min(1,t)*5:tempPosition.y+Math.sin(time*1.8+i)*.4;tempQuaternion.setFromEuler(new THREE.Euler(0,time*(fly?6:2)+i,0));tempScale.setScalar(fly?1.6*Math.max(0,1-t):available?1.6:0);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);this.coinMesh.setMatrixAt(i,tempMatrix);});this.coinMesh.instanceMatrix.needsUpdate=true;}
     for(const mesh of this.heartDrops.values()){
       const seed=mesh.userData.seed;mesh.position.y=mesh.userData.baseY+.32*Math.sin(time*2.1+seed);
@@ -314,7 +315,7 @@ export class TempleArena{
     if(!this.world)return null;const candidates=[];for(const p of artworkDefinitions(this.world)){const art=this.world.artworks?.[p.id],coin=this.world.coins?.[p.id];if(art&&!art.holder&&Date.now()>=(art.availableAt||0))candidates.push({type:'artwork',id:p.id,distance:distance2d(position,(this.world.artworkLayout?.[p.id]?.position||p.artPosition))});if(coin?.available)candidates.push({type:'coin',id:p.id,distance:distance2d(position,p.coinPosition)});}for(const drop of this.world.groundDrops||[])candidates.push({type:'drop',id:drop.id,distance:distance2d(position,drop.position)});for(const structure of this.world.structures||[])candidates.push({type:'structure',id:structure.id,distance:distance2d(position,structure.position)});for(const plant of this.world.plants||[])candidates.push({type:'plant',id:plant.id,distance:distance2d(position,plant.position)});return candidates.filter(c=>c.distance<4.4).sort((a,b)=>a.distance-b.distance)[0]||null;
   }
   groundHeight(x,z,y=0){return this.displayPlatforms?.ground(x,z,y)||0;}
-  blocked(x,z,y=0){for(const s of this.world?.structures||[]){const dims={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4],house:[5,3.8,4],tree:[1.2,4,1.2]}[s.kind]||[2,2,2];if(y<dims[1]&&Math.abs(x-s.position[0])<dims[0]/2+.35&&Math.abs(z-s.position[2])<dims[2]/2+.35)return true;}return false;}
+  blocked(x,z,y=0){if(this.outerCity?.blocked(x,z,y))return true;for(const s of this.world?.structures||[]){const dims={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4],house:[5,3.8,4],tree:[1.2,4,1.2]}[s.kind]||[2,2,2];if(y<dims[1]&&Math.abs(x-s.position[0])<dims[0]/2+.35&&Math.abs(z-s.position[2])<dims[2]/2+.35)return true;}return false;}
 }
 
 function direction(name){return {east:[1,0],west:[-1,0],north:[0,-1],south:[0,1]}[name]||[1,0];}
