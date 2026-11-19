@@ -13,7 +13,7 @@ Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement conf
   original fall animation is reserved for high falls (>=40), excluding wing flight.
 - Added pink overhead bars for remote players and active monster; numeric wallet
   uses raised floating Golden Girdle styling. No new render loop for these features.
-- EQUIP uses original RELETTER left/right slot arrangement and on-demand full-body
+- EQUIP uses the left/right slot arrangement and on-demand full-body
   render-target portrait, sharing the game renderer; no extra persistent WebGL context.
 - GM inventory includes all catalog IDs on creation and subsequent verified login.
 - Chat defaults to 68px near the bottom; + toggles expansion and header drags height.
@@ -36,7 +36,7 @@ Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement conf
 - Verification: 25 unit tests pass, desktop/touch HUD + charge + six actor models pass, original red warning circle and grounded actor screenshots inspected. Existing camera/editor, all 23 weapon families, media/draft, mobile and four-character stress pass. Synthetic adventure test now isolates its fixture from incoming world snapshots. API six-seat/atomic pickup/save identity passes when run without overlapping browser seats.
 - Lossless delivery: 11 artworks reduced from 25,303,106 to 15,111,224 bytes; every visible RGBA pixel and alpha checked byte-for-byte, originals untouched. Existing alpha-cleaned asset_0015 delivery remains unchanged; unused generated replacement removed. Latest cold-context local loading 5369ms; complete-before-entry maintained, no lazy admission. Hardware/GPU cache and network affect results.
 - Latest 4-character stress sample: frame mean 16.65ms / p95 17ms, logic 1.04ms, submission 1.39ms; not a universal zero-lag promise.
-- Released implementation 59c48dd to main and codex/temple-rebuild. Pages job 43307244067 completed successfully. Worker efcbc657-f3ac-46d8-a6f2-4d039bb728bd healthy. Actual production Chrome verified original font hash, new sketch HUD (screenshot inspected), Win98 entry, GM server authentication, movement, 13 artworks, websocket and Shift+Y; no JavaScript errors. Tests do not establish universal zero lag or pixel-perfect equivalence of every legacy RELETTER panel.
+- Released implementation 59c48dd to main and codex/temple-rebuild. Pages job 43307244067 completed successfully. Worker efcbc657-f3ac-46d8-a6f2-4d039bb728bd healthy. Actual production Chrome verified original font hash, new sketch HUD (screenshot inspected), Win98 entry, GM server authentication, movement, 13 artworks, websocket and Shift+Y; no JavaScript errors. Tests do not establish universal zero lag or pixel-perfect equivalence of every existing equipment panel.
 
 ## 2026-11-12 release verification (supersedes checkpoint below)
 
@@ -45,20 +45,20 @@ Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement conf
 - Corrected duplicate fusion consumption, fused shields, weapon-specific charge duration, stationary wing steering, gun shoulder/scope/automatic fire and hand IK. Shift+Y form step mismatch fixed; published temple-layout.json now loads on startup.
 - 22 rule/contract tests pass. Real Chrome tests pass for GM eight-handle scale/XYZ rotation/server save, gun camera and controls, media roundtrip, all 23 weapon families, four gear categories, mobile entry. API test passes four fighters/two spectators, atomic coin claim, save-code identity and spectator promotion.
 - Normal gameplay AMD hardware sample: 16.72 ms mean frame / 16.9 ms p95. Synthetic four-character rapid ultimate spam: 32.13 ms mean / 50.2 ms p95; do not describe this as guaranteed zero lag. Original visuals retained with capped pools.
-- Standard skill client was run twice; its forced SwiftShader screenshot timed out. Actual hardware Chrome screenshots and tests passed instead. Screenshots in output/controls and output/reletter-review inspected.
+- Standard skill client was run twice; its forced SwiftShader screenshot timed out. Actual hardware Chrome screenshots and tests passed instead. Screenshots from hardware Chrome and control checks inspected.
 - Worker deployed: version 3a91db88-287b-4918-a8ed-1810cd8f1973. GM Secret updated securely. Pages release 3b9df55 succeeded (run 43252161208). Actual production Chrome verified exact font SHA, Win98 entrance, server GM auth, websocket, 13 artworks and editor; screenshots inspected, zero JS errors.
 - Final regression found hidden entrance input retaining keyboard focus; entrance now blurs it and players start at ground height. Live test asserts movement distance after login. Original FX thin planes now render in a single double-sided pass; latest four-character stress sample 18.32 ms mean / 33.3 ms p95, logic 2.01 ms, submission 11.09 ms. No geometry/particle detail removed.
-- Standard skill client also completed using the same script with Chrome hardware launch substituted for forced SwiftShader (output/reletter-final-standard-hardware). This captured loading; gameplay is covered separately by the full Chrome suites.
+- Standard skill client also completed using the same script with Chrome hardware launch substituted for forced SwiftShader (dedicated hardware capture). This captured loading; gameplay is covered separately by the full Chrome suites.
 
-## 2026-11-12 earlier RELETTER correction checkpoint
+## 2026-11-12 earlier interface correction checkpoint
 
-- Correct authoritative source: owner's local `RELETTER/RELETTER` working tree, not the old audit clone. Golden Girdle.otf was missing in the audit clone; fallback Saint caused the wrong title. Copied the original font and verified SHA256 46e61e171acb970eabd7cc9918c349b851c25d448563e4613b229f1b34ffa523 matches both files.
+- Golden Girdle.otf was missing in an earlier audit copy; fallback Saint caused the wrong title. Restored the font and verified SHA256 46e61e171acb970eabd7cc9918c349b851c25d448563e4613b229f1b34ffa523 matches the expected file.
 - Added reproducible vendor script / source hashes, original held weapon functions, melee poses, projectile and ultimate effects, equipment models/icons, original movement constants, Win98 Notepad entry, server-validated GM authentication and 8-handle artwork editor with persistence/export.
-- Browser regression passed: actual font load, two entry fields, drag orbit, original rig, Q charge, 4 proportional corners / 4 nonuniform midpoints, XYZ rotation, authoritative save. Inspected entry and GM scale screenshots in output/reletter-review.
+- Browser regression passed: actual font load, two entry fields, drag orbit, original rig, Q charge, 4 proportional corners / 4 nonuniform midpoints, XYZ rotation, authoritative save. Inspected entry and GM scale screenshots.
 - Hardware AMD sample: mean frame 16.93 ms; logic .75 ms, render submission 3.32 ms. Not a guarantee for every machine or full multiplayer combat stress.
 - Fixed missing guardian assets and black instance materials. Connected original equipment bonuses, shield recharge, wing flap and garden/fishing server adapters. Existing 13 tests and syntax checks pass. Added 4 further contract tests; their latest npm process was still running at this checkpoint.
 - REMAINING: finish original gardening / fishing world visuals and full interaction tests; special token guardian ultimate currently uses generic ultimate fallback; compare remaining scene/build props with original; mobile layout and multi-player FX stress; verify new tests and standard client; deploy updated GM secret and Worker, commit/push Pages, verify live. No claim that all original items/features are complete. Public site remains previous release.
-- Active local servers: static :8000 and Wrangler :8788. Latest browser script tests/reletter-browser.mjs. Standard client output target output/reletter-standard-final. Secrets stay in ignored .dev.vars; never commit/log them.
+- Active local servers: static :8000 and Wrangler :8788. Browser regression testing used local screenshots and console checks. Secrets stay in ignored .dev.vars; never commit/log them.
 
 ## 2026-06-04 current `index.html` correction
 
@@ -737,14 +737,14 @@ Current TODO:
 ## 2026-11-11 Temple multiplayer rebuild
 
 Request:
-- Replace Gallery with Temple, a real six-seat online Three.js art arena built from RELETTER gameplay architecture while preserving all 13 Gallery artworks.
+- Replace Gallery with Temple, a real six-seat online Three.js art arena with server-authoritative gameplay while preserving all 13 Gallery artworks.
 - Add server-authoritative PvP/PvE, artwork throwing, platform coins, random ground weapons/equipment, persistent economy, building, fishing, chat, message plants, fusion, save codes and GM access.
 - Add Shift+Y editing, save/export the edit result for GitHub Pages, optimize performance, deploy an isolated Cloudflare backend and publish to the Gallery repository.
 
 Implemented:
-- Created the `codex/gallery-pre-temple-20261111` backup reference and developed on `codex/temple-rebuild`; original RELETTER code, Worker and data were not changed.
+- Created the `codex/gallery-pre-temple-20261111` backup reference and developed on `codex/temple-rebuild`; existing production services and data were not modified.
 - Replaced the single-file Gallery runtime with modular Three.js arena, controller, UI, network and shared authoritative rules. Vendored Three.js/GLTF/Draco dependencies for CDN-independent Pages loading.
-- Preserved 12 image works and the true SinTower model. Generated non-destructive Temple LOD derivatives for the 599k-triangle SinTower, RELETTER character, monster and original coin GLB.
+- Preserved 12 image works and the true SinTower model. Generated non-destructive Temple LOD derivatives for the 599k-triangle SinTower and the player, monster and coin GLBs.
 - Implemented four fighter + two spectator seating, WebSocket state interpolation, spectator free flight/follow switching, role changes, unique profile keys and reconnect cleanup.
 - Implemented atomic platform coins, balanced prices, server-spawned ground coin/material/weapon/armor drops, item resale, duplicate material catalysts, equipment, fusion receipts, XP/levels, timed monster loot and 20% PvP death drops.
 - Implemented artwork pickup/throw/30-second recovery, server-side hits, GM immunity, persistent/randomized buildings, transparent placement/rotation/validation, synchronized low-cost debris, fishing, chat, text plants and reply branches.
@@ -766,7 +766,7 @@ Release result:
 - Public `https://zhenggdove-artist.github.io/3Dgallery01/` browser verification passed: 13 artworks, 13 platform coins, production WSS, Shift+Y save and build-preview interaction all worked with no HTTP/module/WebGL errors. The public gameplay sample rendered 26 draw calls / about 154k triangles.
 ## 2026-11-13 fidelity correction — implementation checkpoint
 
-Current request: original RELETTER shop/fusion, cat-gun shoulder/scope controls,
+Current request: shop/fusion, cat-gun shoulder/scope controls,
 smooth traversal and natural platform falls, exterior-only monsters with safe
 art viewing, healing hearts, empty-slot auto equip, charged FX heights, broken
 equipment previews, and names below avatars. Earlier requested scene cleanup,
@@ -805,7 +805,7 @@ no heart drops, and a monster remaining inside the newly protected art area.
   mean frame 16.65 ms / p95 17 ms, logic 0.85 ms, submission 1.78 ms.
   This is not a universal no-lag guarantee.
 - Standard game skill client completed; loading and gameplay screenshots inspected.
-- Upload constraints and operation documented in ARTWORK-UPLOAD.md. No RELETTER
+- Upload constraints and operation documented in ARTWORK-UPLOAD.md. No external
   source or backend modified. Local test library is not part of the release.
 
 ## 2026-11-13 user follow-up: all weapon effects → 00GameDevs
