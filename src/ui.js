@@ -67,7 +67,7 @@ export class TempleUI extends EventTarget{
     });
     this.form.addEventListener('submit',event=>{
       event.preventDefault();$('entry-error').textContent='';
-      if(!this.firebaseIdToken)return this.joinError('請先選擇 Google 帳號。');
+      if(!this.firebaseIdToken)return this.joinError('Select a Google account first.');
       this.emit('join',{name:$('player-name').value.trim(),color:$('clothing-color').value,
         firebaseIdToken:this.firebaseIdToken,backendUrl:window.TEMPLE_CONFIG.backendUrl});
     });
@@ -111,8 +111,8 @@ export class TempleUI extends EventTarget{
     const button=this.entry.querySelector('[data-google-login]');
     if(button)button.disabled=!enabled;
     $('account-login-status').textContent=message||(
-      enabled?'請選擇 Google 帳號以載入或建立角色。':
-      'Google 登入暫時無法使用，請稍後重試。'
+      enabled?'Choose an account to continue.':
+      'Google sign-in is unavailable.'
     );
   }
   selectFirebaseAccount(token,profile=null){
@@ -122,17 +122,17 @@ export class TempleUI extends EventTarget{
     const existing=!!profile;
     this.entryExistingProfile=existing;
     $('account-login-status').textContent=existing?
-      '帳號驗證完成。確認角色後即可進入遊戲。':
-      '帳號驗證完成。建立角色後即可進入遊戲。';
-    $('entry-profile-heading').textContent=existing?'確認遊戲角色':'建立遊戲角色';
+      'Account verified. Enter your character.':
+      'Account verified. Create your character.';
+    $('entry-profile-heading').textContent=existing?'Confirm Character':'Create Character';
     $('player-name').value=existing?String(profile.name||''):'';
     $('clothing-color').value=existing&&/^#[0-9a-fA-F]{6}$/.test(profile.color||'')?profile.color:'#43b59a';
-    $('enter-button').textContent=existing?'進入遊戲':'建立角色並進入';
+    $('enter-button').textContent=existing?'Enter Game':'Create & Enter';
     this.form.hidden=false;
     $('player-name').required=true;
     if(!existing)$('player-name').focus();
   }
-  joinBusy(value){$('enter-button').disabled=value;$('enter-button').textContent=value?'正在連線…':this.entryExistingProfile?'進入遊戲':'建立角色並進入';}
+  joinBusy(value){$('enter-button').disabled=value;$('enter-button').textContent=value?'Connecting…':this.entryExistingProfile?'Enter Game':'Create & Enter';}
   joinError(message){$('entry-error').textContent=message;this.joinBusy(false);}
   enter(data){document.activeElement?.blur();this.self=data.self;this.authMode=data.authMode||'firebase';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;$('gm-menu').hidden=!data.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;$('gm-menu').hidden=!this.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();if(this.panelName)this.renderPanel();}
