@@ -110,6 +110,10 @@ function batchGeometry(lots,mobile){
   for(let k=0;k<(mobile?2:5);k++){
    box(lot,(r()-.5)*w,h+.12+r()*.15,(r()-.5)*d,.18,.08,1+r()*3,scraps[(lot.index+k)%scraps.length]);
   }
+  // The roof deck is structural, not detachable decoration. Damage may
+  // tear away the corrugated roofing without creating an invisible hole.
+  category='roof-foundation';
+  box(lot,0,h-.045,0,w+.35,.33,d+.31,lot.trim);
   category='sheets-roof';
   box(lot,0,h+.06,0,w+.4,.14,d+.36,lot.roof);
   category='pipes';
@@ -301,7 +305,10 @@ export class OuterCity{
   const firstFloor=lot.height/lot.floors;
   const survivorHeight=firstFloor*(lot.floors===1?.32:.76);
   const ruinTop=cityRoofHeight(lot,3);
-  const roofRanges=this.walls.userData.partRanges?.get(index+':sheets-roof')||[];
+  const roofRanges=[
+    ...(this.walls.userData.partRanges?.get(index+':sheets-roof')||[]),
+    ...(this.walls.userData.partRanges?.get(index+':roof-foundation')||[])
+  ];
   for(const mesh of [this.walls,this.signs,this.graffiti]){
    const range=mesh.userData.lotRanges?.get(index);
    const originals=mesh.userData.originalPositions;
