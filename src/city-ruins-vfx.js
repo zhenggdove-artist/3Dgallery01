@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {CITY_MAX_HP,cityFractureProfile,cityFractureProfiles} from './shared/city-layout.js';
+import {CITY_MAX_HP,cityRoofHeightAtHp,cityFractureProfile,cityFractureProfiles} from './shared/city-layout.js';
 
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const random=seed=>{let s=seed>>>0;return ()=>((s=(Math.imul(s,1664525)+1013904223)>>>0)/4294967296);};
@@ -440,7 +440,7 @@ void main(){
  vec4 mv=modelViewMatrix*vec4(p,1.);
  gl_Position=projectionMatrix*mv;
  gl_PointSize=clamp(uPointSize*(1.+uPower*.68)*(270./max(2.,-mv.z)),1.,100.);
- vOpacity=uOpacity*enabled*smoothstep(1.,.7,cycle)*smoothstep(0.,.12,cycle);
+ vOpacity=uOpacity*enabled*(1.-smoothstep(.7,1.,cycle))*smoothstep(0.,.12,cycle);
 }`;
 const livingFireFragment=`
 uniform sampler2D uSprite;
@@ -487,12 +487,14 @@ export function createPersistentBuildingFire(root,lot,resources,mobile=false){
   points.frustumCulled=false;group.add(points);
   layers.push({points,type,uniforms,count});
  }
- return {root:group,layers,lot,target:0,power:0,hp:lot.maxHp||CITY_MAX_HP,
-  dying:false,elapsed:0,extinguished:false};
+ return {root:group,layers,lot,target:0,power:0,hp:CITY_MAX_HP,maxHp:CITY_MAX_HP,
+  height:lot.height,dying:false,elapsed:0,extinguished:false};
 }
 export function setPersistentBuildingFire(effect,hp,maxHp=CITY_MAX_HP){
  if(!Number.isFinite(hp))return;
  effect.hp=hp;
+ effect.maxHp=maxHp;
+ effect.height=cityRoofHeightAtHp(effect.lot,hp,maxHp);
  if(hp<=0){
   if(!effect.dying){effect.dying=true;effect.elapsed=0;effect.power=1;}
  }else{
@@ -507,7 +509,7 @@ export function updatePersistentBuildingFire(effect,dt,time){
  const fireFade=effect.dying?Math.max(0,1-effect.elapsed/4.6):1;
  const smokeFade=effect.dying?Math.max(0,1-effect.elapsed/8):1;
  const intensity=effect.dying?1:effect.power;
- const structureHeight=effect.lot.height*(1-.7*Math.min(1,Math.max(0,1-effect.hp/CITY_MAX_HP)));
+ const structureHeight=effect.height;
  for(const layer of effect.layers){
   const smoke=layer.type==='smoke';
   layer.uniforms.uTime.value=time;
