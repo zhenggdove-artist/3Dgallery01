@@ -220,3 +220,74 @@ export function cityRaycast(origin,direction,range,damage={}){
  }
  return nearest;
 }
+
+
+// Building facade geometry is shared by paint picking, authenticated paint
+// placement and Three.js decals. Values are stable across rebuild/reset.
+export const CITY_PAINT_WALLS=Object.freeze(['front','back','left','right']);
+export function cityFacadeFloor(lot,floor){
+ const level=Math.max(0,Math.min(lot.floors-1,Math.floor(floor)));
+ const floorH=lot.height/lot.floors;
+ const taper=level&&lot.silhouette%3===0?.79:1;
+ const shift=level?lot.offset*(level%2?1:-.4):0;
+ const setback=level&&lot.silhouette%4===0?(level%2?.8:-.4):0;
+ const depthScale=level&&lot.silhouette%5===0?.86:1;
+ return {level,floorH,shift,setback,w:lot.width*taper,d:lot.depth*depthScale,
+  bottom:level*floorH,top:(level+1)*floorH};
+}
+export function cityWallPoint(lot,wall,u,v,outset=0){
+ if(!CITY_PAINT_WALLS.includes(wall)||!Number.isFinite(u)||!Number.isFinite(v)||u<0||u>1||v<0||v>1)return null;
+ const y=Math.min(lot.height-1e-6,Math.max(0,lot.height*(1-v)));
+ const floor=cityFacadeFloor(lot,Math.floor(y/(lot.height/lot.floors)));
+ let x=0,z=0,nx=0,nz=0;
+ if(wall==='front'){x=floor.shift+(u-.5)*floor.w;z=floor.setback+floor.d/2; nz=1;}
+ else if(wall==='back'){x=floor.shift+(.5-u)*floor.w;z=floor.setback-floor.d/2;nz=-1;}
+ else if(wall==='right'){x=floor.shift+floor.w/2;z=floor.setback+(.5-u)*floor.d;nx=1;}
+ else {x=floor.shift-floor.w/2;z=floor.setback+(u-.5)*floor.d;nx=-1;}
+ const c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
+ return [lot.x+c*(x+nx*outset)+s*(z+nz*outset),y,
+  lot.z-s*(x+nx*outset)+c*(z+nz*outset)];
+}
+// Returns ONLY a visible wall face (never roof or an invisible interior plane).
+// Destroyed facades are not editable until GM repairs the house, but existing
+// paintings remain on the collapsing mesh, and remain after repair.
+export function cityPaintHit(origin,direction,range=17,damage={}){
+ if(!Array.isArray(origin)||!Array.isArray(direction)||range<=0)return null;
+ let best=null,limit=range;
+ for(const lot of CITY_LOTS){
+  if(cityStage(damage[lot.id]?.hp??CITY_MAX_HP)===3)continue;
+  const dx=origin[0]-lot.x,dz=origin[2]-lot.z;
+  const bound=range+Math.max(lot.width,lot.depth)*1.5;
+  if(dx*dx+dz*dz>bound*bound)continue;
+  const [ox,oz]=cityLocal(lot,origin[0],origin[2]);
+  const c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
+  const vx=direction[0]*c-direction[2]*s,vz=direction[0]*s+direction[2]*c,vy=direction[1];
+  for(let floor=0;floor<lot.floors;floor++){
+   const g=cityFacadeFloor(lot,floor);
+   for(const wall of CITY_PAINT_WALLS){
+    const alongX=wall==='left'||wall==='right';
+    const distance=alongX?(wall==='right'?g.shift+g.w/2:g.shift-g.w/2):
+      (wall==='front'?g.setback+g.d/2:g.setback-g.d/2);
+    const axisOrigin=alongX?ox:oz,axisDirection=alongX?vx:vz;
+    if(Math.abs(axisDirection)<1e-7)continue;
+    const t=(distance-axisOrigin)/axisDirection;
+    if(t<.15||t>=limit)continue;
+    // Only the front-facing side of the wall is writable, not its interior.
+    if((wall==='front'&&vz>=0)||(wall==='back'&&vz<=0)||
+       (wall==='right'&&vx>=0)||(wall==='left'&&vx<=0))continue;
+    const px=ox+vx*t,pz=oz+vz*t,py=origin[1]+vy*t;
+    if(py<g.bottom||py>g.top)continue;
+    if(alongX?Math.abs(pz-g.setback)>g.d/2:Math.abs(px-g.shift)>g.w/2)continue;
+    const u=wall==='front'?(px-g.shift)/g.w+.5:
+      wall==='back'?.5-(px-g.shift)/g.w:
+      wall==='right'?.5-(pz-g.setback)/g.d:(pz-g.setback)/g.d+.5;
+    const v=1-py/lot.height;
+    if(u<0||u>1||v<0||v>1)continue;
+    best={lotId:lot.id,lotIndex:lot.index,wall,u,v,
+      position:cityWallPoint(lot,wall,u,v),distance:t};
+    limit=t;
+   }
+  }
+ }
+ return best;
+}
