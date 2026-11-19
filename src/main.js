@@ -102,6 +102,9 @@ function scheduleBeamChannelStart(delay){
 function startHeldCharge(){
  if(!attackHeld||attackHoldStarted===null||chargeStarted!==null||chargeRequest||staffChannel||
     !controller?.enabled||performance.now()<nextChargeRetryAt)return;
+ // Goldfish A/Q is strictly a shoulder-camera toggle; all water bullets
+ // are fired by touch/mouse on the playfield at the weapon's rapid cadence.
+ if(itemById(world?.profile?.equipment?.weapon)?.id==='goldfish')return;
  // Never begin a Black Cat charge while outside the actual sniper scope.
  if(itemById(world?.profile?.equipment?.weapon)?.id==='black-cat'&&(!sniperScopeAtPress||gun.mode!==2))return;
  chargeStarted=performance.now();
@@ -420,6 +423,7 @@ ui.addEventListener('attack-release',async()=>{
  }
  // Outside the scope Black Cat A/Q only changes cameras, even on long holds.
  // Fused weapons cannot turn this camera input into an ordinary or ultimate hit.
+ if(weapon?.id==='goldfish'){gun.cycle();return;}
  if(weapon?.id==='black-cat'&&!wasScopedAtPress){gun.cycle();return;}
  if(weapon?.firstPerson&&heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
  if(heldMs>=STAFF_TAP_MAX_MS&&pending)await pending;
@@ -644,6 +648,7 @@ function performAttack(charge=0,phase=null){
  const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
  // Centralized guard covers UI A/Q, canvas clicks, auto-charge and fusion.
  if(item.id==='black-cat'&&gun.mode!==2)return;
+ if(item.id==='goldfish'&&gun.mode!==1)return;
  const shot=item.firstPerson?gun.shot():null;
  const muzzle=isChannelStaff(item)||item.family==='saber'||item.id==='calico-cat'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
  const direction=shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
@@ -715,6 +720,14 @@ function update(dt,time,movementDt=dt){
     }
   }
   arena.update(dt,time,camera,roots);
+  // The outbound/returning giraffe is the actual thrown weapon. Do not
+  // keep a duplicate giraffe in its wielder's hand during the 2.3s flight.
+  for(const actor of roots.values())if(actor.userData?.blade&&
+   actor.userData?.equipment?.weapon==='giraffe'||
+   actor.userData?.blade&&actor.userData?.giraffeHideUntil){
+   if(actor.userData.blade)actor.userData.blade.visible=
+    !(performance.now()<(actor.userData.giraffeHideUntil||0));
+  }
   for(const mob of [world?.monster,...(world?.monsters||[])])for(const skill of mob?.skills||[]){
    if(skill.motion!=='stomp'||skill.phase!=='active'||nowMs<skill.start+(skill.end-skill.start)*.76||heardStompLandings.has(skill.id))continue;
    heardStompLandings.add(skill.id);if(heardStompLandings.size>128)heardStompLandings.delete(heardStompLandings.values().next().value);
