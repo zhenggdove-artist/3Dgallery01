@@ -403,7 +403,7 @@ export class OuterCity{
    }
    return;
   }
-  if(animate){
+  if(animate&&stage===3){
    const prepared=this.preparedChunks.get(lot.index);
    if(prepared)this.activatePreparedChunks(lot,prepared);
    else{
