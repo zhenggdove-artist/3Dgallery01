@@ -176,6 +176,37 @@ export function cityRoofHeightAtHp(lot,hp=CITY_MAX_HP,maxHp=CITY_MAX_HP){
  const amount=cityCollapseProgress(tier);
  return lot.height+.13+(cityRoofHeight(lot,3)-(lot.height+.13))*amount;
 }
+// Give each 10%-HP threshold one of four pre-existing building corners.
+// The same deterministic cut applies to all walls and painted decals. It
+// only moves existing vertices: zero additional meshes, particles, polygons
+// or GPU materials, including across all 432 houses.
+export function cityAngularCornerCut(lot,x,y,z,tier,isRoof=false){
+ if(tier<=0)return [0,0,0];
+ const [lx,lz]=cityLocal(lot,x,z);
+ const sx=lx>=0?1:-1,sz=lz>=0?1:-1;
+ // Numbering matches the rotating corner sequence on every house.
+ const corner=(sx<0?1:0)+(sz<0?2:0);
+ const first=1+((corner-(lot.index&3)+4)&3);
+ const step=n=>Math.max(0,Math.min(1,tier-(n-1)));
+ const hits=step(first)+step(first+4)+step(first+8);
+ if(hits<=0)return [0,0,0];
+ const ax=Math.abs(lx)/Math.max(.1,lot.width*.5);
+ const az=Math.abs(lz)/Math.max(.1,lot.depth*.5);
+ // ax+az=1 marks a diagonal across the rectangular corner. A triangular
+ // corner is notched; the middle of the roof and the other corners remain.
+ const diagonal=Math.max(0,Math.min(1,(ax+az-1.05)/.95));
+ const upper=Math.max(0,Math.min(1,(y-lot.height*.34)/Math.max(.2,lot.height*.66)));
+ const cut=diagonal*upper*Math.min(1,hits*.36);
+ if(cut<=0)return [0,0,0];
+ // Shrink the exposed corner towards the house interior and lower the
+ // oblique wall edge. Roof deck remains within a few centimetres of the
+ // authoritative collision plane, preserving standable broken buildings.
+ const inwardX=-sx*Math.min(1.1,lot.width*.16)*cut;
+ const inwardZ=-sz*Math.min(1.1,lot.depth*.16)*cut;
+ const cs=Math.cos(lot.yaw),sn=Math.sin(lot.yaw);
+ const drop=-(isRoof?.10:Math.min(1.35,lot.height*.14))*cut;
+ return [cs*inwardX+sn*inwardZ,drop,-sn*inwardX+cs*inwardZ];
+}
 // Exactly the same vertex-space deformation is used for masonry, signs,
 // original graffiti and persistent user drawings.
 export function cityCollapsePosition(lot,x,y,z,tier,isRoof=false){
@@ -187,9 +218,10 @@ export function cityCollapsePosition(lot,x,y,z,tier,isRoof=false){
  const compression=.08+.075*(.5+.5*noise);
  const ruinedY=isRoof?cityRoofHeight(lot,3)+(y-(lot.height+.13))*.16:
   y<=survivor?y:survivor+rise*compression;
- return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*amount,
-  y+(ruinedY-y)*amount,
-  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*amount];
+ const cut=cityAngularCornerCut(lot,x,y,z,tier,isRoof);
+ return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*amount+cut[0],
+  y+(ruinedY-y)*amount+cut[1],
+  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*amount+cut[2]];
 }
 function cityFootprint(lot,x,z,margin=0){
  const dx=x-lot.x,dz=z-lot.z;
