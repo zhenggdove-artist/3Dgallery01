@@ -15,8 +15,8 @@ export function grassPositions(count=65000,seed=17331,inner=11,outer=CITY_INNER_
  return {points,heights,angles,phases,shades};
 }
 // Five crossed long leaves per instanced tuft; no one-mesh-per-blade overhead.
-function bladeGeometry(){
- const positions=[],indices=[],uvs=[],segments=3,blades=4;
+function bladeGeometry({segments=3,blades=4}={}){
+ const positions=[],indices=[],uvs=[];
  for(let j=0;j<blades;j++){
   const phi=j*2.39996,cs=Math.cos(phi),sn=Math.sin(phi);
   const lean=.22+.11*Math.sin(j*4.17),yScale=.77+(j%3)*.14;
@@ -99,7 +99,7 @@ export class GrassField{
   // backed by an unbroken green canopy, so the sandy ground never leaks out.
   // Instanced GPU rendering keeps all 432 collision buildings intact.
   this.outerCount=mobile?85000:190000;
-  const cityGeo=bladeGeometry(),city=grassPositions(this.outerCount,73917,
+  const cityGeo=bladeGeometry({segments:1,blades:4}),city=grassPositions(this.outerCount,73917,
    CITY_INNER_RADIUS-.5,CITY_OUTER_RADIUS+.5);
   cityGeo.setAttribute('aOffset',new THREE.InstancedBufferAttribute(city.points,2));
   cityGeo.setAttribute('aHeight',new THREE.InstancedBufferAttribute(city.heights,1));
