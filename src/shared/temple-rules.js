@@ -805,8 +805,10 @@ function attack(world,profile,actor,body,context,now){
    structureHit??=event;structureHits.push(event);
    if(structure.hp===0){const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);}
   }
-  const city=cityWeaponHits(world,origin,direction,stats.range,area,
-  Math.max(8,Math.round((stats.damage+bonus*.1)*.7)),now);
+  // The city's structural impact follows weapon damage and charged strength,
+  // without changing PvP damage or displaying health numbers on the building.
+  const structuralDamage=Math.max(8,Math.round((stats.damage+bonus*.1)*(charge>=1?1.5:1.1)));
+  const city=cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
