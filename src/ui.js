@@ -54,6 +54,7 @@ export class TempleUI extends EventTarget{
       if(!button||button.disabled)return;
       // Re-clicking must open Google account selection, even after the
       // previous selection returned a usable Firebase token.
+      button.disabled=true; // Avoid duplicate Google popups / account races.
       this.firebaseIdToken='';
       this.form.hidden=true;
       $('entry-error').textContent='';
@@ -110,6 +111,7 @@ export class TempleUI extends EventTarget{
     );
   }
   selectFirebaseAccount(token,profile=null){
+    this.entry.querySelector('[data-google-login]').disabled=false;
     this.firebaseIdToken=token;
     const existing=!!profile;
     this.entryExistingProfile=existing;
