@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
  cityLots,cityStage,cityBlocked,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
+import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume} from './city-ruins-vfx.js';
 
 // All 432 lots remain present on mobile. Simplification changes only geometry
 // detail, never collision or position; a single batched mesh draws the district.
@@ -30,24 +31,24 @@ function compactedSand(){
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;return map;
 }
 function batchGeometry(lots,mobile){
- const position=[],normal=[],color=[],indices=[],lotRanges=new Map(),partRanges=new Map();
+ const position=[],normal=[],color=[],indices=[],lotRanges=new Map(),partRanges=new Map(),lotIds=[],localPoints=[];
  let category='core',current=-1;
- const face=(corners,n,col)=>{
+ const face=(corners,n,col,lot,locals)=>{
   const at=position.length/3,c=rgb(col);
-  for(const corner of corners){position.push(...corner);normal.push(...n);color.push(...c);}
+  for(let i=0;i<corners.length;i++){position.push(...corners[i]);normal.push(...n);color.push(...c);
+   lotIds.push(lot.index??-1);localPoints.push(...(locals?.[i]||[0,0,0]));}
   indices.push(at,at+1,at+2,at,at+2,at+3);
  };
  const box=(lot,x,y,z,w,h,d,c)=>{
   if(w<=0||h<=0||d<=0)return;
   const at=position.length/3;
-  const vertices=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],
-   [-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]].map(([a,b,k])=>{
-    const q=localToWorld(lot,x+a*w/2,z+k*d/2);return [q[0],y+b*h/2,q[1]];
-   });
+  const locals=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],
+   [-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]].map(([a,b,k])=>[x+a*w/2,y+b*h/2,z+k*d/2]);
+  const vertices=locals.map(([vx,vy,vz])=>{const q=localToWorld(lot,vx,vz);return [q[0],vy,q[1]];});
   const cs=Math.cos(lot.yaw),sn=Math.sin(lot.yaw);
   for(const [ids,n] of [[[4,5,6,7],[0,0,1]],[[1,0,3,2],[0,0,-1]],
    [[5,1,2,6],[1,0,0]],[[0,4,7,3],[-1,0,0]],[[7,6,2,3],[0,1,0]],[[0,1,5,4],[0,-1,0]]]){
-    face(ids.map(i=>vertices[i]),[n[0]*cs+n[2]*sn,n[1],-n[0]*sn+n[2]*cs],c);
+    face(ids.map(i=>vertices[i]),[n[0]*cs+n[2]*sn,n[1],-n[0]*sn+n[2]*cs],c,lot,ids.map(i=>locals[i]));
   }
   if(current>=0&&category!=='core'){
    const key=current+':'+category,group=partRanges.get(key)||[];
@@ -132,6 +133,8 @@ function batchGeometry(lots,mobile){
  geo.setAttribute('position',new THREE.Float32BufferAttribute(position,3));
  geo.setAttribute('normal',new THREE.Float32BufferAttribute(normal,3));
  geo.setAttribute('color',new THREE.Float32BufferAttribute(color,3));
+ geo.setAttribute('cityLotId',new THREE.Float32BufferAttribute(lotIds,1));
+ geo.setAttribute('cityLocal',new THREE.Float32BufferAttribute(localPoints,3));
  geo.setIndex(indices);geo.computeBoundingSphere();
  const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.97,metalness:.02,side:THREE.FrontSide}));
  mesh.name='Batched solid concrete, timber, red-brick, stone and ochre ruined homes';
@@ -218,12 +221,13 @@ export class OuterCity{
  constructor(scene,{mobile=false}={}){
   this.scene=scene;this.mobile=mobile;this.root=new THREE.Group();
   this.root.name='High-density ruined city, solid collision and staged destruction';scene.add(this.root);
-  this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();
+  this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();this.plumes=[];
+  this.plumeResources=createPlumeResources();this.partsHidden=new Set();
   this.cube=new THREE.BoxGeometry(1,1,1);
-  const ground=new THREE.Mesh(new THREE.RingGeometry(CITY_INNER_RADIUS,CITY_OUTER_RADIUS,192),
-   new THREE.MeshStandardMaterial({map:compactedSand(),color:'#a4894e',roughness:1,side:THREE.DoubleSide}));
-  ground.rotation.x=-Math.PI/2;ground.position.y=.01;ground.name='Deep yellow-ochre sand and compacted soil';this.root.add(ground);
-  this.walls=batchGeometry(this.lots,mobile);this.signs=buildShopSigns(this.lots);this.graffiti=buildWallGraffiti(this.lots);
+  // Outer district is covered by GrassField's continuous living grass canopy.
+  this.walls=batchGeometry(this.lots,mobile);this.facade=installFacadeCracks(this.walls);
+  this.signs=buildShopSigns(this.lots);this.graffiti=buildWallGraffiti(this.lots);
+  for(const mesh of [this.walls,this.signs,this.graffiti])mesh.userData.originalPositions=mesh.geometry.attributes.position.array.slice();
   this.root.add(this.walls,this.signs,this.graffiti,wires(this.lots));
   const rand=random(78142),bins=mobile?16:30;
   this.dumpsters=instance(new THREE.CylinderGeometry(.5,.47,1.1,7),new THREE.MeshStandardMaterial({color:'#4b615a'}),bins,'Open foul dumpsters');
@@ -320,17 +324,16 @@ export class OuterCity{
   ];
   const r=random(900+lot.index*73),pieces=[];
   descriptions.forEach(([x,y,z,w,h,d,c],index)=>{
-   const material=new THREE.MeshStandardMaterial({color:c,roughness:.96,metalness:.02});
-   const mesh=new THREE.Mesh(this.cube,material);
+   const mesh=buildBrokenStructure(lot,index,w,h,d,c);
    const home=new THREE.Vector3(x,y,z);
-   mesh.position.copy(home);mesh.scale.set(w,h,d);root.add(mesh);
+   mesh.position.copy(home);root.add(mesh);
    if(!animate&&stage===3){
     mesh.position.set(x+(r()-.5)*lot.width*.55,h*.22,z+(r()-.5)*lot.depth*.55);
     mesh.rotation.set((r()-.5)*.7,(r()-.5)*.3,(r()-.5)*.8);
    }
    pieces.push({mesh,index,home,velocity:new THREE.Vector3((r()-.5)*2,1+r()*2,(r()-.5)*2),
     spin:new THREE.Vector3((r()-.5)*1.5,0,(r()-.5)*1.5),
-    moving:animate?(stage===3||index>2):false,settled:!animate,wasInitiallySettled:!animate});
+    h,moving:animate?(stage===3||index>2):false,settled:!animate,wasInitiallySettled:!animate});
   });
   this.root.add(root);this.chunks.set(lot.index,{root,pieces,stage,age:0,animateStarted:animate});
  }
@@ -423,7 +426,7 @@ export class OuterCity{
     part.velocity.y-=11*dt;
     part.mesh.position.addScaledVector(part.velocity,dt);
     part.mesh.rotation.x+=part.spin.x*dt;part.mesh.rotation.z+=part.spin.z*dt;
-    const floor=part.mesh.scale.y*.22;
+    const floor=part.h*.22;
     if(part.mesh.position.y<floor){
      part.mesh.position.y=floor;part.velocity.y=Math.abs(part.velocity.y)*.17;
      part.velocity.x*=.66;part.velocity.z*=.66;
