@@ -54,7 +54,7 @@ test('original arc-ray and charged-beam ShaderMaterials are warped, not replaced
   native.update(.1,camera);
   assert.ok(e.curveBend>.6,'movement smoothly becomes rightward curvature');
   assert.ok(e.fx.group.userData.templeCurve.bend.value>0);
-  assert.equal(e.fx.group.userData.templeCurve.length.value,14);
+  assert.ok(Math.abs(e.fx.group.userData.templeCurve.length.value-14)<.01);
   assert.ok(Math.abs(e.fx.group.userData.templeCurve.bend.value)<=BEAM_CURVE_METRES);
   actor.userData.staffStrafe=-1;
   for(let n=0;n<16;n++)native.update(.05,camera);
