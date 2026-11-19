@@ -1,47 +1,76 @@
-/* In-world graffiti editing. Only the tool strip is interactive; the
-   transparent canvas remains the actual 3D drawing surface. */
+/* Paint uses the existing BUILD -> PAINT -> WRITE function menu.
+   The compact MS Paint-style palette stays on the RIGHT edge above combat
+   controls, rather than opening a wide modal over the arena or chat. */
 #hud #paint-button.paint-active{
  outline:2px solid #b7f1c8;outline-offset:1px;
  background:#e4ffed!important;color:#164b2a!important;
 }
 #paint-toolbar[hidden]{display:none!important}
 #hud #paint-toolbar{
- position:fixed;z-index:120;top:max(72px,calc(env(safe-area-inset-top) + 57px));
- left:50%;transform:translateX(-50%);
- display:flex;align-items:center;justify-content:center;flex-wrap:wrap;
- gap:7px;width:max-content;max-width:calc(100vw - 24px);
- padding:9px 12px;border:2px solid #fafafa;border-right-color:#505050;
- border-bottom-color:#505050;border-radius:0;background:#c0c0c0;
- color:#111;box-shadow:2px 3px 0 #0007;
- font:700 12px/1.2 Tahoma,Arial,sans-serif;pointer-events:auto;
+ position:fixed;z-index:120;left:auto;right:max(10px,env(safe-area-inset-right) + 8px);
+ top:max(106px,calc(env(safe-area-inset-top) + 76px));
+ transform:none;box-sizing:border-box;
+ display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;
+ gap:6px;width:96px;max-width:calc(100vw - 24px);
+ max-height:calc(100dvh - 246px);overflow-y:auto;overscroll-behavior:contain;
+ padding:6px;border:2px solid;border-color:#fafafa #505050 #505050 #fafafa;
+ border-radius:0;background:#c0c0c0;color:#111;
+ box-shadow:2px 3px 0 #0007;font:700 11px/1.15 Tahoma,Arial,sans-serif;
+ pointer-events:auto;touch-action:pan-y;
 }
 #hud #paint-toolbar .paint-title{
- padding:5px 8px;background:#000080;color:white;letter-spacing:.06em;
+ display:block;padding:5px 3px;background:#000080;color:white;
+ font:700 10px Tahoma,Arial,sans-serif;letter-spacing:.08em;text-align:center;
 }
 #hud #paint-toolbar button{
- display:inline-flex;align-items:center;justify-content:center;min-width:65px;
- min-height:34px;gap:4px;padding:4px 9px;border:2px solid;
- border-color:#fff #555 #555 #fff;border-radius:0;
- background:#c0c0c0;color:#111;font:700 12px Tahoma,Arial,sans-serif;
- cursor:pointer;
+ display:flex;align-items:center;justify-content:center;box-sizing:border-box;
+ width:100%;min-height:34px;margin:0;padding:5px 3px;
+ border:2px solid;border-color:#fff #555 #555 #fff;border-radius:0;
+ background:#c0c0c0;color:#111;box-shadow:none;
+ font:700 11px/1.2 Tahoma,Arial,sans-serif;
+ cursor:pointer;touch-action:manipulation;
 }
 #hud #paint-toolbar button.active,
 #hud #paint-toolbar button:active{
  background:#e8e8e8;border-color:#555 #fff #fff #555;
  box-shadow:inset 1px 1px #666;
 }
-#hud #paint-toolbar label{display:inline-flex;align-items:center;gap:5px}
-#hud #paint-toolbar input[type=color]{
- width:36px;height:32px;min-height:32px;padding:2px;cursor:pointer;
- border:2px solid;border-color:#555 #fff #fff #555;background:#c0c0c0;
+#hud #paint-toolbar button:focus-visible,
+#hud #paint-toolbar input:focus-visible{outline:2px solid #000080;outline-offset:1px}
+#hud #paint-toolbar label{
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ gap:4px;margin:0;padding:2px 0;color:#111;min-width:0;
 }
-#hud #paint-toolbar input[type=range]{width:94px;accent-color:#000080}
+#hud #paint-toolbar input[type=color]{
+ display:block;box-sizing:border-box;width:40px;height:33px;min-height:33px;
+ padding:2px;cursor:pointer;border:2px solid;
+ border-color:#555 #fff #fff #555;background:#c0c0c0;touch-action:manipulation;
+}
+#hud #paint-toolbar input[type=range]{
+ box-sizing:border-box;display:block;width:100%;min-height:20px;margin:0;
+ accent-color:#000080;touch-action:pan-x;
+}
 body.wall-paint-active #game{cursor:crosshair!important;touch-action:none}
 body.wall-paint-active #crosshair{opacity:.4}
-@media(max-width:620px){
- #hud #paint-toolbar{top:max(55px,calc(env(safe-area-inset-top) + 45px));
-  width:calc(100vw - 18px);max-width:420px;gap:5px;padding:6px;justify-content:center}
- #hud #paint-toolbar button{min-height:32px;min-width:58px;padding:4px 6px}
- #hud #paint-toolbar label{font-size:11px}
- #hud #paint-toolbar input[type=range]{width:70px}
+@media(max-width:720px),(pointer:coarse){
+ #hud #paint-toolbar{
+  right:max(7px,env(safe-area-inset-right) + 6px);
+  top:max(94px,calc(env(safe-area-inset-top) + 67px));
+  width:76px;padding:4px;gap:4px;
+  max-height:calc(100dvh - 255px);
+  box-shadow:1px 2px 0 #0006;
+ }
+ #hud #paint-toolbar .paint-title{padding:4px 2px;font-size:10px}
+ #hud #paint-toolbar button{min-height:32px;font-size:10px;padding:4px 2px}
+ #hud #paint-toolbar label{gap:2px;padding:0;font-size:10px}
+ #hud #paint-toolbar input[type=color]{height:30px;min-height:30px;width:37px}
+ #hud #paint-toolbar input[type=range]{min-height:17px}
+}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:530px){
+ #hud #paint-toolbar{
+  right:max(7px,env(safe-area-inset-right) + 6px);
+  top:max(55px,calc(env(safe-area-inset-top) + 45px));
+  width:78px;max-height:calc(100dvh - 136px);
+ }
+ #hud #paint-toolbar button{min-height:28px}
 }

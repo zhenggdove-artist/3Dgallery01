@@ -46,11 +46,19 @@ export class CityWallPainter{
   if(active)this.beforeStart();
   this.active=active;
   if(this.toolbar)this.toolbar.hidden=!active;
+  // The menu otherwise stays over the palette and makes PAINT appear inert.
+  if(active){
+   this.ui.hud?.classList.remove('functions-open');
+   document.getElementById('function-toggle')?.setAttribute('aria-expanded','false');
+   this.button?.blur();
+  }
   this.button?.setAttribute('aria-pressed',String(active));
   this.button?.classList.toggle('paint-active',active);
   document.body.classList.toggle('wall-paint-active',active);
   const player=this.controller();
-  if(player)player.setEnabled(!active&&!this.ui.panelName);
+  // Keep joystick/jump and keyboard movement functional while the canvas
+  // captures painting strokes; only the canvas ray is in drawing mode.
+  if(player)player.setEnabled(!this.ui.panelName);
  }
  stop(){this.setActive(false);}
  pick(event){
