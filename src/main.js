@@ -254,7 +254,7 @@ network.addEventListener('wing-catalog',event=>{
 network.addEventListener('players',event=>{players=event.detail;ui.setPlayers(players);syncPlayers();});
 network.addEventListener('state',event=>{const data=event.detail;if(data.key===self?.key)return;let target=remoteTargets.get(data.key);if(!target){syncPlayers();target=remoteTargets.get(data.key);}if(target){target.position.fromArray(data.state.position);target.rotation=data.state.rotation;target.animation=data.state.animation;}});
 network.addEventListener('chat',event=>{ui.addChat(event.detail);showPlayerSpeech(event.detail);});
-network.addEventListener('chat-reset',()=>{ui.clearChat();for(const entry of playerSpeech.values())entry.element.remove();playerSpeech.clear();});
+network.addEventListener('chat-reset',()=>{ui.clearChat();for(const entry of speechBubbles.values())entry.element.remove();speechBubbles.clear();});
 network.addEventListener('artwork-throw',event=>showThrowPulse(event.detail));
 network.addEventListener('attack',event=>showAttack(event.detail));
 network.addEventListener('channel-stop',event=>{const root=roots.get(event.detail.owner);if(root){arena.presentation.vfx.stopChannel(root);root.userData.staffCastingUntil=0;}});
