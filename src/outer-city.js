@@ -212,7 +212,7 @@ function buildWallGraffiti(lots){
  const p=[],uv=[],indices=[],ranges=new Map();
  for(const lot of lots){
   const base=p.length/3,idx=lot.index%16,c=idx%4,row=Math.floor(idx/4);
-  const y=Math.min(lot.height-.8,3.7),z=lot.depth/2+.21,w=lot.width*.25;
+  const y=Math.min(lot.height-.8,3.7),z=lot.depth/2+.012,w=lot.width*.25;
   for(const [x,h] of [[-w,y-.43],[w,y-.43],[w,y+.43],[-w,y+.43]]){
    const v=localToWorld(lot,x,z);p.push(v[0],h,v[1]);
   }
