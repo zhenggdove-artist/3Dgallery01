@@ -5,7 +5,7 @@ import {advanceIslandEnemy,monsterSkillContains,MONSTER_SKILLS} from '../src/sha
 import {createInitialWorld,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
 import {ReletterPresentation} from '../src/reletter-presentation.js';
 import {itemById} from '../src/shared/catalog.js';
-import {attackDirection} from '../src/aiming.js';
+import {attackDirection,crosshairNdc} from '../src/aiming.js';
 
 const NOW=70_000_000;
 const opts={move(){},hit(target,damage,skill){target.hits??=[];target.hits.push([skill.motion,damage]);}};
@@ -87,7 +87,7 @@ test('staff attack direction is solved from the actual raised muzzle to the cent
  const root=new THREE.Group(),controller={root},arena={structureGroup:new THREE.Group(),world:{},islandEnemies:{extraModels:[]}};
  const muzzle=new THREE.Vector3(0,3,0);
  const direction=new THREE.Vector3(...attackDirection(controller,camera,arena,new Map(),itemById('ember-1'),0,muzzle));
- const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(),camera);
+ const ray=new THREE.Raycaster();ray.setFromCamera(crosshairNdc(),camera);
  const target=ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),new THREE.Vector3());
  assert.ok(target,'centre reticle must intersect the ground');
  const expected=target.sub(muzzle).normalize();
