@@ -295,7 +295,7 @@ export class WeaponVFX{
   // An exception in one animation subsystem must never abort the gameplay frame.
   for(const [label,system] of [['saber',this.saberImpact],['particles',this.particleSkills],
     ['signature',this.signatureEffects],['numbered',this.numberedEffects]]){
-   try{system.update(dt);}catch(error){
+   try{system.update(dt,camera);}catch(error){
     this.failedAnimationSystems??=new Set();
     if(!this.failedAnimationSystems.has(label)){
      this.failedAnimationSystems.add(label);

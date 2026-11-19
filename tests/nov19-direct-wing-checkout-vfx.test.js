@@ -17,7 +17,7 @@ test('original vendor #08 lightning and #29 charged yellow beam are used exclusi
  }
  const numbered=readFileSync(new URL('../src/numbered-weapon-effects.js',import.meta.url),'utf8');
  const weapon=readFileSync(new URL('../src/weapon-vfx.js',import.meta.url),'utf8');
- assert.match(numbered,/fx\.setEndpoints\(origin,origin\.clone\(\)\.addScaledVector\(dir,range\)\)/);
+ assert.match(numbered,/fx\.setEndpoints\(origin,end\)/);
  assert.match(numbered,/'charged-beam':'#f6c76c'/);
  assert.doesNotMatch(weapon,/ForwardChannelBeam|refreshForwardBeam|forwardBeams/);
 });
