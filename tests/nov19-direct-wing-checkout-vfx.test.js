@@ -48,10 +48,10 @@ test('tap fires only a traveling elemental orb; channel delegates to actual vend
  assert.equal(scene.children.some(node=>/forward-channel|prism-forward|lightning-forward/.test(node.name)),false);
  vfx.dispose();
 });
-test('all camera rays use five-pixel-up crosshair in a viewport-independent NDC',()=>{
- assert.equal(AIM_RAISE_PX,5);
- assert.equal(crosshairNdc(500).y,.02);
- assert.equal(crosshairNdc(1000).y,.01);
+test('all camera rays share thirty-pixel-up crosshair in a viewport-independent NDC',()=>{
+ assert.equal(AIM_RAISE_PX,30);
+ assert.equal(crosshairNdc(500).y,.12);
+ assert.equal(crosshairNdc(1000).y,.06);
  const camera=new THREE.PerspectiveCamera(55,1,0.1,500);
  camera.position.set(0,2,10);camera.lookAt(0,2,0);
  assert.ok(cameraAimDirection(camera).y>0,'camera ray rises along screen reticle');
