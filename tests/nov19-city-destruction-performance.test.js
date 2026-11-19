@@ -113,3 +113,21 @@ test('one-hit destruction schedules complete sculptural detail without blocking 
  assert.equal(city.chunks.get(lot.index).root.parent,city.root);
  city.disposePreparedChunks(city.chunks.get(lot.index));
 });
+
+test('simultaneous area-of-effect hits are spread over frames without dropping any debris events',()=>{
+ const city=Object.create(OuterCity.prototype),lot=CITY_LOTS[0],seen=[];
+ city.pendingEjections=[];
+ city.spawnEjection=(...args)=>seen.push(args);
+ const contact=[lot.x,1,lot.z];
+ for(let i=0;i<20;i++)city.eject(lot,i%2?'pipes':'masonry',contact,i%2===1);
+ contact[1]=999; // network payload can be reused; queued contact must be stable
+ assert.equal(seen.length,0,'attack dispatch must not synchronously build meshes');
+ assert.equal(city.pendingEjections.length,20);
+ assert.equal(city.processEjections(),true);
+ assert.equal(seen.length,1,'only one detailed burst is built each frame');
+ assert.equal(seen[0][2][1],1);
+ for(let i=1;i<20;i++)assert.equal(city.processEjections(),true);
+ assert.equal(city.processEjections(),false);
+ assert.equal(seen.length,20,'retain the original number and order of all bursts');
+ assert.equal(seen.filter(x=>x[3]).length,10);
+});
