@@ -316,7 +316,13 @@ try{
    target:e.target?.id||e.target?.tagName,
    type:e.pointerType,x:e.clientX,y:e.clientY,locked:!!document.pointerLockElement
   }),true);
+  // Pointer lock may remain stuck indefinitely in overloaded headless Chrome.
+  // This test checks scoped shooting; native lock is covered by GunController
+  // separately, and is not necessary to exercise pointer event routing.
+  const originalRequestLock=gun.canvas.requestPointerLock;
+  gun.canvas.requestPointerLock=()=>Promise.resolve();
   window.restoreDesktopScope=()=>{
+   gun.canvas.requestPointerLock=originalRequestLock;
    gun.end();window.desktopForceGun=false;
    t.ui.setWorld=originalSetWorld;t.network.action=originalAction;
    t.ui.world.profile.equipment.weapon='clam';
@@ -330,7 +336,9 @@ try{
  // Release the test browser's lock without ending the sniper scope, then
  // exercise real DOM pointerdown with Playwright's ordinary mouse input.
  await page.evaluate(()=>{if(document.pointerLockElement)document.exitPointerLock();});
- await page.waitForFunction(()=>document.pointerLockElement===null);
+ await page.waitForFunction(()=>document.pointerLockElement===null,{timeout:5000}).catch(async()=>{
+  await page.evaluate(()=>document.exitPointerLock?.());
+ });
  await page.mouse.click(640,400);
  await page.waitForTimeout(200);
  const firstScope=await page.evaluate(()=>({
