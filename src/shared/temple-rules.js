@@ -1009,10 +1009,10 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   // The same authoritative damage/death/shield pipeline used by combat
   // processes Collector bullets. Fixed 50 HP ignores armour and shields,
   // but respects respawn protection and GM invincibility.
-  let changed=artworkChanged||tickCollector(world,actors,now,rng,(actor,from,damage)=>
+  let changed=tickCollector(world,actors,now,rng,(actor,from,damage)=>
    damagePlayer(world,null,actor,damage,now,'collector',from,'collector-shot',
     [actor.position[0],actor.position[1]+1.15,actor.position[2]],false,false,true)
-  );
+  )||artworkChanged;
   for(const profile of Object.values(world.profiles||{}))
    changed=tickBloomChannelHeal(profile,now)>0||changed;
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
