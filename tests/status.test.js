@@ -5,10 +5,10 @@ import {createInitialWorld,ensureProfile} from '../src/shared/temple-rules.js';
 import {playerStats,refreshStats} from '../src/shared/player-stats.js';
 import {ITEMS} from '../src/shared/catalog.js';
 import {fuseOriginal} from '../src/shared/fusion-adapter.js';
-test('fire ticks, ice freezes for one second, pan knocks back; duration is bounded',()=>{
+test('fire ticks, ice freezes for three seconds, pan knocks back; duration is bounded',()=>{
  const world=createInitialWorld(1000),a=ensureProfile(world,'a','A',null,1000),b=ensureProfile(world,'b','B',null,1000),shot={direction:[1,0,0],charge:1,damage:20};
  applyStatus(world,a,b,ITEMS.find(i=>i.family==='fire'),shot,2000);let damage=0;tickStatus(b,7000,(_,n)=>damage+=n);assert.ok(damage>0);assert.deepEqual(b.effects,{});
- applyStatus(world,a,b,ITEMS.find(i=>i.family==='ice'),shot,8000);assert.ok(effectActive(b,'freeze',8500));assert.ok(!effectActive(b,'freeze',9000));
+ applyStatus(world,a,b,ITEMS.find(i=>i.family==='ice'),shot,8000);assert.ok(effectActive(b,'freeze',8500));assert.ok(!effectActive(b,'freeze',11000));
  applyStatus(world,a,b,ITEMS.find(i=>i.family==='pan'&&!i.exotic),shot,14000);assert.deepEqual(b.impulse.vector,[2,0,0]);
 });
 test('fusion consumes one duplicate only; fused shield capacity is used',()=>{
