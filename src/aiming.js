@@ -18,6 +18,15 @@ export function attackDirection(controller,camera,arena,roots,item,charge,muzzle
  const heading=controller.root.rotation.y;
  if(meleeFamilies.includes(item.family)&&!(item.exotic&&charge>=1))return [Math.sin(heading),0,Math.cos(heading)];
  if(item.firstPerson)return cameraAimDirection(camera).toArray();
+ // Straight lightning / prism spells must follow the camera's FULL 3D
+ // reticle ray, including upward pitch. The generic muzzle-to-intersection
+ // correction may select a nearby ground/structure point BELOW the raised
+ // staff when the camera is looking up from a lower level. That inverted
+ // the ray and sent the actual 00GameDevs #08/#29 effects underground.
+ // Both the server attack and the live native emitter consume this same
+ // vector, so their damage volumes and graphics cannot disagree.
+ if(isChannelStaff(item)&&(item.family==='lightning'||item.family==='beam'))
+  return cameraAimDirection(camera).toArray();
  const origin=muzzle?.isVector3?muzzle.clone():controller.root.position.clone().add(new THREE.Vector3(0,1,0));camera.updateMatrixWorld();ray.setFromCamera(crosshairNdc(),camera);ray.far=250;
  // Use actual screen-centre ray intersections, then project FROM the live staff tip.
  // A 150m guess made nearby targets and raised staffs fire below the crosshair.
