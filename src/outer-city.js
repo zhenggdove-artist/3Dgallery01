@@ -255,6 +255,10 @@ export function markPositionRangeDirty(attribute,start,end){
  if(typeof attribute.addUpdateRange==='function')attribute.addUpdateRange(start*3,(end-start)*3);
  attribute.needsUpdate=true;
 }
+function chunkDescriptions(lot){
+  const descriptions=chunkDescriptions(lot);
+ return descriptions;
+}
 export class OuterCity{
  constructor(scene,{mobile=false}={}){
   this.scene=scene;this.mobile=mobile;this.root=new THREE.Group();
@@ -262,6 +266,7 @@ export class OuterCity{
   this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();this.plumes=[];
    this.renderedTiers=new Map();this.poseCache=new Map();this.collapseAnimations=new Map();this.shakes=new Map();this.seenCityEvents=new Set();
   this.plumeResources=createPlumeResources();this.plumePool=[];this.partsHidden=new Set();
+  this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
   this.cube=new THREE.BoxGeometry(1,1,1);
   // Build detailed chipped plaster, framed glass, reinforcement and brick
   // templates at scene load rather than extruding dozens of shapes PER HIT.
@@ -384,6 +389,16 @@ export class OuterCity{
    }
    return;
   }
+  if(animate){
+   const prepared=this.preparedChunks.get(lot.index);
+   if(prepared)this.activatePreparedChunks(lot,prepared);
+   else{
+    this.prepareChunks(lot);
+    const job=this.preparingChunks.get(lot.index);
+    if(job)job.activate=true;
+   }
+   return;
+  }
   const root=new THREE.Group();root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
   root.name='Solid volumetric collapse '+lot.id;
   const floorH=lot.height/lot.floors;
@@ -415,6 +430,58 @@ export class OuterCity{
     h,moving:animate?(stage===3||index>2):false,settled:!animate,wasInitiallySettled:!animate});
   });
   this.root.add(root);this.chunks.set(lot.index,{root,pieces,stage,age:0,animateStarted:animate});
+ }
+ // The full-resolution collapsed-house sculpture is prepared incrementally
+ // after the first hit, not synchronously at the expensive killing blow.
+ prepareChunks(lot){
+  const index=lot.index;
+  if(this.chunks.has(index)||this.preparedChunks.has(index)||this.preparingChunks.has(index))return;
+  const root=new THREE.Group();root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
+  root.name='Solid volumetric collapse '+lot.id;
+  const job={lot,root,pieces:[],descriptions:chunkDescriptions(lot),
+   random:random(900+index*73),step:0,activate:false};
+  this.preparingChunks.set(index,job);this.chunkBuildQueue.push(job);
+ }
+ activatePreparedChunks(lot,effect){
+  this.preparedChunks.delete(lot.index);
+  effect.stage=3;effect.animateStarted=true;effect.age=0;
+  for(const part of effect.pieces){
+   part.mesh.position.copy(part.home);
+   part.mesh.rotation.set(0,0,0);
+   part.moving=true;part.settled=false;
+  }
+  this.root.add(effect.root);this.chunks.set(lot.index,effect);
+ }
+ disposePreparedChunks(effect){
+  effect.root.traverse(o=>{o.geometry?.dispose();if(o.material)
+   for(const mat of Array.isArray(o.material)?o.material:[o.material])mat.dispose();});
+  effect.root.removeFromParent();
+ }
+ stepChunkPreparation(){
+  const job=this.chunkBuildQueue.shift();if(!job)return;
+  if(this.preparingChunks.get(job.lot.index)!==job)return;
+  const {lot,random:r}=job,index=job.step;
+  const [x,y,z,w,h,d,c]=job.descriptions[index];
+  const mesh=buildBrokenStructure(lot,index,w,h,d,c);
+  const home=new THREE.Vector3(x,y,z);
+  mesh.position.copy(home);job.root.add(mesh);
+  job.pieces.push({mesh,index,home,velocity:new THREE.Vector3((r()-.5)*2,1+r()*2,(r()-.5)*2),
+   spin:new THREE.Vector3((r()-.5)*1.5,0,(r()-.5)*1.5),
+   h,moving:false,settled:true,wasInitiallySettled:true});
+  job.step++;
+  if(job.step<job.descriptions.length){this.chunkBuildQueue.push(job);return;}
+  this.preparingChunks.delete(lot.index);
+  const effect={root:job.root,pieces:job.pieces,stage:3,age:0,animateStarted:false};
+  if(job.activate)this.activatePreparedChunks(lot,effect);
+  else{
+   this.preparedChunks.set(lot.index,effect);
+   const limit=this.mobile?8:16;
+   if(this.preparedChunks.size>limit){
+    const oldest=this.preparedChunks.keys().next().value;
+    this.disposePreparedChunks(this.preparedChunks.get(oldest));
+    this.preparedChunks.delete(oldest);
+   }
+  }
  }
  flash(lot){
   // The actual facade, roof, shop sign and graffiti flash crimson, without
@@ -481,6 +548,7 @@ export class OuterCity{
  // Strong weapons can cross multiple boundaries in one hit; animate all rapidly.
  beginCollapse(lot,previousTier,nextTier,event=null){
   if(nextTier<=previousTier)return;
+  this.prepareChunks(lot);
   let motion=this.collapseAnimations.get(lot.index);
   if(!motion){
    const start=Math.min(previousTier,this.renderedTiers.get(lot.index)??previousTier);
@@ -565,6 +633,9 @@ export class OuterCity{
    effect.root.removeFromParent();
   }
   this.chunks.clear();
+  for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
+  for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
+  this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
   for(const effect of this.debris)this.removeDebris(effect);this.debris=[];
   for(const effect of this.plumes)this.recyclePlume(effect);this.plumes=[];
   // Hit tints are stored in the shared damage texture and have no overlay meshes.
@@ -644,6 +715,9 @@ export class OuterCity{
    }
    if(effect.age>3.5){this.removeDebris(effect);this.debris.splice(i,1);}
   }
+  // At most one expensive sculptural piece is extruded per frame; each
+  // building still gets all original pieces and the same falling animation.
+  this.stepChunkPreparation();
   for(const effect of this.chunks.values()){
    effect.age+=dt;
    for(const part of effect.pieces){
@@ -661,6 +735,9 @@ export class OuterCity{
   }
  }
  dispose(){
+  for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
+  for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
+  this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
   for(const effect of this.debris)this.removeDebris(effect);
   for(const effect of [...this.plumes,...this.plumePool])disposePlume(effect);
   for(const templates of this.scrapPrefabs.values())for(const template of templates)
