@@ -54,7 +54,7 @@ test('continuous flames and dense smoke peak at 10% HP instead of only spawning 
  const root=new THREE.Group(),resources={flame:new THREE.Texture(),smoke:new THREE.Texture()};
  const fire=createPersistentBuildingFire(root,lot,resources,false);
  assert.equal(root.children.length,1);
- assert.deepEqual(fire.layers.map(x=>x.count),[72,122]);
+ assert.deepEqual(fire.layers.map(x=>x.count),[72,122,62]);
  assert.equal(buildingFireIntensity(CITY_MAX_HP),0);
  assert.ok(buildingFireIntensity(CITY_MAX_HP*.8)<buildingFireIntensity(CITY_MAX_HP*.4));
  assert.equal(buildingFireIntensity(CITY_MAX_HP*.1),1);
@@ -68,6 +68,8 @@ test('continuous flames and dense smoke peak at 10% HP instead of only spawning 
  assert.ok(fire.layers[0].uniforms.uOpacity.value>0);
  assert.ok(fire.layers[1].uniforms.uOpacity.value>0);
  assert.equal(fire.layers[0].points.material.depthWrite,false);
+ assert.equal(fire.layers[2].type,'ember');
+ assert.ok(fire.layers[2].uniforms.uOpacity.value>0,'hot sparks grow with flames');
  disposePersistentBuildingFire(fire);
  resources.flame.dispose();resources.smoke.dispose();
  assert.equal(root.children.length,0);
