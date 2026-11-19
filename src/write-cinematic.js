@@ -143,6 +143,7 @@ export class WriteCinematic{
     const result=await this.send('plant',payload,{throwOnError:true});
     if(!result?.plant)throw new Error('Server did not confirm message');
     reveal.plantId=result.plant.id;
+    reveal.confirmedAt=performance.now();
     reveal.position=[...result.plant.position];
     if(this.unsavedMessage?.requestId===payload.requestId)this.unsavedMessage=null;
     return result.plant;
@@ -177,7 +178,9 @@ export class WriteCinematic{
   const radius=4.2-t*.16;
   c.camera.position.set(center.x+Math.sin(angle)*radius,center.y+1.6+Math.sin(t*.8)*.18,center.z+Math.cos(angle)*radius);
   c.camera.lookAt(center.x,center.y+.8,center.z);
-  if(t>=duration/1000)this.finish();
+  // Under high scene load or slow network acknowledgements, do not retire the
+  // reveal before the just-persisted plant has been shown for at least 3s.
+  if(t>=duration/1000&&(!this.reveal.plantId||performance.now()-(this.reveal.confirmedAt||this.reveal.started)>=3000))this.finish();
  }
  update(){
   if(!this.active)return;
