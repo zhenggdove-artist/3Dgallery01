@@ -2,14 +2,23 @@ import * as THREE from 'three';
 import {meleeFamilies} from './reletter/melee-motion.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
 import {ENEMY_RADIUS,ENEMY_HEIGHT} from './shared/island-combat.js';
-const ray=new THREE.Raycaster(),center=new THREE.Vector2(),box=new THREE.Box3(),sphere=new THREE.Sphere(),hit=new THREE.Vector3(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+export const AIM_RAISE_PX=5;
+// NDC Y is positive upward. Both the reticle and ALL weapon rays share this
+// five-CSS-pixel offset, including iPhone-sized viewports and sniper optics.
+export const crosshairNdc=(height=globalThis.innerHeight||1)=>new THREE.Vector2(0,2*AIM_RAISE_PX/Math.max(1,height));
+const ray=new THREE.Raycaster(),box=new THREE.Box3(),sphere=new THREE.Sphere(),hit=new THREE.Vector3(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+export function cameraAimDirection(camera){
+ camera.updateMatrixWorld();
+ ray.setFromCamera(crosshairNdc(),camera);
+ return ray.ray.direction.clone();
+}
 // RELETTER cameraElevationAim/rangedAim: camera parallax supplies elevation,
 // character heading supplies yaw; melee stays level. Only host targets differ.
 export function attackDirection(controller,camera,arena,roots,item,charge,muzzle=null){
  const heading=controller.root.rotation.y;
  if(meleeFamilies.includes(item.family)&&!(item.exotic&&charge>=1))return [Math.sin(heading),0,Math.cos(heading)];
- if(item.firstPerson)return [-Math.sin(controller.yaw)*Math.cos(controller.pitch),-Math.sin(controller.pitch),-Math.cos(controller.yaw)*Math.cos(controller.pitch)];
- const origin=muzzle?.isVector3?muzzle.clone():controller.root.position.clone().add(new THREE.Vector3(0,1,0));camera.updateMatrixWorld();ray.setFromCamera(center,camera);ray.far=250;
+ if(item.firstPerson)return cameraAimDirection(camera).toArray();
+ const origin=muzzle?.isVector3?muzzle.clone():controller.root.position.clone().add(new THREE.Vector3(0,1,0));camera.updateMatrixWorld();ray.setFromCamera(crosshairNdc(),camera);ray.far=250;
  // Use actual screen-centre ray intersections, then project FROM the live staff tip.
  // A 150m guess made nearby targets and raised staffs fire below the crosshair.
  const minDistance=camera.position.distanceTo(origin)*.3,point=ray.ray.at(150,new THREE.Vector3());let nearest=150;
