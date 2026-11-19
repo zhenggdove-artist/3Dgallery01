@@ -675,3 +675,16 @@ body.panel-wing-shop .wing-design-support .wing-gift-action{
  background:linear-gradient(110deg,#ffe5a2,#e98cd1)!important;color:#2b194a!important;
  font-size:16px;padding:12px;display:block;margin:15px auto;
 }
+
+/* Minimal all-English supporter screen; no merchant/developer diagnostics. */
+body.panel-wing-shop .wing-design-support{max-width:560px;min-height:100%;display:flex;flex-direction:column;gap:16px}
+body.panel-wing-shop .wing-design-support .wing-support-controls{width:100%;gap:12px}
+body.panel-wing-shop .wing-design-support .wing-shop-hero{padding:clamp(18px,4vw,32px);text-align:center}
+body.panel-wing-shop .wing-design-support .wing-shop-hero h3{font-size:clamp(23px,5vw,32px);line-height:1.15}
+body.panel-wing-shop .wing-design-support .wing-shop-hero p{font-size:15px;line-height:1.55;margin:12px 0 0}
+body.panel-wing-shop .wing-design-support .wing-payment-preview{display:grid;gap:10px;padding:20px;background:#ececec}
+body.panel-wing-shop .wing-design-support .wing-support-pay{min-height:54px!important;background:#000080!important;color:white!important;font:bold 17px Tahoma,Arial,sans-serif;letter-spacing:.03em;border:2px outset #aaa!important}
+body.panel-wing-shop .wing-design-support .wing-support-pay:disabled{background:#a5a5a5!important;color:#333!important;opacity:1}
+body.panel-wing-shop .wing-design-support .wing-payment-hint{text-align:center;color:#444;font:12px/1.35 Tahoma,Arial,sans-serif}
+body.panel-wing-shop .wing-design-support .wing-gift-action{min-height:48px!important;background:#fff0ff!important;font:bold 14px Tahoma,Arial,sans-serif}
+body.panel-wing-shop .wing-design-support .y2k-taskbar{margin-top:auto}
