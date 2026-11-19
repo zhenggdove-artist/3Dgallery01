@@ -175,8 +175,10 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Boot game assets
-        run: npm run start > /tmp/temple-beam-static.log 2>&1 &
+      - name: Boot isolated backend and game assets
+        run: |
+          npx wrangler dev --local --port 8787 > /tmp/temple-beam-worker.log 2>&1 &
+          npm run start > /tmp/temple-beam-static.log 2>&1 &
       - name: Probe actual GPU pixels of original 00GameDevs beams
         run: node tests/native-beam-visibility-browser.mjs
       - if: always()
@@ -186,4 +188,6 @@ jobs:
           path: output/beam-visibility
           if-no-files-found: ignore
       - if: failure()
-        run: cat /tmp/temple-beam-static.log || true
+        run: |
+          cat /tmp/temple-beam-static.log || true
+          cat /tmp/temple-beam-worker.log || true
