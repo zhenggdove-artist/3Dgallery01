@@ -151,6 +151,31 @@ export function cityDamageTier(hp,maxHp=CITY_MAX_HP){
  if(!Number.isFinite(hp)||!Number.isFinite(maxHp)||maxHp<=0)return 0;
  return Math.max(0,Math.min(10,Math.floor((maxHp-hp)*10/maxHp+1e-8)));
 }
+// Ten deterministic, irregular structural sections per house. Identical
+// local-space fracture positions are used by the building skin and falling
+// architectural pieces; no random geometry is generated on the hit frame.
+const fractureProfiles=new WeakMap();
+export function cityFractureProfiles(lot){
+ let profiles=fractureProfiles.get(lot);
+ if(profiles)return profiles;
+ const rand=cityRandom((lot.index*73856093+82713)>>>0),walls=['front','right','back','left'];
+ profiles=Array.from({length:10},(_,i)=>{
+  const wall=walls[(i*3+lot.index)%4],width=lot.width*(.23+rand()*.21);
+  const height=lot.height*(.13+rand()*.16);
+  const localY=Math.min(lot.height-height*.58,Math.max(height*.65,
+   lot.height*(.26+rand()*.63)));
+  const localX=(rand()-.5)*(lot.width-width*.74);
+  const localZ=(rand()-.5)*(lot.depth-width*.5);
+  return {tier:i+1,wall,width,height,depth:.22+rand()*.48,
+   localX,localY,localZ,seed:rand()*1000,
+   tilt:(rand()-.5)*.42};
+ });
+ fractureProfiles.set(lot,profiles);
+ return profiles;
+}
+export function cityFractureProfile(lot,tier){
+ return cityFractureProfiles(lot)[Math.max(0,Math.min(9,Math.floor(tier)-1))];
+}
 export function cityCollapseProgress(tier){
  const t=Math.max(0,Math.min(1,tier/10));
  return 1-Math.pow(1-t,1.2);
@@ -187,9 +212,33 @@ export function cityCollapsePosition(lot,x,y,z,tier,isRoof=false){
  const compression=.08+.075*(.5+.5*noise);
  const ruinedY=isRoof?cityRoofHeight(lot,3)+(y-(lot.height+.13))*.16:
   y<=survivor?y:survivor+rise*compression;
- return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*amount,
-  y+(ruinedY-y)*amount,
-  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*amount];
+ const [lx,lz]=cityLocal(lot,x,z);
+ let localizedDrop=0,sideShear=0;
+ // Irregular impact cells tear free independently. Unlike a uniform floor
+ // squeeze this produces scattered gouges, diagonal shears and jagged edges
+ // before the final low solid ruin. Rooftop center stays aligned with the
+ // authoritative collider (the original exact center support contract).
+ const profiles=cityFractureProfiles(lot);
+ for(let i=0;i<profiles.length&&i<tier;i++){
+  const p=profiles[i],progress=Math.min(1,Math.max(0,tier-i));
+  const dx=(lx-p.localX)/(p.width*.85);
+  const dy=(y-p.localY)/(p.height*1.2);
+  const dz=(lz-p.localZ)/(p.width*.95);
+  const proximity=Math.max(0,1-Math.sqrt(dx*dx+dy*dy+dz*dz)*.64);
+  const fracture=progress*proximity*proximity;
+  localizedDrop+=fracture*(.17+.07*Math.sin(p.seed))*p.height;
+  sideShear+=fracture*p.tilt*.44;
+ }
+ const transient=Math.sin(Math.PI*amount);
+ const roofRim=isRoof?Math.min(1,Math.hypot(lx/Math.max(1,lot.width),lz/Math.max(1,lot.depth))*2):1;
+ const sheer=sideShear*transient*factor;
+ // Individual facades and corners fold at different speeds. Only the roof's
+ // support surface preserves its exact deterministic collision height.
+ const skew=(Math.sin(lx*.64+lot.index*.91+y*.42)+Math.cos(lz*.83-y*.57+lot.index*.17))*.5;
+ const unevenAmount=isRoof?amount:Math.max(0,Math.min(1,amount*(1+.72*skew*transient)));
+ return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*unevenAmount+sheer,
+  y+(ruinedY-y)*unevenAmount-Math.min(lot.height*.18,localizedDrop)*transient*roofRim,
+  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*unevenAmount-sheer*.7];
 }
 function cityFootprint(lot,x,z,margin=0){
  const dx=x-lot.x,dz=z-lot.z;
