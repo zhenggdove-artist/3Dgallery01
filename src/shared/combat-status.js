@@ -50,8 +50,13 @@ export function applyElementalHit(target,source,weapon,now,scale=1){
  const family=weapon.family;
  if(family==='lightning'||['electric','lightning','thunder'].includes(weapon.element))
    return put('paralysis',1500,0,5000);
- if(family==='ice'){delete e.slow;return put('freeze',1000,0,5000);}
- if(['planter','petal','palm','whip'].includes(family)&&!weapon.exotic)return put('root',1000,0,5000);
+ if(family==='ice'){delete e.slow;return put('freeze',3000,0,5000);}
+ // Coconut palm ultimate binds legs for three seconds, independently
+  // rate-limited to once per six seconds. The player can still aim and attack.
+  if(family==='palm'&&weapon.id?.startsWith('palm-')&&weapon.ultimateHit)
+   return put('root',3000,0,6000);
+  if(['planter','petal','palm','whip'].includes(family)&&!weapon.exotic)
+   return put('root',family==='palm'?3000:1000,0,family==='palm'?6000:5000);
  if(family==='fire'||weapon.element==='fire'){
   if(!e.burn||e.burn.until<=now)return put('burn',5000,1);
   return 'burn';
