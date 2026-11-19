@@ -42,17 +42,17 @@ export function meleeTrailPattern(family,combo){
  }
 }
 export const meleeFamilies=['saber','whip','swatter','pan','planter','palm'];
-export const meleeDuration=(family,combo)=> (combo===6?.65:.3)*({swatter:.85,pan:1.1,planter:1.18,palm:1.25,whip:1.05}[family]||1);
+export const meleeDuration=(family,combo)=> (combo===6?.57:.24)*({swatter:.85,pan:1.04,planter:1.08,palm:1.12,whip:.96}[family]||1);
 const smooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
 const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
 export function sampleMeleePose(family,combo,age){
  combo=Math.max(0,Math.min(6,combo||0));const duration=meleeDuration(family,combo),t=Math.max(0,Math.min(1,age/duration)),[wind,contact]=(familyMoves[family]||moves)[combo];
- const heavy=['pan','planter','palm'].includes(family),windEnd=({saber:.22,whip:.3,swatter:.16,pan:.28,planter:.32,palm:.34}[family]||.24),contactEnd=({saber:.44,whip:.52,swatter:.36,pan:.5,planter:.56,palm:.58}[family]||.46);
+ const heavy=['pan','planter','palm'].includes(family),windEnd=({saber:.22,whip:.22,swatter:.12,pan:.20,planter:.23,palm:.24}[family]||.24),contactEnd=({saber:.44,whip:.42,swatter:.31,pan:.40,planter:.44,palm:.45}[family]||.46);
  let a,b,k,phase;
  if(t<windEnd){a={};b=wind;k=smooth(t/windEnd);phase='windup';}
  else if(t<contactEnd){a=wind;b=contact;k=smooth((t-windEnd)/(contactEnd-windEnd));phase='strike';}
- else if(t<.69){a=contact;b=contact;k=0;phase='follow-through';}
- else{a=contact;b={};k=smooth((t-.69)/.31);phase='recovery';}
+ else if(t<.60){a=contact;b=contact;k=0;phase='follow-through';}
+ else{a=contact;b={};k=smooth((t-.60)/.40);phase='recovery';}
  const bones={};for(const key of Object.keys(wind))bones[key]=mix(a[key]||[0,0,0],b[key]||[0,0,0],k);
  const envelope=Math.sin(t*Math.PI),drive=Math.sin(smooth((t-windEnd)/(1-windEnd))*Math.PI);
  if(family==='whip'){bones.RightArm[1]*=1.3;bones.Spine2[1]*=1.2;bones.RightForeArm[0]+=-Math.sin(t*Math.PI*4)*.3*envelope;}
