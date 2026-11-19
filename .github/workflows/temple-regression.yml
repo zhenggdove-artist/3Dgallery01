@@ -164,3 +164,26 @@ jobs:
         run: |
           cat /tmp/temple-mobile-worker.log || true
           cat /tmp/temple-mobile-static.log || true
+
+  native-beam-visibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Boot game assets
+        run: npm run start > /tmp/temple-beam-static.log 2>&1 &
+      - name: Probe actual GPU pixels of original 00GameDevs beams
+        run: node tests/native-beam-visibility-browser.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-beam-diagnostic
+          path: output/beam-visibility
+          if-no-files-found: ignore
+      - if: failure()
+        run: cat /tmp/temple-beam-static.log || true
