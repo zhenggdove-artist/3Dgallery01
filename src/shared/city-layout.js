@@ -181,8 +181,9 @@ export function cityRoofHeightAtHp(lot,hp=CITY_MAX_HP,maxHp=CITY_MAX_HP){
 // only moves existing vertices: zero additional meshes, particles, polygons
 // or GPU materials, including across all 432 houses.
 const cityCornerRotations=new WeakMap();
+const NO_CITY_CORNER_CUT=Object.freeze([0,0,0]);
 export function cityAngularCornerCut(lot,x,y,z,tier,isRoof=false){
- if(tier<=0)return [0,0,0];
+ if(tier<=0)return NO_CITY_CORNER_CUT;
  // A hit can animate thousands of the existing batched vertices. Cache the
  // building's yaw once instead of calling trig functions twice per vertex.
  let rotation=cityCornerRotations.get(lot);
@@ -193,9 +194,9 @@ export function cityAngularCornerCut(lot,x,y,z,tier,isRoof=false){
  const az=Math.abs(lz)/Math.max(.1,lot.depth*.5);
  // ax+az=1 marks the inner diagonal boundary of a corner notch.
  const diagonal=Math.max(0,Math.min(1,(ax+az-1.05)/.95));
- if(diagonal<=0)return [0,0,0];
+ if(diagonal<=0)return NO_CITY_CORNER_CUT;
  const upper=Math.max(0,Math.min(1,(y-lot.height*.34)/Math.max(.2,lot.height*.66)));
- if(upper<=0)return [0,0,0];
+ if(upper<=0)return NO_CITY_CORNER_CUT;
  const sx=lx>=0?1:-1,sz=lz>=0?1:-1;
  const corner=(sx<0?1:0)+(sz<0?2:0);
  const first=1+((corner-(lot.index&3)+4)&3);
@@ -204,7 +205,7 @@ export function cityAngularCornerCut(lot,x,y,z,tier,isRoof=false){
  const hits=Math.max(0,Math.min(1,tier-first+1))
   +Math.max(0,Math.min(1,tier-first-3))
   +Math.max(0,Math.min(1,tier-first-7));
- if(hits<=0)return [0,0,0];
+ if(hits<=0)return NO_CITY_CORNER_CUT;
  const cut=diagonal*upper*Math.min(1,hits*.48);
  // Existing angled facades fold inwards rather than constructing/shooting
  // new 3D polygon objects. Roof deck remains near its solid support plane.
