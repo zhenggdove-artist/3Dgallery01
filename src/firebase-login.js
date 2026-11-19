@@ -7,7 +7,7 @@ const completeConfig=cfg=>!!(cfg?.apiKey&&cfg?.appId&&cfg?.projectId&&cfg?.authD
 
 export function firebaseConfigured(config){return completeConfig(config);}
 export async function prepareFirebase(config){
- if(!completeConfig(config))throw Error('Firebase 專案尚未設定完成');
+ if(!completeConfig(config))throw Error('Firebase project configuration is incomplete');
  if(pending)return pending;
  pending=(async()=>{
   const [{initializeApp,getApps,getApp},module]=await Promise.all([
@@ -36,12 +36,12 @@ export async function existingGoogleToken(){
 export async function signInWithGoogle(){
  // prepareFirebase must finish before a click is offered so popup open keeps
  // the caller's direct user-gesture authorization on mobile Safari.
- if(!auth||!authModule)throw Error('Firebase 登入模組尚未準備完成');
+ if(!auth||!authModule)throw Error('Google sign-in is not ready');
  const provider=new authModule.GoogleAuthProvider();
  provider.setCustomParameters({prompt:'select_account'});
  const result=await authModule.signInWithPopup(auth,provider);
  if(!result.user.providerData.some(p=>p.providerId==='google.com'))
-  throw Error('只能使用 Google 帳號登入');
+  throw Error('Sign in with a Google account');
  return result.user.getIdToken();
 }
 export async function signOutGoogle(){

@@ -204,16 +204,16 @@ async function initializeGoogleAuth(){
     network.setBackend(window.TEMPLE_CONFIG.backendUrl);
     const config=await network.firebaseConfig();
     if(!config.enabled){
-      ui.setFirebaseLoginStatus(false,'Firebase 尚未連結。需在 Cloudflare 設定 Firebase 專案資訊。');
+      ui.setFirebaseLoginStatus(false,'Google sign-in is unavailable: Firebase project settings are missing.');
       return;
     }
     await prepareFirebase(config);
-    ui.setFirebaseLoginStatus(true,'使用 Google 帳號登入。下次將自動恢復角色。');
+    ui.setFirebaseLoginStatus(true,'Sign in with Google. Your character will be restored automatically next time.');
     const remembered=await existingGoogleToken();
     if(remembered&&!joined)await completeFirebaseLogin(remembered);
   }catch(error){
     console.warn('Firebase Google login setup:',error);
-    ui.setFirebaseLoginStatus(false,'Google 登入初始化失敗：'+(error?.message||'Unknown error'));
+    ui.setFirebaseLoginStatus(false,'Google sign-in initialization failed: '+(error?.message||'Unknown error'));
   }
 }
 ui.addEventListener('firebase-login',async()=>{
@@ -223,9 +223,9 @@ ui.addEventListener('firebase-login',async()=>{
     const token=await signInWithGoogle();
     await completeFirebaseLogin(token);
   }catch(error){
-    const message=error?.code==='auth/popup-closed-by-user'?'Google 登入視窗已關閉':
-      error?.code==='auth/popup-blocked'?'請允許瀏覽器開啟 Google 登入視窗':
-      error?.message||'Google 登入失敗';
+    const message=error?.code==='auth/popup-closed-by-user'?'Google sign-in window was closed':
+      error?.code==='auth/popup-blocked'?'Allow your browser to open the Google sign-in window':
+      error?.message||'Google sign-in failed';
     ui.joinError(message);
     ui.setFirebaseLoginStatus(true,message);
   }

@@ -28,11 +28,11 @@ test('a sold artwork becomes pickable after respawn, despite that player exhaust
  assert.equal(released.error,undefined,'artwork sold earlier must remain throwable');
 });
 
-test('expanded map doubles server radius and keeps the grass within the old radius',()=>{
- assert.equal(ARENA_RADIUS,184);
+test('sand district doubles usable surface area while the central grass remains fixed',()=>{
+ assert.equal(ARENA_RADIUS,244);
  assert.equal(CITY_INNER_RADIUS,92);
- assert.equal(CITY_OUTER_RADIUS,184);
- assert.match(source('src/grass-field.js'),/new THREE\.CircleGeometry\(ARENA_RADIUS\/2,128\)/);
+ assert.ok(Math.abs((CITY_OUTER_RADIUS**2-CITY_INNER_RADIUS**2)/(184**2-92**2)-2)<1e-9);
+ assert.match(source('src/grass-field.js'),/new THREE\.CircleGeometry\(CITY_INNER_RADIUS,128\)/);
  assert.match(source('src/arena-view.js'),/this\.outerCity=new OuterCity/);
  assert.match(source('src/arena-view.js'),/this\.outerCity\?\.blocked\(x,z,y\)/);
 });
@@ -40,12 +40,12 @@ test('expanded map doubles server radius and keeps the grass within the old radi
 test('shopfront city is deterministic, varied, bilingual, non-repeating and mobile-safe',()=>{
  const a=cityLots(),b=cityLots(),mobile=cityLots(912744,48);
  assert.deepEqual(a,b);
- assert.equal(a.length,72);assert.equal(mobile.length,48);
+ assert.equal(a.length,432);assert.equal(mobile.length,48);
  assert.ok(CITY_SHOP_STYLES.length>=12);
  assert.equal(new Set(a.map(l=>l.shopName)).size,a.length);
  assert.ok(a.every(l=>l.shopName&&l.enName&&Math.hypot(l.x,l.z)>CITY_INNER_RADIUS));
  assert.ok(a.every(l=>Math.hypot(l.x,l.z)+l.depth/2<CITY_OUTER_RADIUS));
- assert.deepEqual([...new Set(mobile.map(l=>l.band))].sort(),[0,1,2]);
+ assert.deepEqual([...new Set(a.map(l=>l.band))].sort(),[0,1,2,3,4,5,6]);
  const render=source('src/outer-city.js');
  assert.match(render,/Corrugated|corrugated|corrugate/);
  assert.match(render,/Bent dumpster|Open foul dumpsters/);

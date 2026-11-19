@@ -52,12 +52,12 @@ export class TempleUI extends EventTarget{
     this.entry.addEventListener('click',event=>{
       const button=event.target.closest('[data-google-login]');
       if(!button||button.disabled)return;
-      $('account-login-status').textContent='正在開啟 Google 登入視窗…';
+      $('account-login-status').textContent='Opening Google sign-in…';
       this.emit('firebase-login');
     });
     this.form.addEventListener('submit',event=>{
       event.preventDefault();$('entry-error').textContent='';
-      if(!this.firebaseIdToken)return this.joinError('請先使用 Google 帳號登入');
+      if(!this.firebaseIdToken)return this.joinError('Sign in with Google first');
       this.emit('join',{name:$('player-name').value.trim(),color:$('clothing-color').value,
         firebaseIdToken:this.firebaseIdToken,backendUrl:window.TEMPLE_CONFIG.backendUrl});
     });
@@ -98,13 +98,13 @@ export class TempleUI extends EventTarget{
     const button=this.entry.querySelector('[data-google-login]');
     if(button)button.disabled=!enabled;
     $('account-login-status').textContent=message||(
-      enabled?'使用 Google 帳號登入，角色進度自動儲存。':
-      '尚未設定 Firebase 專案。Google 登入暫未開放。'
+      enabled?'Sign in with Google. Character progress is saved automatically.':
+      'Google sign-in is currently unavailable. Firebase configuration is incomplete.'
     );
   }
   selectFirebaseAccount(token){
     this.firebaseIdToken=token;
-    $('account-login-status').textContent='Google 驗證成功。設定角色名稱與服裝顏色。';
+    $('account-login-status').textContent='Google verified. Set your character name and clothing color.';
     this.form.hidden=false;
     $('player-name').required=true;
     $('player-name').focus();
@@ -291,7 +291,7 @@ export class TempleUI extends EventTarget{
    const status=this.wingPaymentStatus;
    const ready=status?.checkoutEnabled===true;
    this.content.innerHTML=`<section class="wing-shop-panel wing-support-app wing-design-support">
-    <div class="y2k-shell-header"><div class="y2k-shell-brand"><span class="y2k-shell-diamond">◇</span><div><strong>GGTEMPLE <em>98</em></strong><small>SUPPORT</small></div></div><div class="y2k-shell-lights"><span>ONLINE ●</span></div></div>
+    <div class="y2k-shell-header"><div class="y2k-shell-brand"><span class="y2k-shell-diamond">◇</span><div><strong>GGTEMPLE</strong><small>SUPPORT</small></div></div><div class="y2k-shell-lights"><span>ONLINE ●</span></div></div>
     <div class="wing-support-controls">
      <header class="wing-shop-hero">
       <small>GGTEMPLE · SUPPORT</small>
