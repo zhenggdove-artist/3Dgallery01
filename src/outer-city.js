@@ -87,6 +87,8 @@ function batchGeometry(lots,mobile){
     if((k+lot.index)%2===0)box(lot,x,y-.1,frontage+.18,.065,.75,.1,lot.trim);
    }
   }
+  // Retail fronts remain intact when an upstairs window is knocked free.
+  category='storefront';
   // Retail fronts retain distinctive bilingual shop signs and equipment.
   box(lot,0,1.1,frontage+.17,w*.83,1.8,.18,lot.trim);
   box(lot,-w*.24,.96,frontage+.32,w*.27,1.5,.06,'#303c3a');
@@ -96,11 +98,20 @@ function batchGeometry(lots,mobile){
   for(let k=0;k<(mobile?4:8);k++){
    box(lot,-w*.44+k*w*.12,2.52,frontage+1.04,w*.11,.12,.24,k%2?lot.detail:lot.style[3]);
   }
+  category='roof-clutter';
   for(let k=0;k<(mobile?2:5);k++){
    box(lot,(r()-.5)*w,h+.12+r()*.15,(r()-.5)*d,.18,.08,1+r()*3,scraps[(lot.index+k)%scraps.length]);
   }
   category='sheets-roof';
   box(lot,0,h+.06,0,w+.4,.14,d+.36,lot.roof);
+  category='pipes';
+  for(const side of [-1,1]){
+   const pipeX=side*(w/2-.42);
+   box(lot,pipeX,h*.48,front+.24,.10,Math.max(.65,h*.87),.11,'#777b78');
+   box(lot,pipeX+side*.19,h*.89,front+.26,.43,.10,.14,'#777b78');
+   for(let clampIndex=0;clampIndex<3;clampIndex++)
+    box(lot,pipeX,(clampIndex+.5)*h/3,front+.32,.20,.055,.17,'#4d534f');
+  }
   category='masonry';
   // Material-specific relief (timber planks, irregular stone and brick courses)
   // together with broken cladding, exposed supports and ripped-out shutters.
