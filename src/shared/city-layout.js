@@ -81,7 +81,65 @@ export function cityLots(seed=912744,limit=CITY_BUILDING_COUNT){
     roof:['#6d7475','#9f8e76','#b2a499','#a56854','#687676','#b6b3a6'][index%6]});
   }
  }
+ // The ring counts and footprints are unchanged, but houses must not form
+ // evenly spaced radial rows. Repack them into compact, uneven blocks with
+ // touching side walls and generous, irregular breaks between neighbourhoods.
+ // Do this in SHARED data so meshes, player collision and the Worker agree.
+ repackIntoOrganicBlocks(lots,seed);
  return lots.slice(0,Math.max(0,Math.min(CITY_BUILDING_COUNT,limit)));
+}
+// Lay out each ring as several groups of adjoining buildings instead of an
+// equidistant polar grid. Gap widths are measured in world metres, not angles:
+// within a block the walls almost meet (0.04–0.28 m), while street gaps take
+// up the remaining circumference. All random decisions are seeded; the
+// client and authoritative server must generate IDENTICAL footprints.
+function repackIntoOrganicBlocks(lots,seed){
+ const rand=cityRandom((seed^0x65c91e3b)>>>0);
+ let start=0;
+ for(let band=0;band<ringCounts.length;band++){
+  const count=ringCounts[band],ring=lots.slice(start,start+count),radius=ringRadii[band];
+  const gapAfter=new Array(count).fill(null),groups=[],streetEnds=[];
+  for(let first=0;first<count;){
+   const roll=rand();
+   const size=Math.min(count-first,roll<.13?1:2+Math.floor(rand()*5));
+   const group={first,last:first+size-1};
+   groups.push(group);
+   for(let i=first;i<first+size;i++){
+    ring[i].cluster=band+'-'+(groups.length-1);
+    if(i<group.last)gapAfter[i]=.04+rand()*.24;
+   }
+   streetEnds.push(group.last);
+   first+=size;
+  }
+  const circumference=2*Math.PI*radius;
+  const buildings=ring.reduce((sum,lot)=>sum+lot.width,0);
+  const internalGaps=gapAfter.reduce((sum,gap)=>sum+(gap??0),0);
+  const streetSpace=Math.max(0,circumference-buildings-internalGaps);
+  const weights=streetEnds.map((_,index)=>.45+rand()*1.5+(index%4===0?.85:0));
+  const totalWeight=weights.reduce((sum,value)=>sum+value,0);
+  streetEnds.forEach((index,i)=>{gapAfter[index]=streetSpace*weights[i]/totalWeight;});
+  let cursor=rand()*circumference;
+  const angles=[];
+  for(let i=0;i<count;i++){
+   angles[i]=(cursor+ring[i].width/2)/radius;
+   cursor+=ring[i].width+gapAfter[i];
+  }
+  // Share an orientation within each block to create parallel, nearly
+  // continuous sidewalls; vary setbacks subtly for an accumulated-city feel.
+  for(const group of groups){
+   const middle=(angles[group.first]+angles[group.last])*.5;
+   const yaw=-Math.PI/2-middle+(rand()-.5)*.045;
+   const setback=(rand()-.5)*1.7;
+   for(let i=group.first;i<=group.last;i++){
+    const lot=ring[i],angle=angles[i],r=radius+setback+(rand()-.5)*.45;
+    lot.angle=angle%(2*Math.PI);
+    lot.x=Math.cos(angle)*r;
+    lot.z=Math.sin(angle)*r;
+    lot.yaw=yaw+(rand()-.5)*.018;
+   }
+  }
+  start+=count;
+ }
 }
 export const CITY_LOTS=cityLots();
 export const CITY_MAX_HP=240;
