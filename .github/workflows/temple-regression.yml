@@ -18,6 +18,17 @@ on:
   workflow_dispatch:
 
 jobs:
+  firebase-login-config-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify production Google Auth config, CORS and profile readiness
+        run: node tests/firebase-live-config.mjs
+
   unit-and-syntax:
     runs-on: ubuntu-latest
     timeout-minutes: 15
