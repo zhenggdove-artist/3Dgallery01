@@ -34,6 +34,7 @@ import {uploadMedia} from './media-ui.js';
 import {GunController} from './gun-controller.js';
 import {Minimap} from './minimap.js';
 import {CityWallPainter} from './city-wall-painter.js';
+import {rebaseRejectedPose,shouldIgnoreRejection} from './shared/state-reconciliation.js';
 import {createDamageNumbers} from './reletter/damage-numbers.js';
 
 const canvas=document.getElementById('game'),coarse=matchMedia('(pointer:coarse)').matches,settings=loadEditorSettings();
@@ -252,7 +253,17 @@ function acceptWorldView(next){
  registerCustomWings(wings);world={...next,customWings:wings};syncWorld();return true;
 }
 network.addEventListener('welcome',event=>{const data=event.detail;self={...self,...data.self};players=data.players;syncPlayers();acceptWorldView(data.world);});
-network.addEventListener('world',event=>{acceptWorldView(event.detail);});
+// Coalesce high-frequency Worker snapshots: a busy attack can deliver many
+// world packets between animation frames. Only the freshest revision needs a
+// heavyweight UI/scene sync; the socket keeps receiving without blocking input.
+let queuedWorld=null;
+network.addEventListener('world',event=>{
+ const next=event.detail;
+ if(!next)return;
+ if(!queuedWorld||!Number.isFinite(queuedWorld.revision)||
+  !Number.isFinite(next.revision)||next.revision>=queuedWorld.revision)
+  queuedWorld=next;
+});
 network.addEventListener('wing-catalog',event=>{
  const wings=Array.isArray(event.detail?.wings)?event.detail.wings:[];
  registerCustomWings(wings);
@@ -268,16 +279,41 @@ network.addEventListener('attack',event=>showAttack(event.detail));
 network.addEventListener('channel-stop',event=>{const root=roots.get(event.detail.owner);if(root){arena.presentation.vfx.stopChannel(root);root.userData.staffCastingUntil=0;}});
 network.addEventListener('structure-destroyed',event=>arena.showStructureBreak(event.detail));
 network.addEventListener('structure-hit',event=>arena.showStructureHit(event.detail));
+network.addEventListener('state-ack',event=>{
+ const ack=event.detail||{};
+ // Stun, root and server-scripted movement legitimately override prediction;
+ // ordinary 3-decimal state rounding is below the correction threshold.
+ if(!ack.corrected||!controller||!Array.isArray(ack.position))return;
+ const position=controller.root.position;
+ if(position.distanceToSquared(new THREE.Vector3(...ack.position))>1){
+  controller.teleport(ack.position);
+  network.lastCorrectedSequence=Math.max(network.lastCorrectedSequence,ack.seq||0);
+ }
+});
 network.addEventListener('state-rejected',event=>{
-  const rejection=event.detail||{};
-  if(rejection.state?.position&&controller){
-    const accepted=rejection.state.position,delta=controller.root.position.distanceTo(new THREE.Vector3(...accepted));
-    if(delta>.6){controller.teleport(accepted);controller.grounded=Math.abs(accepted[1]-arena.groundHeight(accepted[0],accepted[2],accepted[1]))<.5;}
-    // Server is the source of truth. Rebase subsequent predictions instead
-    // of repeatedly sending the same impossible displacement.
-    network.lastStateAt=0;
+ const rejection=event.detail||{},seq=Number(rejection.seq)||0;
+ if(shouldIgnoreRejection(seq,network.lastAcceptedSequence,network.lastCorrectedSequence))return;
+ if(rejection.state?.position&&controller){
+  const accepted=rejection.state.position,sent=network.sentStates.get(seq);
+  const current=controller.root.position;
+  const recovered=sent&&rejection.error!=='Invalid position'?
+   rebaseRejectedPose(accepted,sent.position,current.toArray(),(x,z,y)=>arena.blocked(x,z,y)):
+   accepted;
+  const corrected=recovered||accepted;
+  const dx=current.x-corrected[0],dy=current.y-corrected[1],dz=current.z-corrected[2];
+  // A correction is authoritative, but movement applied after the rejected
+  // sample must not be wiped away by a delayed reply.
+  if(dx*dx+dy*dy+dz*dz>.36){
+   controller.teleport(corrected);
+   controller.grounded=Math.abs(corrected[1]-arena.groundHeight(
+    corrected[0],corrected[2],corrected[1]))<.5;
   }
-  if(rejection.error!=='Movement rejected'&&performance.now()-toastErrorAt>1200){toastErrorAt=performance.now();ui.toast(rejection.error||'STATE REJECTED');}
+  network.lastCorrectedSequence=Math.max(network.lastCorrectedSequence,seq);
+  network.lastStateAt=0;
+ }
+ if(rejection.error!=='Movement rejected'&&performance.now()-toastErrorAt>1200){
+  toastErrorAt=performance.now();ui.toast(rejection.error||'STATE REJECTED');
+ }
 });
 network.addEventListener('connection',event=>{if(joined)ui.toast(event.detail.connected?'REALTIME CONNECTED':'RECONNECTING…');});
 
@@ -614,7 +650,8 @@ function performInteract(target=null){if(!controller||self?.role!=='fighter')ret
 
 let screenShakeUntil=0;
 const heardStompLandings=new Set();
-function update(dt,time){
+function update(dt,time,movementDt=dt){
+  if(queuedWorld){const pending=queuedWorld;queuedWorld=null;acceptWorldView(pending);}
   damageNumbers.update(camera,innerWidth,innerHeight);vitalModels?.update(time,world?.profile?.hp||0,world?.profile?.maxHp||100);
   if(joined)minimap.update(time,roots,self?.key,world?.monster,world?.monsters||[]);
   if(joined&&controller){
@@ -628,7 +665,15 @@ function update(dt,time){
    // Desktop channel casts steer the camera with relative mouse movement
     // even without holding a mouse button. Mobile touch remains unchanged.
     controller.channelAiming=!!(attackHeld&&isChannelStaff(itemById(world?.profile?.equipment?.weapon)));
-    writer.update();plantHover.update();controller.castMoveFactor=staffChannel?CAST_MOVE_FACTOR:1;const wasGrounded=controller.grounded;const state=controller.update(dt);if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
+    writer.update();plantHover.update();controller.castMoveFactor=staffChannel?CAST_MOVE_FACTOR:1;const wasGrounded=controller.grounded;
+    // Simulate movement in short physics slices using WALL-CLOCK elapsed
+    // time. The previous global 50ms cap made gameplay run in slow motion
+    // after each shader compile or destruction hitch, then fight the Worker.
+    const simulationDt=Math.max(0,Math.min(.24,movementDt));
+    const substeps=Math.max(1,Math.ceil(simulationDt/(1/40)));
+    let state;
+    for(let step=0;step<substeps;step++)state=controller.update(simulationDt/substeps);
+    if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
   collectorView.update(time,camera);
   statusVisuals.update(dt);
   const castingItem=itemById(world?.profile?.equipment?.weapon);
@@ -706,7 +751,7 @@ let lastFrameFaultAt=0;
 function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.05,elapsed/1000);last=now;if(!assetsReady)return;const started=performance.now();
  // An unexpected model/animation exception cannot prevent the render pass.
  // Individual effects are also contained at source; this is a final guard.
- if(now>externalUntil)try{update(dt,now/1000);}catch(error){
+ if(now>externalUntil)try{update(dt,now/1000,Math.min(.24,elapsed/1000));}catch(error){
   if(now-lastFrameFaultAt>2000){lastFrameFaultAt=now;console.error('Gameplay update fault; render frame preserved',error);}
  }
  const updated=performance.now();refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);const shake=Math.max(0,(screenShakeUntil-performance.now())/350),savedPosition=shake>0?camera.position.clone():null;if(shake>0){camera.position.x+=(Math.random()-.5)*shake*.16;camera.position.y+=(Math.random()-.5)*shake*.10;}vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view),arena.presentation.vfx.numberedEffects.hasFullScreenPostprocess());if(savedPosition)camera.position.copy(savedPosition);const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}}
@@ -722,7 +767,8 @@ function distance2d3(a,b){return Math.hypot(a[0]-b[0],a[2]-b[2]);}
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight,false);});
 addEventListener('pagehide',()=>network.close());
 
-window.render_game_to_text=()=>JSON.stringify({mode:joined?'play':'entry',name:self?.name||null,role:self?.role||null,connected:network.socket?.readyState===WebSocket.OPEN,position:controller?.root.position.toArray().map(n=>+n.toFixed(2))||null,players:players.map(p=>({name:p.name,role:p.role,seat:p.seat})),economy:{wallet:world?.profile?.wallet??null,inventory:world?.profile?.inventory?.length||0,groundDrops:world?.groundDrops?.length||0,platformCoins:Object.values(world?.coins||{}).filter(c=>c.available).length,platformCoinTotal:Object.keys(world?.coins||{}).length},artworks:{total:arena.artworks.size,available:Object.values(world?.artworks||{}).filter(a=>!a.holder&&Date.now()>=(a.availableAt||0)).length},monster:world?.monster?.active?{variant:world.monster.variant,hp:world.monster.hp}:null,render:{fps:+fps.toFixed(1),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,pixelRatio:renderer.getPixelRatio(),gunMode:gun.mode,frameMs:+(frameSamples.reduce((a,b)=>a+b,0)/Math.max(1,frameSamples.length)).toFixed(2)},editorShortcut:'Shift+Y'});
+window.render_game_to_text=()=>JSON.stringify({mode:joined?'play':'entry',name:self?.name||null,role:self?.role||null,connected:network.socket?.readyState===WebSocket.OPEN,position:controller?.root.position.toArray().map(n=>+n.toFixed(2))||null,players:players.map(p=>({name:p.name,role:p.role,seat:p.seat})),economy:{wallet:world?.profile?.wallet??null,inventory:world?.profile?.inventory?.length||0,groundDrops:world?.groundDrops?.length||0,platformCoins:Object.values(world?.coins||{}).filter(c=>c.available).length,platformCoinTotal:Object.keys(world?.coins||{}).length},artworks:{total:arena.artworks.size,available:Object.values(world?.artworks||{}).filter(a=>!a.holder&&Date.now()>=(a.availableAt||0)).length},monster:world?.monster?.active?{variant:world.monster.variant,hp:world.monster.hp}:null,render:{fps:+fps.toFixed(1),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,pixelRatio:renderer.getPixelRatio(),gunMode:gun.mode,frameMs:+(frameSamples.reduce((a,b)=>a+b,0)/Math.max(1,frameSamples.length)).toFixed(2)},movementSync:{sent:network.stateSequence,acked:network.lastAcceptedSequence,
+  rejections:network.rejectionCounts},editorShortcut:'Shift+Y'});
 window.advanceTime=milliseconds=>{externalUntil=performance.now()+120;const steps=Math.ceil(milliseconds/16.6667);for(let i=0;i<steps;i++)update(Math.min(.05,milliseconds/steps/1000),(performance.now()+i*milliseconds/steps)/1000);vhs.render(scene,camera,performance.now()/1000);};
 if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.templeTest={writer,plantHover,audio,bursts,artworkThrow,arena,camera,renderer,ui,gun,editor:artEditor,platformDelete,portraitViewport,controller:()=>controller,network,roots,items:ITEMS,slots:EQUIPPABLE_SLOTS,performanceSamples,vitals:()=>vitalModels,hit:applyHitReaction,channelDebug:()=>({attackHeld,chargeStarted,chargeRequest:!!chargeRequest,staffChannel:staffChannel?{...staffChannel}:null,staffChannelBusy,staffChannelShotAt,enabled:controller?.enabled,role:self?.role,weapon:world?.profile?.equipment?.weapon,joined,panel:ui.panelName,now:performance.now()})};
 import {PLATFORMS} from './shared/arena.js';
