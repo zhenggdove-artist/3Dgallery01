@@ -352,7 +352,8 @@ export class OuterCity{
   this.splinters=new CitySplinterField(this.root,mobile);
   this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
   this.pendingEjections=[];
-  this.deformationBasis=new Map();this.basisFrame=0;
+  this.deformationBasis=new Map();this.basisIdleQueue=[];this.basisIdleHandle=null;
+  this.basisLastNearby=0;this.basisDisposed=false;
   this.cube=new THREE.BoxGeometry(1,1,1);
   // Build detailed chipped plaster, framed glass, reinforcement and brick
   // templates at scene load rather than extruding dozens of shapes PER HIT.
@@ -417,16 +418,11 @@ export class OuterCity{
   for(let i=start;i<end;i++)attr.array[i*3+1]=-120;
   markPositionRangeDirty(attr,start,end);
  }
- collapseLot(index,tier=10,shakeX=0,shakeZ=0){
-  const lot=this.lots[index];if(!lot)return;
-  const stamp=[tier.toFixed(4),shakeX.toFixed(4),shakeZ.toFixed(4)].join(':');
-  if(this.poseCache.get(index)===stamp)return;
-  this.poseCache.set(index,stamp);this.renderedTiers.set(index,tier);
-  if(tier>=10)this.hidden.add(index);else this.hidden.delete(index);
-  // Reuse the expensive per-vertex corner, crack and roof coefficients
-  // through EVERY animated frame. Geometry and exact angular silhouette are
-  // unchanged; only the method of evaluating the original formula changes.
-  let coefficients=this.deformationBasis?.get(index);
+ // Reuse the native detailed geometry from 77cb8c5. Cache its unchanged
+ // collapse + diagonal-shatter coefficients once per lot, with a small LRU.
+ getLotBasis(index){
+  const lot=this.lots[index];if(!lot)return null;
+  let coefficients=this.deformationBasis.get(index);
   if(!coefficients){
    const roofRanges=[
     ...(this.walls.userData.partRanges?.get(index+':sheets-roof')||[]),
@@ -438,13 +434,53 @@ export class OuterCity{
      mesh===this.walls?roofRanges:[]):null;
    });
   }
-  // Bounded LRU keeps a handful of active/damaged houses fast without
-  // retaining a whole-city copy of every building's vertex coefficients.
-  this.deformationBasis?.delete(index);
-  this.deformationBasis?.set(index,coefficients);
-  const maximum=this.mobile?12:32;
-  if(this.deformationBasis?.size>maximum)
+  this.deformationBasis.delete(index);this.deformationBasis.set(index,coefficients);
+  while(this.deformationBasis.size>(this.mobile?12:32))
    this.deformationBasis.delete(this.deformationBasis.keys().next().value);
+  return coefficients;
+ }
+ // Populate likely attack targets during idle time, never during a skill
+ // or while the 77cb8c5 per-frame rubble/ejection scheduler is busy.
+ queueNearbyBasis(camera){
+  if(!camera?.position||typeof requestIdleCallback!=='function')return;
+  if(this.collapseAnimations.size||this.pendingEjections.length||this.debris.length)return;
+  const now=performance.now();
+  if(now-this.basisLastNearby<1500)return;
+  this.basisLastNearby=now;
+  const x=camera.position.x,z=camera.position.z;
+  const nearest=this.lots.map(lot=>({index:lot.index,dist:(lot.x-x)**2+(lot.z-z)**2}))
+   .sort((a,b)=>a.dist-b.dist).slice(0,this.mobile?12:32);
+  this.basisIdleQueue=nearest.map(item=>item.index)
+   .filter(index=>!this.deformationBasis.has(index));
+  this.scheduleIdleBasisWarmup();
+ }
+ scheduleIdleBasisWarmup(){
+  if(this.basisDisposed||this.basisIdleHandle!==null||!this.basisIdleQueue.length||
+   typeof requestIdleCallback!=='function')return;
+  this.basisIdleHandle=requestIdleCallback(deadline=>{
+   this.basisIdleHandle=null;
+   if(this.basisDisposed)return;
+   if(this.collapseAnimations.size||this.pendingEjections.length||this.debris.length){
+    // Leave the main thread completely free while attacks are active.
+    this.basisIdleQueue.length=0;return;
+   }
+   let built=0;
+   while(deadline.timeRemaining()>5&&this.basisIdleQueue.length&&built<2){
+    const index=this.basisIdleQueue.shift();
+    if(!this.deformationBasis.has(index)){this.getLotBasis(index);built++;}
+   }
+   this.scheduleIdleBasisWarmup();
+  });
+ }
+ collapseLot(index,tier=10,shakeX=0,shakeZ=0){
+  const lot=this.lots[index];if(!lot)return;
+  const stamp=[tier.toFixed(4),shakeX.toFixed(4),shakeZ.toFixed(4)].join(':');
+  if(this.poseCache.get(index)===stamp)return;
+  this.poseCache.set(index,stamp);this.renderedTiers.set(index,tier);
+  if(tier>=10)this.hidden.add(index);else this.hidden.delete(index);
+  // Each animated frame applies exact precomputed diagonal geometry,
+  // keeping all mesh, sign, window, paint and roof details intact.
+  const coefficients=this.getLotBasis(index);
   for(const [meshIndex,mesh] of [this.walls,this.signs,this.graffiti].entries()){
    const range=mesh.userData.lotRanges?.get(index),original=mesh.userData.originalPositions;
    const basis=coefficients[meshIndex];
@@ -707,6 +743,7 @@ export class OuterCity{
   this.damage={};this.lastDamage=null;this.hidden.clear();this.partsHidden.clear();this.facade.reset();
   this.fireField?.reset();this.splinters?.reset();
   this.renderedTiers.clear();this.poseCache.clear();this.deformationBasis?.clear();
+  this.basisIdleQueue.length=0;this.basisLastNearby=0;
   this.collapseAnimations.clear();this.shakes.clear();this.seenCityEvents.clear();
   this.wallPaint?.resetBuildings();
   for(const mesh of [this.walls,this.signs,this.graffiti]){
@@ -729,7 +766,7 @@ export class OuterCity{
   this.flashes=[];
  }
  blocked(x,z,y=0){return cityBlocked(x,z,y,this.damage);}
- update(time,dt=1/60){
+ update(time,dt=1/60,camera=null){
   const tmp=new THREE.Object3D();
   for(let i=0;i<this.bagRecords.length;i++){
    const p=this.bagRecords[i];tmp.position.set(p.x,.18+Math.abs(Math.sin(time+p.phase))*.1,p.z);
@@ -789,6 +826,7 @@ export class OuterCity{
   }
   this.fireField?.update(time);
   this.splinters?.update(dt);
+  this.queueNearbyBasis(camera);
   for(let i=this.plumes.length-1;i>=0;i--)if(updateFireSmoke(this.plumes[i],dt)){
    this.recyclePlume(this.plumes[i]);this.plumes.splice(i,1);
   }
@@ -811,6 +849,10 @@ export class OuterCity{
   // falling motion without iterating through every destroyed house each frame.
  }
  dispose(){
+  this.basisDisposed=true;this.basisIdleQueue.length=0;
+  if(this.basisIdleHandle!==null&&typeof cancelIdleCallback==='function')
+   cancelIdleCallback(this.basisIdleHandle);
+  this.basisIdleHandle=null;this.deformationBasis.clear();
   this.fireField?.dispose();this.splinters?.dispose();
   for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
   for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
