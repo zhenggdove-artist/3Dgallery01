@@ -90,7 +90,7 @@ export class WeaponVFX{
  staffOrb(data,item,origin,direction){
   if(this.staffOrbs.length>=28)this.releaseStaffOrb(this.staffOrbs[0]);
   const palette={water:['#35c9ff','#d7ffff'],ice:['#9eeaff','#ffffff'],
-   fire:['#ff581d','#ffd063'],lightning:['#9c81ff','#f1ecff'],
+   fire:['#ff581d','#ffd063'],lightning:['#42aaff','#e1ffff'],
    beam:['#fff2a3','#ffffff'],petal:['#ff8dcc','#fff1fd'],wave:['#44dccb','#e4fffb']};
   const family=item.family,colors=palette[family]||palette.water;
   const pool=this.orbPools.get(family)||[];let entry=pool.pop();
@@ -110,6 +110,25 @@ export class WeaponVFX{
    const cloud=new THREE.Points(geometry,new THREE.PointsMaterial({color:colors[1],size:.14,
     transparent:true,opacity:.64,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true}));
    cloud.frustumCulled=false;group.add(core,shell,cloud);entry={group,core,shell,cloud,family};
+   if(family==='lightning'){
+    // Local crackling arcs revolve around the projectile itself, never a laser
+    // extending from the staff. Construct once and reuse from the orb pool.
+    const points=[];
+    for(let arc=0;arc<4;arc++)for(let i=0;i<12;i++){
+     const segment=t=>{
+      const a=(i+t)*Math.PI/6+arc*.42,r=.49+.06*Math.sin(i*3.1+arc*2.2+t);
+      return [r*Math.cos(a),r*Math.sin(a)*Math.cos(arc*1.23),
+       r*Math.sin(a)*Math.sin(arc*1.23)];
+     };
+     points.push(...segment(0),...segment(1));
+    }
+    const arcGeometry=new THREE.BufferGeometry();
+    arcGeometry.setAttribute('position',new THREE.Float32BufferAttribute(points,3));
+    const arcs=new THREE.LineSegments(arcGeometry,new THREE.LineBasicMaterial({
+     color:'#bceaff',transparent:true,opacity:.95,depthWrite:false,
+     blending:THREE.AdditiveBlending,toneMapped:false}));
+    arcs.frustumCulled=false;group.add(arcs);entry.arcs=arcs;
+   }
   }
   this.orbPools.set(family,pool);
   entry.origin=origin.clone();entry.direction=direction.clone();
@@ -289,6 +308,7 @@ export class WeaponVFX{
    const t=Math.min(1,orb.age/orb.duration);
    orb.group.position.copy(orb.origin).addScaledVector(orb.direction,orb.range*t);
    orb.group.rotation.z=orb.age*2.8;orb.cloud.rotation.y=orb.age*7;
+    if(orb.arcs){orb.arcs.rotation.x=orb.age*5.4;orb.arcs.rotation.y=orb.age*9.3;orb.arcs.material.opacity=.72+.23*Math.sin(orb.age*36);}
     orb.shell.scale.setScalar(1+.18*Math.sin(orb.age*18));
     orb.core.scale.setScalar(.93+.11*Math.sin(orb.age*22));
     orb.cloud.material.opacity=.52+.12*Math.sin(orb.age*16);
