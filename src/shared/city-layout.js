@@ -128,10 +128,12 @@ export function cityRaycast(origin,direction,range,damage={}){
   }
   if(near>far||!Number.isFinite(near)||near>range||near<0)continue;
   const px=ox+d[0]*near,py=origin[1]+d[1]*near,pz=oz+d[2]*near;
-  const part=hitAxis===1&&py>h*.66?'sheets':
-   hitAxis===0&&Math.abs(px)>lot.width*.45?'pillars':
-   hitAxis===2&&py>1&&py<h*.85?'windows':
-   hitAxis===1?'masonry':'masonry';
+  const level=Math.min(lot.floors-1,Math.max(0,Math.floor(py/(lot.height/lot.floors))));
+  const windowIndex=Math.min(2,Math.max(0,Math.round(px/(lot.width/4)+1)));
+  const part=hitAxis===1&&py>h*.66?'sheets-roof':
+   hitAxis===0&&Math.abs(px)>lot.width*.45?'pillars-'+(px<0?0:1):
+   hitAxis===2&&pz>=0&&py>1&&py<h*.85?'windows-'+level+'-'+windowIndex:
+   'masonry';
   nearest={lot,distance:near,part,position:origin.map((v,i)=>v+direction[i]*near)};
  }
  return nearest;
