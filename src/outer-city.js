@@ -4,6 +4,8 @@ import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume} from './city-ruins-vfx.js';
 import {CityWallPaint} from './city-wall-paint.js';
+import {CityFireField} from './city-fire-field.js';
+import {CitySplinterField} from './city-splinter-field.js';
 
 // All 432 lots remain present on mobile. Simplification changes only geometry
 // detail, never collision or position; a single batched mesh draws the district.
@@ -280,6 +282,8 @@ export class OuterCity{
   this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();this.plumes=[];
    this.renderedTiers=new Map();this.poseCache=new Map();this.collapseAnimations=new Map();this.shakes=new Map();this.seenCityEvents=new Set();
   this.plumeResources=createPlumeResources();this.plumePool=[];this.partsHidden=new Set();
+  this.fireField=new CityFireField(this.root,this.lots,this.plumeResources,mobile);
+  this.splinters=new CitySplinterField(this.root,mobile);
   this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
   this.pendingEjections=[];
   this.cube=new THREE.BoxGeometry(1,1,1);
@@ -384,53 +388,14 @@ export class OuterCity{
   // a corrugated awning or a small masonry component.
  }
  createChunks(lot,stage,animate=false){
-  let effect=this.chunks.get(lot.index);
-  if(effect){
-   if(stage===3&&(effect.stage!==3||(animate&&!effect.animateStarted))){
-    effect.stage=3;effect.animateStarted=true;
-    for(const piece of effect.pieces){
-     if(!piece.settled){/* preserve prior partial collapse */}
-     else if(animate&&piece.wasInitiallySettled){
-      // A world snapshot may arrive before this impact; reconstruct its
-      // 3D pre-fall height so the final collapse remains visible on all clients.
-      piece.mesh.position.copy(piece.home);
-      piece.mesh.rotation.set(0,0,0);
-     }
-     piece.moving=true;piece.settled=false;piece.velocity.y+=1.4+piece.index*.13;
-    }
-   }else if(stage===2&&animate&&!effect.animateStarted){
-    effect.animateStarted=true;
-    for(const piece of effect.pieces.slice(2)){piece.moving=true;piece.settled=false;}
-   }
-   return;
-  }
-  if(animate&&stage===3){
-   const prepared=this.preparedChunks.get(lot.index);
-   if(prepared)this.activatePreparedChunks(lot,prepared);
-   else{
-    this.prepareChunks(lot);
-    const job=this.preparingChunks.get(lot.index);
-    if(job)job.activate=true;
-   }
-   return;
-  }
-  const root=new THREE.Group();root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
-  root.name='Solid volumetric collapse '+lot.id;
-  const descriptions=chunkDescriptions(lot);
-  const r=random(900+lot.index*73),pieces=[];
-  descriptions.forEach(([x,y,z,w,h,d,c],index)=>{
-   const mesh=buildBrokenStructure(lot,index,w,h,d,c);
-   const home=new THREE.Vector3(x,y,z);
-   mesh.position.copy(home);root.add(mesh);
-   if(!animate&&stage===3){
-    mesh.position.set(x+(r()-.5)*lot.width*.55,h*.22,z+(r()-.5)*lot.depth*.55);
-    mesh.rotation.set((r()-.5)*.7,(r()-.5)*.3,(r()-.5)*.8);
-   }
-   pieces.push({mesh,index,home,velocity:new THREE.Vector3((r()-.5)*2,1+r()*2,(r()-.5)*2),
-    spin:new THREE.Vector3((r()-.5)*1.5,0,(r()-.5)*1.5),
-    h,moving:animate?(stage===3||index>2):false,settled:!animate,wasInitiallySettled:!animate});
-  });
-  this.root.add(root);this.chunks.set(lot.index,{root,pieces,stage,age:0,animateStarted:animate});
+  if(stage!==3||this.chunks.has(lot.index))return;
+  const prepared=this.preparedChunks.get(lot.index);
+  if(prepared){this.activatePreparedChunks(lot,prepared);return;}
+  // Snapshot-created ruins also build in free-frame slices rather than
+  // constructing every destroyed house synchronously during login.
+  this.prepareChunks(lot);
+  const job=this.preparingChunks.get(lot.index);
+  if(job)job.activate=true;
  }
  // The full-resolution collapsed-house sculpture is prepared incrementally
  // after the first hit, not synchronously at the expensive killing blow.
@@ -445,11 +410,21 @@ export class OuterCity{
  }
  activatePreparedChunks(lot,effect){
   this.preparedChunks.delete(lot.index);
-  effect.stage=3;effect.animateStarted=true;effect.age=0;
+  if(this.chunks.has(lot.index))return;
+  effect.stage=3;effect.animateStarted=true;effect.age=0;effect.staticRubble=true;
+  const rand=random(lot.index*9067+311);
   for(const part of effect.pieces){
-   part.mesh.position.copy(part.home);
-   part.mesh.rotation.set(0,0,0);
-   part.moving=true;part.settled=false;
+   // NEVER resurrect original-height floor sections for a second collapse.
+   // All sculpted ruins are first revealed in their already-short, grounded
+   // state, below the remaining solid roof and amid the ejected debris.
+   part.mesh.scale.set(.88,.17,.86);
+   part.mesh.position.set(
+    part.home.x+(rand()-.5)*lot.width*.37,
+    .20+part.h*.087,
+    part.home.z+(rand()-.5)*lot.depth*.37);
+   part.mesh.rotation.set((rand()-.5)*.32,(rand()-.5)*.24,(rand()-.5)*.33);
+   part.velocity.set(0,0,0);
+   part.moving=false;part.settled=true;
   }
   this.root.add(effect.root);this.chunks.set(lot.index,effect);
  }
@@ -583,6 +558,9 @@ export class OuterCity{
   }
   if(part==='sheets-awning')this.hidePart(lot.index,part);
   this.spawnPlume(impact,lot.index*131+tier*499);
+  // More identifiable flying windows, iron sheets, wooden planks,
+  // masonry and sign fragments, with only five shared draw calls.
+  this.splinters?.burst(lot,tier,impact,lot.index*131+tier*499);
  }
  applyDamageEvent(event){
   const lot=this.lots[event?.cityLotIndex];if(!lot)return;
@@ -595,13 +573,16 @@ export class OuterCity{
   const from=Number.isFinite(event.previousTier)?event.previousTier:cityDamageTier(oldHp,maxHp);
   const tier=cityDamageTier(event.hp,maxHp),stage=cityStage(event.hp,maxHp);
   this.damage[lot.id]={hp:event.hp,stage,tier};
+  this.fireField?.setLot(lot,event.hp,maxHp);
   this.facade.set(lot.index,event.hp,maxHp);
   this.flash(lot);
   // Non-threshold hits still throw fine chips, smoke and shake the building.
   if(tier===from){
    this.eject(lot,event.part||'masonry',event.position,!!event.partDestroyed);
-   this.spawnPlume(event.position||[lot.x,1.5,lot.z],
-    lot.index+Math.floor(performance.now()),22);
+   const impact=event.position||[lot.x,1.5,lot.z];
+   this.spawnPlume(impact,lot.index+Math.floor(performance.now()),22);
+   this.splinters?.burst(lot,tier,impact,lot.index+Math.floor(performance.now()),
+    this.mobile?5:8);
   }else this.beginCollapse(lot,from,tier,event);
   if(event.partDestroyed&&event.part!=='masonry')this.hidePart(lot.index,event.part);
  }
@@ -623,6 +604,7 @@ export class OuterCity{
    const staticChange=!firstSnapshot&&tier!==knownTier
     &&!this.collapseAnimations.has(lot.index);
    this.damage[lot.id]={hp:record.hp,stage,tier};
+   this.fireField?.setLot(lot,record.hp,maxHp,{snapshot:true});
    this.facade.set(lot.index,record.hp,maxHp);
    for(const [part,hp] of Object.entries(record.parts||{}))
     if(hp<=0&&part!=='masonry')this.hidePart(lot.index,part);
@@ -638,6 +620,7 @@ export class OuterCity{
  }
  resetBuildings(){
   this.damage={};this.lastDamage=null;this.hidden.clear();this.partsHidden.clear();this.facade.reset();
+  this.fireField?.reset();this.splinters?.reset();
   this.renderedTiers.clear();this.poseCache.clear();this.collapseAnimations.clear();this.shakes.clear();this.seenCityEvents.clear();
   this.wallPaint?.resetBuildings();
   for(const mesh of [this.walls,this.signs,this.graffiti]){
@@ -718,6 +701,8 @@ export class OuterCity{
    }
    this.collapseLot(index,visibleTier,shakeX,shakeZ);
   }
+  this.fireField?.update(time);
+  this.splinters?.update(dt);
   for(let i=this.plumes.length-1;i>=0;i--)if(updateFireSmoke(this.plumes[i],dt)){
    this.recyclePlume(this.plumes[i]);this.plumes.splice(i,1);
   }
@@ -736,23 +721,11 @@ export class OuterCity{
   // One costly VFX geometry job per frame, including simultaneous AOE hits.
   // Structural tiers, collision, hit tint and smoke still react immediately.
   if(!this.processEjections())this.stepChunkPreparation();
-  for(const effect of this.chunks.values()){
-   effect.age+=dt;
-   for(const part of effect.pieces){
-    if(!part.moving||part.settled)continue;
-    part.velocity.y-=11*dt;
-    part.mesh.position.addScaledVector(part.velocity,dt);
-    part.mesh.rotation.x+=part.spin.x*dt;part.mesh.rotation.z+=part.spin.z*dt;
-    const floor=part.h*.22;
-    if(part.mesh.position.y<floor){
-     part.mesh.position.y=floor;part.velocity.y=Math.abs(part.velocity.y)*.17;
-     part.velocity.x*=.66;part.velocity.z*=.66;
-     if(Math.abs(part.velocity.y)<.45)part.settled=true;
-    }
-   }
-  }
+  // Ruined buildings are already grounded; the fragment pools handle all
+  // falling motion without iterating through every destroyed house each frame.
  }
  dispose(){
+  this.fireField?.dispose();this.splinters?.dispose();
   for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
   for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
   this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
