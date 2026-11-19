@@ -196,6 +196,9 @@ async function completeFirebaseLogin(firebaseIdToken){
   const account=await network.firebaseProfile(firebaseIdToken);
   if(joined)return;
   if(account.existing&&account.profile){
+    // Re-enable account selection in case joining fails, so the GM or any
+    // other existing account can retry rather than remaining locked out.
+    ui.setFirebaseLoginStatus(true,'Google 驗證完成，正在載入原有角色…');
     ui.emit('join',{
       name:account.profile.name,color:account.profile.color,
       firebaseIdToken,backendUrl:network.base
