@@ -330,3 +330,19 @@ body.panel-open #panel{inset:16px auto 100px 16px;width:min(440px,calc(100vw - 3
 
 /* In the actual rifle scope, eliminate the chat HUD without removing the scope reticle or FIRE control. */
 body.sniper-scoped #chat-hud{visibility:hidden!important;pointer-events:none!important;}
+
+/* 2026-11-19 chat size tri-state: the middle state exposes two chat lines.
+   Position starts 30px lower; JS only lifts it when combat controls overlap. */
+#hud #chat-hud.chat-medium{
+ --chat-height:92px;
+ height:92px!important;min-height:92px!important;max-height:92px!important;
+}
+#hud #chat-hud.chat-medium #chat-messages{
+ max-height:calc(2 * 1.45em + 4px);
+ overflow-y:auto;
+}
+#hud #chat-hud.chat-max{min-height:112px;max-height:42dvh}
+#hud #chat-hud.chat-minimized{min-height:0!important;max-height:26px!important}
+@media(max-width:720px),(pointer:coarse){
+ #hud #chat-hud{bottom:max(124px,env(safe-area-inset-bottom) + 110px);}
+}
