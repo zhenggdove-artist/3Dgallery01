@@ -76,6 +76,19 @@ test('already-destroyed houses never re-ignite simply by joining the game',()=>{
  fire.dispose();tex.flame.dispose();tex.smoke.dispose();
 });
 
+test('late lethal combat event after an already-dead snapshot still fades from a full blaze',()=>{
+ const root=new THREE.Group(),tex=textures();
+ const fire=new CityFireField(root,CITY_LOTS,tex,true);
+ fire.update(100);
+ fire.setLot(lot,0,CITY_MAX_HP,{snapshot:true});
+ fire.setLot(lot,0,CITY_MAX_HP,{live:true});
+ const at=lot.index*fire.layers[0].count*3;
+ assert.equal(fire.layers[0].burn[at],1);
+ assert.equal(fire.layers[0].burn[at+1],100);
+ assert.equal(fire.layers[0].burn[at+2],1);
+ fire.dispose();tex.flame.dispose();tex.smoke.dispose();
+});
+
 test('five recognizable fragment types share five bounded InstancedMeshes, no new draws on hit',()=>{
  const root=new THREE.Group(),shards=new CitySplinterField(root,false);
  const before=root.children.slice();
