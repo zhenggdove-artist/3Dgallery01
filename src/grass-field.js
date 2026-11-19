@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import {CITY_INNER_RADIUS} from './shared/city-layout.js';
+import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS} from './shared/city-layout.js';
 
 // Single GPU draw call for thousands of slender segmented grass blades.
 // All meshes and wind/trample rules are generated in JS; no external assets.
-export function grassPositions(count=65000,seed=17331){
+export function grassPositions(count=65000,seed=17331,inner=11,outer=CITY_INNER_RADIUS-2){
  const points=new Float32Array(count*2),heights=new Float32Array(count),angles=new Float32Array(count),phases=new Float32Array(count),shades=new Float32Array(count);
  let state=seed>>>0;const rand=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
  for(let i=0;i<count;i++){
-  const r=Math.sqrt(11*11+((CITY_INNER_RADIUS-2)**2-11*11)*rand()),a=rand()*Math.PI*2;
+  const r=Math.sqrt(inner*inner+(outer*outer-inner*inner)*rand()),a=rand()*Math.PI*2;
   points[i*2]=Math.cos(a)*r;points[i*2+1]=Math.sin(a)*r;
   heights[i]=.48+rand()*.82;angles[i]=rand()*Math.PI*2;
   phases[i]=rand()*100;shades[i]=rand();
@@ -95,6 +95,21 @@ export class GrassField{
    uniforms:{uTime:{value:0},uPlayers:{value:positions},uPlayerCount:{value:0}}});
   this.mesh=new THREE.Mesh(geo,material);this.mesh.name='JS procedural wind and footsteps grass';this.mesh.frustumCulled=false;
   scene.add(this.mesh);
+  // Match central grass with living wind/trample blades across every street,
+  // backed by an unbroken green canopy, so the sandy ground never leaks out.
+  // Instanced GPU rendering keeps all 432 collision buildings intact.
+  this.outerCount=mobile?85000:190000;
+  const cityGeo=bladeGeometry(),city=grassPositions(this.outerCount,73917,
+   CITY_INNER_RADIUS-.5,CITY_OUTER_RADIUS+.5);
+  cityGeo.setAttribute('aOffset',new THREE.InstancedBufferAttribute(city.points,2));
+  cityGeo.setAttribute('aHeight',new THREE.InstancedBufferAttribute(city.heights,1));
+  cityGeo.setAttribute('aAngle',new THREE.InstancedBufferAttribute(city.angles,1));
+  cityGeo.setAttribute('aPhase',new THREE.InstancedBufferAttribute(city.phases,1));
+  cityGeo.setAttribute('aShade',new THREE.InstancedBufferAttribute(city.shades,1));
+  cityGeo.instanceCount=this.outerCount;
+  this.outerMesh=new THREE.Mesh(cityGeo,material);
+  this.outerMesh.name='Dense living wind-blown city grass - full ruined district';
+  this.outerMesh.frustumCulled=false;scene.add(this.outerMesh);
   // Continuous fine-blade grass canopy covers every small gap between tufts;
   // no bare underlying meadow plane is visible while walking or looking down.
   this.canopy=new THREE.Mesh(new THREE.CircleGeometry(CITY_INNER_RADIUS,128),new THREE.ShaderMaterial({
@@ -111,6 +126,9 @@ export class GrassField{
     }`,side:THREE.DoubleSide,depthWrite:true}));
   this.canopy.name='Continuous dense grass canopy';
   this.canopy.rotation.x=-Math.PI/2;this.canopy.position.y=.006;scene.add(this.canopy);
+  this.outerCanopy=new THREE.Mesh(new THREE.RingGeometry(CITY_INNER_RADIUS-.25,CITY_OUTER_RADIUS+1,192),this.canopy.material);
+  this.outerCanopy.name='Full city green grass canopy with no exposed earth';
+  this.outerCanopy.rotation.x=-Math.PI/2;this.outerCanopy.position.y=.007;scene.add(this.outerCanopy);
  }
  update(time,roots){
   const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;
@@ -120,5 +138,5 @@ export class GrassField{
   }
   uniform.uPlayerCount.value=i;
  }
- dispose(){this.mesh.removeFromParent();this.mesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.canopy.material.dispose();}
+ dispose(){this.mesh.removeFromParent();this.mesh.geometry.dispose();this.outerMesh.removeFromParent();this.outerMesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.outerCanopy.removeFromParent();this.outerCanopy.geometry.dispose();this.canopy.material.dispose();}
 }
