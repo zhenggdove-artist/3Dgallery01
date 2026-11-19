@@ -131,15 +131,21 @@ void main(){
    // all formed from small independent points rather than solid summoned meshes.
    float a=atan(position.y,position.x)+spin*1.8+position.z*.27;
    float radius=length(position.xy),advance=uReach*smoothstep(.06,.78,t)*.35;
-   if(uStyle<.5){ // wide forward water nozzle with rolling wave-fronts
-     float stream=fract(v+uAge*(1.4+w*.8));
+   if(uStyle<.5){ // volumetric three-tier tidal surge; sustained GPU waves
+     float lane=floor(u*3.);
+     float stream=fract(v+uAge*(1.64+w*.74)+lane*.29);
      float front=stream*uReach*min(1.,uAge*2.9);
-     float spread=(.2+stream*(2.4+uCharge*1.8))*sqrt(w);
-     p=vec3(cos(a+sin(spin)*.6)*spread,
-       sin(a+spin*.28)*spread*.53+sin(front*.55+uAge*9.)*(.25+stream*.35),
-       front+position.z*.12);
-     alpha*=smoothstep(0.,.12,stream)*(1.-smoothstep(.78,1.,stream));
- 
+     float sweep=sin(front*.72-uAge*9.6+lane*2.09);
+     float chop=sin(front*1.57-uAge*14.3+v*TAU);
+     float crest=pow(max(0.,.5+.32*sweep+.18*chop),2.)*(.45+stream*1.45);
+     float spread=(.24+stream*(2.5+uCharge*1.8))*sqrt(w);
+     float fold=cos(front*.43-uAge*5.8+lane)*(.25+crest*.36);
+     p=vec3(cos(a+sin(spin)*.65)*spread+fold,
+       sin(a+spin*.37)*spread*.66+crest+sin(front*.91-uAge*11.)*.31,
+       front+position.z*.14+sin(sweep)*crest*.13);
+     alpha*=smoothstep(0.,.09,stream)*(1.-smoothstep(.78,1.,stream));
+     tint=mix(tint,vec3(.91,.98,1.),smoothstep(.52,1.25,crest)*.67);
+
    }else if(uStyle<1.5){ // ice: tall swirls of icy shatter
      p=vec3(position.x*.8+sin(spin*.9)*.4,
        1.3+abs(position.y)*1.9+u*5.*t,
