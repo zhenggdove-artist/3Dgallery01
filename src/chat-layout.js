@@ -6,30 +6,35 @@ export function bindChatLayout(){
  const handle=document.getElementById('chat-resize');
  const toggle=document.getElementById('chat-toggle');
  const mobile=matchMedia('(pointer:coarse)').matches;
+ const STORAGE_KEY='temple-chat-position-v2'; // Ignore corrupted old upper-left layout.
  let active=null,timer=null,toggleTimer=null,expanded=false,minimized=false,ignoreClick=false,minimizedAt=0;
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
  const resize=height=>{const h=limit(height,Math.min(112,innerHeight*.5),innerHeight*.5);panel.style.setProperty('--chat-height',h+'px');};
- const blocking=()=>['#attack-button','#mobile-stick','#dock [data-action=jump]','#dock [data-action=interact]']
+ const blocking=()=>['#attack-button','#mobile-stick','#dock [data-action=jump]','#dock [data-action=interact]','#dock #aim-button']
   .map(q=>document.querySelector(q)).filter(el=>el&&getComputedStyle(el).display!=='none').map(el=>el.getBoundingClientRect());
  const collide=(a,b)=>a.left<b.right+6&&a.right>b.left-6&&a.top<b.bottom+6&&a.bottom>b.top-6;
  function relocate(left,top){
   const viewport=window.visualViewport,width=viewport?.width||innerWidth,height=viewport?.height||innerHeight;
   const x=limit(left,4,width-panel.offsetWidth-4),y=limit(top,4,height-panel.offsetHeight-4);
   const r={left:x,top:y,right:x+panel.offsetWidth,bottom:y+panel.offsetHeight};
-  // On mobile the player explicitly chooses the position, including positions
-  // formerly rejected because they overlapped a control.
-  if(!mobile&&blocking().some(b=>collide(r,b)))return false;
+  // Never allow the chat to cover A, jump or the virtual joystick on mobile.
+  if(blocking().some(b=>collide(r,b)))return false;
   panel.style.left=x+'px';panel.style.top=y+'px';panel.style.right='auto';
   panel.style.bottom='auto';panel.style.transform='none';
   return true;
  }
- const save=()=>{try{const r=panel.getBoundingClientRect();localStorage.setItem('temple-chat-position',JSON.stringify({left:r.left,top:r.top}));}catch{}};
+ // Default: CSS-controlled lower-center chat, wholly above combat controls.
+ function resetPosition(){
+  for(const property of ['left','top','right','bottom','transform'])panel.style.removeProperty(property);
+  try{localStorage.removeItem(STORAGE_KEY);}catch{}
+ }
+ const save=()=>{try{const r=panel.getBoundingClientRect();localStorage.setItem(STORAGE_KEY,JSON.stringify({left:r.left,top:r.top}));}catch{}};
  const minimize=value=>{
   minimized=value;panel.classList.toggle('chat-minimized',minimized);
   toggle.textContent=minimized?'＋':expanded?'−':'＋';
   toggle.setAttribute('aria-expanded',String(!minimized));
   toggle.setAttribute('aria-label',minimized?'Restore chat':'Collapse chat (hold 1 second)');
-  if(panel.style.top){const r=panel.getBoundingClientRect();relocate(r.left,r.top);}
+  if(panel.style.top){const r=panel.getBoundingClientRect();if(!relocate(r.left,r.top))resetPosition();}
   save();
  };
  toggle.addEventListener('pointerdown',e=>{
@@ -94,16 +99,13 @@ export function bindChatLayout(){
  }
  addEventListener('resize',()=>{
   if(!minimized)resize(panel.getBoundingClientRect().height);
-  if(panel.style.top){const r=panel.getBoundingClientRect();relocate(r.left,r.top);}
+  if(panel.style.top){const r=panel.getBoundingClientRect();if(!relocate(r.left,r.top))resetPosition();}
  });
- // Reuse original saved coordinates, constrained to the current viewport.
- try{const saved=JSON.parse(localStorage.getItem('temple-chat-position')||'null');
-  if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top))requestAnimationFrame(()=>{
-   const key='temple-chat-raise-20261117',top=saved.top-(localStorage.getItem(key)?0:4);
-   for(let rise=0;rise<=240;rise+=4)if(relocate(saved.left,top-rise)){
-    localStorage.setItem('temple-chat-position',JSON.stringify({left:saved.left,top:top-rise}));
-    localStorage.setItem(key,'1');break;
-   }
-  });
- }catch{}
+ // Restore only positions saved with the new control-safe layout policy.
+ // Old mobile coordinates could overlap the title or be pinned at (4,4).
+ try{
+  const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
+  if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top))
+   requestAnimationFrame(()=>{if(!relocate(saved.left,saved.top))resetPosition();});
+ }catch{resetPosition();}
 }
