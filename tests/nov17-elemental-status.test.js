@@ -18,12 +18,12 @@ test('water makes target take 1.5x damage for precisely five seconds',()=>{
  assert.ok(!effectActive(victim,'soaked',T+5000));
 });
 
-test('freeze prevents actions for one second, with five-second proc lock',()=>{
+test('freeze prevents actions for three seconds, with five-second proc lock',()=>{
  const victim=target();
  assert.equal(hit(victim,'ice','water'),'freeze');
- assert.equal(victim.effects.freeze.until,T+1000);
+ assert.equal(victim.effects.freeze.until,T+3000);
  assert.equal(hit(victim,'ice','water',T+1200),null);
- assert.equal(victim.effects.freeze.until,T+1000);
+ assert.equal(victim.effects.freeze.until,T+3000);
  assert.equal(hit(victim,'ice','water',T+5000),'freeze');
  const profile=createProfile('fighter','Fighter','#ffffff',T,false);
  profile.effects=victim.effects;
