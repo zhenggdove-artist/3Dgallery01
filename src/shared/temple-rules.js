@@ -1479,7 +1479,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       changed=true;
      }
      // Broadphase prevents a 432-house scan during each boomerang step.
-     for(const lot of cityCollisionCandidates(point[0],point[2],Math.min(2,fx.radius))){
+     for(const lot of cityCollisionCandidates(point[0],point[2],fx.radius)){
       if(fx.cityHitIds.includes(lot.id)||(world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
       const [u,v]=cityLocal(lot,point[0],point[2]);
       const hp=world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP;
