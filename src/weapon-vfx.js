@@ -7,6 +7,8 @@ import {WeaponParticleEffects} from './weapon-particle-effects.js';
 import {WeaponSignatureEffects} from './weapon-signature-effects.js';
 import {NumberedWeaponEffects} from './numbered-weapon-effects.js';
 import {VerdantRestorationChannel} from './verdant-restoration-channel.js';
+import {ForwardChannelBeam} from './forward-channel-beam.js';
+import {TripleBindingCurse} from './binding-curse-triple.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
@@ -39,7 +41,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.bindingCurse=new TripleBindingCurse(scene);this.prismCardinalBeams=new Map();}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -164,6 +166,17 @@ export class WeaponVFX{
   // Repeated server pulses refresh ONE pooled ring, never spawn duplicates.
   if(data.channel&&!data.fusionEcho&&item.family==='petal'&&root)this.restoration.pulse(root);
   const id=effectFor(item,data.ultimate),direction=new THREE.Vector3(...(data.direction||[0,0,1])).normalize(),origin=new THREE.Vector3(...data.origin),range=Math.max(1,data.range||4),end=data.aimPoint?new THREE.Vector3(...data.aimPoint):data.impactPoint?new THREE.Vector3(...data.impactPoint):origin.clone().addScaledVector(direction,range);
+  if(item.family==='palm'&&data.ultimate&&!data.fusionEcho)this.bindingCurse.play(data);
+  if(item.id==='accordion'&&!data.ultimate&&!data.fusionEcho){
+   const notes=createOddEffect(THREE,{
+    ...data,charge:0,origin:origin.toArray(),direction:direction.toArray(),range:3.2
+   },{...item,pattern:'score'});
+   notes.root.position.copy(root?.position||origin);
+   if(this.snipers.length>=24){
+    const old=this.snipers.shift();old.root.removeFromParent();old.root.material.dispose();
+   }
+   this.scene.add(notes.root);this.snipers.push(notes);
+  }
   // Charged ground spells are placed on the *server validated impact area*.
   // Previously every non-projectile preset was spawned one metre below
   // the caster, leaving distant spells invisible or buried in terrain.
@@ -272,6 +285,7 @@ export class WeaponVFX{
 
  update(dt,camera=null){
   this.restoration.update(dt,camera);
+  this.bindingCurse.update(dt);
   for(const [key,entry] of [...this.channelStreams]){
    if(!this.particleSkills.active.includes(entry)||!entry.host?.parent){
     this.channelStreams.delete(key);continue;
@@ -302,6 +316,22 @@ export class WeaponVFX{
      console.error('VFX subsystem update failed without blocking other effects',label,error);
     }
    }
+  }
+  const livePrisms=new Set();
+  for(const entry of this.numberedEffects.active){
+   if(!entry.channel||entry.spec?.number!==29||
+      !/^prism-/.test(entry.item?.id||'')||!entry.root?.parent)continue;
+   livePrisms.add(entry);
+   let cardinal=this.prismCardinalBeams.get(entry);
+   if(!cardinal){cardinal=new ForwardChannelBeam(this.scene,false);this.prismCardinalBeams.set(entry,cardinal);}
+   const start=this.numberedEffects.muzzleAt(entry);
+   const end=entry.visualEnd||start.clone().addScaledVector(entry.visualDirection,entry.range);
+   const ray=end.clone().sub(start),reach=ray.length();
+   if(reach>.1)cardinal.update(start,ray.normalize(),reach,entry.age,
+    Math.max(.35,(entry.item?.tier||1)*.11));
+  }
+  for(const [entry,cardinal] of this.prismCardinalBeams)if(!livePrisms.has(entry)){
+   cardinal.dispose();this.prismCardinalBeams.delete(entry);
   }
   for(const orb of [...this.staffOrbs]){
    orb.age+=dt;
@@ -350,7 +380,7 @@ export class WeaponVFX{
   this.failedAnimations.add(id);
   console.error('Weapon animation failed; quarantined this instance',id,error);
  }
- dispose(){this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
+ dispose(){this.bindingCurse.dispose();for(const visual of this.prismCardinalBeams.values())visual.dispose();this.prismCardinalBeams.clear();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
   for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }
