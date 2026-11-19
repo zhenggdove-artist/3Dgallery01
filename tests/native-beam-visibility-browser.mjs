@@ -44,12 +44,15 @@ try{
     const entry=numbered.active.at(-1);
     const atStart=entry?{visible:entry.fx.group.visible,phase:entry.fx.phase,
      scale:entry.fx.group.scale.toArray(),position:entry.fx.group.position.toArray(),spec:entry.spec.asset}:null;
+    const gpuAtStart=check();
+    if(entry?.fx.phase!=='active'||gpuAtStart.light<30)
+     throw Error(item.id+' native beam is not VISIBLE on its first authenticated channel frame: '+JSON.stringify({phase:entry?.fx.phase,gpuAtStart}));
     for(let i=0;i<126;i++)numbered.update(1/60);
     const after=entry?{visible:entry.fx.group.visible,phase:entry.fx.phase,
      scale:entry.fx.group.scale.toArray(),position:entry.fx.group.position.toArray(),rotation:entry.fx.group.quaternion.toArray(),
      children:entry.fx.group.children.map(c=>({name:c.name,type:c.type,visible:c.visible,drawRange:c.geometry?.drawRange,frustumCulled:c.frustumCulled})).slice(0,22)}:null;
     const gpu=check();
-    cases.push({id:item.id,spawned,atStart,after,gpu});
+    cases.push({id:item.id,spawned,atStart,gpuAtStart,after,gpu});
     numbered.remove(entry);
    }catch(error){cases.push({id:item.id,error:String(error),stack:error.stack?.slice(0,2000)});}
   }
@@ -115,5 +118,11 @@ try{
   await page.waitForTimeout(300);
  }
  console.log('INTEGRATED_BEAM_DIAGNOSTIC='+JSON.stringify(integrated));
+ for(const {setup,snapshot} of integrated){
+  if(snapshot.nEvents<1)throw Error(setup.item+' has no actual channel spell pulses: '+JSON.stringify(snapshot.channelState));
+  const native=snapshot.active.find(e=>e.weapon===setup.item);
+  if(native?.phase!=='active'||!native.visible)
+   throw Error(setup.item+' native channel does not appear when held: '+JSON.stringify(snapshot));
+ }
  await page.screenshot({path:'output/beam-visibility/scene-diagnostic.png'});
 }finally{await browser.close();}
