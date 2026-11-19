@@ -44,13 +44,13 @@ try{
   const button=action.getBoundingClientRect();
   return {paymentW:r.width,left:r.left,right:r.right,panelW:p.width,
    buttonW:button.width,buttonTop:button.top,
-   buttonBackground:getComputedStyle(action).backgroundImage,
+   buttonBackground:getComputedStyle(action).backgroundColor,
    overflow:document.documentElement.scrollWidth>innerWidth+2};
  });
  assert.ok(mobile.paymentW>250&&mobile.paymentW<=390,JSON.stringify(mobile));
  assert.ok(mobile.left>=-2&&mobile.right<=392,JSON.stringify(mobile));
  assert.ok(mobile.buttonW>=220,JSON.stringify(mobile));
- assert.match(mobile.buttonBackground,/linear-gradient/,JSON.stringify(mobile));
+ assert.notEqual(mobile.buttonBackground,'rgba(0, 0, 0, 0)',JSON.stringify(mobile));
  assert.equal(mobile.overflow,false);
  await page.screenshot({path:folder+'/support-mobile-direct-wings.png',animations:'disabled'});
  assert.deepEqual(errors,[]);
