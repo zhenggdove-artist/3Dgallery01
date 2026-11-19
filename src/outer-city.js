@@ -185,6 +185,15 @@ function buildStaticCity(lots){
     for(let i=0;i<4;i++)box(lot,-w*.3+i*.95,.6,front+1.2,.75,.8,.58,'#a78b6b');break;
   }
  }
+ // Visibly tilted, broken power poles; cables are drawn by a separate shared line batch.
+ for(let i=0;i<16;i++){
+  const a=(i+.23)*Math.PI*2/16,r=100+(i%4)*20,tilt=(i%2?1:-1)*(.8+(i%5)*.25);
+  const pole={x:Math.cos(a)*r,z:Math.sin(a)*r,yaw:-a};
+  for(let j=0;j<9;j++){const t=j/9;box(pole,tilt*t*t,5.3*t,0,.26-t*.08,1.28,.3,'#65625b');}
+  box(pole,tilt*.9,9.5/2,0,.16,1.3,.16,'#544b43');
+  box(pole,tilt*.86,8.3,.04,2.6,.16,.17,'#463d39');
+  for(let n=0;n<3;n++)box(pole,tilt*.86+(n-1)*.87,8.5,0,.19,.36,.25,'#9b8d72');
+ }
  const geometry=new THREE.BufferGeometry();
  geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
  geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
@@ -243,7 +252,7 @@ export class OuterCity{
   const walls=buildStaticCity(lots);walls.name='Batched damaged concrete homes, shops, roofs and storefront goods';this.root.add(walls,buildShopSigns(lots),buildStreetLines(lots));
   // Dumpsters and garbage bags: instanced geometry shared across the district.
   const dumpCount=mobile?9:15,bin=instance(new THREE.CylinderGeometry(.52,.48,1.1,8),new THREE.MeshStandardMaterial({color:'#4b615a',roughness:.94}),dumpCount,'Open foul dumpsters'),lid=instance(new THREE.CylinderGeometry(.58,.55,.09,8),new THREE.MeshStandardMaterial({color:'#232f2a',roughness:.96}),dumpCount,'Bent dumpster rims');
-  const bagCount=mobile?36:95,bags=instance(new THREE.IcosahedronGeometry(.27,0),new THREE.MeshStandardMaterial({color:'#202426',roughness:1}),bagCount,'Scattered black rubbish bags');
+  const bagCount=mobile?36:95,bags=instance(new THREE.IcosahedronGeometry(.27,0),new THREE.MeshStandardMaterial({color:'#202426',roughness:1}),bagCount,'Scattered black rubbish bags');this.bags=bags;this.bagRecords=[];
   const tmp=new THREE.Object3D(),bins=[];
   for(let i=0;i<dumpCount;i++){
    const lot=lots[(i*5)%lots.length],angle=lot.angle,radial=Math.hypot(lot.x,lot.z)-6;
@@ -253,13 +262,17 @@ export class OuterCity{
   }
   bin.instanceMatrix.needsUpdate=lid.instanceMatrix.needsUpdate=true;this.root.add(bin,lid);
   for(let i=0;i<bagCount;i++){const pos=bins[i%bins.length],theta=rand()*Math.PI*2,r=.55+rand()*3.5;
-   tmp.position.set(pos[0]+Math.cos(theta)*r,.25,pos[1]+Math.sin(theta)*r);tmp.rotation.set(rand(),rand()*6,rand());tmp.scale.set(.7+rand(),.55+rand()*.9,.6+rand());tmp.updateMatrix();bags.setMatrixAt(i,tmp.matrix);}
+   const x=pos[0]+Math.cos(theta)*r,z=pos[1]+Math.sin(theta)*r,phase=rand()*20,size=.6+rand()*.7;
+   this.bagRecords.push({x,z,phase,size,loose:i%4===0});
+   tmp.position.set(x,.25,z);tmp.rotation.set(phase,rand()*6,phase*.3);tmp.scale.set(size,.8*size,size*.9);tmp.updateMatrix();bags.setMatrixAt(i,tmp.matrix);}
   bags.instanceMatrix.needsUpdate=true;this.root.add(bags);
   // Billboard and leaflet litter drift independently, updated with one instanced draw.
   this.litterCount=mobile?34:90;this.litter=instance(new THREE.PlaneGeometry(.39,.26),new THREE.MeshBasicMaterial({color:'#d7cbb3',side:THREE.DoubleSide}),this.litterCount,'Windblown tissue paper, leaflets and plastic');
   this.litterRecords=[];
   for(let i=0;i<this.litterCount;i++){const angle=rand()*Math.PI*2,r=94+rand()*83;
-   this.litterRecords.push({x:Math.cos(angle)*r,z:Math.sin(angle)*r,seed:rand()*100,phase:rand()*10,size:.55+rand()*1.6});}
+   this.litterRecords.push({x:Math.cos(angle)*r,z:Math.sin(angle)*r,seed:rand()*100,phase:rand()*10,size:.55+rand()*1.6});
+   this.litter.setColorAt(i,new THREE.Color(['#f7f2e1','#f6e7a6','#c9d9db','#ccb7b2'][i%4]));
+  }
   this.root.add(this.litter);
   // Mice and tails are one instance batch each; flies use an animated GPU point shader.
   this.ratCount=mobile?9:18;
@@ -289,6 +302,13 @@ export class OuterCity{
  }
  update(time){
   const tmp=new THREE.Object3D(),move=time;
+  for(let i=0;i<this.bagRecords.length;i++){
+   const a=this.bagRecords[i],drift=a.loose?Math.sin(move*.75+a.phase)*1.1:0;
+   tmp.position.set(a.x+drift,.22+(a.loose?.3*Math.abs(Math.sin(move*1.15+a.phase)):0),a.z+(a.loose?Math.cos(move*.5+a.phase)*.75:0));
+   tmp.rotation.set(.2*Math.sin(move*.6+a.phase),a.phase+(a.loose?move*.28:0),a.loose?Math.sin(move+a.phase)*.6:0);
+   tmp.scale.set(a.size,.8*a.size,a.size*.9);tmp.updateMatrix();this.bags.setMatrixAt(i,tmp.matrix);
+  }
+  this.bags.instanceMatrix.needsUpdate=true;
   for(let i=0;i<this.litterRecords.length;i++){
    const a=this.litterRecords[i],wind=.55*Math.sin(move*.76+a.seed),side=.65*Math.cos(move*.48+a.phase);
    tmp.position.set(a.x+wind,.055+Math.abs(Math.sin(move*1.3+a.phase))*.62,a.z+side);
