@@ -31,6 +31,14 @@ test('tap fires only a traveling elemental orb; channel delegates to actual vend
   const previous=vfx.staffOrbs.length,previousNative=native.length;
   vfx.play(shot,item,root);
   assert.equal(vfx.staffOrbs.length,previous+1,'normal attacks must create an orb');
+  const orb=vfx.staffOrbs.at(-1);
+  if(item.family==='lightning'){
+   assert.ok(orb.arcs?.isLineSegments,'electric orb carries orbiting sparks');
+   assert.ok(orb.arcs.geometry.attributes.position.count>60);
+  }else{
+   assert.ok(orb.core.material.color.r>orb.core.material.color.b*.7,'prism orb is warm yellow');
+   assert.equal(orb.arcs,undefined,'ordinary prism projectile is not a laser');
+  }
   assert.equal(native.length,previousNative,'normal attack must not render a vendor beam');
   vfx.play({...shot,channel:true,ultimate:true},item,root);
  }
