@@ -11,7 +11,7 @@
 - Binding: `TEMPLE_ROOM`
 - Room: `temple-main-v1`
 
-This Worker is independent from RELETTER. The Worker bundle contains only the Temple API landing page and server modules; Gallery artworks remain GitHub Pages assets.
+This Worker uses dedicated Temple services and storage. Its bundle contains only the Temple API landing page and server modules; Gallery artworks remain GitHub Pages assets.
 
 ## Deploying the backend
 
