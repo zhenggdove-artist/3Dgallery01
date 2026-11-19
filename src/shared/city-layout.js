@@ -151,31 +151,6 @@ export function cityDamageTier(hp,maxHp=CITY_MAX_HP){
  if(!Number.isFinite(hp)||!Number.isFinite(maxHp)||maxHp<=0)return 0;
  return Math.max(0,Math.min(10,Math.floor((maxHp-hp)*10/maxHp+1e-8)));
 }
-// Ten deterministic, irregular structural sections per house. Identical
-// local-space fracture positions are used by the building skin and falling
-// architectural pieces; no random geometry is generated on the hit frame.
-const fractureProfiles=new WeakMap();
-export function cityFractureProfiles(lot){
- let profiles=fractureProfiles.get(lot);
- if(profiles)return profiles;
- const rand=cityRandom((lot.index*73856093+82713)>>>0),walls=['front','right','back','left'];
- profiles=Array.from({length:10},(_,i)=>{
-  const wall=walls[(i*3+lot.index)%4],width=lot.width*(.23+rand()*.21);
-  const height=lot.height*(.13+rand()*.16);
-  const localY=Math.min(lot.height-height*.58,Math.max(height*.65,
-   lot.height*(.26+rand()*.63)));
-  const localX=(rand()-.5)*(lot.width-width*.74);
-  const localZ=(rand()-.5)*(lot.depth-width*.5);
-  return {tier:i+1,wall,width,height,depth:.22+rand()*.48,
-   localX,localY,localZ,seed:rand()*1000,
-   tilt:(rand()-.5)*.42};
- });
- fractureProfiles.set(lot,profiles);
- return profiles;
-}
-export function cityFractureProfile(lot,tier){
- return cityFractureProfiles(lot)[Math.max(0,Math.min(9,Math.floor(tier)-1))];
-}
 export function cityCollapseProgress(tier){
  const t=Math.max(0,Math.min(1,tier/10));
  return 1-Math.pow(1-t,1.2);
@@ -201,6 +176,44 @@ export function cityRoofHeightAtHp(lot,hp=CITY_MAX_HP,maxHp=CITY_MAX_HP){
  const amount=cityCollapseProgress(tier);
  return lot.height+.13+(cityRoofHeight(lot,3)-(lot.height+.13))*amount;
 }
+// Give each 10%-HP threshold one of four pre-existing building corners.
+// The same deterministic cut applies to all walls and painted decals. It
+// only moves existing vertices: zero additional meshes, particles, polygons
+// or GPU materials, including across all 432 houses.
+const cityCornerRotations=new WeakMap();
+const NO_CITY_CORNER_CUT=Object.freeze([0,0,0]);
+export function cityAngularCornerCut(lot,x,y,z,tier,isRoof=false){
+ if(tier<=0)return NO_CITY_CORNER_CUT;
+ // A hit can animate thousands of the existing batched vertices. Cache the
+ // building's yaw once instead of calling trig functions twice per vertex.
+ let rotation=cityCornerRotations.get(lot);
+ if(!rotation){rotation=[Math.cos(lot.yaw),Math.sin(lot.yaw)];cityCornerRotations.set(lot,rotation);}
+ const [cs,sn]=rotation,dx=x-lot.x,dz=z-lot.z;
+ const lx=dx*cs-dz*sn,lz=dx*sn+dz*cs;
+ const ax=Math.abs(lx)/Math.max(.1,lot.width*.5);
+ const az=Math.abs(lz)/Math.max(.1,lot.depth*.5);
+ // ax+az=1 marks the inner diagonal boundary of a corner notch.
+ const diagonal=Math.max(0,Math.min(1,(ax+az-1.05)/.95));
+ if(diagonal<=0)return NO_CITY_CORNER_CUT;
+ const upper=Math.max(0,Math.min(1,(y-lot.height*.34)/Math.max(.2,lot.height*.66)));
+ if(upper<=0)return NO_CITY_CORNER_CUT;
+ const sx=lx>=0?1:-1,sz=lz>=0?1:-1;
+ const corner=(sx<0?1:0)+(sz<0?2:0);
+ const first=1+((corner-(lot.index&3)+4)&3);
+ // Only this corner is affected by thresholds first, first+4, first+8;
+ // previous diagonal cuts persist as the house takes more damage.
+ const hits=Math.max(0,Math.min(1,tier-first+1))
+  +Math.max(0,Math.min(1,tier-first-3))
+  +Math.max(0,Math.min(1,tier-first-7));
+ if(hits<=0)return NO_CITY_CORNER_CUT;
+ const cut=diagonal*upper*Math.min(1,hits*.48);
+ // Existing angled facades fold inwards rather than constructing/shooting
+ // new 3D polygon objects. Roof deck remains near its solid support plane.
+ const inwardX=-sx*Math.min(1.1,lot.width*.16)*cut;
+ const inwardZ=-sz*Math.min(1.1,lot.depth*.16)*cut;
+ const drop=-(isRoof?.10:Math.min(1.35,lot.height*.14))*cut;
+ return [cs*inwardX+sn*inwardZ,drop,-sn*inwardX+cs*inwardZ];
+}
 // Exactly the same vertex-space deformation is used for masonry, signs,
 // original graffiti and persistent user drawings.
 export function cityCollapsePosition(lot,x,y,z,tier,isRoof=false){
@@ -212,33 +225,10 @@ export function cityCollapsePosition(lot,x,y,z,tier,isRoof=false){
  const compression=.08+.075*(.5+.5*noise);
  const ruinedY=isRoof?cityRoofHeight(lot,3)+(y-(lot.height+.13))*.16:
   y<=survivor?y:survivor+rise*compression;
- const [lx,lz]=cityLocal(lot,x,z);
- let localizedDrop=0,sideShear=0;
- // Irregular impact cells tear free independently. Unlike a uniform floor
- // squeeze this produces scattered gouges, diagonal shears and jagged edges
- // before the final low solid ruin. Rooftop center stays aligned with the
- // authoritative collider (the original exact center support contract).
- const profiles=cityFractureProfiles(lot);
- for(let i=0;i<profiles.length&&i<tier;i++){
-  const p=profiles[i],progress=Math.min(1,Math.max(0,tier-i));
-  const dx=(lx-p.localX)/(p.width*.85);
-  const dy=(y-p.localY)/(p.height*1.2);
-  const dz=(lz-p.localZ)/(p.width*.95);
-  const proximity=Math.max(0,1-Math.sqrt(dx*dx+dy*dy+dz*dz)*.64);
-  const fracture=progress*proximity*proximity;
-  localizedDrop+=fracture*(.17+.07*Math.sin(p.seed))*p.height;
-  sideShear+=fracture*p.tilt*.44;
- }
- const transient=Math.sin(Math.PI*amount);
- const roofRim=isRoof?Math.min(1,Math.hypot(lx/Math.max(1,lot.width),lz/Math.max(1,lot.depth))*2):1;
- const sheer=sideShear*transient*factor;
- // Individual facades and corners fold at different speeds. Only the roof's
- // support surface preserves its exact deterministic collision height.
- const skew=(Math.sin(lx*.64+lot.index*.91+y*.42)+Math.cos(lz*.83-y*.57+lot.index*.17))*.5;
- const unevenAmount=isRoof?amount:Math.max(0,Math.min(1,amount*(1+.72*skew*transient)));
- return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*unevenAmount+sheer,
-  y+(ruinedY-y)*unevenAmount-Math.min(lot.height*.18,localizedDrop)*transient*roofRim,
-  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*unevenAmount-sheer*.7];
+ const cut=cityAngularCornerCut(lot,x,y,z,tier,isRoof);
+ return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*amount+cut[0],
+  y+(ruinedY-y)*amount+cut[1],
+  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*amount+cut[2]];
 }
 function cityFootprint(lot,x,z,margin=0){
  const dx=x-lot.x,dz=z-lot.z;
