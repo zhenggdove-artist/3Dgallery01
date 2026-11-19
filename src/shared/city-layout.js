@@ -110,7 +110,8 @@ function cityFootprint(lot,x,z,margin=0){
 export function cityGroundHeight(x,z,y=0,damage={}){
  let height=0;
  for(const lot of CITY_LOTS){
-  if(!cityFootprint(lot,x,z,.06))continue;
+  // Keep support across the 0.20m corrugated roof overhang at its edges.
+  if(!cityFootprint(lot,x,z,.16))continue;
   const top=cityRoofHeight(lot,cityStage(damage[lot.id]?.hp??CITY_MAX_HP));
   // A character below an eave is blocked by its wall, never sucked upward.
   // The .16m tolerance is only for numerical landing precision, not climbing.
