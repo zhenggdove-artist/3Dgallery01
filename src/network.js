@@ -1,6 +1,8 @@
 export class TempleNetwork extends EventTarget{
   constructor(config=window.TEMPLE_CONFIG){
     super();this.config=config;this.base=String(config.backendUrl||'').replace(/\/$/,'');this.token='';this.socket=null;this.joinData=null;this.reconnectTimer=0;this.reconnectAttempt=0;this.closedByUser=false;this.lastStateAt=0;
+    this.stateSequence=0;this.lastAcceptedSequence=0;this.lastCorrectedSequence=0;
+    this.sentStates=new Map();this.rejectionCounts={};
   }
   setBackend(url){this.base=String(url||'').trim().replace(/\/$/,'');localStorage.setItem('temple-backend-url',this.base);}
   ensureConfigured(){if(!/^https?:\/\//.test(this.base)||this.base.includes('REPLACE_WITH_ACCOUNT'))throw new Error('Temple backend URL has not been deployed yet');}
@@ -30,10 +32,35 @@ export class TempleNetwork extends EventTarget{
   async connect(){
     if(!this.token)throw new Error('Join Temple first');if(this.socket){this.socket.onclose=null;this.socket.close();}
     const url=new URL(this.base);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/socket';url.searchParams.set('token',this.token);
-    await new Promise((resolve,reject)=>{const socket=new WebSocket(url);this.socket=socket;const timer=setTimeout(()=>{socket.close();reject(new Error('Realtime connection timed out'));},10_000);socket.onopen=()=>{clearTimeout(timer);this.reconnectAttempt=0;this.dispatch('connection',{connected:true});resolve();};socket.onerror=()=>{clearTimeout(timer);reject(new Error('Realtime connection failed'));};socket.onmessage=event=>{if(event.data==='pong')return;try{const message=JSON.parse(event.data);this.dispatch(message.type,message.data);}catch(error){console.warn('Temple socket message',error);}};socket.onclose=event=>{clearTimeout(timer);this.dispatch('connection',{connected:false,code:event.code});if(!this.closedByUser)this.scheduleReconnect();};});
+    await new Promise((resolve,reject)=>{const socket=new WebSocket(url);this.socket=socket;const timer=setTimeout(()=>{socket.close();reject(new Error('Realtime connection timed out'));},10_000);socket.onopen=()=>{clearTimeout(timer);this.reconnectAttempt=0;this.dispatch('connection',{connected:true});resolve();};socket.onerror=()=>{clearTimeout(timer);reject(new Error('Realtime connection failed'));};socket.onmessage=event=>{if(event.data==='pong')return;try{const message=JSON.parse(event.data);
+      if(message.type==='state-ack')this.acknowledgeState(message.data);
+      if(message.type==='state-rejected')this.rejectedState(message.data);
+      this.dispatch(message.type,message.data);
+     }catch(error){console.warn('Temple socket message',error);}};socket.onclose=event=>{clearTimeout(timer);this.dispatch('connection',{connected:false,code:event.code});if(!this.closedByUser)this.scheduleReconnect();};});
   }
   scheduleReconnect(){clearTimeout(this.reconnectTimer);const delay=Math.min(12_000,600*2**this.reconnectAttempt++);this.reconnectTimer=setTimeout(()=>this.connect().catch(()=>this.scheduleReconnect()),delay);}
-  sendState(state){const now=performance.now();if(now-this.lastStateAt<90||this.socket?.readyState!==WebSocket.OPEN)return;this.lastStateAt=now;this.socket.send(JSON.stringify({type:'state',data:state}));}
+  sendState(state){
+    const now=performance.now();
+    if(now-this.lastStateAt<90||this.socket?.readyState!==WebSocket.OPEN)return;
+    const seq=++this.stateSequence;
+    this.lastStateAt=now;
+    this.sentStates.set(seq,{position:[...state.position],sentAt:now});
+    // The history is bounded and records the exact state the Worker saw,
+    // allowing delayed rejection replies to be rebased rather than snapping
+    // the local player back to a previous animation frame.
+    while(this.sentStates.size>64)this.sentStates.delete(this.sentStates.keys().next().value);
+    this.socket.send(JSON.stringify({type:'state',data:{...state,seq}}));
+  }
+  acknowledgeState(data){
+    const seq=Number(data?.seq)||0;
+    if(!seq)return;
+    this.lastAcceptedSequence=Math.max(this.lastAcceptedSequence,seq);
+    for(const key of this.sentStates.keys())if(key<=seq)this.sentStates.delete(key);
+  }
+  rejectedState(data){
+    const label=String(data?.error||'Unknown');
+    this.rejectionCounts[label]=(this.rejectionCounts[label]||0)+1;
+  }
   async action(action,data={}){return this.request('/api/action',{
     method:'POST',body:{action,requestId:crypto.randomUUID(),...data},
     timeoutMs:action==='gm-wing-publish'?30000:0
