@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {ARENA_RADIUS} from './shared/arena.js';
 
 // Single GPU draw call for thousands of slender segmented grass blades.
 // All meshes and wind/trample rules are generated in JS; no external assets.
@@ -6,7 +7,7 @@ export function grassPositions(count=65000,seed=17331){
  const points=new Float32Array(count*2),heights=new Float32Array(count),angles=new Float32Array(count),phases=new Float32Array(count),shades=new Float32Array(count);
  let state=seed>>>0;const rand=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
  for(let i=0;i<count;i++){
-  const r=Math.sqrt(11*11+(90*90-11*11)*rand()),a=rand()*Math.PI*2;
+  const r=Math.sqrt(11*11+((ARENA_RADIUS/2-2)**2-11*11)*rand()),a=rand()*Math.PI*2;
   points[i*2]=Math.cos(a)*r;points[i*2+1]=Math.sin(a)*r;
   heights[i]=.48+rand()*.82;angles[i]=rand()*Math.PI*2;
   phases[i]=rand()*100;shades[i]=rand();
@@ -96,7 +97,7 @@ export class GrassField{
   scene.add(this.mesh);
   // Continuous fine-blade grass canopy covers every small gap between tufts;
   // no bare underlying meadow plane is visible while walking or looking down.
-  this.canopy=new THREE.Mesh(new THREE.CircleGeometry(500,128),new THREE.ShaderMaterial({
+  this.canopy=new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS/2,128),new THREE.ShaderMaterial({
    vertexShader:`varying vec2 grassPoint;void main(){grassPoint=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
    fragmentShader:`precision mediump float;varying vec2 grassPoint;
     float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
