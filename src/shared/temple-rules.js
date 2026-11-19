@@ -663,6 +663,12 @@ function attack(world,profile,actor,body,context,now){
   if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
    if(weapon.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
    scaleUltimateFootprint(stats,weapon,quality);
+   if(weapon.id==='giraffe'&&stats.ultimate){
+    // Three times the previous ultimate power. A centred 4.9x skinned
+    // baton sweeps a 5.9m-per-quality outer radius while tumbling.
+    stats.damage=+(stats.damage*3).toFixed(3);
+    stats.radius=Math.max(stats.radius,5.9*quality.visual);
+   }
   const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
@@ -758,7 +764,7 @@ function attack(world,profile,actor,body,context,now){
    const inside=area&&['area','sector'].includes(area.mode)?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<(weapon.pattern==='scatter'?.65+along*(stats.ultimate?.56:.32):stats.radius)+structureRadius(v);
    return {v,along,inside};
   }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
-  for(const {v:structure} of (area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
+  for(const {v:structure} of (returningGiraffe?[]:area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
    const damage=Math.max(8,Math.round((stats.damage+bonus*.1)*.7));
    structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
    structure.hp=Math.max(0,structure.hp-damage);
@@ -769,7 +775,7 @@ function attack(world,profile,actor,body,context,now){
   // The city's structural impact follows weapon damage and charged strength,
   // without changing PvP damage or displaying health numbers on the building.
   const structuralDamage=Math.max(8,Math.round((stats.damage+bonus*.1)*(charge>=1?1.5:1.1)));
-  const city=cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
+  const city=returningGiraffe?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
@@ -1443,6 +1449,53 @@ function tickPersistentAttacks(world,actors,now,rng){
       target.kind==='monster'?value:world.profiles[value.key],owner,
       {family:'lightning',element:'electric'},now,fx.echo?.2:1);
      changed=true;
+    }
+    // The revolving soft rod can also strike the real building footprint.
+    // Check along the identical sine-wave outbound/return path, rather
+    // than damaging houses at the instant the player presses A.
+    const stepCount=Math.max(1,Math.ceil(length/.75));
+    fx.structureHitIds??=[];fx.cityHitIds??=[];
+    for(let j=0;j<=stepCount;j++){
+     const t=j/stepCount,point=a.map((v,i)=>v+(b[i]-v)*t);
+     for(const structure of [...(world.structures||[])]){
+      if(structure.owner==='temple'||fx.structureHitIds.includes(structure.id))continue;
+      if(Math.abs(point[1]-(structure.position[1]+structureHeight(structure)*.5))>
+        structureHeight(structure)*.5+fx.radius)continue;
+      if(Math.hypot(point[0]-structure.position[0],point[2]-structure.position[2])>
+        fx.radius+structureRadius(structure))continue;
+      fx.structureHitIds.push(structure.id);
+      structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
+      const damage=Math.max(8,Math.round(fx.damage*.5));
+      structure.hp=Math.max(0,structure.hp-damage);
+      const hit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],
+       hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
+      world.pendingArtworkVisualEvents??=[];
+      world.pendingArtworkVisualEvents.push({kind:'structure-hit',event:hit});
+      if(structure.hp<=0){
+       const destroyed=structureEvent(structure,now);
+       world.pendingArtworkVisualEvents.push({kind:'structure-destroyed',event:destroyed});
+       world.structures.splice(world.structures.indexOf(structure),1);
+      }
+      changed=true;
+     }
+     // Broadphase prevents a 432-house scan during each boomerang step.
+     for(const lot of cityCollisionCandidates(point[0],point[2],Math.min(2,fx.radius))){
+      if(fx.cityHitIds.includes(lot.id)||(world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
+      const [u,v]=cityLocal(lot,point[0],point[2]);
+      const hp=world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP;
+      if(Math.abs(u)>lot.width*.5+fx.radius||Math.abs(v)>lot.depth*.5+fx.radius||
+       point[1]<-fx.radius||point[1]>cityRoofHeightAtHp(lot,hp)+fx.radius)continue;
+      fx.cityHitIds.push(lot.id);
+      const hitPoint=[point[0],Math.max(.1,Math.min(point[1],lot.height)),point[2]];
+      const impact=damageCityLot(world,lot,'masonry',Math.max(8,Math.round(fx.damage*.5)),now,hitPoint);
+      if(impact){
+       world.pendingArtworkVisualEvents??=[];
+       world.pendingArtworkVisualEvents.push({kind:'structure-hit',event:impact.event});
+       if(impact.destroyed)
+        world.pendingArtworkVisualEvents.push({kind:'structure-destroyed',event:impact.destroyed});
+       changed=true;
+      }
+     }
     }
    }
   }else if(fx.kind==='goldfish'){
