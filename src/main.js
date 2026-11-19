@@ -304,7 +304,12 @@ network.addEventListener('state-rejected',event=>{
   // A correction is authoritative, but movement applied after the rejected
   // sample must not be wiped away by a delayed reply.
   if(dx*dx+dy*dy+dz*dz>.36){
-   controller.teleport(corrected);
+   // Predicted step replay is not a teleport: do not erase walk speed,
+   // airborne velocity or knockback each time the server responds.
+   // A true invalid teleport or blocked replay still needs a hard reset.
+   if(!sent||rejection.error==='Invalid position'||(corrected===accepted))
+    controller.teleport(corrected);
+   else controller.root.position.fromArray(corrected);
    controller.grounded=Math.abs(corrected[1]-arena.groundHeight(
     corrected[0],corrected[2],corrected[1]))<.5;
   }
