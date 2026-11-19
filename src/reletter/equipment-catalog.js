@@ -27,6 +27,12 @@ for(const [family,name,color,damage,range,cooldown] of gardenMelee)EQUIPMENT.pus
 EQUIPMENT.push(...ODD_WEAPONS);
 EQUIPMENT.push(...HEADGEAR,...OUTFITS,...WINGS,...SEEDS,...HARVESTS);
 EQUIPMENT.push({id:'chiang-token',name:'蔣家令牌',slot:'weapon',family:'pan',color:'#ae7bd5',tier:5,price:0,notForSale:true,element:'dark',damage:8,chargeDamage:30,range:5,chargeRange:20,radius:2,cooldown:380,description:'Dark melee · Life drain + poison · Full charge summons three spectral bronze guardians for 2 seconds.'});
+// Classification is independent from upgrade-tier range. Every casting
+// staff belongs to MID, including Rank V and the original starter staff.
+const STAFF_FAMILIES=new Set(['water','ice','fire','lightning','beam','petal','wave']);
+for(const item of [DEFAULT_WEAPON,...EQUIPMENT])
+ if(item.slot==='weapon'&&!item.exotic&&STAFF_FAMILIES.has(item.family))
+  item.rangeClass='mid';
 for(const item of [DEFAULT_WEAPON,...EQUIPMENT])item.element=itemElement(item);
 const equipmentIndex=new Map([DEFAULT_WEAPON,...EQUIPMENT].map(item=>[item.id,item]));
 export const equipmentById=id=>equipmentIndex.get(id);
