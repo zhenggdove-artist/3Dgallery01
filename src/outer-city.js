@@ -247,20 +247,60 @@ function wires(lots){
 function instance(geometry,material,count,name){
  const mesh=new THREE.InstancedMesh(geometry,material,count);mesh.name=name;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;return mesh;
 }
+// Three.js can upload only the damaged lot's contiguous vertex range.
+// Marking the entire city buffer dirty on every shake previously sent all
+// 432 houses' vertices to the GPU on each rendered frame.
+export function markPositionRangeDirty(attribute,start,end){
+ if(end<=start)return;
+ if(typeof attribute.addUpdateRange==='function')attribute.addUpdateRange(start*3,(end-start)*3);
+ attribute.needsUpdate=true;
+}
+function chunkDescriptions(lot){
+  const floorH=lot.height/lot.floors;
+  const descriptions=[
+   [0,.22,0,lot.width+.15,.44,lot.depth+.15,lot.trim],
+   ...Array.from({length:lot.floors},(_,level)=>{
+    const taper=level&&lot.silhouette%3===0?.79:1;
+    const shift=level?lot.offset*(level%2?1:-.4):0;
+    const setback=level&&lot.silhouette%4===0?(level%2?.8:-.4):0;
+    return [shift,(level+.5)*floorH,setback,lot.width*taper,floorH*.97,
+      lot.depth*(level&&lot.silhouette%5===0?.86:1),level&&lot.silhouette%4===1?lot.detail:lot.color];
+   }),
+   [0,lot.height+.09,0,lot.width+.4,.24,lot.depth+.36,lot.roof],
+   [-lot.width*.36,lot.height*.52,lot.depth*.43,.24,Math.max(.7,lot.height*.75),.3,lot.trim],
+   [lot.width*.37,lot.height*.46,-lot.depth*.45,.3,Math.max(.7,lot.height*.74),.35,lot.detail],
+   [0,.3,lot.depth*.53,lot.width*.72,.52,.44,lot.color]
+  ];
+ return descriptions;
+}
 export class OuterCity{
  constructor(scene,{mobile=false}={}){
   this.scene=scene;this.mobile=mobile;this.root=new THREE.Group();
   this.root.name='High-density ruined city, solid collision and staged destruction';scene.add(this.root);
   this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();this.plumes=[];
    this.renderedTiers=new Map();this.poseCache=new Map();this.collapseAnimations=new Map();this.shakes=new Map();this.seenCityEvents=new Set();
-  this.plumeResources=createPlumeResources();this.partsHidden=new Set();
+  this.plumeResources=createPlumeResources();this.plumePool=[];this.partsHidden=new Set();
+  this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
+  this.pendingEjections=[];
   this.cube=new THREE.BoxGeometry(1,1,1);
+  // Build detailed chipped plaster, framed glass, reinforcement and brick
+  // templates at scene load rather than extruding dozens of shapes PER HIT.
+  // Every house of the same material uses the same original palette; each
+  // animated clone retains the complete native mesh/material detail.
+  this.scrapPrefabs=new Map();
+  for(const lot of this.lots){
+   if(this.scrapPrefabs.has(lot.material))continue;
+   this.scrapPrefabs.set(lot.material,Array.from({length:4},(_,i)=>
+    buildBrokenStructure(lot,18+i,.24+i*.07,.31+i*.06,.16+i*.014,
+     i%3===0?'#87979c':i%2?lot.trim:lot.detail)));
+  }
   // Outer district is covered by GrassField's continuous living grass canopy.
   this.walls=batchGeometry(this.lots,mobile);this.facade=installFacadeCracks(this.walls);
   this.signs=buildShopSigns(this.lots);this.graffiti=buildWallGraffiti(this.lots);
    installAttachedFlash(this.signs,this.facade.texture);installAttachedFlash(this.graffiti,this.facade.texture);
   for(const mesh of [this.walls,this.signs,this.graffiti]){
     mesh.userData.originalPositions=mesh.geometry.attributes.position.array.slice();
+    mesh.geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled=false; // The vertex positions change during staged structural collapse.
    }
   this.root.add(this.walls,this.signs,this.graffiti,wires(this.lots));
@@ -304,7 +344,7 @@ export class OuterCity{
  hideRange(mesh,start,end){
   const attr=mesh.geometry.attributes.position;
   for(let i=start;i<end;i++)attr.array[i*3+1]=-120;
-  attr.needsUpdate=true;
+  markPositionRangeDirty(attr,start,end);
  }
  collapseLot(index,tier=10,shakeX=0,shakeZ=0){
   const lot=this.lots[index];if(!lot)return;
@@ -330,7 +370,7 @@ export class OuterCity{
     positions[j+1]=point[1];
     positions[j+2]=point[2]+shakeZ;
    }
-   attr.needsUpdate=true;
+   markPositionRangeDirty(attr,range[0],range[1]);
   }
   if(tier>=10&&shakeX===0&&shakeZ===0)this.wallPaint?.collapseLot(index);
   else this.wallPaint?.deformTier(index,tier,shakeX,shakeZ);
@@ -364,23 +404,19 @@ export class OuterCity{
    }
    return;
   }
+  if(animate&&stage===3){
+   const prepared=this.preparedChunks.get(lot.index);
+   if(prepared)this.activatePreparedChunks(lot,prepared);
+   else{
+    this.prepareChunks(lot);
+    const job=this.preparingChunks.get(lot.index);
+    if(job)job.activate=true;
+   }
+   return;
+  }
   const root=new THREE.Group();root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
   root.name='Solid volumetric collapse '+lot.id;
-  const floorH=lot.height/lot.floors;
-  const descriptions=[
-   [0,.22,0,lot.width+.15,.44,lot.depth+.15,lot.trim],
-   ...Array.from({length:lot.floors},(_,level)=>{
-    const taper=level&&lot.silhouette%3===0?.79:1;
-    const shift=level?lot.offset*(level%2?1:-.4):0;
-    const setback=level&&lot.silhouette%4===0?(level%2?.8:-.4):0;
-    return [shift,(level+.5)*floorH,setback,lot.width*taper,floorH*.97,
-      lot.depth*(level&&lot.silhouette%5===0?.86:1),level&&lot.silhouette%4===1?lot.detail:lot.color];
-   }),
-   [0,lot.height+.09,0,lot.width+.4,.24,lot.depth+.36,lot.roof],
-   [-lot.width*.36,lot.height*.52,lot.depth*.43,.24,Math.max(.7,lot.height*.75),.3,lot.trim],
-   [lot.width*.37,lot.height*.46,-lot.depth*.45,.3,Math.max(.7,lot.height*.74),.35,lot.detail],
-   [0,.3,lot.depth*.53,lot.width*.72,.52,.44,lot.color]
-  ];
+  const descriptions=chunkDescriptions(lot);
   const r=random(900+lot.index*73),pieces=[];
   descriptions.forEach(([x,y,z,w,h,d,c],index)=>{
    const mesh=buildBrokenStructure(lot,index,w,h,d,c);
@@ -396,6 +432,58 @@ export class OuterCity{
   });
   this.root.add(root);this.chunks.set(lot.index,{root,pieces,stage,age:0,animateStarted:animate});
  }
+ // The full-resolution collapsed-house sculpture is prepared incrementally
+ // after the first hit, not synchronously at the expensive killing blow.
+ prepareChunks(lot){
+  const index=lot.index;
+  if(this.chunks.has(index)||this.preparedChunks.has(index)||this.preparingChunks.has(index))return;
+  const root=new THREE.Group();root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
+  root.name='Solid volumetric collapse '+lot.id;
+  const job={lot,root,pieces:[],descriptions:chunkDescriptions(lot),
+   random:random(900+index*73),step:0,activate:false};
+  this.preparingChunks.set(index,job);this.chunkBuildQueue.push(job);
+ }
+ activatePreparedChunks(lot,effect){
+  this.preparedChunks.delete(lot.index);
+  effect.stage=3;effect.animateStarted=true;effect.age=0;
+  for(const part of effect.pieces){
+   part.mesh.position.copy(part.home);
+   part.mesh.rotation.set(0,0,0);
+   part.moving=true;part.settled=false;
+  }
+  this.root.add(effect.root);this.chunks.set(lot.index,effect);
+ }
+ disposePreparedChunks(effect){
+  effect.root.traverse(o=>{o.geometry?.dispose();if(o.material)
+   for(const mat of Array.isArray(o.material)?o.material:[o.material])mat.dispose();});
+  effect.root.removeFromParent();
+ }
+ stepChunkPreparation(){
+  const job=this.chunkBuildQueue.shift();if(!job)return;
+  if(this.preparingChunks.get(job.lot.index)!==job)return;
+  const {lot,random:r}=job,index=job.step;
+  const [x,y,z,w,h,d,c]=job.descriptions[index];
+  const mesh=buildBrokenStructure(lot,index,w,h,d,c);
+  const home=new THREE.Vector3(x,y,z);
+  mesh.position.copy(home);job.root.add(mesh);
+  job.pieces.push({mesh,index,home,velocity:new THREE.Vector3((r()-.5)*2,1+r()*2,(r()-.5)*2),
+   spin:new THREE.Vector3((r()-.5)*1.5,0,(r()-.5)*1.5),
+   h,moving:false,settled:true,wasInitiallySettled:true});
+  job.step++;
+  if(job.step<job.descriptions.length){this.chunkBuildQueue.push(job);return;}
+  this.preparingChunks.delete(lot.index);
+  const effect={root:job.root,pieces:job.pieces,stage:3,age:0,animateStarted:false};
+  if(job.activate)this.activatePreparedChunks(lot,effect);
+  else{
+   this.preparedChunks.set(lot.index,effect);
+   const limit=this.mobile?8:16;
+   if(this.preparedChunks.size>limit){
+    const oldest=this.preparedChunks.keys().next().value;
+    this.disposePreparedChunks(this.preparedChunks.get(oldest));
+    this.preparedChunks.delete(oldest);
+   }
+  }
+ }
  flash(lot){
   // The actual facade, roof, shop sign and graffiti flash crimson, without
   // an exterior-invisible BackSide box.
@@ -408,6 +496,17 @@ export class OuterCity{
   else this.shakes.set(lot.index,{age:0,power:.19});
  }
  eject(lot,part,point,detached=false){
+  // All bursts remain visible, but dozens of overlapping area-of-effect
+  // hits cannot synchronously extrude dozens of architectural assemblies.
+  this.pendingEjections.push({lot,part,point:point?.slice?.()||null,detached});
+ }
+ processEjections(){
+  const job=this.pendingEjections.shift();
+  if(!job)return false;
+  this.spawnEjection(job.lot,job.part,job.point,job.detached);
+  return true;
+ }
+ spawnEjection(lot,part,point,detached=false){
   const r=random(lot.index*1259+Math.floor(performance.now())),root=new THREE.Group(),pieces=[];
   root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
   root.name='Real mounted windows, water pipes, steel awnings and chipped facade';
@@ -420,9 +519,12 @@ export class OuterCity{
    add(buildDetachableFixture(lot,part,lot.index+Math.floor(performance.now())),1.15);
   }
   const local=point?this.toLocal(lot,point):[0,Math.min(2,lot.height*.5),lot.depth*.5];
+  const prototypes=this.scrapPrefabs.get(lot.material);
   for(let i=0;i<(this.mobile?2:4);i++){
-   const fragment=buildBrokenStructure(lot,18+i,.15+r()*.36,.2+r()*.45,.12+r()*.13,
-    i%3===0?'#87979c':i%2?lot.trim:lot.detail);
+   // Clone transform nodes only: detailed geometry, crack shaders, windows,
+   // torn metal and textures all remain shared and GPU-resident.
+   const fragment=prototypes[i].clone(true);
+   fragment.userData.sharedCityScrap=true;
    fragment.position.set(local[0]+(r()-.5)*.5,local[1]+(r()-.5)*.6,local[2]+(r()-.5)*.4);
    fragment.scale.setScalar(.38+r()*.35);add(fragment,.75);
   }
@@ -434,16 +536,31 @@ export class OuterCity{
   return [dx*c-dz*s,point[1],dx*s+dz*c];
  }
  removeDebris(effect){
-  effect.root.traverse(object=>{object.geometry?.dispose();if(object.material)
-   for(const mat of Array.isArray(object.material)?object.material:[object.material]){
-    mat.map?.dispose();mat.dispose();
-   }});
+  for(const piece of effect.pieces){
+   if(piece.mesh.userData.sharedCityScrap)continue; // Shared prefab is owned by the city.
+   piece.mesh.traverse(object=>{object.geometry?.dispose();if(object.material)
+    for(const mat of Array.isArray(object.material)?object.material:[object.material]){
+     mat.map?.dispose();mat.dispose();
+    }});
+  }
   effect.root.removeFromParent();
+ }
+ recyclePlume(effect){
+  effect.root.removeFromParent();
+  if(this.plumePool.length<24)this.plumePool.push(effect);
+  else disposePlume(effect);
+ }
+ spawnPlume(position,seed,limit=this.mobile?15:24){
+  const recycled=this.plumePool.pop()||null;
+  const plume=emitFireSmoke(this.root,position,this.plumeResources,this.mobile,seed,recycled);
+  this.plumes.push(plume);
+  if(this.plumes.length>limit)this.recyclePlume(this.plumes.shift());
  }
  // Each 10%-HP boundary causes an independent structural drop and debris burst.
  // Strong weapons can cross multiple boundaries in one hit; animate all rapidly.
  beginCollapse(lot,previousTier,nextTier,event=null){
   if(nextTier<=previousTier)return;
+  this.prepareChunks(lot);
   let motion=this.collapseAnimations.get(lot.index);
   if(!motion){
    const start=Math.min(previousTier,this.renderedTiers.get(lot.index)??previousTier);
@@ -465,10 +582,7 @@ export class OuterCity{
    if(range)this.hideRange(this.signs,...range);
   }
   if(part==='sheets-awning')this.hidePart(lot.index,part);
-  const plume=emitFireSmoke(this.root,impact,this.plumeResources,this.mobile,
-   lot.index*131+tier*499);
-  this.plumes.push(plume);
-  if(this.plumes.length>(this.mobile?15:24))disposePlume(this.plumes.shift());
+  this.spawnPlume(impact,lot.index*131+tier*499);
  }
  applyDamageEvent(event){
   const lot=this.lots[event?.cityLotIndex];if(!lot)return;
@@ -486,9 +600,8 @@ export class OuterCity{
   // Non-threshold hits still throw fine chips, smoke and shake the building.
   if(tier===from){
    this.eject(lot,event.part||'masonry',event.position,!!event.partDestroyed);
-   const plume=emitFireSmoke(this.root,event.position||[lot.x,1.5,lot.z],
-    this.plumeResources,this.mobile,lot.index+Math.floor(performance.now()));
-   this.plumes.push(plume);if(this.plumes.length>22)disposePlume(this.plumes.shift());
+   this.spawnPlume(event.position||[lot.x,1.5,lot.z],
+    lot.index+Math.floor(performance.now()),22);
   }else this.beginCollapse(lot,from,tier,event);
   if(event.partDestroyed&&event.part!=='masonry')this.hidePart(lot.index,event.part);
  }
@@ -524,7 +637,7 @@ export class OuterCity{
   this.wallPaint?.resetBuildings();
   for(const mesh of [this.walls,this.signs,this.graffiti]){
    const attr=mesh.geometry.attributes.position,original=mesh.userData.originalPositions;
-   if(original){attr.array.set(original);attr.needsUpdate=true;}
+   if(original){attr.array.set(original);attr.clearUpdateRanges?.();attr.needsUpdate=true;}
   }
   for(const effect of this.chunks.values()){
    effect.root.traverse(obj=>{obj.geometry?.dispose();if(obj.material)
@@ -532,8 +645,12 @@ export class OuterCity{
    effect.root.removeFromParent();
   }
   this.chunks.clear();
+  for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
+  for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
+  this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
+  this.pendingEjections=[];
   for(const effect of this.debris)this.removeDebris(effect);this.debris=[];
-  for(const effect of this.plumes)disposePlume(effect);this.plumes=[];
+  for(const effect of this.plumes)this.recyclePlume(effect);this.plumes=[];
   // Hit tints are stored in the shared damage texture and have no overlay meshes.
   this.flashes=[];
  }
@@ -597,7 +714,7 @@ export class OuterCity{
    this.collapseLot(index,visibleTier,shakeX,shakeZ);
   }
   for(let i=this.plumes.length-1;i>=0;i--)if(updateFireSmoke(this.plumes[i],dt)){
-   disposePlume(this.plumes[i]);this.plumes.splice(i,1);
+   this.recyclePlume(this.plumes[i]);this.plumes.splice(i,1);
   }
   for(let i=this.debris.length-1;i>=0;i--){
    const effect=this.debris[i];effect.age+=dt;
@@ -611,6 +728,9 @@ export class OuterCity{
    }
    if(effect.age>3.5){this.removeDebris(effect);this.debris.splice(i,1);}
   }
+  // One costly VFX geometry job per frame, including simultaneous AOE hits.
+  // Structural tiers, collision, hit tint and smoke still react immediately.
+  if(!this.processEjections())this.stepChunkPreparation();
   for(const effect of this.chunks.values()){
    effect.age+=dt;
    for(const part of effect.pieces){
@@ -628,8 +748,15 @@ export class OuterCity{
   }
  }
  dispose(){
+  for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
+  for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
+  this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
+  this.pendingEjections=[];
   for(const effect of this.debris)this.removeDebris(effect);
-  for(const effect of this.plumes)disposePlume(effect);
+  for(const effect of [...this.plumes,...this.plumePool])disposePlume(effect);
+  for(const templates of this.scrapPrefabs.values())for(const template of templates)
+   template.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material]){m.map?.dispose();m.dispose();}});
+  this.scrapPrefabs.clear();
   this.plumeResources.flame.dispose();this.plumeResources.smoke.dispose();this.facade.texture.dispose();
   this.root.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material]){m.map?.dispose();m.dispose();}});
   this.cube.dispose();this.root.removeFromParent();

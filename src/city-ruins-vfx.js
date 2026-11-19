@@ -263,11 +263,12 @@ if(vCityLot>=0.){
  mesh.material.needsUpdate=true;
  return {texture:map,set(index,hp,maxHp=CITY_MAX_HP){
   if(index<0||index>=width)return;
-  bytes[index*4]=Math.round(clamp(1-hp/maxHp,0,1)*255);
-  map.needsUpdate=true;
+  const value=Math.round(clamp(1-hp/maxHp,0,1)*255);
+  if(bytes[index*4]!==value){bytes[index*4]=value;map.needsUpdate=true;}
  },pulse(index,intensity){
   if(index<0||index>=width)return;
-  bytes[index*4+1]=Math.round(clamp(intensity,0,1)*255);map.needsUpdate=true;
+  const value=Math.round(clamp(intensity,0,1)*255);
+  if(bytes[index*4+1]!==value){bytes[index*4+1]=value;map.needsUpdate=true;}
  },reset(){bytes.fill(0);map.needsUpdate=true;}};
 }
 export function installAttachedFlash(mesh,texture){
@@ -297,8 +298,30 @@ function plumeTexture(mode){
 export function createPlumeResources(){
  return {flame:plumeTexture('flame'),smoke:plumeTexture('smoke')};
 }
-export function emitFireSmoke(root,position,resources,mobile,seed=1){
+// Geometry, material, and texture storage is recycled after a plume expires.
+// Re-seeding every individual particle preserves the original visual variety
+// and counts, without reallocating WebGL buffers when attacks hit repeatedly.
+export function emitFireSmoke(root,position,resources,mobile,seed=1,recycled=null){
  const r=random(seed),count=mobile?18:35;
+ if(recycled){
+  recycled.age=0;
+  recycled.root.position.fromArray(position);
+  root.add(recycled.root);
+  for(const {pts,data,type} of recycled.clouds){
+   const arr=pts.geometry.attributes.position.array;
+   for(let i=0;i<data.length;i++){
+    const x=(r()-.5)*.8,y=(r()-.5)*.45,z=(r()-.5)*.8;
+    arr.set([x,y,z],i*3);
+    data[i]={x,y,z,vx:(r()-.5)*.7,vz:(r()-.5)*.7,
+     speed:(type==='flame'?1.1:1.65)+r()*.9,phase:r()*6.283};
+   }
+   pts.geometry.attributes.position.needsUpdate=true;
+   pts.material.opacity=type==='flame'?.95:.6;
+   pts.material.size=type==='flame'?.65:1.6;
+  }
+  return recycled;
+ }
+ const group=new THREE.Group();group.position.fromArray(position);root.add(group);
  const clouds=[];
  for(const type of ['flame','smoke']){
   const n=type==='flame'?Math.ceil(count*.63):count,arr=new Float32Array(n*3),data=[];
@@ -311,10 +334,8 @@ export function emitFireSmoke(root,position,resources,mobile,seed=1){
   const mat=new THREE.PointsMaterial({map:resources[type],color:'#ffffff',size:type==='flame'?.65:1.6,
    transparent:true,depthWrite:false,opacity:type==='flame'?.95:.6,sizeAttenuation:true});
   const pts=new THREE.Points(geo,mat);pts.frustumCulled=false;pts.name='Fire and rolling smoke from fractured facade';
-  root.add(pts);clouds.push({pts,data,type});
+  group.add(pts);clouds.push({pts,data,type});
  }
- const group=new THREE.Group();group.position.fromArray(position);root.add(group);
- for(const layer of clouds){layer.pts.removeFromParent();group.add(layer.pts);}
  return {root:group,clouds,age:0,duration:4.4};
 }
 export function updateFireSmoke(effect,dt){
