@@ -7,7 +7,7 @@ import {CITY_LOTS,CITY_BUILDING_COUNT,CITY_MATERIALS,CITY_MAX_HP,CITY_INNER_RADI
 import {validateState,createInitialWorld,worldView,ensureProfile} from '../src/shared/temple-rules.js';
 const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 
-test('the ochre sand district has exactly twice the old surface area and triple the density',()=>{
+test('the ruined city district retains twice the original area and triple the housing density',()=>{
  const oldArea=Math.PI*(184**2-92**2);
  const newArea=Math.PI*(CITY_OUTER_RADIUS**2-CITY_INNER_RADIUS**2);
  assert.ok(Math.abs(newArea/oldArea-2)<1e-12);
@@ -56,7 +56,7 @@ test('authoritative player pose validation rejects entry into a solid building',
  const reopened=validateState(previous,next,1000,'fighter',null,null,2000,nowBroken);
  assert.equal(reopened.error,undefined);
 });
-test('visual chunks are six-faced solids, sync every lot and reflect server damage',()=>{
+test('fragmented structural facades stay solid, synchronized and restore all damaged lots',()=>{
  const render=source('src/outer-city.js');
  assert.match(render,/BoxGeometry\(1,1,1\)/);
  assert.match(render,/createChunks\(lot,stage/);
@@ -64,8 +64,9 @@ test('visual chunks are six-faced solids, sync every lot and reflect server dama
  assert.match(render,/syncDamage\(damage=\{\}\)/);
  assert.match(render,/hidePart\(index,part\)/);
  assert.match(render,/flash\(lot\)/);
- assert.match(render,/eject\(lot,part,point\)/);
- assert.match(render,/compactedSand/);
+ assert.match(render,/eject\(lot,part,point,detached=false\)/);
+ assert.doesNotMatch(render,/this\.root\.add\(ground\)/);
+ assert.match(render,/installFacadeCracks/);
  assert.doesNotMatch(render,/cityLots\(912744,mobile/);
 });
 test('entry copy is entirely English and SUPPORT has no fake OS or artist prompt',()=>{
