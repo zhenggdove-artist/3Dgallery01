@@ -46,7 +46,8 @@ test('client physics uses shared roof-height geometry including late destruction
  assert.match(arena,/cityGroundHeight\(x,z,y,this\.world\?\.cityDamage/);
  assert.match(arena,/cityBlocked\(x,z,y,this\.world\?\.cityDamage/);
  assert.match(player,/Recheck support every tick/);
- assert.match(city,/cityCollapsePosition\(lot,/);
+ assert.match(city,/buildCityDeformationBasis\(lot,/);
+ assert.match(city,/applyCityDeformationBasis\(original,/); // Numerically checked against cityCollapsePosition in performance regression.
  const layout=source('src/shared/city-layout.js');
  assert.match(layout,/cityRoofHeightAtHp\(lot,/);
 });
