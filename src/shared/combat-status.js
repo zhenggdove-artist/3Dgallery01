@@ -15,7 +15,7 @@ export function applyStatus(world,source,target,weapon,shot,now){
  // Rarity extends every newly inflicted debuff without multiplying older
  // stacks each time the same persistent fire or vine hits again.
  // Temple's six elemental responses are authoritative and generated only after a real hit.
- applyElementalHit(target,source,weapon,now);
+ applyElementalHit(target,source,{...weapon,ultimateHit:!!shot.ultimate},now);
  const durationScale=Math.max(1,Math.min(2.4,Number(shot.qualityDuration)||1));
  for(const [key,effect] of Object.entries(target.effects||{})){
   if(['freeze','root','confuse','dazzle','soaked'].includes(key)||effect.owner!==source.key||effect.until<=(previous[key]||0))continue;
@@ -56,7 +56,7 @@ export function applyElementalHit(target,source,weapon,now,scale=1){
   if(family==='palm'&&weapon.id?.startsWith('palm-')&&weapon.ultimateHit)
    return put('root',3000,0,6000);
   if(['planter','petal','palm','whip'].includes(family)&&!weapon.exotic)
-   return put('root',family==='palm'?3000:1000,0,family==='palm'?6000:5000);
+   return put('root',1000,0,5000);
  if(family==='fire'||weapon.element==='fire'){
   if(!e.burn||e.burn.until<=now)return put('burn',5000,1);
   return 'burn';
