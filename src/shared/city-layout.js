@@ -170,7 +170,10 @@ export function cityRoofHeight(lot,stage=0){
 }
 // Shared by browser physics, Worker collision and weapon targeting.
 export function cityRoofHeightAtHp(lot,hp=CITY_MAX_HP,maxHp=CITY_MAX_HP){
- const amount=cityCollapseProgress(cityDamageTier(hp,maxHp));
+ const tier=cityDamageTier(hp,maxHp);
+ if(tier===0)return lot.height+.13;
+ if(tier===10)return cityRoofHeight(lot,3);
+ const amount=cityCollapseProgress(tier);
  return lot.height+.13+(cityRoofHeight(lot,3)-(lot.height+.13))*amount;
 }
 // Exactly the same vertex-space deformation is used for masonry, signs,
