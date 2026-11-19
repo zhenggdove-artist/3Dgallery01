@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {CITY_LOTS,cityFacadeFloor} from './shared/city-layout.js';
+import {CITY_LOTS,cityFacadeFloor,cityCollapsePosition} from './shared/city-layout.js';
 
 const WALLS=['front','back','left','right'];
 const SIZE=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches?256:512;
@@ -76,7 +76,8 @@ export class CityWallPaint{
   mesh.renderOrder=1;this.root.add(mesh);
   const slot={lot,wall,mesh,canvas,ctx,texture,original,strokes:[],stamp:'',preview:null};
   this.surfaces.set(key,slot);
-  if(this.city.hidden.has(lot.index))this.deform(slot);
+  const tier=this.city.renderedTiers?.get(lot.index)??this.city.damage[lot.id]?.tier??0;
+  if(tier>0)this.deform(slot,tier);
   return slot;
  }
  draw(slot){
@@ -116,25 +117,20 @@ export class CityWallPaint{
   slot.mesh.removeFromParent();slot.mesh.geometry.dispose();
   slot.mesh.material.dispose();slot.texture.dispose();
  }
- deform(slot){
+ deform(slot,tier=10,shakeX=0,shakeZ=0){
   const lot=slot.lot,attr=slot.mesh.geometry.attributes.position,arr=attr.array;
   const original=slot.original;
-  const firstFloor=lot.height/lot.floors,survivor=firstFloor*(lot.floors===1?.32:.76);
   for(let i=0;i<arr.length;i+=3){
-   const ox=original[i],oy=original[i+1],oz=original[i+2];
-   if(oy<=survivor){arr[i]=ox;arr[i+1]=oy;arr[i+2]=oz;continue;}
-   const collapse=oy-survivor;
-   const noise=Math.sin(lot.index*.73+ox*.81+oz*.59+oy*1.13);
-   const compression=.08+.075*(.5+.5*noise);
-   const factor=Math.min(1,collapse/Math.max(1,lot.height-survivor));
-   arr[i]=ox+Math.sin(oy*1.9+lot.index*.9)*factor*.35;
-   arr[i+1]=survivor+collapse*compression;
-   arr[i+2]=oz+Math.cos(oy*1.5+lot.index*.7)*factor*.35;
+   const p=cityCollapsePosition(lot,original[i],original[i+1],original[i+2],tier);
+   arr[i]=p[0]+shakeX;arr[i+1]=p[1];arr[i+2]=p[2]+shakeZ;
   }
   attr.needsUpdate=true;slot.mesh.geometry.computeBoundingSphere();
  }
+ deformTier(index,tier,shakeX=0,shakeZ=0){
+  for(const slot of this.surfaces.values())if(slot.lot.index===index)this.deform(slot,tier,shakeX,shakeZ);
+ }
  collapseLot(index){
-  for(const slot of this.surfaces.values())if(slot.lot.index===index)this.deform(slot);
+  this.deformTier(index,10);
  }
  resetBuildings(){
   for(const slot of this.surfaces.values()){
