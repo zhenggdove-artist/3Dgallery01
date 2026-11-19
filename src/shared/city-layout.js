@@ -180,30 +180,36 @@ export function cityRoofHeightAtHp(lot,hp=CITY_MAX_HP,maxHp=CITY_MAX_HP){
 // The same deterministic cut applies to all walls and painted decals. It
 // only moves existing vertices: zero additional meshes, particles, polygons
 // or GPU materials, including across all 432 houses.
+const cityCornerRotations=new WeakMap();
 export function cityAngularCornerCut(lot,x,y,z,tier,isRoof=false){
  if(tier<=0)return [0,0,0];
- const [lx,lz]=cityLocal(lot,x,z);
- const sx=lx>=0?1:-1,sz=lz>=0?1:-1;
- // Numbering matches the rotating corner sequence on every house.
- const corner=(sx<0?1:0)+(sz<0?2:0);
- const first=1+((corner-(lot.index&3)+4)&3);
- const step=n=>Math.max(0,Math.min(1,tier-(n-1)));
- const hits=step(first)+step(first+4)+step(first+8);
- if(hits<=0)return [0,0,0];
+ // A hit can animate thousands of the existing batched vertices. Cache the
+ // building's yaw once instead of calling trig functions twice per vertex.
+ let rotation=cityCornerRotations.get(lot);
+ if(!rotation){rotation=[Math.cos(lot.yaw),Math.sin(lot.yaw)];cityCornerRotations.set(lot,rotation);}
+ const [cs,sn]=rotation,dx=x-lot.x,dz=z-lot.z;
+ const lx=dx*cs-dz*sn,lz=dx*sn+dz*cs;
  const ax=Math.abs(lx)/Math.max(.1,lot.width*.5);
  const az=Math.abs(lz)/Math.max(.1,lot.depth*.5);
- // ax+az=1 marks a diagonal across the rectangular corner. A triangular
- // corner is notched; the middle of the roof and the other corners remain.
+ // ax+az=1 marks the inner diagonal boundary of a corner notch.
  const diagonal=Math.max(0,Math.min(1,(ax+az-1.05)/.95));
+ if(diagonal<=0)return [0,0,0];
  const upper=Math.max(0,Math.min(1,(y-lot.height*.34)/Math.max(.2,lot.height*.66)));
- const cut=diagonal*upper*Math.min(1,hits*.36);
- if(cut<=0)return [0,0,0];
- // Shrink the exposed corner towards the house interior and lower the
- // oblique wall edge. Roof deck remains within a few centimetres of the
- // authoritative collision plane, preserving standable broken buildings.
+ if(upper<=0)return [0,0,0];
+ const sx=lx>=0?1:-1,sz=lz>=0?1:-1;
+ const corner=(sx<0?1:0)+(sz<0?2:0);
+ const first=1+((corner-(lot.index&3)+4)&3);
+ // Only this corner is affected by thresholds first, first+4, first+8;
+ // previous diagonal cuts persist as the house takes more damage.
+ const hits=Math.max(0,Math.min(1,tier-first+1))
+  +Math.max(0,Math.min(1,tier-first-3))
+  +Math.max(0,Math.min(1,tier-first-7));
+ if(hits<=0)return [0,0,0];
+ const cut=diagonal*upper*Math.min(1,hits*.48);
+ // Existing angled facades fold inwards rather than constructing/shooting
+ // new 3D polygon objects. Roof deck remains near its solid support plane.
  const inwardX=-sx*Math.min(1.1,lot.width*.16)*cut;
  const inwardZ=-sz*Math.min(1.1,lot.depth*.16)*cut;
- const cs=Math.cos(lot.yaw),sn=Math.sin(lot.yaw);
  const drop=-(isRoof?.10:Math.min(1.35,lot.height*.14))*cut;
  return [cs*inwardX+sn*inwardZ,drop,-sn*inwardX+cs*inwardZ];
 }
