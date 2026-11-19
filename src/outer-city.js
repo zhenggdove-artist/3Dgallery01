@@ -278,36 +278,54 @@ export class OuterCity{
  createChunks(lot,stage,animate=false){
   let effect=this.chunks.get(lot.index);
   if(effect){
-   if(effect.stage!==3&&stage===3){
-    effect.stage=3;
-    for(const piece of effect.pieces){piece.moving=true;piece.settled=false;piece.velocity.y+=1.8+piece.index*.25;}
+   if(stage===3&&(effect.stage!==3||(animate&&!effect.animateStarted))){
+    effect.stage=3;effect.animateStarted=true;
+    for(const piece of effect.pieces){
+     if(!piece.settled){/* preserve prior partial collapse */}
+     else if(animate&&piece.wasInitiallySettled){
+      // A world snapshot may arrive before this impact; reconstruct its
+      // 3D pre-fall height so the final collapse remains visible on all clients.
+      piece.mesh.position.copy(piece.home);
+      piece.mesh.rotation.set(0,0,0);
+     }
+     piece.moving=true;piece.settled=false;piece.velocity.y+=1.4+piece.index*.13;
+    }
    }else if(stage===2&&animate&&!effect.animateStarted){
     effect.animateStarted=true;
-    for(const piece of effect.pieces.slice(1)){piece.moving=true;piece.settled=false;}
+    for(const piece of effect.pieces.slice(2)){piece.moving=true;piece.settled=false;}
    }
    return;
   }
   const root=new THREE.Group();root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
   root.name='Solid volumetric collapse '+lot.id;
+  const floorH=lot.height/lot.floors;
   const descriptions=[
-   [0,.7,0,lot.width*.95,1.4,lot.depth*.93,lot.color],
-   [-lot.width*.28,1.85,-lot.depth*.22,lot.width*.35,1.55,lot.depth*.5,lot.detail],
-   [lot.width*.25,1.8,lot.depth*.20,lot.width*.45,1.45,lot.depth*.42,lot.trim],
-   [0,2.7,0,lot.width*.81,.28,lot.depth*.79,lot.roof],
-   [-lot.width*.34,1.55,lot.depth*.43,.27,2.3,.42,lot.detail],
-   [lot.width*.35,1.35,-lot.depth*.45,.3,1.9,.35,lot.trim],
-   [0,.3,lot.depth*.53,lot.width*.72,.5,.44,lot.color]
+   [0,.22,0,lot.width+.15,.44,lot.depth+.15,lot.trim],
+   ...Array.from({length:lot.floors},(_,level)=>{
+    const taper=level&&lot.silhouette%3===0?.79:1;
+    const shift=level?lot.offset*(level%2?1:-.4):0;
+    const setback=level&&lot.silhouette%4===0?(level%2?.8:-.4):0;
+    return [shift,(level+.5)*floorH,setback,lot.width*taper,floorH*.97,
+      lot.depth*(level&&lot.silhouette%5===0?.86:1),level&&lot.silhouette%4===1?lot.detail:lot.color];
+   }),
+   [0,lot.height+.09,0,lot.width+.4,.24,lot.depth+.36,lot.roof],
+   [-lot.width*.36,lot.height*.52,lot.depth*.43,.24,Math.max(.7,lot.height*.75),.3,lot.trim],
+   [lot.width*.37,lot.height*.46,-lot.depth*.45,.3,Math.max(.7,lot.height*.74),.35,lot.detail],
+   [0,.3,lot.depth*.53,lot.width*.72,.52,.44,lot.color]
   ];
   const r=random(900+lot.index*73),pieces=[];
   descriptions.forEach(([x,y,z,w,h,d,c],index)=>{
    const material=new THREE.MeshStandardMaterial({color:c,roughness:.96,metalness:.02});
-   const mesh=new THREE.Mesh(this.cube,material);mesh.position.set(x,y,z);mesh.scale.set(w,h,d);root.add(mesh);
+   const mesh=new THREE.Mesh(this.cube,material);
+   const home=new THREE.Vector3(x,y,z);
+   mesh.position.copy(home);mesh.scale.set(w,h,d);root.add(mesh);
    if(!animate&&stage===3){
-    mesh.position.set(x+(r()-.5)*lot.width*.35,mesh.scale.y*.22,z+(r()-.5)*lot.depth*.35);
-    mesh.rotation.set((r()-.5)*.65,(r()-.5)*.3,(r()-.5)*.8);
+    mesh.position.set(x+(r()-.5)*lot.width*.55,h*.22,z+(r()-.5)*lot.depth*.55);
+    mesh.rotation.set((r()-.5)*.7,(r()-.5)*.3,(r()-.5)*.8);
    }
-   pieces.push({mesh,index,velocity:new THREE.Vector3((r()-.5)*2,1+r()*2,(r()-.5)*2),spin:new THREE.Vector3((r()-.5)*1.5,0,(r()-.5)*1.5),
-    moving:animate?(index>0):false,settled:!animate});
+   pieces.push({mesh,index,home,velocity:new THREE.Vector3((r()-.5)*2,1+r()*2,(r()-.5)*2),
+    spin:new THREE.Vector3((r()-.5)*1.5,0,(r()-.5)*1.5),
+    moving:animate?(stage===3||index>2):false,settled:!animate,wasInitiallySettled:!animate});
   });
   this.root.add(root);this.chunks.set(lot.index,{root,pieces,stage,age:0,animateStarted:animate});
  }
