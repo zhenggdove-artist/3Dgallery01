@@ -1,63 +1,96 @@
-// Mobile: hold the chat for one second to drag anywhere within the viewport.
-// Hold the + button for one second to reduce the entire chat to +.
-// Desktop: dragging the header resizes; holding it for a second moves it.
+// Three-step chat sizing: max -> two-line medium -> + only -> max.
+// Hold + for one second to minimize immediately. Long-press the panel to move.
+// A new position key discards old placements that stranded chat high on iOS.
 export function bindChatLayout(){
  const panel=document.getElementById('chat-hud');
  const handle=document.getElementById('chat-resize');
  const toggle=document.getElementById('chat-toggle');
+ if(!panel||!handle||!toggle)return;
  const mobile=matchMedia('(pointer:coarse)').matches;
- const STORAGE_KEY='temple-chat-position-v2'; // Ignore corrupted old upper-left layout.
- let active=null,timer=null,toggleTimer=null,expanded=false,minimized=false,ignoreClick=false,minimizedAt=0;
+ const STORAGE_KEY='temple-chat-position-v3';
+ const sizes=['max','medium','min'];
+ let size='medium',active=null,timer=null,toggleTimer=null,ignoreClickUntil=0,manualPosition=false;
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
- const resize=height=>{const h=limit(height,Math.min(112,innerHeight*.5),innerHeight*.5);panel.style.setProperty('--chat-height',h+'px');};
- const blocking=()=>['#attack-button','#mobile-stick','#dock [data-action=jump]','#dock [data-action=interact]','#dock #aim-button']
-  .map(q=>document.querySelector(q)).filter(el=>el&&getComputedStyle(el).display!=='none').map(el=>el.getBoundingClientRect());
- const collide=(a,b)=>a.left<b.right+6&&a.right>b.left-6&&a.top<b.bottom+6&&a.bottom>b.top-6;
+ const mediumHeight=92;
+ const maxHeight=()=>Math.min(220,Math.max(114,innerHeight*.42));
+ const blocking=()=>['#attack-button','#mobile-stick','#dock [data-action=jump]',
+   '#dock [data-action=interact]','#dock #aim-button']
+  .map(q=>document.querySelector(q))
+  .filter(el=>el&&el.isConnected&&getComputedStyle(el).display!=='none'&&getComputedStyle(el).visibility!=='hidden')
+  .map(el=>el.getBoundingClientRect()).filter(r=>r.width>0&&r.height>0);
+ const collide=(a,b)=>a.left<b.right+8&&a.right>b.left-8&&a.top<b.bottom+8&&a.bottom>b.top-8;
+ const clearInline=()=>{for(const property of ['left','top','right','bottom','transform'])panel.style.removeProperty(property);};
+ const resetPosition=()=>{
+  manualPosition=false;clearInline();
+  try{localStorage.removeItem(STORAGE_KEY);}catch{}
+ };
  function relocate(left,top){
   const viewport=window.visualViewport,width=viewport?.width||innerWidth,height=viewport?.height||innerHeight;
-  const x=limit(left,4,width-panel.offsetWidth-4),y=limit(top,4,height-panel.offsetHeight-4);
+  const yMin=viewport?.offsetTop||0;
+  const x=limit(left,4,width-panel.offsetWidth-4),y=limit(top,yMin+4,yMin+height-panel.offsetHeight-4);
   const r={left:x,top:y,right:x+panel.offsetWidth,bottom:y+panel.offsetHeight};
-  // Never allow the chat to cover A, jump or the virtual joystick on mobile.
   if(blocking().some(b=>collide(r,b)))return false;
   panel.style.left=x+'px';panel.style.top=y+'px';panel.style.right='auto';
   panel.style.bottom='auto';panel.style.transform='none';
   return true;
  }
- // Default: CSS-controlled lower-center chat, wholly above combat controls.
- function resetPosition(){
-  for(const property of ['left','top','right','bottom','transform'])panel.style.removeProperty(property);
-  try{localStorage.removeItem(STORAGE_KEY);}catch{}
+ const save=()=>{if(!manualPosition)return;try{const r=panel.getBoundingClientRect();
+  localStorage.setItem(STORAGE_KEY,JSON.stringify({left:r.left,top:r.top}));}catch{}};
+ // Shift only as far upward as necessary when an on-screen A, jump or stick
+ // would otherwise intersect the chat. On resizing, first restore CSS's
+ // lower anchor instead of inheriting a previous, unnecessarily high offset.
+ function fitSafely(){
+  if(!manualPosition)clearInline();
+  let rect=panel.getBoundingClientRect();
+  const obstacles=blocking(),viewTop=(window.visualViewport?.offsetTop||0)+6;
+  if(!obstacles.some(b=>collide(rect,b)))return;
+  for(let step=0;step<80;step++){
+   const intersect=obstacles.filter(b=>collide(rect,b));
+   if(!intersect.length)break;
+   const nextTop=Math.max(viewTop,Math.min(...intersect.map(b=>b.top-rect.height-10),rect.top-8));
+   if(nextTop>=rect.top-1)break;
+   if(!relocate(rect.left,nextTop)){
+    // relocate rejects overlap; use the geometry of the next candidate
+    // rather than leaving a previous save at an unsafe position.
+    const candidate={left:rect.left,right:rect.right,top:nextTop,bottom:nextTop+rect.height};
+    if(obstacles.some(b=>collide(candidate,b))){rect=candidate;continue;}
+   }
+   rect=panel.getBoundingClientRect();
+  }
+  if(obstacles.some(b=>collide(panel.getBoundingClientRect(),b))&&!manualPosition)resetPosition();
  }
- const save=()=>{try{const r=panel.getBoundingClientRect();localStorage.setItem(STORAGE_KEY,JSON.stringify({left:r.left,top:r.top}));}catch{}};
- const minimize=value=>{
-  minimized=value;panel.classList.toggle('chat-minimized',minimized);
-  toggle.textContent=minimized?'＋':expanded?'−':'＋';
-  toggle.setAttribute('aria-expanded',String(!minimized));
-  toggle.setAttribute('aria-label',minimized?'Restore chat':'Collapse chat (hold 1 second)');
-  if(panel.style.top){const r=panel.getBoundingClientRect();if(!relocate(r.left,r.top))resetPosition();}
-  save();
- };
+ function setSize(next,{hold=false}={}){
+  size=next;
+  panel.classList.toggle('chat-minimized',size==='min');
+  panel.classList.toggle('chat-medium',size==='medium');
+  panel.classList.toggle('chat-max',size==='max');
+  panel.dataset.chatSize=size;
+  panel.style.setProperty('--chat-height',(size==='medium'?mediumHeight:maxHeight())+'px');
+  toggle.textContent=size==='max'?'−':'＋';
+  toggle.setAttribute('aria-expanded',String(size!=='min'));
+  toggle.setAttribute('aria-label',size==='min'?'Expand chat to full size':
+   size==='medium'?'Minimize chat (hold for 1 second)':'Show two chat lines (hold to minimize)');
+  toggle.title=size==='min'?'Open full chat':size==='max'?'Show two lines':'Minimize chat';
+  if(hold)ignoreClickUntil=performance.now()+800;
+  requestAnimationFrame(fitSafely);
+ }
+ setSize('medium');
  toggle.addEventListener('pointerdown',e=>{
-  if(!mobile||e.pointerType==='mouse')return;
+  if(!mobile||e.pointerType==='mouse'||size==='min')return;
   clearTimeout(toggleTimer);
-  toggleTimer=setTimeout(()=>{ignoreClick=true;minimizedAt=performance.now();minimize(true);},1000);
+  toggleTimer=setTimeout(()=>setSize('min',{hold:true}),1000);
  });
  const clearToggle=()=>{clearTimeout(toggleTimer);toggleTimer=null;};
  for(const event of ['pointerup','pointercancel','pointerleave'])toggle.addEventListener(event,clearToggle);
+ toggle.addEventListener('contextmenu',e=>e.preventDefault());
  toggle.addEventListener('click',e=>{
-  // Some mobile browsers suppress the click following a long press.
-  // Do not swallow the user's next actual tap to restore the chat.
-  if(ignoreClick&&performance.now()-minimizedAt<350){ignoreClick=false;e.preventDefault();return;}
-  ignoreClick=false;
-  if(minimized){minimize(false);return;}
-  expanded=!expanded;resize(expanded?Math.min(240,innerHeight*.45):118);
-  toggle.textContent=expanded?'−':'＋';toggle.setAttribute('aria-expanded',String(expanded));
+  if(performance.now()<ignoreClickUntil){e.preventDefault();return;}
+  const index=sizes.indexOf(size);
+  setSize(sizes[(index+1)%sizes.length]);
  });
  if(mobile){
-  // Do not intercept native chat typing or normal message scrolling before
-  // one stationary second has elapsed.
   panel.addEventListener('touchstart',e=>{
-   if(e.touches.length!==1||e.target.closest('button,input,textarea,select,form')||minimized)return;
+   if(e.touches.length!==1||e.target.closest('button,input,textarea,select,form')||size==='min')return;
    const p=e.touches[0],r=panel.getBoundingClientRect();
    active={id:p.identifier,x:p.clientX,y:p.clientY,left:r.left,top:r.top,mode:'pending'};
    clearTimeout(timer);
@@ -71,7 +104,7 @@ export function bindChatLayout(){
     if(Math.hypot(dx,dy)>11){clearTimeout(timer);active=null;}return;
    }
    e.preventDefault();e.stopPropagation();
-   relocate(active.left+dx,active.top+dy);
+   if(relocate(active.left+dx,active.top+dy))manualPosition=true;
   },{passive:false});
   const finish=e=>{
    if(!active)return;
@@ -90,22 +123,33 @@ export function bindChatLayout(){
   handle.addEventListener('pointermove',e=>{
    if(!active||active.id!==e.pointerId)return;
    const dx=e.clientX-active.x,dy=e.clientY-active.y;
-   if(active.mode==='move'){relocate(active.left+dx,active.top+dy);return;}
+   if(active.mode==='move'){
+    if(relocate(active.left+dx,active.top+dy))manualPosition=true;
+    return;
+   }
    if(Math.hypot(dx,dy)>8){clearTimeout(timer);active.mode='resize';}
-   if(active.mode==='resize')resize(active.height-dy);
+   if(active.mode==='resize'){
+    setSize('max');panel.style.setProperty('--chat-height',
+     limit(active.height-dy,112,Math.min(350,innerHeight*.5))+'px');
+   }
   });
-  const finish=e=>{if(!active||e.pointerId!==active.id)return;clearTimeout(timer);if(active.mode==='move')save();active=null;};
+  const finish=e=>{
+   if(!active||e.pointerId!==active.id)return;
+   clearTimeout(timer);if(active.mode==='move')save();active=null;
+  };
   for(const type of ['pointerup','pointercancel','lostpointercapture'])handle.addEventListener(type,finish);
  }
  addEventListener('resize',()=>{
-  if(!minimized)resize(panel.getBoundingClientRect().height);
-  if(panel.style.top){const r=panel.getBoundingClientRect();if(!relocate(r.left,r.top))resetPosition();}
+  if(size==='max')panel.style.setProperty('--chat-height',maxHeight()+'px');
+  requestAnimationFrame(fitSafely);
  });
- // Restore only positions saved with the new control-safe layout policy.
- // Old mobile coordinates could overlap the title or be pinned at (4,4).
  try{
   const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
-  if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top))
-   requestAnimationFrame(()=>{if(!relocate(saved.left,saved.top))resetPosition();});
+  if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top)){
+   requestAnimationFrame(()=>{
+    manualPosition=true;
+    if(!relocate(saved.left,saved.top)){resetPosition();fitSafely();}
+   });
+  }
  }catch{resetPosition();}
 }
