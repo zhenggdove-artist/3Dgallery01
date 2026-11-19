@@ -1445,7 +1445,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     const direction=ray.map(v=>v/length),seen=leg==='out'?fx.outHits:fx.backHits;
     for(const target of targets){
      const value=target.value;if(value.key===fx.owner||seen.includes(value.id||value.key))continue;
-     if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
+     if(target.kind==='player'&&insideSafeZone(value.position))continue; // only the protected 9m WRITE hub is immune
      if(now<(fx.hitTimes?.[value.id||value.key]||0))continue;
      const contact=target.kind==='monster'?monsterRayDistance(a,direction,length,value,1.35*fx.radius):
       rayCylinderDistance(a,direction,length,value.position,1+fx.radius,2.35);
