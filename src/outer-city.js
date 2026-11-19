@@ -348,10 +348,19 @@ export class OuterCity{
   this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();this.plumes=[];
    this.renderedTiers=new Map();this.poseCache=new Map();this.collapseAnimations=new Map();this.shakes=new Map();this.seenCityEvents=new Set();
   this.plumeResources=createPlumeResources();this.plumePool=[];this.partsHidden=new Set();
+  // Move transient smoke/fire Points, typed-buffer and material allocations
+  // from the FIRST high-damage attack into scene initialization. Every one
+  // of the original 24 full-detail plumes now exists before gameplay starts.
+  for(let i=0;i<24;i++){
+   const plume=emitFireSmoke(this.root,[0,-1000,0],this.plumeResources,mobile,
+    9000+i*23);
+   plume.root.removeFromParent();this.plumePool.push(plume);
+  }
   this.fireField=new CityFireField(this.root,this.lots,this.plumeResources,mobile);
   this.splinters=new CitySplinterField(this.root,mobile);
   this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
   this.pendingEjections=[];
+  this.fixturePrefabs=new Map();this.fixtureWarmQueue=[];
   this.deformationBasis=new Map();this.basisIdleQueue=[];this.basisIdleHandle=null;
   this.basisLastNearby=0;this.basisDisposed=false;
   this.cube=new THREE.BoxGeometry(1,1,1);
@@ -413,6 +422,49 @@ export class OuterCity{
   this.flies.name='Buzzing dumpster flies';this.root.add(this.flies);
   this.update(0,0);
  }
+ // Distinct physical windows, signs, iron sheets and stone assemblies
+ // remain detailed. Keep their complete geometry/material/texture once per
+ // (house,part) rather than rebuilding an ExtrudeGeometry and 512px sign
+ // canvas on every attack. Clones only duplicate transform nodes.
+ getFixtureTemplate(lot,part){
+  const key=lot.index+':'+part;
+  let template=this.fixturePrefabs.get(key);
+  if(!template){
+   template=buildDetachableFixture(lot,part,lot.index*101+part.length*137);
+   this.fixturePrefabs.set(key,template);
+   this.pruneFixtureTemplates();
+  }else{
+   this.fixturePrefabs.delete(key);this.fixturePrefabs.set(key,template);
+  }
+  return template;
+ }
+ pruneFixtureTemplates(){
+  if(!this.fixturePrefabs)return; // Legacy/test objects may not own a cache.
+  const max=this.mobile?24:72;
+  let scanned=0;
+  while(this.fixturePrefabs.size>max&&scanned++<this.fixturePrefabs.size){
+   const key=this.fixturePrefabs.keys().next().value;
+   const inUse=this.debris.some(effect=>effect.pieces.some(piece=>
+    piece.mesh.userData.fixtureCacheKey===key));
+   if(inUse){
+    const template=this.fixturePrefabs.get(key);
+    this.fixturePrefabs.delete(key);this.fixturePrefabs.set(key,template);
+    continue;
+   }
+   const template=this.fixturePrefabs.get(key);
+   this.fixturePrefabs.delete(key);
+   template.traverse(o=>{o.geometry?.dispose();if(o.material)
+    for(const mat of Array.isArray(o.material)?o.material:[o.material]){
+     mat.map?.dispose();mat.dispose();
+    }});
+  }
+ }
+ cloneFixture(lot,part){
+  const instance=this.getFixtureTemplate(lot,part).clone(true);
+  instance.userData.sharedCityFixture=true;
+  instance.userData.fixtureCacheKey=lot.index+':'+part;
+  return instance;
+ }
  hideRange(mesh,start,end){
   const attr=mesh.geometry.attributes.position;
   for(let i=start;i<end;i++)attr.array[i*3+1]=-120;
@@ -452,10 +504,18 @@ export class OuterCity{
    .sort((a,b)=>a.dist-b.dist).slice(0,this.mobile?12:32);
   this.basisIdleQueue=nearest.map(item=>item.index)
    .filter(index=>!this.deformationBasis.has(index));
+  // Prime the most likely next detached fixtures only during idle time.
+  // The five-instanced-splinter bursts are still immediate on every impact.
+  const priority=['windows-0-0','sign','pipes','sheets-awning','timber',
+   'tiles','stone','sheets-roof','pillars-0'];
+  this.fixtureWarmQueue=nearest.slice(0,this.mobile?3:7)
+   .flatMap(({index})=>priority.map(part=>[index,part]))
+   .filter(([index,part])=>!this.fixturePrefabs.has(index+':'+part));
   this.scheduleIdleBasisWarmup();
  }
  scheduleIdleBasisWarmup(){
-  if(this.basisDisposed||this.basisIdleHandle!==null||!this.basisIdleQueue.length||
+  if(this.basisDisposed||this.basisIdleHandle!==null||
+   !(this.basisIdleQueue.length||this.fixtureWarmQueue.length)||
    typeof requestIdleCallback!=='function')return;
   this.basisIdleHandle=requestIdleCallback(deadline=>{
    this.basisIdleHandle=null;
@@ -465,9 +525,15 @@ export class OuterCity{
     this.basisIdleQueue.length=0;return;
    }
    let built=0;
-   while(deadline.timeRemaining()>5&&this.basisIdleQueue.length&&built<2){
+   while(deadline.timeRemaining()>8&&this.basisIdleQueue.length&&built<2){
     const index=this.basisIdleQueue.shift();
     if(!this.deformationBasis.has(index)){this.getLotBasis(index);built++;}
+   }
+   // Exactly one complex fixture may be generated in an idle deadline.
+   // Never build a sign canvas or detailed wood/glass mesh on a spell tick.
+   if(!built&&deadline.timeRemaining()>13&&this.fixtureWarmQueue.length){
+    const [index,part]=this.fixtureWarmQueue.shift(),lot=this.lots[index];
+    if(lot&&!this.fixturePrefabs.has(index+':'+part))this.getFixtureTemplate(lot,part);
    }
    this.scheduleIdleBasisWarmup();
   });
@@ -603,8 +669,9 @@ export class OuterCity{
     spin:new THREE.Vector3((r()-.5)*3,(r()-.5)*4,(r()-.5)*3)});
   };
   if(detached){
-   // First unfasten the architectural fixture from its actual mounted position.
-   add(buildDetachableFixture(lot,part,lot.index+Math.floor(performance.now())),1.15);
+   // The actual detailed mounted fixture remains recognizable; this is a
+   // shared deep clone and never compiles/upload a fresh GPU material on hit.
+   add(this.cloneFixture(lot,part),1.15);
   }
   const local=point?this.toLocal(lot,point):[0,Math.min(2,lot.height*.5),lot.depth*.5];
   const prototypes=this.scrapPrefabs.get(lot.material);
@@ -625,13 +692,15 @@ export class OuterCity{
  }
  removeDebris(effect){
   for(const piece of effect.pieces){
-   if(piece.mesh.userData.sharedCityScrap)continue; // Shared prefab is owned by the city.
+   if(piece.mesh.userData.sharedCityScrap||piece.mesh.userData.sharedCityFixture)continue;
+   // Shared architectural prefab owns this mesh's original geometry/material.
    piece.mesh.traverse(object=>{object.geometry?.dispose();if(object.material)
     for(const mat of Array.isArray(object.material)?object.material:[object.material]){
      mat.map?.dispose();mat.dispose();
     }});
   }
   effect.root.removeFromParent();
+  this.pruneFixtureTemplates?.();
  }
  recyclePlume(effect){
   effect.root.removeFromParent();
@@ -743,7 +812,7 @@ export class OuterCity{
   this.damage={};this.lastDamage=null;this.hidden.clear();this.partsHidden.clear();this.facade.reset();
   this.fireField?.reset();this.splinters?.reset();
   this.renderedTiers.clear();this.poseCache.clear();this.deformationBasis?.clear();
-  this.basisIdleQueue.length=0;this.basisLastNearby=0;
+  this.basisIdleQueue.length=0;this.fixtureWarmQueue.length=0;this.basisLastNearby=0;
   this.collapseAnimations.clear();this.shakes.clear();this.seenCityEvents.clear();
   this.wallPaint?.resetBuildings();
   for(const mesh of [this.walls,this.signs,this.graffiti]){
@@ -849,7 +918,7 @@ export class OuterCity{
   // falling motion without iterating through every destroyed house each frame.
  }
  dispose(){
-  this.basisDisposed=true;this.basisIdleQueue.length=0;
+  this.basisDisposed=true;this.basisIdleQueue.length=0;this.fixtureWarmQueue.length=0;
   if(this.basisIdleHandle!==null&&typeof cancelIdleCallback==='function')
    cancelIdleCallback(this.basisIdleHandle);
   this.basisIdleHandle=null;this.deformationBasis.clear();
@@ -863,6 +932,12 @@ export class OuterCity{
   for(const templates of this.scrapPrefabs.values())for(const template of templates)
    template.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material]){m.map?.dispose();m.dispose();}});
   this.scrapPrefabs.clear();
+  for(const template of this.fixturePrefabs.values())
+   template.traverse(o=>{o.geometry?.dispose();if(o.material)
+    for(const mat of Array.isArray(o.material)?o.material:[o.material]){
+     mat.map?.dispose();mat.dispose();
+    }});
+  this.fixturePrefabs.clear();
   this.plumeResources.flame.dispose();this.plumeResources.smoke.dispose();this.facade.texture.dispose();
   this.root.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material]){m.map?.dispose();m.dispose();}});
   this.cube.dispose();this.root.removeFromParent();

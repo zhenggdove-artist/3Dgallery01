@@ -142,6 +142,31 @@ function repackIntoOrganicBlocks(lots,seed){
  }
 }
 export const CITY_LOTS=cityLots();
+// Collision and roof support are queried multiple times in every movement
+// tick on both the browser and the authoritative Worker. Scanning all 432
+// houses on every step creates regular main-thread stalls. Index immutable
+// footprints once in deterministic world-space cells (exact same geometry).
+const CITY_COLLISION_CELL=16;
+const CITY_COLLISION_PADDING=3;
+const CITY_COLLISION_CELLS=new Map();
+const cityCellKey=(x,z)=>x+','+z;
+for(const lot of CITY_LOTS){
+ const reach=Math.hypot(lot.width*.5,lot.depth*.5)+CITY_COLLISION_PADDING;
+ const minX=Math.floor((lot.x-reach)/CITY_COLLISION_CELL),maxX=Math.floor((lot.x+reach)/CITY_COLLISION_CELL);
+ const minZ=Math.floor((lot.z-reach)/CITY_COLLISION_CELL),maxZ=Math.floor((lot.z+reach)/CITY_COLLISION_CELL);
+ for(let cx=minX;cx<=maxX;cx++)for(let cz=minZ;cz<=maxZ;cz++){
+  const key=cityCellKey(cx,cz),cell=CITY_COLLISION_CELLS.get(key);
+  if(cell)cell.push(lot);else CITY_COLLISION_CELLS.set(key,[lot]);
+ }
+}
+// Conservative broadphase: return only candidates; exact rotated rectangle
+// checks and Worker-side authoritative collision remain unchanged. Large
+// custom margins can fall back to the full list without risking missed hits.
+export function cityCollisionCandidates(x,z,margin=0){
+ if(!Number.isFinite(x)||!Number.isFinite(z)||margin>2.0)return CITY_LOTS;
+ return CITY_COLLISION_CELLS.get(cityCellKey(
+  Math.floor(x/CITY_COLLISION_CELL),Math.floor(z/CITY_COLLISION_CELL)))||[];
+}
 export const CITY_MAX_HP=240;
 export function cityStage(hp,maxHp=CITY_MAX_HP){
  return hp<=0?3:hp<=maxHp/3?2:hp<=maxHp*2/3?1:0;
@@ -251,7 +276,7 @@ function cityFootprint(lot,x,z,margin=0){
 }
 export function cityGroundHeight(x,z,y=0,damage={}){
  let height=0;
- for(const lot of CITY_LOTS){
+ for(const lot of cityCollisionCandidates(x,z,.16)){
   // Keep support across the 0.20m corrugated roof overhang at its edges.
   if(!cityFootprint(lot,x,z,.16))continue;
   const top=cityRoofHeightAtPoint(lot,x,z,damage[lot.id]?.hp??CITY_MAX_HP,damage[lot.id]?.maxHp??CITY_MAX_HP);
@@ -262,7 +287,7 @@ export function cityGroundHeight(x,z,y=0,damage={}){
  return height;
 }
 export function cityBlocked(x,z,y=0,damage={},radius=.22){
- for(const lot of CITY_LOTS){
+ for(const lot of cityCollisionCandidates(x,z,radius)){
   if(!cityFootprint(lot,x,z,radius))continue;
   const top=cityRoofHeightAtPoint(lot,x,z,damage[lot.id]?.hp??CITY_MAX_HP,damage[lot.id]?.maxHp??CITY_MAX_HP);
   // Leaving the original house uncollidable at stage 3 caused players to
