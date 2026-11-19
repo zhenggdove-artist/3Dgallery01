@@ -29,29 +29,31 @@ test('public SUPPORT never includes GM design/management controls or GM-facing d
  const support=ui.slice(start,end);
  assert.doesNotMatch(support,/data-open-wing-painter|data-open-wing-manage|data-gm-action/);
  assert.doesNotMatch(support,/GM TEST MODE|GM 特製|GM 畫|GM 管理|GM 自製/);
- assert.match(support,/data-draw-wing/);
- assert.match(support,/wing-gacha-machine/);
+ assert.match(support,/data-wing-checkout/);
+ assert.match(support,/wingDesignCredits/);
+ assert.doesNotMatch(support,/wing-gacha-machine|data-draw-wing/);
  assert.match(support,/y2k-shell-header/);
- assert.match(support,/y2k-display-banner/);
+ assert.match(support,/wing-payment-preview/);
  assert.match(support,/y2k-taskbar/);
  const editor=ui.slice(ui.indexOf('renderPanel(){'),ui.indexOf('  requestGmPresence(){'));
  assert.match(editor,/gm-wing-workspace/);
  assert.match(editor,/data-gm-action="wing-painter"/);
  assert.match(editor,/data-gm-action="wing-manage"/);
- assert.match(ui,/if\(\['gm','wing-painter','wing-manage'\]\.includes\(name\)/);
+ assert.match(ui,/if\(\['gm','wing-manage'\]\.includes\(name\)/);
+ assert.match(ui,/wingDesignCredits>0/);
 });
 
-test('Y2K + Windows 98 gacha remain interactive, responsive and no payment is falsely enabled',()=>{
+test('Y2K support shows guarded ECPay entitlement and does not invent paid success',()=>{
  const css=read('wing-atelier.css'),html=read('index.html'),ui=read('src/ui.js');
  assert.match(css,/\.y2k-shell-header/);
  assert.match(css,/\.y2k-machine-halo/);
  assert.match(css,/\.y2k-display-banner/);
  assert.match(css,/@media\(max-width:780px\)/);
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
- assert.match(ui,/beginWingDraw\(\)/);
+ assert.match(ui,/data-wing-checkout/);
  assert.match(ui,/drawRatePct/);
- assert.match(html,/20261119-custom-material-wings-r6/);
+ assert.match(html,/20261119-direct-wings-pay-r7/);
  const section=ui.slice(ui.indexOf('  renderWingShop(profile){'),ui.indexOf('  hydrateWingGalleryImages(){'));
- assert.match(section,/正式收款尚未啟用/);
- assert.match(section,/profile.admin/,'the checkout button is gated to a GM account');
+ assert.match(section,/正式收款所需綠界商家授權與伺服器金鑰尚未開通/);
+ assert.match(section,/checkoutMode/,'backend status determines whether charging is enabled');
 });

@@ -18,43 +18,41 @@ try{
  await page.locator('#hud').waitFor({state:'visible'});
  await page.waitForFunction(()=>templeTest.controller()&&JSON.parse(window.render_game_to_text()).connected,null,{timeout:25000});
  await page.evaluate(()=>templeTest.ui.openPanel('wing-shop'));
- const machine=page.locator('.wing-support-machine');
- await machine.waitFor({state:'visible'});
- assert.equal(await page.locator('.wing-support-app [data-gm-action],.wing-support-app [data-open-wing-painter],.wing-support-app [data-open-wing-manage]').count(),0);
- assert.equal(await page.locator('.wing-support-app [data-draw-wing]').count(),2);
+ const support=page.locator('.wing-design-support');
+ await support.waitFor({state:'visible'});
+ assert.equal(await page.locator('.wing-design-support [data-draw-wing]').count(),0);
+ assert.equal(await page.locator('.wing-design-support [data-wing-checkout]').count(),1);
  assert.equal(await page.locator('.y2k-shell-header').count(),1);
- assert.equal(await page.locator('.y2k-display-banner').count(),1);
  assert.equal(await page.locator('.y2k-taskbar').count(),1);
  const desktop=await page.evaluate(()=>{
-  const r=document.querySelector('.wing-gacha-machine').getBoundingClientRect();
-  const app=document.querySelector('.wing-support-app').getBoundingClientRect();
-  return {machineW:r.width,machineH:r.height,appW:app.width,bodyOverflow:document.documentElement.scrollWidth>innerWidth+2,
-   gmVisible:document.querySelector('.wing-support-app')?.textContent.includes('GM 特製')};
+  const r=document.querySelector('.wing-payment-preview').getBoundingClientRect();
+  const app=document.querySelector('.wing-design-support').getBoundingClientRect();
+  return {paymentW:r.width,paymentH:r.height,appW:app.width,
+   bodyOverflow:document.documentElement.scrollWidth>innerWidth+2,
+   gachaCount:document.querySelectorAll('.wing-design-support .wing-gacha-machine').length};
  });
- assert.ok(desktop.machineW>=220&&desktop.machineH>=300,JSON.stringify(desktop));
- assert.equal(desktop.gmVisible,false);
+ assert.ok(desktop.paymentW>=350&&desktop.paymentH>150,JSON.stringify(desktop));
+ assert.equal(desktop.gachaCount,0);
  assert.equal(desktop.bodyOverflow,false);
- await page.screenshot({path:folder+'/support-desktop-y2k.png',animations:'disabled'});
+ await page.screenshot({path:folder+'/support-desktop-direct-wings.png',animations:'disabled'});
  await page.setViewportSize({width:390,height:844});
  await page.waitForTimeout(250);
  const mobile=await page.evaluate(()=>{
-  const r=document.querySelector('.wing-support-machine').getBoundingClientRect();
+  const r=document.querySelector('.wing-payment-preview').getBoundingClientRect();
   const p=document.querySelector('#panel-content').getBoundingClientRect();
-  const action=document.querySelector('.wing-support-controls .wing-draw-button'),
-   button=action.getBoundingClientRect();
-  return {machineW:r.width,left:r.left,right:r.right,panelW:p.width,buttonW:button.width,
-   buttonTop:button.top,buttonBottom:button.bottom,buttonPosition:getComputedStyle(action).position,
+  const action=document.querySelector('.wing-design-support [data-wing-checkout]');
+  const button=action.getBoundingClientRect();
+  return {paymentW:r.width,left:r.left,right:r.right,panelW:p.width,
+   buttonW:button.width,buttonTop:button.top,
    buttonBackground:getComputedStyle(action).backgroundImage,
    overflow:document.documentElement.scrollWidth>innerWidth+2};
  });
- assert.ok(mobile.machineW>=260&&mobile.machineW<=390,JSON.stringify(mobile));
+ assert.ok(mobile.paymentW>250&&mobile.paymentW<=390,JSON.stringify(mobile));
  assert.ok(mobile.left>=-2&&mobile.right<=392,JSON.stringify(mobile));
- assert.ok(mobile.buttonW>=250,JSON.stringify(mobile));
- assert.equal(mobile.buttonPosition,'fixed','mobile draw button must remain visible on the first screen');
- assert.ok(mobile.buttonTop>=0&&mobile.buttonBottom<=844,JSON.stringify(mobile));
+ assert.ok(mobile.buttonW>=220,JSON.stringify(mobile));
  assert.match(mobile.buttonBackground,/linear-gradient/,JSON.stringify(mobile));
  assert.equal(mobile.overflow,false);
- await page.screenshot({path:folder+'/support-mobile-y2k.png',animations:'disabled'});
+ await page.screenshot({path:folder+'/support-mobile-direct-wings.png',animations:'disabled'});
  assert.deepEqual(errors,[]);
  console.log('Y2K SUPPORT visual smoke passed',JSON.stringify({desktop,mobile}));
 }finally{await browser.close();}

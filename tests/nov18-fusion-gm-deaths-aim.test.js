@@ -54,11 +54,11 @@ test('only successful fusion upgrades halve the odds; failure and request retrie
  assert.equal(player.wallet,100000,'fusion only consumes source gear, never coins');
 });
 
-test('GM logs in with purple tier-six wings, independently selects 0–100% fusion chance and toggles god mode',()=>{
+test('GM logs in without retired wings, independently selects 0–100% fusion chance and toggles god mode',()=>{
  const gm=actor('god',true),world=createInitialWorld(T);
  const profile=ensureProfile(world,gm.key,gm.name,gm.color,T,true);
- assert.equal(profile.equipment.wings,'wings-18');
- assert.equal(itemById(profile.equipment.wings).color,'#c5a0ed');
+ assert.equal(profile.equipment.wings,null);
+ assert.equal(itemById('wings-18'),null);
  assert.equal(profile.gmInvincible,true);
  assert.equal(fusionChance(profile,'ember-1'),1);
  assert.equal(applyAction(world,gm,{action:'gm-fusion-chance',percent:0},{now:T}).gmFusionChance,0);

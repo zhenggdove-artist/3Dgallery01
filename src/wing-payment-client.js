@@ -1,24 +1,54 @@
-// The real-money checkout is intentionally unavailable. This module only
-// opens ECPay's public TEST gateway for authenticated GMs, after Worker auth.
-const STAGE_GATEWAY='https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5';
-export async function beginWingStageCheckout(network,ui){
- // iOS browsers usually require a window to open directly on the click gesture.
- const popup=window.open('about:blank','GGTEMPLE_ECPAY_STAGE');
+// Secure hosted ECPay checkout. The browser never claims payment success.
+// Production requires Cloudflare-held merchant secrets and an explicit switch.
+// Use the same browsing context (no popups) to support iOS Safari/LINE.
+const GATEWAYS=new Set([
+ 'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5',
+ 'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5'
+]);
+export async function beginWingCheckout(network,ui){
  try{
   const status=await network.request('/api/wing-pay/status');
-  if(!status.checkoutEnabled||status.checkoutMode!=='stage-only')throw Error('綠界測試收款目前未開通；不會產生任何實際扣款。');
+  if(!status.checkoutEnabled)throw Error('綠界正式收款尚未開通，無法建立付款訂單。');
+  if(!['production','stage-only'].includes(status.checkoutMode))throw Error('綠界付款設定無效');
   const order=await network.request('/api/wing-pay/checkout',{method:'POST',body:{}});
-  if(order.gateway!==STAGE_GATEWAY||order.stage!==true||order.amount!==30||order.draws!==5||!order.fields?.CheckMacValue)
-   throw Error('金流測試訂單資料不符合預期。');
-  const form=document.createElement('form');form.method='POST';form.action=STAGE_GATEWAY;form.target=popup?'GGTEMPLE_ECPAY_STAGE':'_self';form.style.display='none';
+  if(!GATEWAYS.has(order.gateway)||order.checkoutMode!==status.checkoutMode||
+     order.amount!==30||order.designCredits!==1||!order.fields?.CheckMacValue||
+     !/^GW[A-Z0-9]{18}$/.test(order.orderId)||order.fields.TotalAmount!=='30')
+   throw Error('伺服器返回的付款訂單無效');
+  if(order.fields.MerchantTradeNo!==order.orderId)throw Error('付款訂單編號不一致');
+  sessionStorage.setItem('ggtemple-wing-pending-order',order.orderId);
+  const form=document.createElement('form');
+  form.method='POST';form.action=order.gateway;form.target='_self';form.style.display='none';
   for(const [name,value] of Object.entries(order.fields)){
-   const input=document.createElement('input');input.type='hidden';input.name=name;input.value=String(value);form.append(input);
+   const field=document.createElement('input');field.type='hidden';field.name=name;field.value=String(value);
+   form.append(field);
   }
-  document.body.append(form);form.submit();
+  document.body.append(form);
+  form.submit();
   queueMicrotask(()=>form.remove());
-  ui.toast('綠界測試訂單已建立，不會實際扣款。');
+  return order.orderId;
  }catch(error){
-  try{popup?.close();}catch{}
-  ui.toast(error.message||'無法建立金流測試訂單。');
+  ui.toast(error.message||'目前無法連線到綠界付款。');
+  return null;
+ }
+}
+// Backward compatible symbol for test-only client integrations.
+export const beginWingStageCheckout=beginWingCheckout;
+export async function resumeWingCheckout(network,ui){
+ const fromUrl=new URLSearchParams(location.search).get('wingOrder')||'';
+ const id=/^GW[A-Z0-9]{18}$/.test(fromUrl)?fromUrl:sessionStorage.getItem('ggtemple-wing-pending-order')||'';
+ if(!/^GW[A-Z0-9]{18}$/.test(id))return null;
+ try{
+  const order=await network.request('/api/wing-pay/order?id='+encodeURIComponent(id));
+  if(order.status==='paid'){
+   sessionStorage.removeItem('ggtemple-wing-pending-order');
+   ui.toast('綠界付款已由伺服器確認，禮物盒繪圖權限已入帳。');
+   return order;
+  }
+  ui.toast('付款訂單尚未確認；請勿重複付款。');
+  return order;
+ }catch(error){
+  console.warn('Pending ECPay order status requires authenticated session',error);
+  return null;
  }
 }

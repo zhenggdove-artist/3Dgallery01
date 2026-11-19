@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(
 
 export class TempleUI extends EventTarget{
   constructor(){
-    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.firebaseIdToken='';this.authMode='firebase';
+    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.wingPaymentStatus=null;this.firebaseIdToken='';this.authMode='firebase';
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
     bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
     this.bind();$('gm-help').onclick=()=>this.openPanel('help');$('gm-menu').onclick=()=>this.openPanel('gm');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag'&&cell.dataset.inventoryIndex!==undefined){
@@ -63,7 +63,7 @@ export class TempleUI extends EventTarget{
     const charge=$('attack-button');let attackPointer=null;charge.onpointerdown=event=>{event.preventDefault();if(attackPointer!==null)return;attackPointer=event.pointerId;charge.setPointerCapture(event.pointerId);this.emit('attack-start');};const endAttack=(event,cancel=false)=>{if(event.pointerId!==attackPointer)return;attackPointer=null;this.emit(cancel?'attack-cancel':'attack-release');};charge.onpointerup=e=>endAttack(e);charge.onpointercancel=charge.onlostpointercapture=e=>endAttack(e,true);const jump=document.querySelector('[data-action=jump]');jump.onpointerdown=e=>{e.preventDefault();jump.setPointerCapture(e.pointerId);this.emit('jump');};jump.onclick=e=>{if(e.detail===0)this.emit('jump');e.stopPropagation();};
     addEventListener('keydown',event=>{if(this.self&&!this.panelName&&event.code==='KeyQ'&&!event.repeat&&!/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)){event.preventDefault();this.emit('attack-start');}});
     addEventListener('keyup',event=>{if(event.code==='KeyQ')this.emit('attack-release');});addEventListener('blur',()=>this.emit('attack-cancel'));
-    $('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.dataset.action)this.emit(button.dataset.action);});
+    $('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.id==='wing-gift-button')this.openPanel('wing-painter');else if(button.dataset.action)this.emit(button.dataset.action);});
     $('build-confirm').onclick=()=>this.emit('build-confirm');$('build-rotate').onclick=()=>this.emit('build-rotate');$('build-cancel').onclick=()=>this.emit('build-cancel');
     this.content.addEventListener('click',event=>this.panelClick(event));this.content.addEventListener('submit',event=>this.panelSubmit(event));
     this.content.addEventListener('change',event=>{
@@ -113,8 +113,11 @@ export class TempleUI extends EventTarget{
   enter(data){document.activeElement?.blur();this.self=data.self;this.authMode=data.authMode||'firebase';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;$('gm-menu').hidden=!data.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;$('gm-menu').hidden=!this.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();if(this.panelName)this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
-  setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','wing-shop'].includes(this.panelName)&&this.panelSignature!==JSON.stringify([world.profile.inventory,world.profile.equipment,world.profile.wallet,world.profile.fusion])&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
-  refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);$('weapon').textContent=(itemById(profile.equipment?.weapon)?.name||'UNARMED').toUpperCase();}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();const monster=this.world?.monster,visible=false;$('monster-hud').hidden=!visible;if(visible){$('monster-name').textContent=`${String(monster.variant).toUpperCase()} · GENERATION ${monster.generation}`;$('monster-hp').max=monster.maxHp;$('monster-hp').value=monster.hp;}}
+  setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','wing-shop'].includes(this.panelName)&&this.panelSignature!==JSON.stringify([world.profile.inventory,world.profile.equipment,world.profile.wallet,world.profile.fusion,world.profile.wingDesignCredits])&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
+  refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);$('weapon').textContent=(itemById(profile.equipment?.weapon)?.name||'UNARMED').toUpperCase();}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();
+    const gift=$('wing-gift-button');
+    if(gift)gift.hidden=!(Number(profile?.wingDesignCredits)||0);
+    const monster=this.world?.monster,visible=false;$('monster-hud').hidden=!visible;if(visible){$('monster-name').textContent=`${String(monster.variant).toUpperCase()} · GENERATION ${monster.generation}`;$('monster-hp').max=monster.maxHp;$('monster-hp').value=monster.hp;}}
   renderRoster(){
     const box=$('player-roster');if(!box)return;
     const signature=JSON.stringify(this.players.map(p=>[p.key,p.name,p.role,p.profile?.hp,p.profile?.maxHp]));
@@ -211,9 +214,12 @@ export class TempleUI extends EventTarget{
     this.fusionTimer=setTimeout(()=>{box.remove();if(this.fusionIndicator===box)this.fusionIndicator=null;},1020);
   }
   death(until,killer=''){if(this.deathUntil===until&&this.deathKiller===killer)return;this.deathUntil=until;this.deathKiller=killer;clearTimeout(this.deathTimer);const overlay=$('death');$('death-killer').textContent=killer?'KILLED BY '+killer:'';if(!until||until<=Date.now()){overlay.hidden=true;return;}overlay.hidden=false;const update=()=>{const left=Math.max(0,Math.ceil((until-Date.now())/1000));$('respawn-count').textContent=left;if(left)this.deathTimer=setTimeout(update,200);else overlay.hidden=true;};update();}
-  openPanel(name,fromJourney=false){if(!this.self)return;if(['gm','wing-painter','wing-manage'].includes(name)&&!this.self.profile?.admin)return;if(name==='social'&&!fromJourney){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',name==='wing-painter');document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});if(name==='gm')this.requestGmPresence();}
+  openPanel(name,fromJourney=false){if(!this.self)return;if(['gm','wing-manage'].includes(name)&&!this.self.profile?.admin)return;
+    if(name==='wing-painter'&&!this.self.profile?.admin&&!(this.world?.profile?.wingDesignCredits>0))return;if(name==='social'&&!fromJourney){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',name==='wing-painter');document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});
+    if(name==='wing-shop')this.emit('wing-payment-status-request');
+    if(name==='gm')this.requestGmPresence();}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;document.body.classList.remove('panel-open','panel-wing-painter','panel-wing-shop');this.wingGalleryObserver?.disconnect();this.panelName='';this.emit('panel',{open:false});}
-  renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','wing-shop':'SUPPORT · WING GACHA',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'GM 翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
+  renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion,this.world?.profile?.wingDesignCredits]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','wing-shop':'SUPPORT · CUSTOM WINGS',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
     if(this.panelName==='gm'){this.renderGm();return;}
      if(this.panelName==='wing-painter'){mountWingPainter(this);return;}
     if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + D：圓盤刪除模式（點選變藍、DELETE 刪除、ESC 離開）<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(this.panelName==='shop')this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='wing-manage')this.renderWingManage(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<section class="gm-wing-workspace"><h3>GM 翅膀編輯工作區</h3><p>繪製、上架、設定中獎率及下架管理。</p><div class="gm-tools"><button type="button" data-gm-action="wing-painter">畫翅膀／上架</button><button type="button" data-gm-action="wing-manage">已上架翅膀／機率／下架</button></div></section><hr><h3>建立漂浮圓盤</h3><form data-form="gm-platform">${['x','y','z'].map(k=>`<label>${k.toUpperCase()}<input name="${k}" type="number" value="${k==='y'?2:0}" step=".1" required></label>`).join('')}<label>半徑<input name="radius" type="number" value="2.5" min=".6" max="8" step=".1" required></label><button>建立並儲存圓盤</button></form><hr><h3>上傳藝術品</h3><form data-form="upload-artwork"><p>PNG／JPEG／WebP、MP4／WebM、GLB／glTF／FBX。模型貼圖與 BIN 檔請一起選取。轉換後上限 32 MB、50 萬三角面、200 個網格；保留圖片透明度，模型會打包成完整 GLB。</p><label>作品名稱<input name="title" type="text" maxlength="100" required placeholder="輸入作品名稱"></label><input name="artwork" type="file" accept="${ART_ACCEPT}" multiple required><button class="panel-button" data-upload-submit>驗證並發布</button><p data-upload-status role="status"></p></form>`);}
@@ -275,65 +281,39 @@ export class TempleUI extends EventTarget{
     const code=this.saveCode||this.self?.saveCode||'';this.content.innerHTML=`<h3>MEMORY CODE</h3><p>將目前的等級、裝備、背包與遊戲進度儲存至伺服器。重新進入遊戲時，在 Memorycode 欄位輸入代碼恢復。</p><label for="save-code-output">存檔代碼<input id="save-code-output" readonly autocomplete="off" spellcheck="false" class="panel-input" value="${escape(code)}" placeholder="尚未產生代碼"></label><button type="button" class="panel-button" data-save-code>產生／重新取得代碼</button><button type="button" class="panel-button" data-copy-save-code ${code?'':'disabled'}>複製存檔代碼</button><p>請妥善保管代碼。擁有代碼的人可能存取你的存檔。</p>`;}
   showSaveCode(code){this.saveCode=String(code||'');this.openPanel('save');this.content.querySelector('#save-code-output')?.select();}
   renderBag(profile){renderOriginalBag(this,profile);}
-  renderShop(profile){const tab=this.shopTab||'near',tabs={near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',shield:'Shields',head:'Headwear',outfit:'Outfits',owned:'Owned'};const items=(tab==='owned'?(profile.inventory||[]).map(itemById).filter(Boolean):SHOP_ITEMS).filter(i=>tab==='owned'||(tab==='mystery'&&i.mysteryWeapon)||(['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab)||i.slot===tab);this.content.innerHTML=`<div class="armory-balance"><span>Equipment · collections</span><b>${profile.admin?'∞':profile.wallet} coins</b></div><nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav><div class="shop-items">${items.map(item=>{const owned=profile.inventory.includes(item.id),equipped=profile.equipment[item.slot]===item.id;return itemCard(item,`<button data-${owned?'equip':'buy'}="${item.id}" ${equipped||!owned&&!profile.admin&&profile.wallet<item.price?'disabled':''}>${equipped?'EQUIPPED':owned?'EQUIP':`BUY · ${item.price.toLocaleString('en-US')}`}</button>`);}).join('')||'<p>Your collection starts here. Earn coins by exploring the arena.</p>'}</div>`;}
+  renderShop(profile){const tab=this.shopTab||'near',tabs={near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',shield:'Shields',head:'Headwear',outfit:'Outfits',wings:'Wings',owned:'Owned'};const items=(tab==='owned'?(profile.inventory||[]).map(itemById).filter(Boolean):SHOP_ITEMS).filter(i=>tab==='owned'||(tab==='mystery'&&i.mysteryWeapon)||(['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab)||i.slot===tab);this.content.innerHTML=`<div class="armory-balance"><span>Equipment · collections</span><b>${profile.admin?'∞':profile.wallet} coins</b></div><nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav><div class="shop-items">${items.map(item=>{const owned=profile.inventory.includes(item.id),equipped=profile.equipment[item.slot]===item.id;return itemCard(item,`<button data-${owned?'equip':'buy'}="${item.id}" ${equipped||!owned&&!profile.admin&&profile.wallet<item.price?'disabled':''}>${equipped?'EQUIPPED':owned?'EQUIP':`BUY · ${item.price.toLocaleString('en-US')}`}</button>`);}).join('')||'<p>Your collection starts here. Earn coins by exploring the arena.</p>'}</div>`;}
 
+  // SUPPORT sells one authoring entitlement, not chance-based capsules.
+  // The merchant/checkout status is provided by the authenticated Worker.
   renderWingShop(profile){
-   this.wingGalleryObserver?.disconnect();
-   const remaining=profile.admin?Infinity:Math.max(0,5-(profile.wingTrialDraws||0))+Math.max(0,Number(profile.wingPaidDraws)||0);
-   const activeCustom=(this.world?.customWings||[]).filter(wing=>wing.retired!==true);
-   const wings=[...SWALLOWTAIL_WINGS,...activeCustom];
-   const owned=new Set(profile.inventory||[]);
-   const featured=this.lastWingDraw?.itemId?itemById(this.lastWingDraw.itemId):null;
-   const capsules=Array.from({length:15},(_,i)=>`<span class="gacha-capsule" style="--n:${i};--shade:${['#f0d6ad','#ec85a7','#83d8dd','#e3cb65','#ae96ed'][i%5]}"></span>`).join('');
-   const assigned=activeCustom.reduce((v,w)=>v+Number(w.drawRatePct??1),0);
-   this.content.innerHTML=`<section class="wing-shop-panel wing-support-app">
-    <div class="y2k-shell-header"><div class="y2k-shell-brand"><span class="y2k-shell-diamond">◇</span><div><strong>GGTEMPLE <em>98</em></strong><small>INTERNET WING LOTTERY SYSTEM</small></div></div><div class="y2k-shell-lights"><i></i><i></i><i></i><span>ONLINE ●</span></div></div>
-    <div class="y2k-shell-menu"><span>File</span><span>View</span><span>Favorites</span><span>Help</span><b>✦ CAPSULE MACHINE ✦</b></div>
-    <div class="wing-support-top"><div class="y2k-stage-glitter" aria-hidden="true"><i>✦</i><i>✧</i><i>✴</i><i>✦</i></div>
-      <div class="win98-gacha-app wing-support-machine" aria-label="Win98 翅膀扭蛋機">
-       <div class="win98-gacha-title"><span>▣ CAPSULE.EXE — GGTEMPLE SUPPORT</span><span>▁ □ ×</span></div>
-       <div class="y2k-display-banner"><span class="y2k-laser-circle" aria-hidden="true">✺</span><strong>WING GACHA</strong><small>LUCKY DRAW 2000</small></div>
-       <div class="wing-gacha-machine" aria-label="翅膀抽獎機"><span class="y2k-machine-halo" aria-hidden="true"></span><span class="y2k-machine-star y2k-star-a" aria-hidden="true">✦</span><span class="y2k-machine-star y2k-star-b" aria-hidden="true">✧</span>
-        <div class="wing-gacha-dome"><span class="wing-gacha-shine"></span><span class="y2k-dome-crest">✧ 2000 ✧</span>${capsules}</div>
-        <div class="wing-gacha-neck"><span class="wing-gacha-face">★ CAPSULE / 98 ★</span></div>
-        <div class="wing-gacha-body"><button type="button" class="wing-gacha-crank" data-draw-wing aria-label="開始扭蛋抽獎" ${!profile.admin&&remaining===0?'disabled':''}>START</button><div class="wing-gacha-slot" aria-hidden="true">▰</div><p>GGTEMPLE · CAPSULE 98</p></div>
-        <div class="wing-gacha-feet"></div>
-       </div>
-       <div class="win98-gacha-status" role="status">PLAYS LEFT: ${Number.isFinite(remaining)?remaining:'∞'}</div><div class="y2k-machine-caption"><span>✦ LIMITED EDITION ✦</span><span>GGTEMPLE 2000</span></div>
-      </div>
-      <div class="wing-support-controls">
-       <header class="wing-shop-hero"><small>WINDOWS 98 · CAPSULE.EXE · SUPPORT</small>
-        <span class="y2k-hero-eyebrow">✧ WELCOME TO THE DIGITAL GARDEN ✧</span>
-        <h3>WING <span>CAPSULE</span> MACHINE</h3><p class="y2k-hero-kicker">YOUR LUCKY WINGS ARE WAITING.</p>
-        <p>轉動扭蛋機抽取翅膀。翅膀品質的稀有度與自身色彩分開計算。</p>
-        <div class="y2k-stat-strip"><span>WINGS ONLINE <b>${wings.length}</b></span><span>SPECIAL EDITIONS <b>${activeCustom.length}</b></span><span>SYSTEM <b>98.2K</b></span></div>
-       </header>
-       <button class="panel-button wing-draw-button" type="button" data-draw-wing ${!profile.admin&&remaining===0?'disabled':''}>${remaining>0?`✦ START LUCKY DRAW · ${Number.isFinite(remaining)?remaining+' PLAYS LEFT':'UNLIMITED PLAYS'} ✦`:'免費抽取次數已用完'}</button>
-       <div class="y2k-rarity-panel"><strong>✦ LUCKY DRAW INFORMATION ✦</strong><p class="wing-draw-odds">特別款總中獎率：${assigned.toFixed(3)}%。
-        剩餘 ${Math.max(0,100-assigned).toFixed(3)}% 依基本品質分布：白45 / 綠30 / 藍18 / 紫5 / 金2。
-        同款可重複抽取。</p></div>
-       ${featured?`<div class="wing-draw-result" role="status">上次開出：${escape(featured.name)} · ${escape(WING_QUALITY_NAMES[wingRarity(featured)])}</div>`:''}
-       <section class="wing-payment-preview"><h3>SUPPORT / PAYMENT STATUS</h3>
-        <p>Google 帳號提供五次免費試抽，每 NT$30 對應五抽；正式收款尚未啟用。測試不會扣款。</p>
-         ${profile.admin?'<button type="button" class="panel-button" data-start-wing-stage>GM · 綠界測試付款 NT$30</button><p>僅獨立測試 Worker 啟用時可建立測試訂單。</p>':'<p>正式付款入口尚未開放。</p>'}<p></p></section>
-      </div>
+   const credits=Math.max(0,Number(profile.wingDesignCredits)||0);
+   const status=this.wingPaymentStatus;
+   const mode=status?.checkoutMode||'disabled';
+   const ready=status?.checkoutEnabled===true;
+   this.content.innerHTML=`<section class="wing-shop-panel wing-support-app wing-design-support">
+    <div class="y2k-shell-header"><div class="y2k-shell-brand"><span class="y2k-shell-diamond">◇</span><div><strong>GGTEMPLE <em>98</em></strong><small>YOUR ORIGINAL WING</small></div></div><div class="y2k-shell-lights"><span>ONLINE ●</span></div></div>
+    <div class="y2k-shell-menu"><span>File</span><span>Support</span><span>Atelier</span><b>✦ CREATE YOUR OWN WINGS ✦</b></div>
+    <div class="wing-support-controls">
+     <header class="wing-shop-hero"><small>GGTEMPLE SUPPORT · CREATIVE COMMISSION</small>
+      <h3>DRAW YOUR OWN <span>WINGS</span></h3>
+      <p class="y2k-hero-kicker">NT$30 · ONE ORIGINAL DESIGN</p>
+      <p>每完成一筆綠界付款，即可獲得一次自製翅膀繪畫權限。繪畫完成按儲存，翅膀會直接進入個人 BAG 並自動裝備，不會上架到商店，也不會進入抽獎池。</p>
+      <div class="y2k-stat-strip"><span>AVAILABLE DESIGN CREDITS <b>${credits}</b></span><span>WING CATALOG <b>14</b></span><span>QUALITY <b>BLUE / GOLD / PURPLE</b></span></div>
+     </header>
+     <section class="wing-payment-preview">
+      <h3>SUPPORT / ECPAY CHECKOUT</h3>
+      <p>台幣 NT$30 / 一次繪製權限。付款完成後由綠界向伺服器驗證並入帳，未付款不會解鎖。自製翅膀僅供裝飾及固定滑翔數值，不得透過畫布提高戰鬥能力。</p>
+      <button type="button" class="panel-button" data-wing-checkout ${ready?'':'disabled'}> ${mode==='production'?'前往綠界安全付款 · NT$30':mode==='stage-only'?'GM 綠界測試付款 · 不扣款':status?'尚未開通正式付款':'正在檢查付款狀態…'}</button>
+      <p data-wing-checkout-notice>${mode==='production'?'付款將導向綠界官方結帳頁面。':mode==='stage-only'?'僅綠界測試交易；正式扣款未開放。':'正式收款所需綠界商家授權與伺服器金鑰尚未開通；此按鈕不會扣款。'}</p>
+      ${credits>0?`<button type="button" class="panel-button wing-gift-action" data-open-gift>使用繪圖權限 · 禮物盒（剩餘 ${credits}）</button>`:'<p>付款完成後，左側工具列會出現禮物盒按鈕。</p>'}
+     </section>
     </div>
-    <section class="wing-catalog-window"><h3>▣ WING COLLECTION — ${wings.length} WINGS <span>✧ DIGITAL SPECIMENS ✧</span></h3>
-     <div class="wing-shop-gallery">${wings.map(item=>{
-      const rarity=wingRarity(item),isOwned=owned.has(item.id),color=WING_QUALITY_COLORS[rarity];
-      return `<article class="wing-shop-card" style="--wing-quality:${color}" data-wing-id="${escape(item.id)}">
-       <span class="wing-shop-rarity">${escape(WING_QUALITY_NAMES[rarity])}</span>
-       <img alt="${escape(item.name)}" data-wing-icon="${escape(item.id)}" loading="lazy">
-       <strong>${escape(item.name)}</strong>
-       <small>${item.design==='painted-wing'?`SPECIAL EDITION · ${Number(item.drawRatePct??1)}% DROP`:isOwned?'OWNED':'LOTTERY ONLY'}</small>
-       ${isOwned?`<button type="button" data-equip="${escape(item.id)}"
-        ${profile.equipment.wings===item.id?'disabled':''}>${profile.equipment.wings===item.id?'EQUIPPED':'EQUIP'}</button>`:''}
-      </article>`;
-     }).join('')}</div>
-    </section>
-    <footer class="y2k-taskbar"><span class="y2k-start-button">▣ Start</span><span>GGTEMPLE · SUPPORT</span><span class="y2k-taskbar-clock">✦ Y2K ONLINE ✦</span></footer>
+    <footer class="y2k-taskbar"><span class="y2k-start-button">▣ Start</span><span>GGTEMPLE · ORIGINAL WINGS</span><span class="y2k-taskbar-clock">✦ Y2K ONLINE ✦</span></footer>
    </section>`;
-   this.hydrateWingGalleryImages();
+  }
+  setWingPaymentStatus(value){
+   this.wingPaymentStatus=value;
+   if(this.panelName==='wing-shop')this.renderWingShop(this.world?.profile||{});
   }
   hydrateWingGalleryImages(){
    this.wingGalleryObserver?.disconnect();
@@ -443,6 +423,8 @@ export class TempleUI extends EventTarget{
   renderEditor(){const saved=JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');this.content.innerHTML=`<p><b>Shift + Y</b> 開啟編輯設定，可儲存或匯出 GitHub Pages 配置。</p><form data-form="editor"><label>解析度倍率上限<input class="panel-input" name="pixelRatio" type="number" min="0.6" max="2" step="0.05" value="${saved.pixelRatio||1.35}"></label><label>霧氣濃度<input class="panel-input" name="fog" type="number" min="0" max="0.04" step="0.0001" value="${saved.fog??.0008}"></label><label>作品漂浮幅度<input class="panel-input" name="artFloat" type="number" min="0" max="0.6" step="0.01" value="${saved.artFloat??.17}"></label><button class="panel-button">儲存編輯結果</button></form><button class="panel-button" data-export-layout>下載 temple-layout.json</button><p>${PLATFORMS.length} 件預設作品，配置由伺服器保存。</p>`;}
   async panelClick(event){const button=event.target.closest('button');if(!button||button.disabled)return;if(button.dataset.openPlant){const plant=(this.world?.plants||[]).find(p=>p.id===button.dataset.openPlant);if(plant)this.showPlant(plant);return;}if(button.hasAttribute('data-open-wing-shop')){this.openPanel('wing-shop');return;}
     if(button.hasAttribute('data-open-wing-painter')){this.openPanel('wing-painter');return;}
+    if(button.hasAttribute('data-open-gift')){this.openPanel('wing-painter');return;}
+    if(button.hasAttribute('data-wing-checkout')){this.emit('wing-payment-checkout');return;}
     if(button.hasAttribute('data-open-wing-manage')){this.openPanel('wing-manage');return;}
     if(button.hasAttribute('data-wing-edit')){
       if(!this.self?.profile?.admin)return;
@@ -485,5 +467,5 @@ export class TempleUI extends EventTarget{
 
 function option(item){return `<option value="${item.id}">${escape(item.name)}</option>`;}
 const icons=new Map();
-function itemCard(item,action){if(!icons.has(item.id))icons.set(item.id,itemIcon(item));const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${pvpShotDamage(item,attackStats(item,0),weaponQuality(item))} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88"><img src="${icons.get(item.id)}" alt="" loading="lazy"><small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><h3>${escape(item.name)}</h3><small>${escape(stats)}</small>${action}</article>`;}
+function itemCard(item,action){if(!icons.has(item.id))icons.set(item.id,item.slot==='wings'?wingIcon(item):itemIcon(item));const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${pvpShotDamage(item,attackStats(item,0),weaponQuality(item))} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88"><img src="${icons.get(item.id)}" alt="" loading="lazy"><small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><h3>${escape(item.name)}</h3><small>${escape(stats)}</small>${action}</article>`;}
 import {bindChatLayout} from './chat-layout.js';

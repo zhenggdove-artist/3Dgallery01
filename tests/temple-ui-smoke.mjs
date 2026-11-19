@@ -356,23 +356,26 @@ try{
  assert.equal(await page.evaluate(()=>templeTest.gun.mode),2,
   'desktop click outside glass circle must not trigger mobile-only scope exit');
  await page.evaluate(()=>window.restoreDesktopScope());
- // Real browser regression: SUPPORT must render a visible Windows 98 gacha,
- // not only CSS or a hidden shop link buried below equipment inventory.
+ // SUPPORT sells a fixed personal painting entitlement, never random wings.
  await page.evaluate(()=>templeTest.ui.openPanel('wing-shop'));
- await page.locator('.wing-support-machine .wing-gacha-machine').waitFor({state:'visible'});
- assert.equal(await page.locator('[data-draw-wing]').count(),2);
+ await page.locator('.wing-design-support [data-wing-checkout]').waitFor({state:'attached'});
+ assert.equal(await page.locator('.wing-design-support .wing-gacha-machine').count(),0);
  const support=await page.evaluate(()=>{
-  const panel=document.querySelector('#panel'),machine=document.querySelector('.wing-support-machine'),
-   top=document.querySelector('.win98-gacha-title'),control=document.querySelector('.wing-draw-button');
-  const r=machine.getBoundingClientRect(),p=panel.getBoundingClientRect();
-  return {panelWidth:p.width,panelHeight:p.height,machineWidth:r.width,machineHeight:r.height,
-   shown:getComputedStyle(machine).display!=='none',title:top?.textContent,
-   buttonEnabled:!control?.disabled};
+  const panel=document.querySelector('#panel'),app=document.querySelector('.wing-design-support'),
+   button=app.querySelector('[data-wing-checkout]');
+  const p=panel.getBoundingClientRect(),r=app.getBoundingClientRect();
+  return {panelWidth:p.width,panelHeight:p.height,appWidth:r.width,
+   gachaCount:app.querySelectorAll('[data-draw-wing]').length,
+   oneCheckout:app.querySelectorAll('[data-wing-checkout]').length,
+   title:app.querySelector('.wing-shop-hero h3')?.textContent||'',
+   buttonVisible:getComputedStyle(button).display!=='none'};
  });
- assert.ok(support.panelWidth>1000&&support.panelHeight>740,support);
- assert.ok(support.machineWidth>275&&support.machineHeight>330&&support.shown&&support.buttonEnabled,support);
- assert.match(support.title,/CAPSULE\.EXE/);
- await page.screenshot({path:output+'/win98-support-gacha.png'});
+ assert.ok(support.panelWidth>900&&support.panelHeight>600,support);
+ assert.equal(support.oneCheckout,1,support);
+ assert.equal(support.gachaCount,0,support);
+ assert.ok(support.buttonVisible,support);
+ assert.match(support.title,/DRAW YOUR OWN/);
+ await page.screenshot({path:output+'/win98-support-personal-wing.png'});
  await page.locator('#panel-close').click();
  assert.deepEqual(errors,[],errors.join('\n'));
  console.log(JSON.stringify({ok:true,write:true,artBombPreview:scale,errors}));

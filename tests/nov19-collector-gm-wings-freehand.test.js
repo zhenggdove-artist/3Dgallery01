@@ -69,11 +69,11 @@ test('Collector migrated legacy last sale is protected against one more sale',()
  assert.equal(w.profiles.a.collectorSoldArtworks['platform-03'],T-10);
 });
 
-test('GM receives all catalogue items, all 41 wings, and every new custom wing only once',()=>{
+test('GM receives all catalogue items, exactly 14 curated wings, and GM custom wings only once',()=>{
  const w=createInitialWorld(T);
  const gm=ensureProfile(w,'gm','GM','#aabbcc',T,true);
  assert.ok(ITEMS.every(item=>gm.inventory.includes(item.id)),'every base item must be granted');
- assert.equal(SWALLOWTAIL_WINGS.length,21);
+ assert.equal(SWALLOWTAIL_WINGS.length,14);
  assert.ok(SWALLOWTAIL_WINGS.every(item=>gm.inventory.includes(item.id)));
  assert.equal(new Set(gm.inventory).size,gm.inventory.length,'one of each at initialization');
  const existing=createProfile('legacyGM','legacy','#aabbcc',T,false);

@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createInitialWorld,ensureProfile,applyAction,worldView,migrateWorld} from '../src/shared/temple-rules.js';
 import {registerCustomWings,itemById} from '../src/shared/catalog.js';
 import {normalizePaintedWing} from '../src/shared/custom-wings.js';
-import {drawGmWing,WING_QUALITY_WEIGHTS} from '../src/shared/wing-shop.js';
+
 import {SWALLOWTAIL_WINGS} from '../src/reletter/wing-catalog.js';
 const now=10_000_000,actor={key:'gm',name:'Ely',color:'#abcdef',role:'fighter',position:[0,0,10]};
 const draft={name:'Hand-painted Monarch',tier:4,slot:'wings',family:'wings',
@@ -43,19 +43,16 @@ test('invalid art is rejected without minting equipment',()=>{
  assert.throws(()=>normalizePaintedWing({...draft,strokes:[{...draft.strokes[0],points:[[300,3]]}]},'id'),/coordinate/);
  assert.throws(()=>normalizePaintedWing({...draft,name:'<script>'},'id'),/name/);
 });
-test('exact five-percent Epic band, independent of inventory',()=>{
- const all=Array.from({length:10000},(_,i)=>i/10000);
- let epics=0;
- for(const r of all){
-  const result=drawGmWing({admin:true,inventory:[]},()=>r);
-  if(result.quality==='epic')epics++;
- }
- assert.equal(epics,500);
- assert.deepEqual(Object.values(WING_QUALITY_WEIGHTS),[45,30,18,5,2]);
+test('only fourteen user-requested material wings remain in public catalog',()=>{
+ assert.equal(SWALLOWTAIL_WINGS.length,14);
  assert.equal(SWALLOWTAIL_WINGS.filter(w=>w.tier===4).length,5);
- const owned=SWALLOWTAIL_WINGS.map(w=>w.id);
- const filled=drawGmWing({admin:true,inventory:owned},()=>.945);
- assert.equal(filled.quality,'epic');
+ assert.equal(SWALLOWTAIL_WINGS.filter(w=>w.tier===3).length,5);
+ assert.equal(SWALLOWTAIL_WINGS.filter(w=>w.tier===5).length,4);
+ const world=createInitialWorld(now);
+ const gm=ensureProfile(world,'gm','GM','#abcdef',now,true);
+ const denied=applyAction(world,actor,{action:'gm-wing-draw'},{now});
+ assert.match(denied.error,/removed/);
+ assert.equal(gm.wingDesignCredits,0);
 });
 test('Google-only Firebase entry and verified server route integration',()=>{
  const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
