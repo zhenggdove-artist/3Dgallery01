@@ -36,8 +36,8 @@ test('giraffe charged collision is wider than the visible revolving rod and deal
  const baseline=pvpShotDamage({...item,id:'legacy-giraffe'}, {ultimate:true,radius:12}, {tier:3});
  const triple=pvpShotDamage(item,{ultimate:true,radius:12},{tier:3});
  assert.equal(triple,+(baseline*3).toFixed(3));
- const world=createInitialWorld(T),attacker=fighter('thrower',[45,0,0]),
-  defender=fighter('defender',[45,0,25]);
+ const world=createInitialWorld(T),attacker=fighter('thrower',[75,0,0]),
+  defender=fighter('defender',[75,0,25]);
  const user=ensureProfile(world,'thrower','thrower','#aaaaaa',T);
  const victim=ensureProfile(world,'defender','defender','#aaaaaa',T);
  user.inventory.push('giraffe');user.equipment.weapon='giraffe';
