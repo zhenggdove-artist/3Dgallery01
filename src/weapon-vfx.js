@@ -172,7 +172,7 @@ export class WeaponVFX{
   const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
   if(data.ultimate&&Array.isArray(impactArea?.visualCenter))end.copy(new THREE.Vector3(...impactArea.visualCenter));
   // Every ordinary staff shot, including beam, is a pulsing elemental orb.
-  if(isChannelStaff(item)&&item.id!=='clam'&&!data.ultimate&&!data.channel){
+  if(isChannelStaff(item)&&item.id!=='clam'&&!data.channel&&(!data.ultimate||['lightning','beam'].includes(item.family))){
    this.staffOrb(data,item,origin,direction);return;
   }
   // Charged and sustained spells keep their original 00GameDevs effects.
