@@ -175,6 +175,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: npm run build:cloud
       - name: Boot isolated backend and game assets
         run: |
           npx wrangler dev --local --port 8787 > /tmp/temple-beam-worker.log 2>&1 &
