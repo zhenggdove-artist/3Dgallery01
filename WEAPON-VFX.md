@@ -28,6 +28,6 @@ wind-up does not delay a game's instant hit. Hit points come from server results
 Neither visual completion nor pool eviction applies damage.
 
 Tests: npm test; node tests/weapon-vfx-browser.mjs;
-node tests/reletter-complete.mjs. Screenshots and GPU console errors are checked,
+npm run test:browser. Screenshots and GPU console errors are checked,
 including normal/charged stop, replay and cleanup. Low library load labels are
 not treated as device-independent FPS guarantees.
