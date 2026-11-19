@@ -104,13 +104,16 @@ try{
  for(const name of ['storm-3','prism-3']){
   const setup=await page.evaluate(id=>{
    const t=templeTest;
-   const world={...t.ui.world,profile:{...t.ui.world.profile,equipment:{...t.ui.world.profile.equipment,weapon:id}}};
+   const world={...t.ui.world,revision:(Number(t.ui.world.revision)||0)+1000,profile:{...t.ui.world.profile,equipment:{...t.ui.world.profile.equipment,weapon:id}}};
    t.network.dispatchEvent(new CustomEvent('world',{detail:world}));
    const item=t.items.find(x=>x.id===id);
    t.arena.setPlayerEquipment(t.controller().root,{weapon:id});
    t.controller().pitch=-.35;
    return {item:item?.id,chargeMs:item?.chargeMs,channelItem:item?.family};
   },name);
+  // The real socket's pending initial snapshot can otherwise overwrite the
+  // fixture before the next animation frame, reverting to white-cat.
+  await page.waitForFunction(id=>templeTest.ui.world?.profile?.equipment?.weapon===id,name,{timeout:12000});
   await page.evaluate(()=>templeTest.ui.emit('attack-start'));
   await page.waitForTimeout(Math.max(5300,(setup.chargeMs||1500)+2900));
   const snapshot=await page.evaluate(()=>{
