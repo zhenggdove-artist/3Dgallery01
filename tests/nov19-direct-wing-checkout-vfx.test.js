@@ -40,6 +40,8 @@ test('tap fires only a traveling elemental orb; channel delegates to actual vend
    assert.equal(orb.arcs,undefined,'ordinary prism projectile is not a laser');
   }
   assert.equal(native.length,previousNative,'normal attack must not render a vendor beam');
+  vfx.play({...shot,ultimate:true},item,root);
+  assert.equal(native.length,previousNative,'non-channel charged attacks cannot become continuous lasers');
   vfx.play({...shot,channel:true,ultimate:true},item,root);
  }
  assert.deepEqual(native.map(x=>x.item.family),['lightning','beam']);
