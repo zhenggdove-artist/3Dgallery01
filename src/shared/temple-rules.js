@@ -7,7 +7,7 @@ import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
-import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityBlocked} from './city-layout.js';
+import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityBlocked,cityWallPoint,CITY_PAINT_WALLS} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
@@ -55,7 +55,7 @@ export function createInitialWorld(now=Date.now()){
     profiles:{},customWings:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
-    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],groundDrops:[],structures:[],cityDamage:{},plants:[],sceneCleanupVersion:1,
+    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
     monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],audioSettings:{},musicVersion:0,
     collector:initialCollector(now),lastCollectorSale:null,
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
@@ -67,7 +67,7 @@ export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
   world.profiles??={};world.customWings??=[];registerCustomWings(world.customWings);
-  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.plants??=[];
+  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
   // Old RELETTER farming data must not survive the removal of the Garden game mode.
@@ -181,7 +181,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
   const profile=world.profiles[actorKey];
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
-    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
+    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),wallPaint:clone(world.wallPaint||{}),wallPaintRevision:world.wallPaintRevision||0,plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
@@ -352,6 +352,56 @@ export function applyAction(world,actor,body,context={}){
    target.drawRatePct=drawRatePct;registerCustomWings(world.customWings);
    world.revision=(world.revision||0)+1;
    return {updatedWingId:target.id,notice:'已更新「'+target.name+'」中獎率為 '+drawRatePct+'%'};
+  }
+  // Drawings persist independently of the structural reset. Only the GM
+  // clean command removes a mural, including its stored eraser strokes.
+  if(body.action==='clean-graffiti'){
+   if(!profile.admin)return {error:'GM only'};
+   const count=Object.values(world.wallPaint||{}).reduce((total,walls)=>
+    total+Object.values(walls||{}).reduce((n,strokes)=>n+(Array.isArray(strokes)?strokes.length:0),0),0);
+   world.wallPaint={};world.wallPaintRevision=(world.wallPaintRevision||0)+1;
+   world.revision=(world.revision||0)+1;
+   return {notice:'已清除全部 '+count+' 筆建築塗鴉',cleanGraffiti:true,removedStrokes:count};
+  }
+  if(body.action==='paint-building'){
+   if(actor.role!=='fighter')return {error:'Spectators cannot paint'};
+   if(profile.hp<=0||profile.deadUntil>now)return {error:'Cannot paint while defeated'};
+   const bodyStroke=body.stroke||{};
+   const lot=CITY_LOTS.find(item=>item.id===bodyStroke.lotId);
+   if(!lot||!CITY_PAINT_WALLS.includes(bodyStroke.wall))return {error:'Invalid building wall'};
+   if(cityStage(world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)===3)
+    return {error:'Restore the damaged building before painting again'};
+   if(!['brush','eraser'].includes(bodyStroke.tool))return {error:'Invalid painting tool'};
+   const color=bodyStroke.tool==='eraser'?'#000000':bodyStroke.color;
+   if(!validColor(color))return {error:'Invalid painting colour'};
+   const size=Number(bodyStroke.size);
+   if(!Number.isFinite(size)||size<.04||size>.95)return {error:'Invalid brush size'};
+   const points=bodyStroke.points;
+   if(!Array.isArray(points)||points.length<1||points.length>130)return {error:'Invalid stroke length'};
+   const verified=[];
+   for(const p of points){
+    if(!Array.isArray(p)||p.length!==2||!p.every(x=>Number.isFinite(x)&&x>=0&&x<=1))
+     return {error:'Invalid paint coordinates'};
+    const u=+p[0].toFixed(4),v=+p[1].toFixed(4);
+    const location=cityWallPoint(lot,bodyStroke.wall,u,v);
+    if(!location||Math.hypot(location[0]-actor.position[0],
+      location[1]-(actor.position[1]+1.4),location[2]-actor.position[2])>19)
+     return {error:'Paint within reach of your character'};
+    verified.push([u,v]);
+   }
+   world.wallPaint??={};
+   const total=Object.values(world.wallPaint).reduce((n,walls)=>
+    n+Object.values(walls||{}).reduce((m,strokes)=>m+(strokes?.length||0),0),0);
+   if(total>=2000)return {error:'City mural archive is full; GM must clean graffiti'};
+   const walls=world.wallPaint[lot.id]??={};
+   const strokes=walls[bodyStroke.wall]??=[];
+   if(strokes.length>=100)return {error:'This wall has reached the mural limit'};
+   const stroke={id:'paint-'+id(),owner:actor.key,lotId:lot.id,wall:bodyStroke.wall,
+    tool:bodyStroke.tool,color,size,points:verified,time:now};
+   strokes.push(stroke);
+   world.wallPaintRevision=(world.wallPaintRevision||0)+1;
+   world.revision=(world.revision||0)+1;
+   return {paintStroke:stroke};
   }
   if(body.action==='reset-buildings'){
    if(!profile.admin)return {error:'GM only'};
