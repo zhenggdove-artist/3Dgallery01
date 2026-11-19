@@ -198,7 +198,7 @@ export class TempleArena{
   for(const prior of this.world?.groundDrops||[]){
    if(prior.kind==='coin'&&!active.has(prior.id))this.spawnDropCoinFlight(prior);
   }
-  this.world=world;this.players=players;this.displayPlatforms.sync();this.syncHearts();this.syncDrops();this.syncStructures();this.adventure.sync(world);this.syncMonster();}
+  this.world=world;this.players=players;this.outerCity?.wallPaint?.sync(world.wallPaint||{},world.wallPaintRevision||0);this.displayPlatforms.sync();this.syncHearts();this.syncDrops();this.syncStructures();this.adventure.sync(world);this.syncMonster();}
   spawnDropCoinFlight(drop){
    if(!this.coinMesh||!Array.isArray(drop.position))return;
    if(this.dropCoinFlights.length>=40){const old=this.dropCoinFlights.shift();old.mesh.removeFromParent();}
