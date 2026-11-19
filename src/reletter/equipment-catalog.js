@@ -40,7 +40,7 @@ export const equipmentById=id=>equipmentIndex.get(id);
 // Shared client/server cadence and rank identity for rapid, buffered melee chains.
 for(const item of EQUIPMENT)if(!item.exotic&&['saber','whip','swatter','pan','planter','palm'].includes(item.family)){
  item.color=['#73e5ff','#73ffc1','#b68aff','#ffae55','#ff78d9'][item.tier-1];
- item.cooldown=({saber:300,whip:320,swatter:260,pan:340,planter:360,palm:380}[item.family])-(item.tier-1)*15;
+ item.cooldown=({saber:300,whip:225,swatter:190,pan:235,planter:245,palm:265}[item.family])-(item.tier-1)*15;
  item.range=+(item.range*1.2).toFixed(2);item.radius=+(item.radius*1.3).toFixed(2);
 }
 
