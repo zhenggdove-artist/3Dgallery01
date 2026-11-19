@@ -52,12 +52,17 @@ export class TempleUI extends EventTarget{
     this.entry.addEventListener('click',event=>{
       const button=event.target.closest('[data-google-login]');
       if(!button||button.disabled)return;
-      $('account-login-status').textContent='Opening Google sign-in…';
+      // Re-clicking must open Google account selection, even after the
+      // previous selection returned a usable Firebase token.
+      this.firebaseIdToken='';
+      this.form.hidden=true;
+      $('entry-error').textContent='';
+      $('account-login-status').textContent='正在開啟 Google 帳號選擇視窗…';
       this.emit('firebase-login');
     });
     this.form.addEventListener('submit',event=>{
       event.preventDefault();$('entry-error').textContent='';
-      if(!this.firebaseIdToken)return this.joinError('Sign in with Google first');
+      if(!this.firebaseIdToken)return this.joinError('請先選擇 Google 帳號。');
       this.emit('join',{name:$('player-name').value.trim(),color:$('clothing-color').value,
         firebaseIdToken:this.firebaseIdToken,backendUrl:window.TEMPLE_CONFIG.backendUrl});
     });
@@ -100,18 +105,26 @@ export class TempleUI extends EventTarget{
     const button=this.entry.querySelector('[data-google-login]');
     if(button)button.disabled=!enabled;
     $('account-login-status').textContent=message||(
-      enabled?'Sign in with Google. Character progress is saved automatically.':
-      'Google sign-in is currently unavailable. Firebase configuration is incomplete.'
+      enabled?'請選擇 Google 帳號以載入或建立角色。':
+      'Google 登入暫時無法使用，請稍後重試。'
     );
   }
-  selectFirebaseAccount(token){
+  selectFirebaseAccount(token,profile=null){
     this.firebaseIdToken=token;
-    $('account-login-status').textContent='Google verified. Set your character name and clothing color.';
+    const existing=!!profile;
+    this.entryExistingProfile=existing;
+    $('account-login-status').textContent=existing?
+      '帳號驗證完成。確認角色後即可進入遊戲。':
+      '帳號驗證完成。建立角色後即可進入遊戲。';
+    $('entry-profile-heading').textContent=existing?'確認遊戲角色':'建立遊戲角色';
+    $('player-name').value=existing?String(profile.name||''):'';
+    $('clothing-color').value=existing&&/^#[0-9a-fA-F]{6}$/.test(profile.color||'')?profile.color:'#43b59a';
+    $('enter-button').textContent=existing?'進入遊戲':'建立角色並進入';
     this.form.hidden=false;
     $('player-name').required=true;
-    $('player-name').focus();
+    if(!existing)$('player-name').focus();
   }
-  joinBusy(value){$('enter-button').disabled=value;$('enter-button').textContent=value?'Connecting…':'Enter ↵';}
+  joinBusy(value){$('enter-button').disabled=value;$('enter-button').textContent=value?'正在連線…':this.entryExistingProfile?'進入遊戲':'建立角色並進入';}
   joinError(message){$('entry-error').textContent=message;this.joinBusy(false);}
   enter(data){document.activeElement?.blur();this.self=data.self;this.authMode=data.authMode||'firebase';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;$('gm-menu').hidden=!data.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;$('gm-menu').hidden=!this.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();if(this.panelName)this.renderPanel();}
