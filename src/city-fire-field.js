@@ -98,7 +98,7 @@ export class CityFireField{
   const previous=this.current.get(lot.index);
   if(previous&&previous.hp===hp&&previous.maxHp===maxHp)return;
   const dead=hp<=0;
-  const previouslyLiving=previous&&previous.hp>0&&previous.hp<previous.maxHp;
+  const previouslyLiving=!previous||previous.hp>0;
   const dying=dead&&!snapshot&&!!previouslyLiving;
   const power=dead?(dying?1:0):cityFirePower(hp,maxHp);
   const deathStart=dying?this.time:0;
