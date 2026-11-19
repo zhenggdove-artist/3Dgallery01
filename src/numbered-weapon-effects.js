@@ -22,9 +22,7 @@ import animeFlame from '../vendor/00gamedevs/source/anime-flame-shield.js';
 export const REQUESTED_VFX=Object.freeze({
  'clam:channel':{number:33,asset:'tidal-surge',original:true},
  'clam:ultimate':{number:33,asset:'tidal-surge',original:true},
- 'beam:normal':{number:29,asset:'charged-beam',original:true},
  'beam:channel':{number:29,asset:'charged-beam',original:true},
- 'beam:ultimate':{number:29,asset:'charged-beam',original:true},
  'saber:ultimate':{number:38,asset:'magma-fissure',original:true},
  'palm:ultimate':{number:31,asset:'thorn-crown',original:true},
  'petal:channel':{number:43,asset:'revival-bloom',original:true},
@@ -68,7 +66,7 @@ const vector=(value,fallback)=>Array.isArray(value)&&value.length===3&&value.eve
 const channelColors=Object.freeze({
  'arc-ray':'#2878ff','tidal-surge':'#66cddd','revival-bloom':'#ff1493',
  'anime-flame-shield':'#ff761f','ice-lance-study':'#d4e8ed',
- 'energy-vortex':'#66d7ff','radiant-beam':'#b874ff','charged-beam':'#b874ff','thorn-crown':'#88d49a'
+ 'energy-vortex':'#66d7ff','radiant-beam':'#b874ff','charged-beam':'#f6c76c','thorn-crown':'#88d49a'
 });
 // Scale the ORIGINAL authored effect, rather than replacing its artwork.
 // #68 and #48 retain their pre-change vendor size and apply the exact same
@@ -94,7 +92,6 @@ export function requestedEffect(item,event){
  if(item.exotic&&!['clam','jellybrella'].includes(item.id))return null;
  const key=event.channel?(item.id==='clam'?'clam':item.family)+':channel':
   event.ultimate?(item.id==='clam'?'clam':item.id==='jellybrella'?'jellybrella':item.family)+':ultimate':
-  item.family==='beam'?'beam:normal':
   item.family==='saber'&&Number(event.combo)===5?'saber:combo':'';
  return REQUESTED_VFX[key]||null;
 }
