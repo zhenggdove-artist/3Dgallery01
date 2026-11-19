@@ -348,6 +348,14 @@ export class OuterCity{
   this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();this.plumes=[];
    this.renderedTiers=new Map();this.poseCache=new Map();this.collapseAnimations=new Map();this.shakes=new Map();this.seenCityEvents=new Set();
   this.plumeResources=createPlumeResources();this.plumePool=[];this.partsHidden=new Set();
+  // Move transient smoke/fire Points, typed-buffer and material allocations
+  // from the FIRST high-damage attack into scene initialization. Every one
+  // of the original 24 full-detail plumes now exists before gameplay starts.
+  for(let i=0;i<24;i++){
+   const plume=emitFireSmoke(this.root,[0,-1000,0],this.plumeResources,mobile,
+    9000+i*23);
+   plume.root.removeFromParent();this.plumePool.push(plume);
+  }
   this.fireField=new CityFireField(this.root,this.lots,this.plumeResources,mobile);
   this.splinters=new CitySplinterField(this.root,mobile);
   this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
@@ -431,6 +439,7 @@ export class OuterCity{
   return template;
  }
  pruneFixtureTemplates(){
+  if(!this.fixturePrefabs)return; // Legacy/test objects may not own a cache.
   const max=this.mobile?24:72;
   let scanned=0;
   while(this.fixturePrefabs.size>max&&scanned++<this.fixturePrefabs.size){
