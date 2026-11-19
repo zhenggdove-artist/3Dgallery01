@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {CITY_MAX_HP} from './shared/city-layout.js';
+import {CITY_MAX_HP,cityFractureProfile,cityFractureProfiles} from './shared/city-layout.js';
 
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const random=seed=>{let s=seed>>>0;return ()=>((s=(Math.imul(s,1664525)+1013904223)>>>0)/4294967296);};
@@ -216,6 +216,65 @@ export function buildBrokenStructure(lot,index,w,h,d,color){
  }
  return group;
 }
+// A true asymmetric 3D polyhedron, never an axis-aligned cube. Every 10%-HP
+// structural loss throws one of these from the corresponding wall scar.
+export function buildIrregularFractureChunk(lot,tier){
+ const p=cityFractureProfile(lot,tier),seed=lot.index*983+tier*509,r=random(seed);
+ const n=9,front=[],back=[],vertices=[],normals=[],colors=[];
+ for(let i=0;i<n;i++){
+  const theta=Math.PI*2*i/n,rad=.76+r()*.40;
+  const x=Math.cos(theta)*p.width*.5*rad;
+  const y=Math.sin(theta)*p.height*.5*rad;
+  front.push([x,y,(r()-.5)*.17]);
+  back.push([x*.65+(r()-.5)*.12,y*.74+(r()-.5)*.13,-p.depth*(.75+r()*.45)]);
+ }
+ const center=[0,0,.08];
+ const add=(a,b,c)=>{
+  const u=new THREE.Vector3(...b).sub(new THREE.Vector3(...a));
+  const v=new THREE.Vector3(...c).sub(new THREE.Vector3(...a));
+  const normal=u.cross(v).normalize(),shade=.77+r()*.24;
+  for(const pt of [a,b,c]){
+   vertices.push(...pt);normals.push(normal.x,normal.y,normal.z);
+   colors.push(shade,shade*(.92+r()*.06),shade*(.87+r()*.05));
+  }
+ };
+ for(let i=0;i<n;i++){
+  const j=(i+1)%n;
+  add(center,front[i],front[j]);
+  add(front[j],back[j],back[i]);
+  add(front[i],front[j],back[i]);
+  add([0,0,-p.depth],back[j],back[i]);
+ }
+ const geometry=new THREE.BufferGeometry();
+ geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+ geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+ geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+ const material=scarredSurface(lot.color,seed);
+ material.vertexColors=true;material.side=THREE.DoubleSide;
+ const group=new THREE.Group();group.name='Detached nonuniform polyhedral masonry '+tier;
+ const mass=new THREE.Mesh(geometry,material);group.add(mass);
+ // The exposed section contains snapped reinforcement and cracked plaster.
+ for(let i=0;i<3;i++){
+  const f=front[(i*3+1)%n],b=back[(i*3+1)%n];
+  tube(group,[[f[0],f[1],-.05],[f[0]+(r()-.5)*.25,f[1]+(r()-.5)*.4,-p.depth*.7],
+   [b[0]+(r()-.5)*.18,b[1]+(r()-.5)*.16,-p.depth*.9]],.025+i*.006,
+   i%2?'#837668':'#615b50');
+ }
+ if(tier%3===0){
+  const broken=brokenPlate(group,p.width*.45,p.height*.38,.06,lot.detail,seed+91);
+  broken.position.set(0,-p.height*.18,.16);
+ }
+ const front=p.wall==='front',backWall=p.wall==='back',right=p.wall==='right';
+ const localSide=front||backWall?p.localX:p.localZ;
+ const offset=front?lot.depth*.5+.22:backWall?-lot.depth*.5-.22:
+  (right?lot.width*.5+.22:-lot.width*.5-.22);
+ if(front){group.position.set(localSide,p.localY,offset);}
+ else if(backWall){group.position.set(-localSide,p.localY,offset);group.rotation.y=Math.PI;}
+ else if(right){group.position.set(offset,p.localY,localSide);group.rotation.y=Math.PI*.5;}
+ else{group.position.set(offset,p.localY,-localSide);group.rotation.y=-Math.PI*.5;}
+ group.rotation.z=p.tilt*.3;
+ return group;
+}
 export function installFacadeCracks(mesh){
  const width=512,bytes=new Uint8Array(width*4);
  const map=new THREE.DataTexture(bytes,width,1,THREE.RGBAFormat,THREE.UnsignedByteType);
@@ -356,5 +415,113 @@ export function updateFireSmoke(effect,dt){
 }
 export function disposePlume(effect){
  effect.root.traverse(o=>{if(o.isPoints){o.geometry.dispose();o.material.dispose();}});
+ effect.root.removeFromParent();
+}
+
+export function buildingFireIntensity(hp,maxHp=CITY_MAX_HP){
+ if(!Number.isFinite(hp)||!Number.isFinite(maxHp)||maxHp<=0)return 0;
+ return hp<=0?1:clamp((maxHp-hp)/(maxHp*.90),0,1);
+}
+// The long-lived fire is a GPU-driven point cloud: no per-frame CPU particle
+// allocation and no loss of detail as a building accumulates damage.
+const livingFireVertex=`
+attribute vec4 aFlow;
+uniform float uTime,uPower,uHeight,uPointSize,uOpacity;
+varying float vOpacity;
+void main(){
+ float cycle=fract(uTime*aFlow.y+aFlow.x);
+ float enabled=1.-step(max(.02,uPower),aFlow.w);
+ float wander=cycle*(.36+uPower*1.15);
+ vec3 p=position;
+ p.y*=uHeight;
+ p.x+=sin(cycle*8.1+aFlow.z*9.1)*wander;
+ p.z+=cos(cycle*6.8+aFlow.z*5.3)*wander;
+ p.y+=cycle*(1.7+uPower*5.7)*aFlow.z;
+ vec4 mv=modelViewMatrix*vec4(p,1.);
+ gl_Position=projectionMatrix*mv;
+ gl_PointSize=clamp(uPointSize*(1.+uPower*.68)*(270./max(2.,-mv.z)),1.,100.);
+ vOpacity=uOpacity*enabled*smoothstep(1.,.7,cycle)*smoothstep(0.,.12,cycle);
+}`;
+const livingFireFragment=`
+uniform sampler2D uSprite;
+uniform vec3 uTint;
+varying float vOpacity;
+void main(){
+ vec4 sprite=texture2D(uSprite,gl_PointCoord);
+ float alpha=sprite.a*vOpacity;
+ if(alpha<.005)discard;
+ gl_FragColor=vec4(sprite.rgb*uTint,alpha);
+}`;
+export function createPersistentBuildingFire(root,lot,resources,mobile=false){
+ const group=new THREE.Group();
+ group.name='Persistent structural flames and smoke '+lot.id;
+ group.position.set(lot.x,0,lot.z);
+ group.rotation.y=-lot.yaw;
+ root.add(group);
+ const layers=[],r=random(39991+lot.index*977),profiles=cityFractureProfiles(lot);
+ for(const type of ['flame','smoke']){
+  const count=(type==='flame'?(mobile?44:72):(mobile?72:122));
+  const positions=new Float32Array(count*3),flows=new Float32Array(count*4);
+  for(let i=0;i<count;i++){
+   const p=profiles[i%profiles.length];
+   const u=(r()-.5)*p.width,side=p.wall;
+   const x=side==='right'?lot.width*.5:(side==='left'?-lot.width*.5:p.localX+u);
+   const z=side==='front'?lot.depth*.5:(side==='back'?-lot.depth*.5:p.localZ+u);
+   positions.set([x+(r()-.5)*.65,p.localY/Math.max(.1,lot.height),z+(r()-.5)*.65],i*3);
+   flows.set([r(),.23+r()*.32,.35+r()*.65,r()],i*4);
+  }
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  geometry.setAttribute('aFlow',new THREE.BufferAttribute(flows,4));
+  const uniforms={uTime:{value:0},uPower:{value:0},uHeight:{value:lot.height},
+   uOpacity:{value:0},uPointSize:{value:type==='flame'?.82:1.75},
+   uSprite:{value:resources[type]},
+   uTint:{value:new THREE.Color(type==='flame'?'#ffffff':'#afb0ae')}};
+  const material=new THREE.ShaderMaterial({
+   uniforms,vertexShader:livingFireVertex,fragmentShader:livingFireFragment,
+   transparent:true,depthWrite:false,
+   blending:type==='flame'?THREE.AdditiveBlending:THREE.NormalBlending
+  });
+  const points=new THREE.Points(geometry,material);
+  points.name=type==='flame'?'Constant growing flames':'Constant dense billowing black smoke';
+  points.frustumCulled=false;group.add(points);
+  layers.push({points,type,uniforms,count});
+ }
+ return {root:group,layers,lot,target:0,power:0,hp:lot.maxHp||CITY_MAX_HP,
+  dying:false,elapsed:0,extinguished:false};
+}
+export function setPersistentBuildingFire(effect,hp,maxHp=CITY_MAX_HP){
+ if(!Number.isFinite(hp))return;
+ effect.hp=hp;
+ if(hp<=0){
+  if(!effect.dying){effect.dying=true;effect.elapsed=0;effect.power=1;}
+ }else{
+  effect.dying=false;effect.elapsed=0;
+  effect.target=buildingFireIntensity(hp,maxHp);
+ }
+}
+export function updatePersistentBuildingFire(effect,dt,time){
+ const elapsed=Math.max(0,dt);
+ if(effect.dying)effect.elapsed+=elapsed;
+ else effect.power+=(effect.target-effect.power)*Math.min(1,elapsed*5);
+ const fireFade=effect.dying?Math.max(0,1-effect.elapsed/4.6):1;
+ const smokeFade=effect.dying?Math.max(0,1-effect.elapsed/8):1;
+ const intensity=effect.dying?1:effect.power;
+ const structureHeight=effect.lot.height*(1-.7*Math.min(1,Math.max(0,1-effect.hp/CITY_MAX_HP)));
+ for(const layer of effect.layers){
+  const smoke=layer.type==='smoke';
+  layer.uniforms.uTime.value=time;
+  layer.uniforms.uPower.value=Math.max(0,intensity);
+  layer.uniforms.uHeight.value=Math.max(.4,structureHeight);
+  layer.uniforms.uOpacity.value=(smoke?.67:.92)*Math.max(0,intensity)*(smoke?smokeFade:fireFade);
+  layer.uniforms.uPointSize.value=(smoke?1.75:.82)*(1+(smoke?.37:.18)*intensity);
+ }
+ effect.extinguished=effect.dying&&effect.elapsed>=8;
+ return effect.extinguished;
+}
+export function disposePersistentBuildingFire(effect){
+ for(const layer of effect.layers){
+  layer.points.geometry.dispose();layer.points.material.dispose();
+ }
  effect.root.removeFromParent();
 }
