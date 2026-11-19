@@ -175,7 +175,54 @@ try{
     controller.pitch=oldPitch;controller.updateCamera(1);renderer.setRenderTarget(originalTarget);rt.dispose();
    }
   },name);
-  integrated.push({setup,snapshot,gamePixels,steepPixels});
+  // REAL GPU test: this must be the original #08/#29 mesh, not an overlay.
+  // Render its lateral movement bends in the actual world, and require
+  // distinct left/right arc positions while both keep the target endpoint.
+  const curvedPixels=await page.evaluate(async id=>{
+   const THREE=await import('three');
+   const t=templeTest,renderer=t.renderer,scene=t.arena.scene,camera=t.camera;
+   const native=t.arena.presentation.vfx.numberedEffects;
+   const entry=native.active.find(e=>e.item?.id===id&&e.channel);
+   if(!entry)return {error:'No active original beam'};
+   const prior=renderer.getRenderTarget(),rt=new THREE.WebGLRenderTarget(440,300);
+   const oldBend=entry.curveBend,target=entry.root?.userData.staffTargetPoint;
+   const n=440*300,buffer=new Uint8Array(n*4),ref=new Uint8Array(n*4);
+   const capture=(bend,visible)=>{
+    entry.curveBend=bend;
+    native.align(entry);
+    entry.fx.group.visible=visible;
+    renderer.setRenderTarget(rt);renderer.render(scene,camera);
+    renderer.readRenderTargetPixels(rt,0,0,440,300,buffer);
+    return new Uint8Array(buffer);
+   };
+   try{
+    const start=native.muzzleAt(entry),dir=entry.visualDirection.clone();
+    const enemy=start.clone().addScaledVector(dir,Math.min(11,entry.range*.7));
+    entry.root.userData.staffTargetPoint=enemy.toArray();
+    const background=capture(0,false);
+    const reads=[];
+    for(const bend of [-1,1]){
+     const pixels=capture(bend,true),uniform=entry.fx.group.userData.templeCurve;
+     let count=0,weightedX=0;
+     for(let i=0;i<n;i++){
+      const offset=i*4,delta=Math.max(Math.abs(pixels[offset]-background[offset]),
+       Math.abs(pixels[offset+1]-background[offset+1]),
+       Math.abs(pixels[offset+2]-background[offset+2]));
+      if(delta>60){count++;weightedX+=(i%440);}
+     }
+     reads.push({bend,count,meanX:count?weightedX/count:null,
+      amplitude:uniform?.bend.value,endpoint:entry.visualEnd?.toArray(),
+      shaderCount:entry.fx.group.userData.templeCurveShaderCount});
+    }
+    return {reads,enemy:enemy.toArray(),glError:renderer.getContext().getError()};
+   }finally{
+    entry.curveBend=oldBend;
+    if(entry.root)entry.root.userData.staffTargetPoint=target;
+    entry.fx.group.visible=true;native.align(entry);
+    renderer.setRenderTarget(prior);rt.dispose();
+   }
+  },name);
+  integrated.push({setup,snapshot,gamePixels,steepPixels,curvedPixels});
   await page.screenshot({path:'output/beam-visibility/'+name+'-held.png'});
   await page.evaluate(()=>{templeTest.ui.emit('attack-release');window.beamActions=[];window.beamChannelEvents=[];});
   await page.waitForTimeout(300);
@@ -194,6 +241,15 @@ try{
   const steep=integrated.find(x=>x.setup.item===setup.item)?.steepPixels;
   if(!steep||steep.bright<50||steep.elevation<.6)
    throw Error(setup.item+' disappears or points down on steep upward camera angle: '+JSON.stringify(steep));
+  const curve=integrated.find(x=>x.setup.item===setup.item)?.curvedPixels;
+  const [left,right]=curve?.reads||[];
+  if(!left||!right||left.shaderCount<1||left.count<50||right.count<50||
+      !(left.amplitude<0&&right.amplitude>0)||
+      !(left.meanX<right.meanX-2)||curve.glError!==0)
+   throw Error(setup.item+' ORIGINAL #08/#29 vertex shader must visibly curve left/right toward target: '+JSON.stringify(curve));
+  if(left.endpoint.some((v,i)=>Math.abs(v-curve.enemy[i])>.01)||
+      right.endpoint.some((v,i)=>Math.abs(v-curve.enemy[i])>.01))
+   throw Error(setup.item+' curved ray failed to land on intended enemy: '+JSON.stringify(curve));
  }
  await page.screenshot({path:'output/beam-visibility/scene-diagnostic.png'});
 }finally{await browser.close();}
