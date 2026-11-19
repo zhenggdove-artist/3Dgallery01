@@ -4,6 +4,7 @@ import {oddParts} from './reletter/odd-weapon-art.js';
 import {calicoPellets,CALICO_PELLET_COUNT} from './shared/calico-pellets.js';
 import {GOLDFISH_SWIM_MS} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
+import nativeArcRay from '../vendor/00gamedevs/arc-ray.js';
 
 const TAU=Math.PI*2;
 const sphere=new THREE.SphereGeometry(1,16,12);
@@ -393,9 +394,23 @@ export class WeaponSignatureEffects {
    electricBolts.push({core:makeBolt(.012,j%2?'#eac0ff':'#be6bff',.92),
     glow:makeBolt(.027,'#7e32f3',.30),phase:j*1.73});
   }
+  // Project already bundles the actual MIT-licensed 00GameDevs Arc Ray
+  // generator. Layer it directly on the returning giraffe body; the
+  // requested Sustained Arc source was not included in the vendor package.
+  const nativeElectric=nativeArcRay({color:'#bd76ff',size:.42,density:.78,quantity:4});
+  nativeElectric.group.name='00GameDevs arc ray bound to giraffe boomerang';
+  nativeElectric.setEndpoints(new THREE.Vector3(0,-.16,0),new THREE.Vector3(0,1.58,0));
+  giraffe.add(nativeElectric.group);
+  group.userData.nativeElectric=nativeElectric;group.userData.nativeElectricAge=0;
   group.userData.giraffe=giraffe;group.userData.model=model;group.userData.bolts=electricBolts;
   }
   giraffe.scale.setScalar(5.4*quality);group.scale.setScalar(1);
+  if(group.userData.nativeElectric){
+   group.userData.nativeElectric.reset();
+   group.userData.nativeElectricAge=0;
+   group.userData.nativeElectric.setEndpoints(
+    new THREE.Vector3(0,-.16,0),new THREE.Vector3(0,1.58,0));
+  }
   const orientation=qdir(dir),duration=2.3;
   if(ownerRoot)ownerRoot.userData.giraffeHideUntil=performance.now()+duration*1000;
   this.add(group,duration,age=>{
@@ -404,6 +419,11 @@ export class WeaponSignatureEffects {
    group.quaternion.copy(orientation);
    model.rotation.z=age*15.5;
    model.rotation.x=Math.sin(age*13)*.25;
+   if(group.userData.nativeElectric){
+    const delta=Math.max(0,age-(group.userData.nativeElectricAge||0));
+    group.userData.nativeElectricAge=age;
+    group.userData.nativeElectric.update(Math.min(.11,delta));
+   }
    for(const bolt of electricBolts){
     const brightness=.48+.52*Math.abs(Math.sin(age*31+bolt.phase));
     bolt.core.material.opacity=.92*brightness;
