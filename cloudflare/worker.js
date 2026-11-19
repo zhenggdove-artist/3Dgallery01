@@ -372,10 +372,10 @@ export class TempleRoom extends DurableObject{
       }
       return json({ok:true,notice:result.notice,removedArtworks:result.removedArtworks});
     }
-    if(/^\/reset\s+(?:building|message)$/i.test(text)){
+    if(/^\/(?:reset\s+(?:building|message)|clean\s+graffic|clean\s+graffiti)$/i.test(text)){
       const gm=this.world().profiles?.[session.profile_key]?.admin===true;
       if(!gm)return json({error:'GM only'},403);
-      const world=this.world(),which=/building$/i.test(text)?'reset-buildings':'reset-messages';
+      const world=this.world(),which=/^\/clean\s+graff?ic?i?$/i.test(text)?'clean-graffiti':/building$/i.test(text)?'reset-buildings':'reset-messages';
       const actor={key:session.profile_key,name:session.name,color:session.color,
        role:session.role,admin:true,position:JSON.parse(session.state||'{}').position||[0,0,0]};
       const result=applyAction(world,actor,{action:which},{now:Date.now(),actors:[]});
