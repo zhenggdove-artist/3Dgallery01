@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {installNativeCurve,updateNativeCurve,targetOnBeam} from './native-beam-curve.js';
 // The authoritative forward ray is now owned by WeaponVFX, not this vendor module.
 // These are byte-for-byte official 00GameDevs downloads. Their SHA-256 hashes,
 // source URLs and licenses are verified in vendor/00gamedevs/numbered-manifest.json.
@@ -137,6 +138,7 @@ export class NumberedWeaponEffects {
   fx.group.userData.vfxSource='00GameDevs';
   fx.group.userData.vfxId=spec.asset;
   fx.group.userData.vfxNumber=spec.number;
+  if(spec.number===8||spec.number===29)installNativeCurve(fx);
   if(spec.number===73) {
    // Official #73 ships two neutral demo collision props as part of its
    // source. Retain the official VFX code and conceal only the unnecessary
@@ -232,6 +234,7 @@ export class NumberedWeaponEffects {
   const target=areaLocked?vector(event.area.visualCenter,origin):origin.clone();
   const entry={
    spec,fx,group:fx.group,root,item,direction,visualDirection:direction.clone(),origin,target,options,
+   curveBend:0,visualEnd:null,
    worldScale:ultimateWorldScale(spec.number,event,options),
    range:Math.max(.5,Number(event.range)||12),
    key,channel:!!event.channel,fusionEcho:!!event.fusionEcho,areaLocked,age:0,
@@ -293,7 +296,15 @@ export class NumberedWeaponEffects {
   if((spec.number===8||spec.number===29)&&typeof fx.setEndpoints==='function'){
    fx.group.position.set(0,0,0);
    fx.group.quaternion.identity();
-   fx.setEndpoints(origin,origin.clone().addScaledVector(dir,range));
+   const targeted=entry.channel&&!entry.fusionEcho&&entry.root?.userData?.staffTargetPoint;
+   const end=(targeted&&targetOnBeam(origin,dir,range,[targeted],1.6))||
+    origin.clone().addScaledVector(dir,range);
+   fx.setEndpoints(origin,end);
+   entry.visualEnd=end.clone();
+   // Modulate the ACTUAL original vertex shader, not a separate imitation
+   // laser. Zero curvature at both physical endpoints, peak left/right at
+   // the midpoint according to the player's lateral movement.
+   updateNativeCurve(fx,origin,end,entry.curveBend||0,this.camera);
    if(spec.number===8&&entry.item?.family==='lightning'){fx.group.scale.y=2.4;fx.group.scale.z=2.4;}
    if(spec.number===29&&entry.item?.id?.startsWith('prism-')){fx.group.scale.y=5;fx.group.scale.z=5;}
    return;
@@ -475,7 +486,8 @@ export class NumberedWeaponEffects {
   }
   if(entry.age>=1.88)entry.stopping=true;
  }
- update(dt){
+ update(dt,camera=null){
+  if(camera)this.camera=camera;
   const now=performance.now();
   for(const e of [...this.active]){
    try{
@@ -485,6 +497,10 @@ export class NumberedWeaponEffects {
     const target=Array.isArray(ray)&&ray.length===3&&ray.every(Number.isFinite)&&!e.fusionEcho?
      new THREE.Vector3(...ray).normalize():e.direction;
     e.visualDirection.lerp(target,1-Math.exp(-dt*28)).normalize();
+    if(e.spec.number===8||e.spec.number===29){
+     const strafe=Number(e.root?.userData?.staffStrafe)||0;
+     e.curveBend=THREE.MathUtils.damp(e.curveBend||0,e.fusionEcho?0:THREE.MathUtils.clamp(strafe,-1,1),11,dt);
+    }
    }
    if(e.key&&now-e.lastPulse>Math.max(CHANNEL_GRACE_MS,Number(e.item.cooldown||700)*2+650)){
     this.remove(e);continue;
