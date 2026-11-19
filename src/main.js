@@ -33,6 +33,7 @@ import {uploadMedia} from './media-ui.js';
 
 import {GunController} from './gun-controller.js';
 import {Minimap} from './minimap.js';
+import {CityWallPainter} from './city-wall-painter.js';
 import {createDamageNumbers} from './reletter/damage-numbers.js';
 
 const canvas=document.getElementById('game'),coarse=matchMedia('(pointer:coarse)').matches,settings=loadEditorSettings();
@@ -160,6 +161,8 @@ ui.addEventListener('write-start',()=>writer.begin());
 const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>itemById(world?.profile?.equipment?.weapon),ui,attack:performAttack});
 const artEditor=new ArtworkEditor({scene,camera,canvas,arena,player:()=>localRoot,isGM:()=>!!self?.profile?.admin,send:sendAction,control:enabled=>{if(controller){controller.setEnabled(enabled&&!ui.panelName&&!wasDead);controller.cameraLocked=!!artEditor.mode&&artEditor.mode!=='follow';}},toast:text=>ui.toast(text)});
 const platformDelete=new PlatformDeleteEditor({canvas,camera,arena,ui,editor:artEditor,isGM:()=>!!self?.profile?.admin,send:sendAction,controller:()=>controller,cancelBuild:cancelBuildPlacement});
+const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>controller,
+ role:()=>self?.role,ui,send:sendAction});
 
 const portraitViewport=new EquipmentPortraitViewport();
 function refreshEquipmentPortrait(){
@@ -198,7 +201,7 @@ async function completeFirebaseLogin(firebaseIdToken){
   if(account.existing&&account.profile){
     // Re-enable account selection in case joining fails, so the GM or any
     // other existing account can retry rather than remaining locked out.
-    ui.setFirebaseLoginStatus(true,'Google 驗證完成，正在載入原有角色…');
+    ui.setFirebaseLoginStatus(true,'Account verified. Loading your character…');
     ui.emit('join',{
       name:account.profile.name,color:account.profile.color,
       firebaseIdToken,backendUrl:network.base
@@ -214,7 +217,7 @@ async function initializeGoogleAuth(){
       return;
     }
     await prepareFirebase(config);
-    ui.setFirebaseLoginStatus(true,'請選擇 Google 帳號以載入或建立角色。');
+    ui.setFirebaseLoginStatus(true,'Choose an account to continue.');
   }catch(error){
     console.warn('Firebase Google login setup:',error);
     ui.setFirebaseLoginStatus(false,'Google sign-in initialization failed: '+(error?.message||'Unknown error'));
@@ -451,14 +454,15 @@ ui.addEventListener('build-start',async event=>{try{const d=event.detail;const m
 ui.addEventListener('destroy-near',()=>{if(!controller)return;const position=controller.root.position.toArray(),nearest=(world?.structures||[]).map(structure=>({structure,distance:distance2d3(position,structure.position)})).sort((a,b)=>a.distance-b.distance)[0];if(!nearest||nearest.distance>12)return ui.toast('NO STRUCTURE NEARBY');sendAction('destroy',{structureId:nearest.structure.id,direction:controller.aimDirection()});});
 ui.addEventListener('chat',async event=>{const text=String(event.detail||'').trim();if(text==='/recovery'){await sendAction('recover-artworks');return;}if(/^\/reset$/i.test(text)){if(!self?.profile?.admin)return ui.toast('GM only');await sendAction('reset-player-artworks');return;}
  if(/^\/reset\s+building$/i.test(text)){if(!self?.profile?.admin)return ui.toast('GM only');await sendAction('reset-buildings');return;}
+ if(/^\/clean\s+(?:graffic|graffiti)$/i.test(text)){if(!self?.profile?.admin)return ui.toast('GM only');await sendAction('clean-graffiti');return;}
  if(/^\/reset\s+message$/i.test(text)){if(!self?.profile?.admin)return ui.toast('GM only');await sendAction('reset-messages');return;}
  try{const result=await network.chat(text);if(result?.notice)ui.toast(result.notice);}catch(error){ui.toast(error.message);}});
 ui.addEventListener('plant',event=>writer.submit(event.detail));
 ui.addEventListener('save-code',async()=>{try{const data=await network.createSaveCode();self.saveCode=data.code;ui.self=self;ui.showSaveCode(data.code);ui.toast('存檔代碼已產生 · 請保存');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('gm-presence-request',async()=>{if(!self?.profile?.admin)return;try{ui.setGmPresence(await network.gmPresence());}catch(error){ui.setGmPresenceError(error.message);}});
-ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
+ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);if(data.role!=='fighter')wallPainter.stop();controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
-ui.addEventListener('panel',event=>{chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
+ui.addEventListener('panel',event=>{chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active&&!wallPainter.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
 ui.addEventListener('editor-settings',event=>applyEditorSettings(event.detail));
 ui.addEventListener('gm-audio-setting',event=>{if(!self?.profile?.admin)return;audio.setVolumes({[event.detail.key]:event.detail.value});void sendAction('gm-audio-setting',event.detail);});
  ui.addEventListener('gm-fusion-chance',event=>{if(!self?.profile?.admin)return;void sendAction('gm-fusion-chance',event.detail);});
