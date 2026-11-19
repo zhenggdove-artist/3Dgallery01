@@ -42,7 +42,7 @@ function collectorPosition(world,rng){
  for(let attempt=0;attempt<48;attempt++){
   const angle=Math.max(0,Math.min(.999999,Number(rng())||0))*Math.PI*2;
   const radial=Math.max(0,Math.min(.999999,Number(rng())||0));
-  const radius=14+Math.sqrt(radial)*(ARENA_RADIUS-22);
+  const radius=14+Math.sqrt(radial)*(Math.min(ARENA_RADIUS/2,92)-22);
   const p=[Math.cos(angle)*radius,0,Math.sin(angle)*radius];
   if(!insideArena(p,-6)||insideSafeZone(p))continue;
   if(PLATFORMS.some(display=>distance2d(p,display.position)<Math.max(3.5,display.size[0]/2+2.8)))continue;
