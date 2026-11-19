@@ -374,7 +374,7 @@ try{
  assert.equal(support.oneCheckout,1,support);
  assert.equal(support.gachaCount,0,support);
  assert.ok(support.buttonVisible,support);
- assert.match(support.title,/DRAW YOUR OWN/);
+ assert.match(support.title,/THANK YOU FOR YOUR SUPPORT/);
  await page.screenshot({path:output+'/win98-support-personal-wing.png'});
  await page.locator('#panel-close').click();
  assert.deepEqual(errors,[],errors.join('\n'));
