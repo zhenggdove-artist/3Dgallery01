@@ -1,6 +1,6 @@
 import {registerCustomWings} from './shared/catalog.js';
 import {beginWingCheckout,resumeWingCheckout} from './wing-payment-client.js';
-import {prepareFirebase,existingGoogleToken,signInWithGoogle} from './firebase-login.js';
+import {prepareFirebase,signInWithGoogle} from './firebase-login.js';
 import * as THREE from 'three';
 import {WriteCinematic} from './write-cinematic.js';
 import {ChargeTargetPreview} from './charge-target-preview.js';
@@ -190,14 +190,12 @@ async function boot(){
 }
 
 async function completeFirebaseLogin(firebaseIdToken){
+  // Even an existing character must be explicitly confirmed before entering.
+  // Account selection is handled by Google's select_account popup, not by a
+  // cached Firebase identity or the previous character's auto-join.
   const account=await network.firebaseProfile(firebaseIdToken);
   if(joined)return;
-  if(account.existing&&account.profile){
-    ui.emit('join',{
-      name:account.profile.name,color:account.profile.color,firebaseIdToken,
-      backendUrl:network.base
-    });
-  }else ui.selectFirebaseAccount(firebaseIdToken);
+  ui.selectFirebaseAccount(firebaseIdToken,account.existing?account.profile:null);
 }
 async function initializeGoogleAuth(){
   try{
@@ -208,9 +206,7 @@ async function initializeGoogleAuth(){
       return;
     }
     await prepareFirebase(config);
-    ui.setFirebaseLoginStatus(true,'Sign in with Google. Your character will be restored automatically next time.');
-    const remembered=await existingGoogleToken();
-    if(remembered&&!joined)await completeFirebaseLogin(remembered);
+    ui.setFirebaseLoginStatus(true,'請選擇 Google 帳號以載入或建立角色。');
   }catch(error){
     console.warn('Firebase Google login setup:',error);
     ui.setFirebaseLoginStatus(false,'Google sign-in initialization failed: '+(error?.message||'Unknown error'));
