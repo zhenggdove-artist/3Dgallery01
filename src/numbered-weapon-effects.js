@@ -294,6 +294,7 @@ export class NumberedWeaponEffects {
    fx.group.position.set(0,0,0);
    fx.group.quaternion.identity();
    fx.setEndpoints(origin,origin.clone().addScaledVector(dir,range));
+   if(spec.number===8&&entry.item?.family==='lightning'){fx.group.scale.y=2.4;fx.group.scale.z=2.4;}
    if(spec.number===29&&entry.item?.id?.startsWith('prism-')){fx.group.scale.y=5;fx.group.scale.z=5;}
    return;
   }
@@ -515,6 +516,7 @@ export class NumberedWeaponEffects {
     e.stopping=true;e.fx.stop();
    }
    e.fx.update(dt);
+   if(e.spec.number===8&&e.item?.family==='lightning'){e.fx.group.scale.y=2.4;e.fx.group.scale.z=2.4;}
    if(e.spec.number===29&&e.item?.id?.startsWith('prism-')){e.fx.group.scale.y=5;e.fx.group.scale.z=5;}
    if(e.worldScale!=null)e.fx.group.scale.setScalar(e.worldScale);
    if((!e.key&&e.fx.finished)||e.age>=e.duration){
