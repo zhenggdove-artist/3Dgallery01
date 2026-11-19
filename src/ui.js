@@ -54,7 +54,11 @@ export class TempleUI extends EventTarget{
       if(!button||button.disabled)return;
       // Re-clicking must open Google account selection, even after the
       // previous selection returned a usable Firebase token.
-      button.disabled=true; // Avoid duplicate Google popups / account races.
+      // Keep native user activation intact for iOS Safari's Google popup.
+      // Guard rapid duplicate taps with a flag rather than disabling the
+      // clicked element while the browser is opening its auth window.
+      if(this.googleLoginBusy)return;
+      this.googleLoginBusy=true;
       this.firebaseIdToken='';
       this.form.hidden=true;
       $('entry-error').textContent='';
@@ -103,6 +107,7 @@ export class TempleUI extends EventTarget{
   setLoading(progress,label){$('loading-fill').style.width=`${Math.round(progress*100)}%`;$('loading-detail').textContent=label;$('loading-percent').textContent=`${Math.round(progress*100)}%`;}
   ready(){document.body.classList.add('ready');document.body.classList.remove('booting');}
   setFirebaseLoginStatus(enabled,message=''){
+    this.googleLoginBusy=false;
     const button=this.entry.querySelector('[data-google-login]');
     if(button)button.disabled=!enabled;
     $('account-login-status').textContent=message||(
@@ -111,6 +116,7 @@ export class TempleUI extends EventTarget{
     );
   }
   selectFirebaseAccount(token,profile=null){
+    this.googleLoginBusy=false;
     this.entry.querySelector('[data-google-login]').disabled=false;
     this.firebaseIdToken=token;
     const existing=!!profile;
