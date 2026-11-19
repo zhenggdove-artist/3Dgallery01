@@ -64,7 +64,8 @@ test('explicit Google chooser keeps legacy GM/profile join working without auto-
  assert.match(main,/firebaseIdToken,backendUrl:network\.base/);
  assert.match(main,/\}else ui\.selectFirebaseAccount\(firebaseIdToken\)/);
  assert.match(html,/id="entry-form" hidden/);
- assert.match(html,/選擇 Google 帳號/);
+ assert.match(html,/Choose Google Account/);
+ assert.doesNotMatch(html.slice(html.indexOf('<main id="entry"'),html.indexOf('<section id="hud"')),/多人線上互動藝術空間/);
  assert.match(html,/僅使用 Google 登入驗證所需的基本帳號資訊/);
  assert.match(css,/#entry #entry-form\[hidden\]\{display:none!important\}/);
  assert.match(ui,/if\(this\.googleLoginBusy\)return/);
