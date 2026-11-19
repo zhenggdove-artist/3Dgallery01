@@ -116,7 +116,7 @@ function batchGeometry(lots,mobile){
   lotRanges.set(lot.index,[begin,position.length/3]);
  }
  current=-1;
- // Visibly tilted, broken power poles built from solid geometry rather than planes.
+ // Visibly tilted, broken power poles and corrugated roofs built from solid geometry rather than planes.
  for(let i=0;i<34;i++){
   const angle=i*Math.PI*2/34,r=98+(i%7)*20;
   const pole={x:Math.cos(angle)*r,z:Math.sin(angle)*r,yaw:-angle};
@@ -281,6 +281,9 @@ export class OuterCity{
    if(effect.stage!==3&&stage===3){
     effect.stage=3;
     for(const piece of effect.pieces){piece.moving=true;piece.settled=false;piece.velocity.y+=1.8+piece.index*.25;}
+   }else if(stage===2&&animate&&!effect.animateStarted){
+    effect.animateStarted=true;
+    for(const piece of effect.pieces.slice(1)){piece.moving=true;piece.settled=false;}
    }
    return;
   }
@@ -299,10 +302,14 @@ export class OuterCity{
   descriptions.forEach(([x,y,z,w,h,d,c],index)=>{
    const material=new THREE.MeshStandardMaterial({color:c,roughness:.96,metalness:.02});
    const mesh=new THREE.Mesh(this.cube,material);mesh.position.set(x,y,z);mesh.scale.set(w,h,d);root.add(mesh);
+   if(!animate&&stage===3){
+    mesh.position.set(x+(r()-.5)*lot.width*.35,mesh.scale.y*.22,z+(r()-.5)*lot.depth*.35);
+    mesh.rotation.set((r()-.5)*.65,(r()-.5)*.3,(r()-.5)*.8);
+   }
    pieces.push({mesh,index,velocity:new THREE.Vector3((r()-.5)*2,1+r()*2,(r()-.5)*2),spin:new THREE.Vector3((r()-.5)*1.5,0,(r()-.5)*1.5),
     moving:animate?(index>0):false,settled:!animate});
   });
-  this.root.add(root);this.chunks.set(lot.index,{root,pieces,stage,age:0});
+  this.root.add(root);this.chunks.set(lot.index,{root,pieces,stage,age:0,animateStarted:animate});
  }
  flash(lot){
   const material=new THREE.MeshBasicMaterial({color:'#f01422',transparent:true,opacity:.55,depthWrite:false,side:THREE.BackSide});
