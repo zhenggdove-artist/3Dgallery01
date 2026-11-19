@@ -573,7 +573,7 @@ export class OuterCity{
   const from=Number.isFinite(event.previousTier)?event.previousTier:cityDamageTier(oldHp,maxHp);
   const tier=cityDamageTier(event.hp,maxHp),stage=cityStage(event.hp,maxHp);
   this.damage[lot.id]={hp:event.hp,stage,tier};
-  this.fireField?.setLot(lot,event.hp,maxHp);
+  this.fireField?.setLot(lot,event.hp,maxHp,{live:true});
   this.facade.set(lot.index,event.hp,maxHp);
   this.flash(lot);
   // Non-threshold hits still throw fine chips, smoke and shake the building.
