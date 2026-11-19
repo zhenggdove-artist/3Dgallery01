@@ -7,7 +7,7 @@ import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
-import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage} from './city-layout.js';
+import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityBlocked} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
@@ -246,6 +246,13 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
       !justRespawned&&!landedFromWrite)
       return {error:'Movement rejected',state:previous};
   }
+  // Authoritative solid city collision. Allow a fighter already inside a
+  // building after a physics impulse to exit, but never permit entry.
+  if(role==='fighter'&&mobility?.cityDamage&&
+   cityBlocked(next.position[0],next.position[2],next.position[1],mobility.cityDamage)&&
+   !cityBlocked(previous?.position?.[0]??1e6,previous?.position?.[2]??1e6,
+     previous?.position?.[1]??0,mobility.cityDamage))
+   return {error:'Building collision',state:previous||null};
   return {state:{position:next.position.map(n=>+n.toFixed(3)),rotation:+next.rotation.toFixed(4),animation:String(next.animation||'idle').slice(0,12),visible:next.visible!==false}};
 }
 
