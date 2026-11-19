@@ -358,6 +358,7 @@ export class WeaponSignatureEffects {
   }
   giraffe.scale.setScalar(5.4*quality);group.scale.setScalar(1);
   const orientation=qdir(dir),duration=2.3;
+  if(ownerRoot)ownerRoot.userData.giraffeHideUntil=performance.now()+duration*1000;
   this.add(group,duration,age=>{
    const t=Math.min(1,age/duration),distance=Math.sin(t*Math.PI)*(event.range||28);
    group.position.copy(origin).addScaledVector(dir,distance); // identical server-owned sin(πt) route
