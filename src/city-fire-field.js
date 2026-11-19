@@ -93,12 +93,15 @@ export class CityFireField{
   this.layers=[layer(root,lots,textures.flame,mobile,false),
    layer(root,lots,textures.smoke,mobile,true)];
  }
- setLot(lot,hp,maxHp=CITY_MAX_HP,{snapshot=false}={}){
+ setLot(lot,hp,maxHp=CITY_MAX_HP,{snapshot=false,live=false}={}){
   if(!lot||!Number.isFinite(hp))return;
   const previous=this.current.get(lot.index);
-  if(previous&&previous.hp===hp&&previous.maxHp===maxHp)return;
+  // Snapshots may overtake the final blow event. Only a live combat
+  // event can start a death fade after the 0-HP snapshot was seen first.
+  const lateFinalBlow=live&&hp<=0&&previous?.hp<=0&&!previous.dying;
+  if(previous&&previous.hp===hp&&previous.maxHp===maxHp&&!lateFinalBlow)return;
   const dead=hp<=0;
-  const previouslyLiving=!previous||previous.hp>0;
+  const previouslyLiving=!previous||previous.hp>0||lateFinalBlow;
   const dying=dead&&!snapshot&&!!previouslyLiving;
   const power=dead?(dying?1:0):cityFirePower(hp,maxHp);
   const deathStart=dying?this.time:0;
