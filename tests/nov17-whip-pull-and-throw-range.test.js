@@ -26,7 +26,12 @@ test('artwork has fivefold horizontal reach with unchanged vertical ballistic ar
  const result=applyAction(world,caster,{action:'throw-artwork',direction:[0,0,1],power:1},
   {now:T+1000,actors:[caster,victim],rng:()=>.5});
  assert.equal(result.error,undefined);
- assert.equal(result.hit?.target,'victim','server hit range tracks longer ordinary artwork flight');
+ assert.equal(result.hit,undefined,'no early damage when the artwork is launched');
+ assert.equal(world.profiles.victim.hp,100);
+ tickWorld(world,{now:T+1300,actors:[caster,victim],activeFighters:0,rng:()=>.5});
+ assert.equal(world.profiles.victim.hp,100,'not yet at target');
+ tickWorld(world,{now:T+1960,actors:[caster,victim],activeFighters:0,rng:()=>.5});
+ assert.ok(world.profiles.victim.hp<100,'impact is applied when projectile reaches victim');
 });
 
 test('native pan/whip authoritative damage lifetime matches the visible original animation',()=>{
