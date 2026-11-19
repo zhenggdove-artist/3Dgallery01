@@ -190,12 +190,17 @@ async function boot(){
 }
 
 async function completeFirebaseLogin(firebaseIdToken){
-  // Even an existing character must be explicitly confirmed before entering.
-  // Account selection is handled by Google's select_account popup, not by a
-  // cached Firebase identity or the previous character's auto-join.
+  // The player explicitly requested Google's account chooser on this visit.
+  // Preserve the previously proven profile->join flow for existing GM/players.
+  // Never auto-join from an old stored Firebase session on page load.
   const account=await network.firebaseProfile(firebaseIdToken);
   if(joined)return;
-  ui.selectFirebaseAccount(firebaseIdToken,account.existing?account.profile:null);
+  if(account.existing&&account.profile){
+    ui.emit('join',{
+      name:account.profile.name,color:account.profile.color,
+      firebaseIdToken,backendUrl:network.base
+    });
+  }else ui.selectFirebaseAccount(firebaseIdToken);
 }
 async function initializeGoogleAuth(){
   try{
