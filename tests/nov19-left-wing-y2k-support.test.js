@@ -52,7 +52,9 @@ test('Y2K support shows guarded ECPay entitlement and does not invent paid succe
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
  assert.match(ui,/data-wing-checkout/);
  assert.match(ui,/drawRatePct/);
- assert.match(html,/20261119-sand-city-demolition-r14/);
+ const release=html.match(/const release = '([^']+)'/)?.[1];
+ assert.ok(release,'first-party module graph has one release token');
+ assert.ok(html.includes('fidelity-ui.css?v='+release),'CSS and module imports use the same release token');
  const section=ui.slice(ui.indexOf('  renderWingShop(profile){'),ui.indexOf('  hydrateWingGalleryImages(){'));
  assert.match(section,/PAYMENT UNAVAILABLE/);
  assert.match(section,/checkoutEnabled/,'backend status determines whether charging is enabled');
