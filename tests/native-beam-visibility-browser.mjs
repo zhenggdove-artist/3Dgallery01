@@ -95,10 +95,10 @@ try{
    return {item:item?.id,chargeMs:item?.chargeMs,channelItem:item?.family};
   },name);
   await page.evaluate(()=>templeTest.ui.emit('attack-start'));
-  await page.waitForTimeout(Math.max(3400,(setup.chargeMs||1500)+1400));
+  await page.waitForTimeout(Math.max(5300,(setup.chargeMs||1500)+2900));
   const snapshot=await page.evaluate(()=>{
    const t=templeTest,n=t.arena.presentation.vfx.numberedEffects,camera=t.camera;
-   return {name:t.ui.world.profile.equipment.weapon,actions:window.beamActions.slice(-24),
+   return {name:t.ui.world.profile.equipment.weapon,channelState:t.channelDebug(),actions:window.beamActions.slice(-24),
     nEvents:window.beamChannelEvents.length,
     active:n.active.map(e=>({weapon:e.item?.id,kind:e.spec.asset,channel:e.channel,
      phase:e.fx.phase,visible:e.fx.group.visible,origin:e.origin.toArray(),
