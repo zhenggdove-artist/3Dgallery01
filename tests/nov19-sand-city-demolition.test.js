@@ -72,7 +72,8 @@ test('fragmented structural facades stay solid, synchronized and restore all dam
 test('entry clearly discloses Google verification in Chinese and SUPPORT has no fake OS text',()=>{
  const html=source('index.html'),ui=source('src/ui.js'),main=source('src/main.js');
  const login=html.slice(html.indexOf('<main id="entry"'),html.indexOf('<section id="hud"'));
- assert.match(login,/選擇 Google 帳號/);
+ assert.match(login,/Choose Google Account/);
+ assert.doesNotMatch(login,/多人線上互動藝術空間/);
  assert.match(login,/不會讀取 Gmail/);
  assert.match(login,/entry-profile-heading/);
  assert.doesNotMatch(login,/Account Setup · Secure Login/);
