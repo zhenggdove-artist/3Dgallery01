@@ -153,7 +153,17 @@ try{
    const t=templeTest,scene=t.arena.scene,renderer=t.renderer,camera=t.camera;
    const controller=t.controller(),native=t.arena.presentation.vfx.numberedEffects;
    const entry=native.active.find(e=>e.item?.id===id&&e.channel);
-   const oldPitch=controller.pitch,oldDirection=entry?.visualDirection.clone();
+   if(!entry)return {
+    error:'Previously confirmed native channel is no longer active',
+    weapon:id,channel:t.channelDebug(),equipment:controller.root.userData.equipment,
+    staffCasting:controller.root.userData.staffCasting,
+    staffCastingUntil:controller.root.userData.staffCastingUntil,
+    failedEffects:[...(native.failedEffects||[])],
+    active:native.active.map(e=>({weapon:e.item?.id,channel:e.channel,
+     key:e.key,age:e.age,elapsed:performance.now()-e.lastPulse,
+     rootSame:e.root===controller.root}))
+   };
+   const oldPitch=controller.pitch,oldDirection=entry.visualDirection.clone();
    const originalTarget=renderer.getRenderTarget(),rt=new THREE.WebGLRenderTarget(440,300);
    const absent=new Uint8Array(440*300*4),present=new Uint8Array(440*300*4);
    try{
