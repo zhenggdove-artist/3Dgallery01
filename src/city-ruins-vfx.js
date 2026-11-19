@@ -264,11 +264,11 @@ export function buildIrregularFractureChunk(lot,tier){
   const broken=brokenPlate(group,p.width*.45,p.height*.38,.06,lot.detail,seed+91);
   broken.position.set(0,-p.height*.18,.16);
  }
- const front=p.wall==='front',backWall=p.wall==='back',right=p.wall==='right';
- const localSide=front||backWall?p.localX:p.localZ;
- const offset=front?lot.depth*.5+.22:backWall?-lot.depth*.5-.22:
+ const isFront=p.wall==='front',backWall=p.wall==='back',right=p.wall==='right';
+ const localSide=isFront||backWall?p.localX:p.localZ;
+ const offset=isFront?lot.depth*.5+.22:backWall?-lot.depth*.5-.22:
   (right?lot.width*.5+.22:-lot.width*.5-.22);
- if(front){group.position.set(localSide,p.localY,offset);}
+ if(isFront){group.position.set(localSide,p.localY,offset);}
  else if(backWall){group.position.set(-localSide,p.localY,offset);group.rotation.y=Math.PI;}
  else if(right){group.position.set(offset,p.localY,localSide);group.rotation.y=Math.PI*.5;}
  else{group.position.set(offset,p.localY,-localSide);group.rotation.y=-Math.PI*.5;}
