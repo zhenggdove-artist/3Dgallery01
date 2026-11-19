@@ -107,10 +107,10 @@ function batchGeometry(lots,mobile){
   category='pipes';
   for(const side of [-1,1]){
    const pipeX=side*(w/2-.42);
-   box(lot,pipeX,h*.48,front+.24,.10,Math.max(.65,h*.87),.11,'#777b78');
-   box(lot,pipeX+side*.19,h*.89,front+.26,.43,.10,.14,'#777b78');
+   box(lot,pipeX,h*.48,frontage+.24,.10,Math.max(.65,h*.87),.11,'#777b78');
+   box(lot,pipeX+side*.19,h*.89,frontage+.26,.43,.10,.14,'#777b78');
    for(let clampIndex=0;clampIndex<3;clampIndex++)
-    box(lot,pipeX,(clampIndex+.5)*h/3,front+.32,.20,.055,.17,'#4d534f');
+    box(lot,pipeX,(clampIndex+.5)*h/3,frontage+.32,.20,.055,.17,'#4d534f');
   }
   category='masonry';
   // Material-specific relief (timber planks, irregular stone and brick courses)
