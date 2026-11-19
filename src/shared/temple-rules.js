@@ -907,8 +907,10 @@ export function tickArtworkFlights(world,actors=[],now=Date.now(),rng=Math.rando
   const from=Math.min(until,Math.max(0,((flight.lastAt||event.time)-event.time)/1000));
   const owner=world.profiles?.[event.owner]||null,bomb=!!event.bomb;
   const size=Math.max(1,Math.min(3,Number(flight.bombSize)||1));
-  const actorRadius=Math.min(4.2,2.1+size*.45);
-  const artRadius=.85+size*.32;
+  // A sphere fitted to the thrown art meets real upright player/monster
+  // capsules. Never use the previous generous 2.5m centre-to-centre
+  // proximity sphere, which displayed HP damage before visible contact.
+  const artRadius=.65+size*.20;
   const tracked=(field,key)=>flight[field]?.includes(key);
   const mark=(field,key)=>{flight[field]??=[];flight[field].push(key);};
   const hitPlayer=(target)=>{
@@ -953,16 +955,25 @@ export function tickArtworkFlights(world,actors=[],now=Date.now(),rng=Math.rando
    for(const target of actors){
     if(tracked('hitActors',target.key)||target.key===event.owner||target.role!=='fighter')continue;
     const centre=[target.position[0],target.position[1]+1,target.position[2]];
+    const horizontal=Math.max(0,Math.hypot(point[0]-target.position[0],
+      point[2]-target.position[2])-1.02);
+    const vertical=Math.max(0,target.position[1]-point[1],
+      point[1]-(target.position[1]+2.35));
     const touching=blast?artworkBlastHits(point,centre):
-     Math.hypot(point[0]-centre[0],point[1]-centre[1],point[2]-centre[2])<=actorRadius;
+     Math.hypot(horizontal,vertical)<=artRadius;
     if(touching)hitPlayer(target);
    }
    for(const mob of [world.monster,...(world.monsters||[])]){
     if(!mob?.active||tracked('hitMonsters',mob.id))continue;
     const centre=[mob.position[0],mob.position[1]+1.25,mob.position[2]];
+    const monsterRadius=Math.max(.5,Number(mob.bodyRadius)||ENEMY_RADIUS);
+    const monsterHeight=Math.max(1,Number(mob.bodyHeight)||ENEMY_HEIGHT);
+    const horizontal=Math.max(0,Math.hypot(point[0]-mob.position[0],
+      point[2]-mob.position[2])-monsterRadius);
+    const vertical=Math.max(0,mob.position[1]-point[1],
+      point[1]-(mob.position[1]+monsterHeight));
     const touching=blast?artworkBlastHits(point,centre):
-     Math.hypot(point[0]-centre[0],point[1]-centre[1],point[2]-centre[2])<=
-      actorRadius+Math.min(1.4,Number(mob.bodyRadius)||ENEMY_RADIUS)*.5;
+     Math.hypot(horizontal,vertical)<=artRadius;
     if(touching)hitMonster(mob);
    }
    for(const structure of [...(world.structures||[])]){
