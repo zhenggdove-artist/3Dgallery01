@@ -171,6 +171,11 @@ export class TempleRoom extends DurableObject{
       if(saved)this.sql.exec('UPDATE save_codes SET last_used=? WHERE code=?',now,saveCode);
     });
     this.recordPresence({name:profile.name,role},'online',now);
+    // Spawn the real uncle / flower rigs before the first world response.
+    // Waiting for a later socket tick can leave a freshly joined arena empty.
+    if(role==='fighter'){
+      tickWorld(world,{now,activeFighters:1,actors:[]});this.save(world);
+    }
     this.broadcastRoster();await this.armAlarm();
     return json({
       ok:true,token:id,role,seat,saveCode:saveCode||null,
@@ -241,6 +246,11 @@ export class TempleRoom extends DurableObject{
       this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,JSON.stringify(response),Date.now());
       this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);
     });
+    if(result.resetMessages){
+      this.sql.exec('DELETE FROM chat_messages');
+      // Reset must remove prior messages from *every* connected client's UI.
+      this.broadcast('chat-reset',{time:Date.now()});
+    }
     if(result.publishedWingId||result.unpublishedWingId||result.updatedWingId||result.personalWingId)
       this.broadcast('wing-catalog',{wings:world.customWings||[]});
     this.broadcastWorld(world);if(didRespawn)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))this.broadcast('structure-hit',hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))this.broadcast('structure-destroyed',broken);await this.armAlarm();return json(response);
@@ -361,6 +371,21 @@ export class TempleRoom extends DurableObject{
         this.broadcastWorld(world);
       }
       return json({ok:true,notice:result.notice,removedArtworks:result.removedArtworks});
+    }
+    if(/^\/reset\s+(?:building|message)$/i.test(text)){
+      const gm=this.world().profiles?.[session.profile_key]?.admin===true;
+      if(!gm)return json({error:'GM only'},403);
+      const world=this.world(),which=/building$/i.test(text)?'reset-buildings':'reset-messages';
+      const actor={key:session.profile_key,name:session.name,color:session.color,
+       role:session.role,admin:true,position:JSON.parse(session.state||'{}').position||[0,0,0]};
+      const result=applyAction(world,actor,{action:which},{now:Date.now(),actors:[]});
+      if(result.error)return json({error:result.error},403);
+      this.ctx.storage.transactionSync(()=>{
+       this.save(world);
+       if(result.resetMessages)this.sql.exec('DELETE FROM chat_messages');
+      });
+      if(result.resetMessages)this.broadcast('chat-reset',{time:Date.now()});
+      this.broadcastWorld(world);return json({ok:true,...result});
     }
     const recent=this.sql.exec('SELECT time FROM chat_messages WHERE profile_key=? ORDER BY time DESC LIMIT 1',session.profile_key).toArray()[0];if(recent&&Date.now()-recent.time<500)return json({error:'Please wait before sending again'},429);
     const message={id:crypto.randomUUID(),profileKey:session.profile_key,name:session.name,text,time:Date.now()};this.sql.exec('INSERT INTO chat_messages VALUES(?,?,?,?,?)',message.id,message.profileKey,message.name,message.text,message.time);this.sql.exec('DELETE FROM chat_messages WHERE time<?',Date.now()-30*86_400_000);this.broadcast('chat',message);return json({ok:true,message});
