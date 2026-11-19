@@ -71,6 +71,52 @@ function windowAssembly(group,w,h,seed,frameColor=FRAME){
   shard.rotation.z=(r()-.5)*.5;
  }
 }
+// Detachable assemblies carry recognizable weathered architectural surfaces.
+function signAssembly(group,lot){
+ const canvas=document.createElement('canvas');canvas.width=512;canvas.height=192;
+ const ctx=canvas.getContext('2d');
+ ctx.fillStyle=lot.style[3];ctx.fillRect(0,0,512,192);
+ ctx.fillStyle='#24272a';ctx.fillRect(11,13,490,166);
+ ctx.strokeStyle='#dbcead';ctx.lineWidth=7;ctx.strokeRect(17,20,478,152);
+ ctx.textAlign='center';ctx.fillStyle='#f6edd9';
+ ctx.font='bold 48px sans-serif';ctx.fillText(lot.shopName,256,89,470);
+ ctx.font='bold 26px sans-serif';ctx.fillText(lot.enName,256,139,468);
+ const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;
+ const w=Math.min(4.5,lot.width*.85);
+ const face=new THREE.Mesh(new THREE.PlaneGeometry(w,1.15),
+  new THREE.MeshStandardMaterial({map,side:THREE.DoubleSide,roughness:.72,metalness:.1}));
+ face.position.z=.12;group.add(face);
+ for(const y of [-.61,.61])box(group,0,y,0,w+.15,.12,.17,'#5b5a54',.65);
+ for(const x of [-w*.51,w*.51])box(group,x,0,0,.12,1.3,.2,'#464c4c',.65);
+ for(const x of [-w*.3,w*.3])tube(group,[[x,-.62,0],[x,-.95,-.13]],.045,'#67645c');
+}
+function pipeAssembly(group){
+ tube(group,[[-.32,-.93,.06],[-.30,-.25,.1],[-.26,.45,.1],[.21,.47,.13],[.22,.82,.13]],.08,'#737f7a');
+ tube(group,[[-.29,-.72,.06],[-.11,-.57,.09],[.1,-.6,.14]],.04,'#725343');
+ for(let i=0;i<4;i++){
+  const clip=box(group,-.30,-.69+i*.46,.1,.28,.07,.19,'#3d4544',.7);
+  clip.rotation.z=i%2?.04:-.06;
+ }
+ box(group,.2,.42,.13,.26,.2,.27,'#575e5c',.7);
+}
+function timberAssembly(group,lot,seed){
+ const rand=random(seed);
+ for(let i=0;i<5;i++){
+  const plank=brokenPlate(group,.12+rand()*.11,.6+rand()*.62,.04,
+   i%2?lot.color:lot.detail,seed+i*17);
+  plank.position.set((i-2)*.16,(rand()-.5)*.15,(rand()-.5)*.055);
+  plank.rotation.z=(rand()-.5)*.21;
+  for(let n=0;n<2;n++)box(group,plank.position.x,plank.position.y+(n?-.25:.25),.1,.025,.027,.018,'#3d3935',.5);
+ }
+}
+function tileAssembly(group,lot,seed){
+ const rand=random(seed);
+ for(let row=0;row<3;row++)for(let col=0;col<3;col++){
+  const tile=brokenPlate(group,.27,.27,.018,row%2?'#c5b8a0':lot.detail,seed+row*29+col*13);
+  tile.position.set((col-1)*.32,(row-1)*.32,(rand()-.5)*.04);
+  tile.rotation.z=(rand()-.5)*.19;
+ }
+}
 function awningAssembly(group,w,d,seed){
  const r=random(seed),n=8;
  box(group,0,0,0,w,.065,d,'#9b7154',.35);
@@ -95,6 +141,25 @@ export function buildDetachableFixture(lot,part,seed=1){
   group.position.set(x,y,front+.13);
   windowAssembly(group,lot.width/5,Math.min(1.3,floor*.53),seed,lot.trim);
   box(group,0,-Math.min(.42,floor*.13),.23,lot.width/5+.16,.08,.13,lot.trim);
+ }else if(part==='sign'){
+  group.position.set(0,2.96,front+.62);
+  signAssembly(group,lot);
+ }else if(part==='pipes'){
+  group.position.set(lot.width*.39,lot.height*.55,front+.22);
+  pipeAssembly(group);
+ }else if(part==='timber'){
+  group.position.set((r()-.5)*lot.width*.45,lot.height*.55,front+.18);
+  timberAssembly(group,lot,seed);
+ }else if(part==='tiles'){
+  group.position.set((r()-.5)*lot.width*.55,lot.height*.45,front+.19);
+  tileAssembly(group,lot,seed);
+ }else if(part==='stone'){
+  group.position.set((r()-.5)*lot.width*.55,lot.height*.6,front+.15);
+  for(let i=0;i<5;i++){
+   const piece=brokenPlate(group,.32+r()*.28,.2+r()*.25,.13,i%2?lot.color:lot.trim,seed+i*29);
+   piece.position.set((r()-.5)*.65,(r()-.5)*.65,(r()-.5)*.12);
+   piece.rotation.z=(r()-.5)*.55;
+  }
  }else if(part.startsWith('pillars-')){
   const side=bits[1]==='0'?-1:1;
   group.position.set(side*(lot.width/2-.18),lot.height*.5,front+.1);
@@ -190,6 +255,8 @@ if(vCityLot>=0.){
   diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.057,.047,.040),clamp(crack*wear+soot*damage*.69+spall*damage*.4,0.,.94));
   diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.36,.29,.21),spall*damage*.14);
  }
+ float hitTint=texture2D(uCityDamage,vec2((floor(vCityLot+.5)+.5)/512.,.5)).g;
+ diffuseColor.rgb=mix(diffuseColor.rgb,vec3(1.,.014,.025),hitTint*.93);
 }`);
  };
  mesh.material.customProgramCacheKey=()=> 'city-facade-cracks-2026-11-19';
@@ -198,7 +265,26 @@ if(vCityLot>=0.){
   if(index<0||index>=width)return;
   bytes[index*4]=Math.round(clamp(1-hp/maxHp,0,1)*255);
   map.needsUpdate=true;
+ },pulse(index,intensity){
+  if(index<0||index>=width)return;
+  bytes[index*4+1]=Math.round(clamp(intensity,0,1)*255);map.needsUpdate=true;
  },reset(){bytes.fill(0);map.needsUpdate=true;}};
+}
+export function installAttachedFlash(mesh,texture){
+ const material=mesh.material;
+ material.onBeforeCompile=shader=>{
+  shader.uniforms.uCityDamage={value:texture};
+  shader.vertexShader='attribute float cityLotId;\\nvarying float vCityFlashLot;\\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
+   '#include <begin_vertex>\\nvCityFlashLot=cityLotId;');
+  shader.fragmentShader='uniform sampler2D uCityDamage;\\nvarying float vCityFlashLot;\\n'+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',
+   `#include <color_fragment>
+    float cityFlash=texture2D(uCityDamage,vec2((floor(vCityFlashLot+.5)+.5)/512.,.5)).g;
+    diffuseColor.rgb=mix(diffuseColor.rgb,vec3(1.,.014,.025),cityFlash*.93);`);
+ };
+ material.customProgramCacheKey=()=> 'city-attached-material-flash-v1';
+ material.needsUpdate=true;
 }
 function plumeTexture(mode){
  const canvas=document.createElement('canvas');canvas.width=canvas.height=64;
