@@ -59,5 +59,61 @@ try{
  console.log('BEAM_RENDER_DIAGNOSTIC='+JSON.stringify({diagnostic,errors}));
  if(diagnostic.cases.some(x=>x.gpu?.light>100))console.log('Some native beam renders measurable pixels');
  else console.log('NATIVE_BEAMS_INVISIBLE: no light pixels produced');
+
+ // End-to-end client smoke: enter the actual game, equip both weapons locally,
+ // hold A through charge and fire by server-shaped channel responses.
+ await page.evaluate(()=>templeTest.ui.emit('join',{name:'BeamDebug',color:'#ffaabb',backendUrl:window.TEMPLE_CONFIG.backendUrl}));
+ await page.waitForFunction(()=>!document.querySelector('#hud')?.hidden&&templeTest.controller()?.enabled,null,{timeout:22000});
+ await page.evaluate(()=>{
+  const t=templeTest;
+  t.network.close(); // prevent remote world updates from overwriting test equipment
+  window.beamActions=[];window.beamChannelEvents=[];
+  t.network.action=async(action,data)=>{
+   window.beamActions.push({action,phase:data?.phase||'',direction:data?.direction});
+   if(action==='attack'&&data?.phase==='charge')return {charging:true};
+   if(action==='attack'&&data?.phase==='channel-start')return {channeling:true};
+   if(action==='attack'&&data?.phase==='channel'){
+    const item=t.items.find(x=>x.id===t.ui.world.profile.equipment.weapon);
+    const ev={id:crypto.randomUUID(),owner:t.ui.self.key,weapon:item.id,family:item.family,
+     origin:data.origin||t.controller().root.position.clone().add(new (t.camera.position.constructor)(0,1,0)).toArray(),
+     direction:data.direction||[0,0,-1],range:20,channel:true,ultimate:true,charge:1,qualityTier:3,qualityScale:1,time:Date.now()};
+    window.beamChannelEvents.push(ev);
+    return {attackEvent:ev};
+   }
+   return {};
+  };
+ });
+ const integrated=[];
+ for(const name of ['storm-3','prism-3']){
+  const setup=await page.evaluate(id=>{
+   const t=templeTest;
+   const world={...t.ui.world,profile:{...t.ui.world.profile,equipment:{...t.ui.world.profile.equipment,weapon:id}}};
+   t.network.dispatchEvent(new CustomEvent('world',{detail:world}));
+   const item=t.items.find(x=>x.id===id);
+   t.arena.setPlayerEquipment(t.controller().root,{weapon:id});
+   t.controller().pitch=-.35;
+   return {item:item?.id,chargeMs:item?.chargeMs,channelItem:item?.family};
+  },name);
+  await page.evaluate(()=>templeTest.ui.emit('attack-start'));
+  await page.waitForTimeout(Math.max(3400,(setup.chargeMs||1500)+1400));
+  const snapshot=await page.evaluate(()=>{
+   const t=templeTest,n=t.arena.presentation.vfx.numberedEffects,camera=t.camera;
+   return {name:t.ui.world.profile.equipment.weapon,actions:window.beamActions.slice(-24),
+    nEvents:window.beamChannelEvents.length,
+    active:n.active.map(e=>({weapon:e.item?.id,kind:e.spec.asset,channel:e.channel,
+     phase:e.fx.phase,visible:e.fx.group.visible,origin:e.origin.toArray(),
+     muzzle:n.muzzleAt(e).toArray(),direction:e.visualDirection.toArray(),
+     projected:e.fx.group.position.clone().project(camera).toArray(),
+     fxPosition:e.fx.group.position.toArray(),
+     fxScale:e.fx.group.scale.toArray()})),
+    camera:camera.position.toArray(),camDirection:camera.getWorldDirection(camera.position.clone()).toArray(),
+    hudVisible:!t.ui.hud.hidden,root:t.controller().root.position.toArray()};
+  });
+  integrated.push({setup,snapshot});
+  await page.screenshot({path:'output/beam-visibility/'+name+'-held.png'});
+  await page.evaluate(()=>{templeTest.ui.emit('attack-release');window.beamActions=[];window.beamChannelEvents=[];});
+  await page.waitForTimeout(300);
+ }
+ console.log('INTEGRATED_BEAM_DIAGNOSTIC='+JSON.stringify(integrated));
  await page.screenshot({path:'output/beam-visibility/scene-diagnostic.png'});
 }finally{await browser.close();}
