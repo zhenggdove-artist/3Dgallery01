@@ -27,7 +27,7 @@ test('every material and physically distinct low and tall silhouettes exist',()=
  assert.ok(CITY_LOTS.some(l=>l.decay>.9));
  assert.ok(CITY_LOTS.every(l=>l.height>2&&l.width>3&&l.depth>3));
 });
-test('intact homes obstruct players and weapon rays; stage three clears the collider',()=>{
+test('intact roofs and solid ruined-home bases obstruct entry while supporting feet',()=>{
  const lot=CITY_LOTS.find(l=>l.floors>=3);
  assert.equal(cityBlocked(lot.x,lot.z,0,{}),true);
  assert.equal(cityStage(CITY_MAX_HP),0);
@@ -54,7 +54,7 @@ test('authoritative player pose validation rejects entry into a solid building',
  assert.equal(r.error,'Building collision');
  const nowBroken={cityDamage:{[lot.id]:{hp:0}} ,stats:{speed:3}};
  const reopened=validateState(previous,next,1000,'fighter',null,null,2000,nowBroken);
- assert.equal(reopened.error,undefined);
+ assert.equal(reopened.error,'Building collision','destroyed masonry remains solid below the rubble roof');
 });
 test('fragmented structural facades stay solid, synchronized and restore all damaged lots',()=>{
  const render=source('src/outer-city.js');
