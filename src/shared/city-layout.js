@@ -92,16 +92,39 @@ export function cityLocal(lot,x,z){
  const dx=x-lot.x,dz=z-lot.z,c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
  return [dx*c-dz*s,dx*s+dz*c];
 }
+// A single deterministic support surface for both client-side physics and
+// the authoritative Worker. Whole roofs stay solid throughout partial damage;
+// destroyed houses remain low, solid, standable ruins instead of empty space.
+export function cityRoofHeight(lot,stage=0){
+ if(stage!==3)return lot.height+.13; // rendered corrugated roof: center + .06, half thickness .07
+ const first=lot.height/lot.floors;
+ const surviving=first*(lot.floors===1?.32:.76);
+ return surviving+(lot.height+.13-surviving)*.10;
+}
+function cityFootprint(lot,x,z,margin=0){
+ const dx=x-lot.x,dz=z-lot.z;
+ if(dx*dx+dz*dz>(lot.width+lot.depth+margin*3)**2)return false;
+ const [lx,lz]=cityLocal(lot,x,z);
+ return Math.abs(lx)<=lot.width/2+margin&&Math.abs(lz)<=lot.depth/2+margin;
+}
+export function cityGroundHeight(x,z,y=0,damage={}){
+ let height=0;
+ for(const lot of CITY_LOTS){
+  if(!cityFootprint(lot,x,z,.06))continue;
+  const top=cityRoofHeight(lot,cityStage(damage[lot.id]?.hp??CITY_MAX_HP));
+  // A character below an eave is blocked by its wall, never sucked upward.
+  // The .16m tolerance is only for numerical landing precision, not climbing.
+  if(y>=top-.16)height=Math.max(height,top);
+ }
+ return height;
+}
 export function cityBlocked(x,z,y=0,damage={},radius=.22){
  for(const lot of CITY_LOTS){
-  // Cheap broad phase before rotated OBB test.
-  const dx=x-lot.x,dz=z-lot.z;
-  if(dx*dx+dz*dz>(lot.width+lot.depth+radius*3)**2)continue;
-  const stage=cityStage(damage[lot.id]?.hp??CITY_MAX_HP);
-  if(stage===3)continue;
-  const [lx,lz]=cityLocal(lot,x,z);
-  if(Math.abs(lx)<lot.width/2+radius&&Math.abs(lz)<lot.depth/2+radius &&
-   y>=-1&&y<(stage===2?Math.min(2.2,lot.height*.33):lot.height))return true;
+  if(!cityFootprint(lot,x,z,radius))continue;
+  const top=cityRoofHeight(lot,cityStage(damage[lot.id]?.hp??CITY_MAX_HP));
+  // Leaving the original house uncollidable at stage 3 caused players to
+  // phase through debris. Conversely a roof is walkable, not a side wall.
+  if(y>=-1&&y<top-.12)return true;
  }
  return false;
 }
