@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {GrassField} from './grass-field.js';
 import {OuterCity} from './outer-city.js';
+import {cityGroundHeight,cityBlocked} from './shared/city-layout.js';
 import {DisplayPlatforms} from './display-platforms.js';
 import {artworkPosition,artworkLanding,artworkRenderFlight} from './shared/artwork-flight.js';
 import {artworkDefinitions} from './shared/artwork-library.js';
@@ -316,8 +317,12 @@ export class TempleArena{
   nearest(position){
     if(!this.world)return null;const candidates=[];for(const p of artworkDefinitions(this.world)){const art=this.world.artworks?.[p.id],coin=this.world.coins?.[p.id];if(art&&!art.holder&&Date.now()>=(art.availableAt||0))candidates.push({type:'artwork',id:p.id,distance:distance2d(position,(this.world.artworkLayout?.[p.id]?.position||p.artPosition))});if(coin?.available)candidates.push({type:'coin',id:p.id,distance:distance2d(position,p.coinPosition)});}for(const drop of this.world.groundDrops||[])candidates.push({type:'drop',id:drop.id,distance:distance2d(position,drop.position)});for(const structure of this.world.structures||[])candidates.push({type:'structure',id:structure.id,distance:distance2d(position,structure.position)});for(const plant of this.world.plants||[])candidates.push({type:'plant',id:plant.id,distance:distance2d(position,plant.position)});return candidates.filter(c=>c.distance<4.4).sort((a,b)=>a.distance-b.distance)[0]||null;
   }
-  groundHeight(x,z,y=0){return this.displayPlatforms?.ground(x,z,y)||0;}
-  blocked(x,z,y=0){if(this.outerCity?.blocked(x,z,y))return true;for(const s of this.world?.structures||[]){const dims={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4],house:[5,3.8,4],tree:[1.2,4,1.2]}[s.kind]||[2,2,2];if(y<dims[1]&&Math.abs(x-s.position[0])<dims[0]/2+.35&&Math.abs(z-s.position[2])<dims[2]/2+.35)return true;}return false;}
+  groundHeight(x,z,y=0){
+    const platforms=this.displayPlatforms?.ground(x,z,y)||0;
+    const city=cityGroundHeight(x,z,y,this.world?.cityDamage||this.outerCity?.damage||{});
+    return Math.max(platforms,city);
+  }
+  blocked(x,z,y=0){if(cityBlocked(x,z,y,this.world?.cityDamage||this.outerCity?.damage||{}))return true;for(const s of this.world?.structures||[]){const dims={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4],house:[5,3.8,4],tree:[1.2,4,1.2]}[s.kind]||[2,2,2];if(y<dims[1]&&Math.abs(x-s.position[0])<dims[0]/2+.35&&Math.abs(z-s.position[2])<dims[2]/2+.35)return true;}return false;}
 }
 
 function direction(name){return {east:[1,0],west:[-1,0],north:[0,-1],south:[0,1]}[name]||[1,0];}
