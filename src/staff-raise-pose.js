@@ -34,8 +34,12 @@ export function poseOverheadStaff(root,blade,bones,restore,progress=1){
   new THREE.Vector3(...root.userData.staffAimDirection):forward.clone();
  if(aim.lengthSq()<.001)aim.copy(forward);
  aim.normalize();
+ // Lower the two forward-ray wand grips without separating the mesh from
+ // the skeletal right-hand joint. Native rays still originate at the tip.
+ const beamWand=['beam','lightning'].includes(blade.userData.family);
+ const handLift=beamWand?.16:.48;
  const rightTarget=shoulder.addScaledVector(forward,Math.min(.33,reach*.43))
-  .add(new THREE.Vector3(0,Math.min(.48,reach*.6),0));
+  .add(new THREE.Vector3(0,Math.min(handLift,reach*.6),0));
  // Never ask a short-armed model to reach an impossible high target.
  if(shoulderR){
   const offset=rightTarget.clone().sub(shoulderR),limit=reach*.9;
