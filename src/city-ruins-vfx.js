@@ -1,0 +1,224 @@
+import * as THREE from 'three';
+import {CITY_MAX_HP} from './shared/city-layout.js';
+
+const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+const random=seed=>{let s=seed>>>0;return ()=>((s=(Math.imul(s,1664525)+1013904223)>>>0)/4294967296);};
+const surface=(color,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness:.92,metalness});
+const FRAME='#454b4b',GLASS='#71858b',STEEL='#5d615d';
+function box(group,x,y,z,w,h,d,color,metal=0){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),surface(color,metal));
+ mesh.position.set(x,y,z);group.add(mesh);return mesh;
+}
+function tube(group,points,radius=.06,color=STEEL){
+ const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p)));
+ const mesh=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.max(4,points.length*4),radius,5,false),surface(color,.35));
+ group.add(mesh);return mesh;
+}
+function brokenPlate(group,w,h,depth,color,seed=1){
+ const r=random(seed),shape=new THREE.Shape();
+ shape.moveTo(-w*.5,-h*.44);
+ shape.lineTo(-w*.35,h*(.24+r()*.22));
+ shape.lineTo(-w*.05,h*.49);
+ shape.lineTo(w*(.12+r()*.31),h*.26);
+ shape.lineTo(w*.5,h*.14);
+ shape.lineTo(w*(.32+r()*.13),-h*.32);
+ shape.lineTo(w*.1,-h*.47);
+ shape.closePath();
+ const geometry=new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:false,curveSegments:1,steps:1});
+ const mesh=new THREE.Mesh(geometry,surface(color));group.add(mesh);return mesh;
+}
+function windowAssembly(group,w,h,seed,frameColor=FRAME){
+ const thickness=.09;
+ box(group,0,h*.5,0,w,thickness,.11,frameColor,.15);
+ box(group,0,-h*.5,0,w,thickness,.11,frameColor,.15);
+ box(group,-w*.5,0,0,thickness,h,.12,frameColor,.15);
+ box(group,w*.5,0,0,thickness,h,.12,frameColor,.15);
+ box(group,0,0,.03,.06,h,.09,frameColor,.16);
+ box(group,0,0,-.045,w*.96,h*.93,.036,GLASS,.08);
+ // Broken glazing is actual cut glass, attached to the window's frame.
+ const r=random(seed);
+ for(let i=0;i<4;i++){
+  const shard=brokenPlate(group,w*(.16+r()*.16),h*(.19+r()*.17),.015,
+   i%2?'#9bb2b4':'#526b74',seed+i*103);
+  shard.position.set((i%2?1:-1)*w*.2,(i<2?1:-1)*h*.2,.1);
+  shard.rotation.z=(r()-.5)*.5;
+ }
+}
+function awningAssembly(group,w,d,seed){
+ const r=random(seed),n=8;
+ box(group,0,0,0,w,.065,d,'#9b7154',.35);
+ for(let i=0;i<n;i++){
+  const x=-w/2+(i+.5)*w/n;
+  const strip=box(group,x,.055,0,w/n*.65,.07,d, i%2?'#8e8170':'#706b60',.45);
+  strip.rotation.z=(r()-.5)*.065;
+ }
+ box(group,0,-.16,-d*.43,w*.94,.08,.09,FRAME,.7);
+ box(group,0,-.16,d*.43,w*.94,.08,.09,FRAME,.7);
+ for(const x of [-w*.45,w*.45]){
+  tube(group,[[x,-.15,-d*.42],[x,-.65,-d*.42],[x,-.7,d*.33]],.04,STEEL);
+ }
+}
+export function buildDetachableFixture(lot,part,seed=1){
+ const group=new THREE.Group();group.name='Detached actual facade fixture: '+part;
+ const floor=lot.height/lot.floors,front=lot.depth/2;
+ const r=random(seed),bits=String(part).split('-');
+ if(part.startsWith('windows-')){
+  const level=clamp(Number(bits[1])||0,0,lot.floors-1),k=clamp(Number(bits[2])||0,0,2);
+  const x=(k-1)*lot.width/4,y=level*floor+floor*.49;
+  group.position.set(x,y,front+.13);
+  windowAssembly(group,lot.width/5,Math.min(1.3,floor*.53),seed,lot.trim);
+  box(group,0,-Math.min(.42,floor*.13),.23,lot.width/5+.16,.08,.13,lot.trim);
+ }else if(part.startsWith('pillars-')){
+  const side=bits[1]==='0'?-1:1;
+  group.position.set(side*(lot.width/2-.18),lot.height*.5,front+.1);
+  box(group,0,0,0,.27,lot.height,.3,lot.trim);
+  for(const x of [-.075,.075])tube(group,[[x,-lot.height*.45,.16],[x,lot.height*.42,.16]],.023,'#725d48');
+  for(let i=0;i<5;i++)box(group,.0,-lot.height*.38+i*lot.height*.19,.18,.24,.042,.08,'#413d36',.6);
+ }else if(part==='sheets-roof'){
+  group.position.set(0,lot.height+.1,0);
+  awningAssembly(group,Math.min(4,lot.width*.64),Math.min(2.6,lot.depth*.45),seed);
+ }else if(part==='sheets-awning'){
+  group.position.set(0,2.58,front+.58);
+  awningAssembly(group,lot.width*1.03,1.1,seed);
+ }else{
+  // Wall-mounted water / drainage pipe, exposed rebar, bricks, plaster and
+  // concrete fragments are detached together, not unrelated colored cubes.
+  const x=(r()-.5)*lot.width*.6,y=.8+r()*Math.max(1,lot.height-.9);
+  group.position.set(x,y,front+.19);
+  tube(group,[[-.33,-.9,.05],[-.28,-.3,.07],[-.28,.4,.08],[.12,.49,.08],[.12,.79,.08]],.08,'#616a68');
+  for(let i=0;i<4;i++){
+   const b=brokenPlate(group,.33+r()*.48,.2+r()*.36,.07,i%2?lot.detail:lot.trim,seed+i*41);
+   b.position.set((r()-.5)*.85,(r()-.5)*1.6,.07+r()*.06);
+   b.rotation.z=(r()-.5)*.4;
+  }
+  for(let i=0;i<3;i++)box(group,(r()-.5)*.6,(r()-.5)*1.1,.11,.38,.1,.22,lot.color);
+ }
+ return group;
+}
+export function buildBrokenStructure(lot,index,w,h,d,color){
+ const group=new THREE.Group(),r=random(lot.index*4109+index*37);
+ const plate=brokenPlate(group,w*(.55+r()*.3),h*(.72+r()*.2),
+   Math.max(.13,d*.54),color,lot.index*999+index*31);
+ plate.position.z=-d*.37;
+ // A ripped brick / timber / concrete cross section with actual jagged silhouette.
+ for(let i=0;i<4;i++){
+  const piece=brokenPlate(group,w*(.1+r()*.15),h*(.08+r()*.18),.12,
+    i%2?lot.detail:lot.trim,lot.index*107+i*101+index*47);
+  piece.position.set((r()-.5)*w*.7,(r()-.5)*h*.55,d*.12);
+  piece.rotation.z=(r()-.5)*1.6;
+ }
+ // Exposed metal reinforcement, window framing and torn corrugated sheet.
+ tube(group,[[-w*.35,-h*.3,.03],[-w*.16,h*.24,.06],[-w*.07,h*.44,.14]],.025,'#564f43');
+ tube(group,[[w*.13,-h*.45,.02],[w*.09,h*.22,.07],[w*.27,h*.35,.1]],.022,'#615a4e');
+ if(index%2===0){
+  const framed=buildDetachableFixture(lot,'windows-'+Math.min(lot.floors-1,index%lot.floors)+'-1',index+lot.index);
+  const cloned=framed.children;
+  // Reparent the actual window pieces so they travel with the broken facade.
+  while(cloned.length){const child=cloned[0];group.add(child);child.position.x+=w*.11;child.position.y-=h*.08;child.scale.multiplyScalar(.5);}
+ }
+ if(index%3===0){
+  const sheet=box(group,(r()-.5)*w*.3,h*.3,.18,w*.38,.045,d*.28,'#77685e',.4);
+  sheet.rotation.z=.23+r()*.16;
+ }
+ return group;
+}
+export function installFacadeCracks(mesh){
+ const width=512,bytes=new Uint8Array(width*4);
+ const map=new THREE.DataTexture(bytes,width,1,THREE.RGBAFormat,THREE.UnsignedByteType);
+ map.minFilter=map.magFilter=THREE.NearestFilter;map.wrapS=THREE.ClampToEdgeWrapping;
+ map.generateMipmaps=false;map.needsUpdate=true;
+ mesh.material.onBeforeCompile=shader=>{
+  shader.uniforms.uCityDamage={value:map};
+  shader.vertexShader='attribute float cityLotId;\nattribute vec3 cityLocal;\nvarying float vCityLot;\nvarying vec3 vCitySurface;\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvCityLot=cityLotId;vCitySurface=cityLocal;');
+  const header=`uniform sampler2D uCityDamage;
+varying float vCityLot;
+varying vec3 vCitySurface;
+float cityHash(vec2 x){return fract(sin(dot(x,vec2(127.1,311.7)))*43758.5453123);}
+float cityNoise(vec2 x){
+ vec2 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
+ return mix(mix(cityHash(i),cityHash(i+vec2(1.,0.)),f.x),
+ mix(cityHash(i+vec2(0.,1.)),cityHash(i+vec2(1.,1.)),f.x),f.y);
+}
+`;
+  shader.fragmentShader=header+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+if(vCityLot>=0.){
+ float damage=texture2D(uCityDamage,vec2((floor(vCityLot+.5)+.5)/512.,.5)).r;
+ if(damage>.001){
+  vec2 p=abs(vCitySurface.z)>abs(vCitySurface.x)?vCitySurface.xy:vCitySurface.zy;
+  float warp=cityNoise(p*1.91+vCityLot*.037);
+  vec2 q=p+vec2(warp-.5,cityNoise(p*2.7+vCityLot*.07)-.5)*.47;
+  // Multiscale branching cracks are evaluated ON the material surface.
+  float mainA=abs(sin(q.x*2.7+sin(q.y*1.29+vCityLot)*.8));
+  float mainB=abs(sin(q.y*2.13+sin(q.x*1.67+vCityLot*.11)*1.2));
+  float micro=abs(sin(q.x*8.9+q.y*4.3+warp*3.));
+  float crack=(1.-smoothstep(.015,.105,min(mainA,mainB)))*.89;
+  crack+=.35*(1.-smoothstep(.01,.09,micro))*clamp(damage*2.,0.,1.);
+  float soot=cityNoise(p*.55+vCityLot*.21)*cityNoise(p*3.1+vCityLot*.17);
+  float spall=1.-smoothstep(.2,.46,cityNoise(q*7.3+vCityLot));
+  float wear=clamp(damage*2.2,0.,1.);
+  diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.057,.047,.040),clamp(crack*wear+soot*damage*.69+spall*damage*.4,0.,.94));
+  diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.36,.29,.21),spall*damage*.14);
+ }
+}`);
+ };
+ mesh.material.customProgramCacheKey=()=> 'city-facade-cracks-2026-11-19';
+ mesh.material.needsUpdate=true;
+ return {texture:map,set(index,hp,maxHp=CITY_MAX_HP){
+  if(index<0||index>=width)return;
+  bytes[index*4]=Math.round(clamp(1-hp/maxHp,0,1)*255);
+  map.needsUpdate=true;
+ },reset(){bytes.fill(0);map.needsUpdate=true;}};
+}
+function plumeTexture(mode){
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=64;
+ const g=canvas.getContext('2d'),grad=g.createRadialGradient(32,32,0,32,32,31);
+ if(mode==='flame'){grad.addColorStop(0,'rgba(255,251,191,1)');grad.addColorStop(.23,'rgba(255,161,21,.95)');grad.addColorStop(.52,'rgba(225,50,5,.55)');grad.addColorStop(1,'rgba(215,28,0,0)');}
+ else{grad.addColorStop(0,'rgba(57,55,49,.58)');grad.addColorStop(.45,'rgba(69,65,59,.35)');grad.addColorStop(1,'rgba(82,79,73,0)');}
+ g.fillStyle=grad;g.fillRect(0,0,64,64);
+ return new THREE.CanvasTexture(canvas);
+}
+export function createPlumeResources(){
+ return {flame:plumeTexture('flame'),smoke:plumeTexture('smoke')};
+}
+export function emitFireSmoke(root,position,resources,mobile,seed=1){
+ const r=random(seed),count=mobile?18:35;
+ const clouds=[];
+ for(const type of ['flame','smoke']){
+  const n=type==='flame'?Math.ceil(count*.63):count,arr=new Float32Array(n*3),data=[];
+  for(let i=0;i<n;i++){
+   arr.set([(r()-.5)*.8,(r()-.5)*.45,(r()-.5)*.8],i*3);
+   data.push({x:arr[i*3],y:arr[i*3+1],z:arr[i*3+2],vx:(r()-.5)*.7,
+    vz:(r()-.5)*.7,speed:(type==='flame'?1.1:1.65)+r()*.9,phase:r()*6.283});
+  }
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(arr,3));
+  const mat=new THREE.PointsMaterial({map:resources[type],color:'#ffffff',size:type==='flame'?.65:1.6,
+   transparent:true,depthWrite:false,opacity:type==='flame'?.95:.6,sizeAttenuation:true});
+  const pts=new THREE.Points(geo,mat);pts.frustumCulled=false;pts.name='Fire and rolling smoke from fractured facade';
+  root.add(pts);clouds.push({pts,data,type});
+ }
+ const group=new THREE.Group();group.position.fromArray(position);root.add(group);
+ for(const layer of clouds){layer.pts.removeFromParent();group.add(layer.pts);}
+ return {root:group,clouds,age:0,duration:4.4};
+}
+export function updateFireSmoke(effect,dt){
+ effect.age+=dt;
+ for(const {pts,data,type} of effect.clouds){
+  const arr=pts.geometry.attributes.position.array;
+  for(let i=0;i<data.length;i++){
+   const p=data[i],t=effect.age;
+   arr[i*3]=p.x+p.vx*t+Math.sin(t*2+p.phase)*.16;
+   arr[i*3+1]=p.y+p.speed*t*(type==='flame'?.75:1.1);
+   arr[i*3+2]=p.z+p.vz*t+Math.cos(t*1.3+p.phase)*.14;
+  }
+  pts.geometry.attributes.position.needsUpdate=true;
+  pts.material.opacity=(type==='flame'?.95:.54)*Math.max(0,1-effect.age/effect.duration);
+  pts.material.size=(type==='flame'?.65:1.5)*(1+effect.age*(type==='flame'?.06:.23));
+ }
+ return effect.age>=effect.duration;
+}
+export function disposePlume(effect){
+ effect.root.traverse(o=>{if(o.isPoints){o.geometry.dispose();o.material.dispose();}});
+ effect.root.removeFromParent();
+}
