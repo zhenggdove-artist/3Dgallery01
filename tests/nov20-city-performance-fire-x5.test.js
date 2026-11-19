@@ -47,7 +47,7 @@ test('hidden fixtures never respawn while remaining wall vertices deform',()=>{
  const basis=buildCityDeformationBasis(lot,original,0,count,[]);
  applyCityDeformationBasis(original,positions,0,count,basis,4.5);
  assert.equal(positions[hidden+1],-120);
- assert.notEqual(positions[12*3+1],original[12*3+1]);
+ assert.notEqual(positions[112*3+1],original[112*3+1]);
 });
 
 test('fivefold smoke and flame envelope uses shader early culling and keeps only two shared draws',()=>{
