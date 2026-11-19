@@ -94,7 +94,9 @@ test('full detailed collapse is preassembled a piece per frame and activated onl
  const animated=city.chunks.get(lot.index);
  assert.equal(animated.pieces.length,expected);
  assert.equal(animated.root.parent,city.root);
- assert.ok(animated.pieces.every(piece=>piece.moving&&!piece.settled));
+ assert.ok(animated.pieces.every(piece=>!piece.moving&&piece.settled),
+  'revealing the grounded ruin must not regrow whole floor slabs');
+ assert.ok(animated.pieces.every(piece=>piece.mesh.scale.y===.17));
  city.disposePreparedChunks(animated);
 });
 
