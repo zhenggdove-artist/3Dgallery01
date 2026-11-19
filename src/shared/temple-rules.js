@@ -1183,7 +1183,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       const targetStatus=isPlayer?world.profiles[enemy.key]:enemy;
       if(fx.echo)applyElementalHit(targetStatus,owner,weapon,now,.2);
       else applyStatus(world,owner,targetStatus,weapon,{
-       direction:fx.direction,charge:fx.charge,
+       direction:fx.direction,charge:fx.charge,ultimate:fx.charge>=1,
        damage:isPlayer?Math.min(12,fx.pvpDamage):fx.damage,
        qualityDuration:fx.qualityDuration
       },now);
