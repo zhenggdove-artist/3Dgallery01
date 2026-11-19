@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
- cityLots,cityStage,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
+ cityLots,cityStage,cityDamageTier,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
-import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume} from './city-ruins-vfx.js';
+import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume} from './city-ruins-vfx.js';
 import {CityWallPaint} from './city-wall-paint.js';
 
 // All 432 lots remain present on mobile. Simplification changes only geometry
@@ -182,7 +182,7 @@ function signAtlas(lots){
  return {map,columns,rows};
 }
 function buildShopSigns(lots){
- const atlas=signAtlas(lots),p=[],uv=[],ids=[],ranges=new Map();
+ const atlas=signAtlas(lots),p=[],uv=[],ids=[],lotIds=[],ranges=new Map();
  for(const lot of lots){
   const base=p.length/3,y=2.96,z=lot.depth/2+.62,w=lot.width*.45;
   for(const [x,h] of [[-w,y-.39],[w,y-.39],[w,y+.39],[-w,y+.39]]){
@@ -192,10 +192,13 @@ function buildShopSigns(lots){
   const l=col/atlas.columns+m,r=(col+1)/atlas.columns-m;
   const t=1-(row+1)/atlas.rows+m,b=1-row/atlas.rows-m;
   uv.push(l,t,r,t,r,b,l,b);ids.push(base,base+1,base+2,base,base+2,base+3);
+   lotIds.push(lot.index,lot.index,lot.index,lot.index);
   ranges.set(lot.index,[base,p.length/3]);
  }
  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
- geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setIndex(ids);geo.computeVertexNormals();
+ geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  geo.setAttribute('cityLotId',new THREE.Float32BufferAttribute(lotIds,1));
+  geo.setIndex(ids);geo.computeVertexNormals();
  const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:atlas.map,side:THREE.DoubleSide}));
  mesh.name='Unique bilingual shop sign atlas';mesh.userData.lotRanges=ranges;return mesh;
 }
@@ -209,7 +212,7 @@ function buildWallGraffiti(lots){
   g.fillText(words[i],x,y,220);
  }
  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
- const p=[],uv=[],indices=[],ranges=new Map();
+ const p=[],uv=[],indices=[],lotIds=[],ranges=new Map();
  for(const lot of lots){
   const base=p.length/3,idx=lot.index%16,c=idx%4,row=Math.floor(idx/4);
   const y=Math.min(lot.height-.8,3.7),z=lot.depth/2+.012,w=lot.width*.25;
@@ -218,10 +221,13 @@ function buildWallGraffiti(lots){
   }
   const m=.012,l=c/4+m,r=(c+1)/4-m,t=1-(row+1)/4+m,b=1-row/4-m;
   uv.push(l,t,r,t,r,b,l,b);indices.push(base,base+1,base+2,base,base+2,base+3);
+   lotIds.push(lot.index,lot.index,lot.index,lot.index);
   ranges.set(lot.index,[base,p.length/3]);
  }
  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
- geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
+ geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  geo.setAttribute('cityLotId',new THREE.Float32BufferAttribute(lotIds,1));
+  geo.setIndex(indices);geo.computeVertexNormals();
  const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}));
  mesh.name='Batched hand-sprayed bilingual wall graffiti and vandalism';mesh.userData.lotRanges=ranges;return mesh;
 }
@@ -246,12 +252,17 @@ export class OuterCity{
   this.scene=scene;this.mobile=mobile;this.root=new THREE.Group();
   this.root.name='High-density ruined city, solid collision and staged destruction';scene.add(this.root);
   this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();this.plumes=[];
+   this.renderedTiers=new Map();this.poseCache=new Map();this.collapseAnimations=new Map();this.shakes=new Map();this.seenCityEvents=new Set();
   this.plumeResources=createPlumeResources();this.partsHidden=new Set();
   this.cube=new THREE.BoxGeometry(1,1,1);
   // Outer district is covered by GrassField's continuous living grass canopy.
   this.walls=batchGeometry(this.lots,mobile);this.facade=installFacadeCracks(this.walls);
   this.signs=buildShopSigns(this.lots);this.graffiti=buildWallGraffiti(this.lots);
-  for(const mesh of [this.walls,this.signs,this.graffiti])mesh.userData.originalPositions=mesh.geometry.attributes.position.array.slice();
+   installAttachedFlash(this.signs,this.facade.texture);installAttachedFlash(this.graffiti,this.facade.texture);
+  for(const mesh of [this.walls,this.signs,this.graffiti]){
+    mesh.userData.originalPositions=mesh.geometry.attributes.position.array.slice();
+    mesh.frustumCulled=false; // The vertex positions change during staged structural collapse.
+   }
   this.root.add(this.walls,this.signs,this.graffiti,wires(this.lots));
   this.wallPaint=new CityWallPaint(this.root,this);
   const rand=random(78142),bins=mobile?16:30;
@@ -295,49 +306,34 @@ export class OuterCity{
   for(let i=start;i<end;i++)attr.array[i*3+1]=-120;
   attr.needsUpdate=true;
  }
- collapseLot(index){
-  // Previous implementation sent every facade vertex to y=-120, including
-  // shop signs, spray-painted plaster, windows and all material colours.
-  // The replacement rubble was much plainer than the original house.
-  // Compress the SAME geometry into a fractured low ruin instead; its paint,
-  // trim, attachments and material-integrated crack shader survive impact.
-  if(this.hidden.has(index))return;
+ collapseLot(index,tier=10,shakeX=0,shakeZ=0){
   const lot=this.lots[index];if(!lot)return;
-  this.hidden.add(index);
-  const firstFloor=lot.height/lot.floors;
-  const survivorHeight=firstFloor*(lot.floors===1?.32:.76);
-  const ruinTop=cityRoofHeight(lot,3);
+  const stamp=[tier.toFixed(4),shakeX.toFixed(4),shakeZ.toFixed(4)].join(':');
+  if(this.poseCache.get(index)===stamp)return;
+  this.poseCache.set(index,stamp);this.renderedTiers.set(index,tier);
+  if(tier>=10)this.hidden.add(index);else this.hidden.delete(index);
   const roofRanges=[
-    ...(this.walls.userData.partRanges?.get(index+':sheets-roof')||[]),
-    ...(this.walls.userData.partRanges?.get(index+':roof-foundation')||[])
+   ...(this.walls.userData.partRanges?.get(index+':sheets-roof')||[]),
+   ...(this.walls.userData.partRanges?.get(index+':roof-foundation')||[])
   ];
   for(const mesh of [this.walls,this.signs,this.graffiti]){
-   const range=mesh.userData.lotRanges?.get(index);
-   const originals=mesh.userData.originalPositions;
-   if(!range||!originals)continue;
-   const positions=mesh.geometry.attributes.position;
+   const range=mesh.userData.lotRanges?.get(index),original=mesh.userData.originalPositions;
+   if(!range||!original)continue;
+   const attr=mesh.geometry.attributes.position,positions=attr.array;
    for(let i=range[0];i<range[1];i++){
-    const j=i*3,ox=originals[j],oy=originals[j+1],oz=originals[j+2];
-    // Preserve any fixture already detached by a precise hit.
-    if(positions.array[j+1]<-50)continue;
-    if(oy<=survivorHeight)continue;
-    const collapse=oy-survivorHeight;
-    const noise=Math.sin(index*.73+ox*.81+oz*.59+oy*1.13);
-    const compression=.08+.075*(.5+.5*noise);
-    const factor=Math.min(1,collapse/Math.max(1,lot.height-survivorHeight));
-    positions.array[j]=ox+Math.sin(oy*1.9+index*.9)*factor*.35;
-    // The original corrugated roof becomes the walkable top of the ruin.
-    // All its top vertices lie exactly at the shared physics roofHeight;
-    // the rest of the original painted structure fractures underneath it.
-    const isRoof=mesh===this.walls&&roofRanges.some(([a,b])=>i>=a&&i<b);
-    positions.array[j+1]=isRoof?
-      ruinTop+(oy-(lot.height+.13))*.16:
-      survivorHeight+collapse*compression;
-    positions.array[j+2]=oz+Math.cos(oy*1.5+index*.7)*factor*.35;
+    const j=i*3;
+    // Once a real fixture has detached, never silently grow it back.
+    if(positions[j+1]<-50)continue;
+    const roof=mesh===this.walls&&roofRanges.some(([a,b])=>i>=a&&i<b);
+    const point=cityCollapsePosition(lot,original[j],original[j+1],original[j+2],tier,roof);
+    positions[j]=point[0]+shakeX;
+    positions[j+1]=point[1];
+    positions[j+2]=point[2]+shakeZ;
    }
-   positions.needsUpdate=true;
+   attr.needsUpdate=true;
   }
-  this.wallPaint?.collapseLot(index);
+  if(tier>=10&&shakeX===0&&shakeZ===0)this.wallPaint?.collapseLot(index);
+  else this.wallPaint?.deformTier(index,tier,shakeX,shakeZ);
  }
  hidePart(index,part){
   const key=index+':'+part;
