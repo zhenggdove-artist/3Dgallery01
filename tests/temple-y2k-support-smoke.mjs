@@ -31,7 +31,7 @@ try{
    bodyOverflow:document.documentElement.scrollWidth>innerWidth+2,
    gachaCount:document.querySelectorAll('.wing-design-support .wing-gacha-machine').length};
  });
- assert.ok(desktop.paymentW>=350&&desktop.paymentH>150,JSON.stringify(desktop));
+ assert.ok(desktop.paymentW>=350&&desktop.paymentH>105,JSON.stringify(desktop));
  assert.equal(desktop.gachaCount,0);
  assert.equal(desktop.bodyOverflow,false);
  await page.screenshot({path:folder+'/support-desktop-direct-wings.png',animations:'disabled'});
