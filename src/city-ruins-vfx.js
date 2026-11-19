@@ -445,12 +445,13 @@ void main(){
 const livingFireFragment=`
 uniform sampler2D uSprite;
 uniform vec3 uTint;
+uniform float uPower,uSmoke;
 varying float vOpacity;
 void main(){
  vec4 sprite=texture2D(uSprite,gl_PointCoord);
  float alpha=sprite.a*vOpacity;
  if(alpha<.005)discard;
- gl_FragColor=vec4(sprite.rgb*uTint,alpha);
+ gl_FragColor=vec4(sprite.rgb*uTint*(1.-uSmoke*uPower*.48),alpha);
 }`;
 export function createPersistentBuildingFire(root,lot,resources,mobile=false){
  const group=new THREE.Group();
@@ -459,8 +460,8 @@ export function createPersistentBuildingFire(root,lot,resources,mobile=false){
  group.rotation.y=-lot.yaw;
  root.add(group);
  const layers=[],r=random(39991+lot.index*977),profiles=cityFractureProfiles(lot);
- for(const type of ['flame','smoke']){
-  const count=(type==='flame'?(mobile?44:72):(mobile?72:122));
+ for(const type of ['flame','smoke','ember']){
+  const count=type==='smoke'?(mobile?72:122):type==='ember'?(mobile?38:62):(mobile?44:72);
   const positions=new Float32Array(count*3),flows=new Float32Array(count*4);
   for(let i=0;i<count;i++){
    const p=profiles[i%profiles.length];
@@ -468,22 +469,24 @@ export function createPersistentBuildingFire(root,lot,resources,mobile=false){
    const x=side==='right'?lot.width*.5:(side==='left'?-lot.width*.5:p.localX+u);
    const z=side==='front'?lot.depth*.5:(side==='back'?-lot.depth*.5:p.localZ+u);
    positions.set([x+(r()-.5)*.65,p.localY/Math.max(.1,lot.height),z+(r()-.5)*.65],i*3);
-   flows.set([r(),.23+r()*.32,.35+r()*.65,r()],i*4);
+   flows.set([r(),type==='ember'?.45+r()*.60:.23+r()*.32,.35+r()*.65,r()],i*4);
   }
   const geometry=new THREE.BufferGeometry();
   geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
   geometry.setAttribute('aFlow',new THREE.BufferAttribute(flows,4));
   const uniforms={uTime:{value:0},uPower:{value:0},uHeight:{value:lot.height},
-   uOpacity:{value:0},uPointSize:{value:type==='flame'?.82:1.75},
-   uSprite:{value:resources[type]},
-   uTint:{value:new THREE.Color(type==='flame'?'#ffffff':'#afb0ae')}};
+   uOpacity:{value:0},uPointSize:{value:type==='smoke'?1.75:type==='ember'?.17:.82},
+   uSmoke:{value:type==='smoke'?1:0},
+   uSprite:{value:resources[type==='ember'?'flame':type]},
+   uTint:{value:new THREE.Color(type==='flame'?'#ffffff':type==='ember'?'#ffbb72':'#afb0ae')}};
   const material=new THREE.ShaderMaterial({
    uniforms,vertexShader:livingFireVertex,fragmentShader:livingFireFragment,
    transparent:true,depthWrite:false,
-   blending:type==='flame'?THREE.AdditiveBlending:THREE.NormalBlending
+   blending:type==='smoke'?THREE.NormalBlending:THREE.AdditiveBlending
   });
   const points=new THREE.Points(geometry,material);
-  points.name=type==='flame'?'Constant growing flames':'Constant dense billowing black smoke';
+  points.name=type==='flame'?'Constant growing flames':type==='ember'?
+   'Continuous sparks and hot embers':'Constant dense billowing black smoke';
   points.frustumCulled=false;group.add(points);
   layers.push({points,type,uniforms,count});
  }
@@ -511,12 +514,12 @@ export function updatePersistentBuildingFire(effect,dt,time){
  const intensity=effect.dying?1:effect.power;
  const structureHeight=effect.height;
  for(const layer of effect.layers){
-  const smoke=layer.type==='smoke';
+  const smoke=layer.type==='smoke',ember=layer.type==='ember';
   layer.uniforms.uTime.value=time;
   layer.uniforms.uPower.value=Math.max(0,intensity);
   layer.uniforms.uHeight.value=Math.max(.4,structureHeight);
-  layer.uniforms.uOpacity.value=(smoke?.67:.92)*Math.max(0,intensity)*(smoke?smokeFade:fireFade);
-  layer.uniforms.uPointSize.value=(smoke?1.75:.82)*(1+(smoke?.37:.18)*intensity);
+  layer.uniforms.uOpacity.value=(smoke?.67:ember?.88:.92)*Math.max(0,intensity)*(smoke?smokeFade:fireFade);
+  layer.uniforms.uPointSize.value=(smoke?1.75:ember?.17:.82)*(1+(smoke?.37:.18)*intensity);
  }
  effect.extinguished=effect.dying&&effect.elapsed>=8;
  return effect.extinguished;
