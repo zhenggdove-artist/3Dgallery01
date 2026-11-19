@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import {ForwardChannelBeam} from './forward-channel-beam.js';
 import {createOddEffect,updateOddEffect} from './reletter/odd-weapon-effects.js';
 import {chargedArea} from './shared/charge-area.js';
 import {ElementalCharge} from './elemental-charge.js';
@@ -40,7 +39,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.forwardBeams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -80,7 +79,6 @@ export class WeaponVFX{
  stopChannel(root){
   this.restoration.stop(root);
   this.numberedEffects.stop(root);
-  for(const [key,beam] of [...this.forwardBeams])if(beam.root===root&&beam.channel){beam.visual.dispose();this.forwardBeams.delete(key);}
   for(const [key,entry] of [...this.channelStreams])if(entry.host===root){
    this.particleSkills.remove(entry);this.channelStreams.delete(key);
   }
@@ -141,8 +139,8 @@ export class WeaponVFX{
   finally{renderer.setRenderTarget(previous);target.dispose();for(const entry of entries)this.releaseStaffOrb(entry);}
  }
  play(data,item,root){
-  // Independent full-length rays survive faults in #08/#29's native shader.
-  if(['beam','lightning'].includes(item?.family))this.refreshForwardBeam(data,item,root);
+  // Sustained beams use only the authentic 00GameDevs #08 / #29 animations.
+  // Short taps are orb projectiles; no independently fabricated ray.
   // Native ground healing ring is independent of #43's travelling blossom.
   // Repeated server pulses refresh ONE pooled ring, never spawn duplicates.
   if(data.channel&&!data.fusionEcho&&item.family==='petal'&&root)this.restoration.pulse(root);
@@ -247,27 +245,6 @@ export class WeaponVFX{
   // Fusion echoes are complete server-authored source weapon events, not placeholder flashes.
   if(data.impactPoint&&!projectiles.has(id)){const impact=this.acquire(item.family==='ice'?'ice-shatter':'energy-burst',{size:.3,color:item.color,speed:2});impact.fx.group.position.copy(end);}
  }
- refreshForwardBeam(data,item,root){
-  if(!Array.isArray(data?.origin)||!Array.isArray(data?.direction))return;
-  const direction=new THREE.Vector3(...data.direction);
-  if(!direction.lengthSq()||!Number.isFinite(direction.lengthSq()))return;
-  const channel=!!data.channel,now=performance.now();
-  const key=(root?.uuid||String(data.owner||'anonymous'))+':'+item.family+':'+(channel?'channel':data.ultimate?'ultimate':'tap');
-  let entry=this.forwardBeams.get(key);
-  if(!entry){
-   const visual=new ForwardChannelBeam(this.scene,item.family==='lightning');
-   entry={visual,root,item,channel,lastPulse:now,age:0,origin:new THREE.Vector3(...data.origin),
-    direction:direction.clone().normalize(),range:Math.max(.5,Number(data.range)||1),
-    width:Math.max(.3,Math.min(.85,Number(data.radius||.3)*2.5)),lifetime:channel?Infinity:data.ultimate?1.5:.48};
-   this.forwardBeams.set(key,entry);
-  }
-  entry.lastPulse=now;entry.range=Math.max(.5,Number(data.range)||entry.range);
-  entry.direction.copy(direction).normalize();
-  entry.origin.fromArray(data.origin);
-  entry.width=Math.max(.3,Math.min(.85,Number(data.radius||.3)*2.5));
-  if(!channel)entry.age=0;
-  entry.visual.update(root?this.channelMuzzle(root,item,entry.origin.clone()):entry.origin,entry.direction,entry.range,.24,entry.width);
- }
  charging(root,progress,item){
   // No arcane-missile emitter here: that effect used to float to the right
   // and remain suspended as a stuck particle cloud.
@@ -275,21 +252,6 @@ export class WeaponVFX{
  }
 
  update(dt,camera=null){
-  // Update the physical long ray BEFORE expensive third-party VFX modules.
-  for(const [key,entry] of [...this.forwardBeams]){
-   entry.age+=dt;
-   const lost=entry.root&&!entry.root.parent,stale=entry.channel&&performance.now()-entry.lastPulse>Math.max(3100,Number(entry.item.cooldown||800)*2+650);
-   if(lost||stale||entry.age>=entry.lifetime){
-    entry.visual.dispose();this.forwardBeams.delete(key);continue;
-   }
-   const aim=entry.root?.userData?.staffAimDirection;
-   if(entry.channel&&Array.isArray(aim)&&aim.length===3&&aim.every(Number.isFinite)){
-    const vec=new THREE.Vector3(...aim);
-    if(vec.lengthSq()>.001)entry.direction.lerp(vec.normalize(),1-Math.exp(-dt*25)).normalize();
-   }
-   const origin=entry.root?this.channelMuzzle(entry.root,entry.item,entry.origin.clone()):entry.origin;
-   entry.visual.update(origin,entry.direction,entry.range,entry.age,entry.width);
-  }
   this.restoration.update(dt,camera);
   for(const [key,entry] of [...this.channelStreams]){
    if(!this.particleSkills.active.includes(entry)||!entry.host?.parent){
@@ -368,7 +330,7 @@ export class WeaponVFX{
   this.failedAnimations.add(id);
   console.error('Weapon animation failed; quarantined this instance',id,error);
  }
- dispose(){for(const beam of this.forwardBeams.values())beam.visual.dispose();this.forwardBeams.clear();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
+ dispose(){this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
   for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }
