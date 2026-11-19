@@ -7,7 +7,7 @@ import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
-import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityBlocked,cityWallPoint,CITY_PAINT_WALLS} from './city-layout.js';
+import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
@@ -805,8 +805,10 @@ function attack(world,profile,actor,body,context,now){
    structureHit??=event;structureHits.push(event);
    if(structure.hp===0){const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);}
   }
-  const city=cityWeaponHits(world,origin,direction,stats.range,area,
-  Math.max(8,Math.round((stats.damage+bonus*.1)*.7)),now);
+  // The city's structural impact follows weapon damage and charged strength,
+  // without changing PvP damage or displaying health numbers on the building.
+  const structuralDamage=Math.max(8,Math.round((stats.damage+bonus*.1)*(charge>=1?1.5:1.1)));
+  const city=cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
@@ -1032,7 +1034,9 @@ function damageCityLot(world,lot,part,damage,now,position=null){
  const previous=world.cityDamage[lot.id];
  if(previous?.hp===0)return null;
  const state=previous||{hp:CITY_MAX_HP,maxHp:CITY_MAX_HP,parts:{}};
+ const previousHp=state.hp;
  const previousStage=cityStage(state.hp,CITY_MAX_HP);
+ const previousTier=cityDamageTier(state.hp,CITY_MAX_HP);
  const base=String(part||'masonry').split('-')[0];
  const kind=Object.hasOwn(CITY_PART_HEALTH,base)?String(part):'masonry';
  const hp=state.parts[kind]??CITY_PART_HEALTH[base in CITY_PART_HEALTH?base:'masonry'];
@@ -1041,8 +1045,9 @@ function damageCityLot(world,lot,part,damage,now,position=null){
  state.hp=Math.max(0,state.hp-damage);
  world.cityDamage[lot.id]=state;
  const stage=cityStage(state.hp,CITY_MAX_HP);
+ const tier=cityDamageTier(state.hp,CITY_MAX_HP);
  const event={id:id(),structureId:lot.id,cityLotIndex:lot.index,kind:'city-house',part:kind,
-  partDestroyed,stage,previousStage,
+  partDestroyed,stage,previousStage,previousHp,previousTier,tier,
   position:position||[lot.x,Math.min(2,lot.height*.5),lot.z],
   hp:state.hp,maxHp:CITY_MAX_HP,damage,time:now};
  return {event,destroyed:stage===3?{...event,id:lot.id,rotation:lot.yaw}:null};

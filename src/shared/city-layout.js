@@ -146,6 +146,15 @@ export const CITY_MAX_HP=240;
 export function cityStage(hp,maxHp=CITY_MAX_HP){
  return hp<=0?3:hp<=maxHp/3?2:hp<=maxHp*2/3?1:0;
 }
+// A structural collapse occurs at each authoritative 10%-HP boundary.
+export function cityDamageTier(hp,maxHp=CITY_MAX_HP){
+ if(!Number.isFinite(hp)||!Number.isFinite(maxHp)||maxHp<=0)return 0;
+ return Math.max(0,Math.min(10,Math.floor((maxHp-hp)*10/maxHp+1e-8)));
+}
+export function cityCollapseProgress(tier){
+ const t=Math.max(0,Math.min(1,tier/10));
+ return 1-Math.pow(1-t,1.2);
+}
 export function cityLocal(lot,x,z){
  const dx=x-lot.x,dz=z-lot.z,c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
  return [dx*c-dz*s,dx*s+dz*c];
@@ -159,6 +168,29 @@ export function cityRoofHeight(lot,stage=0){
  const surviving=first*(lot.floors===1?.32:.76);
  return surviving+(lot.height+.13-surviving)*.10;
 }
+// Shared by browser physics, Worker collision and weapon targeting.
+export function cityRoofHeightAtHp(lot,hp=CITY_MAX_HP,maxHp=CITY_MAX_HP){
+ const tier=cityDamageTier(hp,maxHp);
+ if(tier===0)return lot.height+.13;
+ if(tier===10)return cityRoofHeight(lot,3);
+ const amount=cityCollapseProgress(tier);
+ return lot.height+.13+(cityRoofHeight(lot,3)-(lot.height+.13))*amount;
+}
+// Exactly the same vertex-space deformation is used for masonry, signs,
+// original graffiti and persistent user drawings.
+export function cityCollapsePosition(lot,x,y,z,tier,isRoof=false){
+ const amount=cityCollapseProgress(tier);
+ if(amount<=0)return [x,y,z];
+ const first=lot.height/lot.floors,survivor=first*(lot.floors===1?.32:.76);
+ const rise=Math.max(0,y-survivor),factor=Math.min(1,rise/Math.max(1,lot.height-survivor));
+ const noise=Math.sin(lot.index*.73+x*.81+z*.59+y*1.13);
+ const compression=.08+.075*(.5+.5*noise);
+ const ruinedY=isRoof?cityRoofHeight(lot,3)+(y-(lot.height+.13))*.16:
+  y<=survivor?y:survivor+rise*compression;
+ return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*amount,
+  y+(ruinedY-y)*amount,
+  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*amount];
+}
 function cityFootprint(lot,x,z,margin=0){
  const dx=x-lot.x,dz=z-lot.z;
  if(dx*dx+dz*dz>(lot.width+lot.depth+margin*3)**2)return false;
@@ -170,7 +202,7 @@ export function cityGroundHeight(x,z,y=0,damage={}){
  for(const lot of CITY_LOTS){
   // Keep support across the 0.20m corrugated roof overhang at its edges.
   if(!cityFootprint(lot,x,z,.16))continue;
-  const top=cityRoofHeight(lot,cityStage(damage[lot.id]?.hp??CITY_MAX_HP));
+  const top=cityRoofHeightAtHp(lot,damage[lot.id]?.hp??CITY_MAX_HP,damage[lot.id]?.maxHp??CITY_MAX_HP);
   // A character below an eave is blocked by its wall, never sucked upward.
   // The .16m tolerance is only for numerical landing precision, not climbing.
   if(y>=top-.16)height=Math.max(height,top);
@@ -180,7 +212,7 @@ export function cityGroundHeight(x,z,y=0,damage={}){
 export function cityBlocked(x,z,y=0,damage={},radius=.22){
  for(const lot of CITY_LOTS){
   if(!cityFootprint(lot,x,z,radius))continue;
-  const top=cityRoofHeight(lot,cityStage(damage[lot.id]?.hp??CITY_MAX_HP));
+  const top=cityRoofHeightAtHp(lot,damage[lot.id]?.hp??CITY_MAX_HP,damage[lot.id]?.maxHp??CITY_MAX_HP);
   // Leaving the original house uncollidable at stage 3 caused players to
   // phase through debris. Conversely a roof is walkable, not a side wall.
   if(y>=-1&&y<top-.12)return true;
@@ -198,7 +230,7 @@ export function cityRaycast(origin,direction,range,damage={}){
   const [ox,oz]=cityLocal(lot,origin[0],origin[2]);
   const c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
   const d=[direction[0]*c-direction[2]*s,direction[1],direction[0]*s+direction[2]*c];
-  const h=stage===2?Math.min(2.2,lot.height*.33):lot.height;
+  const h=cityRoofHeightAtHp(lot,record?.hp??CITY_MAX_HP,record?.maxHp??CITY_MAX_HP);
   const mins=[-lot.width/2,0,-lot.depth/2],maxs=[lot.width/2,h,lot.depth/2],o=[ox,origin[1],oz];
   let near=0,far=Math.min(range,nearest?.distance??range),hitAxis=2;
   for(let axis=0;axis<3;axis++){

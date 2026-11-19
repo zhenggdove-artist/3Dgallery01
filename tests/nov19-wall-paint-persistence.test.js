@@ -76,7 +76,7 @@ test('rendered wall paints deform with the actual building and restore without c
  assert.match(city,/wallPaint=new CityWallPaint/);
  assert.match(city,/wallPaint\?\.collapseLot\(index\)/);
  assert.match(city,/wallPaint\?\.resetBuildings\(\)/);
- assert.match(paint,/const compression=\.08\+\.075/);
+ assert.match(paint,/cityCollapsePosition\(lot,/);
  assert.match(paint,/attr\.array\.set\(slot\.original\)/);
  assert.match(paint,/destination-out/);
  assert.match(arena,/wallPaint\?\.sync\(world\.wallPaint/);
