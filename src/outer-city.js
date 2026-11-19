@@ -79,11 +79,19 @@ function batchGeometry(lots,mobile){
    const y=level*floorH+floorH*.49;
    const count=3;
    for(let k=0;k<count;k++){
-    category='windows-'+level+'-'+k;
     const x=(k-(count-1)/2)*w/(count+1);
+    const windowWidth=w/(count+2),windowHeight=Math.min(1.3,floorH*.53);
+    // A window hole, warped frame and rusted mullion are integral masonry:
+    // knocking off a pane must NOT expose a featureless solid-color block.
+    category='window-scars';
+    box(lot,x,y,frontage+.015,windowWidth*.96,windowHeight*.93,.035,'#272b2a');
+    box(lot,x-windowWidth*.49,y,frontage+.12,.065,windowHeight,.09,lot.trim);
+    box(lot,x+windowWidth*.49,y,frontage+.12,.065,windowHeight,.09,lot.trim);
+    box(lot,x,y,frontage+.125,.04,windowHeight,.075,lot.trim);
+    category='windows-'+level+'-'+k;
     const windowColor=(k+level+lot.index)%4===0?'#6b5547':'#313a3a';
-    box(lot,x,y,frontage+.06,w/(count+2),Math.min(1.3,floorH*.53),.13,windowColor);
-    box(lot,x,y+Math.min(.42,floorH*.13),frontage+.16,w/(count+2)+.08,.08,.13,lot.detail);
+    box(lot,x,y,frontage+.06,windowWidth,windowHeight,.13,windowColor);
+    box(lot,x,y+Math.min(.42,floorH*.13),frontage+.16,windowWidth+.08,.08,.13,lot.detail);
     if((k+lot.index)%2===0)box(lot,x,y-.1,frontage+.18,.065,.75,.1,lot.trim);
    }
   }
@@ -281,10 +289,36 @@ export class OuterCity{
   for(let i=start;i<end;i++)attr.array[i*3+1]=-120;
   attr.needsUpdate=true;
  }
- hideLot(index){
-  if(this.hidden.has(index))return;this.hidden.add(index);
+ collapseLot(index){
+  // Previous implementation sent every facade vertex to y=-120, including
+  // shop signs, spray-painted plaster, windows and all material colours.
+  // The replacement rubble was much plainer than the original house.
+  // Compress the SAME geometry into a fractured low ruin instead; its paint,
+  // trim, attachments and material-integrated crack shader survive impact.
+  if(this.hidden.has(index))return;
+  const lot=this.lots[index];if(!lot)return;
+  this.hidden.add(index);
+  const firstFloor=lot.height/lot.floors;
+  const survivorHeight=firstFloor*(lot.floors===1?.32:.76);
   for(const mesh of [this.walls,this.signs,this.graffiti]){
-   const range=mesh.userData.lotRanges?.get(index);if(range)this.hideRange(mesh,...range);
+   const range=mesh.userData.lotRanges?.get(index);
+   const originals=mesh.userData.originalPositions;
+   if(!range||!originals)continue;
+   const positions=mesh.geometry.attributes.position;
+   for(let i=range[0];i<range[1];i++){
+    const j=i*3,ox=originals[j],oy=originals[j+1],oz=originals[j+2];
+    // Preserve any fixture already detached by a precise hit.
+    if(positions.array[j+1]<-50)continue;
+    if(oy<=survivorHeight)continue;
+    const collapse=oy-survivorHeight;
+    const noise=Math.sin(index*.73+ox*.81+oz*.59+oy*1.13);
+    const compression=.08+.075*(.5+.5*noise);
+    const factor=Math.min(1,collapse/Math.max(1,lot.height-survivorHeight));
+    positions.array[j]=ox+Math.sin(oy*1.9+index*.9)*factor*.35;
+    positions.array[j+1]=survivorHeight+collapse*compression;
+    positions.array[j+2]=oz+Math.cos(oy*1.5+index*.7)*factor*.35;
+   }
+   positions.needsUpdate=true;
   }
  }
  hidePart(index,part){
@@ -292,8 +326,8 @@ export class OuterCity{
   this.partsHidden??=new Set();if(this.partsHidden.has(key))return;
   this.partsHidden.add(key);
   for(const [a,b] of this.walls.userData.partRanges?.get(key)||[])this.hideRange(this.walls,a,b);
-  if(part.startsWith('sheets-'))this.hideRange(this.signs,...this.signs.userData.lotRanges.get(index));
-  if(part==='masonry')this.hideRange(this.graffiti,...this.graffiti.userData.lotRanges.get(index));
+  // Independent street signs and painted wall grime must survive the loss of
+  // a corrugated awning or a small masonry component.
  }
  createChunks(lot,stage,animate=false){
   let effect=this.chunks.get(lot.index);
@@ -393,10 +427,11 @@ export class OuterCity{
    this.plumeResources,this.mobile,lot.index+Math.floor(performance.now()));
   this.plumes.push(plume);if(this.plumes.length>22)disposePlume(this.plumes.shift());
   if(event.partDestroyed&&event.part!=='masonry')this.hidePart(lot.index,event.part);
-  // Retain the battered original wall. Only after total collapse is it
-  // replaced by jagged, windowed, rebar-filled fragments instead of cubes.
-  if(stage===3){this.hideLot(lot.index);this.createChunks(lot,stage,true);}
-  else if(stage===2)this.createChunks(lot,stage,true);
+  // Mid-health: keep the detailed original facade and grow shader-native
+  // cracks; a second full-size overlapping shell looked like plain blocks.
+  // Total destruction folds the old decorated mesh into rubble and adds
+  // jagged physical fragments, never substitutes an undecorated cube.
+  if(stage===3){this.collapseLot(lot.index);this.createChunks(lot,stage,true);}
  }
  syncDamage(damage={}){
   if(damage===this.lastDamage)return;
@@ -407,8 +442,7 @@ export class OuterCity{
    const stage=cityStage(record.hp,record.maxHp||CITY_MAX_HP);
    this.damage[lot.id]={hp:record.hp,stage};this.facade.set(lot.index,record.hp,record.maxHp||CITY_MAX_HP);
    for(const [part,hp] of Object.entries(record.parts||{}))if(hp<=0&&part!=='masonry')this.hidePart(lot.index,part);
-   if(stage===3){this.hideLot(lot.index);this.createChunks(lot,stage,false);}
-   else if(stage===2)this.createChunks(lot,stage,false);
+   if(stage===3){this.collapseLot(lot.index);this.createChunks(lot,stage,false);}
   }
  }
  resetBuildings(){
