@@ -502,7 +502,14 @@ export class NumberedWeaponEffects {
      e.curveBend=THREE.MathUtils.damp(e.curveBend||0,e.fusionEcho?0:THREE.MathUtils.clamp(strafe,-1,1),11,dt);
     }
    }
-   if(e.key&&now-e.lastPulse>Math.max(CHANNEL_GRACE_MS,Number(e.item.cooldown||700)*2+650)){
+   // Keep a server-confirmed continuous channel visible while its caster
+   // still holds the same staff. Slow WebGL frames and packet jitter must
+   // never erase an already active beam between authoritative hit pulses.
+   // This extends visuals only; combat/damage remains server-authoritative.
+   const casterHoldingChannel=e.channel&&e.root?.userData?.staffCasting===true&&
+    e.root?.userData?.equipment?.weapon===e.item?.id;
+   if(e.key&&!casterHoldingChannel&&
+      now-e.lastPulse>Math.max(CHANNEL_GRACE_MS,Number(e.item.cooldown||700)*2+650)){
     this.remove(e);continue;
    }
    if(e.palmLayers){
