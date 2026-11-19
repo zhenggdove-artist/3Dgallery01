@@ -20,6 +20,11 @@ export async function prepareFirebase(config){
   auth=module.getAuth(app);
   authModule=module;
   await auth.authStateReady();
+  // Never restore an old role/account into a new visit. Firebase defaults to
+  // persistent storage, which bypasses the account chooser on return visits.
+  // Use session-memory only, and discard any previously persisted identity.
+  await module.setPersistence(auth,module.inMemoryPersistence);
+  if(auth.currentUser)await module.signOut(auth);
   return auth;
  })().catch(error=>{pending=null;throw error;});
  return pending;
