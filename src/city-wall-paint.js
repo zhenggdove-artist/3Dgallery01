@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {CITY_LOTS,cityFacadeFloor,cityRoofHeight} from './shared/city-layout.js';
 
 const WALLS=['front','back','left','right'];
-const SIZE=512;
+const SIZE=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches?256:512;
 function panelPoint(lot,wall,floor,u,y){
  const g=cityFacadeFloor(lot,floor),delta=.033;
  let x,z;
