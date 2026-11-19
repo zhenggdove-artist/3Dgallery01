@@ -14,6 +14,7 @@ import {CollectorView} from './collector-view.js';
 import {ElementalStatusVisuals} from './elemental-status-visuals.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {attackDirection,cameraAimDirection} from './aiming.js';
+import {lateralBeamInput,targetOnBeam} from './native-beam-curve.js';
 import {isChannelStaff,isStaffTap,channelInterval,chargeProgress,STAFF_TAP_MAX_MS,CAST_MOVE_FACTOR} from './shared/weapon-abilities.js';
 import {uploadArtwork} from './artwork-upload.js';
 import {VitalModels} from './vital-models.js';
@@ -622,6 +623,29 @@ function update(dt,time){
     localRoot.userData.staffAimDirection=castingItem&&isChannelStaff(castingItem)&&controller
      ?attackDirection(controller,camera,arena,roots,castingItem,1,muzzle)
      :cameraAimDirection(camera).toArray();
+    const curved=!!(castingItem&&['lightning','beam'].includes(castingItem.family)&&
+     isChannelStaff(castingItem)&&controller&&muzzle);
+    if(curved){
+     const forward=new THREE.Vector3(...localRoot.userData.staffAimDirection).normalize();
+     // Read the SAME movement vector used by PlayerController's keyboard or
+     // touch joystick, projected perpendicular to the live camera ray.
+     // Leftward input produces a negative bend, rightward a positive bend.
+     localRoot.userData.staffStrafe=lateralBeamInput(
+      controller.direction,forward,controller.speed>.02&&controller.enabled);
+     const targets=[];
+     const monsters=[world?.monster,...(world?.monsters||[])];
+     for(const enemy of monsters)if(enemy?.active&&Array.isArray(enemy.position))
+      targets.push(new THREE.Vector3(...enemy.position).add(new THREE.Vector3(0,1.1,0)));
+     for(const [key,root] of roots)if(root!==localRoot&&root.visible&&
+      players.some(p=>p.key===key&&p.role==='fighter'))
+      targets.push(root.position.clone().add(new THREE.Vector3(0,1.05,0)));
+     const end=targetOnBeam(muzzle,forward,
+      Math.max(2,Math.min(18,Number(castingItem.range)||18)),targets,1.6);
+     localRoot.userData.staffTargetPoint=end?.toArray()||null;
+    }else{
+     localRoot.userData.staffStrafe=0;
+     localRoot.userData.staffTargetPoint=null;
+    }
   }
   arena.update(dt,time,camera,roots);
   for(const mob of [world?.monster,...(world?.monsters||[])])for(const skill of mob?.skills||[]){
