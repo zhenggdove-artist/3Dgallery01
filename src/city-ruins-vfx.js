@@ -274,10 +274,10 @@ export function installAttachedFlash(mesh,texture){
  const material=mesh.material;
  material.onBeforeCompile=shader=>{
   shader.uniforms.uCityDamage={value:texture};
-  shader.vertexShader='attribute float cityLotId;\\nvarying float vCityFlashLot;\\n'+shader.vertexShader;
+  shader.vertexShader='attribute float cityLotId;\nvarying float vCityFlashLot;\n'+shader.vertexShader;
   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
-   '#include <begin_vertex>\\nvCityFlashLot=cityLotId;');
-  shader.fragmentShader='uniform sampler2D uCityDamage;\\nvarying float vCityFlashLot;\\n'+shader.fragmentShader;
+   '#include <begin_vertex>\nvCityFlashLot=cityLotId;');
+  shader.fragmentShader='uniform sampler2D uCityDamage;\nvarying float vCityFlashLot;\n'+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',
    `#include <color_fragment>
     float cityFlash=texture2D(uCityDamage,vec2((floor(vCityFlashLot+.5)+.5)/512.,.5)).g;
