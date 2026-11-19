@@ -969,8 +969,9 @@ function damageCityLot(world,lot,part,damage,now,position=null){
  if(previous?.hp===0)return null;
  const state=previous||{hp:CITY_MAX_HP,maxHp:CITY_MAX_HP,parts:{}};
  const previousStage=cityStage(state.hp,CITY_MAX_HP);
- const kind=Object.hasOwn(CITY_PART_HEALTH,part)?part:'masonry';
- const hp=state.parts[kind]??CITY_PART_HEALTH[kind];
+ const base=String(part||'masonry').split('-')[0];
+ const kind=Object.hasOwn(CITY_PART_HEALTH,base)?String(part):'masonry';
+ const hp=state.parts[kind]??CITY_PART_HEALTH[base in CITY_PART_HEALTH?base:'masonry'];
  const partDestroyed=hp>0&&hp<=damage;
  state.parts[kind]=Math.max(0,hp-damage);
  state.hp=Math.max(0,state.hp-damage);
