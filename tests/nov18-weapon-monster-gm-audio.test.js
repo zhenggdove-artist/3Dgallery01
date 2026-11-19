@@ -21,7 +21,7 @@ test('actual 00GameDevs original renderer supports both requested native effects
 test('prism visible beam diameter is 5x without extending its reach',()=>{
  const effects=new NumberedWeaponEffects(new THREE.Scene());
  const item=itemById('prism-3'),event={id:'prism',weapon:item.id,origin:[0,1,0],
-  direction:[0,0,1],range:24,qualityScale:1,qualityTier:3,channel:false,ultimate:false};
+  direction:[0,0,1],range:24,qualityScale:1,qualityTier:3,channel:true,ultimate:true};
  assert.ok(effects.play(event,item));
  const fx=effects.active[0].fx;
  assert.equal(fx.group.scale.y,5);assert.equal(fx.group.scale.z,5);
