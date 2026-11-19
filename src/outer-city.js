@@ -281,6 +281,7 @@ export class OuterCity{
    this.renderedTiers=new Map();this.poseCache=new Map();this.collapseAnimations=new Map();this.shakes=new Map();this.seenCityEvents=new Set();
   this.plumeResources=createPlumeResources();this.plumePool=[];this.partsHidden=new Set();
   this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
+  this.pendingEjections=[];
   this.cube=new THREE.BoxGeometry(1,1,1);
   // Build detailed chipped plaster, framed glass, reinforcement and brick
   // templates at scene load rather than extruding dozens of shapes PER HIT.
@@ -495,6 +496,17 @@ export class OuterCity{
   else this.shakes.set(lot.index,{age:0,power:.19});
  }
  eject(lot,part,point,detached=false){
+  // All bursts remain visible, but dozens of overlapping area-of-effect
+  // hits cannot synchronously extrude dozens of architectural assemblies.
+  this.pendingEjections.push({lot,part,point:point?.slice?.()||null,detached});
+ }
+ processEjections(){
+  const job=this.pendingEjections.shift();
+  if(!job)return false;
+  this.spawnEjection(job.lot,job.part,job.point,job.detached);
+  return true;
+ }
+ spawnEjection(lot,part,point,detached=false){
   const r=random(lot.index*1259+Math.floor(performance.now())),root=new THREE.Group(),pieces=[];
   root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
   root.name='Real mounted windows, water pipes, steel awnings and chipped facade';
@@ -636,6 +648,7 @@ export class OuterCity{
   for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
   for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
   this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
+  this.pendingEjections=[];
   for(const effect of this.debris)this.removeDebris(effect);this.debris=[];
   for(const effect of this.plumes)this.recyclePlume(effect);this.plumes=[];
   // Hit tints are stored in the shared damage texture and have no overlay meshes.
@@ -715,9 +728,9 @@ export class OuterCity{
    }
    if(effect.age>3.5){this.removeDebris(effect);this.debris.splice(i,1);}
   }
-  // At most one expensive sculptural piece is extruded per frame; each
-  // building still gets all original pieces and the same falling animation.
-  this.stepChunkPreparation();
+  // One costly VFX geometry job per frame, including simultaneous AOE hits.
+  // Structural tiers, collision, hit tint and smoke still react immediately.
+  if(!this.processEjections())this.stepChunkPreparation();
   for(const effect of this.chunks.values()){
    effect.age+=dt;
    for(const part of effect.pieces){
@@ -738,6 +751,7 @@ export class OuterCity{
   for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
   for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
   this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
+  this.pendingEjections=[];
   for(const effect of this.debris)this.removeDebris(effect);
   for(const effect of [...this.plumes,...this.plumePool])disposePlume(effect);
   for(const templates of this.scrapPrefabs.values())for(const template of templates)
