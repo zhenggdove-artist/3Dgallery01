@@ -52,7 +52,7 @@ test('Y2K support shows guarded ECPay entitlement and does not invent paid succe
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
  assert.match(ui,/data-wing-checkout/);
  assert.match(ui,/drawRatePct/);
- assert.match(html,/20261119-native-beam-visible-r10/);
+ assert.match(html,/20261119-lowered-staff-far-reticle-r11/);
  const section=ui.slice(ui.indexOf('  renderWingShop(profile){'),ui.indexOf('  hydrateWingGalleryImages(){'));
  assert.match(section,/PAYMENT UNAVAILABLE/);
  assert.match(section,/checkoutEnabled/,'backend status determines whether charging is enabled');

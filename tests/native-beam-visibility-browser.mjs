@@ -67,6 +67,11 @@ try{
  // hold A through charge and fire by server-shaped channel responses.
  await page.evaluate(()=>templeTest.ui.emit('join',{name:'BeamDebug',color:'#ffaabb',backendUrl:window.TEMPLE_CONFIG.backendUrl}));
  await page.waitForFunction(()=>!document.querySelector('#hud')?.hidden&&templeTest.controller()?.enabled,null,{timeout:22000});
+ const reticleOffset=await page.evaluate(()=>{
+  const r=document.getElementById('crosshair').getBoundingClientRect();
+  return innerHeight/2-(r.top+r.height/2);
+ });
+ if(Math.abs(reticleOffset-30)>1)throw Error('Visible CSS reticle not raised by 30px: '+reticleOffset);
  await page.evaluate(()=>{
   const t=templeTest;
   t.network.close(); // prevent remote world updates from overwriting test equipment
@@ -112,7 +117,65 @@ try{
     camera:camera.position.toArray(),camDirection:camera.getWorldDirection(camera.position.clone()).toArray(),
     hudVisible:!t.ui.hud.hidden,root:t.controller().root.position.toArray()};
   });
-  integrated.push({setup,snapshot});
+  // Verify REAL GAME SCENE pixels from the live camera, not merely the
+  // vendor's isolated module. Detect occlusion/clipping with full environment.
+  const gamePixels=await page.evaluate(async id=>{
+   const THREE=await import('three');
+   const t=templeTest,renderer=t.renderer,scene=t.arena.scene,camera=t.camera;
+   const fx=t.arena.presentation.vfx.numberedEffects.active.find(e=>e.item?.id===id&&e.channel);
+   if(!fx)return {error:'No active channel VFX'};
+   const previous=renderer.getRenderTarget(),previousVisible=fx.fx.group.visible;
+   const rt=new THREE.WebGLRenderTarget(440,300,{depthBuffer:true});
+   const baseline=new Uint8Array(440*300*4),rendered=new Uint8Array(440*300*4);
+   const read=(arr,visible)=>{
+    fx.fx.group.visible=visible;
+    renderer.setRenderTarget(rt);renderer.render(scene,camera);
+    renderer.readRenderTargetPixels(rt,0,0,440,300,arr);
+   };
+   try{
+    read(baseline,false);read(rendered,true);
+    let delta=0,bright=0,total=0;
+    for(let i=0;i<baseline.length;i+=4){
+     const diff=Math.max(Math.abs(baseline[i]-rendered[i]),Math.abs(baseline[i+1]-rendered[i+1]),Math.abs(baseline[i+2]-rendered[i+2]));
+     if(diff>20)delta++;
+     if(diff>70)bright++;
+     total+=diff;
+    }
+    return {delta,bright,avg:total/(440*300),glError:renderer.getContext().getError(),
+     cameraDistance:camera.position.distanceTo(t.controller().root.position)};
+   }finally{fx.fx.group.visible=previousVisible;renderer.setRenderTarget(previous);rt.dispose();}
+  },name);
+  // Also tilt the actual game camera sharply upward (about 49 degrees),
+  // without relying on a unit vector assertion or an isolated black scene.
+  const steepPixels=await page.evaluate(async id=>{
+   const THREE=await import('three');
+   const {raisedBeamDirection}=await import('/src/aiming.js');
+   const t=templeTest,scene=t.arena.scene,renderer=t.renderer,camera=t.camera;
+   const controller=t.controller(),native=t.arena.presentation.vfx.numberedEffects;
+   const entry=native.active.find(e=>e.item?.id===id&&e.channel);
+   const oldPitch=controller.pitch,oldDirection=entry?.visualDirection.clone();
+   const originalTarget=renderer.getRenderTarget(),rt=new THREE.WebGLRenderTarget(440,300);
+   const absent=new Uint8Array(440*300*4),present=new Uint8Array(440*300*4);
+   try{
+    controller.pitch=-.85;controller.updateCamera(1);
+    const origin=native.muzzleAt(entry);
+    entry.visualDirection.copy(raisedBeamDirection(camera,origin));
+    native.align(entry);
+    const render=(array,visible)=>{
+     entry.fx.group.visible=visible;renderer.setRenderTarget(rt);
+     renderer.render(scene,camera);renderer.readRenderTargetPixels(rt,0,0,440,300,array);
+    };
+    render(absent,false);render(present,true);
+    let bright=0;
+    for(let i=0;i<absent.length;i+=4)
+     if(Math.max(Math.abs(present[i]-absent[i]),Math.abs(present[i+1]-absent[i+1]),Math.abs(present[i+2]-absent[i+2]))>70)bright++;
+    return {bright,elevation:entry.visualDirection.y,cameraPitch:controller.pitch};
+   }finally{
+    if(entry){entry.fx.group.visible=true;entry.visualDirection.copy(oldDirection);native.align(entry);}
+    controller.pitch=oldPitch;controller.updateCamera(1);renderer.setRenderTarget(originalTarget);rt.dispose();
+   }
+  },name);
+  integrated.push({setup,snapshot,gamePixels,steepPixels});
   await page.screenshot({path:'output/beam-visibility/'+name+'-held.png'});
   await page.evaluate(()=>{templeTest.ui.emit('attack-release');window.beamActions=[];window.beamChannelEvents=[];});
   await page.waitForTimeout(300);
@@ -123,6 +186,14 @@ try{
   const native=snapshot.active.find(e=>e.weapon===setup.item);
   if(native?.phase!=='active'||!native.visible)
    throw Error(setup.item+' native channel does not appear when held: '+JSON.stringify(snapshot));
+  const pixels=integrated.find(x=>x.setup.item===setup.item)?.gamePixels;
+  if(!pixels||pixels.bright<50)
+   throw Error(setup.item+' native effect is hidden by world scene/camera: '+JSON.stringify(pixels));
+  if(pixels.cameraDistance<8)
+   throw Error(setup.item+' camera not pulled sufficiently away from the avatar: '+JSON.stringify(pixels));
+  const steep=integrated.find(x=>x.setup.item===setup.item)?.steepPixels;
+  if(!steep||steep.bright<50||steep.elevation<.6)
+   throw Error(setup.item+' disappears or points down on steep upward camera angle: '+JSON.stringify(steep));
  }
  await page.screenshot({path:'output/beam-visibility/scene-diagnostic.png'});
 }finally{await browser.close();}

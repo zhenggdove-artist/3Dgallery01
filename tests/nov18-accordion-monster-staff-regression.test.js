@@ -121,3 +121,18 @@ test('staff raise is a 100ms interpolation and the grip never leaves the real ri
   assert.equal(restore.length,4,'all two-hand arm joints are restored before mixer update');
  }
 });
+
+test('lightning and prism grips sit lower than ordinary staffs but remain bone-attached',()=>{
+ const heights={};
+ for(const family of ['fire','lightning','beam']){
+  const {root,bones,blade}=makeStaffRig(),restore=[];
+  blade.userData.family=family;
+  poseOverheadStaff(root,blade,bones,restore,1);
+  const palm=bones.get('RightHand').getWorldPosition(new THREE.Vector3());
+  const tip=blade.getWorldPosition(new THREE.Vector3());
+  assert.ok(palm.distanceTo(tip)<.00001,'the lowered '+family+' staff cannot detach from its hand');
+  heights[family]=tip.y;
+ }
+ assert.ok(heights.lightning<heights.fire-.10,'lightning wand must physically lower on the avatar');
+ assert.ok(heights.beam<heights.fire-.10,'prism wand must physically lower on the avatar');
+});

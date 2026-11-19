@@ -2,15 +2,37 @@ import * as THREE from 'three';
 import {meleeFamilies} from './reletter/melee-motion.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
 import {ENEMY_RADIUS,ENEMY_HEIGHT} from './shared/island-combat.js';
-export const AIM_RAISE_PX=5;
+export const AIM_RAISE_PX=30;
+export const BEAM_RETICLE_DISTANCE=90; // World-space target is beyond the avatar, not at the wand tip.
 // NDC Y is positive upward. Both the reticle and ALL weapon rays share this
-// five-CSS-pixel offset, including iPhone-sized viewports and sniper optics.
+// thirty-CSS-pixel offset, including iPhone-sized viewports and sniper optics.
 export const crosshairNdc=(height=globalThis.innerHeight||720)=>new THREE.Vector2(0,2*AIM_RAISE_PX/Math.max(1,height));
 const ray=new THREE.Raycaster(),box=new THREE.Box3(),sphere=new THREE.Sphere(),hit=new THREE.Vector3(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 export function cameraAimDirection(camera){
  camera.updateMatrixWorld();
  ray.setFromCamera(crosshairNdc(),camera);
  return ray.ray.direction.clone();
+}
+// A third-person camera is BEHIND and typically BELOW the held wand.
+// Sending a parallel ray out of the wand retains that offset forever. The
+// authentic #08/#29 native beam therefore misses the screen reticle even
+// though its own WebGL mesh is rendering. Converge the wand emitter on a
+// DISTANT camera reticle point: clearly forward of the actor, with positive
+// elevation whenever the player looks upward. Never intersect near terrain.
+export function raisedBeamDirection(camera,muzzle=null){
+ camera.updateMatrixWorld();
+ ray.setFromCamera(crosshairNdc(),camera);
+ const forward=ray.ray.direction.clone();
+ if(!muzzle?.isVector3)return forward;
+ const target=ray.ray.at(BEAM_RETICLE_DISTANCE,new THREE.Vector3());
+ const aimed=target.sub(muzzle).normalize();
+ // Looking upward must NEVER produce an underground ray merely because the
+ // third-person camera is offset below the emitter. Retain continuous yaw.
+ if(forward.y>0&&aimed.y<Math.min(.01,forward.y)) {
+  aimed.y=Math.min(.01,forward.y);
+  aimed.normalize();
+ }
+ return aimed;
 }
 // RELETTER cameraElevationAim/rangedAim: camera parallax supplies elevation,
 // character heading supplies yaw; melee stays level. Only host targets differ.
@@ -26,7 +48,7 @@ export function attackDirection(controller,camera,arena,roots,item,charge,muzzle
  // Both the server attack and the live native emitter consume this same
  // vector, so their damage volumes and graphics cannot disagree.
  if(isChannelStaff(item)&&(item.family==='lightning'||item.family==='beam'))
-  return cameraAimDirection(camera).toArray();
+  return raisedBeamDirection(camera,muzzle).toArray();
  const origin=muzzle?.isVector3?muzzle.clone():controller.root.position.clone().add(new THREE.Vector3(0,1,0));camera.updateMatrixWorld();ray.setFromCamera(crosshairNdc(),camera);ray.far=250;
  // Use actual screen-centre ray intersections, then project FROM the live staff tip.
  // A 150m guess made nearby targets and raised staffs fire below the crosshair.
