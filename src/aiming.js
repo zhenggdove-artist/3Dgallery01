@@ -5,7 +5,7 @@ import {ENEMY_RADIUS,ENEMY_HEIGHT} from './shared/island-combat.js';
 export const AIM_RAISE_PX=5;
 // NDC Y is positive upward. Both the reticle and ALL weapon rays share this
 // five-CSS-pixel offset, including iPhone-sized viewports and sniper optics.
-export const crosshairNdc=(height=globalThis.innerHeight||1)=>new THREE.Vector2(0,2*AIM_RAISE_PX/Math.max(1,height));
+export const crosshairNdc=(height=globalThis.innerHeight||720)=>new THREE.Vector2(0,2*AIM_RAISE_PX/Math.max(1,height));
 const ray=new THREE.Raycaster(),box=new THREE.Box3(),sphere=new THREE.Sphere(),hit=new THREE.Vector3(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 export function cameraAimDirection(camera){
  camera.updateMatrixWorld();
