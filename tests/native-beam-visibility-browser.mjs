@@ -112,7 +112,35 @@ try{
     camera:camera.position.toArray(),camDirection:camera.getWorldDirection(camera.position.clone()).toArray(),
     hudVisible:!t.ui.hud.hidden,root:t.controller().root.position.toArray()};
   });
-  integrated.push({setup,snapshot});
+  // Verify REAL GAME SCENE pixels from the live camera, not merely the
+  // vendor's isolated module. Detect occlusion/clipping with full environment.
+  const gamePixels=await page.evaluate(async id=>{
+   const THREE=await import('three');
+   const t=templeTest,renderer=t.renderer,scene=t.arena.scene,camera=t.camera;
+   const fx=t.arena.presentation.vfx.numberedEffects.active.find(e=>e.item?.id===id&&e.channel);
+   if(!fx)return {error:'No active channel VFX'};
+   const previous=renderer.getRenderTarget(),previousVisible=fx.fx.group.visible;
+   const rt=new THREE.WebGLRenderTarget(440,300,{depthBuffer:true});
+   const baseline=new Uint8Array(440*300*4),rendered=new Uint8Array(440*300*4);
+   const read=(arr,visible)=>{
+    fx.fx.group.visible=visible;
+    renderer.setRenderTarget(rt);renderer.render(scene,camera);
+    renderer.readRenderTargetPixels(rt,0,0,440,300,arr);
+   };
+   try{
+    read(baseline,false);read(rendered,true);
+    let delta=0,bright=0,total=0;
+    for(let i=0;i<baseline.length;i+=4){
+     const diff=Math.max(Math.abs(baseline[i]-rendered[i]),Math.abs(baseline[i+1]-rendered[i+1]),Math.abs(baseline[i+2]-rendered[i+2]));
+     if(diff>20)delta++;
+     if(diff>70)bright++;
+     total+=diff;
+    }
+    return {delta,bright,avg:total/(440*300),glError:renderer.getContext().getError(),
+     cameraDistance:camera.position.distanceTo(t.controller().root.position)};
+   }finally{fx.fx.group.visible=previousVisible;renderer.setRenderTarget(previous);rt.dispose();}
+  },name);
+  integrated.push({setup,snapshot,gamePixels});
   await page.screenshot({path:'output/beam-visibility/'+name+'-held.png'});
   await page.evaluate(()=>{templeTest.ui.emit('attack-release');window.beamActions=[];window.beamChannelEvents=[];});
   await page.waitForTimeout(300);
@@ -123,6 +151,11 @@ try{
   const native=snapshot.active.find(e=>e.weapon===setup.item);
   if(native?.phase!=='active'||!native.visible)
    throw Error(setup.item+' native channel does not appear when held: '+JSON.stringify(snapshot));
+  const pixels=integrated.find(x=>x.setup.item===setup.item)?.gamePixels;
+  if(!pixels||pixels.bright<50)
+   throw Error(setup.item+' native effect is hidden by world scene/camera: '+JSON.stringify(pixels));
+  if(pixels.cameraDistance<8)
+   throw Error(setup.item+' camera not pulled sufficiently away from the avatar: '+JSON.stringify(pixels));
  }
  await page.screenshot({path:'output/beam-visibility/scene-diagnostic.png'});
 }finally{await browser.close();}
