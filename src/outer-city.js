@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
- cityLots,cityStage,cityBlocked,CITY_MAX_HP} from './shared/city-layout.js';
+ cityLots,cityStage,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume} from './city-ruins-vfx.js';
 
@@ -300,6 +300,8 @@ export class OuterCity{
   this.hidden.add(index);
   const firstFloor=lot.height/lot.floors;
   const survivorHeight=firstFloor*(lot.floors===1?.32:.76);
+  const ruinTop=cityRoofHeight(lot,3);
+  const roofRanges=this.walls.userData.partRanges?.get(index+':sheets-roof')||[];
   for(const mesh of [this.walls,this.signs,this.graffiti]){
    const range=mesh.userData.lotRanges?.get(index);
    const originals=mesh.userData.originalPositions;
@@ -315,7 +317,13 @@ export class OuterCity{
     const compression=.08+.075*(.5+.5*noise);
     const factor=Math.min(1,collapse/Math.max(1,lot.height-survivorHeight));
     positions.array[j]=ox+Math.sin(oy*1.9+index*.9)*factor*.35;
-    positions.array[j+1]=survivorHeight+collapse*compression;
+    // The original corrugated roof becomes the walkable top of the ruin.
+    // All its top vertices lie exactly at the shared physics roofHeight;
+    // the rest of the original painted structure fractures underneath it.
+    const isRoof=mesh===this.walls&&roofRanges.some(([a,b])=>i>=a&&i<b);
+    positions.array[j+1]=isRoof?
+      ruinTop+(oy-(lot.height+.13))*.16:
+      survivorHeight+collapse*compression;
     positions.array[j+2]=oz+Math.cos(oy*1.5+index*.7)*factor*.35;
    }
    positions.needsUpdate=true;
