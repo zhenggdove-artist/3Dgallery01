@@ -392,7 +392,7 @@ export class OuterCity{
   const plume=emitFireSmoke(this.root,event.position||[lot.x,1.5,lot.z],
    this.plumeResources,this.mobile,lot.index+Math.floor(performance.now()));
   this.plumes.push(plume);if(this.plumes.length>22)disposePlume(this.plumes.shift());
-  if(event.partDestroyed)this.hidePart(lot.index,event.part);
+  if(event.partDestroyed&&event.part!=='masonry')this.hidePart(lot.index,event.part);
   // Retain the battered original wall. Only after total collapse is it
   // replaced by jagged, windowed, rebar-filled fragments instead of cubes.
   if(stage===3){this.hideLot(lot.index);this.createChunks(lot,stage,true);}
@@ -406,7 +406,7 @@ export class OuterCity{
    const record=damage[lot.id];if(!record)continue;
    const stage=cityStage(record.hp,record.maxHp||CITY_MAX_HP);
    this.damage[lot.id]={hp:record.hp,stage};this.facade.set(lot.index,record.hp,record.maxHp||CITY_MAX_HP);
-   for(const [part,hp] of Object.entries(record.parts||{}))if(hp<=0)this.hidePart(lot.index,part);
+   for(const [part,hp] of Object.entries(record.parts||{}))if(hp<=0&&part!=='masonry')this.hidePart(lot.index,part);
    if(stage===3){this.hideLot(lot.index);this.createChunks(lot,stage,false);}
    else if(stage===2)this.createChunks(lot,stage,false);
   }
