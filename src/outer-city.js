@@ -1,16 +1,14 @@
 import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
- cityLots,cityStage,cityDamageTier,cityCollapsePosition,cityFractureProfile,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
+ cityLots,cityStage,cityDamageTier,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
-import {buildDetachableFixture,buildBrokenStructure,buildIrregularFractureChunk,installFacadeCracks,installAttachedFlash,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume,
- createPersistentBuildingFire,setPersistentBuildingFire,updatePersistentBuildingFire,disposePersistentBuildingFire} from './city-ruins-vfx.js';
+import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume} from './city-ruins-vfx.js';
 import {CityWallPaint} from './city-wall-paint.js';
 
 // All 432 lots remain present on mobile. Simplification changes only geometry
 // detail, never collision or position; a single batched mesh draws the district.
 function random(seed){let n=seed>>>0;return ()=>((n=(Math.imul(n,1664525)+1013904223)>>>0)/4294967296);}
-const rgbCache=new Map();
-const rgb=c=>{if(!rgbCache.has(c)){const color=new THREE.Color(c);rgbCache.set(c,[color.r,color.g,color.b]);}return rgbCache.get(c);};
+const rgb=c=>{const color=new THREE.Color(c);return [color.r,color.g,color.b];};
 const scraps=['#706b61','#a78557','#744c43','#9b9889','#565d5b'];
 function localToWorld(lot,x,z){
  const c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
@@ -144,52 +142,6 @@ function batchGeometry(lots,mobile){
   if(lot.decay>.45){
    box(lot,w*.29,h-.25,frontage+.34,w*.34,.3,.66,'#51483c');
    if(lot.decay>.72)box(lot,-w*.25,h-.5,frontage+.38,w*.3,.37,.65,'#342f29');
-  }
-  // A different angular section of masonry separates at each 10% HP
-  // threshold. The dark, polygonal wound stays on the building when its
-  // raised 3D cladding is knocked free. All 4,320 pieces remain part of the
-  // original single-batched city material (no extra draw calls).
-  const makeFracturePoint=(p,u,v,depth)=>{
-   let local;
-   if(p.wall==='front')local=[p.localX+u,p.localY+v,lot.depth*.5+depth];
-   else if(p.wall==='back')local=[-p.localX-u,p.localY+v,-lot.depth*.5-depth];
-   else if(p.wall==='right')local=[lot.width*.5+depth,p.localY+v,p.localZ-u];
-   else local=[-lot.width*.5-depth,p.localY+v,-p.localZ+u];
-   const world=localToWorld(lot,local[0],local[2]);
-   return {world:[world[0],local[1],world[1]],local};
-  };
-  for(let step=1;step<=10;step++){
-   const p=cityFractureProfile(lot,step),rand=random(lot.index*983+step*509);
-   const count=7,outline=[];
-   for(let k=0;k<count;k++){
-    const angle=k*2*Math.PI/count,dist=.71+rand()*.41;
-    outline.push([Math.cos(angle)*p.width*.5*dist,Math.sin(angle)*p.height*.5*dist]);
-   }
-   const normalLocal=p.wall==='front'?[0,0,1]:p.wall==='back'?[0,0,-1]:
-     p.wall==='right'?[1,0,0]:[-1,0,0];
-   const cs=Math.cos(lot.yaw),sn=Math.sin(lot.yaw);
-   const n=[normalLocal[0]*cs+normalLocal[2]*sn,0,-normalLocal[0]*sn+normalLocal[2]*cs];
-   const center=makeFracturePoint(p,0,0,.25);
-   const centerUnder=makeFracturePoint(p,0,0,.027);
-   category='core';
-   for(let k=0;k<count;k++){
-    const v=outline[k],next=outline[(k+1)%count];
-    const a=makeFracturePoint(p,v[0],v[1],.029),b=makeFracturePoint(p,next[0],next[1],.029);
-    face([centerUnder.world,a.world,b.world,b.world],n,'#252522',lot,
-      [centerUnder.local,a.local,b.local,b.local]);
-   }
-   category='fracture-'+step;
-   for(let k=0;k<count;k++){
-    const v=outline[k],next=outline[(k+1)%count];
-    const a=makeFracturePoint(p,v[0],v[1],.24+rand()*.08);
-    const b=makeFracturePoint(p,next[0],next[1],.24+rand()*.08);
-    const innerA=makeFracturePoint(p,v[0]*.91,v[1]*.91,.04);
-    const innerB=makeFracturePoint(p,next[0]*.91,next[1]*.91,.04);
-    face([center.world,a.world,b.world,b.world],n,k%3===0?lot.trim:lot.detail,lot,
-      [center.local,a.local,b.local,b.local]);
-    face([a.world,innerA.world,innerB.world,b.world],n,lot.trim,lot,
-      [a.local,innerA.local,innerB.local,b.local]);
-   }
   }
   lotRanges.set(lot.index,[begin,position.length/3]);
  }
@@ -328,7 +280,6 @@ export class OuterCity{
   this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();this.plumes=[];
    this.renderedTiers=new Map();this.poseCache=new Map();this.collapseAnimations=new Map();this.shakes=new Map();this.seenCityEvents=new Set();
   this.plumeResources=createPlumeResources();this.plumePool=[];this.partsHidden=new Set();
-  this.livingFires=new Map();this.extinguishedLots=new Set();this.fireTime=0;
   this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
   this.pendingEjections=[];
   this.cube=new THREE.BoxGeometry(1,1,1);
@@ -545,20 +496,17 @@ export class OuterCity{
   else this.shakes.set(lot.index,{age:0,power:.19});
  }
  eject(lot,part,point,detached=false){
-  // Preserve the existing public four-argument interface. Threshold
-  // animation optionally supplies the 5th argument for a masonry fracture.
-  const fractureTier=arguments.length>4?arguments[4]:0;
   // All bursts remain visible, but dozens of overlapping area-of-effect
   // hits cannot synchronously extrude dozens of architectural assemblies.
-  this.pendingEjections.push({lot,part,point:point?.slice?.()||null,detached,fractureTier});
+  this.pendingEjections.push({lot,part,point:point?.slice?.()||null,detached});
  }
  processEjections(){
   const job=this.pendingEjections.shift();
   if(!job)return false;
-  this.spawnEjection(job.lot,job.part,job.point,job.detached,job.fractureTier);
+  this.spawnEjection(job.lot,job.part,job.point,job.detached);
   return true;
  }
- spawnEjection(lot,part,point,detached=false,fractureTier=0){
+ spawnEjection(lot,part,point,detached=false){
   const r=random(lot.index*1259+Math.floor(performance.now())),root=new THREE.Group(),pieces=[];
   root.position.set(lot.x,0,lot.z);root.rotation.y=-lot.yaw;
   root.name='Real mounted windows, water pipes, steel awnings and chipped facade';
@@ -570,7 +518,6 @@ export class OuterCity{
    // First unfasten the architectural fixture from its actual mounted position.
    add(buildDetachableFixture(lot,part,lot.index+Math.floor(performance.now())),1.15);
   }
-  if(fractureTier>0)add(buildIrregularFractureChunk(lot,fractureTier),1.4);
   const local=point?this.toLocal(lot,point):[0,Math.min(2,lot.height*.5),lot.depth*.5];
   const prototypes=this.scrapPrefabs.get(lot.material);
   for(let i=0;i<(this.mobile?2:4);i++){
@@ -609,23 +556,6 @@ export class OuterCity{
   this.plumes.push(plume);
   if(this.plumes.length>limit)this.recyclePlume(this.plumes.shift());
  }
- // A single persistent emitter per damaged house. It grows denser for
- // every reduction in HP, peaks at 10% HP, then fades once at 0 HP.
- updateLotFire(lot,hp,maxHp=CITY_MAX_HP){
-  if(hp>=maxHp){
-   this.extinguishedLots.delete(lot.index);
-   const old=this.livingFires.get(lot.index);
-   if(old){disposePersistentBuildingFire(old);this.livingFires.delete(lot.index);}
-   return;
-  }
-  if(hp<=0&&this.extinguishedLots.has(lot.index))return;
-  let fire=this.livingFires.get(lot.index);
-  if(!fire){
-   fire=createPersistentBuildingFire(this.root,lot,this.plumeResources,this.mobile);
-   this.livingFires.set(lot.index,fire);
-  }
-  setPersistentBuildingFire(fire,hp,maxHp);
- }
  // Each 10%-HP boundary causes an independent structural drop and debris burst.
  // Strong weapons can cross multiple boundaries in one hit; animate all rapidly.
  beginCollapse(lot,previousTier,nextTier,event=null){
@@ -646,8 +576,7 @@ export class OuterCity{
    'tiles',`windows-${Math.min(1,lot.floors-1)}-2`,'pillars-0','sheets-roof','stone'];
   const part=sequence[Math.min(9,tier-1)];
   const impact=event?.position||[lot.x,Math.min(lot.height*.65,5),lot.z+lot.depth*.5];
-  this.eject(lot,part,impact,true,tier);
-  this.hidePart(lot.index,'fracture-'+tier);
+  this.eject(lot,part,impact,true);
   if(part==='sign'){
    const range=this.signs.userData.lotRanges?.get(lot.index);
    if(range)this.hideRange(this.signs,...range);
@@ -666,7 +595,6 @@ export class OuterCity{
   const from=Number.isFinite(event.previousTier)?event.previousTier:cityDamageTier(oldHp,maxHp);
   const tier=cityDamageTier(event.hp,maxHp),stage=cityStage(event.hp,maxHp);
   this.damage[lot.id]={hp:event.hp,stage,tier};
-  this.updateLotFire(lot,event.hp,maxHp);
   this.facade.set(lot.index,event.hp,maxHp);
   this.flash(lot);
   // Non-threshold hits still throw fine chips, smoke and shake the building.
@@ -690,12 +618,10 @@ export class OuterCity{
    if(tier>knownTier&&!firstSnapshot)this.beginCollapse(lot,knownTier,tier,
     {position:[lot.x,Math.min(lot.height*.65,5),lot.z+lot.depth*.5]});
    this.damage[lot.id]={hp:record.hp,stage,tier};
-   this.updateLotFire(lot,record.hp,maxHp);
    this.facade.set(lot.index,record.hp,maxHp);
    for(const [part,hp] of Object.entries(record.parts||{}))
     if(hp<=0&&part!=='masonry')this.hidePart(lot.index,part);
    if(firstSnapshot){
-    for(let step=1;step<=tier;step++)this.hidePart(lot.index,'fracture-'+step);
     this.collapseLot(lot.index,tier);
     if(tier>=3){
      const range=this.signs.userData.lotRanges?.get(lot.index);
@@ -707,8 +633,6 @@ export class OuterCity{
  }
  resetBuildings(){
   this.damage={};this.lastDamage=null;this.hidden.clear();this.partsHidden.clear();this.facade.reset();
-  for(const fire of this.livingFires.values())disposePersistentBuildingFire(fire);
-  this.livingFires.clear();this.extinguishedLots.clear();
   this.renderedTiers.clear();this.poseCache.clear();this.collapseAnimations.clear();this.shakes.clear();this.seenCityEvents.clear();
   this.wallPaint?.resetBuildings();
   for(const mesh of [this.walls,this.signs,this.graffiti]){
@@ -789,13 +713,6 @@ export class OuterCity{
    }
    this.collapseLot(index,visibleTier,shakeX,shakeZ);
   }
-  this.fireTime=time;
-  for(const [index,fire] of this.livingFires){
-   if(updatePersistentBuildingFire(fire,dt,time)){
-    disposePersistentBuildingFire(fire);this.livingFires.delete(index);
-    this.extinguishedLots.add(index);
-   }
-  }
   for(let i=this.plumes.length-1;i>=0;i--)if(updateFireSmoke(this.plumes[i],dt)){
    this.recyclePlume(this.plumes[i]);this.plumes.splice(i,1);
   }
@@ -831,8 +748,6 @@ export class OuterCity{
   }
  }
  dispose(){
-  for(const fire of this.livingFires.values())disposePersistentBuildingFire(fire);
-  this.livingFires.clear();this.extinguishedLots.clear();
   for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
   for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
   this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
