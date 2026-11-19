@@ -67,6 +67,11 @@ try{
  // hold A through charge and fire by server-shaped channel responses.
  await page.evaluate(()=>templeTest.ui.emit('join',{name:'BeamDebug',color:'#ffaabb',backendUrl:window.TEMPLE_CONFIG.backendUrl}));
  await page.waitForFunction(()=>!document.querySelector('#hud')?.hidden&&templeTest.controller()?.enabled,null,{timeout:22000});
+ const reticleOffset=await page.evaluate(()=>{
+  const r=document.getElementById('crosshair').getBoundingClientRect();
+  return innerHeight/2-(r.top+r.height/2);
+ });
+ if(Math.abs(reticleOffset-30)>1)throw Error('Visible CSS reticle not raised by 30px: '+reticleOffset);
  await page.evaluate(()=>{
   const t=templeTest;
   t.network.close(); // prevent remote world updates from overwriting test equipment
