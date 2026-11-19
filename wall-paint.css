@@ -1,0 +1,47 @@
+/* In-world graffiti editing. Only the tool strip is interactive; the
+   transparent canvas remains the actual 3D drawing surface. */
+#hud #paint-button.paint-active{
+ outline:2px solid #b7f1c8;outline-offset:1px;
+ background:#e4ffed!important;color:#164b2a!important;
+}
+#paint-toolbar[hidden]{display:none!important}
+#hud #paint-toolbar{
+ position:fixed;z-index:120;top:max(72px,calc(env(safe-area-inset-top) + 57px));
+ left:50%;transform:translateX(-50%);
+ display:flex;align-items:center;justify-content:center;flex-wrap:wrap;
+ gap:7px;width:max-content;max-width:calc(100vw - 24px);
+ padding:9px 12px;border:2px solid #fafafa;border-right-color:#505050;
+ border-bottom-color:#505050;border-radius:0;background:#c0c0c0;
+ color:#111;box-shadow:2px 3px 0 #0007;
+ font:700 12px/1.2 Tahoma,Arial,sans-serif;pointer-events:auto;
+}
+#hud #paint-toolbar .paint-title{
+ padding:5px 8px;background:#000080;color:white;letter-spacing:.06em;
+}
+#hud #paint-toolbar button{
+ display:inline-flex;align-items:center;justify-content:center;min-width:65px;
+ min-height:34px;gap:4px;padding:4px 9px;border:2px solid;
+ border-color:#fff #555 #555 #fff;border-radius:0;
+ background:#c0c0c0;color:#111;font:700 12px Tahoma,Arial,sans-serif;
+ cursor:pointer;
+}
+#hud #paint-toolbar button.active,
+#hud #paint-toolbar button:active{
+ background:#e8e8e8;border-color:#555 #fff #fff #555;
+ box-shadow:inset 1px 1px #666;
+}
+#hud #paint-toolbar label{display:inline-flex;align-items:center;gap:5px}
+#hud #paint-toolbar input[type=color]{
+ width:36px;height:32px;min-height:32px;padding:2px;cursor:pointer;
+ border:2px solid;border-color:#555 #fff #fff #555;background:#c0c0c0;
+}
+#hud #paint-toolbar input[type=range]{width:94px;accent-color:#000080}
+body.wall-paint-active #game{cursor:crosshair!important;touch-action:none}
+body.wall-paint-active #crosshair{opacity:.4}
+@media(max-width:620px){
+ #hud #paint-toolbar{top:max(55px,calc(env(safe-area-inset-top) + 45px));
+  width:calc(100vw - 18px);max-width:420px;gap:5px;padding:6px;justify-content:center}
+ #hud #paint-toolbar button{min-height:32px;min-width:58px;padding:4px 6px}
+ #hud #paint-toolbar label{font-size:11px}
+ #hud #paint-toolbar input[type=range]{width:70px}
+}
