@@ -95,6 +95,7 @@ export class TempleArena{
    root.userData.video?.play().catch(()=>{});
   }
   showStructureHit(event){
+    if(event?.cityLotIndex!==undefined){this.outerCity?.applyDamageEvent(event);return;}
    if(!event?.structureId||!Array.isArray(event.position)||this.seenStructureHits.has(event.id))return;
    this.seenStructureHits.add(event.id);
    if(this.seenStructureHits.size>128)this.seenStructureHits.delete(this.seenStructureHits.values().next().value);
@@ -130,6 +131,7 @@ export class TempleArena{
    }
   }
   showStructureBreak(event){
+    if(event?.cityLotIndex!==undefined)return; // The city uses volumetric custom chunks.
     if(!event?.position||this.destroyedEffects.has(event.id))return;
     this.destroyedEffects.add(event.id);
     if(this.destroyedEffects.size>80)this.destroyedEffects.delete(this.destroyedEffects.values().next().value);
@@ -264,7 +266,7 @@ export class TempleArena{
   syncMonster(){this.islandEnemies.sync(this.world?.monster,this.world?.monsters||[]);this.monster=this.islandEnemies.current;}
   update(dt,time,camera,playerRoots=new Map()){
     this.presentation.beforeAnimation();this.adventure.beforeAnimation();for(const root of playerRoots.values())updateHitFlash(root,performance.now());
-    this.clock=time;this.scene.userData.moonlitSky?.update(camera,time);this.grass?.update(time,playerRoots);this.outerCity?.update(time);for(const mixer of this.mixers)mixer.update(dt);if(this.dust){this.dust.rotation.y=time*.004;const positions=this.dust.geometry.attributes.position.array;for(let i=1;i<positions.length;i+=3){positions[i]+=dt*.025;if(positions[i]>22)positions[i]=0;}this.dust.geometry.attributes.position.needsUpdate=true;}if(this.water)this.water.material.opacity=.72+Math.sin(time*1.4)*.05;
+    this.clock=time;this.scene.userData.moonlitSky?.update(camera,time);this.grass?.update(time,playerRoots);this.outerCity?.syncDamage(this.world?.cityDamage);this.outerCity?.update(time,dt);for(const mixer of this.mixers)mixer.update(dt);if(this.dust){this.dust.rotation.y=time*.004;const positions=this.dust.geometry.attributes.position.array;for(let i=1;i<positions.length;i+=3){positions[i]+=dt*.025;if(positions[i]>22)positions[i]=0;}this.dust.geometry.attributes.position.needsUpdate=true;}if(this.water)this.water.material.opacity=.72+Math.sin(time*1.4)*.05;
     if(this.coinMesh&&this.world){PLATFORMS.forEach((p,i)=>{const available=this.world.coins?.[p.id]?.available;tempPosition.fromArray(p.coinPosition);const fly=this.coinFlights?.get(p.id);if(fly)fly.age+=dt;const t=fly?fly.age/.8:1;if(fly&&t>=1)this.coinFlights.delete(p.id);tempPosition.y=fly?fly.y+Math.min(1,t)*5:tempPosition.y+Math.sin(time*1.8+i)*.4;tempQuaternion.setFromEuler(new THREE.Euler(0,time*(fly?6:2)+i,0));tempScale.setScalar(fly?1.6*Math.max(0,1-t):available?1.6:0);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);this.coinMesh.setMatrixAt(i,tempMatrix);});this.coinMesh.instanceMatrix.needsUpdate=true;}
     for(const mesh of this.heartDrops.values()){
       const seed=mesh.userData.seed;mesh.position.y=mesh.userData.baseY+.32*Math.sin(time*2.1+seed);
