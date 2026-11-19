@@ -47,7 +47,7 @@ test('numbered effects retain verified originals; prism alone switches to origin
   const file=await readFile(new URL('../vendor/00gamedevs/source/'+spec.asset+'.js',import.meta.url));
   assert.equal(createHash('sha256').update(file).digest('hex'),manifestEntry.sha256);
  }
- assert.equal(Object.keys(REQUESTED_VFX).length,19);
+ assert.equal(Object.keys(REQUESTED_VFX).length,17);
 });
 
 test('every numbered attack instantiates an actual source module, never a particle imitation',()=>{
@@ -157,24 +157,25 @@ test('custom exotic ultimates are not stolen by ordinary family mappings',()=>{
 });
 
 
-test('prism focuser uses original Charged Beam on tap, full charge, and held cast',()=>{
+test('prism focuser fires orb on tap and full charge; only held channel uses original Charged Beam',()=>{
  const item=itemById('prism-2');
- for(const event of [
-  {...evt('normal'),channel:false,ultimate:false},
-  {...evt('ultimate'),channel:false,ultimate:true},
-  {...evt('channel'),channel:true,ultimate:true}
- ]){
-  assert.equal(requestedEffect(item,event)?.asset,'charged-beam');
-  const scene=new THREE.Scene(),effects=new NumberedWeaponEffects(scene);
-  assert.equal(effects.play(event,item),true);
-  const active=effects.active[0];
-  assert.equal(active.spec.number,29);
-  // Source setEndpoints() puts its center at the real midway ray position.
-  assert.ok(active.fx.group.position.distanceTo(new THREE.Vector3(0,1,6))<1e-7);
-  assert.equal(active.fx.group.userData.vfxSource,'00GameDevs');
+ for(const event of [{...evt('normal'),channel:false,ultimate:false},
+   {...evt('ultimate'),channel:false,ultimate:true}]){
+  assert.equal(requestedEffect(item,event),null);
+  const effects=new NumberedWeaponEffects(new THREE.Scene());
+  assert.equal(effects.play(event,item),false);
   effects.dispose();
-  assert.equal(scene.children.length,0);
  }
+ const event={...evt('channel'),channel:true,ultimate:true};
+ assert.equal(requestedEffect(item,event)?.asset,'charged-beam');
+ const scene=new THREE.Scene(),effects=new NumberedWeaponEffects(scene);
+ assert.equal(effects.play(event,item),true);
+ const active=effects.active[0];
+ assert.equal(active.spec.number,29);
+ assert.ok(active.fx.group.position.distanceTo(new THREE.Vector3(0,1,6))<1e-7);
+ assert.equal(active.fx.group.userData.vfxSource,'00GameDevs');
+ effects.dispose();
+ assert.equal(scene.children.length,0);
 });
 
 test('authored #73 demonstration sphere and cube are hidden; the fire nozzle is weapon-anchored',()=>{

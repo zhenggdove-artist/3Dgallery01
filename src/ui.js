@@ -14,6 +14,7 @@ import {SWALLOWTAIL_WINGS} from './reletter/wing-catalog.js';
 import {wingIcon} from './reletter/garden-art.js';
 import {wingRarity,WING_QUALITY_NAMES,WING_QUALITY_COLORS} from './shared/wing-shop.js';
 import {mountWingPainter} from './gm-wing-painter.js';
+import {bindChatLayout} from './chat-layout.js';
 
 const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
@@ -288,27 +289,22 @@ export class TempleUI extends EventTarget{
   renderWingShop(profile){
    const credits=Math.max(0,Number(profile.wingDesignCredits)||0);
    const status=this.wingPaymentStatus;
-   const mode=status?.checkoutMode||'disabled';
    const ready=status?.checkoutEnabled===true;
    this.content.innerHTML=`<section class="wing-shop-panel wing-support-app wing-design-support">
-    <div class="y2k-shell-header"><div class="y2k-shell-brand"><span class="y2k-shell-diamond">◇</span><div><strong>GGTEMPLE <em>98</em></strong><small>YOUR ORIGINAL WING</small></div></div><div class="y2k-shell-lights"><span>ONLINE ●</span></div></div>
-    <div class="y2k-shell-menu"><span>File</span><span>Support</span><span>Atelier</span><b>✦ CREATE YOUR OWN WINGS ✦</b></div>
+    <div class="y2k-shell-header"><div class="y2k-shell-brand"><span class="y2k-shell-diamond">◇</span><div><strong>GGTEMPLE <em>98</em></strong><small>SUPPORT</small></div></div><div class="y2k-shell-lights"><span>ONLINE ●</span></div></div>
     <div class="wing-support-controls">
-     <header class="wing-shop-hero"><small>GGTEMPLE SUPPORT · CREATIVE COMMISSION</small>
-      <h3>DRAW YOUR OWN <span>WINGS</span></h3>
-      <p class="y2k-hero-kicker">NT$30 · ONE ORIGINAL DESIGN</p>
-      <p>每完成一筆綠界付款，即可獲得一次自製翅膀繪畫權限。繪畫完成按儲存，翅膀會直接進入個人 BAG 並自動裝備，不會上架到商店，也不會進入抽獎池。</p>
-      <div class="y2k-stat-strip"><span>AVAILABLE DESIGN CREDITS <b>${credits}</b></span><span>WING CATALOG <b>14</b></span><span>QUALITY <b>BLUE / GOLD / PURPLE</b></span></div>
+     <header class="wing-shop-hero">
+      <small>GGTEMPLE · SUPPORT</small>
+      <h3>THANK YOU FOR YOUR SUPPORT</h3>
+      <p>Support GGTEMPLE with NT$30 to unlock one wing canvas and create your own pair of wings.</p>
      </header>
      <section class="wing-payment-preview">
-      <h3>SUPPORT / ECPAY CHECKOUT</h3>
-      <p>台幣 NT$30 / 一次繪製權限。付款完成後由綠界向伺服器驗證並入帳，未付款不會解鎖。自製翅膀僅供裝飾及固定滑翔數值，不得透過畫布提高戰鬥能力。</p>
-      <button type="button" class="panel-button" data-wing-checkout ${ready?'':'disabled'}> ${mode==='production'?'前往綠界安全付款 · NT$30':mode==='stage-only'?'GM 綠界測試付款 · 不扣款':status?'尚未開通正式付款':'正在檢查付款狀態…'}</button>
-      <p data-wing-checkout-notice>${mode==='production'?'付款將導向綠界官方結帳頁面。':mode==='stage-only'?'僅綠界測試交易；正式扣款未開放。':'正式收款所需綠界商家授權與伺服器金鑰尚未開通；此按鈕不會扣款。'}</p>
-      ${credits>0?`<button type="button" class="panel-button wing-gift-action" data-open-gift>使用繪圖權限 · 禮物盒（剩餘 ${credits}）</button>`:'<p>付款完成後，左側工具列會出現禮物盒按鈕。</p>'}
+      <button type="button" class="panel-button wing-support-pay" data-wing-checkout ${ready?'':'disabled'}>${ready?'SUPPORT · NT$30':status?'PAYMENT UNAVAILABLE':'CHECKING PAYMENT…'}</button>
+      ${ready?'<small class="wing-payment-hint">Secure checkout powered by ECPay.</small>':'<small class="wing-payment-hint">Payments are currently unavailable.</small>'}
+      ${credits>0?`<button type="button" class="panel-button wing-gift-action" data-open-gift>DRAW YOUR WINGS · ${credits} ${credits===1?'CANVAS':'CANVASES'} READY</button>`:''}
      </section>
     </div>
-    <footer class="y2k-taskbar"><span class="y2k-start-button">▣ Start</span><span>GGTEMPLE · ORIGINAL WINGS</span><span class="y2k-taskbar-clock">✦ Y2K ONLINE ✦</span></footer>
+    <footer class="y2k-taskbar"><span class="y2k-start-button">▣ Start</span><span>GGTEMPLE · SUPPORT</span></footer>
    </section>`;
   }
   setWingPaymentStatus(value){
@@ -468,4 +464,3 @@ export class TempleUI extends EventTarget{
 function option(item){return `<option value="${item.id}">${escape(item.name)}</option>`;}
 const icons=new Map();
 function itemCard(item,action){if(!icons.has(item.id))icons.set(item.id,item.slot==='wings'?wingIcon(item):itemIcon(item));const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${pvpShotDamage(item,attackStats(item,0),weaponQuality(item))} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88"><img src="${icons.get(item.id)}" alt="" loading="lazy"><small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><h3>${escape(item.name)}</h3><small>${escape(stats)}</small>${action}</article>`;}
-import {bindChatLayout} from './chat-layout.js';

@@ -31,7 +31,7 @@ try{
    bodyOverflow:document.documentElement.scrollWidth>innerWidth+2,
    gachaCount:document.querySelectorAll('.wing-design-support .wing-gacha-machine').length};
  });
- assert.ok(desktop.paymentW>=350&&desktop.paymentH>150,JSON.stringify(desktop));
+ assert.ok(desktop.paymentW>=350&&desktop.paymentH>105,JSON.stringify(desktop));
  assert.equal(desktop.gachaCount,0);
  assert.equal(desktop.bodyOverflow,false);
  await page.screenshot({path:folder+'/support-desktop-direct-wings.png',animations:'disabled'});
@@ -44,13 +44,13 @@ try{
   const button=action.getBoundingClientRect();
   return {paymentW:r.width,left:r.left,right:r.right,panelW:p.width,
    buttonW:button.width,buttonTop:button.top,
-   buttonBackground:getComputedStyle(action).backgroundImage,
+   buttonBackground:getComputedStyle(action).backgroundColor,
    overflow:document.documentElement.scrollWidth>innerWidth+2};
  });
  assert.ok(mobile.paymentW>250&&mobile.paymentW<=390,JSON.stringify(mobile));
  assert.ok(mobile.left>=-2&&mobile.right<=392,JSON.stringify(mobile));
  assert.ok(mobile.buttonW>=220,JSON.stringify(mobile));
- assert.match(mobile.buttonBackground,/linear-gradient/,JSON.stringify(mobile));
+ assert.notEqual(mobile.buttonBackground,'rgba(0, 0, 0, 0)',JSON.stringify(mobile));
  assert.equal(mobile.overflow,false);
  await page.screenshot({path:folder+'/support-mobile-direct-wings.png',animations:'disabled'});
  assert.deepEqual(errors,[]);

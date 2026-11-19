@@ -64,17 +64,18 @@ test('fourteen material designs have deterministic motifs and epic detail indepe
  assert.ok(purple.every(w=>w.visualComplexity>gold[0].visualComplexity));
  assert.ok(new Set([...blue,...purple,...gold].map(w=>w.color)).size>=12);
 });
-test('forward channel beams, floating +1, wing thumbnail hydration and isolated payment are wired',()=>{
- const fx=read('src/weapon-vfx.js'),ray=read('src/forward-channel-beam.js');
+test('authentic native rays, floating +1 and separate secure payment remain wired',()=>{
+ const fx=read('src/weapon-vfx.js'),vendor=read('src/numbered-weapon-effects.js');
  const ui=read('src/ui.js'),main=read('src/main.js'),numbers=read('src/reletter/damage-numbers.js');
- assert.match(fx,/new ForwardChannelBeam/);
- assert.match(fx,/entry\.visual\.update/);
- assert.match(ray,/reach=distance\*Math\.min/);
+ assert.doesNotMatch(fx,/new ForwardChannelBeam/);
+ assert.match(fx,/this\.numberedEffects\.play/);
+ assert.match(vendor,/fx\.setEndpoints/);
+ assert.match(vendor,/'charged-beam':'#f6c76c'/);
  assert.match(numbers,/data-kind=heal/);
  assert.match(main,/staffChannel\?\.ready/);
  assert.match(ui,/data-wing-edit/);
- assert.match(ui,/data-start-wing-stage/);
  assert.match(ui,/data-wing-checkout/);
+ assert.match(ui,/THANK YOU FOR YOUR SUPPORT/);
  const shop=ui.slice(ui.indexOf('  renderShop(profile){'),ui.indexOf('  renderWingShop(profile){'));
  assert.doesNotMatch(shop,/wing-shop-link/);
 });

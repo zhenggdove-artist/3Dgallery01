@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {weaponMuzzle} from './weapon-muzzle.js';
 import {SNIPER_RANGE} from './shared/combat-balance.js';
+import {crosshairNdc} from './aiming.js';
 
 // CSS uses a transparent 35vmin-radius circular sniper viewport. Touching
 // the opaque mask exits on mobile; desktop mouse clicks always shoot.
@@ -57,7 +58,7 @@ export class GunController {
   cycle(){const c=this.controller(),w=this.weapon();if(!c?.enabled||!w?.firstPerson)return;if(!this.mode){this.savedFov=this.camera.fov;this.weaponId=w.id;this.mode=1;}else if(w.id==='black-cat'&&this.mode===1)this.mode=2;else return this.end();this.held=false;this.ui.emit('attack-cancel');if(matchMedia('(pointer:fine)').matches){try{this.canvas.requestPointerLock()?.catch(()=>{});}catch{}}}
   end(){if(!this.mode)return;this.mode=0;this.held=false;this.recoilAmount=0;this.recoilOffset=0;this.lookPointer=null;this.overlay.hidden=true;this.ui.emit('attack-cancel');this.camera.fov=this.savedFov;this.camera.updateProjectionMatrix();const root=this.controller()?.root;if(root){root.userData.model.visible=true;if(root.userData.blade)root.userData.blade.visible=true;}if(document.pointerLockElement===this.canvas)document.exitPointerLock();}
   direction(){const c=this.controller();return new THREE.Vector3(-Math.sin(c.yaw)*Math.cos(c.pitch),-Math.sin(c.pitch),-Math.cos(c.yaw)*Math.cos(c.pitch));}
-  shot(){const ray=new THREE.Raycaster();this.camera.updateMatrixWorld();ray.setFromCamera(new THREE.Vector2(),this.camera);const c=this.controller(),sniper=this.weapon().id==='black-cat',range=sniper?SNIPER_RANGE:(this.weapon().chargedRange||this.weapon().range),origin=sniper?ray.ray.origin.clone():(weaponMuzzle(c.root,this.weapon())||c.root.position.clone().add(new THREE.Vector3(0,1,0)));let point=ray.ray.at(range,new THREE.Vector3());
+  shot(){const ray=new THREE.Raycaster();this.camera.updateMatrixWorld();ray.setFromCamera(crosshairNdc(),this.camera);const c=this.controller(),sniper=this.weapon().id==='black-cat',range=sniper?SNIPER_RANGE:(this.weapon().chargedRange||this.weapon().range),origin=sniper?ray.ray.origin.clone():(weaponMuzzle(c.root,this.weapon())||c.root.position.clone().add(new THREE.Vector3(0,1,0)));let point=ray.ray.at(range,new THREE.Vector3());
     // Sniper uses the exact centre-camera ray, not a displaced muzzle aim point,
     // so a head under the reticle is also on the server's full-map collision ray.
     if(sniper)return {origin:origin.toArray(),aimPoint:point.toArray(),direction:ray.ray.direction.toArray()};const targets=[...c.arena.artworks.values(),c.arena.monster,...(c.arena.remoteAimTargets||[])].filter(o=>o?.visible&&o!==c.root);const hit=ray.intersectObjects(targets,true).find(h=>h.distance>.15&&h.distance<=range);if(hit)point.copy(hit.point);return {origin:origin.toArray(),aimPoint:point.toArray(),direction:point.clone().sub(origin).normalize().toArray()};}

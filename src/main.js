@@ -13,7 +13,7 @@ import {EquipmentPortraitViewport} from './equipment-portrait-view.js';
 import {CollectorView} from './collector-view.js';
 import {ElementalStatusVisuals} from './elemental-status-visuals.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
-import {attackDirection} from './aiming.js';
+import {attackDirection,cameraAimDirection} from './aiming.js';
 import {isChannelStaff,isStaffTap,channelInterval,chargeProgress,STAFF_TAP_MAX_MS,CAST_MOVE_FACTOR} from './shared/weapon-abilities.js';
 import {uploadArtwork} from './artwork-upload.js';
 import {VitalModels} from './vital-models.js';
@@ -380,7 +380,7 @@ ui.addEventListener('wing-publish-request',async event=>{
 });
 ui.addEventListener('wing-payment-status-request',async()=>{
  try{ui.setWingPaymentStatus(await network.request('/api/wing-pay/status'));}
- catch(error){ui.setWingPaymentStatus({checkoutEnabled:false,checkoutMode:'disabled'});ui.toast('無法確認綠界金流狀態');}
+ catch(error){ui.setWingPaymentStatus({checkoutEnabled:false,checkoutMode:'disabled'});ui.toast('Payment status unavailable.');}
 });
 ui.addEventListener('wing-payment-checkout',()=>{void beginWingCheckout(network,ui);});
 ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;
@@ -568,7 +568,12 @@ function update(dt,time){
   const castingItem=itemById(world?.profile?.equipment?.weapon);
   if(localRoot){
    localRoot.userData.staffCasting=!!(attackHeld&&isChannelStaff(castingItem));
-   localRoot.userData.staffAimDirection=camera.getWorldDirection(new THREE.Vector3()).toArray();
+   // Render the live native #08 / #29 on the EXACT ray that the next
+    // authoritative cast will transmit, not on the old screen-center ray.
+    const muzzle=castingItem&&isChannelStaff(castingItem)?arena.presentation.vfx.channelMuzzle(localRoot,castingItem):null;
+    localRoot.userData.staffAimDirection=castingItem&&isChannelStaff(castingItem)&&controller
+     ?attackDirection(controller,camera,arena,roots,castingItem,1,muzzle)
+     :cameraAimDirection(camera).toArray();
   }
   arena.update(dt,time,camera,roots);
   for(const mob of [world?.monster,...(world?.monsters||[])])for(const skill of mob?.skills||[]){

@@ -83,7 +83,7 @@ export async function wingCheckoutApi(room,request,session){
  if(!profile||typeof session.profile_key!=='string'||!session.profile_key.startsWith('firebase:'))
   return json({error:'Sign in with a verified Google account.'},403);
  const mode=paymentMode(room.env,!!profile.admin);
- if(mode==='disabled')return json({error:'綠界正式金流尚未完成設定與開通，不能收取付款。'},503);
+ if(mode==='disabled')return json({error:'Payments are not available.'},503);
  const recent=room.sql.exec('SELECT COUNT(*) AS n FROM wing_design_orders WHERE profile_key=? AND created_at>?',session.profile_key,Date.now()-60_000).toArray()[0];
  if(recent?.n>=5)return json({error:'Too many orders. Retry after one minute.'},429);
  const tradeNo=newWingTradeNo(),now=Date.now(),base=new URL(request.url).origin;
