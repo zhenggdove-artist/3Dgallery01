@@ -193,9 +193,9 @@ export function cityAngularCornerCut(lot,x,y,z,tier,isRoof=false){
  const ax=Math.abs(lx)/Math.max(.1,lot.width*.5);
  const az=Math.abs(lz)/Math.max(.1,lot.depth*.5);
  // ax+az=1 marks the inner diagonal boundary of a corner notch.
- const diagonal=Math.max(0,Math.min(1,(ax+az-1.05)/.95));
+ const diagonal=Math.max(0,Math.min(1,(ax+az-1.02)/.98));
  if(diagonal<=0)return NO_CITY_CORNER_CUT;
- const upper=Math.max(0,Math.min(1,(y-lot.height*.34)/Math.max(.2,lot.height*.66)));
+ const upper=Math.max(0,Math.min(1,(y-lot.height*.15)/Math.max(.2,lot.height*.85)));
  if(upper<=0)return NO_CITY_CORNER_CUT;
  const sx=lx>=0?1:-1,sz=lz>=0?1:-1;
  const corner=(sx<0?1:0)+(sz<0?2:0);
@@ -206,12 +206,12 @@ export function cityAngularCornerCut(lot,x,y,z,tier,isRoof=false){
   +Math.max(0,Math.min(1,tier-first-3))
   +Math.max(0,Math.min(1,tier-first-7));
  if(hits<=0)return NO_CITY_CORNER_CUT;
- const cut=diagonal*upper*Math.min(1,hits*.48);
+ const cut=diagonal*upper*Math.min(1,hits*.82);
  // Existing angled facades fold inwards rather than constructing/shooting
  // new 3D polygon objects. Roof deck remains near its solid support plane.
- const inwardX=-sx*Math.min(1.1,lot.width*.16)*cut;
- const inwardZ=-sz*Math.min(1.1,lot.depth*.16)*cut;
- const drop=-(isRoof?.10:Math.min(1.35,lot.height*.14))*cut;
+ const inwardX=-sx*Math.min(2.65,lot.width*.39)*cut;
+ const inwardZ=-sz*Math.min(2.65,lot.depth*.39)*cut;
+ const drop=-Math.min(isRoof?2.15:4.2,lot.height*(isRoof?.31:.49))*cut;
  return [cs*inwardX+sn*inwardZ,drop,-sn*inwardX+cs*inwardZ];
 }
 // Exactly the same vertex-space deformation is used for masonry, signs,
@@ -226,9 +226,22 @@ export function cityCollapsePosition(lot,x,y,z,tier,isRoof=false){
  const ruinedY=isRoof?cityRoofHeight(lot,3)+(y-(lot.height+.13))*.16:
   y<=survivor?y:survivor+rise*compression;
  const cut=cityAngularCornerCut(lot,x,y,z,tier,isRoof);
- return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*amount+cut[0],
-  y+(ruinedY-y)*amount+cut[1],
-  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*amount+cut[2]];
+ // Keep the roof centre pinned to the server's physical support height.
+ // Side facades deform unevenly; the whole facade no longer drops as a
+ // perfectly uniform slab while a diagonal corner is being torn away.
+ const [lx,lz]=cityLocal(lot,x,z);
+ const edge=Math.min(1,(Math.abs(lx)/(lot.width*.5)+Math.abs(lz)/(lot.depth*.5))*.5);
+ const wallAmount=isRoof?amount:amount*(.38+.62*edge);
+ return [x+Math.sin(y*1.9+lot.index*.9)*factor*.35*wallAmount+cut[0],
+  y+(ruinedY-y)*wallAmount+cut[1],
+  z+Math.cos(y*1.5+lot.index*.7)*factor*.35*wallAmount+cut[2]];
+}
+// The diagonal roof corners are now genuinely lower, not invisible solid
+// flat floors. Shared Worker and client physics use the same corner drop.
+export function cityRoofHeightAtPoint(lot,x,z,hp=CITY_MAX_HP,maxHp=CITY_MAX_HP){
+ const height=cityRoofHeightAtHp(lot,hp,maxHp);
+ const cut=cityAngularCornerCut(lot,x,lot.height+.13,z,cityDamageTier(hp,maxHp),true);
+ return Math.max(0.15,height+cut[1]);
 }
 function cityFootprint(lot,x,z,margin=0){
  const dx=x-lot.x,dz=z-lot.z;
@@ -241,7 +254,7 @@ export function cityGroundHeight(x,z,y=0,damage={}){
  for(const lot of CITY_LOTS){
   // Keep support across the 0.20m corrugated roof overhang at its edges.
   if(!cityFootprint(lot,x,z,.16))continue;
-  const top=cityRoofHeightAtHp(lot,damage[lot.id]?.hp??CITY_MAX_HP,damage[lot.id]?.maxHp??CITY_MAX_HP);
+  const top=cityRoofHeightAtPoint(lot,x,z,damage[lot.id]?.hp??CITY_MAX_HP,damage[lot.id]?.maxHp??CITY_MAX_HP);
   // A character below an eave is blocked by its wall, never sucked upward.
   // The .16m tolerance is only for numerical landing precision, not climbing.
   if(y>=top-.16)height=Math.max(height,top);
@@ -251,7 +264,7 @@ export function cityGroundHeight(x,z,y=0,damage={}){
 export function cityBlocked(x,z,y=0,damage={},radius=.22){
  for(const lot of CITY_LOTS){
   if(!cityFootprint(lot,x,z,radius))continue;
-  const top=cityRoofHeightAtHp(lot,damage[lot.id]?.hp??CITY_MAX_HP,damage[lot.id]?.maxHp??CITY_MAX_HP);
+  const top=cityRoofHeightAtPoint(lot,x,z,damage[lot.id]?.hp??CITY_MAX_HP,damage[lot.id]?.maxHp??CITY_MAX_HP);
   // Leaving the original house uncollidable at stage 3 caused players to
   // phase through debris. Conversely a roof is walkable, not a side wall.
   if(y>=-1&&y<top-.12)return true;
