@@ -9,7 +9,8 @@ import {CityWallPaint} from './city-wall-paint.js';
 // All 432 lots remain present on mobile. Simplification changes only geometry
 // detail, never collision or position; a single batched mesh draws the district.
 function random(seed){let n=seed>>>0;return ()=>((n=(Math.imul(n,1664525)+1013904223)>>>0)/4294967296);}
-const rgb=c=>{const color=new THREE.Color(c);return [color.r,color.g,color.b];};
+const rgbCache=new Map();
+const rgb=c=>{if(!rgbCache.has(c)){const color=new THREE.Color(c);rgbCache.set(c,[color.r,color.g,color.b]);}return rgbCache.get(c);};
 const scraps=['#706b61','#a78557','#744c43','#9b9889','#565d5b'];
 function localToWorld(lot,x,z){
  const c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
