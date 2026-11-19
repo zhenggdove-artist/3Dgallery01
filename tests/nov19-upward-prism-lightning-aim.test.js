@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {attackDirection,cameraAimDirection,crosshairNdc} from '../src/aiming.js';
+import {attackDirection,cameraAimDirection,crosshairNdc,raisedBeamDirection,BEAM_RETICLE_DISTANCE,AIM_RAISE_PX} from '../src/aiming.js';
 import {NumberedWeaponEffects} from '../src/numbered-weapon-effects.js';
 import {itemById} from '../src/shared/catalog.js';
 
@@ -32,7 +32,7 @@ test('camera looking UP from below the floor fires prism and lightning UP, never
   const item=itemById(name);
   const aim=vector(attackDirection({root:actor},camera,arena(),new Map(),item,1,muzzle));
   assert.ok(aim.y>.2,name+' must shoot above the horizon');
-  assert.ok(aim.dot(visible)>.999999,name+' must aim exactly at the raised 5px reticle');
+  assert.ok(aim.dot(visible)>.995,name+' must converge toward the raised 30px reticle');
   assert.ok(muzzle.clone().addScaledVector(aim,40).y>muzzle.y+8,
    name+' terminal VFX endpoint must not be underground');
  }
@@ -49,18 +49,20 @@ test('prism and lightning camera pitch is continuous: UP / level / DOWN; yaw not
   const expected=cameraAimDirection(camera);
   for(const name of names){
    const actual=vector(attackDirection({root:actor},camera,world,new Map(),itemById(name),0,muzzle));
-   assert.ok(actual.dot(expected)>.999999,name+' points at the reticle throughout a pitch sweep');
+   assert.ok(actual.dot(expected)>.995,name+' converges toward the distant reticle throughout a pitch sweep');
    assert.ok(sign*actual.y>0,name+' keeps the camera elevation sign');
    assert.ok(actual.x<0&&actual.z<0,name+' respects camera yaw rather than the avatar facing sideways');
   }
  }
- assert.equal(crosshairNdc(1000).y,.01);
+ assert.equal(AIM_RAISE_PX,30);
+ assert.equal(crosshairNdc(1000).y,.06);
+ assert.equal(BEAM_RETICLE_DISTANCE,90);
 });
 
 test('authentic 00GameDevs #08 and #29 ray endpoints follow rising aim from the live staff muzzle',()=>{
  const camera=cameraAt([0,-.5,9],[3,8,-10]);
- const direction=cameraAimDirection(camera);
  const muzzle=new THREE.Vector3(.2,2.6,.3);
+ const direction=raisedBeamDirection(camera,muzzle);
  assert.ok(direction.y>.3);
  for(const name of names){
   const scene=new THREE.Scene(),actor=root();scene.add(actor);
@@ -84,4 +86,18 @@ test('authentic 00GameDevs #08 and #29 ray endpoints follow rising aim from the 
   original.dispose();
   assert.equal(scene.children.includes(entry.fx.group),false);
  }
+});
+
+test('native ray from a lowered wand converges on the far reticle above the player',()=>{
+ const camera=cameraAt([0,.6,10],[0,7,-15]);
+ const muzzle=new THREE.Vector3(.4,2.2,.15);
+ const targetDirection=cameraAimDirection(camera);
+ const far=camera.position.clone().addScaledVector(targetDirection,BEAM_RETICLE_DISTANCE);
+ const cast=raisedBeamDirection(camera,muzzle);
+ const point=muzzle.clone().addScaledVector(cast,muzzle.distanceTo(far));
+ assert.ok(point.distanceTo(far)<.00001,'the 90m convergence target is exactly on the reticle ray');
+ assert.ok(cast.y>0,'the native beam must rise through the elevated crosshair');
+ const projected=far.project(camera);
+ assert.ok(Math.abs(projected.y-crosshairNdc().y)<.001,'the world-space target must land at the visible crosshair');
+ assert.ok(Math.abs(projected.x)<.001);
 });
