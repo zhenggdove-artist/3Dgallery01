@@ -182,7 +182,25 @@ export class PlayerController{
     this.advanceWhipPull(dt);
     this.animation=!this.grounded?(this.velocityY<0&&this.fallStartY>=40&&!this.stats.impulse?'fall':'jump'):moving?'walk':'idle';this.updateCamera(dt);return this.state();
   }
-  updateCamera(dt){if(this.cameraLocked)return;const focus=this.followTarget?.visible?this.followTarget.position:this.root.position;this.target.lerp(new THREE.Vector3(focus.x,focus.y+1.5,focus.z),Math.min(1,dt*4));this.camera.position.set(this.target.x+this.distance*Math.cos(this.pitch)*Math.sin(this.yaw),this.target.y+this.distance*Math.sin(this.pitch),this.target.z+this.distance*Math.cos(this.pitch)*Math.cos(this.yaw));if(this.pitch<0){this.camera.position.y=Math.max(this.camera.position.y,focus.y+.6);this.camera.lookAt(this.target.x-Math.sin(this.yaw)*20,this.camera.position.y+Math.tan(-this.pitch)*20,this.target.z-Math.cos(this.yaw)*20);}else this.camera.lookAt(this.target);}
+  updateCamera(dt){
+   if(this.cameraLocked)return;
+   const focus=this.followTarget?.visible?this.followTarget.position:this.root.position;
+   this.target.lerp(new THREE.Vector3(focus.x,focus.y+1.5,focus.z),Math.min(1,dt*4));
+   // Pull back the third-person view for the lightning/prism pair only.
+   // Separate the player silhouette from the original vendor's long beam.
+   const id=this.root.userData.weaponId||'';
+   const longBeam=id.startsWith('storm-')||id.startsWith('prism-');
+   const distance=this.distance+(longBeam?2.6:0);
+   this.camera.position.set(
+    this.target.x+distance*Math.cos(this.pitch)*Math.sin(this.yaw),
+    this.target.y+distance*Math.sin(this.pitch),
+    this.target.z+distance*Math.cos(this.pitch)*Math.cos(this.yaw)
+   );
+   if(this.pitch<0){
+    this.camera.position.y=Math.max(this.camera.position.y,focus.y+.6);
+    this.camera.lookAt(this.target.x-Math.sin(this.yaw)*20,this.camera.position.y+Math.tan(-this.pitch)*20,this.target.z-Math.cos(this.yaw)*20);
+   }else this.camera.lookAt(this.target);
+  }
   aimDirection(){const elevation=THREE.MathUtils.clamp(-this.pitch,-.7,.8),h=this.root.rotation.y;return [Math.sin(h)*Math.cos(elevation),Math.sin(elevation),Math.cos(h)*Math.cos(elevation)];}
   buildPosition(distance=5){const h=this.root.rotation.y,x=this.root.position.x+Math.sin(h)*distance,z=this.root.position.z+Math.cos(h)*distance;return [x,this.arena.groundHeight(x,z),z];}
   state(){return {position:this.root.position.toArray(),rotation:this.root.rotation.y,animation:this.animation,visible:true};}
