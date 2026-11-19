@@ -216,6 +216,40 @@ function buildShopSigns(lots){
  const mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:atlas.texture,side:THREE.DoubleSide}));
  mesh.name='Unique bilingual shop sign atlas';return mesh;
 }
+function buildWallGraffiti(lots){
+ const tiles=16,grid=4,size=256,c=document.createElement('canvas');c.width=c.height=grid*size;
+ const cx=c.getContext('2d'),rand=seeded(41414);
+ const slogans=['拆遷中','GHOST TOWN','NOT FOR SALE','ERROR 404','花開在廢墟','STAY ALIVE','別回頭','ACAB','THE END','水泥之夢','NIGHT RATS','NO SIGNAL','塗鴉自由','WAKE UP','誰在看','NEW WORLD'];
+ for(let i=0;i<tiles;i++){
+  const x=(i%grid)*size,y=Math.floor(i/grid)*size;
+  cx.save();cx.translate(x+size/2,y+size/2);cx.rotate((rand()-.5)*.42);
+  cx.textAlign='center';cx.textBaseline='middle';
+  cx.shadowColor=['#371f25','#bc7149','#568d85','#4c344f'][i%4];cx.shadowBlur=13+rand()*12;
+  cx.font='900 38px sans-serif';cx.strokeStyle=['#302b32','#d6794c','#7c4b66','#2c676b'][i%4];cx.lineWidth=9;cx.strokeText(slogans[i],0,0,size*.84);
+  cx.fillStyle=['#e2af89','#2e3134','#b9c4ac','#df6a72'][i%4];cx.fillText(slogans[i],0,0,size*.84);
+  cx.shadowBlur=0;cx.strokeStyle=['#3d3235','#a56540','#597a79'][i%3];cx.lineWidth=2;
+  for(let j=0;j<12;j++){cx.beginPath();const a=(rand()-.5)*170,b=(rand()-.5)*110;cx.moveTo(a,b);cx.lineTo(a+(rand()-.5)*90,b+rand()*70);cx.stroke();}
+  for(let j=0;j<9;j++){cx.fillStyle=['#d38a64','#555d50','#b7ac8b'][j%3];cx.fillRect((rand()-.5)*200,(rand()-.5)*170,1.5+rand()*4,3+rand()*27);}
+  cx.restore();
+ }
+ const texture=new THREE.CanvasTexture(c);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=4;
+ const pos=[],uv=[],idx=[];
+ for(const lot of lots){
+  const count=lot.height>7?3:2;
+  for(let k=0;k<count;k++){
+   const decal=(lot.index*7+k*5)%tiles,col=decal%grid,row=Math.floor(decal/grid);
+   const x=lot.width*(k%2? .235:-.24),y=Math.min(lot.height-.57,3.55+(k===2?2.45:0)),z=lot.depth/2+.65+k*.04;
+   const w=lot.width*.27,h=.85+(lot.index%3)*.15;
+   const corners=[[-w,-h], [w,-h], [w,h], [-w,h]],base=pos.length/3;
+   for(const [dx,dy] of corners){const [xx,zz]=localToWorld(lot,x+dx,z);pos.push(xx,y+dy,zz);}
+   const margin=.01,lo=col/grid+margin,hi=(col+1)/grid-margin,bot=1-(row+1)/grid+margin,top=1-row/grid-margin;
+   uv.push(lo,bot,hi,bot,hi,top,lo,top);idx.push(base,base+1,base+2,base,base+2,base+3);
+  }
+ }
+ const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setIndex(idx);geo.computeVertexNormals();
+ const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1}));
+ mesh.name='Batched hand-sprayed bilingual wall graffiti and vandalism';return mesh;
+}
 function buildStreetLines(lots){
  const rand=seeded(419),p=[];
  const line=(a,b)=>p.push(...a,...b);
@@ -249,7 +283,7 @@ export class OuterCity{
   this.lots=lots;
   const ground=new THREE.Mesh(new THREE.RingGeometry(CITY_INNER_RADIUS,CITY_OUTER_RADIUS,160),new THREE.MeshStandardMaterial({map:paintConcrete(rand),roughness:1,side:THREE.DoubleSide}));
   ground.rotation.x=-Math.PI/2;ground.position.y=.01;ground.name='Graffiti cracked cement streets beyond grass';this.root.add(ground);
-  const walls=buildStaticCity(lots);walls.name='Batched damaged concrete homes, shops, roofs and storefront goods';this.root.add(walls,buildShopSigns(lots),buildStreetLines(lots));
+  const walls=buildStaticCity(lots);walls.name='Batched damaged concrete homes, shops, roofs and storefront goods';this.root.add(walls,buildShopSigns(lots),buildWallGraffiti(lots),buildStreetLines(lots));
   // Dumpsters and garbage bags: instanced geometry shared across the district.
   const dumpCount=mobile?9:15,bin=instance(new THREE.CylinderGeometry(.52,.48,1.1,8),new THREE.MeshStandardMaterial({color:'#4b615a',roughness:.94}),dumpCount,'Open foul dumpsters'),lid=instance(new THREE.CylinderGeometry(.58,.55,.09,8),new THREE.MeshStandardMaterial({color:'#232f2a',roughness:.96}),dumpCount,'Bent dumpster rims');
   const bagCount=mobile?36:95,bags=instance(new THREE.IcosahedronGeometry(.27,0),new THREE.MeshStandardMaterial({color:'#202426',roughness:1}),bagCount,'Scattered black rubbish bags');this.bags=bags;this.bagRecords=[];
