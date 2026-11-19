@@ -8,14 +8,14 @@ const GATEWAYS=new Set([
 export async function beginWingCheckout(network,ui){
  try{
   const status=await network.request('/api/wing-pay/status');
-  if(!status.checkoutEnabled)throw Error('綠界正式收款尚未開通，無法建立付款訂單。');
-  if(!['production','stage-only'].includes(status.checkoutMode))throw Error('綠界付款設定無效');
+  if(!status.checkoutEnabled)throw Error('Payments are currently unavailable.');
+  if(!['production','stage-only'].includes(status.checkoutMode))throw Error('Invalid checkout configuration.');
   const order=await network.request('/api/wing-pay/checkout',{method:'POST',body:{}});
   if(!GATEWAYS.has(order.gateway)||order.checkoutMode!==status.checkoutMode||
      order.amount!==30||order.designCredits!==1||!order.fields?.CheckMacValue||
      !/^GW[A-Z0-9]{18}$/.test(order.orderId)||order.fields.TotalAmount!=='30')
-   throw Error('伺服器返回的付款訂單無效');
-  if(order.fields.MerchantTradeNo!==order.orderId)throw Error('付款訂單編號不一致');
+   throw Error('The checkout could not be verified.');
+  if(order.fields.MerchantTradeNo!==order.orderId)throw Error('Checkout order mismatch.');
   sessionStorage.setItem('ggtemple-wing-pending-order',order.orderId);
   const form=document.createElement('form');
   form.method='POST';form.action=order.gateway;form.target='_self';form.style.display='none';
@@ -28,7 +28,7 @@ export async function beginWingCheckout(network,ui){
   queueMicrotask(()=>form.remove());
   return order.orderId;
  }catch(error){
-  ui.toast(error.message||'目前無法連線到綠界付款。');
+  ui.toast(error.message||'Secure checkout is unavailable.');
   return null;
  }
 }
@@ -42,10 +42,10 @@ export async function resumeWingCheckout(network,ui){
   const order=await network.request('/api/wing-pay/order?id='+encodeURIComponent(id));
   if(order.status==='paid'){
    sessionStorage.removeItem('ggtemple-wing-pending-order');
-   ui.toast('綠界付款已由伺服器確認，禮物盒繪圖權限已入帳。');
+   ui.toast('Payment confirmed. Your wing canvas is ready.');
    return order;
   }
-  ui.toast('付款訂單尚未確認；請勿重複付款。');
+  ui.toast('Payment pending. Please do not pay again.');
   return order;
  }catch(error){
   console.warn('Pending ECPay order status requires authenticated session',error);
