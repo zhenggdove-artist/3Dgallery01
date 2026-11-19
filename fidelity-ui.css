@@ -338,7 +338,7 @@ body.sniper-scoped #chat-hud{visibility:hidden!important;pointer-events:none!imp
  height:92px!important;min-height:92px!important;max-height:92px!important;
 }
 #hud #chat-hud.chat-medium #chat-messages{
- max-height:calc(2 * 1.45em + 4px);
+ max-height:36px; /* Two 11px messages at 1.45 line-height on iOS Safari. */
  overflow-y:auto;
 }
 #hud #chat-hud.chat-max{min-height:112px;max-height:42dvh}
