@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import {COLLECTOR_RADIUS} from './shared/collector.js';
 import {attachOutfit} from './reletter/outfit-model.js';
 
+// Visual enlargement only: the server's Collector trade/defence radius is unchanged.
+const COLLECTOR_VISUAL_SCALE=2;
+
 // Put a real outfit on the *skinned* Temple protagonist. The torso, arms
 // and legs remain the original animated avatar; no substitute cube body.
 function dressCollector(root){
@@ -81,11 +84,17 @@ export class CollectorView{
   root.userData.ring.visible=false;
   root.userData.label.visible=false;
   dressCollector(root);
+  // Scale the actual skinned body and its floating 'Collector' sprite together.
+  // Avoid scaling the server interaction zone or changing spawn coordinates.
+  root.scale.setScalar(COLLECTOR_VISUAL_SCALE);
   const ring=new THREE.Mesh(
    new THREE.RingGeometry(COLLECTOR_RADIUS-.14,COLLECTOR_RADIUS,64),
    new THREE.MeshBasicMaterial({color:'#f8d489',side:THREE.DoubleSide,transparent:true,opacity:.65,depthWrite:false})
   );
-  ring.rotation.x=-Math.PI/2;ring.position.y=.08;root.add(ring);
+  ring.rotation.x=-Math.PI/2;
+  ring.position.y=.08/COLLECTOR_VISUAL_SCALE;
+  ring.scale.setScalar(1/COLLECTOR_VISUAL_SCALE); // exact original interaction ring radius
+  root.add(ring);
   const label=collectorLabel();
   label.position.y=Math.max(2.35,root.userData.chatHeadY+.35);
   root.add(label);
@@ -111,7 +120,13 @@ export class CollectorView{
   this.muzzle.visible=true;
   this.onShot?.(shot);
   this.showTaunt(shot.taunt);
-  const from=new THREE.Vector3(...shot.from),to=new THREE.Vector3(...shot.to);
+  // Keep the warning-shot tracer visually attached to the enlarged hand,
+  // rather than the server's pre-enlargement muzzle height.
+  this.root.updateMatrixWorld(true);
+  const from=this.gunBone?
+    this.gunBone.getWorldPosition(new THREE.Vector3()):
+    this.root.localToWorld(new THREE.Vector3(.49,1.15,.30));
+  const to=new THREE.Vector3(...shot.to);
   const offset=to.clone().sub(from),length=offset.length();
   if(length>.05){
    const mesh=new THREE.Mesh(new THREE.CylinderGeometry(.023,.035,1,8),
@@ -162,7 +177,7 @@ export class CollectorView{
    }else if(camera){
     this.speechPosition.set(
      this.root.position.x,
-     this.root.position.y+Math.max(3.4,(this.root.userData.chatHeadY||2.8)+1.25),
+     this.root.position.y+Math.max(3.4,(this.root.userData.chatHeadY||2.8)*COLLECTOR_VISUAL_SCALE+1.25),
      this.root.position.z
     ).project(camera);
     const p=this.speechPosition;
