@@ -250,7 +250,7 @@ function instance(geometry,material,count,name){
 // Three.js can upload only the damaged lot's contiguous vertex range.
 // Marking the entire city buffer dirty on every shake previously sent all
 // 432 houses' vertices to the GPU on each rendered frame.
-function markPositionRangeDirty(attribute,start,end){
+export function markPositionRangeDirty(attribute,start,end){
  if(end<=start)return;
  if(typeof attribute.addUpdateRange==='function')attribute.addUpdateRange(start*3,(end-start)*3);
  attribute.needsUpdate=true;
