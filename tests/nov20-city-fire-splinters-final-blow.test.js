@@ -59,7 +59,7 @@ test('the lethal hit fades flame in 4.6s and smoke in 8s without reigniting on s
  assert.equal(layer.burn[offset+1],22);
  assert.equal(layer.burn[offset+2],1);
  fire.update(23);
- fire.setLot(lot,0,{snapshot:true});
+ fire.setLot(lot,0,CITY_MAX_HP,{snapshot:true});
  assert.equal(layer.burn[offset+1],22);
  assert.match(layer.material.vertexShader,/4\.6,8\./);
  fire.dispose();tex.flame.dispose();tex.smoke.dispose();
