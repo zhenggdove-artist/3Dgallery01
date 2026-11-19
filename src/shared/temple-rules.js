@@ -7,6 +7,7 @@ import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks
 import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
+import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
@@ -54,7 +55,7 @@ export function createInitialWorld(now=Date.now()){
     profiles:{},customWings:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
-    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],groundDrops:[],structures:[],plants:[],sceneCleanupVersion:1,
+    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],groundDrops:[],structures:[],cityDamage:{},plants:[],sceneCleanupVersion:1,
     monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],audioSettings:{},musicVersion:0,
     collector:initialCollector(now),lastCollectorSale:null,
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
@@ -66,7 +67,7 @@ export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
   world.profiles??={};world.customWings??=[];registerCustomWings(world.customWings);
-  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.groundDrops??=[];world.structures??=[];world.plants??=[];
+  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
   // Old RELETTER farming data must not survive the removal of the Garden game mode.
@@ -180,7 +181,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
   const profile=world.profiles[actorKey];
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
-    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
+    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
@@ -525,7 +526,16 @@ function throwArtwork(world,profile,actor,body,context,now){
     structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);
    }
   }
-  return {throwEvent:event,hit,hits,monsterHit,monsterHits,structureHit,structureHits,structureDestroyed,structureDestroyedEvents,notice:monsterHit?.defeated?'Monster defeated · loot dropped':structureDestroyed?'Artwork shattered a structure':undefined};
+  // Artwork blast affects tangible houses and detaches three-dimensional components.
+ for(const lot of CITY_LOTS){
+  if((world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
+  const point=[lot.x,Math.min(1.5,lot.height/3),lot.z];
+  if(!artworkBlastHits(landing.position,point,ARTWORK_BLAST_RADIUS,Math.max(lot.width,lot.depth)*.5))continue;
+  const result=damageCityLot(world,lot,'masonry',Math.round(70*event.power),now,point);
+  if(result){structureHit??=result.event;structureHits.push(result.event);
+   if(result.destroyed){structureDestroyed??=result.destroyed;structureDestroyedEvents.push(result.destroyed);}}
+ }
+ return {throwEvent:event,hit,hits,monsterHit,monsterHits,structureHit,structureHits,structureDestroyed,structureDestroyedEvents,notice:monsterHit?.defeated?'Monster defeated · loot dropped':structureDestroyed?'Artwork shattered a structure':undefined};
 }
 
 function buy(world,profile,body){const item=SHOP_ITEMS.find(entry=>entry.id===body.itemId);if(!item)return {error:'Item is not sold'};if(profile.inventory.includes(item.id)&&item.slot!=='seed')return {error:'Already owned'};if(profile.inventory.length>=600)return {error:'Inventory full'};if(!spend(profile,item.price,world))return {error:'Not enough coins'};appendInventoryInstance(profile,item.id);profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';return {notice:`Purchased ${item.name}`};}
@@ -724,7 +734,11 @@ function attack(world,profile,actor,body,context,now){
    structureHit??=event;structureHits.push(event);
    if(structure.hp===0){const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);}
   }
-  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+  const city=cityWeaponHits(world,origin,direction,stats.range,area,
+  Math.max(8,Math.round((stats.damage+bonus*.1)*.7)),now);
+ for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
+ for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
+ return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
@@ -940,6 +954,48 @@ function perpendicular(origin,direction,point,along){return Math.hypot(point[0]-
 function structureRadius(structure){return structure.kind==='house'?3.4:structure.kind==='tree'?1.4:['wall','bar'].includes(structure.kind)?3.3:1.7;}
 function structureHeight(structure){return structure.kind==='house'?3.8:structure.kind==='tree'?4:structure.kind==='column'?4:structure.kind==='platform'?.7:2;}
 function structureEvent(structure,now){return {id:structure.id,kind:structure.kind,variant:structure.variant||0,position:[...structure.position],rotation:structure.rotation||0,surface:structure.surface||null,time:now};}
+// The Worker owns every city's health and four independent component pools.
+const CITY_PART_HEALTH=Object.freeze({windows:36,pillars:74,sheets:48,masonry:105});
+function damageCityLot(world,lot,part,damage,now,position=null){
+ world.cityDamage??={};
+ const previous=world.cityDamage[lot.id];
+ if(previous?.hp===0)return null;
+ const state=previous||{hp:CITY_MAX_HP,maxHp:CITY_MAX_HP,parts:{}};
+ const previousStage=cityStage(state.hp,CITY_MAX_HP);
+ const kind=Object.hasOwn(CITY_PART_HEALTH,part)?part:'masonry';
+ const hp=state.parts[kind]??CITY_PART_HEALTH[kind];
+ const partDestroyed=hp>0&&hp<=damage;
+ state.parts[kind]=Math.max(0,hp-damage);
+ state.hp=Math.max(0,state.hp-damage);
+ world.cityDamage[lot.id]=state;
+ const stage=cityStage(state.hp,CITY_MAX_HP);
+ const event={id:id(),structureId:lot.id,cityLotIndex:lot.index,kind:'city-house',part:kind,
+  partDestroyed,stage,previousStage,
+  position:position||[lot.x,Math.min(2,lot.height*.5),lot.z],
+  hp:state.hp,maxHp:CITY_MAX_HP,damage,time:now};
+ return {event,destroyed:stage===3?{...event,id:lot.id,rotation:lot.yaw}:null};
+}
+function cityWeaponHits(world,origin,direction,range,area,damage,now){
+ const hits=[],destroyed=[];
+ if(area&&['area','sector'].includes(area.mode)){
+  for(const lot of CITY_LOTS){
+   if((world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
+   const point=[lot.x,Math.min(lot.height*.4,1.4),lot.z];
+   if(!insideChargedArea(area,point,Math.hypot(lot.width,lot.depth)*.43))continue;
+   const result=damageCityLot(world,lot,'masonry',damage,now,point);
+   if(result){hits.push(result.event);if(result.destroyed)destroyed.push(result.destroyed);}
+   if(hits.length>=24)break;
+  }
+ }else{
+  const target=cityRaycast(origin,direction,range,world.cityDamage);
+  if(target){
+   const result=damageCityLot(world,target.lot,target.part,damage,now,target.position);
+   if(result){hits.push(result.event);if(result.destroyed)destroyed.push(result.destroyed);}
+  }
+ }
+ return {hits,destroyed};
+}
+
 
 // No horizontal side collider exists on a disc or stair. An impact impulse
 // is measured from the actual ground explosion centre, not from the caster.
