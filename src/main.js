@@ -753,7 +753,7 @@ function update(dt,time,movementDt=dt){
 }
 
 let lastFrameFaultAt=0;
-function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.05,elapsed/1000);last=now;if(!assetsReady)return;const started=performance.now();
+function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.10,elapsed/1000);last=now;if(!assetsReady)return;const started=performance.now();
  // An unexpected model/animation exception cannot prevent the render pass.
  // Individual effects are also contained at source; this is a final guard.
  if(now>externalUntil)try{update(dt,now/1000,Math.min(.24,elapsed/1000));}catch(error){
