@@ -37,6 +37,41 @@ test('rapid Worker worlds are coalesced before frame processing instead of repea
  assert.match(main,/movementSync:\{/);
 });
 
+test('detailed window geometry and scarred materials are reused between hits with no visual downgrade',async()=>{
+ const THREE=await import('three');
+ const {CITY_LOTS}=await import('../src/shared/city-layout.js');
+ const {OuterCity}=await import('../src/outer-city.js');
+ const city=Object.create(OuterCity.prototype);
+ city.fixturePrefabs=new Map();city.debris=[];city.mobile=false;
+ const lot=CITY_LOTS[5],part='windows-0-0';
+ const template=city.getFixtureTemplate(lot,part);
+ assert.equal(template,city.getFixtureTemplate(lot,part));
+ const a=city.cloneFixture(lot,part),b=city.cloneFixture(lot,part);
+ assert.notEqual(a,b);
+ const meshes=group=>{const out=[];group.traverse(node=>{if(node.isMesh)out.push(node);});return out;};
+ const ma=meshes(a),mb=meshes(b);
+ assert.ok(ma.length>=5,'window retains frame, mullion and broken glazing');
+ assert.equal(ma.length,mb.length);
+ assert.ok(ma.every((mesh,i)=>mesh.geometry===mb[i].geometry&&mesh.material===mb[i].material));
+ assert.equal(a.userData.sharedCityFixture,true);
+ const scene=new THREE.Group();scene.add(a);
+ let disposed=0;ma[0].geometry.addEventListener('dispose',()=>disposed++);
+ city.removeDebris({root:scene,pieces:[{mesh:a}]});
+ assert.equal(disposed,0,'detached instance must not dispose the reusable detailed art');
+ assert.equal(city.fixturePrefabs.size,1);
+ template.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});
+ city.fixturePrefabs.clear();
+});
+
+test('skill-time smoke pools are preallocated and all visual detail remains enabled',()=>{
+ const city=source('src/outer-city.js');
+ assert.match(city,/for\(let i=0;i<24;i\+\+\)\{/);
+ assert.match(city,/this\.plumePool\.push\(plume\)/);
+ assert.match(city,/this\.cloneFixture\(lot,part\)/);
+ assert.match(city,/this\.splinters\?\.burst/);
+ assert.match(city,/part\.mesh\.scale\.set\(\.88,\.17,\.86\)/);
+});
+
 test('all existing building visuals and last-blow safeguards remain intact',()=>{
  const city=source('src/outer-city.js'),fire=source('src/city-fire-field.js');
  const splinters=source('src/city-splinter-field.js');
