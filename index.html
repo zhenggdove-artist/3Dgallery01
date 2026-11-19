@@ -10,13 +10,13 @@
   <title>Temple</title>
   <link rel="icon" href="data:,">
   <link rel="preload" href="./src/reletter/FONTS/Golden%20Girdle.otf" as="font" type="font/otf" crossorigin>
-  <link rel="stylesheet" href="./styles.css?v=20261119-monsters-grass-ruins-reset-r18">
+  <link rel="stylesheet" href="./styles.css?v=20261119-roof-collision-login-r15">
   <link rel="stylesheet" href="./src/reletter/fonts.css">
   <link rel="stylesheet" href="./reletter-theme.css">
   <link rel="stylesheet" href="./gun.css">
   <link rel="stylesheet" href="./sketch-hud.css">
-  <link rel="stylesheet" href="./fidelity-ui.css?v=20261119-sand-city-demolition-r14">
-  <link rel="stylesheet" href="./wing-atelier.css?v=20261119-sand-city-demolition-r14">
+  <link rel="stylesheet" href="./fidelity-ui.css?v=20261119-roof-collision-login-r15">
+  <link rel="stylesheet" href="./wing-atelier.css?v=20261119-roof-collision-login-r15">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
   <script src="./temple-config.js"></script>
@@ -28,7 +28,7 @@
     // Stable for one deployment: 15-second URL rotation previously defeated Safari cache
     // and forced every 4G reload to download the whole large module graph.
     // Bump this token when changing the boot graph or deployed JS modules.
-    const release = '20261119-sand-city-demolition-r14';
+    const release = '20261119-roof-collision-login-r15';
     const imports = {
       "three": "./vendor/three/build/three.module.js",
       "three/addons/": "./vendor/three/examples/jsm/"
@@ -42,7 +42,7 @@
   // Import/link failures happen before main.js can enter its boot try/catch.
   (() => {
     let moduleFailure = "";
-    window.templeStartupDiagnostics = {release: "20261119-sand-city-demolition-r14", failures: []};
+    window.templeStartupDiagnostics = {release: "20261119-roof-collision-login-r15", failures: []};
     function displayFailure(message) {
       if (!message || document.body?.classList.contains("ready")) return;
       // Do not replace the original module/import error with a later timeout.
@@ -83,27 +83,35 @@
   <canvas id="game" aria-label="Temple 3D game"></canvas>
   <div id="loading" role="status"><section class="loading-window"><header class="win98-titlebar"><span>GGTemple</span><span aria-hidden="true">▁ ▣ ×</span></header><div class="loading-body"><p>Loading GGTemple…</p><div class="loading-track"><i id="loading-fill"></i></div><output id="loading-percent">0%</output><small id="loading-detail">Preparing arena</small></div></section></div>
 
-  <main id="entry" aria-labelledby="entry-title">
-    <section class="notepad-window">
-    <header class="win98-titlebar"><span>▣ GGTEMPLE.EXE - Account Login</span><span aria-hidden="true">▁ ▣ ×</span></header>
-    <div class="notepad-page"><h1 id="entry-title" class="reletter-wordmark">GGTEMPLE</h1>
-    <div class="win98-login-intro"><div class="win98-login-computer" aria-hidden="true">▣</div><div><strong>Welcome to GGTEMPLE</strong><small>Account Setup · Secure Login</small></div></div>
-    <div id="account-login" class="temple-account-login" aria-label="Google account sign-in">
-      <fieldset class="win98-login-group"><legend>Account Sign In</legend>
-        <p>Sign in with Google. Your character, equipment and wings are saved automatically.</p>
-        <div class="account-buttons">
-          <button type="button" data-google-login disabled>Sign in with Google</button>
-        </div>
-        <p id="account-login-status" role="status">Preparing Google sign-in…</p>
-      </fieldset>
-    </div>
-    <form id="entry-form" hidden><div class="win98-profile-heading">▣ PLAYER PROFILE · CHARACTER SETUP</div>
-      <label>Character name: <input id="player-name" name="name" maxlength="24" autocomplete="nickname" required></label>
-      <label>Clothing color: <input id="clothing-color" type="color" value="#43b59a" aria-label="Clothing color (does not affect skin tone)"></label>
-      <button id="enter-button" type="submit">Create Character & Enter ↵</button><p id="entry-error" role="alert"></p>
-    </form>
-    <div class="win98-login-footer"><span>● SYSTEM STATUS: GOOGLE SIGN-IN REQUIRED</span><span>GGTEMPLE</span></div>
-    </div></section><div class="win98-taskbar" aria-hidden="true"><span>▤ Start</span><span>▣ GGTEMPLE.EXE</span></div>
+  <main id="entry" aria-labelledby="entry-title" lang="zh-Hant">
+    <section class="temple-entry-card" aria-label="GGTEMPLE 登入">
+      <header class="temple-entry-header">
+        <span class="temple-entry-eyebrow">INTERACTIVE ART WORLD</span>
+        <h1 id="entry-title" class="reletter-wordmark">GGTEMPLE</h1>
+        <p>多人線上互動藝術空間</p>
+      </header>
+      <div id="account-login" class="temple-entry-login" aria-label="Google 帳號登入">
+        <h2>登入遊戲</h2>
+        <p class="temple-entry-lead">使用 Google 帳號保存角色、裝備及遊戲進度。</p>
+        <button type="button" class="temple-google-button" data-google-login disabled>
+          <span class="temple-google-g" aria-hidden="true">G</span><span>選擇 Google 帳號</span>
+        </button>
+        <p id="account-login-status" role="status" aria-live="polite">正在準備帳號驗證…</p>
+        <p class="temple-entry-privacy">僅使用 Google 登入驗證所需的基本帳號資訊，不會讀取 Gmail、聯絡人或雲端硬碟內容，也不會公開您的 Google 帳號資料。</p>
+      </div>
+      <form id="entry-form" hidden>
+        <h2 id="entry-profile-heading">建立遊戲角色</h2>
+        <label for="player-name">角色名稱
+          <input id="player-name" name="name" maxlength="24" autocomplete="nickname" required placeholder="輸入遊戲暱稱">
+        </label>
+        <label for="clothing-color">服裝顏色
+          <input id="clothing-color" type="color" value="#43b59a" aria-label="服裝顏色（不影響膚色）">
+        </label>
+        <button id="enter-button" type="submit">建立角色並進入</button>
+        <p id="entry-error" role="alert"></p>
+      </form>
+      <footer class="temple-entry-footer">帳號驗證使用 Google Firebase Authentication</footer>
+    </section>
   </main>
 
   <section id="hud" hidden>
