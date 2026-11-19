@@ -54,7 +54,7 @@ export function cityLots(seed=912744,limit=72){
    enName:style[2]+' / '+String(index+1).padStart(2,'0'),color:palette[Math.floor(rand()*palette.length)],
    roof:corrugate[Math.floor(rand()*corrugate.length)]});
  }
- return lots.slice(0,limit);
+ return limit>=lots.length?lots:lots.filter(lot=>lot.index%3!==0).slice(0,limit);
 }
 function localToWorld(lot,x,z){
  return [lot.x+Math.cos(lot.yaw)*x+Math.sin(lot.yaw)*z,lot.z-Math.sin(lot.yaw)*x+Math.cos(lot.yaw)*z];
@@ -74,7 +74,7 @@ function paintConcrete(rand){
  return new THREE.CanvasTexture(c);
 }
 function signAtlas(lots){
- const columns=8,rows=Math.ceil(lots.length/columns),tile=256;
+ const columns=8,rows=Math.ceil((Math.max(...lots.map(l=>l.index))+1)/columns),tile=256;
  const c=document.createElement('canvas');c.width=columns*tile;c.height=rows*tile;
  const ctx=c.getContext('2d');const rand=seeded(2011);
  for(const lot of lots){const col=lot.index%columns,row=Math.floor(lot.index/columns),x=col*tile,y=row*tile;
