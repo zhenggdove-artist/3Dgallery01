@@ -67,7 +67,7 @@ test('fourteen material designs have deterministic motifs and epic detail indepe
 test('authentic native rays, floating +1 and separate secure payment remain wired',()=>{
  const fx=read('src/weapon-vfx.js'),vendor=read('src/numbered-weapon-effects.js');
  const ui=read('src/ui.js'),main=read('src/main.js'),numbers=read('src/reletter/damage-numbers.js');
- assert.doesNotMatch(fx,/new ForwardChannelBeam/);
+ assert.match(fx,/new ForwardChannelBeam\(this.scene,false\)/,'four arced Prism rays must supplement the original native beam');
  assert.match(fx,/this\.numberedEffects\.play/);
  assert.match(vendor,/fx\.setEndpoints/);
  assert.match(vendor,/'charged-beam':'#f6c76c'/);
