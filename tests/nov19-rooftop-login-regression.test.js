@@ -51,17 +51,22 @@ test('client physics uses shared roof-height geometry including late destruction
  assert.match(city,/ruinTop\+\(oy-\(lot\.height\+\.13\)\)\*\.16/);
 });
 
-test('sign-in never resumes cached Google accounts or enters remembered roles by itself',()=>{
+test('explicit Google chooser keeps legacy GM/profile join working without auto-login or auth-session migration',()=>{
  const auth=source('src/firebase-login.js'),main=source('src/main.js');
  const ui=source('src/ui.js'),html=source('index.html'),css=source('fidelity-ui.css');
- assert.match(auth,/inMemoryPersistence/);
- assert.match(auth,/if\(auth\.currentUser\)await module\.signOut\(auth\)/);
  assert.match(auth,/prompt:'select_account'/);
+ assert.match(auth,/await auth\.authStateReady\(\)/);
+ assert.doesNotMatch(auth,/setPersistence\(auth/);
+ assert.doesNotMatch(auth,/if\(auth\.currentUser\)await module\.signOut\(auth\)/);
  assert.doesNotMatch(main,/existingGoogleToken\(/);
- assert.match(main,/ui\.selectFirebaseAccount\(firebaseIdToken,account\.existing\?account\.profile:null\)/);
+ assert.match(main,/if\(account\.existing&&account\.profile\)/);
+ assert.match(main,/name:account\.profile\.name,color:account\.profile\.color/);
+ assert.match(main,/firebaseIdToken,backendUrl:network\.base/);
+ assert.match(main,/\}else ui\.selectFirebaseAccount\(firebaseIdToken\)/);
  assert.match(html,/id="entry-form" hidden/);
  assert.match(html,/選擇 Google 帳號/);
  assert.match(html,/僅使用 Google 登入驗證所需的基本帳號資訊/);
  assert.match(css,/#entry #entry-form\[hidden\]\{display:none!important\}/);
- assert.match(ui,/this\.form\.hidden=true/);
+ assert.match(ui,/if\(this\.googleLoginBusy\)return/);
+ assert.doesNotMatch(ui,/button\.disabled=true; \/\/ Avoid duplicate Google popups/);
 });
