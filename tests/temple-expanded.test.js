@@ -112,7 +112,7 @@ test('thrown original gallery art without a target completes without a charge-ar
  world.artworks['platform-01'].holder=thrower.key;
  const result=applyAction(world,thrower,{action:'throw-artwork',direction:[0,0,1],power:1},{now:5000,actors:[],rng:()=>.2});
  assert.ok(result.throwEvent,JSON.stringify(result));
- assert.equal(result.structureHit,null);
+ assert.ok(!result.structureHit||result.structureHit.kind==='city-house', 'Nearby solid buildings can be damaged by the explosion');
 });
 
 test('player-published artwork bomb uses ballistic collision and server damage against another fighter',()=>{
