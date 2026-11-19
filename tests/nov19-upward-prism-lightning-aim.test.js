@@ -71,6 +71,7 @@ test('authentic 00GameDevs #08 and #29 ray endpoints follow rising aim from the 
   assert.equal(original.play(event,item,actor),true,name+' native channel effect is playable');
   const entry=original.active[0];
   assert.equal(entry.fx.group.userData.vfxSource,'00GameDevs');
+  assert.equal(entry.fx.phase,'active','real vendor beam must already be visually firing on the first authenticated channel pulse');
   assert.equal(entry.spec.asset,name.startsWith('storm')?'arc-ray':'charged-beam');
   const axis=new THREE.Vector3(1,0,0).applyQuaternion(entry.fx.group.quaternion).normalize();
   assert.ok(axis.dot(direction)>.999,name+' authored +X VFX axis points upward');

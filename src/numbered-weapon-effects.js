@@ -246,6 +246,17 @@ export class NumberedWeaponEffects {
   this.active.push(entry);
   if(this.active.length>14)this.remove(this.active.find(e=>!e.channel)||this.active[0]);
   this.align(entry);
+  // #08 Arc Ray and #29 Charged Beam both contain a SECOND native startup
+  // charge (0.4s / 1.6s) before any full-length ray is drawn. GGTEMPLE has
+  // already held A until the authoritative staff charge reached 100%; running
+  // the vendor's charge again leaves only muzzle sparks visible, especially on
+  // slow mobile GPU frames. Advance the ORIGINAL vendor animation to its
+  // active phase ONCE when its validated channel starts. Keep its geometry,
+  // shader, endpoint logic and all subsequent updates untouched.
+  if(entry.channel&&(spec.number===8||spec.number===29)&&fx.phase==='starting'){
+   const nativeStart=Math.max(0,Number(fx.lifecycle?.start)||0);
+   fx.update(nativeStart+1/60);
+  }
   if(entry.worldScale!=null)fx.group.scale.setScalar(entry.worldScale);
   // The vendor clamps 'size' at 2. Double the physical world-space group.
   if(spec.number===26)fx.group.scale.setScalar(entry.worldScale||2*quality);

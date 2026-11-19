@@ -82,13 +82,19 @@ const damageNumbers=createDamageNumbers(THREE),statusVisuals=new ElementalStatus
 let previousHealHp=null,healVisualSeq=0;
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
-let pendingAInteraction=null,chargeDelayTimer=null,nextChargeRetryAt=0;
+let pendingAInteraction=null,chargeDelayTimer=null,beamStartTimer=null,nextChargeRetryAt=0;
 let sniperScopeAtPress=false; // Black Cat A-holds may charge only when already scoped.
 // Begin charging after the 500ms tap threshold without relying on render FPS.
 // After a stun/rejected request, retry only while the A/Q button is still held.
 function clearChargeDelay(){
  if(chargeDelayTimer!==null)clearTimeout(chargeDelayTimer);
  chargeDelayTimer=null;
+ if(beamStartTimer!==null)clearTimeout(beamStartTimer);
+ beamStartTimer=null;
+}
+function scheduleBeamChannelStart(delay){
+ if(beamStartTimer!==null)clearTimeout(beamStartTimer);
+ beamStartTimer=setTimeout(()=>{beamStartTimer=null;beginStaffChannel();},Math.max(0,delay));
 }
 function startHeldCharge(){
  if(!attackHeld||attackHoldStarted===null||chargeStarted!==null||chargeRequest||staffChannel||
@@ -103,8 +109,50 @@ function startHeldCharge(){
   return result;
  });
  audio.play('charge',.62);
+ // Original vendor #08 and #29 now become visible on the FIRST channel pulse.
+ // Do not wait for a future render frame to request that pulse: slow mobile
+ // GPU compilation can starve the rAF-driven transition for several seconds.
+ const weapon=itemById(world?.profile?.equipment?.weapon);
+ if(weapon&&['lightning','beam'].includes(weapon.family))
+  scheduleBeamChannelStart((Number(weapon.chargeMs)||1500)+75);
 }
 let staffChannel=null,staffChannelPromise=null,staffChannelBusy=false,staffChannelShotAt=0,staffChannelSerial=0;
+function beginStaffChannel(){
+ const item=itemById(world?.profile?.equipment?.weapon);
+ const now=performance.now();
+ if(!attackHeld||!chargeStarted||!isChannelStaff(item)||staffChannel||
+    !controller?.enabled||self?.role!=='fighter'||ui.panelName||
+    world?.profile?.effects?.paralysis?.until>Date.now()||now-(window._templeLastChannelAttempt||0)<=170)return;
+ const elapsed=now-chargeStarted,chargeMs=Number(item?.chargeMs)||1500;
+ if(elapsed<chargeMs)return;
+ window._templeLastChannelAttempt=now;
+ const serial=++staffChannelSerial;
+ staffChannel={weapon:item.id,serial,ready:false};
+ staffChannelShotAt=-Infinity;
+ staffChannelPromise=Promise.resolve(chargeRequest).then(result=>{
+  if(!result?.charging||!attackHeld||staffChannel?.serial!==serial)return null;
+  return sendAction('attack',{phase:'channel-start'});
+ }).then(result=>{
+  if(result?.channeling&&staffChannel?.serial===serial&&attackHeld){
+   staffChannel.ready=true;
+   // The player has ALREADY fully charged. Trigger one server-owned effect
+   // now rather than rendering another empty frame before the next rAF.
+   if(['lightning','beam'].includes(item.family)&&!staffChannelBusy){
+    staffChannelShotAt=performance.now();
+    staffChannelBusy=true;
+    void Promise.resolve(performAttack(1,'channel')).finally(()=>{staffChannelBusy=false;});
+   }
+  }else if(staffChannel?.serial===serial){
+   staffChannel=null;
+   // Server charge start can lag the client clock. Retry the actual state
+   // transition without depending on rendering/fps; never fake an attack.
+   if(attackHeld&&['lightning','beam'].includes(item.family))
+    scheduleBeamChannelStart(260);
+  }
+  return result;
+ });
+}
+
 const writer=new WriteCinematic({scene,controller:()=>controller,arena,ui,send:sendAction,audio,bursts,upload:file=>uploadMedia(network,file)});
 const plantHover=bindPlantHover({canvas,camera,arena,controller:()=>controller,ui});
 ui.addEventListener('write-start',()=>writer.begin());
@@ -588,24 +636,8 @@ function update(dt,time){
   const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
   // First 500ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
   // the charging window; the very first sustained pulse is the ultimate.
-  if(attackHeld&&!(world?.profile?.effects?.paralysis?.until>Date.now())&&charge>=1&&isChannelStaff(heldItem)&&!staffChannel&&
-     performance.now()-(window._templeLastChannelAttempt||0)>170){
-   window._templeLastChannelAttempt=performance.now();
-   const serial=++staffChannelSerial;
-   staffChannel={weapon:heldItem.id,serial,ready:false};
-   staffChannelShotAt=-Infinity;
-   staffChannelPromise=Promise.resolve(chargeRequest).then(result=>{
-    if(!result?.charging||!attackHeld||staffChannel?.serial!==serial)return null;
-    return sendAction('attack',{phase:'channel-start'});
-   }).then(result=>{
-    if(result?.channeling&&staffChannel?.serial===serial&&attackHeld){
-     staffChannel.ready=true;
-    }else if(staffChannel?.serial===serial){
-     staffChannel=null; // network latency may require retry after 100%
-    }
-    return result;
-   });
-  }
+  if(attackHeld&&charge>=1&&isChannelStaff(heldItem)&&!staffChannel)
+   beginStaffChannel();
   if(staffChannel){
    if(!attackHeld||!isChannelStaff(heldItem)||heldItem.id!==staffChannel.weapon||!controller.enabled){
     const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;
@@ -651,5 +683,5 @@ addEventListener('pagehide',()=>network.close());
 
 window.render_game_to_text=()=>JSON.stringify({mode:joined?'play':'entry',name:self?.name||null,role:self?.role||null,connected:network.socket?.readyState===WebSocket.OPEN,position:controller?.root.position.toArray().map(n=>+n.toFixed(2))||null,players:players.map(p=>({name:p.name,role:p.role,seat:p.seat})),economy:{wallet:world?.profile?.wallet??null,inventory:world?.profile?.inventory?.length||0,groundDrops:world?.groundDrops?.length||0,platformCoins:Object.values(world?.coins||{}).filter(c=>c.available).length,platformCoinTotal:Object.keys(world?.coins||{}).length},artworks:{total:arena.artworks.size,available:Object.values(world?.artworks||{}).filter(a=>!a.holder&&Date.now()>=(a.availableAt||0)).length},monster:world?.monster?.active?{variant:world.monster.variant,hp:world.monster.hp}:null,render:{fps:+fps.toFixed(1),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,pixelRatio:renderer.getPixelRatio(),gunMode:gun.mode,frameMs:+(frameSamples.reduce((a,b)=>a+b,0)/Math.max(1,frameSamples.length)).toFixed(2)},editorShortcut:'Shift+Y'});
 window.advanceTime=milliseconds=>{externalUntil=performance.now()+120;const steps=Math.ceil(milliseconds/16.6667);for(let i=0;i<steps;i++)update(Math.min(.05,milliseconds/steps/1000),(performance.now()+i*milliseconds/steps)/1000);vhs.render(scene,camera,performance.now()/1000);};
-if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.templeTest={writer,plantHover,audio,bursts,artworkThrow,arena,camera,renderer,ui,gun,editor:artEditor,platformDelete,portraitViewport,controller:()=>controller,network,roots,items:ITEMS,slots:EQUIPPABLE_SLOTS,performanceSamples,vitals:()=>vitalModels,hit:applyHitReaction};
+if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.templeTest={writer,plantHover,audio,bursts,artworkThrow,arena,camera,renderer,ui,gun,editor:artEditor,platformDelete,portraitViewport,controller:()=>controller,network,roots,items:ITEMS,slots:EQUIPPABLE_SLOTS,performanceSamples,vitals:()=>vitalModels,hit:applyHitReaction,channelDebug:()=>({attackHeld,chargeStarted,chargeRequest:!!chargeRequest,staffChannel:staffChannel?{...staffChannel}:null,staffChannelBusy,staffChannelShotAt,enabled:controller?.enabled,role:self?.role,weapon:world?.profile?.equipment?.weapon,joined,panel:ui.panelName,now:performance.now()})};
 import {PLATFORMS} from './shared/arena.js';
