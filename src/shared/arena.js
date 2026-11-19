@@ -1,5 +1,5 @@
 import {ART_DISPLAY_DISCS} from './artwork-discs.js';
-export const ARENA_RADIUS = 92;
+export const ARENA_RADIUS = 184;
 // Covers every fighter spawn as well as the central writing plant.
 export const SAFE_ZONE = Object.freeze({x:0,z:0,radius:9});
 // Entire art perimeter, distinct from the central PvP/build reservation.
