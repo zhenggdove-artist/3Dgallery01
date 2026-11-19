@@ -3,6 +3,7 @@ import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
  cityLots,cityStage,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume} from './city-ruins-vfx.js';
+import {CityWallPaint} from './city-wall-paint.js';
 
 // All 432 lots remain present on mobile. Simplification changes only geometry
 // detail, never collision or position; a single batched mesh draws the district.
@@ -252,6 +253,7 @@ export class OuterCity{
   this.signs=buildShopSigns(this.lots);this.graffiti=buildWallGraffiti(this.lots);
   for(const mesh of [this.walls,this.signs,this.graffiti])mesh.userData.originalPositions=mesh.geometry.attributes.position.array.slice();
   this.root.add(this.walls,this.signs,this.graffiti,wires(this.lots));
+  this.wallPaint=new CityWallPaint(this.root,this);
   const rand=random(78142),bins=mobile?16:30;
   this.dumpsters=instance(new THREE.CylinderGeometry(.5,.47,1.1,7),new THREE.MeshStandardMaterial({color:'#4b615a'}),bins,'Open foul dumpsters');
   this.bags=instance(new THREE.IcosahedronGeometry(.3,0),new THREE.MeshStandardMaterial({color:'#202426'}),mobile?75:150,'Scattered black rubbish bags');
@@ -335,6 +337,7 @@ export class OuterCity{
    }
    positions.needsUpdate=true;
   }
+  this.wallPaint?.collapseLot(index);
  }
  hidePart(index,part){
   const key=index+':'+part;
@@ -462,6 +465,7 @@ export class OuterCity{
  }
  resetBuildings(){
   this.damage={};this.lastDamage=null;this.hidden.clear();this.partsHidden.clear();this.facade.reset();
+  this.wallPaint?.resetBuildings();
   for(const mesh of [this.walls,this.signs,this.graffiti]){
    const attr=mesh.geometry.attributes.position,original=mesh.userData.originalPositions;
    if(original){attr.array.set(original);attr.needsUpdate=true;}
