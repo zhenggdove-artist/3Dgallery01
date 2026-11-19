@@ -28,10 +28,10 @@ test('tap fires only a traveling elemental orb; channel delegates to actual vend
  for(const id of ['storm-3','prism-3']){
   const item=itemById(id);
   const shot={channel:false,ultimate:false,origin:[0,1,0],direction:[0,0,1],range:30};
-  const previous=vfx.staffOrbs.length;
+  const previous=vfx.staffOrbs.length,previousNative=native.length;
   vfx.play(shot,item,root);
   assert.equal(vfx.staffOrbs.length,previous+1,'normal attacks must create an orb');
-  assert.equal(native.length,0,'normal attack must not render a vendor beam');
+  assert.equal(native.length,previousNative,'normal attack must not render a vendor beam');
   vfx.play({...shot,channel:true,ultimate:true},item,root);
  }
  assert.deepEqual(native.map(x=>x.item.family),['lightning','beam']);
