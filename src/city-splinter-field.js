@@ -119,7 +119,7 @@ export class CitySplinterField{
   }
  }
  update(dt){
-  const delta=Math.max(0,Math.min(.055,dt)),dummy=this.dummy;
+  const delta=Math.max(0,Math.min(.10,dt)),dummy=this.dummy;
   for(const pool of this.items.values()){
    let changed=false;
    for(let i=0;i<pool.cap;i++){
