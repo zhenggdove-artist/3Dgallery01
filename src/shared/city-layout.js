@@ -147,7 +147,7 @@ export const CITY_LOTS=cityLots();
 // houses on every step creates regular main-thread stalls. Index immutable
 // footprints once in deterministic world-space cells (exact same geometry).
 const CITY_COLLISION_CELL=16;
-const CITY_COLLISION_PADDING=2;
+const CITY_COLLISION_PADDING=3;
 const CITY_COLLISION_CELLS=new Map();
 const cityCellKey=(x,z)=>x+','+z;
 for(const lot of CITY_LOTS){
@@ -163,7 +163,7 @@ for(const lot of CITY_LOTS){
 // checks and Worker-side authoritative collision remain unchanged. Large
 // custom margins can fall back to the full list without risking missed hits.
 export function cityCollisionCandidates(x,z,margin=0){
- if(!Number.isFinite(x)||!Number.isFinite(z)||margin>CITY_COLLISION_PADDING-0.3)return CITY_LOTS;
+ if(!Number.isFinite(x)||!Number.isFinite(z)||margin>2.0)return CITY_LOTS;
  return CITY_COLLISION_CELLS.get(cityCellKey(
   Math.floor(x/CITY_COLLISION_CELL),Math.floor(z/CITY_COLLISION_CELL)))||[];
 }
