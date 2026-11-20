@@ -38,5 +38,6 @@ export function isStaffTap(item,heldMs){
 }
 export function channelInterval(item){return Math.max(260,Number(item?.cooldown)||700);}
 // One shared duration/radius for the visible giant fish and server-owned swept hitbox.
-export const GOLDFISH_SWIM_MS=1600;
+// Triple duration keeps the original swimming speed over the tripled reach.
+export const GOLDFISH_SWIM_MS=4800;
 export const GOLDFISH_SWIM_RADIUS=1.05; // Halved to follow the halved fish mesh, including collision.
