@@ -57,6 +57,24 @@ export class ChargeTargetPreview {
   }
   this.guides=[];this.t=0;this.activeShape=null;this.lastParams=null;this.footprint=null;
  }
+ async warm(renderer,camera){
+  // Original 00GameDevs #58/#59 warning assets were invisible in normal
+  // scene compilation, so the FIRST charged attack still compiled them.
+  const stage=new THREE.Scene(),parts=[this.group,this.sector.group,this.rectangle.group];
+  const oldVisible=parts.map(g=>g.visible);
+  try{
+   for(const group of parts){stage.add(group);group.position.set(0,.03,-5);group.visible=true;}
+   this.sector.setProgress(.8);this.rectangle.setProgress(.8);
+   this.sector.update(.016);this.rectangle.update(.016);
+   await renderer.compileAsync(stage,camera);
+   const target=new THREE.WebGLRenderTarget(32,32),oldTarget=renderer.getRenderTarget();
+   try{renderer.setRenderTarget(target);renderer.render(stage,camera);}
+   finally{renderer.setRenderTarget(oldTarget);target.dispose();}
+  }finally{
+   for(let i=0;i<parts.length;i++){const group=parts[i];this.scene.add(group);group.visible=oldVisible[i];}
+   this.hide();
+  }
+ }
  update(root,item,charge,direction,arena,fusion=null,muzzle=null,dt=1/60){
   if(!root||!item||charge<.1||!Array.isArray(direction)){this.hide();return;}
   const equipped=fusion?.original?.stats?{...item,...fusion.original.stats}:item;
