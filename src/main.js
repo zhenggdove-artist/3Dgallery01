@@ -262,7 +262,11 @@ ui.addEventListener('join',async event=>{
 });
 
 function acceptWorldView(next){
- if(!next||(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&next.revision<world.revision))return false;
+ // A successful attack delivers the same revision in its HTTP response AND
+ // in a WebSocket world broadcast. Rebuilding the complete gallery/UI twice
+ // on that same hit was one of the repeatable browser frame spikes.
+ if(!next||(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&
+    next.revision<=world.revision))return false;
  const wings=Array.isArray(next.customWings)?next.customWings:(world?.customWings||[]);
  registerCustomWings(wings);world={...next,customWings:wings};syncWorld();return true;
 }
