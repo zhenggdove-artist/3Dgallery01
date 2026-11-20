@@ -1597,7 +1597,9 @@ function tickPersistentAttacks(world,actors,now,rng){
      if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
      const contact=target.kind==='monster'
       ?monsterRayDistance(origin,travelDirection,length,value,fx.radius)
-      :rayCylinderDistance(origin,travelDirection,length,value.position,1.02+fx.radius,2.35);
+      :rayCylinderDistance(origin,travelDirection,length,value.position,1.02+fx.radius,2.35+fx.radius);
+     // The floating fish spans BELOW its raised centre; vertical overlap
+     // must include its full body, otherwise it ghosts through fighters.
      if(contact===null)continue;
      fx.hitTimes??={};fx.hitTimes[key]=now+contactDamageIntervalMs({id:'goldfish'});
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
