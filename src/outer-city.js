@@ -487,9 +487,25 @@ export class OuterCity{
    });
   }
   this.deformationBasis.delete(index);this.deformationBasis.set(index,coefficients);
-  while(this.deformationBasis.size>(this.mobile?12:32))
-   this.deformationBasis.delete(this.deformationBasis.keys().next().value);
+  this.pruneDeformationBasis();
   return coefficients;
+ }
+ pruneDeformationBasis(){
+  // 24 city targets from a single ultimate plus other simultaneous hits can
+  // exceed the fixed 12/32-slot LRU. The prior loop evicted an ACTIVE house
+  // on every frame, recomputed its expensive three-buffer deformation basis
+  // on the next frame, and caused recurring animation slow motion.
+  const pinned=new Set([
+   ...this.collapseAnimations.keys(),...this.shakes.keys()
+  ]);
+  const cap=Math.max(this.mobile?12:32,pinned.size+4);
+  if(this.deformationBasis.size<=cap)return;
+  // Reclaim cold entries only. Preserve the same 432 detailed facades and
+  // the same continuous damage stages, with no visual quality reductions.
+  for(const key of this.deformationBasis.keys()){
+   if(this.deformationBasis.size<=cap)break;
+   if(!pinned.has(key))this.deformationBasis.delete(key);
+  }
  }
  // Populate likely attack targets during idle time, never during a skill
  // or while the 77cb8c5 per-frame rubble/ejection scheduler is busy.
@@ -920,6 +936,7 @@ export class OuterCity{
   // One costly VFX geometry job per frame, including simultaneous AOE hits.
   // Structural tiers, collision, hit tint and smoke still react immediately.
   if(!this.processEjections())this.stepChunkPreparation();
+  this.pruneDeformationBasis();
   // Ruined buildings are already grounded; the fragment pools handle all
   // falling motion without iterating through every destroyed house each frame.
  }
