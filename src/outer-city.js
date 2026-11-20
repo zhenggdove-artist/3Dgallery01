@@ -487,9 +487,25 @@ export class OuterCity{
    });
   }
   this.deformationBasis.delete(index);this.deformationBasis.set(index,coefficients);
-  while(this.deformationBasis.size>(this.mobile?12:32))
-   this.deformationBasis.delete(this.deformationBasis.keys().next().value);
+  this.pruneDeformationBasis();
   return coefficients;
+ }
+ pruneDeformationBasis(){
+  // 24 city targets from a single ultimate plus other simultaneous hits can
+  // exceed the fixed 12/32-slot LRU. The prior loop evicted an ACTIVE house
+  // on every frame, recomputed its expensive three-buffer deformation basis
+  // on the next frame, and caused recurring animation slow motion.
+  const pinned=new Set([
+   ...this.collapseAnimations.keys(),...this.shakes.keys()
+  ]);
+  const cap=Math.max(this.mobile?12:32,pinned.size+4);
+  if(this.deformationBasis.size<=cap)return;
+  // Reclaim cold entries only. Preserve the same 432 detailed facades and
+  // the same continuous damage stages, with no visual quality reductions.
+  for(const key of this.deformationBasis.keys()){
+   if(this.deformationBasis.size<=cap)break;
+   if(!pinned.has(key))this.deformationBasis.delete(key);
+  }
  }
  // Populate likely attack targets during idle time, never during a skill
  // or while the 77cb8c5 per-frame rubble/ejection scheduler is busy.
@@ -762,7 +778,7 @@ export class OuterCity{
    existing?.hp??Math.min(maxHp,event.hp+Math.max(0,event.damage||0));
   const from=Number.isFinite(event.previousTier)?event.previousTier:cityDamageTier(oldHp,maxHp);
   const tier=cityDamageTier(event.hp,maxHp),stage=cityStage(event.hp,maxHp);
-  this.damage[lot.id]={hp:event.hp,stage,tier};
+  this.damage[lot.id]={...existing,hp:event.hp,maxHp,stage,tier};
   this.fireField?.setLot(lot,event.hp,maxHp,{live:true});
   this.facade.set(lot.index,event.hp,maxHp);
   this.flash(lot);
@@ -785,7 +801,14 @@ export class OuterCity{
    const record=damage[lot.id];if(!record)continue;
    const maxHp=record.maxHp||CITY_MAX_HP;
    const tier=cityDamageTier(record.hp,maxHp),stage=cityStage(record.hp,maxHp);
-   const knownTier=this.damage[lot.id]?.tier??0;
+   const existing=this.damage[lot.id],knownTier=existing?.tier??0;
+   // Combat snapshots always clone cityDamage. An unchanged HP does not
+   // warrant 3 facade updates, part scans, or geometry preparation again.
+   const destroyedParts=Object.entries(record.parts||{})
+    .filter(([part,hp])=>hp<=0&&part!=='masonry').map(([part])=>part).sort();
+   const partSig=destroyedParts.join('|');
+   if(existing?.hp===record.hp&&existing?.maxHp===maxHp&&
+      existing.partSig===partSig)continue;
    // A world snapshot is state, not an attack animation. On initial join
    // an empty placeholder snapshot often precedes the real damaged-city
    // snapshot; replaying all historical tiers here launched hundreds of
@@ -793,11 +816,10 @@ export class OuterCity{
    // Only applyDamageEvent() starts animated debris on a real live hit.
    const staticChange=!firstSnapshot&&tier!==knownTier
     &&!this.collapseAnimations.has(lot.index);
-   this.damage[lot.id]={hp:record.hp,stage,tier};
+   this.damage[lot.id]={hp:record.hp,maxHp,stage,tier,partSig};
    this.fireField?.setLot(lot,record.hp,maxHp,{snapshot:true});
    this.facade.set(lot.index,record.hp,maxHp);
-   for(const [part,hp] of Object.entries(record.parts||{}))
-    if(hp<=0&&part!=='masonry')this.hidePart(lot.index,part);
+   for(const part of destroyedParts)this.hidePart(lot.index,part);
    if(firstSnapshot||staticChange){
     this.collapseLot(lot.index,tier);
     if(tier>=3){
@@ -914,6 +936,7 @@ export class OuterCity{
   // One costly VFX geometry job per frame, including simultaneous AOE hits.
   // Structural tiers, collision, hit tint and smoke still react immediately.
   if(!this.processEjections())this.stepChunkPreparation();
+  this.pruneDeformationBasis();
   // Ruined buildings are already grounded; the fragment pools handle all
   // falling motion without iterating through every destroyed house each frame.
  }

@@ -461,7 +461,18 @@ export class TempleRoom extends DurableObject{
       role:actor.role,seat:actor.seat,state});
      respawned=true;
     }
-    this.save(world);this.broadcastWorld(world);
+    this.save(world);
+    // Full world views include persistent artwork, graffiti, 432-lot city HP,
+    // profile inventories and active damage effects. Serializing that entire
+    // JSON graph up to 14x/s during beam/building ticks blocks movement ACKs
+    // in the same Durable Object and repeatedly stalls browser scene sync.
+    // Keep the authoritative simulation at its current 70ms cadence, but
+    // send coalesced 180ms snapshots (no damage or detail is discarded).
+    // Respawn state is always delivered immediately through the state stream.
+    if(respawned||now-(this.lastCombatWorldAt||0)>=180){
+     this.lastCombatWorldAt=now;
+     this.broadcastWorld(world);
+    }
     for(const impact of artworkVisualEvents)
       if(impact?.kind==='structure-hit'||impact?.kind==='structure-destroyed')
        this.broadcast(impact.kind,impact.event);

@@ -262,7 +262,11 @@ ui.addEventListener('join',async event=>{
 });
 
 function acceptWorldView(next){
- if(!next||(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&next.revision<world.revision))return false;
+ // A successful attack delivers the same revision in its HTTP response AND
+ // in a WebSocket world broadcast. Rebuilding the complete gallery/UI twice
+ // on that same hit was one of the repeatable browser frame spikes.
+ if(!next||(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&
+    next.revision<=world.revision))return false;
  const wings=Array.isArray(next.customWings)?next.customWings:(world?.customWings||[]);
  registerCustomWings(wings);world={...next,customWings:wings};syncWorld();return true;
 }
@@ -325,7 +329,10 @@ network.addEventListener('state-rejected',event=>{
   // the authoritative location.
   if(sent&&!controller.status.freeze&&!controller.status.root&&!controller.vortexSpin&&
      keepPredictedMoveOnLatencyReject(rejection.error,accepted,sent.position,
-      current.toArray(),(x,z,y)=>arena.blocked(x,z,y))){
+      current.toArray(),(x,z,y)=>arena.blocked(x,z,y),{
+       sampleAgeMs:performance.now()-sent.sentAt,
+       authorityAgeMs:performance.now()-(network.lastAuthorityAt||sent.sentAt)
+      })){
     network.lastCorrectedSequence=Math.max(network.lastCorrectedSequence,seq);
     network.lastStateAt=0;
     return;
