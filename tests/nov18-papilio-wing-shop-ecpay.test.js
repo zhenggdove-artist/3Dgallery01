@@ -53,7 +53,7 @@ test('monster and ground drops never contain any wings; outdated inventories are
 test('SUPPORT is one personal design payment; shop wings show material previews',()=>{
  const ui=read('src/ui.js'),index=read('index.html'),art=read('src/reletter/swallowtail-art.js');
  assert.match(ui,/wings:'Wings'/);
- assert.match(ui,/item\.slot==='wings'\?wingIcon/);
+ assert.match(ui,/previewMarkup\(item\)/,'wings use actual pre-rendered models in shop');
  assert.match(ui,/data-wing-checkout/);
  assert.match(ui,/data-open-gift/);
  const section=ui.slice(ui.indexOf('  renderWingShop(profile){'),ui.indexOf('  hydrateWingGalleryImages(){'));
