@@ -11,11 +11,11 @@ vec4 templeCurvedMV(vec4 originalEye) {
   if(abs(uTempleCurveBend)<0.001 || uTempleCurveLength<0.001)return originalEye;
   vec3 world=(uTempleCurveCameraWorld*originalEye).xyz;
   float t=clamp(dot(world-uTempleCurveStart,uTempleCurveDirection)/uTempleCurveLength,0.0,1.0);
-  // Prism uses an S-shaped cubic-inflection sweep: zero at both tips AND
-  // midpoint, with opposite gentle curves before and after the midpoint.
+  // Prism uses a cubic smoothstep S-profile like the reference: a gradual
+  // flattening near both ends with one smooth inflection at the midpoint.
   // Lightning keeps its original single-lobe bend.
   float bow=4.0*t*(1.0-t);
-  float sigmoid=48.0*t*t*(1.0-t)*(1.0-t)*(2.0*t-1.0);
+  float sigmoid=6.0*(t*t*(3.0-2.0*t)-t);
   world+=uTempleCurveRight*(mix(bow,sigmoid,uTempleCurveSigmoid)*uTempleCurveBend);
   return viewMatrix*vec4(world,1.0);
 }
@@ -25,7 +25,7 @@ export function curvePoint(start,end,bend,t,shape='bow'){
  const axis=end.clone().sub(start),right=new THREE.Vector3(-axis.z,0,axis.x);
  if(right.lengthSq()<1e-8)right.set(1,0,0);
  right.normalize();
- return start.clone().lerp(end,t).addScaledVector(right,bend*(shape==='s'?48*t*t*(1-t)*(1-t)*(2*t-1):4*t*(1-t)));
+ return start.clone().lerp(end,t).addScaledVector(right,bend*(shape==='s'?6*(t*t*(3-2*t)-t):4*t*(1-t)));
 }
 export function lateralBeamInput(movement,aim,active=true){
  if(!active||!movement?.isVector3||movement.lengthSq()<1e-8)return 0;
