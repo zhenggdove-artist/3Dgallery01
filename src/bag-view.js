@@ -1,5 +1,6 @@
 import {itemById,EQUIPPABLE_SLOTS,RARITIES} from './shared/catalog.js';
 import {itemPreview} from './item-preview.js';
+import {itemIcon as fallbackItemIcon} from './reletter/item-art.js';
 import {weaponClass,explainWeapon} from './shared/weapon-info.js';
 import {weaponPresentation} from './shared/weapon-presentation.js';
 import {fusionChance} from './shared/temple-fusion.js';
@@ -10,7 +11,7 @@ const tabs=[['all','Items'],['equipment','EQUIP'],['weapons','All Weapons'],['ne
 export function renderOriginalBag(ui,profile){
  const scroll={content:ui.content.scrollTop,items:ui.content.querySelector('#bag-items')?.scrollTop||0,tabs:ui.content.querySelector('#bag-tabs')?.scrollLeft||0};
  ui.bagObserver?.disconnect();const tab=ui.bagCategory==='garden'?'all':ui.bagCategory||'all',items=(profile.inventory||[]).map((id,index)=>({item:itemById(id),index})).filter(v=>v.item),equipped=(i,index)=>profile.equipment?.[i.slot]===i.id&&(!Number.isInteger(index)||!profile.equippedInstanceIds?.[i.slot]||profile.equippedInstanceIds[i.slot]===profile.inventoryInstances?.[index]?.uid),recordAt=(i,index)=>Number.isInteger(index)?fusionRecordAt(profile,index):profile.fusion?.[i.id];
- const cell=(item,index=null)=>{const f=weaponPresentation(item,recordAt(item,index));return `<button class="bag-cell ${equipped(item,index)?'equipped':''}" data-bag-item="${item.id}" ${Number.isInteger(index)?`data-inventory-index="${index}"`:``} data-rarity="${item.rarity}" style="--rarity:${RARITIES.find(r=>r.id===item.rarity)?.color||'#eadcf4'}" draggable="true" title="${esc(f.title)}" aria-label="${esc(f.title)}"><img data-preview="${item.id}" alt="">${item.slot==='weapon'?`<small class="range-mark">${({near:'近',mid:'中',far:'遠'})[weaponClass(item)]||''}</small>`:''}${f.level?`<small class="fusion-level">+${f.level}</small>`:''}</button>`;};
+ const cell=(item,index=null)=>{const f=weaponPresentation(item,recordAt(item,index));return `<button class="bag-cell ${equipped(item,index)?'equipped':''}" data-bag-item="${item.id}" ${Number.isInteger(index)?`data-inventory-index="${index}"`:``} data-rarity="${item.rarity}" style="--rarity:${RARITIES.find(r=>r.id===item.rarity)?.color||'#eadcf4'}" draggable="true" title="${esc(f.title)}" aria-label="${esc(f.title)}"><img data-preview="${item.id}" src="${esc(fallbackItemIcon(item))}" decoding="async" alt="">${item.slot==='weapon'?`<small class="range-mark">${({near:'近',mid:'中',far:'遠'})[weaponClass(item)]||''}</small>`:''}${f.level?`<small class="fusion-level">+${f.level}</small>`:''}</button>`;};
  let body='';if(tab==='equipment'){const slot=s=>{const i=itemById(profile.equipment?.[s]),index=profile.inventoryInstances?.findIndex(v=>v.uid===profile.equippedInstanceIds?.[s]&&v.itemId===i?.id)??-1;return `<div class="equip-position"><b>${s.toUpperCase()}${i?.slot==='weapon'?' · '+({near:'近距離',mid:'中距離',far:'遠距離'}[weaponClass(i)]||''):''}</b>${i?cell(i,index>=0?index:null):'<div class="bag-cell"></div>'}<span>${esc(i?weaponPresentation(i,recordAt(i,index>=0?index:null)).title:'Empty')}</span></div>`;};body=`<div class="equipment-layout"><div class="equip-column">${['head','outfit','weapon','shield'].map(slot).join('')}</div><div id="bag-portrait-frame"><canvas id="bag-portrait" role="img" aria-label="Front-facing full 3D character wearing current equipment"></canvas></div><div class="equip-column">${['wings','armor'].map(slot).join('')}</div></div>`;}else{const filter={weapons:['weapon'],head:['head'],outfit:['outfit'],wings:['wings'],shields:['shield']}[tab];const list=items.filter(({item:i})=>['near','mid','far'].includes(tab)?i.slot==='weapon'&&weaponClass(i)===tab:!filter||filter.includes(i.slot));body=list.map(({item,index})=>cell(item,index)).join('')+'<div class="bag-cell" aria-hidden="true"></div>'.repeat(Math.max(0,42-list.length));}
  const keepPortrait=tab==='equipment'&&ui.content.querySelector('.equipment-view');
  if(keepPortrait){
@@ -51,7 +52,7 @@ export function renderOriginalBag(ui,profile){
   if(img)try{
    const item=itemById(img.dataset.preview);
    const url=item&&await itemPreview(item);
-   if(url&&img.isConnected)img.src=url;
+   if(url&&img.isConnected&&img.dataset.preview===item?.id)img.src=url;
   }catch(error){console.warn('Inventory preview unavailable',error);}
   if(pending.length)requestAnimationFrame(drawNext);else scheduled=false;
  };
