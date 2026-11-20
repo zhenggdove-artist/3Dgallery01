@@ -65,8 +65,8 @@ test('detailed window geometry and scarred materials are reused between hits wit
 
 test('skill-time smoke pools are preallocated and all visual detail remains enabled',()=>{
  const city=source('src/outer-city.js');
- assert.match(city,/for\(let i=0;i<24;i\+\+\)\{/);
- assert.match(city,/this\.plumePool\.push\(plume\)/);
+ assert.match(city,/this\.impactPlumes=new CityImpactPlumes/);
+ assert.match(city,/this\.impactPlumes\.spawn\(position,seed,limit\)/);
  assert.match(city,/this\.cloneFixture\(lot,part\)/);
  assert.match(city,/this\.splinters\?\.burst/);
  assert.match(city,/part\.mesh\.scale\.set\(\.88,\.17,\.86\)/);

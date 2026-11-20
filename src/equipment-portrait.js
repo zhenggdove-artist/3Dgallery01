@@ -3,7 +3,7 @@ import {clone} from 'three/addons/utils/SkeletonUtils.js';
 // The character's GLB can have a nonstandard standing axis and authored
 // root yaw. Build a *front-facing anatomical frame* instead of guessing 90°
  // turns from its imported Euler rotation. Only the EQUIP clone is changed.
-export function orientPortraitModel(model){
+export function orientPortraitModel(model,{precise=true}={}){
  model.updateMatrixWorld(true);
  const bones=[];
  model.traverse(o=>{if(o.isBone)bones.push({bone:o,name:o.name.toLowerCase().replace(/[^a-z]/g,'')});});
@@ -35,7 +35,7 @@ export function orientPortraitModel(model){
  }
  // Fallback for models without Mixamo bone names: an upright silhouette
  // is mandatory, even if the imported scene lies horizontally.
- const bounds=new THREE.Box3().setFromObject(model,true);
+ const bounds=new THREE.Box3().setFromObject(model,precise);
  const size=bounds.getSize(new THREE.Vector3());
  const axis=size.x>=size.y&&size.x>=size.z?new THREE.Vector3(1,0,0):
   size.z>size.y?new THREE.Vector3(0,0,1):new THREE.Vector3(0,1,0);

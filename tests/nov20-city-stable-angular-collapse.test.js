@@ -19,7 +19,7 @@ test('reverted GPU smoke, polyhedral debris, and 4,320 extra fracture shells',()
  const vfx=readFileSync(new URL('../src/city-ruins-vfx.js',import.meta.url),'utf8');
  assert.doesNotMatch(city,/livingFires|buildIrregularFractureChunk|category='fracture-'\+step/);
  assert.doesNotMatch(vfx,/createPersistentBuildingFire|buildingFireIntensity|livingFireVertex/);
- assert.match(city,/this\.plumePool/,'stable pooled smoke and fire remain');
+ assert.match(city,/this\.impactPlumes/,'stable pooled smoke and fire remain');
  assert.match(city,/this\.scrapPrefabs/,'stable shared detailed fragments remain');
 });
 

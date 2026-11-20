@@ -20,6 +20,7 @@ import artworkDelivery from '../artwork-delivery.json' with {type:'json'};
 import {ARTWORK_DISCS,discGroundHeight} from './shared/artwork-discs.js';
 import {samplePanBlastPosition} from './shared/pan-blast-flight.js';
 import {originalBuildSizes,buildGeometry,buildMaterial} from './build-style.js';
+import {inPlaceLocomotion} from './locomotion-clips.js';
 
 const touch=matchMedia('(pointer:coarse)').matches;
 const tempMatrix=new THREE.Matrix4(),tempPosition=new THREE.Vector3(),tempQuaternion=new THREE.Quaternion(),tempScale=new THREE.Vector3();
@@ -36,6 +37,7 @@ export class TempleArena{
     const [character,coin]=await Promise.all([
       this.loader.loadAsync('./temple-assets/character.temple.glb'),this.loader.loadAsync('./temple-assets/coin_small.temple.glb'),this.islandEnemies.load(),artTask
     ]);
+    character.animations=character.animations.map(inPlaceLocomotion);
     this.characterAsset=character;this.coinAsset=coin;this.createCoinInstances();progress(.85,'All models loaded');
   }
   buildEnvironment(){
@@ -65,6 +67,22 @@ export class TempleArena{
     const ring=new THREE.Mesh(new THREE.RingGeometry(.46,.53,24),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.65,side:THREE.DoubleSide,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;root.add(ring);const label=makeNameSprite(name,admin);label.position.y=-.25;root.add(label);const weaponMount=new THREE.Group();weaponMount.position.set(.48,1.05,.1);weaponMount.rotation.set(0,0,-.55);root.add(weaponMount);const mixer=new THREE.AnimationMixer(model),actions={};for(const clip of this.characterAsset.animations)actions[clip.name]=mixer.clipAction(clip);actions.idle?.play();mixer.update(.001);model.updateMatrixWorld(true);model.position.y-=new THREE.Box3().setFromObject(model,true).min.y;model.updateMatrixWorld(true);const chatHeadY=new THREE.Box3().setFromObject(model,true).max.y+.4;root.userData={model,mixer,actions,current:'idle',ring,label,weaponMount,weaponId:null,chatHeadY};this.mixers.push(mixer);return root;
   }
   setPlayerEquipment(root,equipment){if(root)this.presentation.equipment(root,equipment);}
+  removePlayer(root){
+   const {model,mixer,ring,label}=root.userData;
+   this.setPlayerEquipment(root,{});
+   this.presentation.players.delete(root);
+   const index=this.mixers.indexOf(mixer);if(index>=0)this.mixers.splice(index,1);
+   mixer?.stopAllAction();if(model)mixer?.uncacheRoot(model);
+   const skeletons=new Set();
+   model?.traverse(o=>{
+    if(o.isSkinnedMesh)skeletons.add(o.skeleton);
+    if(o.isMesh)for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();
+   });
+   skeletons.forEach(s=>s.dispose());
+   ring?.geometry.dispose();ring?.material.dispose();
+   label?.material.map?.dispose();label?.material.dispose();
+   root.removeFromParent();
+  }
   setBuildPreview(kind,position,rotation=0,valid=true,size=1,previewFile=null){if(!this.buildPreview||this.buildPreview.userData.kind!==kind){this.clearBuildPreview();const group=new THREE.Group();group.userData.kind=kind;const material=new THREE.MeshStandardMaterial({color:'#85d9bd',transparent:true,opacity:.34,depthWrite:false,roughness:.5,emissive:'#2c705c',emissiveIntensity:.3});for(const mesh of previewMeshes(kind,material))group.add(mesh);
    if(kind==='art-bomb'&&previewFile?.type?.startsWith('image/')){
     const url=URL.createObjectURL(previewFile);
@@ -188,17 +206,29 @@ export class TempleArena{
   }
   setPlayerAnimation(root,name){const data=root?.userData;if(!data?.actions||data.current===name)return;const next=data.actions[name]||data.actions.idle,current=data.actions[data.current];current?.fadeOut(.1);if(next){next.setLoop(name==='jump'?THREE.LoopOnce:THREE.LoopRepeat);next.clampWhenFinished=name==='jump';next.reset().fadeIn(.1).play();}data.current=name;}
   sync(world,players=[]){
+  const previous=this.syncedWorld;
+  this.syncedWorld=world;this.world=world;this.players=players;
   // RELETTER coin collection: *every* disappearing coin, whether on a disc
   // or dropped by a monster/player, spins upward and diminishes for .8 sec.
-  for(const p of PLATFORMS){
-   if(this.world?.coins?.[p.id]?.available&&!world.coins?.[p.id]?.available&&!this.coinFlights.has(p.id))
+  if(previous?.coins!==world.coins)for(const p of PLATFORMS){
+   if(previous?.coins?.[p.id]?.available&&!world.coins?.[p.id]?.available&&!this.coinFlights.has(p.id))
     this.coinFlights.set(p.id,{age:0,y:p.coinPosition[1]+Math.sin(this.clock*1.7+p.index)*.18});
   }
-  const active=new Set((world.groundDrops||[]).map(d=>d.id));
-  for(const prior of this.world?.groundDrops||[]){
-   if(prior.kind==='coin'&&!active.has(prior.id))this.spawnDropCoinFlight(prior);
+  if(!previous||previous.groundDrops!==world.groundDrops){
+   const active=new Set((world.groundDrops||[]).map(d=>d.id));
+   for(const prior of previous?.groundDrops||[]){
+    if(prior.kind==='coin'&&!active.has(prior.id))this.spawnDropCoinFlight(prior);
+   }
+   this.syncHearts();this.syncDrops();
   }
-  this.world=world;this.players=players;this.outerCity?.wallPaint?.sync(world.wallPaint||{},world.wallPaintRevision||0);this.displayPlatforms.sync();this.syncHearts();this.syncDrops();this.syncStructures();this.adventure.sync(world);this.syncMonster();}
+  if(!previous||previous.wallPaintRevision!==world.wallPaintRevision)
+   this.outerCity?.wallPaint?.sync(world.wallPaint||{},world.wallPaintRevision||0);
+  if(!previous||previous.floatingPlatforms!==world.floatingPlatforms||
+    previous.artworkLayout!==world.artworkLayout||previous.customArtworks!==world.customArtworks||
+    previous.removedPlatformIds!==world.removedPlatformIds)this.displayPlatforms.sync();
+  if(!previous||previous.structures!==world.structures)this.syncStructures();
+  this.adventure.sync(world);this.syncMonster();
+  }
   spawnDropCoinFlight(drop){
    if(!this.coinMesh||!Array.isArray(drop.position))return;
    if(this.dropCoinFlights.length>=40){const old=this.dropCoinFlights.shift();old.mesh.removeFromParent();}
@@ -396,7 +426,7 @@ function tintCharacter(model,color,admin){
         templeCool *= smoothstep(0.2, 0.5, templeSource.b / max(templeSource.g, 0.0001));
         float templeShade = clamp(dot(templeSource, vec3(0.2126, 0.7152, 0.0722)) / 0.65, 0.58, 1.3);
         diffuseColor.rgb = mix(templeSource, templeTint * templeShade, templeCool);
-      `);};material.customProgramCacheKey=()=>`temple-player-tint-v2-${color}`;if(material.emissive){material.emissive.set(0);material.emissiveIntensity=0;}material.needsUpdate=true;return material;});node.material=Array.isArray(node.material)?materials:materials[0];});
+      `);};material.customProgramCacheKey=()=>'temple-player-tint-v2';if(material.emissive){material.emissive.set(0);material.emissiveIntensity=0;}material.needsUpdate=true;return material;});node.material=Array.isArray(node.material)?materials:materials[0];});
 }
 function makeNameSprite(name,admin){const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;const context=canvas.getContext('2d');context.font='700 46px Arial, sans-serif';context.textAlign='center';context.textBaseline='middle';context.shadowColor='#000';context.shadowBlur=14;context.fillStyle=admin?'#f0cd65':'#f5eed8';context.fillText(String(name||'Pilgrim').slice(0,24),256,58);context.font='600 22px system-ui';context.fillStyle=admin?'#f0cd65':'#9cc9bd';context.fillText(admin?'GM':'',256,101);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.minFilter=THREE.LinearFilter;texture.generateMipmaps=false;const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false,toneMapped:false}));sprite.scale.set(2.5,.63,1);sprite.renderOrder=8;return sprite;}
 import {updateHitFlash} from './hit-flash.js';

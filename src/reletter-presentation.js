@@ -35,13 +35,29 @@ export class ReletterPresentation{
   constructor(scene){this.scene=scene;this.players=new Set();this.bursts=[];this.ultimates=[];this.restore=[];this.seen=new Set();this.charge=null;this.odd=[];this.guardians=[];this.echoes=[];this.fusionEchoLast=new Map();this.vfx=new WeaponVFX(scene);}
   equipment(root,equipment={}){
     const d=root.userData;this.players.add(root);d.equipment=equipment;
-    const weapon=itemById(equipment.weapon),signature=JSON.stringify(equipment);if(d.equipmentSignature===signature)return;d.equipmentSignature=signature;
-    if(d.blade)disposeVisual(d.blade);d.blade=null;if(weapon&&(weapon.exotic||weapon.id==='chiang-token'||meleeFamilies.includes(weapon.family)||isSpellWeapon(weapon))){d.blade=isSpellWeapon(weapon)?makeSpellEquipment(weapon):makeHeldWeapon(weapon);root.add(d.blade);}d.weaponId=weapon?.id;d.staffRaise=0;
-    if(d.headgear)disposeHeadgear(d.headgear);d.headgear=equipment.head?attachHeadgear(THREE,d.model,itemById(equipment.head)):null;
-    if(d.outfit)disposeOutfit(d.outfit);d.outfit=equipment.outfit?attachOutfit(THREE,d.model,itemById(equipment.outfit),{hood:!equipment.head}):null;
-    if(d.wings)disposeGardenModel(d.wings);d.wings=equipment.wings?attachWings(THREE,d.model,itemById(equipment.wings)):null;
-    if(d.shield)disposeVisual(d.shield);d.shield=null;const shield=itemById(equipment.shield);if(shield){const mat=new THREE.ShaderMaterial({uniforms:{tint:{value:new THREE.Color(shield.color)},pulse:{value:1}},vertexShader:'varying vec3 n;varying vec3 v;void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-p.xyz);gl_Position=projectionMatrix*p;}',fragmentShader:'uniform vec3 tint;uniform float pulse;varying vec3 n;varying vec3 v;void main(){float rim=pow(1.-abs(dot(normalize(n),normalize(v))),2.5);gl_FragColor=vec4(tint,(.04+rim*.55)*pulse);}',transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});d.shield=new THREE.Mesh(new THREE.SphereGeometry(1.35,32,20),mat);d.shield.position.y=1;root.add(d.shield);}
-    d.bones=new Map();d.model.traverse(o=>{if(o.isBone)d.bones.set(o.name.replace(/[^a-z0-9]/gi,'').replace(/^mixamorig\d*/,''),o);});
+    const wing=itemById(equipment.wings);
+    const next=[equipment.weapon||null,equipment.head||null,equipment.outfit||null,
+      equipment.wings||null,wing?.updatedAt||0,equipment.shield||null];
+    const last=d.equipmentVisualSlots||[];
+    if(next.every((value,i)=>value===last[i]))return;
+    if(next[0]!==last[0]){
+     const weapon=itemById(equipment.weapon);
+     if(d.blade)disposeVisual(d.blade);d.blade=null;if(weapon&&(weapon.exotic||weapon.id==='chiang-token'||meleeFamilies.includes(weapon.family)||isSpellWeapon(weapon))){d.blade=isSpellWeapon(weapon)?makeSpellEquipment(weapon):makeHeldWeapon(weapon);root.add(d.blade);}d.weaponId=weapon?.id;d.staffRaise=0;
+    }
+    if(next[1]!==last[1]){
+     if(d.headgear)disposeHeadgear(d.headgear);d.headgear=equipment.head?attachHeadgear(THREE,d.model,itemById(equipment.head)):null;
+    }
+    if(next[2]!==last[2]||(equipment.outfit&&Boolean(next[1])!==Boolean(last[1]))){
+     if(d.outfit)disposeOutfit(d.outfit);d.outfit=equipment.outfit?attachOutfit(THREE,d.model,itemById(equipment.outfit),{hood:!equipment.head}):null;
+    }
+    if(next[3]!==last[3]||next[4]!==last[4]){
+     if(d.wings)disposeGardenModel(d.wings);d.wings=wing?attachWings(THREE,d.model,wing):null;
+    }
+    if(next[5]!==last[5]){
+     if(d.shield)disposeVisual(d.shield);d.shield=null;const shield=itemById(equipment.shield);if(shield){const mat=new THREE.ShaderMaterial({uniforms:{tint:{value:new THREE.Color(shield.color)},pulse:{value:1}},vertexShader:'varying vec3 n;varying vec3 v;void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-p.xyz);gl_Position=projectionMatrix*p;}',fragmentShader:'uniform vec3 tint;uniform float pulse;varying vec3 n;varying vec3 v;void main(){float rim=pow(1.-abs(dot(normalize(n),normalize(v))),2.5);gl_FragColor=vec4(tint,(.04+rim*.55)*pulse);}',transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});d.shield=new THREE.Mesh(new THREE.SphereGeometry(1.35,32,20),mat);d.shield.position.y=1;root.add(d.shield);}
+    }
+    if(!d.bones){d.bones=new Map();d.model.traverse(o=>{if(o.isBone)d.bones.set(o.name.replace(/[^a-z0-9]/gi,'').replace(/^mixamorig\d*/,''),o);});}
+    d.equipmentVisualSlots=next;d.equipmentSignature=JSON.stringify(next);
   }
   beforeAnimation(){for(let i=this.restore.length-1;i>=0;i--){const [object,property,value]=this.restore[i];object[property].copy(value);}this.restore.length=0;}
   play(event,root){if(!event||this.seen.has(event.id))return;this.seen.add(event.id);if(this.seen.size>100)this.seen.delete(this.seen.values().next().value);const item=itemById(event.weapon);if(!item)return;const data={...item,...event,charge:event.charge||0};if(root&&isSpellWeapon(item))root.userData.staffCastingUntil=performance.now()+

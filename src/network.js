@@ -34,11 +34,12 @@ export class TempleNetwork extends EventTarget{
   }
   async connect(){
     if(!this.token)throw new Error('Join Temple first');if(this.socket){this.socket.onclose=null;this.socket.close();}
-    const url=new URL(this.base);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/socket';url.searchParams.set('token',this.token);url.searchParams.set('patch','1');
+    this.compactCombat=false;
+    const url=new URL(this.base);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/socket';url.searchParams.set('token',this.token);url.searchParams.set('patch','2');
     await new Promise((resolve,reject)=>{const socket=new WebSocket(url);this.socket=socket;const timer=setTimeout(()=>{socket.close();reject(new Error('Realtime connection timed out'));},10_000);socket.onopen=()=>{clearTimeout(timer);this.reconnectAttempt=0;this.dispatch('connection',{connected:true});resolve();};socket.onerror=()=>{clearTimeout(timer);reject(new Error('Realtime connection failed'));};socket.onmessage=event=>{if(socket!==this.socket||event.data==='pong')return;try{const message=JSON.parse(event.data);
       if(message.type==='state-ack')this.acknowledgeState(message.data);
       if(message.type==='state-rejected')this.rejectedState(message.data);
-      if(message.type==='welcome')this.wireWorld=message.data.world;
+      if(message.type==='welcome'){this.wireWorld=message.data.world;this.compactCombat=message.data.compactCombat===true;}
       if(message.type==='world')this.wireWorld=message.data;
       if(message.type==='world-patch'){
        const next=applyWorldPatch(this.wireWorld,message.data);
@@ -87,10 +88,25 @@ export class TempleNetwork extends EventTarget{
     const label=String(data?.error||'Unknown');
     this.rejectionCounts[label]=(this.rejectionCounts[label]||0)+1;
   }
-  async action(action,data={}){return this.request('/api/action',{
-    method:'POST',body:{action,requestId:crypto.randomUUID(),...data},
+  async action(action,data={}){
+   const compactCombat=action==='attack'&&this.compactCombat&&this.socket?.readyState===WebSocket.OPEN;
+   const result=await this.request('/api/action',{
+    method:'POST',body:{action,requestId:crypto.randomUUID(),...data,...(compactCombat?{compactCombat:true}:{})},
     timeoutMs:action==='gm-wing-publish'?30000:0
-  });}
+   });
+   if(result.worldRevision>(this.wireWorld?.revision??-1)){
+    // Stream interruptions must not strand a completed action. This is a
+    // presentation recovery only; do not alter the socket's patch baseline.
+    this.pendingCombatRevision=Math.max(result.worldRevision,this.pendingCombatRevision||0);
+    if(!this.combatSyncTimer)this.combatSyncTimer=setTimeout(()=>{
+     this.combatSyncTimer=0;
+     const revision=this.pendingCombatRevision;this.pendingCombatRevision=0;
+     if(!this.closedByUser&&revision>(this.wireWorld?.revision??-1))
+      void this.world().then(data=>this.dispatch('world',data.world)).catch(()=>{});
+    },850);
+   }
+   return result;
+  }
   async chat(text){return this.request('/api/chat',{method:'POST',body:{text}});}
   async chatHistory(){return this.request('/api/chat');}
   async createSaveCode(){return this.request('/api/save-code',{method:'POST',body:{}});}
@@ -114,7 +130,7 @@ export class TempleNetwork extends EventTarget{
   }
   dispatch(type,data){this.dispatchEvent(new CustomEvent(type,{detail:data}));}
   close(){
-    this.closedByUser=true;clearTimeout(this.reconnectTimer);if(this.socket?.readyState<2)this.socket.close(1000,'Leaving Temple');this.socket=null;
+    this.closedByUser=true;clearTimeout(this.reconnectTimer);clearTimeout(this.combatSyncTimer);this.combatSyncTimer=0;this.pendingCombatRevision=0;if(this.socket?.readyState<2)this.socket.close(1000,'Leaving Temple');this.socket=null;
     if(!this.token||!this.base)return;const url=`${this.base}/api/disconnect?token=${encodeURIComponent(this.token)}`;
     if(navigator.sendBeacon){navigator.sendBeacon(url,new Blob(['{}'],{type:'text/plain;charset=UTF-8'}));return;}
     fetch(url,{method:'POST',body:'{}',keepalive:true}).catch(()=>{});

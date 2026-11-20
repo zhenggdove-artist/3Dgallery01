@@ -855,3 +855,24 @@ no heart drops, and a monster remaining inside the newly protected art area.
   actors. No universal zero-lag claim. Repeated weapon trails now reuse one entry.
 - ESC now closes a panel even when its textarea is focused. Render counters
   now include both world and VHS passes instead of only the final fullscreen quad.
+
+## 2026-11-20 user follow-up: movement, real building hits and EQUIP
+
+- Recorded controller and visible Hips motion simultaneously: the unmodified
+  GLB walk loop jumped backward four times over 5.2 s, with no authority
+  corrections. Walk/run retain their original pose and cyclic motion; the
+  per-loop translation drift is removed. Post-fix trace has no backwards steps.
+- Kept the EQUIP canvas, neutral bind-pose rig and unchanged equipment resident.
+  Paper-doll wings use the real sails without emitters and face the camera.
+  Inventory image encoding and portrait program compilation now yield.
+- Real Ember casts through the room API produced 39 hits across 12 lots.
+  Room protocol 2 sends compact attack receipts, per-field private profile
+  changes and batches structure events; old clients retain protocol 1/full
+  replies. GPU-impact fire and smoke use two fixed-size batches without
+  per-frame particle uploads. Damage, colliders, particles per emitter and
+  staged collapse are retained.
+- Browser reproduction: `node tests/live-hotpaths-browser.mjs` against local
+  Wrangler and static site only; `RUN_LABEL=before` replays the prior front end.
+  Reports, CPU profiles and screenshots are under `output/live-hotpaths/`.
+  Local tests do not characterize production geographic latency or mobile GPU
+  variance; keep the network and rendering measurements separate.

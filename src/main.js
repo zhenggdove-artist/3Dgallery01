@@ -186,10 +186,7 @@ const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>contro
 const portraitViewport=new EquipmentPortraitViewport();
 function refreshEquipmentPortrait(){
  const canvas=document.getElementById('bag-portrait');
- if(ui.panelName!=='bag'||ui.bagCategory!=='equipment'||!canvas?.isConnected){
-  if(portraitViewport.canvas)portraitViewport.close();
-  return;
- }
+ if(ui.panelName!=='bag'||ui.bagCategory!=='equipment'||!canvas?.isConnected)return;
  if(!assetsReady||!localRoot?.userData?.model)return;
  const signature=JSON.stringify([self?.key,self?.color,world?.profile?.equipment,
   localRoot?.userData?.equipmentSignature]);
@@ -202,7 +199,9 @@ function refreshEquipmentPortrait(){
   // No cached failed <img>: retry on the next frame, including after DOM replacement.
  }
 }
-ui.addEventListener('equipment-portrait',()=>requestAnimationFrame(refreshEquipmentPortrait));
+ui.addEventListener('equipment-portrait',()=>{
+ portraitViewport.lastWidth=0;requestAnimationFrame(refreshEquipmentPortrait);
+});
 boot();
 
 async function boot(){
@@ -271,7 +270,7 @@ function acceptWorldView(next){
  if(!next||(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&
     next.revision<=world.revision))return false;
  const wings=Array.isArray(next.customWings)?next.customWings:(world?.customWings||[]);
- registerCustomWings(wings);world={...next,customWings:wings};syncWorld();return true;
+ if(wings!==world?.customWings)registerCustomWings(wings);world={...next,customWings:wings};syncWorld();return true;
 }
 network.addEventListener('welcome',event=>{const data=event.detail;self={...self,...data.self};players=data.players;syncPlayers();acceptWorldView(data.world);});
 // Coalesce high-frequency Worker snapshots: a busy attack can deliver many
@@ -291,7 +290,7 @@ network.addEventListener('wing-catalog',event=>{
  if(world){world={...world,customWings:wings};arena.world=world;ui.setWorld(world);
   if(['wing-shop','wing-manage'].includes(ui.panelName))ui.renderPanel();}
 });
-network.addEventListener('players',event=>{players=event.detail;ui.setPlayers(players);syncPlayers();});
+network.addEventListener('players',event=>{players=event.detail;syncPlayers();});
 network.addEventListener('state',event=>{const data=event.detail;if(data.key===self?.key)return;let target=remoteTargets.get(data.key);if(!target){syncPlayers();target=remoteTargets.get(data.key);}if(target){target.position.fromArray(data.state.position);target.rotation=data.state.rotation;target.animation=data.state.animation;}});
 network.addEventListener('chat',event=>{ui.addChat(event.detail);showPlayerSpeech(event.detail);});
 network.addEventListener('chat-reset',()=>{ui.clearChat();for(const entry of speechBubbles.values())entry.element.remove();speechBubbles.clear();});
@@ -300,6 +299,10 @@ network.addEventListener('attack',event=>showAttack(event.detail));
 network.addEventListener('channel-stop',event=>{const root=roots.get(event.detail.owner);if(root){arena.presentation.vfx.stopChannel(root);root.userData.staffCastingUntil=0;}});
 network.addEventListener('structure-destroyed',event=>arena.showStructureBreak(event.detail));
 network.addEventListener('structure-hit',event=>arena.showStructureHit(event.detail));
+network.addEventListener('structure-events',event=>{
+ for(const hit of event.detail.hits)arena.showStructureHit(hit);
+ for(const broken of event.detail.broken)arena.showStructureBreak(broken);
+});
 network.addEventListener('state-ack',event=>{
  const ack=event.detail||{};
  if(!controller||ack.seq!==network.lastAcceptedSequence||ack.seq<=network.lastCorrectedSequence)return;
@@ -607,8 +610,11 @@ function createLocalPlayer(data){
 
 function syncPlayers(){
   if(!self)return;const live=new Set([self.key]);for(const player of players){if(player.role!=='fighter')continue;live.add(player.key);if(player.key===self.key)continue;let root=roots.get(player.key);if(!root){root=arena.createPlayer(player.color,false,player.name);root.name=`Player ${player.name}`;scene.add(root);roots.set(player.key,root);remoteTargets.set(player.key,{position:new THREE.Vector3(),rotation:0,animation:'idle'});}if(player.state){const target=remoteTargets.get(player.key);target.position.fromArray(player.state.position);target.rotation=player.state.rotation;target.animation=player.state.animation;root.visible=player.role==='fighter';}else root.visible=false;}
-  for(const player of players){if(player.role!=='fighter')continue;const root=roots.get(player.key);if(root){arena.setPlayerEquipment(root,player.profile?.equipment);if(root!==localRoot)setHealthBar(root,player.profile?.hp,player.profile?.maxHp);root.userData.deadUntil=player.profile?.deadUntil||0;applyHitReaction(root,player.profile);statusVisuals.sync(root,player.profile?.effects);}}
-  for(const [key,root] of roots)if(key!==self.key&&!live.has(key)){statusVisuals.clear(root);root.removeFromParent();roots.delete(key);remoteTargets.delete(key);}ui.setPlayers(players);
+  // The authoritative private world is the ONLY owner of local equipment,
+  // effects and impulses. A delayed cached roster can contain older combat
+  // state even after the matching HTTP/WS world has been applied.
+  for(const player of players){if(player.role!=='fighter'||player.key===self.key)continue;const root=roots.get(player.key);if(root){arena.setPlayerEquipment(root,player.profile?.equipment);setHealthBar(root,player.profile?.hp,player.profile?.maxHp);root.userData.deadUntil=player.profile?.deadUntil||0;applyHitReaction(root,player.profile);statusVisuals.sync(root,player.profile?.effects);}}
+  for(const [key,root] of roots)if(key!==self.key&&!live.has(key)){statusVisuals.clear(root);arena.removePlayer(root);roots.delete(key);remoteTargets.delete(key);}ui.setPlayers(players);
 }
 function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root||!hit||root.userData.lastHitReaction===hit.id||Date.now()-hit.time>2500)return;root.userData.lastHitReaction=hit.id;audio.play('hit',root===localRoot?1:.35);root.userData.hitFlashUntil=performance.now()+250;
  if((hit.stunMs||0)>=900){const remaining=Math.max(0,hit.stunMs-(Date.now()-hit.time));root.userData.knockdown={start:performance.now(),duration:remaining};}if(root===localRoot){
@@ -645,14 +651,23 @@ function updateKnockdowns(){
   model.rotation.z=model.userData.knockdownBase-Math.PI*.39*collapsed;
  }
 }
-function syncWorld(){if(!world)return;audio.setVolumes(world.audioSettings||{});if(world.musicVersion)audio.setUploadedMusic(network.base,world.musicVersion);arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));damageNumbers.receive(world.damageEvents);arena.sync(world,players);collectorView.sync(world.collector);ui.setWorld(world);ui.showCollectorSale(world.collectorSale,self?.key);ui.showKillEvents(world.killEvents);
+let lastSyncedWorld=null;
+function syncWorld(){if(!world)return;
+ const previous=lastSyncedWorld;lastSyncedWorld=world;
+ if(!previous||world.audioSettings!==previous.audioSettings)audio.setVolumes(world.audioSettings||{});
+ if(world.musicVersion&&world.musicVersion!==previous?.musicVersion)audio.setUploadedMusic(network.base,world.musicVersion);
+ if(!previous||world.customArtworks!==previous.customArtworks)
+  arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));
+ if(!previous||world.damageEvents!==previous.damageEvents)damageNumbers.receive(world.damageEvents);
+ arena.sync(world,players);
+ if(!previous||world.collector!==previous.collector)collectorView.sync(world.collector);
+ ui.setWorld(world);ui.showCollectorSale(world.collectorSale,self?.key);ui.showKillEvents(world.killEvents);
   // Monster deaths use the SAME purely visual golden burst as thrown artwork.
   // Server-issued IDs prevent repeats on sync/reconnect; no attack collider.
   for(const death of world.monsterDeathEvents||[]){
    if(!Array.isArray(death.position)||Date.now()-death.time>5000)continue;
    bursts.play(death.position,'monster-death-'+death.id);
   }
- for(const player of players){const root=roots.get(player.key);if(root)statusVisuals.sync(root,player.profile?.effects);}
  if(arena.monster)statusVisuals.sync(arena.monster,world.monster?.effects);
  for(const {root,state} of arena.islandEnemies.extraLive)statusVisuals.sync(root,state?.effects);const profile=world.profile,dead=profile?.deadUntil>Date.now();
  // Only visualize a confirmed server-side HP increase during a flower channel.

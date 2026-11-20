@@ -404,3 +404,90 @@ export function disposePlume(effect){
  effect.root.traverse(o=>{if(o.isPoints){o.geometry.dispose();o.material.dispose();}});
  effect.root.removeFromParent();
 }
+
+// Reuse the original flame and smoke sprites, opacity/size curves and
+// trajectories, but batch every impact into two GPU point clouds.
+export class CityImpactPlumes{
+ constructor(root,textures,mobile=false){
+  this.time={value:0};this.capacity=mobile?15:24;this.cursor=0;
+  this.slots=[];this.lastSpawn=-Infinity;
+  this.layers=['flame','smoke'].map(type=>{
+   const flame=type==='flame',count=flame?Math.ceil((mobile?18:35)*.63):(mobile?18:35);
+   const geo=new THREE.BufferGeometry();
+   const attribute=(name,size)=>{
+    const attr=new THREE.BufferAttribute(new Float32Array(this.capacity*count*size),size);
+    geo.setAttribute(name,attr.setUsage(THREE.DynamicDrawUsage));return attr;
+   };
+   const initial=attribute('position',3),motion=attribute('plumeMotion',4),birth=attribute('plumeBirth',1);
+   birth.array.fill(-100);
+   const material=new THREE.PointsMaterial({map:textures[type],size:flame?.65:1.5,
+    transparent:true,opacity:flame?.95:.54,depthWrite:false});
+   material.customProgramCacheKey=()=>type+'-impact-plume-batch';
+   material.onBeforeCompile=shader=>{
+    shader.uniforms.plumeTime=this.time;
+    shader.vertexShader=shader.vertexShader.replace('void main() {',`
+     attribute vec4 plumeMotion;
+     attribute float plumeBirth;
+     uniform float plumeTime;
+     varying float vPlumeOpacity;
+     void main() {
+    `).replace('#include <begin_vertex>',`
+     #include <begin_vertex>
+     float age = plumeTime - plumeBirth;
+     vPlumeOpacity = max(0.0,1.0-age/4.4);
+     if (vPlumeOpacity <= 0.0) {
+      gl_Position=vec4(2.0,2.0,2.0,1.0);gl_PointSize=0.0;return;
+     }
+     transformed += vec3(
+      plumeMotion.x*age+sin(age*2.0+plumeMotion.w)*0.16,
+      plumeMotion.y*age,
+      plumeMotion.z*age+cos(age*1.3+plumeMotion.w)*0.14
+     );
+    `).replace('gl_PointSize = size;',`gl_PointSize = size * (1.0 + age * ${flame?'0.06':'0.23'});`);
+    shader.fragmentShader='varying float vPlumeOpacity;\n'+shader.fragmentShader
+     .replace('vec4 diffuseColor = vec4( diffuse, opacity );','vec4 diffuseColor = vec4(diffuse,opacity*vPlumeOpacity);');
+   };
+   const points=new THREE.Points(geo,material);
+   points.name=type+' · shared city impact particles';points.frustumCulled=false;
+   points.visible=false;root.add(points);
+   return {flame,count,initial,motion,birth,points};
+  });
+ }
+ setVisible(visible){for(const {points} of this.layers)points.visible=visible;}
+ spawn(position,seed=1,limit=this.capacity){
+  const slot=this.cursor++%this.capacity,now=this.time.value,r=random(seed);
+  const prior=this.slots.indexOf(slot);if(prior>=0)this.slots.splice(prior,1);
+  this.slots.push(slot);
+  while(this.slots.length>Math.min(limit,this.capacity)){
+   const expired=this.slots.shift();
+   for(const {birth,count} of this.layers){
+    birth.array.fill(-100,expired*count,(expired+1)*count);
+    birth.addUpdateRange(expired*count,count);birth.needsUpdate=true;
+   }
+  }
+  this.lastSpawn=now;this.setVisible(true);
+  for(const {flame,count,initial,motion,birth} of this.layers){
+   const start=slot*count;
+   for(let i=start;i<start+count;i++){
+    initial.setXYZ(i,position[0]+(r()-.5)*.8,position[1]+(r()-.5)*.45,position[2]+(r()-.5)*.8);
+    const vx=(r()-.5)*.7,vz=(r()-.5)*.7,s=(flame?1.1:1.65)+r()*.9;
+    motion.setXYZW(i,vx,s*(flame?.75:1.1),vz,r()*6.283);
+    birth.setX(i,now);
+   }
+   initial.addUpdateRange(start*3,count*3);initial.needsUpdate=true;
+   motion.addUpdateRange(start*4,count*4);motion.needsUpdate=true;
+   birth.addUpdateRange(start,count);birth.needsUpdate=true;
+  }
+ }
+ update(dt){
+  this.time.value+=dt;
+  if(this.time.value-this.lastSpawn>=4.4)this.setVisible(false);
+ }
+ reset(){
+  this.slots.length=0;this.lastSpawn=-Infinity;this.setVisible(false);
+  for(const {birth} of this.layers){birth.array.fill(-100);birth.clearUpdateRanges();birth.needsUpdate=true;}
+ }
+ dispose(){
+  for(const {points} of this.layers){points.removeFromParent();points.geometry.dispose();points.material.dispose();}
+ }
+}

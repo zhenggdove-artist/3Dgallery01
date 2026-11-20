@@ -17,7 +17,7 @@ test('equipped marker, 3px chat lift, GM help inside S and opaque clean paper do
  assert.match(css,/#gm-help\{display:none!important\}/);
  assert.match(ui,/data-gm-action="help" aria-label="GM instructions and shortcuts"/);
  assert.match(css,/#panel #bag-portrait-frame::after\{display:none!important\}/);
- assert.match(portrait,/alpha:false/);assert.match(portrait,/setClearColor\(0xe9e8ed,1\)/);
+ assert.match(portrait,/alpha:false/);assert.match(portrait,/setClearColor\(0xf5f4f7,1\)/);
 });
 test('store classes all original staffs as mid and giraffe melee and jellybrella as mid',()=>{
  for(const id of ['water','tide-1','tide-5','frost-5','storm-5','prism-5','ember-5','bloom-5','nova-5']){

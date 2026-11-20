@@ -50,11 +50,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Verify production Worker supports current artwork APIs
+      - name: Verify production Worker protocol and artwork APIs
         run: |
           node --input-type=module <<'NODE'
           const url = 'https://temple-arena.zhenggdove-artist.workers.dev/health';
-          const required = ['artMediaUpload', 'artBombPlace', 'gmReset'];
+          const required = ['artMediaUpload', 'artBombPlace', 'gmReset', 'compactCombat'];
           let verified = false;
           for (let attempt = 1; attempt <= 6; attempt++) {
             try {

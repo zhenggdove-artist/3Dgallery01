@@ -494,6 +494,7 @@ body.sniper-scoped #chat-hud{visibility:hidden!important;pointer-events:none!imp
 /* The GM exclamation mark lives inside the S panel; it never blocks the HP bar. */
 #gm-help{display:none!important}
 /* Clear, stable portrait backdrop; remove the translucent stacked checker/scanline layers. */
-#panel #bag-portrait-frame{background:#e9e8ed!important;isolation:isolate}
+#panel #bag-portrait-frame{background:#f5f4f7!important;isolation:isolate}
 #panel #bag-portrait-frame::after{display:none!important}
+#panel #bag-portrait{filter:none}
 #panel #bag-portrait{filter:none!important;background:transparent!important}

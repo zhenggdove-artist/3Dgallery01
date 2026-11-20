@@ -7,7 +7,7 @@ import {DurableObject} from 'cloudflare:workers';
 import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,releasePlayerWorldState,tickWorld,validateState,isLiveStaffChannel,validColor,validName,worldView,worldProfileView,MAX_FIGHTERS,MAX_SPECTATORS} from '../src/shared/temple-rules.js';
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
 import {playerStats} from '../src/shared/player-stats.js';
-import {createWorldPatch} from '../src/shared/world-patch.js';
+import {changedWorldFields,createWorldPatch} from '../src/shared/world-patch.js';
 
 const MUSIC_CHUNK_BYTES=512*1024,MAX_GM_MUSIC_BYTES=7_500_000;
 const ROOM_ID='temple-main-v1',SESSION_MS=24*60*60*1000,SAVE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -17,7 +17,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:4,features:{artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,motionAuthority:true,supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:5,features:{artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,motionAuthority:true,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
@@ -189,9 +189,9 @@ export class TempleRoom extends DurableObject{
   connect(request,session,token){
     if(request.headers.get('Upgrade')?.toLowerCase()!=='websocket')return json({error:'WebSocket required'},426);
     for(const ws of this.ctx.getWebSockets(session.id)){this.closed.add(ws);try{ws.close(1000,'Reconnected');}catch{}}
-    const [client,server]=Object.values(new WebSocketPair()),patch=new URL(request.url).searchParams.get('patch')==='1';this.ctx.acceptWebSocket(server,[session.id]);server.serializeAttachment({sessionId:session.id,profileKey:session.profile_key,role:session.role,seat:session.seat,lastStateAt:0,patch});
+    const [client,server]=Object.values(new WebSocketPair()),protocol=new URL(request.url).searchParams.get('patch'),compact=protocol==='2',patch=compact||protocol==='1';this.ctx.acceptWebSocket(server,[session.id]);server.serializeAttachment({sessionId:session.id,profileKey:session.profile_key,role:session.role,seat:session.seat,lastStateAt:0,patch,compact});
     const view=worldView(this.readWorld(),session.profile_key);if(patch)this.worldBaselines.set(server,view);
-    server.send(JSON.stringify({type:'welcome',data:{self:this.self(session),players:this.roster(),world:view}}));this.broadcastRoster();this.armAlarm();
+    server.send(JSON.stringify({type:'welcome',data:{self:this.self(session),players:this.roster(),world:view,compactCombat:compact}}));this.broadcastRoster();this.armAlarm();
     return new Response(null,{status:101,webSocket:client});
   }
 
@@ -251,7 +251,13 @@ export class TempleRoom extends DurableObject{
      const next={position:[...newProfile.respawnPosition],rotation:0,animation:'idle',visible:true};
      this.sql.exec('UPDATE sessions SET state=? WHERE id=?',JSON.stringify(next),session.id);
     }
-    const response={ok:true,...result,world:worldView(world,session.profile_key,Date.now(),['gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate','redeem-wing-design'].includes(body.action))};
+    const compact=body.action==='attack'&&body.compactCombat===true&&
+      this.ctx.getWebSockets(session.id).some(ws=>ws.readyState===1&&!this.closed.has(ws)&&ws.deserializeAttachment()?.compact);
+    // Attack results still contain hit events and the original success/error
+    // fields, but the room patch already carries the new authority revision.
+    // Do not encode, persist and retransmit a full gallery for every pulse.
+    const response={ok:true,...result,...(compact?{worldRevision:world.revision}:
+      {world:worldView(world,session.profile_key,Date.now(),['gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate','redeem-wing-design'].includes(body.action))})};
     this.ctx.storage.transactionSync(()=>{
       this.save(world);
       if(body.action==='reset-player-artworks'&&Array.isArray(result.removedArtworkMediaIds)){
@@ -270,7 +276,7 @@ export class TempleRoom extends DurableObject{
     }
     if(result.publishedWingId||result.unpublishedWingId||result.updatedWingId||result.personalWingId)
       this.broadcast('wing-catalog',{wings:world.customWings||[]});
-    this.broadcastWorld(world);if(didRespawn)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))this.broadcast('structure-hit',hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))this.broadcast('structure-destroyed',broken);await this.armAlarm();return json(response);
+    this.broadcastWorld(world);if(didRespawn)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);this.broadcastStructureEvents(result.structureHits||(result.structureHit?[result.structureHit]:[]),result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]));await this.armAlarm();return json(response);
   }
 
   async saveCode(session){
@@ -421,11 +427,30 @@ export class TempleRoom extends DurableObject{
     return json({ok:true,online,events});
   }
   roster(){this.prune();const world=this.readWorld();return this.sql.exec('SELECT id,profile_key,name,color,role,seat,state FROM sessions WHERE expires>? ORDER BY seat',Date.now()).toArray().map(row=>({id:row.id,key:row.profile_key,name:row.name,color:row.color,role:row.role,seat:row.seat,state:row.state?JSON.parse(row.state):null,profile:world.profiles[row.profile_key]?publicProfile(world.profiles[row.profile_key]):null}));}
-  actors(){return this.roster().filter(player=>player.state?.position).map(player=>({...player,position:player.state.position}));}
+  actors(){
+   // Combat uses physical actors only, never a clone of public profiles or
+   // spectators. The /players roster still performs its own expiry cleanup.
+   const rows=this.sql.exec("SELECT id,profile_key,name,color,role,seat,state FROM sessions WHERE expires>? AND role='fighter' AND state IS NOT NULL ORDER BY seat",Date.now()).toArray();
+   return rows.map(row=>({id:row.id,key:row.profile_key,name:row.name,color:row.color,role:row.role,
+    seat:row.seat,position:JSON.parse(row.state).position})).filter(actor=>Array.isArray(actor.position));
+  }
   self(session){const world=this.readWorld(),profile=world.profiles[session.profile_key];return {id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,saveCode:session.save_code||null,profile:profile?publicProfile(profile):null};}
   prune(){const now=Date.now();for(const row of this.sql.exec('SELECT id FROM sessions WHERE expires<=?',now).toArray())this.disconnectSession(row.id,false);this.sql.exec('DELETE FROM rate_limits WHERE window_start<?',now-3_600_000);}
   disconnectSession(id,broadcast=true){const row=this.sql.exec('SELECT profile_key,name,role FROM sessions WHERE id=?',id).toArray()[0];for(const ws of this.ctx.getWebSockets(id)){this.closed.add(ws);try{ws.close(1000,'Disconnected');}catch{}}this.sql.exec('DELETE FROM sessions WHERE id=?',id);if(row){this.recordPresence(row,'offline');const world=this.world();if(releasePlayerWorldState(world,row.profile_key,Date.now())){this.save(world);this.broadcastWorld(world);}}if(broadcast)this.broadcastRoster();}
   broadcast(type,data,except){const text=JSON.stringify({type,data});for(const ws of this.sockets())if(ws!==except)try{ws.send(text);}catch{this.closed.add(ws);}}
+  broadcastStructureEvents(hits,broken){
+   if(!hits.length&&!broken.length)return;
+   let batch,legacy;
+   for(const ws of this.sockets())try{
+    if(ws.deserializeAttachment()?.compact){
+     batch??=JSON.stringify({type:'structure-events',data:{hits,broken}});ws.send(batch);
+    }else{
+     legacy??=[...hits.map(data=>JSON.stringify({type:'structure-hit',data})),
+      ...broken.map(data=>JSON.stringify({type:'structure-destroyed',data}))];
+     for(const packet of legacy)ws.send(packet);
+    }
+   }catch{this.closed.add(ws);}
+  }
   broadcastRoster(){this.lastRosterAt=Date.now();this.broadcast('players',this.roster());}
   broadcastWorld(world=this.readWorld()){
     const now=Date.now(),updateViewers=now-(this.lastSpectatorWorldAt||0)>=350;
@@ -443,8 +468,11 @@ export class TempleRoom extends DurableObject{
         const baselineKey=previous.revision+':'+previous.serverTime;
         let patch=commonPatches.get(baselineKey);
         if(!patch){patch=createWorldPatch(previous,common,true);commonPatches.set(baselineKey,patch);}
-        const fields=JSON.stringify(previous.profile)===JSON.stringify(profile)?patch.fields:{...patch.fields,profile};
-        ws.send(JSON.stringify({type:'world-patch',data:{...patch,fields}}));
+        const profileDelta=meta.compact&&previous.profile&&profile?
+          changedWorldFields(previous.profile,profile):null;
+        const fields=profileDelta||JSON.stringify(previous.profile)===JSON.stringify(profile)?patch.fields:{...patch.fields,profile};
+        ws.send(JSON.stringify({type:'world-patch',data:{...patch,fields,
+          ...(profileDelta&&Object.keys(profileDelta).length?{profile:profileDelta}:{})}}));
        }else ws.send(JSON.stringify({type:'world',data:next}));
        if(meta.patch)this.worldBaselines.set(ws,next);
       }

@@ -58,7 +58,7 @@ test('ruined city has surface-integrated cracks, detached architectural fittings
  assert.doesNotMatch(city,/\bfront\+/,'bare undefined front variable must never block boot');
  assert.match(city,/buildDetachableFixture\(lot,part/);
  assert.match(city,/buildBrokenStructure\(lot,index/);
- assert.match(city,/emitFireSmoke\(/);
+ assert.match(city,/new CityImpactPlumes\(/);
  assert.match(city,/resetBuildings\(\)/);
  assert.doesNotMatch(city,/this\.root\.add\(ground\)/);
  assert.match(vfx,/vCitySurface/);

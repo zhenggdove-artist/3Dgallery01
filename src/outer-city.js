@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
  cityLots,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
-import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
+import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,CityImpactPlumes,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
 import {CityWallPaint} from './city-wall-paint.js';
 import {CityFireField} from './city-fire-field.js';
 import {CitySplinterField} from './city-splinter-field.js';
@@ -395,17 +395,10 @@ export class OuterCity{
  constructor(scene,{mobile=false}={}){
   this.scene=scene;this.mobile=mobile;this.root=new THREE.Group();
   this.root.name='High-density ruined city, solid collision and staged destruction';scene.add(this.root);
-  this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();this.plumes=[];
+  this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();
    this.renderedTiers=new Map();this.poseCache=new Map();this.collapseAnimations=new Map();this.shakes=new Map();this.seenCityEvents=new Set();
-  this.plumeResources=createPlumeResources();this.plumePool=[];this.partsHidden=new Set();
-  // Move transient smoke/fire Points, typed-buffer and material allocations
-  // from the FIRST high-damage attack into scene initialization. Every one
-  // of the original 24 full-detail plumes now exists before gameplay starts.
-  for(let i=0;i<24;i++){
-   const plume=emitFireSmoke(this.root,[0,-1000,0],this.plumeResources,mobile,
-    9000+i*23);
-   plume.root.removeFromParent();this.plumePool.push(plume);
-  }
+  this.plumeResources=createPlumeResources();this.partsHidden=new Set();
+  this.impactPlumes=new CityImpactPlumes(this.root,this.plumeResources,mobile);
   this.fireField=new CityFireField(this.root,this.lots,this.plumeResources,mobile);
   this.splinters=new CitySplinterField(this.root,mobile);
   this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
@@ -483,14 +476,14 @@ export class OuterCity{
   // Warm the actual world target permutation (including the existing lights
   // and fog). These templates are normally detached and skipped at boot.
   const testLot=this.lots[0],group=new THREE.Group();group.name='City shader warmup';
-  const plume=this.plumePool[0];if(plume)group.add(plume.root);
+  this.impactPlumes.setVisible(true);
   for(const part of ['windows-0-0','sign','pipes','sheets-awning','timber','tiles','stone','sheets-roof','pillars-0'])group.add(this.cloneFixture(testLot,part));
   for(const batch of this.scrapBatches){batch.visible=true;batch.count=1;batch.setMatrixAt(0,new THREE.Matrix4().makeTranslation(0,-1000,0));}
   group.position.copy(camera.position);group.position.y-=2;
   this.scene.add(group);
   const before=renderer.getRenderTarget(),target=new THREE.WebGLRenderTarget(1,1,{type:THREE.HalfFloatType});
   try{renderer.setRenderTarget(target);await renderer.compileAsync(this.scene,camera);for(const program of renderer.info.programs)program.getUniforms();}
-  finally{for(const batch of this.scrapBatches){batch.visible=false;batch.count=0;}renderer.setRenderTarget(before);group.removeFromParent();group.clear();target.dispose();}
+  finally{this.impactPlumes.setVisible(false);for(const batch of this.scrapBatches){batch.visible=false;batch.count=0;}renderer.setRenderTarget(before);group.removeFromParent();group.clear();target.dispose();}
  }
  // Distinct physical windows, signs, iron sheets and stone assemblies
  // remain detailed. Keep their complete geometry/material/texture once per
@@ -798,16 +791,8 @@ export class OuterCity{
   effect.root.removeFromParent();
   this.pruneFixtureTemplates?.();
  }
- recyclePlume(effect){
-  effect.root.removeFromParent();
-  if(this.plumePool.length<24)this.plumePool.push(effect);
-  else disposePlume(effect);
- }
  spawnPlume(position,seed,limit=this.mobile?15:24){
-  const recycled=this.plumePool.pop()||null;
-  const plume=emitFireSmoke(this.root,position,this.plumeResources,this.mobile,seed,recycled);
-  this.plumes.push(plume);
-  if(this.plumes.length>limit)this.recyclePlume(this.plumes.shift());
+  this.impactPlumes.spawn(position,seed,limit);
  }
  // Each 10%-HP boundary causes an independent structural drop and debris burst.
  // Strong weapons can cross multiple boundaries in one hit; animate all rapidly.
@@ -933,7 +918,7 @@ export class OuterCity{
   this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
   this.pendingEjections=[];this.pendingEjectionKeys?.clear();this.deformationBasis?.clear();
   for(const effect of this.debris)this.removeDebris(effect);this.debris=[];
-  for(const effect of this.plumes)this.recyclePlume(effect);this.plumes=[];
+  this.impactPlumes.reset();
   // Hit tints are stored in the shared damage texture and have no overlay meshes.
   this.flashes=[];
  }
@@ -999,9 +984,7 @@ export class OuterCity{
   this.fireField?.update(time);
   this.splinters?.update(dt);
   this.queueNearbyBasis(camera);
-  for(let i=this.plumes.length-1;i>=0;i--)if(updateFireSmoke(this.plumes[i],dt)){
-   this.recyclePlume(this.plumes[i]);this.plumes.splice(i,1);
-  }
+  this.impactPlumes.update(dt);
   for(const batch of this.scrapBatches){batch.count=0;batch.visible=false;}
   for(let i=this.debris.length-1;i>=0;i--){
    const effect=this.debris[i];effect.age+=dt;
@@ -1038,7 +1021,7 @@ export class OuterCity{
   this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
   this.pendingEjections=[];this.pendingEjectionKeys?.clear();
   for(const effect of this.debris)this.removeDebris(effect);
-  for(const effect of [...this.plumes,...this.plumePool])disposePlume(effect);
+  this.impactPlumes.dispose();
   for(const templates of this.scrapPrefabs.values())for(const template of templates)
    template.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material]){m.map?.dispose();m.dispose();}});
   this.scrapPrefabs.clear();
