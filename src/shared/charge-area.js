@@ -95,6 +95,28 @@ export function insideChargedArea(area,target,actorRadius=1){
   Math.abs(target[1]-area.center[1])<=Math.max(3,area.radius*.7);
 }
 
+// Clip fused damage to the MAIN weapon's displayed warning, not to an
+// independently recomputed secondary spell shape. Calculations use the
+// same world X/Z metre coordinates as #58/#59 on client and Worker.
+export function insideSpellFootprint(footprint,point){
+ if(!footprint||!Array.isArray(point))return false;
+ const dx=point[0]-footprint.position[0],dz=point[2]-footprint.position[2];
+ if(footprint.shape==='circle')return Math.hypot(dx,dz)<=footprint.radius+.0001;
+ if(footprint.shape==='rectangle'){
+  const c=Math.cos(footprint.yaw),s=Math.sin(footprint.yaw);
+  const along=dx*c-dz*s,side=dx*s+dz*c;
+  return Math.abs(along)<=footprint.length*.5+.0001&&
+   Math.abs(side)<=footprint.width*.5+.0001;
+ }
+ if(footprint.shape==='sector'){
+  const c=Math.cos(footprint.yaw),s=Math.sin(footprint.yaw);
+  const along=dx*c-dz*s,side=dx*s+dz*c;
+  return along>=0&&Math.hypot(dx,dz)<=footprint.radius+.0001&&
+   Math.abs(side)<=along*Math.tan((footprint.angleDeg||90)*Math.PI/360)+.0001;
+ }
+ return false;
+}
+
 // One dimensional contract for authored warning assets #58/#59 and casting
 // geometry. #58 starts at the staff/clam mouth; #59 is centered midway along
 // the full server ray, never on the remote area.visualCenter marker.
