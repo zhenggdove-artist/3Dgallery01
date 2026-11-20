@@ -51,14 +51,25 @@ test('original arc-ray and charged-beam ShaderMaterials are warped, not replaced
   assert.ok(!meshes.some(x=>x.name==='synthetic-beam'),'no homemade beam geometry');
   const camera=new THREE.PerspectiveCamera(55,1,.1,200);
   camera.position.set(0,3,8);camera.lookAt(0,3,-12);
-  native.update(.1,camera);
-  assert.ok(e.curveBend>.6,'movement smoothly becomes rightward curvature');
+  const owner='prism-test';
+  e.owner=owner;
+  const lock={prismLocks:{[owner]:{targetKey:'enemy',kind:'monster',position:end.toArray(),since:1000}}};
+  native.update(.1,camera,id==='prism-3'?lock:null);
+  if(id==='prism-3'){
+   assert.ok(e.curveBend>.25,'prism bends smoothly toward its Worker-locked target');
+   assert.ok(e.fx.group.userData.templeCurve.sigmoid.value===1,'prism uses single native S-shaped guided beam');
+   assert.ok(e.visualEnd.distanceTo(end)<.001,'guided prism endpoint adheres to enemy');
+  }else{
+   assert.ok(e.curveBend>.6,'lightning movement smoothly becomes rightward curvature');
+   assert.ok(e.fx.group.userData.templeCurve.sigmoid.value===0,'lightning retains its original profile');
+  }
   assert.ok(e.fx.group.userData.templeCurve.bend.value>0);
   assert.ok(Math.abs(e.fx.group.userData.templeCurve.length.value-14)<.01);
   assert.ok(Math.abs(e.fx.group.userData.templeCurve.bend.value)<=BEAM_CURVE_METRES);
   actor.userData.staffStrafe=-1;
-  for(let n=0;n<16;n++)native.update(.05,camera);
-  assert.ok(e.curveBend<-.9,id+' movement bends left without snapping original animation');
+  for(let n=0;n<16;n++)native.update(.05,camera,id==='prism-3'?lock:null);
+  if(id==='prism-3')assert.ok(e.curveBend>.5,'prism stays guided despite caster strafing left');
+  else assert.ok(e.curveBend<-.9,'lightning movement bends left without snapping original animation');
   native.dispose();
  }
 });

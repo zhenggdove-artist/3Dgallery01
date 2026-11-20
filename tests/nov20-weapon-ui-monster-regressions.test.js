@@ -9,12 +9,11 @@ import {scaleUltimateFootprint,chargedArea,spellFootprint} from '../src/shared/c
 import {CITY_LOTS,CITY_MAX_HP,cityBlocked} from '../src/shared/city-layout.js';
 import {moveMonster} from '../src/shared/temple-rules.js';
 import {TripleBindingCurse} from '../src/binding-curse-triple.js';
-import {ForwardChannelBeam} from '../src/forward-channel-beam.js';
 const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('equipped marker, 3px chat lift, GM help inside S and opaque clean paper doll',()=>{
  const css=source('fidelity-ui.css'),ui=source('src/ui.js'),portrait=source('src/equipment-portrait-view.js');
  assert.match(css,/\.bag-cell\.equipped::after\{top:1px!important;bottom:auto!important/);
- assert.match(css,/#hud #chat-hud\{bottom:max\(160px/);
+ assert.match(css,/#hud #chat-hud\{bottom:max\(163px/);
  assert.match(css,/#gm-help\{display:none!important\}/);
  assert.match(ui,/data-gm-action="help" aria-label="GM instructions and shortcuts"/);
  assert.match(css,/#panel #bag-portrait-frame::after\{display:none!important\}/);
@@ -82,20 +81,14 @@ test('monsters are physically blocked by solid houses on server patrol and clien
  const sourceMob=source('src/island-enemies.js');
  assert.match(sourceMob,/cityBlocked\(x,z,next\.y,damage,\.58\)/);
 });
-test('four curved cardinal Prism beams, water surf and colored music notes in active VFX',()=>{
- const root=new THREE.Group(),fx=new ForwardChannelBeam(root,false);
- assert.equal(fx.paths.length,4);
- assert.ok(fx.paths.every(p=>p.geometry.attributes.position.count===65));
- fx.update(new THREE.Vector3(0,1,0),new THREE.Vector3(0,0,1),35,.8,.5);
- const top=fx.paths[1].geometry.attributes.position.array;
- assert.ok(Math.abs(top[32*3+1]-1)>5,'Prism beam must visibly curve upward');
- assert.ok(fx.paths.every(p=>p.userData.glow));
- fx.dispose();assert.equal(root.children.length,0);
+test('single guided native Prism beam, water surf and colored music notes in active VFX',()=>{
+ const vfx=source('src/weapon-vfx.js'),native=source('src/numbered-weapon-effects.js');
+ assert.doesNotMatch(vfx,/prismCardinalBeams|new ForwardChannelBeam/);
+ assert.match(native,/entry\.lockedPoint\.clone\(\)/);
+ assert.match(native,/world\?\.prismLocks\?\.\[e\.owner\]/);
  const shader=source('src/weapon-particle-effects.js');
  assert.match(shader,/float lane=floor\(u\*3\.\)/);
  assert.match(shader,/float crest=pow\(max/);
- const vfx=source('src/weapon-vfx.js');
- assert.match(vfx,/new ForwardChannelBeam\(this\.scene,false\)/);
  assert.match(vfx,/item\.id==='accordion'&&!data\.ultimate/);
  assert.match(source('src/reletter/odd-weapon-effects.js'),/pattern===5\?2400:650/);
 });

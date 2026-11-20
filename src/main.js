@@ -97,7 +97,18 @@ function clearChargeDelay(){
 }
 function scheduleBeamChannelStart(delay){
  if(beamStartTimer!==null)clearTimeout(beamStartTimer);
- beamStartTimer=setTimeout(()=>{beamStartTimer=null;beginStaffChannel();},Math.max(0,delay));
+ const scheduledWeapon=world?.profile?.equipment?.weapon;
+ beamStartTimer=setTimeout(()=>{
+  beamStartTimer=null;
+  beginStaffChannel();
+  // A single missed browser timer (GPU compile or background throttling)
+  // previously left the prism charged forever with NO active beam. Watch
+  // until the authenticated channel has actually started, even without rAF.
+  if(attackHeld&&chargeStarted!==null&&!staffChannel&&controller?.enabled&&
+     scheduledWeapon===world?.profile?.equipment?.weapon&&
+     ['lightning','beam'].includes(itemById(scheduledWeapon)?.family))
+   scheduleBeamChannelStart(260);
+ },Math.max(0,delay));
 }
 function startHeldCharge(){
  if(!attackHeld||attackHoldStarted===null||chargeStarted!==null||chargeRequest||staffChannel||
@@ -823,7 +834,7 @@ addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updat
 addEventListener('pagehide',()=>network.close());
 
 window.render_game_to_text=()=>JSON.stringify({mode:joined?'play':'entry',name:self?.name||null,role:self?.role||null,connected:network.socket?.readyState===WebSocket.OPEN,position:controller?.root.position.toArray().map(n=>+n.toFixed(2))||null,players:players.map(p=>({name:p.name,role:p.role,seat:p.seat})),economy:{wallet:world?.profile?.wallet??null,inventory:world?.profile?.inventory?.length||0,groundDrops:world?.groundDrops?.length||0,platformCoins:Object.values(world?.coins||{}).filter(c=>c.available).length,platformCoinTotal:Object.keys(world?.coins||{}).length},artworks:{total:arena.artworks.size,available:Object.values(world?.artworks||{}).filter(a=>!a.holder&&Date.now()>=(a.availableAt||0)).length},monster:world?.monster?.active?{variant:world.monster.variant,hp:world.monster.hp}:null,render:{fps:+fps.toFixed(1),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,pixelRatio:renderer.getPixelRatio(),gunMode:gun.mode,frameMs:+(frameSamples.reduce((a,b)=>a+b,0)/Math.max(1,frameSamples.length)).toFixed(2)},movementSync:{sent:network.stateSequence,acked:network.lastAcceptedSequence,
-  rejections:network.rejectionCounts},editorShortcut:'Shift+Y'});
+  rejections:network.rejectionCounts,recent:network.motionDiagnostics},editorShortcut:'Shift+Y'});
 window.advanceTime=milliseconds=>{externalUntil=performance.now()+120;const steps=Math.ceil(milliseconds/16.6667);for(let i=0;i<steps;i++)update(Math.min(.05,milliseconds/steps/1000),(performance.now()+i*milliseconds/steps)/1000);vhs.render(scene,camera,performance.now()/1000);};
-if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.templeTest={writer,plantHover,audio,bursts,artworkThrow,arena,camera,renderer,ui,gun,editor:artEditor,platformDelete,portraitViewport,controller:()=>controller,network,roots,items:ITEMS,slots:EQUIPPABLE_SLOTS,performanceSamples,vitals:()=>vitalModels,hit:applyHitReaction,channelDebug:()=>({attackHeld,chargeStarted,chargeRequest:!!chargeRequest,staffChannel:staffChannel?{...staffChannel}:null,staffChannelBusy,staffChannelShotAt,enabled:controller?.enabled,role:self?.role,weapon:world?.profile?.equipment?.weapon,joined,panel:ui.panelName,now:performance.now()})};
+if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.templeTest={writer,plantHover,audio,bursts,artworkThrow,arena,camera,renderer,ui,gun,editor:artEditor,platformDelete,portraitViewport,controller:()=>controller,network,roots,items:ITEMS,slots:EQUIPPABLE_SLOTS,performanceSamples,vitals:()=>vitalModels,hit:applyHitReaction,channelDebug:()=>({attackHeld,chargeStarted,chargeRequest:!!chargeRequest,staffChannel:staffChannel?{...staffChannel}:null,staffChannelBusy,staffChannelShotAt,enabled:controller?.enabled,role:self?.role,weapon:world?.profile?.equipment?.weapon,joined,panel:ui.panelName,now:performance.now(),attemptAge:performance.now()-(window._templeLastChannelAttempt||0),beamStartScheduled:beamStartTimer!==null,channelEligible:isChannelStaff(itemById(world?.profile?.equipment?.weapon)),paralysisUntil:world?.profile?.effects?.paralysis?.until||0,lastFrameFaultAt})};
 import {PLATFORMS} from './shared/arena.js';

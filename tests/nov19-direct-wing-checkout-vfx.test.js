@@ -19,7 +19,8 @@ test('original vendor #08 lightning and #29 charged yellow beam are used exclusi
  const weapon=readFileSync(new URL('../src/weapon-vfx.js',import.meta.url),'utf8');
  assert.match(numbered,/fx\.setEndpoints\(origin,end\)/);
  assert.match(numbered,/'charged-beam':'#f6c76c'/);
- assert.match(weapon,/new ForwardChannelBeam\(this.scene,false\)/,'four cardinal Prism arcs are channel-only overlays');
+ assert.doesNotMatch(weapon,/new ForwardChannelBeam\(this.scene,false\)/,'four cardinal Prism arcs are removed entirely');
+ assert.match(numbered,/entry\.lockedPoint\.clone\(\)/,'native prism follows server-locked target');
 });
 test('tap fires only a traveling elemental orb; channel delegates to actual vendor VFX',()=>{
  const scene=new THREE.Scene(),root=new THREE.Group();scene.add(root);

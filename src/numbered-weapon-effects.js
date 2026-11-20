@@ -204,6 +204,7 @@ export class NumberedWeaponEffects {
    live.heading=root?.rotation.y||0;
    live.lastPulse=performance.now();
    if(event.persistentAttackId)live.attackId=event.persistentAttackId;
+   if(event.owner)live.owner=event.owner;
    if(!live.waves&&!live.cycles)this.align(live);
    return true;
   }
@@ -236,6 +237,7 @@ export class NumberedWeaponEffects {
   const entry={
    spec,fx,group:fx.group,root,item,direction,visualDirection:direction.clone(),origin,target,options,
    curveBend:0,visualEnd:null,attackId:event.persistentAttackId||null,
+   owner:event.owner||null,lockedPoint:null,
    worldScale:ultimateWorldScale(spec.number,event,options),
    range:Math.max(.5,Number(event.range)||12),
    key,channel:!!event.channel,fusionEcho:!!event.fusionEcho,areaLocked,age:0,
@@ -298,7 +300,11 @@ export class NumberedWeaponEffects {
    fx.group.position.set(0,0,0);
    fx.group.quaternion.identity();
    const targeted=entry.channel&&!entry.fusionEcho&&entry.root?.userData?.staffTargetPoint;
-   const end=(targeted&&targetOnBeam(origin,dir,range,[targeted],1.6))||
+   // The single native prism beam ends on the Worker-selected living target.
+   // It follows off-axis enemies, not four independent XY cardinal arcs.
+   const end=entry.item?.family==='beam'&&entry.lockedPoint?
+    entry.lockedPoint.clone():
+    (targeted&&targetOnBeam(origin,dir,range,[targeted],1.6))||
     origin.clone().addScaledVector(dir,range);
    fx.setEndpoints(origin,end);
    entry.visualEnd=end.clone();
@@ -494,13 +500,21 @@ export class NumberedWeaponEffects {
    try{
    e.age+=dt;
    if(e.channel){
+    const prism=e.item?.family==='beam'&&e.spec.number===29&&!e.fusionEcho;
+    const locked=prism&&e.owner?world?.prismLocks?.[e.owner]:null;
+    e.lockedPoint=locked&&Array.isArray(locked.position)&&locked.position.length===3&&
+      locked.position.every(Number.isFinite)?new THREE.Vector3(...locked.position):null;
     const ray=e.root?.userData?.staffAimDirection;
-    const target=Array.isArray(ray)&&ray.length===3&&ray.every(Number.isFinite)&&!e.fusionEcho?
+    const aim=Array.isArray(ray)&&ray.length===3&&ray.every(Number.isFinite)&&!e.fusionEcho?
      new THREE.Vector3(...ray).normalize():e.direction;
+    const source=this.muzzleAt(e);
+    const target=e.lockedPoint?e.lockedPoint.clone().sub(source).normalize():aim;
     e.visualDirection.lerp(target,1-Math.exp(-dt*28)).normalize();
     if(e.spec.number===8||e.spec.number===29){
      const strafe=Number(e.root?.userData?.staffStrafe)||0;
-     e.curveBend=THREE.MathUtils.damp(e.curveBend||0,e.fusionEcho?0:THREE.MathUtils.clamp(strafe,-1,1),11,dt);
+     // Guided native shader: maintain a smooth curve while the lock persists.
+     const bend=prism?(e.lockedPoint?.62:0):(e.fusionEcho?0:THREE.MathUtils.clamp(strafe,-1,1));
+     e.curveBend=THREE.MathUtils.damp(e.curveBend||0,bend,11,dt);
     }
    }
    // Keep a server-confirmed continuous channel visible while its caster

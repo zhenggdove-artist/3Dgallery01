@@ -2,7 +2,7 @@ export class TempleNetwork extends EventTarget{
   constructor(config=window.TEMPLE_CONFIG){
     super();this.config=config;this.base=String(config.backendUrl||'').replace(/\/$/,'');this.token='';this.socket=null;this.joinData=null;this.reconnectTimer=0;this.reconnectAttempt=0;this.closedByUser=false;this.lastStateAt=0;
     this.stateSequence=0;this.lastAcceptedSequence=0;this.lastCorrectedSequence=0;
-    this.sentStates=new Map();this.rejectionCounts={};
+    this.sentStates=new Map();this.rejectionCounts={};this.motionDiagnostics=[];
   }
   setBackend(url){this.base=String(url||'').trim().replace(/\/$/,'');localStorage.setItem('temple-backend-url',this.base);}
   ensureConfigured(){if(!/^https?:\/\//.test(this.base)||this.base.includes('REPLACE_WITH_ACCOUNT'))throw new Error('Temple backend URL has not been deployed yet');}
@@ -56,10 +56,22 @@ export class TempleNetwork extends EventTarget{
     if(!seq)return;
     // Match an authoritative correction to the submitted sample, not the current frame.
     if(data&&this.sentStates.has(seq))data.submitted=[...this.sentStates.get(seq).position];
+    if(data?.corrected)this.noteMotionError({kind:'corrected-ack',seq,serverTime:data.serverTime,
+      distance:Array.isArray(data.position)&&Array.isArray(data.submitted)?
+       Math.hypot(...data.position.map((v,i)=>v-data.submitted[i])):null});
     this.lastAcceptedSequence=Math.max(this.lastAcceptedSequence,seq);
     for(const key of this.sentStates.keys())if(key<=seq)this.sentStates.delete(key);
   }
+  noteMotionError(entry){
+    this.motionDiagnostics.push({...entry,receivedAt:Date.now()});
+    if(this.motionDiagnostics.length>12)this.motionDiagnostics.shift();
+  }
   rejectedState(data){
+    const sample=this.sentStates.get(Number(data?.seq)||0);
+    this.noteMotionError({kind:'rejected',seq:Number(data?.seq)||0,
+      error:String(data?.error||'Unknown'),serverTime:data?.serverTime,
+      distance:sample&&Array.isArray(data?.state?.position)?
+       Math.hypot(...sample.position.map((v,i)=>v-data.state.position[i])):null});
     const label=String(data?.error||'Unknown');
     this.rejectionCounts[label]=(this.rejectionCounts[label]||0)+1;
   }
