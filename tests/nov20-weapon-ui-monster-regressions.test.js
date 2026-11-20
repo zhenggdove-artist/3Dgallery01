@@ -9,7 +9,6 @@ import {scaleUltimateFootprint,chargedArea,spellFootprint} from '../src/shared/c
 import {CITY_LOTS,CITY_MAX_HP,cityBlocked} from '../src/shared/city-layout.js';
 import {moveMonster} from '../src/shared/temple-rules.js';
 import {TripleBindingCurse} from '../src/binding-curse-triple.js';
-import {ForwardChannelBeam} from '../src/forward-channel-beam.js';
 const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('equipped marker, 3px chat lift, GM help inside S and opaque clean paper doll',()=>{
  const css=source('fidelity-ui.css'),ui=source('src/ui.js'),portrait=source('src/equipment-portrait-view.js');
