@@ -23,7 +23,12 @@ test('every specified colour/rank is exactly five times its former shop price',(
   assert.ok(SHOP_ITEMS.includes(item),item.id+' available to buy');
  }
  const actual=SHOP_ITEMS.filter(item=>item.mysteryWeapon).map(item=>item.id);
- assert.deepEqual(new Set(actual),premiumIds);
+ assert.deepEqual(new Set(actual),new Set([...premiumIds,'giraffe']));
+ const giraffe=SHOP_ITEMS.find(item=>item.id==='giraffe');
+ const originalGiraffe=EQUIPMENT.find(item=>item.id==='giraffe');
+ assert.ok(giraffe?.mysteryWeapon,'giraffe belongs only to the Mystery tab');
+ assert.equal(giraffe.price,ranks[2]+Math.min(180,originalGiraffe.price),
+  'changing shops must not silently quintuple giraffe price');
  // Exotic weapons may share 'whip', 'swatter' or 'pan' families but
  // should not inherit a 5x price multiplier.
  for(const id of ['goldfish','telephone','fan','accordion','clam','white-cat','planter-1']){
