@@ -1,7 +1,7 @@
 export class TempleNetwork extends EventTarget{
   constructor(config=window.TEMPLE_CONFIG){
     super();this.config=config;this.base=String(config.backendUrl||'').replace(/\/$/,'');this.token='';this.socket=null;this.joinData=null;this.reconnectTimer=0;this.reconnectAttempt=0;this.closedByUser=false;this.lastStateAt=0;
-    this.stateSequence=0;this.lastAcceptedSequence=0;this.lastCorrectedSequence=0;
+    this.stateSequence=0;this.lastAcceptedSequence=0;this.lastCorrectedSequence=0;this.lastAuthorityAt=0;
     this.sentStates=new Map();this.rejectionCounts={};this.motionDiagnostics=[];
   }
   setBackend(url){this.base=String(url||'').trim().replace(/\/$/,'');localStorage.setItem('temple-backend-url',this.base);}
@@ -60,6 +60,7 @@ export class TempleNetwork extends EventTarget{
       distance:Array.isArray(data.position)&&Array.isArray(data.submitted)?
        Math.hypot(...data.position.map((v,i)=>v-data.submitted[i])):null});
     this.lastAcceptedSequence=Math.max(this.lastAcceptedSequence,seq);
+    this.lastAuthorityAt=performance.now();
     for(const key of this.sentStates.keys())if(key<=seq)this.sentStates.delete(key);
   }
   noteMotionError(entry){
