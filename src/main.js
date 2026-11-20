@@ -325,7 +325,10 @@ network.addEventListener('state-rejected',event=>{
   // the authoritative location.
   if(sent&&!controller.status.freeze&&!controller.status.root&&!controller.vortexSpin&&
      keepPredictedMoveOnLatencyReject(rejection.error,accepted,sent.position,
-      current.toArray(),(x,z,y)=>arena.blocked(x,z,y))){
+      current.toArray(),(x,z,y)=>arena.blocked(x,z,y),{
+       sampleAgeMs:performance.now()-sent.sentAt,
+       authorityAgeMs:performance.now()-(network.lastAuthorityAt||sent.sentAt)
+      })){
     network.lastCorrectedSequence=Math.max(network.lastCorrectedSequence,seq);
     network.lastStateAt=0;
     return;
