@@ -1,7 +1,7 @@
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint} from './charge-area.js';
-import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,goldfishSchoolPosition} from './goldfish-school.js';
+import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition} from './goldfish-school.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
@@ -1761,9 +1761,23 @@ function tickPersistentAttacks(world,actors,now,rng){
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
      const first=!(fx.hitTimes?.[key]);
      fx.hitTimes??={};fx.hitTimes[key]=now;
-     const multiplier=contacts*GOLDFISH_DAMAGE_PER_FISH;
+     // T1 normal direct damage = at most 3 per fish, 90 for all 30.
+     // Persistent hit tracking already grants each fish ONE hit per target.
+     // Preserve the 20%-strength rule for an inherited fusion echo.
+     fx.damageSpent??={};
+     const totalBudget=goldfishDirectHitBudget(fx.tier,fx.echo);
+     const remaining=Math.max(0,totalBudget-(fx.damageSpent[key]||0));
+     const perFishCap=GOLDFISH_T1_DAMAGE_PER_FISH*Math.max(1,Math.min(5,fx.tier||1))*(fx.echo?.2:1);
+     const baseFish=fx.damage*1.25*GOLDFISH_DAMAGE_PER_FISH;
+     const direct=Math.min(remaining,contacts*Math.min(perFishCap,baseFish));
+     if(direct<=0)continue;
      if(target.kind==='monster'){
-      const result=damageMonster(world,owner,fx.damage*1.25*multiplier,now,rng,'giant-goldfish',value,center);
+      // Soaked/exposed damage multipliers cannot bypass the 90-point cap.
+      const amplification=(1+(effectActive(value,'expose',now)?.power||0))*
+       (1+(effectActive(value,'soaked',now)?.power||0));
+      const raw=Math.min(direct,remaining/Math.max(.001,amplification));
+      const result=damageMonster(world,owner,raw,now,rng,'giant-goldfish',value,center);
+      fx.damageSpent[key]=(fx.damageSpent[key]||0)+raw*amplification;
       if(result&&!result.defeated&&first){
        if(fx.echo)applyElementalHit(value,owner,itemById('goldfish'),now,.2);
        else applyStatus(world,owner,value,itemById('goldfish'),{
@@ -1774,7 +1788,9 @@ function tickPersistentAttacks(world,actors,now,rng){
        value.effects??={};value.effects.stun={owner:fx.owner,power:fx.echo?.2:1,until:now+(fx.echo?160:800),next:now+1000};
       }
      }else{
-      const hit=damagePlayer(world,owner,value,(fx.pvpDamage||12)*1.08*multiplier,now,'goldfish',fx.origin,'giant-goldfish',center);
+      const pvpDirect=Math.min(direct,contacts*(fx.pvpDamage||12)*1.08*GOLDFISH_DAMAGE_PER_FISH);
+      const hit=damagePlayer(world,owner,value,pvpDirect,now,'goldfish',fx.origin,'giant-goldfish',center);
+      fx.damageSpent[key]=(fx.damageSpent[key]||0)+pvpDirect;
       if(hit&&!hit.immune&&first){
        const profile=world.profiles[value.key];
        if(profile?.hp>0){

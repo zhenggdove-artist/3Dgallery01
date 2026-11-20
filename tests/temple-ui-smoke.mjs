@@ -30,6 +30,18 @@ try{
  await page.evaluate(()=>templeTest.ui.emit('join',{name:'CIBrowser',color:'#43b59a',backendUrl:window.TEMPLE_CONFIG.backendUrl}));
  await page.locator('#hud').waitFor({state:'visible'});
  await page.waitForFunction(()=>window.templeTest?.controller()&&JSON.parse(window.render_game_to_text()).connected);
+ // SHOP must display the complete 3D equipment models in the FIRST frame,
+ // not Promise URLs, broken images, or the deleted generic RELETTER glyphs.
+ await page.evaluate(()=>templeTest.ui.openPanel('shop'));
+ await page.waitForFunction(()=>{
+  const cards=[...document.querySelectorAll('.shop-items article.item')];
+  const images=[...document.querySelectorAll('.shop-items article.item img')];
+  return cards.length>0&&images.length===cards.length&&images.every(
+   img=>img.complete&&img.naturalWidth>0&&/^(blob:|https?:)/.test(img.currentSrc)
+  );
+ },null,{timeout:12000});
+ await page.screenshot({path:output+'/shop-complete-3d-previews.png'});
+ await page.locator('#panel-close').click();
  // FISH has been retired from both the dock and shop.
  assert.equal(await page.locator('[data-action="fish"]').count(),0);
  // Inventory categories, custom 3D spell preview, readable descriptions.

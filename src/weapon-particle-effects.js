@@ -57,16 +57,17 @@ function styleFor(recipe){const index=styleIds.indexOf(recipe);return index<0?4:
 const vertex=`
 attribute vec3 seed;
 attribute vec3 pigment;
-uniform float uAge,uDuration,uReach,uMode,uRadius,uCharge,uStyle,uLooping;
+uniform float uAge,uDuration,uReach,uBakedReach,uMode,uRadius,uCharge,uStyle,uLooping;
 varying vec3 vColor;
 varying float vAlpha;
 const float TAU=6.283185307;
 void main(){
  // Damage pulses are not VFX restarts: let water/fire streams flow forever.
  float t=uLooping>.5?.52:clamp(uAge/uDuration,0.,1.);
+ vec3 basePosition=vec3(position.xy,position.z*uReach/max(.001,uBakedReach));
  float u=seed.x,v=seed.y,w=seed.z;
  float phase=u*TAU,spin=uAge*(2.+v*3.);
- vec3 p=position;
+ vec3 p=basePosition;
  vec3 color=pigment;
  float alpha=smoothstep(0.,.07,t)*(1.-smoothstep(.72,1.,t));
  if(uMode<1.5){
@@ -77,7 +78,7 @@ void main(){
  }else if(uMode<2.5){
    // Pursuing black fly cloud, smaller than the player but visibly volumetric.
    float distance=uReach*min(1.,t*1.45);
-   p=vec3(position.x+sin(spin*6.+w*50.)*.48,position.y+sin(spin*4.+u*20.)*.32,position.z+distance);
+   p=vec3(position.x+sin(spin*6.+w*50.)*.48,position.y+sin(spin*4.+u*20.)*.32,basePosition.z+distance);
    p.x*=.8+.25*sin(uAge*7.);
    alpha*=.92;
  }else if(uMode<3.5){
@@ -85,12 +86,12 @@ void main(){
    float angle=spin*1.8+floor(w*5.)*2.1;
    p=vec3(position.x*cos(angle)-position.y*sin(angle),
      position.x*sin(angle)+position.y*cos(angle)+2.4+abs(sin(uAge*7.+w*6.))*.7,
-     position.z+uReach*min(1.,t*1.5));
+     basePosition.z+uReach*min(1.,t*1.5));
    alpha*=.85;
  }else if(uMode<4.5){
    // Spiral column with readable coloured note silhouettes.
-   float angle=atan(position.z,position.x)+spin*1.15+position.y*.5;
-   float r=length(position.xz)+.18*t;
+   float angle=atan(basePosition.z,position.x)+spin*1.15+position.y*.5;
+   float r=length(basePosition.xz)+.18*t;
    p=vec3(cos(angle)*r,position.y+sin(spin+u*14.)*.25,
      sin(angle)*r+uReach*min(.9,t*1.12));
    alpha*=.92;
@@ -98,17 +99,17 @@ void main(){
    // Complex floor fissures plus exploding point-rocks and a towering sword arc.
    if(w<.58){
      float front=uReach*smoothstep(.09,.62,t);
-     p=position;p.y=.10+sin(uAge*18.+u*50.)*.025;
+     p=basePosition;p.y=.10+sin(uAge*18.+u*50.)*.025;
      alpha*=1.-smoothstep(front-.7,front+.12,p.z);
      alpha*=smoothstep(-.15,.5,front-p.z);
    }else if(w<.83){
-     p=position;
+     p=basePosition;
      p.y=max(.1,position.y+max(0.,t-.2)*7.5*(.55+u)-pow(max(0.,t-.23),2.)*7.5);
      p.x+=sin(spin*2.+v*11.)*t*2.7;
      alpha*=smoothstep(.22,.4,t);
    }else{
      // A 25-metre vertical crescent sweeps forward above the cracks.
-     p=position;
+     p=basePosition;
      p.z+=uReach*smoothstep(.2,.64,t)*.2;
      alpha*=smoothstep(.1,.3,t)*(1.-smoothstep(.6,.88,t));
    }
@@ -129,7 +130,7 @@ void main(){
  }else{
    // Individual weapon families have different silhouette, path and movement,
    // all formed from small independent points rather than solid summoned meshes.
-   float a=atan(position.y,position.x)+spin*1.8+position.z*.27;
+   float a=atan(position.y,position.x)+spin*1.8+basePosition.z*.27;
    float radius=length(position.xy),advance=uReach*smoothstep(.06,.78,t)*.35;
    if(uStyle<.5){ // volumetric three-tier tidal surge; sustained GPU waves
      float lane=floor(u*3.);
@@ -142,65 +143,65 @@ void main(){
      float fold=cos(front*.43-uAge*5.8+lane)*(.25+crest*.36);
      p=vec3(cos(a+sin(spin)*.65)*spread+fold,
        sin(a+spin*.37)*spread*.66+crest+sin(front*.91-uAge*11.)*.31,
-       front+position.z*.14+sin(sweep)*crest*.13);
+       front+basePosition.z*.14+sin(sweep)*crest*.13);
      alpha*=smoothstep(0.,.09,stream)*(1.-smoothstep(.78,1.,stream));
      color=mix(color,vec3(.91,.98,1.),smoothstep(.52,1.25,crest)*.67);
 
    }else if(uStyle<1.5){ // ice: tall swirls of icy shatter
      p=vec3(position.x*.8+sin(spin*.9)*.4,
        1.3+abs(position.y)*1.9+u*5.*t,
-       position.z+advance+sin(v*TAU)*1.2);
+       basePosition.z+advance+sin(v*TAU)*1.2);
    }else if(uStyle<2.5){ // high-volume forward flamethrower
      float jet=fract(v+uAge*(1.9+w*1.2));
      float plume=(.28+jet*(2.5+uCharge*1.7))*sqrt(w);
      p=vec3(cos(a+sin(spin)*.65)*plume+sin(jet*16.+uAge*13.)*.28,
        sin(a+cos(spin)*.5)*plume*.75+sin(jet*19.+uAge*16.)*.32,
-       jet*uReach*min(1.,uAge*3.6)+position.z*.15);
+       jet*uReach*min(1.,uAge*3.6)+basePosition.z*.15);
      alpha*=smoothstep(0.,.09,jet)*(1.-smoothstep(.72,1.,jet));
 
    }else if(uStyle<3.5){ // lightning: branching irregular bolts
-     float zig=floor(position.z*3.+t*14.);
+     float zig=floor(basePosition.z*3.+t*14.);
      p=vec3(position.x*.65+sin(zig*5.5+v*11.)*1.7,
        2.5+abs(position.y)*.75+sin(zig*4.1)*2.2,
-       position.z+advance);
+       basePosition.z+advance);
    }else if(uStyle<4.5){ // prismatic helix beam
-     p=vec3(cos(a)*radius*.35+cos(position.z*.75+spin)*1.1,
-       2.5+sin(a)*radius*.35+sin(position.z*.75+spin)*1.1,
-       position.z+advance);
+     p=vec3(cos(a)*radius*.35+cos(basePosition.z*.75+spin)*1.1,
+       2.5+sin(a)*radius*.35+sin(basePosition.z*.75+spin)*1.1,
+       basePosition.z+advance);
    }else if(uStyle<5.5){ // rose petals in a moving flowering spiral
      p=vec3(cos(a)*radius*1.9,2.1+sin(a)*radius*.52+abs(sin(spin))*1.2,
-       position.z+advance);
+       basePosition.z+advance);
    }else if(uStyle<6.5){ // singularity: expanding rings and cosmic orbit trails
      float r=1.+radius*(1.+t*.6);
-     p=vec3(cos(a)*r,3.3+sin(a)*r*.8,position.z*.6+advance);
+     p=vec3(cos(a)*r,3.3+sin(a)*r*.8,basePosition.z*.6+advance);
    }else if(uStyle<7.5){ // thorn: several snapping, coiling whips
-     p=vec3(sin(position.z*.76+spin)*2.8+position.x*.32,
-       2.1+cos(position.z*.65+spin)*1.4+abs(position.y)*.24,
-       position.z+advance);
+     p=vec3(sin(basePosition.z*.76+spin)*2.8+position.x*.32,
+       2.1+cos(basePosition.z*.65+spin)*1.4+abs(position.y)*.24,
+       basePosition.z+advance);
    }else if(uStyle<8.5){ // world tree: giant rising branching particles
      float branch=floor(u*7.);
      p=vec3(position.x+sin(branch*2.7)*t*3.,.4+abs(position.y)*2.+t*5.,
-       position.z*.55+advance);
+       basePosition.z*.55+advance);
    }else if(uStyle<9.5){ // tropical leaf and monsoon cyclone
      p=vec3(cos(a)*radius*1.5,2.+abs(position.y)*.6+t*2.+sin(spin)*.8,
-       position.z*.8+advance);
+       basePosition.z*.8+advance);
    }else if(uStyle<10.5){ // wind: four strands of gusting filaments
      float strand=floor(u*4.);
      p=vec3(cos(a+strand*1.571)*radius*1.3,
        2.+sin(a+strand*1.571)*radius*.5,
-       position.z+advance*1.6);
+       basePosition.z+advance*1.6);
    }else if(uStyle<11.5){ // telephone: broad expanding resonant wave rings
      float wavefront=fract(t*2.4+u*.7)*4.;
      p=vec3(cos(a)*radius*wavefront,
        2.8+sin(a)*radius*wavefront*.9,
-       position.z*.55+advance);
+       basePosition.z*.55+advance);
    }else if(uStyle<12.5){ // glowing floating jellyfish strands
      p=vec3(cos(a)*radius*.75,2.4+abs(sin(spin+u*7.))*2.+position.y*.24,
-       position.z*.65+advance);
+       basePosition.z*.65+advance);
    }else if(uStyle<13.5){ // haunted spectral procession
      p=vec3(position.x*.8+sin(spin+v*15.)*.4,
        2.2+abs(position.y)*.75+sin(uAge*4.+w*10.)*.8,
-       position.z*.8+advance);
+       basePosition.z*.8+advance);
    }else if(uStyle<14.5){ // giant returning V-shaped light-particle boomerang
      float travel=sin(t*3.141593)*uReach;
      float arm=u<.5?-1.:1.,along=v*7.5;
@@ -211,13 +212,13 @@ void main(){
        travel+along*.7+sin(v*TAU+spin)*.2);
    }else if(uStyle<15.5){ // goldfish: dense streaming water nozzle
      p=vec3(position.x*.48+sin(spin*2.)*.45,
-       2.6+position.y*.32+sin(spin+position.z)*.3,
-       position.z+advance*1.8);
+       2.6+position.y*.32+sin(spin+basePosition.z)*.3,
+       basePosition.z+advance*1.8);
    }else if(uStyle<16.5){ // giant clam shells
      float shell=floor(u*6.);
      p=vec3(cos(a+shell*1.047)*radius*1.5,
        2.4+sin(a+shell*1.047)*radius*.9,
-       position.z*.65+advance*1.4);
+       basePosition.z*.65+advance*1.4);
    }else if(uStyle<17.5){ // airy, slowly revolving nine-petal flower, no solid mesh
      float blade=floor(u*9.),angle=blade*(TAU/9.)+uAge*.67;
      float depth=sqrt(v),spread=(w-.5)*(1.25+1.45*sin(depth*3.141593));
@@ -327,22 +328,41 @@ function populate(recipe,amount,range,palette){
 export class WeaponParticleEffects{
  constructor(scene){this.scene=scene;this.active=[];this.charger=null;this.maxActive=14;this.pools=new Map();this.pooledCount=0;}
  async warm(renderer,camera){
-  // Compile the actual GPU point-sprite shader before a player can cast.
-  const sample=this.make('prism',{id:'shader-warmup',family:'water'},{amount:1200,range:12});
-  const stage=new THREE.Scene();stage.add(sample.root);
-  try{await renderer.compileAsync(stage,camera);if(typeof renderer.getRenderTarget==='function'&&typeof renderer.setRenderTarget==='function'&&typeof renderer.render==='function'){const target=new THREE.WebGLRenderTarget(32,32),prior=renderer.getRenderTarget();try{renderer.setRenderTarget(target);renderer.render(stage,camera);}finally{renderer.setRenderTarget(prior);target.dispose();}}}
-  finally{sample.root.removeFromParent();sample.geometry.dispose();sample.material.dispose();}
+  // Compile, GPU-upload and RETAIN every native particle silhouette and
+  // normal/ultimate count variant before live play. Ranges and item IDs are
+  // uniforms, not separate allocation keys, so the first spell reuses them.
+  const stage=new THREE.Scene(),entries=[];
+  const chargedCount=recipe=>['fissure','rainbow-scatter','boomerang','lotus-veil','thorn-tower'].includes(recipe)?5600:
+    ['music','flies','food'].includes(recipe)?3900:3200;
+  for(const recipe of new Set([...Object.values(PARTICLE_RECIPES),'prism','tidal','rainbow'])){
+   for(const count of [1200,1600,2400,chargedCount(recipe)]){
+    const entry=this.make(recipe,{id:'warm-'+recipe,family:recipe},{amount:count,range:16});
+    stage.add(entry.root);entries.push(entry);
+   }
+  }
+  try{
+   await renderer.compileAsync(stage,camera);
+   const target=new THREE.WebGLRenderTarget(32,32),prior=renderer.getRenderTarget();
+   try{renderer.setRenderTarget(target);renderer.render(stage,camera);}
+   finally{renderer.setRenderTarget(prior);target.dispose();}
+  }finally{
+   for(const e of entries){
+    e.root.removeFromParent();e.root.visible=false;
+    const pool=this.pools.get(e.poolKey)||[];
+    pool.push(e);this.pools.set(e.poolKey,pool);this.pooledCount++;
+   }
+  }
  }
  make(recipe,item,{duration=2.1,range=20,amount=2300,charge=1}={}){
   const touch=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
   const count=Math.min(amount,touch?MAX_PARTICLES_TOUCH:MAX_PARTICLES_DESKTOP);
-  const key=[recipe,item?.id||item?.family||'unknown',count,Number(range).toFixed(2)].join(':');
+  const key=[recipe,count].join(':');
   const stored=this.pools.get(key);
   if(stored?.length){
    const e=stored.pop();this.pooledCount--;e.age=0;e.duration=duration;e.channeling=false;e.charging=false;e.homingTarget=null;
    e.root.visible=true;e.root.position.set(0,0,0);e.root.quaternion.identity();e.root.scale.setScalar(1);
    e.material.uniforms.uAge.value=0;e.material.uniforms.uDuration.value=duration;
-   e.material.uniforms.uCharge.value=charge;e.material.uniforms.uLooping.value=0;
+   e.material.uniforms.uCharge.value=charge;e.material.uniforms.uReach.value=range;e.material.uniforms.uLooping.value=0;
    return e;
   }
   const palette=recipePalette(recipe,item),data=populate(recipe,count,range,palette);
@@ -351,7 +371,7 @@ export class WeaponParticleEffects{
   geometry.setAttribute('seed',new THREE.BufferAttribute(data.seed,3));
   geometry.setAttribute('pigment',new THREE.BufferAttribute(data.colors,3));
   const material=new THREE.ShaderMaterial({
-    uniforms:{uAge:{value:0},uDuration:{value:duration},uReach:{value:range},uMode:{value:modeFor(recipe)},uRadius:{value:2},uCharge:{value:charge},uStyle:{value:styleFor(recipe)},uLooping:{value:0}},
+    uniforms:{uAge:{value:0},uDuration:{value:duration},uReach:{value:range},uBakedReach:{value:range},uMode:{value:modeFor(recipe)},uRadius:{value:2},uCharge:{value:charge},uStyle:{value:styleFor(recipe)},uLooping:{value:0}},
     vertexShader:vertex,fragmentShader:fragment,
     transparent:true,depthTest:true,depthWrite:false,blending:THREE.AdditiveBlending
   });
@@ -464,7 +484,7 @@ export class WeaponParticleEffects{
   const i=this.active.indexOf(entry);if(i>=0)this.active.splice(i,1);
   entry.root.removeFromParent();entry.root.visible=false;if(this.charger===entry)this.charger=null;
   let list=this.pools.get(entry.poolKey);if(!list){list=[];this.pools.set(entry.poolKey,list);}
-  if(list.length<2&&this.pooledCount<18){list.push(entry);this.pooledCount++;}
+  if(list.length<3&&this.pooledCount<96){list.push(entry);this.pooledCount++;}
   else{entry.geometry.dispose();entry.material.dispose();}
  }
  dispose(){

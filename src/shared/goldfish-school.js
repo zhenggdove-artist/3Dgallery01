@@ -3,6 +3,10 @@
 // A sparse nose/tail and dense middle form an irregular spindle, not a grid.
 export const GOLDFISH_SCHOOL_COUNT=30;
 export const GOLDFISH_DAMAGE_PER_FISH=.2;
+// Absolute T1 direct-hit budget for any single target across all 30 fish.
+export const GOLDFISH_T1_DAMAGE_PER_FISH=3;
+export const GOLDFISH_T1_TOTAL_MAX=GOLDFISH_SCHOOL_COUNT*GOLDFISH_T1_DAMAGE_PER_FISH;
+export const goldfishDirectHitBudget=(tier=1,echo=false)=>GOLDFISH_T1_TOTAL_MAX*Math.max(1,Math.min(5,tier))*(echo?.2:1);
 export const GOLDFISH_FISH_SCALE=.21; // Matches the ordinary dark-blue .35m cannonball silhouette.
 export const GOLDFISH_SCHOOL_RADIUS=2.25;
 export const GOLDFISH_CONTACT_RADIUS=.32;

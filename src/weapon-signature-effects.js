@@ -53,7 +53,11 @@ export class WeaponSignatureEffects {
    area:{mode:'area',center:[0,.1,10],visualCenter:[0,.1,10],radius:4}};
   const stage=new THREE.Scene();
   try{
-   for(const id of ['calico-cat','calico-cat','goldfish','fan','bloom-1','planter-1','giraffe']){
+   // Both first-tap bubbles and charged creatures must already have GPU
+   // buffers and shaders. Warm multiple goldfish schools for overlapping casts.
+   const bubble=itemById('goldfish');
+   if(bubble)this.play({...event,ultimate:false,range:11},bubble,null);
+   for(const id of ['calico-cat','calico-cat','goldfish','goldfish','fan','bloom-1','planter-1','giraffe']){
     const item=itemById(id);
     if(item)this.play(event,item,null);
    }
@@ -176,48 +180,65 @@ export class WeaponSignatureEffects {
   let tail=cached?.userData.tail;
   if(!cached){group.add(fish);
   // A glasslike moving fish image rather than a solid stack of toy primitives.
+  // Baked dorsal-to-belly gradient, with distinctly dark backs, warm orange
+  // flanks and light-gold undersides. Shaded per vertex with no refraction.
   const bodyGeo=new THREE.SphereGeometry(1,20,12);
-  // Avoid expensive per-pixel physical refraction and four deep-cloned fish.
-  // One low-poly shared geometry with low-cost translucent emissive shading.
-  const glow=(color,opacity)=>new THREE.MeshLambertMaterial({
-   color,emissive:color,emissiveIntensity:.31,transparent:true,opacity,
-   depthWrite:false,side:THREE.DoubleSide
+  const positions=bodyGeo.getAttribute('position'),gradient=new Float32Array(positions.count*3);
+  const dorsal=new THREE.Color('#70302f'),flank=new THREE.Color('#ff7850'),belly=new THREE.Color('#ffe5a3');
+  const mixed=new THREE.Color();
+  for(let i=0;i<positions.count;i++){
+   const y=positions.getY(i),h=THREE.MathUtils.smoothstep(y,-.65,.68);
+   if(h<.5)mixed.copy(belly).lerp(flank,h*2);
+   else mixed.copy(flank).lerp(dorsal,(h-.5)*2);
+   gradient[i*3]=mixed.r;gradient[i*3+1]=mixed.g;gradient[i*3+2]=mixed.b;
+  }
+  bodyGeo.setAttribute('color',new THREE.BufferAttribute(gradient,3));
+  const glow=(color,opacity,vertexColors=false)=>new THREE.MeshLambertMaterial({
+   color,vertexColors,emissive:new THREE.Color(color).multiplyScalar(.16),
+   emissiveIntensity:.52,transparent:opacity<1,opacity,
+   depthWrite:opacity>=1,side:THREE.DoubleSide
   });
-  // Transparency increased by 40% (multiply existing opacity by 0.6).
-  const amber=glow('#ec2439',.456),pearl=glow('#ff707a',.33),
-   finMat=glow('#f52b4e',.36),rim=glow('#ffb2a7',.468),eye=glow('#241020',.57);
+  const amber=glow('#ffb18e',.99,true),pearl=glow('#ffcf92',.96,true),
+   finMat=glow('#ffac54',.88),rim=glow('#711e23',.98),
+   highlight=glow('#ffebbd',.98),eye=glow('#21131a',1);
   const add=(parent,geo,mat,pos,scale)=>{
    const mesh=new THREE.Mesh(geo,mat);mesh.position.set(...pos);mesh.scale.set(...scale);
    parent.add(mesh);return mesh;
   };
   add(fish,bodyGeo,amber,[0,0,0],[.86,.66,1.36]);
-  add(fish,bodyGeo,pearl,[0,-.21,.43],[.77,.43,.9]);
+  add(fish,bodyGeo,pearl,[0,-.30,.32],[.74,.38,.92]);
   add(fish,bodyGeo,amber,[0,.09,1.03],[.67,.57,.67]);
-  add(fish,bodyGeo,rim,[0,-.21,1.54],[.24,.14,.12]);
+  add(fish,bodyGeo,highlight,[0,-.21,1.54],[.24,.14,.12]);
+  add(fish,bodyGeo,rim,[0,.67,-.14],[.12,.10,.98]);
   for(const side of [-1,1]){
-   add(fish,bodyGeo,rim,[side*.59,.21,1.2],[.21,.22,.10]);
+   add(fish,bodyGeo,highlight,[side*.59,.21,1.2],[.21,.22,.10]);
    add(fish,bodyGeo,eye,[side*.65,.21,1.31],[.11,.13,.055]);
-   add(fish,bodyGeo,finMat,[side*.79,-.12,-.13],[.24,.76,.09]).rotation.z=side*.48;
+   add(fish,bodyGeo,highlight,[side*.695,.245,1.34],[.038,.039,.029]);
+   add(fish,bodyGeo,rim,[side*.79,-.13,-.13],[.28,.78,.105]).rotation.z=side*.48;
+   add(fish,bodyGeo,finMat,[side*.81,-.13,-.12],[.23,.7,.12]).rotation.z=side*.48;
    // Curved gill filaments and light-catching seams define the facial profile.
    for(let i=0;i<3;i++){
     const curve=new THREE.CatmullRomCurve3([
      new THREE.Vector3(side*(.56+i*.06),.33,1.04-i*.12),
      new THREE.Vector3(side*(.73+i*.04),0,.94-i*.12),
      new THREE.Vector3(side*(.56+i*.06),-.27,.99-i*.12)]);
-    fish.add(new THREE.Mesh(new THREE.TubeGeometry(curve,8,.009,3,false),rim));
+    fish.add(new THREE.Mesh(new THREE.TubeGeometry(curve,8,.023,4,false),rim));
    }
   }
-  add(fish,bodyGeo,finMat,[0,.73,-.23],[.20,.62,.44]);
+  add(fish,bodyGeo,rim,[0,.73,-.23],[.24,.65,.46]);
+  add(fish,bodyGeo,finMat,[0,.78,-.22],[.18,.60,.44]);
   tail=new THREE.Group();tail.position.z=-1.3;fish.add(tail);
   for(const side of [-1,1]){
-   const blade=add(tail,bodyGeo,finMat,[side*.35,.03,-.55],[.55,.83,.11]);
+   const edge=add(tail,bodyGeo,rim,[side*.37,.03,-.58],[.61,.88,.13]);
+   edge.rotation.z=side*.35;
+   const blade=add(tail,bodyGeo,finMat,[side*.35,.03,-.55],[.51,.78,.14]);
    blade.rotation.z=side*.35;
    for(let i=0;i<5;i++){
     const line=new THREE.CatmullRomCurve3([
      new THREE.Vector3(0,0,-.05),
      new THREE.Vector3(side*(.22+i*.065),.05+(i-2)*.16,-.48),
      new THREE.Vector3(side*(.36+i*.075),.05+(i-2)*.28,-.91)]);
-    tail.add(new THREE.Mesh(new THREE.TubeGeometry(line,8,.006,3,false),rim));
+    tail.add(new THREE.Mesh(new THREE.TubeGeometry(line,8,.018,4,false),highlight));
    }
   }
   // Keep the detailed original fish as a hidden source for GPU instancing.
@@ -229,6 +250,11 @@ export class WeaponSignatureEffects {
    if(!node.isMesh)return;
    const instances=new THREE.InstancedMesh(node.geometry,node.material,GOLDFISH_SCHOOL_COUNT);
    instances.frustumCulled=false;instances.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+   const tints=['#ffffff','#ffe7bd','#fff4dc','#ffd0ae','#fff9ce','#ffdbbc'];
+   const tint=new THREE.Color();
+   for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++)
+    instances.setColorAt(i,tint.set(tints[(i*7+Math.floor(i/4))%tints.length]));
+   instances.instanceColor.needsUpdate=true;
    school.add(instances);parts.push({mesh:instances,source:node});
   });
   fish.visible=false;group.add(school);
@@ -269,7 +295,8 @@ export class WeaponSignatureEffects {
    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
     const [x,y,z]=GOLDFISH_SCHOOL_OFFSETS[i],phase=age*8+i*2.399963;
     offset.set(x+Math.sin(phase)*.08,y+Math.sin(phase*.71)*.065,z);
-    rotation.setFromAxisAngle(axis,Math.sin(phase)*.075);
+    rotation.setFromAxisAngle(axis,Math.sin(phase)*.19+Math.sin(i*3.17)*.14);
+    scale.setScalar(.83+((i*11)%9)*.043);
     transforms[i].compose(offset,rotation,scale);
    }
    for(const {mesh,source} of group.userData.schoolParts){
