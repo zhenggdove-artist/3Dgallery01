@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {readFileSync} from 'node:fs';
-import {TempleArena} from '../src/arena-view.js';
+// Node tests do not have the browser's media-query global.
+globalThis.matchMedia??=()=>({matches:false});
+const {TempleArena}=await import('../src/arena-view.js');
 import {OuterCity} from '../src/outer-city.js';
 import {CITY_LOTS,CITY_MAX_HP} from '../src/shared/city-layout.js';
 import {keepPredictedMoveOnLatencyReject} from '../src/shared/state-reconciliation.js';
