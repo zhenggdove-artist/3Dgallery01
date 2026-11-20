@@ -1,7 +1,6 @@
 import {fuseEquipment} from '../reletter/server/fusion-rules.js';
 import {equipmentById} from '../reletter/equipment-catalog.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
-import {normalMeleeFootprint} from './melee-contact.js';
 import {sniperMaterialStat} from './fusion-balance.js';
 import {itemById} from './catalog.js';
 
