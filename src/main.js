@@ -286,12 +286,20 @@ network.addEventListener('state-ack',event=>{
  const ack=event.detail||{};
  // Stun, root and server-scripted movement legitimately override prediction;
  // ordinary 3-decimal state rounding is below the correction threshold.
- if(!ack.corrected||!controller||!Array.isArray(ack.position))return;
+ if(!ack.corrected||!controller||!Array.isArray(ack.position)||
+    ack.seq!==network.lastAcceptedSequence||ack.seq<=network.lastCorrectedSequence)return;
  const position=controller.root.position;
- if(position.distanceToSquared(new THREE.Vector3(...ack.position))>1){
-  controller.teleport(ack.position);
-  network.lastCorrectedSequence=Math.max(network.lastCorrectedSequence,ack.seq||0);
+ const immobilized=controller.status?.freeze||controller.status?.root||controller.vortexSpin;
+ const recovered=!immobilized&&Array.isArray(ack.submitted)?
+  rebaseRejectedPose(ack.position,ack.submitted,position.toArray(),
+   (x,z,y)=>arena.blocked(x,z,y)):null;
+ const corrected=recovered||ack.position;
+ if(position.distanceToSquared(new THREE.Vector3(...corrected))>.36){
+  // Keep motion simulated after this ACK; do not rewind the newest frame.
+  if(immobilized||!recovered)controller.teleport(corrected);
+  else controller.root.position.fromArray(corrected);
  }
+ network.lastCorrectedSequence=Math.max(network.lastCorrectedSequence,ack.seq||0);
 });
 network.addEventListener('state-rejected',event=>{
  const rejection=event.detail||{},seq=Number(rejection.seq)||0;
@@ -627,6 +635,11 @@ if(localRoot&&profile){arena.setPlayerEquipment(localRoot,profile.equipment);loc
   controller.lastWhipPullId=profile.whipPull.id;
   controller.stunUntil=0;controller.beginWhipPull(profile.whipPull);
  }
+ if(profile.vortexSpin?.id&&profile.vortexSpin.id!==controller.lastVortexSpinId&&
+    Date.now()-profile.vortexSpin.time<profile.vortexSpin.durationMs){
+  controller.lastVortexSpinId=profile.vortexSpin.id;
+  controller.beginVortexSpin(profile.vortexSpin);
+ }
  controller.stats=profile.stats||{speed:1,jump:1,gravity:1};statusVisuals.sync(localRoot,profile.effects);if(profile.impulse&&controller.lastImpulse!==profile.impulse.id){controller.lastImpulse=profile.impulse.id;controller.knockback=new THREE.Vector3(...profile.impulse.vector).multiplyScalar(5);}}if(dead){if(!wasDead&&localRoot){bursts.play(localRoot.position,'death-'+self.key+'-'+profile.deadUntil);audio.play('explosion');}wasDead=true;controller?.setEnabled(false);ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}else if(joined){if(wasDead&&controller){
  const spawn=Array.isArray(profile?.respawnPosition)?profile.respawnPosition:
   (PLAYER_SPAWNS[self.seat]||PLAYER_SPAWNS[0]);
@@ -656,9 +669,13 @@ function performAttack(charge=0,phase=null){
  // Centralized guard covers UI A/Q, canvas clicks, auto-charge and fusion.
  if(item.id==='black-cat'&&gun.mode!==2)return;
  if(item.id==='goldfish'&&gun.mode!==1&&charge<1)return;
- const shot=item.firstPerson?gun.shot():null;
+ // Unscoped goldfish ultimate follows the camera forward ray; an 11m
+ // third-person muzzle intersection can otherwise aim behind the avatar.
+ const goldfishUltimate=item.id==='goldfish'&&charge>=1&&gun.mode===0;
+ const shot=item.firstPerson&&!goldfishUltimate?gun.shot():null;
  const muzzle=isChannelStaff(item)||item.family==='saber'||item.id==='calico-cat'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
- const direction=shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
+ const direction=goldfishUltimate?cameraAimDirection(camera).toArray():
+  shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
   ...(item.id==='black-cat'?{scoped:true}:{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
@@ -766,7 +783,8 @@ function update(dt,time,movementDt=dt){
   const chargedWeapon=itemById(world?.profile?.equipment?.weapon);
   if(charge>.08&&!staffChannel&&chargedWeapon&&controller){
    const muzzle=isChannelStaff(chargedWeapon)||chargedWeapon.family==='saber'?arena.presentation.vfx.channelMuzzle(localRoot,chargedWeapon):null;
-   const direction=chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1,muzzle);
+   const direction=chargedWeapon.id==='goldfish'&&gun.mode===0?cameraAimDirection(camera).toArray():
+     chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1,muzzle);
    chargePreview.update(localRoot,chargedWeapon,charge,direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null,muzzle?.toArray(),dt);
   }else chargePreview.hide();
   const attackButton=document.getElementById('attack-button');attackButton.classList.toggle('charging',charge>0||!!staffChannel||artworkThrow.started!==null);attackButton.style.setProperty('--charge',`${(artworkThrow.started!==null?artworkThrow.progress:charge)*100}%`);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}

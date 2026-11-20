@@ -54,6 +54,8 @@ export class TempleNetwork extends EventTarget{
   acknowledgeState(data){
     const seq=Number(data?.seq)||0;
     if(!seq)return;
+    // Match an authoritative correction to the submitted sample, not the current frame.
+    if(data&&this.sentStates.has(seq))data.submitted=[...this.sentStates.get(seq).position];
     this.lastAcceptedSequence=Math.max(this.lastAcceptedSequence,seq);
     for(const key of this.sentStates.keys())if(key<=seq)this.sentStates.delete(key);
   }

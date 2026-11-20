@@ -71,11 +71,11 @@ export class WeaponSignatureEffects {
   if(!group.children.length){
    group.name='High-rate translucent goldfish water cannon ball';
    const core=new THREE.Mesh(sphere,new THREE.MeshStandardMaterial({
-    color:'#79e5ff',transparent:true,opacity:.71,metalness:.12,roughness:.08,
-    emissive:'#319fdb',emissiveIntensity:.65,depthWrite:false
+    color:'#063276',transparent:true,opacity:.85,metalness:.12,roughness:.08,
+    emissive:'#041b5d',emissiveIntensity:.65,depthWrite:false
    }));
    const shell=new THREE.Mesh(sphere,new THREE.MeshBasicMaterial({
-    color:'#c7f9ff',transparent:true,opacity:.29,depthWrite:false,
+    color:'#104b9d',transparent:true,opacity:.35,depthWrite:false,
     blending:THREE.AdditiveBlending
    }));
    const geometry=new THREE.BufferGeometry(),points=new Float32Array(42*3);
@@ -85,7 +85,7 @@ export class WeaponSignatureEffects {
    }
    geometry.setAttribute('position',new THREE.BufferAttribute(points,3));
    const sparkle=new THREE.Points(geometry,new THREE.PointsMaterial({
-    color:'#ffffff',size:.09,transparent:true,opacity:.9,
+    color:'#3276c5',size:.09,transparent:true,opacity:.9,
     blending:THREE.AdditiveBlending,depthWrite:false
    }));
    group.add(core,shell,sparkle);

@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import {ARENA_RADIUS,PLAYER_SPAWNS} from './shared/arena.js';
 import {PAN_BLAST_GRAVITY,PAN_BLAST_LAUNCH_SPEED,PAN_BLAST_BOUNCE_SPEEDS,PAN_BLAST_BOUNCE_GRAVITY,PAN_BLAST_INITIAL_DURATION} from './shared/pan-blast-flight.js';
 import {WHIP_PULL_SPEED} from './shared/weapon-abilities.js';
+import {vortexSpinPoint,VORTEX_SPIN_MS} from './shared/vortex-flight.js';
 
 // RELETTER Explore's actual acceleration, camera, momentum and jump constants.
 export const RELETTER_MOVEMENT=Object.freeze({speed:8.64,acceleration:6,deceleration:12,gravity:25,jump:10});
 export class PlayerController{
   constructor({camera,canvas,arena,root,role='fighter',seat=0,mobileStick}){
-    Object.assign(this,{camera,canvas,arena,root,role,seat});this.enabled=false;this.keys=new Set();this.yaw=0;this.pitch=.2;this.distance=7;this.speed=0;this.velocityY=0;this.grounded=true;this.animation='idle';this.move=new THREE.Vector2();this.jumpVelocity=new THREE.Vector3();this.direction=new THREE.Vector3();this.target=new THREE.Vector3();this.drag=null;this.pointers=new Map();this.followTarget=null;this.stats={speed:1,jump:1,gravity:1};this.castMoveFactor=1;this.status={};this.whipPull=null;
+    Object.assign(this,{camera,canvas,arena,root,role,seat});this.enabled=false;this.keys=new Set();this.yaw=0;this.pitch=.2;this.distance=7;this.speed=0;this.velocityY=0;this.grounded=true;this.animation='idle';this.move=new THREE.Vector2();this.jumpVelocity=new THREE.Vector3();this.direction=new THREE.Vector3();this.target=new THREE.Vector3();this.drag=null;this.pointers=new Map();this.followTarget=null;this.stats={speed:1,jump:1,gravity:1};this.castMoveFactor=1;this.status={};this.whipPull=null;this.vortexSpin=null;
     root.position.fromArray(PLAYER_SPAWNS[seat]||PLAYER_SPAWNS[0]);root.position.y=arena.groundHeight(root.position.x,root.position.z);this.bind(mobileStick);this.updateCamera(1);
   }
   bind(stick){
@@ -35,11 +36,11 @@ export class PlayerController{
     this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
     if(stick){let pointer=null;const knob=stick.firstElementChild;const move=e=>{if(e.pointerId!==pointer)return;const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,radius=Math.max(20,(r.width-knob.offsetWidth)/2-4),f=radius/Math.max(radius,Math.hypot(x,y));this.move.set(x*f/radius,y*f/radius);knob.style.transform=`translate(${x*f}px,${y*f}px)`;};stick.onpointerdown=e=>{e.preventDefault();if(pointer!==null)return;pointer=e.pointerId;stick.setPointerCapture(pointer);move(e);};stick.onpointermove=move;stick.onpointerup=stick.onpointercancel=stick.onlostpointercapture=e=>{if(e.pointerId!==pointer)return;pointer=null;this.move.set(0,0);knob.style.transform='';};}
   }
-  jump(){if(this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
+  jump(){if(this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
   setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();}}
   setRole(role){this.role=role;this.root.visible=role==='fighter';}
   setFollowTarget(root=null){this.followTarget=root;}
-  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;}
+  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;this.vortexSpin=null;}
   beginPanBlast(hit){
     if(!hit?.panBlast||!(Number(hit.knockbackDistance)>0))return false;
     const d=new THREE.Vector3(...hit.vector);d.y=0;
@@ -55,6 +56,12 @@ export class PlayerController{
     this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;
     this.velocityY=PAN_BLAST_LAUNCH_SPEED;this.grounded=false;this.fallStartY=this.root.position.y;
     this.speed=0;
+    return true;
+  }
+  beginVortexSpin(spin){
+    if(!spin?.id||!Array.isArray(spin.start)||!Array.isArray(spin.center))return false;
+    this.vortexSpin={...spin,startYaw:this.root.rotation.y};
+    this.knockback=null;this.knockbackRemaining=0;this.whipPull=null;
     return true;
   }
   beginWhipPull(pull){
@@ -156,6 +163,16 @@ export class PlayerController{
      this.stepHorizontal(this.knockback.x*dt,this.knockback.z*dt);
      this.knockback.multiplyScalar(Math.exp(-5*dt));
      if(this.knockback.lengthSq()<.001)this.knockback=null;
+    }
+    if(this.vortexSpin){
+      const spin=this.vortexSpin,progress=(Date.now()-spin.time)/VORTEX_SPIN_MS;
+      if(progress>=1)this.vortexSpin=null;
+      else{
+       const point=vortexSpinPoint(spin,Date.now());
+       if(point)this.stepHorizontal(point[0]-this.root.position.x,point[2]-this.root.position.z);
+       this.root.rotation.y=spin.startYaw+Math.PI*4*Math.max(0,progress);
+       this.speed=0;this.animation='walk';this.updateCamera(dt);return this.state();
+      }
     }
     if(this.status.freeze){this.speed=0;this.animation='idle';this.updateCamera(dt);return this.state();}
     if(performance.now()<(this.stunUntil||0)){this.animation='idle';this.updateCamera(dt);return this.state();}

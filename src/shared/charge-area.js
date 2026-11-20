@@ -28,7 +28,7 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
   const swatter=/^swatter-[1-5]$/.test(item?.id||'');
   const whip=/^whip-[1-5]$/.test(item?.id||'');
   const planter=/^planter-[1-5]$/.test(item?.id||'');
-  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:item?.family==='ice'?1.5:1);
+  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:item?.family==='ice'?1.5:item?.family==='wave'?3:1);
   // Broaden only the whip's warning/hit radius; retain its travel distance.
   const radiusFactor=rangeFactor*(whip?1.5:1);
   stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);

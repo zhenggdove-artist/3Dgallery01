@@ -24,6 +24,7 @@ import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,
 import {normalMeleeFootprint} from './melee-contact.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
+import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS} from './vortex-flight.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
 import {replenishHearts} from './heart-pickups.js';
@@ -174,7 +175,7 @@ export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
     level:profile.level,xp:profile.xp,wingTrialDraws:profile.wingTrialDraws||0,wingPaidDraws:Math.max(0,Number(profile.wingPaidDraws)||0),wingDesignCredits:Math.max(0,Number(profile.wingDesignCredits)||0),deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
     respawnPosition:clone(profile.respawnPosition||null),
-    spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
+    spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
 
 export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true){
@@ -182,6 +183,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),wallPaint:clone(world.wallPaint||{}),wallPaintRevision:world.wallPaintRevision||0,plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
+    vortexes:(world.persistentAttacks||[]).filter(v=>v.kind==='vortex').map(v=>({id:v.id,position:clone(v.position||v.origin),owner:v.owner})),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
@@ -675,26 +677,29 @@ function attack(world,profile,actor,body,context,now){
   const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
-  const area=stats.ultimate&&weapon.id!=='goldfish'?chargedArea(weapon,origin,direction,stats,groundForSpell,channel):null;
+  const waveVortex=weapon.family==='wave'&&stats.ultimate;
+  const area=stats.ultimate&&weapon.id!=='goldfish'&&!waveVortex?chargedArea(weapon,origin,direction,stats,groundForSpell,channel):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate,now):null;
   const fusionEchoes=[];
   const pvpDamage=pvpShotDamage(weapon,stats,quality);
   const returningGiraffe=weapon.id==='giraffe'&&stats.ultimate;
   const roamingFan=weapon.id==='fan'&&stats.ultimate;
   const swimmingFish=weapon.id==='goldfish'&&stats.ultimate;
-  if(returningGiraffe||roamingFan||swimmingFish){
+  let persistentAttackId=null;
+  if(returningGiraffe||roamingFan||swimmingFish||waveVortex){
     world.persistentAttacks??=[];
-    const duration=swimmingFish?Math.round(GOLDFISH_SWIM_MS*quality.duration):returningGiraffe?2300:Math.round((1400+quality.tier*850)*quality.duration);
+    const duration=waveVortex?VORTEX_FLIGHT_MS:swimmingFish?Math.round(GOLDFISH_SWIM_MS*quality.duration):returningGiraffe?2300:Math.round((1400+quality.tier*850)*quality.duration);
+    const attackId=id();persistentAttackId=attackId;
     world.persistentAttacks.push({
-      id:id(),kind:swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
-      origin:[...origin],direction:[...direction],range:stats.range,
+      id:attackId,kind:waveVortex?'vortex':swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
+      origin:[...origin],direction:[...direction],range:stats.range,position:[...origin],travelled:0,hitTimes:{},
       damage:stats.damage+bonus*.1,pvpDamage,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
       createdAt:now,lastAt:now,expiresAt:now+duration,
       outHits:[],backHits:[],fanHits:{},fishHits:[]
     });
     if(world.persistentAttacks.length>32)world.persistentAttacks.splice(0,world.persistentAttacks.length-32);
   }
-  const persistentOnly=returningGiraffe||roamingFan||swimmingFish;
+  const persistentOnly=returningGiraffe||roamingFan||swimmingFish||waveVortex;
   // Attack requests only launch server-owned trajectories. Health, statuses,
   // and damage-number events are produced by tickPersistentAttacks when the
   // travelling VFX volume actually touches a target (never on key release).
@@ -726,13 +731,13 @@ function attack(world,profile,actor,body,context,now){
       const echoFactor=/^pan-[1-5]$/.test(source.id)?.5:/^whip-[1-5]$/.test(source.id)?.2:1;
       secondary.range=+(secondary.range*echoFactor).toFixed(3);
       secondary.radius=+(secondary.radius*echoFactor*(/^whip-[1-5]$/.test(source.id)?1.5:1)).toFixed(3);
-      const echoArea=source.id==='goldfish'?null:chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel);
+      const echoArea=source.id==='goldfish'||source.family==='wave'?null:chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel);
       if(echoArea?.mode==='area'&&area?.visualCenter&&source.family!=='whip'){
         echoArea.center=[...area.center];echoArea.visualCenter=[...area.visualCenter];
       }
-      const exotic=source.id==='fan'?'fan':source.id==='giraffe'?'giraffe':source.id==='goldfish'?'goldfish':null;
+      const exotic=source.family==='wave'?'vortex':source.id==='fan'?'fan':source.id==='giraffe'?'giraffe':source.id==='goldfish'?'goldfish':null;
       const flight=projectileFlightMs(source,true);
-      const duration=exotic==='goldfish'?Math.round(GOLDFISH_SWIM_MS*sourceQuality.duration):
+      const duration=exotic==='vortex'?VORTEX_FLIGHT_MS:exotic==='goldfish'?Math.round(GOLDFISH_SWIM_MS*sourceQuality.duration):
         exotic==='giraffe'?2300:exotic==='fan'?Math.round((1400+sourceQuality.tier*850)*sourceQuality.duration):
         Math.max(flight,visibleCollisionLifetimeMs(source,true));
       // Sniper fusion echo must not exceed 30% of the original sniper
@@ -742,7 +747,7 @@ function attack(world,profile,actor,body,context,now){
       const echoPvP=balancedSniper?.pvpDamage??+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
-        origin:[...origin],direction:[...direction],range:secondary.range,radius:secondary.radius,area:echoArea,
+        origin:[...origin],direction:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,
         damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*.2,
         tier:sourceQuality.tier,flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
@@ -767,7 +772,7 @@ function attack(world,profile,actor,body,context,now){
    const inside=area&&['area','sector'].includes(area.mode)?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<(weapon.pattern==='scatter'?.65+along*(stats.ultimate?.56:.32):stats.radius)+structureRadius(v);
    return {v,along,inside};
   }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
-  for(const {v:structure} of (returningGiraffe?[]:area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
+  for(const {v:structure} of (returningGiraffe||waveVortex?[]:area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
    const damage=Math.max(8,Math.round((stats.damage+bonus*.1)*.7));
    structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
    structure.hp=Math.max(0,structure.hp-damage);
@@ -778,10 +783,10 @@ function attack(world,profile,actor,body,context,now){
   // The city's structural impact follows weapon damage and charged strength,
   // without changing PvP damage or displaying health numbers on the building.
   const structuralDamage=Math.max(8,Math.round((stats.damage+bonus*.1)*(charge>=1?1.5:1.1)));
-  const city=returningGiraffe?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
+  const city=returningGiraffe||waveVortex?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
- return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+ return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
@@ -1040,27 +1045,27 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
   if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
   if(activeFighters>0&&!world.monster.active&&now>=world.monster.nextSpawnAt){const spawn=MONSTER_SPAWNS[Math.floor(rng()*MONSTER_SPAWNS.length)],variant=['warden','drowned','signal'][Math.floor(rng()*3)],maxHp={warden:420,drowned:520,signal:360}[variant];world.monster={active:true,id:id(),variant,position:[...spawn],hp:maxHp,maxHp,generation:(world.monster.generation||0)+1,spawnedAt:now,nextAttackAt:now+2_000,nextSpawnAt:now+ECONOMY.monsterIntervalMs};changed=true;}
-  if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!monster.panBlastFlight||!!monster.whipPull||!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),silenced:!!effectActive(monster,'paralysis',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
+  if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!monster.panBlastFlight||!!monster.whipPull||!!monster.vortexSpin&&now<monster.vortexSpin.time+VORTEX_SPIN_MS||!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),silenced:!!effectActive(monster,'paralysis',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
  const confused=effectActive(monster,'confuse',now);
  if(confused){
   const angle=(now/210+(monster.generation||0)*2.4)%(Math.PI*2);
   return moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],distance);
  }
  return moveMonster(world,monster,target,distance);
-},hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position,'normal',null,false,false,skill?.motion==='venom');applyMonsterImpactReaction(world.profiles[target.key],target,skill,now);return result;}});if(!monster.panBlastFlight&&!monster.whipPull&&effectActive(monster,'confuse',now)){
+},hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(monster,'weak',now)?.power||0)),now,'monster',target.position,'normal',null,false,false,skill?.motion==='venom');applyMonsterImpactReaction(world.profiles[target.key],target,skill,now);return result;}});if(!monster.panBlastFlight&&!monster.whipPull&&!monster.vortexSpin&&effectActive(monster,'confuse',now)){
  const angle=(now/217+(monster.generation||0)*1.73)%(Math.PI*2);
  moveMonster(world,monster,[monster.position[0]+Math.cos(angle)*8,monster.position[1],monster.position[2]+Math.sin(angle)*8],.21);
-}else if(!monster.panBlastFlight&&!monster.whipPull&&!effectActive(monster,'root',now)&&!effectActive(monster,'freeze',now)&&
+}else if(!monster.panBlastFlight&&!monster.whipPull&&!monster.vortexSpin&&!effectActive(monster,'root',now)&&!effectActive(monster,'freeze',now)&&
  !monster.aggroTarget&&!fighters.some(a=>distance2d(a.position,monster.position)<18))
  patrolMonster(monster,now,rng,(target,distance)=>moveMonster(world,monster,target,distance));
- advancePanBlastMonster(monster,now);advanceWhipPullMonster(world,monster,now);changed=true;}
+ advancePanBlastMonster(monster,now);advanceWhipPullMonster(world,monster,now);advanceVortexMonster(world,monster,now);changed=true;}
   if(activeFighters>0){
    for(const mob of world.monsters||[]){
     if(!mob?.active)continue;
     if(insideArtSanctuary(mob.position)){mob.position=[...MONSTER_SPAWNS[(mob.slot||0)%MONSTER_SPAWNS.length]];}
     mob.bodyHeight=ENEMY_HEIGHT;mob.bodyRadius=ENEMY_RADIUS;
     const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));
-    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!mob.panBlastFlight||!!mob.whipPull||!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),silenced:!!effectActive(mob,'paralysis',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
+    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!mob.panBlastFlight||!!mob.whipPull||!!mob.vortexSpin&&now<mob.vortexSpin.time+VORTEX_SPIN_MS||!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),silenced:!!effectActive(mob,'paralysis',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
      move:(target,distance)=>{
        const confused=effectActive(mob,'confuse',now);
        if(confused){
@@ -1069,13 +1074,13 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
        }
        return moveMonster(world,mob,target,distance);
       },hit:(target,amount,skill)=>{const result=damagePlayer(world,null,target,skill?.motion==='venom'?5:amount*(1-(effectActive(mob,'weak',now)?.power||0)),now,'monster',mob.position,'normal',null,false,false,skill?.motion==='venom');applyMonsterImpactReaction(world.profiles[target.key],target,skill,now);return result;}});
-    if(!mob.panBlastFlight&&!mob.whipPull&&effectActive(mob,'confuse',now)){
+    if(!mob.panBlastFlight&&!mob.whipPull&&!mob.vortexSpin&&effectActive(mob,'confuse',now)){
  const angle=(now/217+(mob.slot||0)*1.73)%(Math.PI*2);
  moveMonster(world,mob,[mob.position[0]+Math.cos(angle)*8,mob.position[1],mob.position[2]+Math.sin(angle)*8],.21);
-}else if(!mob.panBlastFlight&&!mob.whipPull&&!effectActive(mob,'root',now)&&!effectActive(mob,'freeze',now)&&
+}else if(!mob.panBlastFlight&&!mob.whipPull&&!mob.vortexSpin&&!effectActive(mob,'root',now)&&!effectActive(mob,'freeze',now)&&
  !mob.aggroTarget&&!fighters.some(a=>distance2d(a.position,mob.position)<18))
  patrolMonster(mob,now,rng,(target,distance)=>moveMonster(world,mob,target,distance));
-    advancePanBlastMonster(mob,now);advanceWhipPullMonster(world,mob,now);changed=true;
+    advancePanBlastMonster(mob,now);advanceWhipPullMonster(world,mob,now);advanceVortexMonster(world,mob,now);changed=true;
    }
   }
   for(const profile of Object.values(world.profiles))if(profile.hp<=0&&profile.deadUntil<=now){
@@ -1198,6 +1203,16 @@ function advanceWhipPullMonster(world,mob,now){
  }
  pull.updatedAt=to;
  if(now>=until)delete mob.whipPull;
+ return true;
+}
+
+function advanceVortexMonster(world,mob,now){
+ const spin=mob?.vortexSpin;
+ if(!spin||!mob.active)return false;
+ const point=vortexSpinPoint(spin,now);
+ if(point&&now<spin.time+VORTEX_SPIN_MS)
+  moveMonster(world,mob,point,Math.hypot(point[0]-mob.position[0],point[2]-mob.position[2]));
+ else delete mob.vortexSpin;
  return true;
 }
 
@@ -1436,6 +1451,41 @@ function tickPersistentAttacks(world,actors,now,rng){
      if(outcome(target,center,center,null,dist))changed=true;
     }
    }
+  }else if(fx.kind==='vortex'){
+   // Continuous server-owned homing trajectory: target seeking, radius and
+   // each 500ms hit always use this single physical vortex center.
+   const candidates=targets.filter(t=>t.value.key!==fx.owner&&t.value.hp!==0&&
+    !(t.kind==='player'&&insideSafeZone(t.value.position)));
+   const viable=candidates.filter(t=>Math.hypot(t.value.position[0]-fx.position[0],
+    t.value.position[2]-fx.position[2])<fx.range*.85+6);
+   const aim=viable.find(t=>(t.value.id||t.value.key)===fx.targetId)||
+    viable.sort((a,b)=>Math.hypot(a.value.position[0]-fx.position[0],a.value.position[2]-fx.position[2])-
+      Math.hypot(b.value.position[0]-fx.position[0],b.value.position[2]-fx.position[2]))[0];
+   if(aim)fx.targetId=aim.value.id||aim.value.key;
+   const start=[...fx.position],elapsed=Math.max(0,now-fx.lastAt);
+   advanceHomingVortex(fx,aim?.value,elapsed);
+   if(Math.hypot(fx.position[0]-start[0],fx.position[2]-start[2])>.001)changed=true;
+   const radius=Math.max(2.1,Math.min(7,fx.radius*.5));
+   for(const target of candidates){
+    const victim=target.value,key=victim.id||victim.key;
+    const victimRadius=target.kind==='monster'?(victim.bodyRadius||ENEMY_RADIUS):1.02;
+    if(Math.hypot(victim.position[0]-fx.position[0],victim.position[2]-fx.position[2])>radius+victimRadius||
+     Math.abs(victim.position[1]-fx.position[1])>8||(fx.hitTimes?.[key]||0)>now)continue;
+    const point=[victim.position[0],victim.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),victim.position[2]];
+    const hit=target.kind==='monster'?
+     damageMonster(world,owner,fx.damage*.12,now,rng,'vortex',victim,point):
+     damagePlayer(world,owner,victim,(fx.pvpDamage||12)*.18,now,'vortex',fx.origin,'vortex',point);
+    if(!hit||hit.immune)continue;
+    fx.hitTimes??={};fx.hitTimes[key]=now+VORTEX_DAMAGE_INTERVAL_MS;
+    changed=true;
+    if(hit.defeated)continue;
+    const status=target.kind==='monster'?victim:world.profiles[victim.key];
+    if(status&&now>=(status.vortexSpinCooldownUntil||0)){
+     status.vortexSpin={id:id(),time:now,durationMs:VORTEX_SPIN_MS,
+      center:[fx.position[0],fx.position[2]],start:[...victim.position]};
+     status.vortexSpinCooldownUntil=now+VORTEX_SPIN_LOCK_MS;
+    }
+   }
   }else if(fx.kind==='giraffe'){
    for(const [leg,lo,hi] of [['out',0,.5],['back',.5,1]]){
     const from=Math.max(prev,lo),to=Math.min(next,hi);
@@ -1468,16 +1518,18 @@ function tickPersistentAttacks(world,actors,now,rng){
     // Check along the identical sine-wave outbound/return path, rather
     // than damaging houses at the instant the player presses A.
     const stepCount=Math.max(1,Math.ceil(length/.75));
-    fx.structureHitIds??=[];fx.cityHitIds??=[];
+    // One real building contact per outward and RETURN pass; not one for both.
+    const structureSeen=leg==='out'?(fx.structureOutHitIds??=[]):(fx.structureBackHitIds??=[]);
+    const citySeen=leg==='out'?(fx.cityOutHitIds??=[]):(fx.cityBackHitIds??=[]);
     for(let j=0;j<=stepCount;j++){
      const t=j/stepCount,point=a.map((v,i)=>v+(b[i]-v)*t);
      for(const structure of [...(world.structures||[])]){
-      if(structure.owner==='temple'||fx.structureHitIds.includes(structure.id))continue;
+      if(structure.owner==='temple'||structureSeen.includes(structure.id))continue;
       if(Math.abs(point[1]-(structure.position[1]+structureHeight(structure)*.5))>
         structureHeight(structure)*.5+fx.radius)continue;
       if(Math.hypot(point[0]-structure.position[0],point[2]-structure.position[2])>
         fx.radius+structureRadius(structure))continue;
-      fx.structureHitIds.push(structure.id);
+      structureSeen.push(structure.id);
       structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
       const damage=Math.max(8,Math.round(fx.damage*.5));
       structure.hp=Math.max(0,structure.hp-damage);
@@ -1494,12 +1546,12 @@ function tickPersistentAttacks(world,actors,now,rng){
      }
      // Broadphase prevents a 432-house scan during each boomerang step.
      for(const lot of cityCollisionCandidates(point[0],point[2],fx.radius)){
-      if(fx.cityHitIds.includes(lot.id)||(world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
+      if(citySeen.includes(lot.id)||(world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
       const [u,v]=cityLocal(lot,point[0],point[2]);
       const hp=world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP;
       if(Math.abs(u)>lot.width*.5+fx.radius||Math.abs(v)>lot.depth*.5+fx.radius||
        point[1]<-fx.radius||point[1]>cityRoofHeightAtHp(lot,hp)+fx.radius)continue;
-      fx.cityHitIds.push(lot.id);
+      citySeen.push(lot.id);
       const hitPoint=[point[0],Math.max(.1,Math.min(point[1],lot.height)),point[2]];
       const impact=damageCityLot(world,lot,'masonry',Math.max(8,Math.round(fx.damage*.5)),now,hitPoint);
       if(impact){

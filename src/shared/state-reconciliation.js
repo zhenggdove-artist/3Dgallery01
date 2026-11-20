@@ -9,7 +9,8 @@ export function rebaseRejectedPose(accepted,submitted,current,blocked=()=>false)
  const travel=Math.hypot(dx,dy,dz);
  // This is a prediction replay, never an allowance to bypass the server's
  // movement/collision rules or to replay a large unsupported teleport.
- if(travel>3.5)return [...accepted];
+ // A delayed 90ms socket sample may trail several valid strides on busy frames.
+ if(travel>12)return [...accepted];
  const next=[accepted[0]+dx,accepted[1]+dy,accepted[2]+dz];
  if(blocked(next[0],next[2],next[1]))return [...accepted];
  return next;
