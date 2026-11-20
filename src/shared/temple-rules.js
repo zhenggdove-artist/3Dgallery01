@@ -199,6 +199,15 @@ function spend(profile,amount,world){if(profile.admin)return true;if(profile.wal
 function earn(profile,amount,world){if(!profile.admin)profile.wallet+=amount;world.activity.coinMinted+=amount;}
 function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>=600)return false;appendInventoryInstance(profile,itemId);return true;}
 
+// A channel interrupted by a lost stop packet MUST NOT impose 5%-speed
+// validation forever. Movement and attack ticks use the same expiry window.
+export function isLiveStaffChannel(profile,now=Date.now()){
+ const staff=profile?.channelWeapon&&itemById(profile.channelWeapon);
+ if(!staff||!isChannelStaff(staff))return false;
+ const latest=Number(profile.lastChannelPulseAt||profile.channelStartedAt)||0;
+ const grace=Math.max(1900,Math.min(4500,(staff.cooldown||700)*2+500));
+ return latest>0&&now-latest<=grace;
+}
 export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,journey=null,now=Date.now(),mobility=null){
   const pose=journeyPose(journey,now);
   if(pose&&role==='fighter')return {state:{position:pose.position,rotation:Math.PI,animation:pose.animation,visible:true}};
@@ -1040,8 +1049,17 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
    damagePlayer(world,null,actor,damage,now,'collector',from,'collector-shot',
     [actor.position[0],actor.position[1]+1.15,actor.position[2]],false,false,true)
   )||artworkChanged;
-  for(const profile of Object.values(world.profiles||{}))
+  for(const profile of Object.values(world.profiles||{})){
+   if(profile.channelWeapon&&!isLiveStaffChannel(profile,now)){
+    // Clear orphaned continuous-cast state before validating later movement.
+    profile.channelWeapon=null;profile.channelStartedAt=0;
+    profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
+    world.persistentAttacks=(world.persistentAttacks||[]).filter(fx=>
+     !(fx.owner===profile.key&&fx.channel));
+    changed=true;
+   }
    changed=tickBloomChannelHeal(profile,now)>0||changed;
+  }
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
   if(world.channelContactLocks)for(const [key,expiry] of Object.entries(world.channelContactLocks))
    if(expiry<now-2000)delete world.channelContactLocks[key];
