@@ -762,7 +762,7 @@ export class OuterCity{
    existing?.hp??Math.min(maxHp,event.hp+Math.max(0,event.damage||0));
   const from=Number.isFinite(event.previousTier)?event.previousTier:cityDamageTier(oldHp,maxHp);
   const tier=cityDamageTier(event.hp,maxHp),stage=cityStage(event.hp,maxHp);
-  this.damage[lot.id]={hp:event.hp,stage,tier};
+  this.damage[lot.id]={...existing,hp:event.hp,maxHp,stage,tier};
   this.fireField?.setLot(lot,event.hp,maxHp,{live:true});
   this.facade.set(lot.index,event.hp,maxHp);
   this.flash(lot);
@@ -785,7 +785,14 @@ export class OuterCity{
    const record=damage[lot.id];if(!record)continue;
    const maxHp=record.maxHp||CITY_MAX_HP;
    const tier=cityDamageTier(record.hp,maxHp),stage=cityStage(record.hp,maxHp);
-   const knownTier=this.damage[lot.id]?.tier??0;
+   const existing=this.damage[lot.id],knownTier=existing?.tier??0;
+   // Combat snapshots always clone cityDamage. An unchanged HP does not
+   // warrant 3 facade updates, part scans, or geometry preparation again.
+   const destroyedParts=Object.entries(record.parts||{})
+    .filter(([part,hp])=>hp<=0&&part!=='masonry').map(([part])=>part).sort();
+   const partSig=destroyedParts.join('|');
+   if(existing?.hp===record.hp&&existing?.maxHp===maxHp&&
+      existing.partSig===partSig)continue;
    // A world snapshot is state, not an attack animation. On initial join
    // an empty placeholder snapshot often precedes the real damaged-city
    // snapshot; replaying all historical tiers here launched hundreds of
@@ -793,11 +800,10 @@ export class OuterCity{
    // Only applyDamageEvent() starts animated debris on a real live hit.
    const staticChange=!firstSnapshot&&tier!==knownTier
     &&!this.collapseAnimations.has(lot.index);
-   this.damage[lot.id]={hp:record.hp,stage,tier};
+   this.damage[lot.id]={hp:record.hp,maxHp,stage,tier,partSig};
    this.fireField?.setLot(lot,record.hp,maxHp,{snapshot:true});
    this.facade.set(lot.index,record.hp,maxHp);
-   for(const [part,hp] of Object.entries(record.parts||{}))
-    if(hp<=0&&part!=='masonry')this.hidePart(lot.index,part);
+   for(const part of destroyedParts)this.hidePart(lot.index,part);
    if(firstSnapshot||staticChange){
     this.collapseLot(lot.index,tier);
     if(tier>=3){
