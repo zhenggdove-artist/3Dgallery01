@@ -56,7 +56,7 @@ export function createInitialWorld(now=Date.now()){
     profiles:{},customWings:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
-    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
+    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],prismLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
     monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],audioSettings:{},musicVersion:0,
     collector:initialCollector(now),lastCollectorSale:null,
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
@@ -68,7 +68,7 @@ export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
   world.profiles??={};world.customWings??=[];registerCustomWings(world.customWings);
-  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.pendingArtworkFlights??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
+  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.prismLocks??={};world.pendingArtworkFlights??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
   // Old RELETTER farming data must not survive the removal of the Garden game mode.
@@ -183,6 +183,10 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),wallPaint:clone(world.wallPaint||{}),wallPaintRevision:world.wallPaintRevision||0,plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
+    prismLocks:Object.fromEntries(Object.entries(world.prismLocks||{}).map(([key,lock])=>[
+      key,{targetKey:lock.targetKey,kind:lock.kind,position:clone(lock.position),since:lock.since,
+        multiplier:prismDamageMultiplier(now-lock.since),range:lock.range}
+    ])),
     vortexes:(world.persistentAttacks||[]).filter(v=>v.kind==='vortex').map(v=>({id:v.id,position:clone(v.position||v.origin),owner:v.owner})),
     goldfishFlights:(world.persistentAttacks||[]).filter(v=>v.kind==='goldfish').map(v=>({
       id:v.id,position:clone(v.position||v.origin),direction:clone(v.direction),owner:v.owner
@@ -617,6 +621,7 @@ function attack(world,profile,actor,body,context,now){
   if(body.phase==='channel-stop'){
    profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;
    profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
+   if(world.prismLocks)delete world.prismLocks[actor.key];
    world.persistentAttacks=(world.persistentAttacks||[]).filter(
     fx=>!(fx.owner===actor.key&&fx.channel));
    return {channeling:false,channelStopped:{owner:actor.key,time:now}};
@@ -689,11 +694,18 @@ function attack(world,profile,actor,body,context,now){
   const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
+  const prismChannel=channel&&weapon.family==='beam'&&!weapon.exotic;
   const waveVortex=weapon.family==='wave'&&stats.ultimate;
   const area=stats.ultimate&&weapon.id!=='goldfish'&&!waveVortex?chargedArea(weapon,origin,direction,stats,groundForSpell,channel):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate,now):null;
   const fusionEchoes=[];
   const pvpDamage=pvpShotDamage(weapon,stats,quality);
+  if(prismChannel){
+   // Damage and direction are server-owned; each channel pulse renews
+   // this source without restarting the current target's power ramp.
+   profile.prismChannelStats={range:stats.range,monsterDps:stats.damage,pvpDps:pvpDamage,
+    direction:[...direction]};
+  }
   const returningGiraffe=weapon.id==='giraffe'&&stats.ultimate;
   const roamingFan=weapon.id==='fan'&&stats.ultimate;
   const swimmingFish=weapon.id==='goldfish'&&stats.ultimate;
@@ -716,7 +728,7 @@ function attack(world,profile,actor,body,context,now){
     });
     if(world.persistentAttacks.length>32)world.persistentAttacks.splice(0,world.persistentAttacks.length-32);
   }
-  const persistentOnly=returningGiraffe||roamingFan||swimmingFish||waveVortex;
+  const persistentOnly=returningGiraffe||roamingFan||swimmingFish||waveVortex||prismChannel;
   // Attack requests only launch server-owned trajectories. Health, statuses,
   // and damage-number events are produced by tickPersistentAttacks when the
   // travelling VFX volume actually touches a target (never on key release).
@@ -1054,6 +1066,8 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
     // Clear orphaned continuous-cast state before validating later movement.
     profile.channelWeapon=null;profile.channelStartedAt=0;
     profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
+    delete profile.prismChannelStats;
+    if(world.prismLocks?.[profile.key])delete world.prismLocks[profile.key];
     world.persistentAttacks=(world.persistentAttacks||[]).filter(fx=>
      !(fx.owner===profile.key&&fx.channel));
     changed=true;
@@ -1061,6 +1075,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
    changed=tickBloomChannelHeal(profile,now)>0||changed;
   }
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
+  changed=tickPrismChannels(world,actors,now,rng)||changed;
   if(world.channelContactLocks)for(const [key,expiry] of Object.entries(world.channelContactLocks))
    if(expiry<now-2000)delete world.channelContactLocks[key];
   if(world.monster?.active)changed=tickStatus(world.monster,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng))||changed;
@@ -1247,6 +1262,79 @@ function blastDirection(center,position,fallback=[0,0,1]){
  if(length>.0001)return [dx/length,0,dz/length];
  const fallbackLength=Math.hypot(fallback[0],fallback[2])||1;
  return [-fallback[0]/fallbackLength,0,-fallback[2]/fallbackLength];
+}
+
+
+export const PRISM_DAMAGE_TICK_MS=250;
+export function prismDamageMultiplier(durationMs){
+ // Each complete second permanently adds 20% to the LOCKED victim's DPS,
+ // compounded as requested, with an absolute 5x ceiling.
+ return Math.min(5,1.2**Math.max(0,Math.floor((Number(durationMs)||0)/1000)));
+}
+export function tickPrismChannels(world,actors,now=Date.now(),rng=Math.random){
+ const locks=world.prismLocks??={};
+ let changed=false;
+ // Every live caster has one channel and at most one locked target.
+ const active=new Set();
+ for(const caster of actors){
+  const profile=world.profiles[caster.key],weapon=itemById(profile?.channelWeapon);
+  if(caster.role!=='fighter'||!profile||profile.hp<=0||profile.deadUntil>now||
+     !weapon||weapon.family!=='beam'||weapon.exotic||
+     profile.equipment.weapon!==weapon.id||!isLiveStaffChannel(profile,now))continue;
+  active.add(caster.key);
+  const params=profile.prismChannelStats;
+  if(!params)continue; // A charged channel must emit its first authenticated pulse.
+  const range=Math.max(2,Number(params.range)||12);
+  const living=[...(world.monster?.active?[{kind:'monster',value:world.monster}]:[]),
+    ...(world.monsters||[]).filter(m=>m.active&&m.hp>0).map(value=>({kind:'monster',value})),
+    ...actors.filter(a=>a.role==='fighter'&&a.key!==caster.key&&
+     world.profiles[a.key]?.hp>0&&world.profiles[a.key]?.deadUntil<=now&&
+     !insideSafeZone(a.position)&&!insideArtSanctuary(a.position))
+     .map(value=>({kind:'player',value}))];
+  const targets=living.map(t=>{
+   const v=t.value,point=[v.position[0],v.position[1]+(t.kind==='monster'?(v.bodyHeight||ENEMY_HEIGHT)*.54:1.13),v.position[2]];
+   const dx=point[0]-caster.position[0],dy=point[1]-(caster.position[1]+1.16),dz=point[2]-caster.position[2];
+   return {...t,key:v.id||v.key,point,distance:Math.hypot(dx,dy,dz)};
+  }).filter(t=>t.distance<=range);
+  const prior=locks[caster.key];
+  const target=targets.find(t=>prior?.targetKey===t.key&&prior?.kind===t.kind)||
+    targets.sort((a,b)=>a.distance-b.distance)[0];
+  if(!target){
+   if(prior){delete locks[caster.key];changed=true;}
+   continue;
+  }
+  let lock=prior;
+  if(!lock||lock.targetKey!==target.key||lock.kind!==target.kind){
+   lock={targetKey:target.key,kind:target.kind,since:now,lastHitAt:now,
+    range,position:[...target.point]};
+   locks[caster.key]=lock;changed=true;
+  }
+  const drift=Math.hypot(...lock.position.map((v,i)=>v-target.point[i]));
+  if(drift>.02){lock.position=[...target.point];changed=true;}
+  lock.range=range;
+  const elapsed=now-lock.lastHitAt;
+  if(elapsed<PRISM_DAMAGE_TICK_MS)continue;
+  // Limit the backlog from a suspended tab: the beam cannot cause multiple
+  // seconds of invisible retroactive damage on a single frame.
+  const sample=Math.min(elapsed,500);
+  lock.lastHitAt=now;
+  const multiplier=prismDamageMultiplier(now-lock.since);
+  const base=target.kind==='monster'?params.monsterDps:params.pvpDps;
+  const dps=Math.max(0,Number(base)||0)*multiplier;
+  if(dps<=0)continue;
+  const amount=dps*sample/1000;
+  if(target.kind==='monster'){
+   damageMonster(world,profile,amount,now,rng,'prism-lock',target.value,target.point);
+  }else{
+   damagePlayer(world,profile,target.value,amount,now,'prism',caster.position,
+    'prism-lock',target.point,false,false,true);
+  }
+  changed=true;
+ }
+ for(const key of Object.keys(locks))if(!active.has(key)){
+  delete locks[key];changed=true;
+ }
+ return changed;
 }
 
 // Timed server-owned abilities: a returning giraffe can hit each target once
