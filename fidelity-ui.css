@@ -498,3 +498,8 @@ body.sniper-scoped #chat-hud{visibility:hidden!important;pointer-events:none!imp
 #panel #bag-portrait-frame::after{display:none!important}
 #panel #bag-portrait{filter:none}
 #panel #bag-portrait{filter:none!important;background:transparent!important}
+
+/* No legacy item glyphs: preserve exact image space until a FULL model is ready. */
+#panel .item .equipment-preview-pending{display:flex;align-items:center;justify-content:center;width:100%;height:80px;box-sizing:border-box;background:linear-gradient(125deg,#e4dfeb,#f7f3fa);border:1px solid #d8cede;border-radius:5px;color:#74677d;font:10px system-ui;text-align:center}
+#panel #bag-items .bag-cell .equipment-preview-pending{display:flex;align-items:center;justify-content:center;width:100%;height:46px;box-sizing:border-box;background:linear-gradient(125deg,#d9d4df,#eee8f2);border-radius:3px;color:#74677d;font:8px system-ui;pointer-events:none}
+#panel .equipment-preview-error{font-size:10px!important;opacity:.65}
