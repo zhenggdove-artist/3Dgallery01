@@ -184,6 +184,9 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),wallPaint:clone(world.wallPaint||{}),wallPaintRevision:world.wallPaintRevision||0,plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
     vortexes:(world.persistentAttacks||[]).filter(v=>v.kind==='vortex').map(v=>({id:v.id,position:clone(v.position||v.origin),owner:v.owner})),
+    goldfishFlights:(world.persistentAttacks||[]).filter(v=>v.kind==='goldfish').map(v=>({
+      id:v.id,position:clone(v.position||v.origin),direction:clone(v.direction),owner:v.owner
+    })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
@@ -685,6 +688,11 @@ function attack(world,profile,actor,body,context,now){
   const returningGiraffe=weapon.id==='giraffe'&&stats.ultimate;
   const roamingFan=weapon.id==='fan'&&stats.ultimate;
   const swimmingFish=weapon.id==='goldfish'&&stats.ultimate;
+  // Lift the whole creature above ground/water while retaining the muzzle
+  // position for ordinary bubbles. Server collision and render share this.
+  const goldfishOrigin=swimmingFish?[origin[0],origin[1]+2.0,origin[2]]:origin;
+  const horizontalLength=Math.hypot(direction[0],direction[2])||1;
+  const goldfishDirection=swimmingFish?[direction[0]/horizontalLength,0,direction[2]/horizontalLength]:direction;
   let persistentAttackId=null;
   if(returningGiraffe||roamingFan||swimmingFish||waveVortex){
     world.persistentAttacks??=[];
@@ -692,7 +700,7 @@ function attack(world,profile,actor,body,context,now){
     const attackId=id();persistentAttackId=attackId;
     world.persistentAttacks.push({
       id:attackId,kind:waveVortex?'vortex':swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
-      origin:[...origin],direction:[...direction],range:stats.range,position:[...origin],travelled:0,hitTimes:{},
+      origin:[...goldfishOrigin],direction:[...goldfishDirection],range:stats.range,position:[...goldfishOrigin],travelled:0,hitTimes:{},
       damage:stats.damage+bonus*.1,pvpDamage,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
       createdAt:now,lastAt:now,expiresAt:now+duration,
       outHits:[],backHits:[],fanHits:{},fishHits:[]
@@ -786,7 +794,7 @@ function attack(world,profile,actor,body,context,now){
   const city=returningGiraffe||waveVortex?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
- return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+ return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
@@ -1565,18 +1573,31 @@ function tickPersistentAttacks(world,actors,now,rng){
     }
    }
   }else if(fx.kind==='goldfish'){
-   // The fish's swept server collider follows precisely the same straight
-   // route, scale, and duration as its visible Three.js body.
-   const length=(next-prev)*fx.range;
+   // A real moving fish: steer toward the nearest live target on every tick,
+   // then sweep the *actual curved segment* instead of the old straight ray.
+   // Targets cannot dodge a tracking fish merely because it changed bearing.
+   const candidates=targets.filter(t=>(t.value.id||t.value.key)!==fx.owner&&
+      t.value.hp!==0&&!(t.kind==='player'&&insideArtSanctuary(t.value.position)));
+   const nearby=candidates.filter(t=>
+    Math.hypot(t.value.position[0]-fx.position[0],t.value.position[2]-fx.position[2])<fx.range*.9+6);
+   const aim=nearby.find(t=>(t.value.id||t.value.key)===fx.targetId)||
+    nearby.sort((a,b)=>Math.hypot(a.value.position[0]-fx.position[0],a.value.position[2]-fx.position[2])-
+     Math.hypot(b.value.position[0]-fx.position[0],b.value.position[2]-fx.position[2]))[0];
+   if(aim)fx.targetId=aim.value.id||aim.value.key;
+   const origin=[...fx.position];
+   advanceHomingVortex(fx,aim?.value,Math.min(now,fx.expiresAt)-fx.lastAt,flight);
+   const ray=fx.position.map((v,j)=>v-origin[j]);
+   const length=Math.hypot(...ray);
    if(length>.001){
-    const origin=fx.origin.map((v,j)=>v+fx.direction[j]*prev*fx.range);
+    const travelDirection=ray.map(v=>v/length);
+    changed=true;
     for(const target of targets){
      const value=target.value,key=value.id||value.key;
      if(key===fx.owner||now<(fx.hitTimes?.[key]||0))continue;
      if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
      const contact=target.kind==='monster'
-      ?monsterRayDistance(origin,fx.direction,length,value,fx.radius)
-      :rayCylinderDistance(origin,fx.direction,length,value.position,1.02+fx.radius,2.35);
+      ?monsterRayDistance(origin,travelDirection,length,value,fx.radius)
+      :rayCylinderDistance(origin,travelDirection,length,value.position,1.02+fx.radius,2.35);
      if(contact===null)continue;
      fx.hitTimes??={};fx.hitTimes[key]=now+contactDamageIntervalMs({id:'goldfish'});
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
