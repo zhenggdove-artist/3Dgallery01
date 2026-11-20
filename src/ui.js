@@ -241,10 +241,10 @@ export class TempleUI extends EventTarget{
   death(until,killer=''){if(this.deathUntil===until&&this.deathKiller===killer)return;this.deathUntil=until;this.deathKiller=killer;clearTimeout(this.deathTimer);const overlay=$('death');$('death-killer').textContent=killer?'KILLED BY '+killer:'';if(!until||until<=Date.now()){overlay.hidden=true;return;}overlay.hidden=false;const update=()=>{const left=Math.max(0,Math.ceil((until-Date.now())/1000));$('respawn-count').textContent=left;if(left)this.deathTimer=setTimeout(update,200);else overlay.hidden=true;};update();}
   openPanel(name,fromJourney=false){if(!this.self)return;if(['gm','wing-manage'].includes(name)&&!this.self.profile?.admin)return;
     if(name==='wing-painter'&&!this.self.profile?.admin&&!(this.world?.profile?.wingDesignCredits>0))return;if(name==='social'&&!fromJourney){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',name==='wing-painter');document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});
-    if(name==='wing-shop')this.emit('wing-payment-status-request');
+    if(name==='wing-shop'){$('panel-close').focus({preventScroll:true});this.emit('wing-payment-status-request');}
     if(name==='gm')this.requestGmPresence();}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;document.body.classList.remove('panel-open','panel-wing-painter','panel-wing-shop');this.wingGalleryObserver?.disconnect();this.panelName='';this.emit('panel',{open:false});}
-  renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion,this.world?.profile?.wingDesignCredits]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','wing-shop':'SUPPORT · CUSTOM WINGS',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
+  renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion,this.world?.profile?.wingDesignCredits]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
     if(this.panelName==='gm'){this.renderGm();return;}
      if(this.panelName==='wing-painter'){mountWingPainter(this);return;}
     if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + D：圓盤刪除模式（點選變藍、DELETE 刪除、ESC 離開）<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p><h3>GM 指令</h3><p><code>/reset building</code>：復原全部破損房屋（保留塗鴉）<br><code>/clean graffic</code>：永久清除牆面塗鴉<br><code>/reset message</code>：永久清空中央留言與聊天室<br><code>/reset</code>：清空玩家上傳作品<br><code>/recovery</code>：還原藝術品</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(this.panelName==='shop')this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='wing-manage')this.renderWingManage(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<section class="gm-wing-workspace"><h3>GM 翅膀編輯工作區</h3><p>繪製、上架、設定中獎率及下架管理。</p><div class="gm-tools"><button type="button" data-gm-action="wing-painter">畫翅膀／上架</button><button type="button" data-gm-action="wing-manage">已上架翅膀／機率／下架</button></div></section><hr><h3>建立漂浮圓盤</h3><form data-form="gm-platform">${['x','y','z'].map(k=>`<label>${k.toUpperCase()}<input name="${k}" type="number" value="${k==='y'?2:0}" step=".1" required></label>`).join('')}<label>半徑<input name="radius" type="number" value="2.5" min=".6" max="8" step=".1" required></label><button>建立並儲存圓盤</button></form><hr><h3>上傳藝術品</h3><form data-form="upload-artwork"><p>PNG／JPEG／WebP、MP4／WebM、GLB／glTF／FBX。模型貼圖與 BIN 檔請一起選取。轉換後上限 32 MB、50 萬三角面、200 個網格；保留圖片透明度，模型會打包成完整 GLB。</p><label>作品名稱<input name="title" type="text" maxlength="100" required placeholder="輸入作品名稱"></label><input name="artwork" type="file" accept="${ART_ACCEPT}" multiple required><button class="panel-button" data-upload-submit>驗證並發布</button><p data-upload-status role="status"></p></form>`);}
@@ -318,21 +318,23 @@ export class TempleUI extends EventTarget{
    const credits=Math.max(0,Number(profile.wingDesignCredits)||0);
    const status=this.wingPaymentStatus;
    const ready=status?.checkoutEnabled===true;
-   this.content.innerHTML=`<section class="wing-shop-panel wing-support-app wing-design-support">
-    <div class="y2k-shell-header"><div class="y2k-shell-brand"><span class="y2k-shell-diamond">◇</span><div><strong>GGTEMPLE</strong><small>SUPPORT</small></div></div><div class="y2k-shell-lights"><span>ONLINE ●</span></div></div>
+   const stage=status?.checkoutMode==='stage-only',busy=!!this.wingCheckoutBusy;
+   const amount=Number.isInteger(status?.amount)&&status.amount>0?status.amount:30;
+   this.content.innerHTML=`<section class="wing-shop-panel wing-support-app wing-design-support" aria-label="Support GGTEMPLE">
+    <div class="y2k-shell-header"><strong>▣ &nbsp; GGTEMPLE — SUPPORT.EXE</strong>${stage?'<small>TEST MODE</small>':''}</div>
     <div class="wing-support-controls">
      <header class="wing-shop-hero">
-      <small>GGTEMPLE · SUPPORT</small>
-      <h3>THANK YOU FOR YOUR SUPPORT</h3>
-      <p>Support GGTEMPLE with NT$30 to unlock one wing canvas and create your own pair of wings.</p>
+      <svg aria-hidden="true" width="64" height="48" viewBox="0 0 64 48"><path d="M31 36C11 35 4 20 4 7c12 1 22 9 27 24m2 5C53 35 60 20 60 7c-12 1-22 9-27 24" fill="#e6dcff" stroke="#574279" stroke-width="2"/><path d="M12 19c9 2 15 7 19 16m21-16c-9 2-15 7-19 16M32 3v12m-6-6h12" fill="none" stroke="#8c6ab3" stroke-width="2"/></svg>
+      <div><h3>Make your own wings.</h3><p>Support GGTEMPLE and unlock one wing canvas.</p></div>
      </header>
      <section class="wing-payment-preview">
-      <button type="button" class="panel-button wing-support-pay" data-wing-checkout ${ready?'':'disabled'}>${ready?'SUPPORT · NT$30':status?'PAYMENT UNAVAILABLE':'CHECKING PAYMENT…'}</button>
-      ${ready?'<small class="wing-payment-hint">Secure checkout powered by ECPay.</small>':'<small class="wing-payment-hint">Payments are currently unavailable.</small>'}
-      ${credits>0?`<button type="button" class="panel-button wing-gift-action" data-open-gift>DRAW YOUR WINGS · ${credits} ${credits===1?'CANVAS':'CANVASES'} READY</button>`:''}
+      <div class="wing-order-line"><span>1 × Wing canvas</span><strong>NT$${amount}</strong></div>
+      <button type="button" class="panel-button wing-support-pay" data-wing-checkout ${ready&&!busy?'':'disabled'}>${busy?'Opening checkout…':ready?stage?'Open test checkout':'Continue to ECPay ↗':status?'Checkout unavailable':'Checking availability…'}</button>
+      <small class="wing-payment-hint" role="status">${busy?'Preparing your order.':ready?stage?'Test mode · no real charge.':'Payment takes place on ECPay.':status?'Online checkout is not available right now.':'Checking payment status.'}</small>
+      ${credits>0?`<button type="button" class="panel-button wing-gift-action" data-open-gift>Open your canvas (${credits})</button>`:''}
      </section>
     </div>
-    <footer class="y2k-taskbar"><span class="y2k-start-button">▣ Start</span><span>GGTEMPLE · SUPPORT</span></footer>
+    <footer class="y2k-taskbar"><span>WING STUDIO</span><span>One-time purchase</span></footer>
    </section>`;
   }
   setWingPaymentStatus(value){

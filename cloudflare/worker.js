@@ -1,12 +1,13 @@
 import {initializeArtMedia,uploadArtMedia,getArtMedia} from './art-media.js';
-import {initializeWingOrders,wingPaymentStatus,wingCheckoutApi,wingOrderStatus,wingNotifyApi} from './ecpay-wing-payments.js';
+import {initializeWingOrders,wingPaymentStatus,wingCheckoutApi,wingOrderStatus,wingNotifyApi,paymentMode} from './ecpay-wing-payments.js';
 import {verifyFirebaseIdToken,firebaseWebConfig,firebaseProfileKey,isFirebaseGm} from './firebase-auth.js';
 import {recoverArtworks} from '../src/shared/artwork-recovery.js';
 import {resetPlayerArtworks} from '../src/shared/art-bomb.js';
 import {DurableObject} from 'cloudflare:workers';
-import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,releasePlayerWorldState,tickWorld,validateState,isLiveStaffChannel,validColor,validName,worldView,MAX_FIGHTERS,MAX_SPECTATORS} from '../src/shared/temple-rules.js';
+import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,releasePlayerWorldState,tickWorld,validateState,isLiveStaffChannel,validColor,validName,worldView,worldProfileView,MAX_FIGHTERS,MAX_SPECTATORS} from '../src/shared/temple-rules.js';
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
 import {playerStats} from '../src/shared/player-stats.js';
+import {createWorldPatch} from '../src/shared/world-patch.js';
 
 const MUSIC_CHUNK_BYTES=512*1024,MAX_GM_MUSIC_BYTES=7_500_000;
 const ROOM_ID='temple-main-v1',SESSION_MS=24*60*60*1000,SAVE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -16,7 +17,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:3,features:{artMediaUpload:true,artBombPlace:true,gmReset:true}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:4,features:{artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,motionAuthority:true,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
@@ -25,7 +26,7 @@ export default {
 
 export class TempleRoom extends DurableObject{
   constructor(ctx,env){
-    super(ctx,env);this.ctx=ctx;this.env=env;this.sql=ctx.storage.sql;this.closed=new Set();this.lastTick=0;
+    super(ctx,env);this.ctx=ctx;this.env=env;this.sql=ctx.storage.sql;this.closed=new Set();this.lastTick=0;this.worldBaselines=new WeakMap();
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS world_state (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, profile_key TEXT NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL, role TEXT NOT NULL, seat INTEGER NOT NULL, expires INTEGER NOT NULL, state TEXT, save_code TEXT, last_code_at INTEGER NOT NULL DEFAULT 0);
@@ -45,7 +46,8 @@ export class TempleRoom extends DurableObject{
   }
 
   world(){return migrateWorld(JSON.parse(this.sql.exec('SELECT payload FROM world_state WHERE id=1').toArray()[0]?.payload||'{}'));}
-  save(world){this.sql.exec('INSERT OR REPLACE INTO world_state VALUES(1,?)',JSON.stringify(world));}
+  readWorld(){return this.readSnapshot??=this.world();}
+  save(world){this.readSnapshot=null;this.sql.exec('INSERT OR REPLACE INTO world_state VALUES(1,?)',JSON.stringify(world));}
   session(token){if(!token)return null;return this.sql.exec('SELECT * FROM sessions WHERE id=? AND expires>?',token,Date.now()).toArray()[0]||null;}
   token(request,url){return request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]||url.searchParams.get('token')||'';}
   sockets(){return this.ctx.getWebSockets().filter(ws=>ws.readyState===1&&!this.closed.has(ws));}
@@ -187,8 +189,9 @@ export class TempleRoom extends DurableObject{
   connect(request,session,token){
     if(request.headers.get('Upgrade')?.toLowerCase()!=='websocket')return json({error:'WebSocket required'},426);
     for(const ws of this.ctx.getWebSockets(session.id)){this.closed.add(ws);try{ws.close(1000,'Reconnected');}catch{}}
-    const [client,server]=Object.values(new WebSocketPair());this.ctx.acceptWebSocket(server,[session.id]);server.serializeAttachment({sessionId:session.id,profileKey:session.profile_key,role:session.role,seat:session.seat,lastStateAt:0});
-    server.send(JSON.stringify({type:'welcome',data:{self:this.self(session),players:this.roster(),world:worldView(this.world(),session.profile_key)}}));this.broadcastRoster();this.armAlarm();
+    const [client,server]=Object.values(new WebSocketPair()),patch=new URL(request.url).searchParams.get('patch')==='1';this.ctx.acceptWebSocket(server,[session.id]);server.serializeAttachment({sessionId:session.id,profileKey:session.profile_key,role:session.role,seat:session.seat,lastStateAt:0,patch});
+    const view=worldView(this.readWorld(),session.profile_key);if(patch)this.worldBaselines.set(server,view);
+    server.send(JSON.stringify({type:'welcome',data:{self:this.self(session),players:this.roster(),world:view}}));this.broadcastRoster();this.armAlarm();
     return new Response(null,{status:101,webSocket:client});
   }
 
@@ -205,7 +208,7 @@ export class TempleRoom extends DurableObject{
     // Spectators move their free camera locally; only four fighters send
     // authoritative pose streams. Do not fan out up to 100 viewer cameras.
     if(session.role!=='fighter')return;
-    const now=Date.now();if(now-meta.lastStateAt<70)return;const previous=session.state?JSON.parse(session.state):null,world=this.world(),profile=world.profiles[session.profile_key],mobility=profile?{stats:playerStats(world,profile,now),channeling:isLiveStaffChannel(profile,now),effects:profile.effects,hitReaction:profile.hitReaction,impulse:profile.impulse,lastRespawnAt:profile.lastRespawnAt,lastWriteLanding:profile.lastWriteLanding,lastWriteLandingAt:profile.lastWriteLandingAt,cityDamage:world.cityDamage}:null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],profile?.writeJourney,now,mobility);
+    const now=Date.now();if(now-meta.lastStateAt<70)return;const previous=session.state?JSON.parse(session.state):null,world=this.readWorld(),profile=world.profiles[session.profile_key],mobility=profile?{stats:playerStats(world,profile,now),channeling:isLiveStaffChannel(profile,now),effects:profile.effects,hitReaction:profile.hitReaction,impulse:profile.impulse,lastRespawnAt:profile.lastRespawnAt,lastWriteLanding:profile.lastWriteLanding,lastWriteLandingAt:profile.lastWriteLandingAt,cityDamage:world.cityDamage}:null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],profile?.writeJourney,now,mobility);
     const seq=Number.isSafeInteger(event.data?.seq)&&event.data.seq>0?event.data.seq:0;
     if(result.error){
       // Reject the specific input sample, not an unspecified older pose:
@@ -219,7 +222,7 @@ export class TempleRoom extends DurableObject{
     if(seq)ws.send(JSON.stringify({type:'state-ack',data:{seq,serverTime:now,
       corrected:Array.isArray(result.state?.position)&&Array.isArray(event.data?.position)&&
       Math.hypot(...result.state.position.map((v,i)=>v-event.data.position[i]))>.18,
-      position:result.state.position}}));
+      position:result.state.position,authority:result.authority}}));
     this.broadcast('state',{id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,state:result.state},ws);await this.tick(true);
   }
   webSocketClose(ws){this.releaseClosedSocket(ws);this.broadcastRoster();}
@@ -417,19 +420,34 @@ export class TempleRoom extends DurableObject{
     const online=this.roster().map(({name,role})=>({name,role}));
     return json({ok:true,online,events});
   }
-  roster(){this.prune();const world=this.world();return this.sql.exec('SELECT id,profile_key,name,color,role,seat,state FROM sessions WHERE expires>? ORDER BY seat',Date.now()).toArray().map(row=>({id:row.id,key:row.profile_key,name:row.name,color:row.color,role:row.role,seat:row.seat,state:row.state?JSON.parse(row.state):null,profile:world.profiles[row.profile_key]?publicProfile(world.profiles[row.profile_key]):null}));}
+  roster(){this.prune();const world=this.readWorld();return this.sql.exec('SELECT id,profile_key,name,color,role,seat,state FROM sessions WHERE expires>? ORDER BY seat',Date.now()).toArray().map(row=>({id:row.id,key:row.profile_key,name:row.name,color:row.color,role:row.role,seat:row.seat,state:row.state?JSON.parse(row.state):null,profile:world.profiles[row.profile_key]?publicProfile(world.profiles[row.profile_key]):null}));}
   actors(){return this.roster().filter(player=>player.state?.position).map(player=>({...player,position:player.state.position}));}
-  self(session){const world=this.world(),profile=world.profiles[session.profile_key];return {id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,saveCode:session.save_code||null,profile:profile?publicProfile(profile):null};}
+  self(session){const world=this.readWorld(),profile=world.profiles[session.profile_key];return {id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,saveCode:session.save_code||null,profile:profile?publicProfile(profile):null};}
   prune(){const now=Date.now();for(const row of this.sql.exec('SELECT id FROM sessions WHERE expires<=?',now).toArray())this.disconnectSession(row.id,false);this.sql.exec('DELETE FROM rate_limits WHERE window_start<?',now-3_600_000);}
   disconnectSession(id,broadcast=true){const row=this.sql.exec('SELECT profile_key,name,role FROM sessions WHERE id=?',id).toArray()[0];for(const ws of this.ctx.getWebSockets(id)){this.closed.add(ws);try{ws.close(1000,'Disconnected');}catch{}}this.sql.exec('DELETE FROM sessions WHERE id=?',id);if(row){this.recordPresence(row,'offline');const world=this.world();if(releasePlayerWorldState(world,row.profile_key,Date.now())){this.save(world);this.broadcastWorld(world);}}if(broadcast)this.broadcastRoster();}
   broadcast(type,data,except){const text=JSON.stringify({type,data});for(const ws of this.sockets())if(ws!==except)try{ws.send(text);}catch{this.closed.add(ws);}}
   broadcastRoster(){this.lastRosterAt=Date.now();this.broadcast('players',this.roster());}
-  broadcastWorld(world=this.world()){
+  broadcastWorld(world=this.readWorld()){
     const now=Date.now(),updateViewers=now-(this.lastSpectatorWorldAt||0)>=350;
+    const commonPatches=new Map(),profileViews=new Map();let common;
     for(const ws of this.sockets()){
       const meta=ws.deserializeAttachment();
       if(!meta||(meta.role==='spectator'&&!updateViewers))continue;
-      try{ws.send(JSON.stringify({type:'world',data:worldView(world,meta.profileKey,now,false)}));}
+      try{
+       const previous=meta.patch?this.worldBaselines.get(ws):null;
+       if(previous?.revision>=world.revision)continue;
+       common??=worldView(world,null,now,false);
+       if(!profileViews.has(meta.profileKey))profileViews.set(meta.profileKey,worldProfileView(world,meta.profileKey,now));
+       const profile=profileViews.get(meta.profileKey),next={...common,profile};
+       if(previous){
+        const baselineKey=previous.revision+':'+previous.serverTime;
+        let patch=commonPatches.get(baselineKey);
+        if(!patch){patch=createWorldPatch(previous,common,true);commonPatches.set(baselineKey,patch);}
+        const fields=JSON.stringify(previous.profile)===JSON.stringify(profile)?patch.fields:{...patch.fields,profile};
+        ws.send(JSON.stringify({type:'world-patch',data:{...patch,fields}}));
+       }else ws.send(JSON.stringify({type:'world',data:next}));
+       if(meta.patch)this.worldBaselines.set(ws,next);
+      }
       catch{this.closed.add(ws);}
     }
     if(updateViewers)this.lastSpectatorWorldAt=now;
@@ -438,8 +456,9 @@ export class TempleRoom extends DurableObject{
     if(now-(this.lastRosterAt||0)>=800)this.broadcastRoster();
   }
   async tick(fromState=false){
-   const now=Date.now(),world=this.world(),movingEffects=(world.persistentAttacks||[]).length>0||(world.pendingArtworkFlights||[]).length>0||Object.keys(world.prismLocks||{}).length>0;
+   const now=Date.now(),current=this.readWorld(),movingEffects=(current.persistentAttacks||[]).length>0||(current.pendingArtworkFlights||[]).length>0||Object.keys(current.prismLocks||{}).length>0;
    if(fromState&&now-this.lastTick<(movingEffects?70:500))return;
+   const world=this.world();
    this.lastTick=now;
    const actors=this.actors();
    const previousRespawns=new Map(actors.map(actor=>[actor.key,world.profiles[actor.key]?.lastRespawnAt||0]));
@@ -461,7 +480,7 @@ export class TempleRoom extends DurableObject{
       role:actor.role,seat:actor.seat,state});
      respawned=true;
     }
-    this.save(world);
+    this.save(world);this.readSnapshot=world;
     // Full world views include persistent artwork, graffiti, 432-lot city HP,
     // profile inventories and active damage effects. Serializing that entire
     // JSON graph up to 14x/s during beam/building ticks blocks movement ACKs
@@ -481,7 +500,7 @@ export class TempleRoom extends DurableObject{
    await this.armAlarm();
   }
   async alarm(){this.prune();await this.tick();}
-  async armAlarm(){if(this.roster().length)await this.ctx.storage.setAlarm(Date.now()+1_000);}
+  async armAlarm(){const now=Date.now();if(now-(this.lastArmAt||0)<500)return;if(this.sql.exec('SELECT 1 FROM sessions WHERE expires>? LIMIT 1',now).toArray().length){this.lastArmAt=now;await this.ctx.storage.setAlarm(now+1_000);}}
 }
 
 function json(value,status=200,headers={}){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});}

@@ -18,7 +18,7 @@ test('blue warnings are the two unchanged original MIT source files, not imitati
  for(const a of manifest.assets){
   assert.equal(a.license,'MIT');
   const bytes=await readFile(new URL('../vendor/00gamedevs/source/'+a.id+'.js',import.meta.url));
-  assert.equal(createHash('sha256').update(bytes).digest('hex'),a.sha256);
+  assert.equal(createHash('sha256').update(bytes.toString('utf8').replace(/\r\n/g,'\n')).digest('hex'),a.sha256);
  }
 });
 

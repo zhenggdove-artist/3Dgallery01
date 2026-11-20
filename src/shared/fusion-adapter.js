@@ -5,14 +5,15 @@ import {normalMeleeFootprint} from './melee-contact.js';
 import {sniperMaterialStat} from './fusion-balance.js';
 import {itemById} from './catalog.js';
 
-export function originalEquipmentGame(profile,world={}){
- const key=profile.key,instances=profile.inventory.filter(id=>equipmentById(id)).map(id=>{
+export function originalEquipmentGame(profile,world={},equippedOnly=false){
+ const inventory=equippedOnly?[...new Set(Object.values(profile.equipment||{}))].filter(id=>profile.inventory.includes(id)):profile.inventory;
+ const key=profile.key,instances=inventory.filter(id=>equipmentById(id)).map(id=>{
   const record=profile.fusion?.[id],original=record?.original||{};
   const affixIds=[...new Set([...itemAffixes(original),...itemAffixes(record)])];
   return {id,baseId:id,origin:profile.itemOrigins?.[id]||'monster',sourceLevel:profile.level,
    obtainedAt:profile.createdAt,...original,affixIds,affixId:affixIds[0]||null};
  });
- return {inventories:{[key]:[...profile.inventory]},equipment:{[key]:{...profile.equipment}},weaponInstances:{[key]:instances},garden:world.reletter?.garden,equipmentRevision:0};
+ return {inventories:{[key]:[...inventory]},equipment:{[key]:{...profile.equipment}},weaponInstances:{[key]:instances},garden:world.reletter?.garden,equipmentRevision:0};
 }
 export function fuseOriginal(world,profile,body,rng){
  const g=originalEquipmentGame(profile,world),key=profile.key,result=fuseEquipment(g,key,{source:body.sourceId,target:body.targetId,requestId:body.requestId},rng);

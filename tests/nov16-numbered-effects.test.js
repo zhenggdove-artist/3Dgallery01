@@ -45,7 +45,7 @@ test('numbered effects retain verified originals; prism alone switches to origin
   assert.equal(manifestEntry.license,'MIT');
   assert.equal(manifestEntry.url.startsWith('https://00gamedevs.com/'),true);
   const file=await readFile(new URL('../vendor/00gamedevs/source/'+spec.asset+'.js',import.meta.url));
-  assert.equal(createHash('sha256').update(file).digest('hex'),manifestEntry.sha256);
+  assert.equal(createHash('sha256').update(file.toString('utf8').replace(/\r\n/g,'\n')).digest('hex'),manifestEntry.sha256);
  }
  assert.equal(Object.keys(REQUESTED_VFX).length,17);
 });

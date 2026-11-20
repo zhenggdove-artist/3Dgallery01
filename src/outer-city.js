@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
  cityLots,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
-import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume} from './city-ruins-vfx.js';
+import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,emitFireSmoke,updateFireSmoke,disposePlume,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
 import {CityWallPaint} from './city-wall-paint.js';
 import {CityFireField} from './city-fire-field.js';
 import {CitySplinterField} from './city-splinter-field.js';
@@ -341,6 +341,56 @@ function chunkDescriptions(lot){
   ];
  return descriptions;
 }
+
+// One 24 KiB texture replaces streamed position buffers for all 432 buildings.
+// The shader evaluates exactly the same shear, roof and angular cut as the
+// shared collision model. Only detached vertices still update the buffers.
+export function cityDeformationTexture(lots){
+ const width=512,data=new Float32Array(width*3*4);
+ for(const l of lots){const i=l.index*4;data.set([l.x,l.z,Math.cos(l.yaw),Math.sin(l.yaw)],width*4+i);data.set([l.width,l.depth,l.height,l.floors],width*8+i);}
+ const texture=new THREE.DataTexture(data,width,3,THREE.RGBAFormat,THREE.FloatType);
+ texture.needsUpdate=true;
+ return {texture,set(index,tier,x,z){data.set([tier,x,z,cityCollapseProgress(tier)],index*4);texture.needsUpdate=true;},reset(){data.fill(0,0,width*4);texture.needsUpdate=true;}};
+}
+
+function installDeformation(mesh,pose){
+ const {geometry,material}=mesh,flags=new Uint8Array(geometry.attributes.position.count);
+ for(const [key,ranges] of mesh.userData.partRanges||[])if(/:(?:sheets-roof|roof-foundation)$/.test(key))for(const [a,b] of ranges)flags.fill(1,a,b);
+ geometry.setAttribute('cityRoofFlag',new THREE.BufferAttribute(flags,1));
+ const previous=material.onBeforeCompile,key=material.customProgramCacheKey();
+ material.customProgramCacheKey=()=>key+'-gpu-pose-v1';
+ material.onBeforeCompile=function(shader,renderer){
+  previous.call(this,shader,renderer);
+  shader.uniforms.uCityPose={value:pose.texture};
+  shader.vertexShader='uniform sampler2D uCityPose;\nattribute float cityRoofFlag;\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+  if(cityLotId>=0. && position.y>=-50.){
+   float id=floor(cityLotId+.5),u=(id+.5)/512.;
+   vec4 pose=texture2D(uCityPose,vec2(u,1./6.));
+   transformed.xz+=pose.yz;
+   if(pose.x>0.){
+    vec4 frame=texture2D(uCityPose,vec2(u,.5));
+    vec4 lot=texture2D(uCityPose,vec2(u,5./6.));
+    vec2 d=position.xz-frame.xy;
+    vec2 local=vec2(d.x*frame.z-d.y*frame.w,d.x*frame.w+d.y*frame.z);
+    float y=position.y,edge=dot(abs(local),2./lot.xy),roof=cityRoofFlag;
+    float survivor=lot.z/lot.w*(lot.w<1.5?.32:.76),rise=max(0.,y-survivor);
+    float weight=mix(.38+.62*min(1.,edge*.5),1.,roof);
+    float noise=sin(id*.73+position.x*.81+position.z*.59+y*1.13);
+    float ruinedY=mix(min(y,survivor)+rise*(.08+.075*(.5+.5*noise)),survivor+(lot.z+.13-survivor)*.1+(y-lot.z-.13)*.16,roof);
+    float shear=min(1.,rise/max(1.,lot.z-survivor))*.35;
+    transformed+=vec3(sin(y*1.9+id*.9)*shear,ruinedY-y,cos(y*1.5+id*.7)*shear)*weight*pose.w;
+    float intensity=clamp((edge-1.02)/.98,0.,1.)*clamp((y-lot.z*.15)/max(.2,lot.z*.85),0.,1.);
+    float quadrant=step(local.x,-.0000001)+2.*step(local.y,-.0000001);
+    float first=1.+mod(quadrant-mod(id,4.)+4.,4.);
+    float strength=min(1.,.82*(clamp(pose.x-first+1.,0.,1.)+clamp(pose.x-first-3.,0.,1.)+clamp(pose.x-first-7.,0.,1.)));
+    vec2 cut=mix(vec2(-1.),vec2(1.),step(local,vec2(-.0000001)))*min(vec2(2.65),lot.xy*.39);
+    transformed+=vec3(cut.x*frame.z+cut.y*frame.w,-min(mix(4.2,2.15,roof),lot.z*mix(.49,.31,roof)), -cut.x*frame.w+cut.y*frame.z)*intensity*strength;
+   }
+  }`);
+ };
+}
+
 export class OuterCity{
  constructor(scene,{mobile=false}={}){
   this.scene=scene;this.mobile=mobile;this.root=new THREE.Group();
@@ -359,7 +409,7 @@ export class OuterCity{
   this.fireField=new CityFireField(this.root,this.lots,this.plumeResources,mobile);
   this.splinters=new CitySplinterField(this.root,mobile);
   this.preparedChunks=new Map();this.preparingChunks=new Map();this.chunkBuildQueue=[];
-  this.pendingEjections=[];
+  this.pendingEjections=[];this.pendingEjectionKeys=new Set();
   this.fixturePrefabs=new Map();this.fixtureWarmQueue=[];
   this.deformationBasis=new Map();this.basisIdleQueue=[];this.basisIdleHandle=null;
   this.basisLastNearby=0;this.basisDisposed=false;
@@ -368,21 +418,28 @@ export class OuterCity{
   // templates at scene load rather than extruding dozens of shapes PER HIT.
   // Every house of the same material uses the same original palette; each
   // animated clone retains the complete native mesh/material detail.
-  this.scrapPrefabs=new Map();
+  this.scrapPrefabs=new Map();this.scrapBatches=[];this.rubbleMaterial=packedRubbleMaterial();
   for(const lot of this.lots){
    if(this.scrapPrefabs.has(lot.material))continue;
    this.scrapPrefabs.set(lot.material,Array.from({length:4},(_,i)=>
     buildBrokenStructure(lot,18+i,.24+i*.07,.31+i*.06,.16+i*.014,
      i%3===0?'#87979c':i%2?lot.trim:lot.detail)));
   }
+  for(const templates of this.scrapPrefabs.values())for(const template of templates){
+   const packed=packRubble(template,this.rubbleMaterial);
+   const batch=instance(packed.geometry,this.rubbleMaterial,32,'Instanced chipped facade fragments');
+   batch.count=0;batch.visible=false;this.scrapBatches.push(batch);template.userData.batch=batch;this.root.add(batch);
+  }
   // Outer district is covered by GrassField's continuous living grass canopy.
   this.walls=batchGeometry(this.lots,mobile);this.facade=installFacadeCracks(this.walls);
   this.signs=buildShopSigns(this.lots);this.graffiti=buildWallGraffiti(this.lots);
    installAttachedFlash(this.signs,this.facade.texture);installAttachedFlash(this.graffiti,this.facade.texture);
+  this.gpuPose=cityDeformationTexture(this.lots);
   for(const mesh of [this.walls,this.signs,this.graffiti]){
     mesh.userData.originalPositions=mesh.geometry.attributes.position.array.slice();
     mesh.geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled=false; // The vertex positions change during staged structural collapse.
+    installDeformation(mesh,this.gpuPose);
    }
   this.root.add(this.walls,this.signs,this.graffiti,wires(this.lots));
   this.wallPaint=new CityWallPaint(this.root,this);
@@ -422,6 +479,19 @@ export class OuterCity{
   this.flies.name='Buzzing dumpster flies';this.root.add(this.flies);
   this.update(0,0);
  }
+ async warmEffects(renderer,camera){
+  // Warm the actual world target permutation (including the existing lights
+  // and fog). These templates are normally detached and skipped at boot.
+  const testLot=this.lots[0],group=new THREE.Group();group.name='City shader warmup';
+  const plume=this.plumePool[0];if(plume)group.add(plume.root);
+  for(const part of ['windows-0-0','sign','pipes','sheets-awning','timber','tiles','stone','sheets-roof','pillars-0'])group.add(this.cloneFixture(testLot,part));
+  for(const batch of this.scrapBatches){batch.visible=true;batch.count=1;batch.setMatrixAt(0,new THREE.Matrix4().makeTranslation(0,-1000,0));}
+  group.position.copy(camera.position);group.position.y-=2;
+  this.scene.add(group);
+  const before=renderer.getRenderTarget(),target=new THREE.WebGLRenderTarget(1,1,{type:THREE.HalfFloatType});
+  try{renderer.setRenderTarget(target);await renderer.compileAsync(this.scene,camera);for(const program of renderer.info.programs)program.getUniforms();}
+  finally{for(const batch of this.scrapBatches){batch.visible=false;batch.count=0;}renderer.setRenderTarget(before);group.removeFromParent();group.clear();target.dispose();}
+ }
  // Distinct physical windows, signs, iron sheets and stone assemblies
  // remain detailed. Keep their complete geometry/material/texture once per
  // (house,part) rather than rebuilding an ExtrudeGeometry and 512px sign
@@ -431,6 +501,7 @@ export class OuterCity{
   let template=this.fixturePrefabs.get(key);
   if(!template){
    template=buildDetachableFixture(lot,part,lot.index*101+part.length*137);
+   if(this.rubbleMaterial)packRubble(template,this.rubbleMaterial);
    this.fixturePrefabs.set(key,template);
    this.pruneFixtureTemplates();
   }else{
@@ -455,7 +526,7 @@ export class OuterCity{
    this.fixturePrefabs.delete(key);
    template.traverse(o=>{o.geometry?.dispose();if(o.material)
     for(const mat of Array.isArray(o.material)?o.material:[o.material]){
-     mat.map?.dispose();mat.dispose();
+     mat.map?.dispose();if(mat!==this.rubbleMaterial)mat.dispose();
     }});
   }
  }
@@ -518,7 +589,7 @@ export class OuterCity{
   const x=camera.position.x,z=camera.position.z;
   const nearest=this.lots.map(lot=>({index:lot.index,dist:(lot.x-x)**2+(lot.z-z)**2}))
    .sort((a,b)=>a.dist-b.dist).slice(0,this.mobile?12:32);
-  this.basisIdleQueue=nearest.map(item=>item.index)
+  this.basisIdleQueue=(this.gpuPose?[]:nearest).map(item=>item.index)
    .filter(index=>!this.deformationBasis.has(index));
   // Prime the most likely next detached fixtures only during idle time.
   // The five-instanced-splinter bursts are still immediate on every impact.
@@ -562,6 +633,8 @@ export class OuterCity{
   if(tier>=10)this.hidden.add(index);else this.hidden.delete(index);
   // Each animated frame applies exact precomputed diagonal geometry,
   // keeping all mesh, sign, window, paint and roof details intact.
+  if(this.gpuPose)this.gpuPose.set(index,tier,shakeX,shakeZ);
+  else {
   const coefficients=this.getLotBasis(index);
   for(const [meshIndex,mesh] of [this.walls,this.signs,this.graffiti].entries()){
    const range=mesh.userData.lotRanges?.get(index),original=mesh.userData.originalPositions;
@@ -570,6 +643,7 @@ export class OuterCity{
    const attr=mesh.geometry.attributes.position;
    applyCityDeformationBasis(original,attr.array,...range,basis,tier,shakeX,shakeZ);
    markPositionRangeDirty(attr,range[0],range[1]);
+  }
   }
   if(tier>=10&&shakeX===0&&shakeZ===0)this.wallPaint?.collapseLot(index);
   else this.wallPaint?.deformTier(index,tier,shakeX,shakeZ);
@@ -668,11 +742,15 @@ export class OuterCity{
  eject(lot,part,point,detached=false){
   // All bursts remain visible, but dozens of overlapping area-of-effect
   // hits cannot synchronously extrude dozens of architectural assemblies.
-  this.pendingEjections.push({lot,part,point:point?.slice?.()||null,detached});
+  const key=lot.index+':'+part+':'+Number(detached);
+  if(this.pendingEjectionKeys?.has(key))return;
+  this.pendingEjectionKeys?.add(key);
+  this.pendingEjections.push({key,lot,part,point:point?.slice?.()||null,detached});
  }
  processEjections(){
   const job=this.pendingEjections.shift();
   if(!job)return false;
+  this.pendingEjectionKeys?.delete(job.key);
   this.spawnEjection(job.lot,job.part,job.point,job.detached);
   return true;
  }
@@ -694,8 +772,10 @@ export class OuterCity{
   for(let i=0;i<(this.mobile?2:4);i++){
    // Clone transform nodes only: detailed geometry, crack shaders, windows,
    // torn metal and textures all remain shared and GPU-resident.
-   const fragment=prototypes[i].clone(true);
+   const batch=prototypes[i].userData.batch;
+   const fragment=batch?new THREE.Object3D():prototypes[i].clone(true);
    fragment.userData.sharedCityScrap=true;
+   fragment.userData.batch=batch;
    fragment.position.set(local[0]+(r()-.5)*.5,local[1]+(r()-.5)*.6,local[2]+(r()-.5)*.4);
    fragment.scale.setScalar(.38+r()*.35);add(fragment,.75);
   }
@@ -712,7 +792,7 @@ export class OuterCity{
    // Shared architectural prefab owns this mesh's original geometry/material.
    piece.mesh.traverse(object=>{object.geometry?.dispose();if(object.material)
     for(const mat of Array.isArray(object.material)?object.material:[object.material]){
-     mat.map?.dispose();mat.dispose();
+     mat.map?.dispose();if(mat!==this.rubbleMaterial)mat.dispose();
     }});
   }
   effect.root.removeFromParent();
@@ -833,6 +913,7 @@ export class OuterCity{
  resetBuildings(){
   this.damage={};this.lastDamage=null;this.hidden.clear();this.partsHidden.clear();this.facade.reset();
   this.fireField?.reset();this.splinters?.reset();
+  this.gpuPose?.reset();
   this.renderedTiers.clear();this.poseCache.clear();this.deformationBasis?.clear();
   this.basisIdleQueue.length=0;this.fixtureWarmQueue.length=0;this.basisLastNearby=0;
   this.collapseAnimations.clear();this.shakes.clear();this.seenCityEvents.clear();
@@ -850,7 +931,7 @@ export class OuterCity{
   for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
   for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
   this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
-  this.pendingEjections=[];this.deformationBasis?.clear();
+  this.pendingEjections=[];this.pendingEjectionKeys?.clear();this.deformationBasis?.clear();
   for(const effect of this.debris)this.removeDebris(effect);this.debris=[];
   for(const effect of this.plumes)this.recyclePlume(effect);this.plumes=[];
   // Hit tints are stored in the shared damage texture and have no overlay meshes.
@@ -921,8 +1002,11 @@ export class OuterCity{
   for(let i=this.plumes.length-1;i>=0;i--)if(updateFireSmoke(this.plumes[i],dt)){
    this.recyclePlume(this.plumes[i]);this.plumes.splice(i,1);
   }
+  for(const batch of this.scrapBatches){batch.count=0;batch.visible=false;}
   for(let i=this.debris.length-1;i>=0;i--){
    const effect=this.debris[i];effect.age+=dt;
+   if(effect.age>3.5){this.removeDebris(effect);this.debris.splice(i,1);continue;}
+   effect.root.updateMatrixWorld(true);
    for(const piece of effect.pieces){
     piece.velocity.y-=14*dt;piece.mesh.position.addScaledVector(piece.velocity,dt);
     piece.mesh.rotation.x+=piece.spin.x*dt;piece.mesh.rotation.y+=piece.spin.y*dt;piece.mesh.rotation.z+=piece.spin.z*dt;
@@ -930,9 +1014,11 @@ export class OuterCity{
      piece.mesh.position.y=.14-effect.root.position.y;piece.velocity.y=Math.abs(piece.velocity.y)*.22;
      piece.velocity.x*=.65;piece.velocity.z*=.65;
     }
+    const batch=piece.mesh.userData.batch;
+    if(batch){piece.mesh.updateMatrix();batch.setMatrixAt(batch.count++,tmp.matrix.multiplyMatrices(effect.root.matrixWorld,piece.mesh.matrix));batch.visible=true;}
    }
-   if(effect.age>3.5){this.removeDebris(effect);this.debris.splice(i,1);}
   }
+  for(const batch of this.scrapBatches)if(batch.count){batch.instanceMatrix.addUpdateRange(0,batch.count*16);batch.instanceMatrix.needsUpdate=true;}
   // One costly VFX geometry job per frame, including simultaneous AOE hits.
   // Structural tiers, collision, hit tint and smoke still react immediately.
   if(!this.processEjections())this.stepChunkPreparation();
@@ -946,10 +1032,11 @@ export class OuterCity{
    cancelIdleCallback(this.basisIdleHandle);
   this.basisIdleHandle=null;this.deformationBasis.clear();
   this.fireField?.dispose();this.splinters?.dispose();
+  this.gpuPose?.texture.dispose();
   for(const job of this.preparingChunks.values())this.disposePreparedChunks(job);
   for(const effect of this.preparedChunks.values())this.disposePreparedChunks(effect);
   this.preparingChunks.clear();this.preparedChunks.clear();this.chunkBuildQueue=[];
-  this.pendingEjections=[];
+  this.pendingEjections=[];this.pendingEjectionKeys?.clear();
   for(const effect of this.debris)this.removeDebris(effect);
   for(const effect of [...this.plumes,...this.plumePool])disposePlume(effect);
   for(const templates of this.scrapPrefabs.values())for(const template of templates)
@@ -958,11 +1045,11 @@ export class OuterCity{
   for(const template of this.fixturePrefabs.values())
    template.traverse(o=>{o.geometry?.dispose();if(o.material)
     for(const mat of Array.isArray(o.material)?o.material:[o.material]){
-     mat.map?.dispose();mat.dispose();
+     mat.map?.dispose();if(mat!==this.rubbleMaterial)mat.dispose();
     }});
   this.fixturePrefabs.clear();
   this.plumeResources.flame.dispose();this.plumeResources.smoke.dispose();this.facade.texture.dispose();
   this.root.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material]){m.map?.dispose();m.dispose();}});
-  this.cube.dispose();this.root.removeFromParent();
+  this.rubbleMaterial?.dispose();this.cube.dispose();this.root.removeFromParent();
  }
 }

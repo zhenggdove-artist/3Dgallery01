@@ -1,17 +1,17 @@
 // Secure hosted ECPay checkout. The browser never claims payment success.
 // Production requires Cloudflare-held merchant secrets and an explicit switch.
 // Use the same browsing context (no popups) to support iOS Safari/LINE.
-const GATEWAYS=new Set([
- 'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5',
- 'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5'
-]);
+const GATEWAYS={
+ 'stage-only':'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5',
+ production:'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5'
+};
 export async function beginWingCheckout(network,ui){
  try{
   const status=await network.request('/api/wing-pay/status');
   if(!status.checkoutEnabled)throw Error('Payments are currently unavailable.');
   if(!['production','stage-only'].includes(status.checkoutMode))throw Error('Invalid checkout configuration.');
   const order=await network.request('/api/wing-pay/checkout',{method:'POST',body:{}});
-  if(!GATEWAYS.has(order.gateway)||order.checkoutMode!==status.checkoutMode||
+  if(order.gateway!==GATEWAYS[status.checkoutMode]||order.checkoutMode!==status.checkoutMode||
      order.amount!==30||order.designCredits!==1||!order.fields?.CheckMacValue||
      !/^GW[A-Z0-9]{18}$/.test(order.orderId)||order.fields.TotalAmount!=='30')
    throw Error('The checkout could not be verified.');

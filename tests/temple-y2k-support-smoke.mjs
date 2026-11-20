@@ -6,13 +6,13 @@ import {mkdir} from 'node:fs/promises';
 const folder='output/support-y2k';
 await mkdir(folder,{recursive:true});
 const browser=await chromium.launch({channel:'chrome',headless:true,
- args:['--use-gl=angle','--use-angle=swiftshader','--disable-dev-shm-usage','--enable-webgl']});
+ args:process.platform==='win32'?['--ignore-gpu-blocklist']:['--use-gl=angle','--use-angle=swiftshader','--disable-dev-shm-usage','--enable-webgl']});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:800}});
  const errors=[];
  page.on('pageerror',error=>errors.push(error.message));
- await page.addInitScript(()=>localStorage.setItem('temple-backend-url','http://127.0.0.1:8787'));
- await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});
+ await page.addInitScript(base=>localStorage.setItem('temple-backend-url',base),process.env.TEMPLE_BACKEND||'http://127.0.0.1:8787');
+ await page.goto(process.env.TEMPLE_SITE||'http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});
  await page.waitForFunction(()=>document.body.classList.contains('ready')&&window.templeTest,null,{timeout:70000});
  await page.evaluate(()=>templeTest.ui.emit('join',{name:'Y2KVisualCI',color:'#6fe7e3',backendUrl:window.TEMPLE_CONFIG.backendUrl}));
  await page.locator('#hud').waitFor({state:'visible'});
@@ -52,7 +52,18 @@ try{
  assert.ok(mobile.buttonW>=220,JSON.stringify(mobile));
  assert.notEqual(mobile.buttonBackground,'rgba(0, 0, 0, 0)',JSON.stringify(mobile));
  assert.equal(mobile.overflow,false);
- await page.screenshot({path:folder+'/support-mobile-direct-wings.png',animations:'disabled'});
+ await support.screenshot({path:folder+'/support-mobile-direct-wings.png',timeout:60000});
+ // Contract-only production checkout: intercept the outbound POST before
+ // it can reach ECPay. No order or card charge is created on the real gateway.
+ const cors={'Access-Control-Allow-Origin':new URL(page.url()).origin,'Access-Control-Allow-Headers':'authorization,content-type','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};
+ const orderId='GW0123456789ABCDEFGH';
+ await page.route('**/api/wing-pay/status',r=>r.fulfill({status:200,headers:cors,json:{checkoutEnabled:true,checkoutMode:'production',amount:30}}));
+ await page.route('**/api/wing-pay/checkout',r=>r.fulfill({status:200,headers:cors,json:{checkoutMode:'production',gateway:'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5',orderId,amount:30,designCredits:1,fields:{MerchantTradeNo:orderId,TotalAmount:'30',CheckMacValue:'MOCK'}}}));
+ await page.route('https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5',r=>r.fulfill({status:200,contentType:'text/plain',body:'ECPay navigation intercepted'}));
+ await page.evaluate(()=>templeTest.ui.openPanel('wing-shop'));const buy=page.getByRole('button',{name:/Continue to ECPay/});
+ await buy.waitFor({state:'visible'});
+ const [submit]=await Promise.all([page.waitForRequest(r=>r.url().startsWith('https://payment.ecpay.com.tw/')&&r.method()==='POST'),buy.click()]);
+ assert.equal(new URLSearchParams(submit.postData()).get('TotalAmount'),'30');
  assert.deepEqual(errors,[]);
  console.log('Y2K SUPPORT visual smoke passed',JSON.stringify({desktop,mobile}));
-}finally{await browser.close();}
+}finally{for(const page of browser.contexts().flatMap(c=>c.pages()))await page.evaluate(()=>window.templeTest?.network.close()).catch(()=>{});await browser.close();}

@@ -178,8 +178,12 @@ export function publicProfile(profile){
     spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
 
+export function worldProfileView(world,actorKey,now){
+ const profile=world.profiles[actorKey];
+ return profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
+}
+
 export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true){
-  const profile=world.profiles[actorKey];
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),wallPaint:clone(world.wallPaint||{}),wallPaintRevision:world.wallPaintRevision||0,plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
@@ -192,7 +196,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
       id:v.id,position:clone(v.position||v.origin),direction:clone(v.direction),owner:v.owner
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
+    profile:worldProfileView(world,actorKey,now),
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -214,7 +218,7 @@ export function isLiveStaffChannel(profile,now=Date.now()){
 }
 export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,journey=null,now=Date.now(),mobility=null){
   const pose=journeyPose(journey,now);
-  if(pose&&role==='fighter')return {state:{position:pose.position,rotation:Math.PI,animation:pose.animation,visible:true}};
+  if(pose&&role==='fighter')return {state:{position:pose.position,rotation:Math.PI,animation:pose.animation,visible:true},authority:{kind:'write'}};
   // Pan recoil can lift someone standing on a 30m GM deck above the
   // ordinary 32m arena ceiling. Grant only the short, server-authorized
   // explosion arc the extra vertical headroom.
@@ -234,7 +238,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
     const freeze=effectActive(mobility||{},'freeze',now)||effectActive(mobility||{},'stun',now),root=effectActive(mobility||{},'root',now);
     if((freeze||root)&&!authorizedPanFlight)return {state:{...previous,position:[...previous.position],
       rotation:freeze?previous.rotation:+next.rotation.toFixed(4),
-      animation:'idle',visible:true}};
+      animation:'idle',visible:true},authority:{kind:'immobilized',until:Math.max(freeze?.until||0,root?.until||0)}};
     const elapsed=clamp(elapsedMs/1000,.05,12);
     // Horizontal movement and vertical free-fall are different physical
     // quantities. The prior Euclidean distance budget incorrectly rejected

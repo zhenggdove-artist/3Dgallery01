@@ -36,7 +36,7 @@ export class PlayerController{
     this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
     if(stick){let pointer=null;const knob=stick.firstElementChild;const move=e=>{if(e.pointerId!==pointer)return;const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,radius=Math.max(20,(r.width-knob.offsetWidth)/2-4),f=radius/Math.max(radius,Math.hypot(x,y));this.move.set(x*f/radius,y*f/radius);knob.style.transform=`translate(${x*f}px,${y*f}px)`;};stick.onpointerdown=e=>{e.preventDefault();if(pointer!==null)return;pointer=e.pointerId;stick.setPointerCapture(pointer);move(e);};stick.onpointermove=move;stick.onpointerup=stick.onpointercancel=stick.onlostpointercapture=e=>{if(e.pointerId!==pointer)return;pointer=null;this.move.set(0,0);knob.style.transform='';};}
   }
-  jump(){if(this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
+  jump(){if(this.awaitingSpawn||this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
   setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();}}
   setRole(role){this.role=role;this.root.visible=role==='fighter';}
   setFollowTarget(root=null){this.followTarget=root;}
@@ -144,7 +144,7 @@ export class PlayerController{
     }
   }
   update(dt){
-    if(!this.enabled){this.updateCamera(dt);return this.state();}
+    if(!this.enabled||this.awaitingSpawn||(!this.panBlastFlight&&performance.now()<(this.authorityHoldUntil||0))){this.updateCamera(dt);return this.state();}
     if(this.panBlastFlight){
       // Hit stun cannot cancel the launch: steer/jump return only after
       // one big parabola and precisely three successively lower bounces.

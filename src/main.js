@@ -79,6 +79,9 @@ function updatePlayerSpeech(now=performance.now()){
   entry.element.hidden=!visible;
   if(visible){entry.element.style.left=((speechPoint.x+1)*innerWidth/2)+'px';entry.element.style.top=((1-speechPoint.y)*innerHeight/2-8)+'px';}
  }
+ // SUPPORT is a fully opaque Win98 window. Keep socket/inputs responsive
+ // without rendering the hidden 3D scene beneath it.
+ if(ui.panelName==='wing-shop')return;
 }
 const minimap=new Minimap();
 const damageNumbers=createDamageNumbers(THREE),statusVisuals=new ElementalStatusVisuals();
@@ -204,7 +207,7 @@ boot();
 
 async function boot(){
   const started=performance.now(),timings=window.templeLoadTimings={};
-  try{const [published,layout]=await Promise.all([fetch('./temple-layout.json').then(r=>r.ok?r.json():{}),fetch('./temple-artwork-layout.json').then(r=>r.json())]);Object.assign(settings,published.settings||{},loadEditorSettings());arena.defaultLayout=layout.artworkLayout||{};timings.configMs=performance.now()-started;const assetStart=performance.now(),warmStart=performance.now(),warmTask=arena.presentation.vfx.warm(renderer,camera).then(result=>{timings.effects=result;timings.effectsMs=performance.now()-warmStart;});await Promise.all([arena.load((value,label)=>ui.setLoading(value,label)),document.fonts.load('bold 48px GoldenGirdle')]);vitalModels=new VitalModels(arena.coinMesh.geometry,arena.coinMesh.material);timings.assetsMs=performance.now()-assetStart;ui.setLoading(.9,'Preparing 00GameDevs weapon effects');await warmTask;ui.setLoading(.94,'Prewarming all monster jump and dash animations');try{timings.monsterRigs=await arena.islandEnemies.warmModels(renderer,camera);}catch(error){console.warn('Monster rig prewarm incomplete',error);}ui.setLoading(.95,'Prewarming monster landing shockwaves');try{await arena.islandEnemies.attackEffects.warm(renderer,camera);}catch(error){console.warn('Monster VFX shader prewarm incomplete',error);}applyEditorSettings({pixelRatio:settings.pixelRatio||(coarse?1:1.35),fog:settings.fog??.0008,artFloat:settings.artFloat??.17});camera.position.set(0,13,30);camera.lookAt(0,2,0);ui.setLoading(.99,'Preparing scene shaders');const compileStart=performance.now();await renderer.compileAsync(scene,camera);timings.sceneCompileMs=performance.now()-compileStart;timings.totalMs=performance.now()-started;ui.setLoading(1,'100% · Ready');assetsReady=true;ui.ready();void initializeGoogleAuth();}
+  try{const [published,layout]=await Promise.all([fetch('./temple-layout.json').then(r=>r.ok?r.json():{}),fetch('./temple-artwork-layout.json').then(r=>r.json())]);Object.assign(settings,published.settings||{},loadEditorSettings());arena.defaultLayout=layout.artworkLayout||{};timings.configMs=performance.now()-started;const assetStart=performance.now(),warmStart=performance.now(),warmTask=arena.presentation.vfx.warm(renderer,camera).then(result=>{timings.effects=result;timings.effectsMs=performance.now()-warmStart;});await Promise.all([arena.load((value,label)=>ui.setLoading(value,label)),document.fonts.load('bold 48px GoldenGirdle')]);vitalModels=new VitalModels(arena.coinMesh.geometry,arena.coinMesh.material);timings.assetsMs=performance.now()-assetStart;ui.setLoading(.9,'Preparing 00GameDevs weapon effects');await warmTask;ui.setLoading(.94,'Prewarming all monster jump and dash animations');try{timings.monsterRigs=await arena.islandEnemies.warmModels(renderer,camera);}catch(error){console.warn('Monster rig prewarm incomplete',error);}ui.setLoading(.95,'Prewarming monster landing shockwaves');try{await arena.islandEnemies.attackEffects.warm(renderer,camera);}catch(error){console.warn('Monster VFX shader prewarm incomplete',error);}applyEditorSettings({pixelRatio:settings.pixelRatio||(coarse?1:1.35),fog:settings.fog??.0008,artFloat:settings.artFloat??.17});camera.position.set(0,13,30);camera.lookAt(0,2,0);ui.setLoading(.99,'Preparing scene shaders');const compileStart=performance.now();await renderer.compileAsync(scene,camera);await arena.outerCity?.warmEffects(renderer,camera);timings.sceneCompileMs=performance.now()-compileStart;timings.totalMs=performance.now()-started;ui.setLoading(1,'100% · Ready');assetsReady=true;ui.ready();void initializeGoogleAuth();}
   catch(error){console.error(error);ui.setLoading(0,'Loading failed · reload to retry: '+error.message);ui.joinError(error.message);}
 }
 
@@ -299,17 +302,31 @@ network.addEventListener('structure-destroyed',event=>arena.showStructureBreak(e
 network.addEventListener('structure-hit',event=>arena.showStructureHit(event.detail));
 network.addEventListener('state-ack',event=>{
  const ack=event.detail||{};
+ if(!controller||ack.seq!==network.lastAcceptedSequence||ack.seq<=network.lastCorrectedSequence)return;
+ if(controller&&ack.seq===network.lastAcceptedSequence&&!network.spawnConfirmed){
+  network.spawnConfirmed=true;
+  if(!ui.panelName&&!artEditor.mode&&!writer.active&&!platformDelete.active&&!wasDead)controller.setEnabled(true);
+ }
+ // WRITE owns local cinematic motion. Its server pose is evaluated at a
+ // different instant; treating the difference as a walking correction
+ // double-applies the scripted travel (including after landing).
+ if(ack.authority?.kind==='write')return;
+ if(controller&&ack.authority?.kind==='immobilized'){
+  const until=performance.now()+Math.max(0,ack.authority.until-ack.serverTime);
+  controller.authorityHoldUntil=until;
+ }else if(controller)controller.authorityHoldUntil=0;
  // Stun, root and server-scripted movement legitimately override prediction;
  // ordinary 3-decimal state rounding is below the correction threshold.
  if(!ack.corrected||!controller||!Array.isArray(ack.position)||
     ack.seq!==network.lastAcceptedSequence||ack.seq<=network.lastCorrectedSequence)return;
  const position=controller.root.position;
- const immobilized=controller.status?.freeze||controller.status?.root||controller.vortexSpin;
+ const immobilized=ack.authority?.kind==='immobilized'||controller.status?.freeze||controller.status?.root||controller.vortexSpin;
  const recovered=!immobilized&&Array.isArray(ack.submitted)?
   rebaseRejectedPose(ack.position,ack.submitted,position.toArray(),
    (x,z,y)=>arena.blocked(x,z,y)):null;
  const corrected=recovered||ack.position;
  if(position.distanceToSquared(new THREE.Vector3(...corrected))>.36){
+  network.noteMotionError({kind:'applied-ack',source:ack.authority?.kind||'correction',seq:ack.seq,serverTime:ack.serverTime,before:position.toArray(),submitted:ack.submitted,authoritative:ack.position,after:corrected});
   // Keep motion simulated after this ACK; do not rewind the newest frame.
   if(immobilized||!recovered)controller.teleport(corrected);
   else controller.root.position.fromArray(corrected);
@@ -345,6 +362,7 @@ network.addEventListener('state-rejected',event=>{
   // A correction is authoritative, but movement applied after the rejected
   // sample must not be wiped away by a delayed reply.
   if(dx*dx+dy*dy+dz*dz>.36){
+   network.noteMotionError({kind:'applied-rejection',source:rejection.error,seq,serverTime:rejection.serverTime,before:current.toArray(),submitted:sent?.position,authoritative:accepted,after:corrected});
    // Predicted step replay is not a teleport: do not erase walk speed,
    // airborne velocity or knockback each time the server responds.
    // A true invalid teleport or blocked replay still needs a hard reset.
@@ -533,7 +551,12 @@ ui.addEventListener('wing-payment-status-request',async()=>{
  try{ui.setWingPaymentStatus(await network.request('/api/wing-pay/status'));}
  catch(error){ui.setWingPaymentStatus({checkoutEnabled:false,checkoutMode:'disabled'});ui.toast('Payment status unavailable.');}
 });
-ui.addEventListener('wing-payment-checkout',()=>{void beginWingCheckout(network,ui);});
+ui.addEventListener('wing-payment-checkout',async()=>{
+ if(ui.wingCheckoutBusy)return;
+ ui.wingCheckoutBusy=true;if(ui.panelName==='wing-shop')ui.renderWingShop(world.profile);
+ const order=await beginWingCheckout(network,ui);
+ if(!order){ui.wingCheckoutBusy=false;if(ui.panelName==='wing-shop')ui.renderWingShop(world.profile);}
+});
 ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;
  if(action==='fuse'){
   if(ui.bagFusionPending)return;
@@ -551,7 +574,7 @@ ui.addEventListener('chat',async event=>{const text=String(event.detail||'').tri
 ui.addEventListener('plant',event=>writer.submit(event.detail));
 ui.addEventListener('save-code',async()=>{try{const data=await network.createSaveCode();self.saveCode=data.code;ui.self=self;ui.showSaveCode(data.code);ui.toast('存檔代碼已產生 · 請保存');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('gm-presence-request',async()=>{if(!self?.profile?.admin)return;try{ui.setGmPresence(await network.gmPresence());}catch(error){ui.setGmPresenceError(error.message);}});
-ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);if(data.role!=='fighter')wallPainter.stop();controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
+ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);network.spawnConfirmed=data.role===self?.role&&network.spawnConfirmed;cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);if(data.role!=='fighter')wallPainter.stop();controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
 ui.addEventListener('panel',event=>{if(event.detail.open)wallPainter.stop();chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active&&!wallPainter.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
 ui.addEventListener('editor-settings',event=>applyEditorSettings(event.detail));
@@ -733,7 +756,10 @@ function update(dt,time,movementDt=dt){
     // Simulate movement in short physics slices using WALL-CLOCK elapsed
     // time. The previous global 50ms cap made gameplay run in slow motion
     // after each shader compile or destruction hitch, then fight the Worker.
-    const simulationDt=Math.max(0,Math.min(.24,movementDt));
+  // Only move after authority has accepted this seat's spawn. HTTP join is
+  // allowed to paint the scene before WS opens, but cannot advance the pose.
+  controller.awaitingSpawn=self?.role==='fighter'&&!network.spawnConfirmed;
+  const simulationDt=Math.max(0,Math.min(.24,movementDt));
     const substeps=Math.max(1,Math.ceil(simulationDt/(1/40)));
     let state;
     for(let step=0;step<substeps;step++)state=controller.update(simulationDt/substeps);

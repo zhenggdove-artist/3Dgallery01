@@ -56,6 +56,7 @@ test('Y2K support shows guarded ECPay entitlement and does not invent paid succe
  assert.ok(release,'first-party module graph has one release token');
  assert.ok(html.includes('fidelity-ui.css?v='+release),'CSS and module imports use the same release token');
  const section=ui.slice(ui.indexOf('  renderWingShop(profile){'),ui.indexOf('  hydrateWingGalleryImages(){'));
- assert.match(section,/PAYMENT UNAVAILABLE/);
+ assert.match(section,/Checkout unavailable/);
+ assert.match(section,/Continue to ECPay/);
  assert.match(section,/checkoutEnabled/,'backend status determines whether charging is enabled');
 });

@@ -12,6 +12,7 @@ const encoder=new TextEncoder();
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 const stageKeys=()=>({id:STAGE_MERCHANT,key:STAGE_KEY,iv:STAGE_IV});
 const validSecrets=env=>/^\d{7,10}$/.test(env?.ECPAY_MERCHANT_ID||'')&&
+ env.ECPAY_MERCHANT_ID!==STAGE_MERCHANT&&env.ECPAY_HASH_KEY!==STAGE_KEY&&env.ECPAY_HASH_IV!==STAGE_IV&&
  typeof env?.ECPAY_HASH_KEY==='string'&&env.ECPAY_HASH_KEY.length>=8&&
  typeof env?.ECPAY_HASH_IV==='string'&&env.ECPAY_HASH_IV.length>=8;
 export function paymentMode(env={},isGm=false){

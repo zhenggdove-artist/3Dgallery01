@@ -80,12 +80,14 @@ test('unchanged cloned city snapshots skip expensive damage reapplication',()=>{
 test('Worker decouples combat tick rate from heavy full-world broadcasts',()=>{
  const worker=read('cloudflare/worker.js');
  assert.match(worker,/now-\(this\.lastCombatWorldAt\|\|0\)>=180/);
- assert.match(worker,/this\.save\(world\);\s*\/\/ Full world views/);
+ assert.match(worker,/this\.save\(world\);\s*this\.readSnapshot=world/);
+ assert.match(worker,/createWorldPatch\(previous,common,true\)/);
  assert.match(worker,/for\(const impact of artworkVisualEvents\)/,'all architecture events must still be broadcast');
 });
 
 test('a new module release also updates CSS and startup diagnostics to avoid stale control code',()=>{
- const html=read('index.html'),newRelease='20261120-motion-city-hitch-r30';
+ const html=read('index.html'),newRelease=html.match(/const release = '([^']+)'/)?.[1];
+ assert.ok(newRelease);
  assert.ok(html.includes(newRelease));
  assert.ok(!html.includes('20261120-soft-giraffe-contact-r29'));
  assert.ok((html.split(newRelease).length-1)>=5);

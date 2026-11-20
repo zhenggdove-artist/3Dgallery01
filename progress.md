@@ -1,5 +1,33 @@
 Original prompt: Debug the exported 3D gallery. Fix artwork asset/placement confusion, invisible smoke, too-fast look controls, mobile forward movement, and performance without reducing visual quality.
 
+## 2026-11-20: `main` 1af6712 follow-up — movement, city load, SUPPORT
+
+- Packet capture reproduced a local reverse step after delayed initial WebSocket
+  connection: client walked before any authority existed, and the first pose
+  was rejected as `Spawn position rejected`. The first ACK now gates physics;
+  server validation limits are unchanged. Explicit WRITE/immobilization ACKs
+  no longer use ordinary move replay. Normal straight walking did not reproduce
+  the reported recurring rollback in the baseline, so this is not proof that
+  every production trigger has been identified.
+- Repeatable Chrome profile: 24 lots hit over five attack waves, with the same
+  scene and network snapshots isolated from the synthetic visual bursts. p95
+  frame time 66.7 → 17.0 ms; render submission 39.4 → 5.4 ms; sampled draw calls
+  1244 → 137; longest task 281 ms → no tasks ≥50 ms; shader compile calls during
+  the waves 4 → 0. Reported bufferSubData bytes over the window 48.6 → 13.8 MB
+  (different frame counts); numbers are a local Chrome observation, not a floor
+  for all devices. Smoke, windows, signs, scars and collision remain present.
+- City stores per-lot collapse state in a fixed-size GPU table; flying masonry
+  is packed/instanced. The Worker uses cached reads, shared snapshots with
+  per-lot patches, and equipped-only movement stats. Local real Worker smoke:
+  four clients, twelve confirmed building hits, ACK p95 16 ms idle and combat,
+  no movement rejection. `tests/critical-perf-{browser,room}.mjs` reproduce the
+  network and rendering checks; artifacts under `output/critical-perf/`.
+- SUPPORT uses the fixed NT$30 wing-canvas SKU and hosted ECPay POST with
+  checkout mode/gateway matching. New Win98/Y2K UI does not render the hidden
+  scene beneath the opaque modal. Live payment remains disabled until approved
+  merchant secrets and the explicit production switch are configured; never
+  place those secrets in Git or the browser.
+
 ## 2026-11-14 controls / equipment release
 
 - Fixed hit tint restoration at the shared-material seam. Reproduction restored

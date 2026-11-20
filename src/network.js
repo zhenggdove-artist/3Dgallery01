@@ -1,7 +1,10 @@
+import {applyWorldPatch} from './shared/world-patch.js';
+
 export class TempleNetwork extends EventTarget{
   constructor(config=window.TEMPLE_CONFIG){
     super();this.config=config;this.base=String(config.backendUrl||'').replace(/\/$/,'');this.token='';this.socket=null;this.joinData=null;this.reconnectTimer=0;this.reconnectAttempt=0;this.closedByUser=false;this.lastStateAt=0;
     this.stateSequence=0;this.lastAcceptedSequence=0;this.lastCorrectedSequence=0;this.lastAuthorityAt=0;
+    this.spawnConfirmed=false;
     this.sentStates=new Map();this.rejectionCounts={};this.motionDiagnostics=[];
   }
   setBackend(url){this.base=String(url||'').trim().replace(/\/$/,'');localStorage.setItem('temple-backend-url',this.base);}
@@ -13,7 +16,7 @@ export class TempleNetwork extends EventTarget{
     const data=await this.request('/api/join',{
       method:'POST',body:{name,color},auth:false,identityToken:firebaseIdToken
     });
-    this.token=data.token;this.joinData=data;this.closedByUser=false;
+    this.token=data.token;this.joinData=data;this.closedByUser=false;this.spawnConfirmed=false;
     sessionStorage.setItem('temple-session-token',this.token);
     // Gameplay entry never blocks on websocket establishment.
     void this.connect().catch(error=>console.warn('Realtime socket pending',error));
@@ -31,10 +34,18 @@ export class TempleNetwork extends EventTarget{
   }
   async connect(){
     if(!this.token)throw new Error('Join Temple first');if(this.socket){this.socket.onclose=null;this.socket.close();}
-    const url=new URL(this.base);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/socket';url.searchParams.set('token',this.token);
-    await new Promise((resolve,reject)=>{const socket=new WebSocket(url);this.socket=socket;const timer=setTimeout(()=>{socket.close();reject(new Error('Realtime connection timed out'));},10_000);socket.onopen=()=>{clearTimeout(timer);this.reconnectAttempt=0;this.dispatch('connection',{connected:true});resolve();};socket.onerror=()=>{clearTimeout(timer);reject(new Error('Realtime connection failed'));};socket.onmessage=event=>{if(event.data==='pong')return;try{const message=JSON.parse(event.data);
+    const url=new URL(this.base);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/socket';url.searchParams.set('token',this.token);url.searchParams.set('patch','1');
+    await new Promise((resolve,reject)=>{const socket=new WebSocket(url);this.socket=socket;const timer=setTimeout(()=>{socket.close();reject(new Error('Realtime connection timed out'));},10_000);socket.onopen=()=>{clearTimeout(timer);this.reconnectAttempt=0;this.dispatch('connection',{connected:true});resolve();};socket.onerror=()=>{clearTimeout(timer);reject(new Error('Realtime connection failed'));};socket.onmessage=event=>{if(socket!==this.socket||event.data==='pong')return;try{const message=JSON.parse(event.data);
       if(message.type==='state-ack')this.acknowledgeState(message.data);
       if(message.type==='state-rejected')this.rejectedState(message.data);
+      if(message.type==='welcome')this.wireWorld=message.data.world;
+      if(message.type==='world')this.wireWorld=message.data;
+      if(message.type==='world-patch'){
+       const next=applyWorldPatch(this.wireWorld,message.data);
+       if(next){this.wireWorld=next;this.dispatch('world',next);}
+       else if(socket===this.socket&&message.data.revision>(this.wireWorld?.revision??-1))socket.close(4002,'World baseline changed');
+       return;
+      }
       this.dispatch(message.type,message.data);
      }catch(error){console.warn('Temple socket message',error);}};socket.onclose=event=>{clearTimeout(timer);this.dispatch('connection',{connected:false,code:event.code});if(!this.closedByUser)this.scheduleReconnect();};});
   }

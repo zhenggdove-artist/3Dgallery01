@@ -43,7 +43,7 @@ export class TempleArena{
     buildReletterEnvironment(this.scene,this.renderer);
     const rings=new THREE.Mesh(new THREE.RingGeometry(SAFE_ZONE.radius-1,SAFE_ZONE.radius,64),new THREE.MeshBasicMaterial({color:'#b9ac70',transparent:true,opacity:.34,side:THREE.DoubleSide,depthWrite:false}));rings.rotation.x=-Math.PI/2;rings.position.y=.025;this.scene.add(rings);
     this.buildPlatforms();this.buildDust();this.grass=new GrassField(this.scene,{mobile:touch});this.outerCity=new OuterCity(this.scene,{mobile:touch});
-    for(let i=0;i<(touch?3:5);i++){const light=new THREE.PointLight('#e6d49a',i?18:24,18,2);light.visible=false;this.scene.add(light);this.lightPool.push(light);}
+    for(let i=0;i<(touch?3:5);i++){const light=new THREE.PointLight('#e6d49a',0,18,2);this.scene.add(light);this.lightPool.push(light);}
   }
   buildCentralPlant(){
     const root=new THREE.Group();root.name='Message plant';const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.2,.5,3.8,9),new THREE.MeshStandardMaterial({color:'#3b3425',roughness:1}));trunk.position.y=1.9;root.add(trunk);
@@ -354,7 +354,7 @@ export class TempleArena{
      }
      this.presentation.update(dt,time,camera,this.world);this.adventure.update(dt,time,playerRoots,camera);if(time-this.lastLightUpdate>.35){this.lastLightUpdate=time;this.updateArtLights(camera);}
   }
-  updateArtLights(camera){const visible=[...this.artworks.values()].filter(o=>o.visible).sort((a,b)=>a.position.distanceToSquared(camera.position)-b.position.distanceToSquared(camera.position));this.lightPool.forEach((light,i)=>{const art=visible[i];light.visible=!!art;if(art){light.position.copy(art.position).add(new THREE.Vector3(0,2,2.5));light.color.set(i%2?'#d6dfff':'#ffe1b8');}});}
+  updateArtLights(camera){const visible=[...this.artworks.values()].filter(o=>o.visible).sort((a,b)=>a.position.distanceToSquared(camera.position)-b.position.distanceToSquared(camera.position));this.lightPool.forEach((light,i)=>{const art=visible[i];light.intensity=art?(i?18:24):0;if(art){light.position.copy(art.position).add(new THREE.Vector3(0,2,2.5));light.color.set(i%2?'#d6dfff':'#ffe1b8');}});}
   nearest(position){
     if(!this.world)return null;const candidates=[];for(const p of artworkDefinitions(this.world)){const art=this.world.artworks?.[p.id],coin=this.world.coins?.[p.id];if(art&&!art.holder&&Date.now()>=(art.availableAt||0))candidates.push({type:'artwork',id:p.id,distance:distance2d(position,(this.world.artworkLayout?.[p.id]?.position||p.artPosition))});if(coin?.available)candidates.push({type:'coin',id:p.id,distance:distance2d(position,p.coinPosition)});}for(const drop of this.world.groundDrops||[])candidates.push({type:'drop',id:drop.id,distance:distance2d(position,drop.position)});for(const structure of this.world.structures||[])candidates.push({type:'structure',id:structure.id,distance:distance2d(position,structure.position)});for(const plant of this.world.plants||[])candidates.push({type:'plant',id:plant.id,distance:distance2d(position,plant.position)});return candidates.filter(c=>c.distance<4.4).sort((a,b)=>a.distance-b.distance)[0]||null;
   }

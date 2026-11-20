@@ -76,7 +76,7 @@ test('authentic native rays, floating +1 and separate secure payment remain wire
  assert.match(main,/staffChannel\?\.ready/);
  assert.match(ui,/data-wing-edit/);
  assert.match(ui,/data-wing-checkout/);
- assert.match(ui,/THANK YOU FOR YOUR SUPPORT/);
+ assert.match(ui,/Support GGTEMPLE and unlock one wing canvas/);
  const shop=ui.slice(ui.indexOf('  renderShop(profile){'),ui.indexOf('  renderWingShop(profile){'));
  assert.doesNotMatch(shop,/wing-shop-link/);
 });

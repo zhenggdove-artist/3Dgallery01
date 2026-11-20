@@ -688,3 +688,19 @@ body.panel-wing-shop .wing-design-support .wing-support-pay:disabled{background:
 body.panel-wing-shop .wing-design-support .wing-payment-hint{text-align:center;color:#444;font:12px/1.35 Tahoma,Arial,sans-serif}
 body.panel-wing-shop .wing-design-support .wing-gift-action{min-height:48px!important;background:#fff0ff!important;font:bold 14px Tahoma,Arial,sans-serif}
 body.panel-wing-shop .wing-design-support .y2k-taskbar{margin-top:auto}
+
+/* SUPPORT.EXE: classic window chrome, with just one item and one action. */
+body.panel-wing-shop .wing-design-support{box-sizing:border-box;min-height:0;gap:0;padding:3px;background:#d7d4df;color:#242033;box-shadow:inset 1px 1px #fff,inset -1px -1px #686474;font-family:Tahoma,Arial,sans-serif}
+body.panel-wing-shop .wing-design-support .y2k-shell-header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:linear-gradient(95deg,#27235d,#575295);color:#fff;letter-spacing:.03em;font-size:13px}
+body.panel-wing-shop .wing-design-support .y2k-shell-header small{color:#fff;font-size:10px}
+body.panel-wing-shop .wing-design-support .wing-support-controls{padding:clamp(9px,3vw,16px);box-sizing:border-box;background:linear-gradient(145deg,#fcf5ff,#f7f7fd)}
+body.panel-wing-shop .wing-design-support .wing-shop-hero{display:flex;align-items:center;gap:12px;text-align:left;padding:12px 0;background:none;border:0;box-shadow:none}
+body.panel-wing-shop .wing-design-support .wing-shop-hero svg{flex:0 0 52px}
+body.panel-wing-shop .wing-design-support .wing-shop-hero h3{color:#242033;font:700 clamp(17px,4vw,23px)/1.2 Tahoma,Arial,sans-serif!important;margin:0}
+body.panel-wing-shop .wing-design-support .wing-shop-hero p{color:#494258;font:14px/1.45 Tahoma,Arial,sans-serif;margin:5px 0 0}
+body.panel-wing-shop .wing-design-support .wing-payment-preview{box-sizing:border-box;width:100%;gap:10px;padding:12px;background:#fff;border:1px solid #d7cfdf}
+.wing-order-line{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#242033;font-size:14px}.wing-order-line strong{white-space:nowrap;font-size:17px}
+body.panel-wing-shop .wing-design-support .wing-support-pay{min-height:44px!important;background:#34316a!important;color:#fff!important;font-size:14px;letter-spacing:0;border:2px outset #b9b4d7!important;border-radius:0}
+body.panel-wing-shop .wing-design-support .wing-support-pay:disabled{background:#e5e1ec!important;color:#534d61!important}
+body.panel-wing-shop .wing-design-support button:focus-visible{outline:2px solid #3e2a78;outline-offset:2px}
+body.panel-wing-shop .wing-design-support .y2k-taskbar{justify-content:space-between;padding:6px 10px;color:#494258;background:#e5e2eb;font-size:11px}

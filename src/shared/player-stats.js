@@ -5,7 +5,9 @@ import {originalEquipmentGame,equippedItem} from './fusion-adapter.js';
 
 // Original equipment/crop multipliers; Temple uses a 100 HP base instead of 3 HP.
 export function playerStats(world,profile,now=Date.now()){
-  const key=profile.key,traits=traitStats(originalEquipmentGame(profile,world),key,now);
+  // Only equipped items contribute to traits. Do not rebuild every owned
+  // inventory instance on each movement frame or combat broadcast.
+  const key=profile.key,traits=traitStats(originalEquipmentGame(profile,world,true),key,now);
   let fusedAttack=0,fusedDefense=0;
   for(const [slot,id] of Object.entries(profile.equipment||{})){
     const base=itemById(id),stats=profile.fusion?.[id]?.templeStats;

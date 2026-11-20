@@ -9,6 +9,7 @@ const surface=(color,metalness=0)=>new THREE.MeshStandardMaterial({color,roughne
 // cannot float away when a wall fragment spins, drops or bounces.
 function scarredSurface(color,seed=0){
  const material=surface(color);
+ material.userData.cityScarSeed=seed%997;
  material.onBeforeCompile=shader=>{
   shader.uniforms.uPieceScarSeed={value:seed%997};
   shader.vertexShader='varying vec3 vPieceSurface;\n'+shader.vertexShader;
@@ -30,6 +31,51 @@ function scarredSurface(color,seed=0){
  };
  material.customProgramCacheKey=()=> 'city-rubble-surface-cracks-v1';
  return material;
+}
+
+// Bake the intact mesh details, object-space scar inputs and material
+// properties into one vertex stream; independent rubble pieces still move.
+export function packedRubbleMaterial(){
+ const m=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92});
+ m.onBeforeCompile=shader=>{
+  const varyings='varying vec3 vRubbleLocal;\nvarying vec2 vRubbleSurface;\n';
+  shader.vertexShader='attribute vec3 rubbleLocal;\nattribute vec2 rubbleSurface;\n'+varyings+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvRubbleLocal=rubbleLocal;vRubbleSurface=rubbleSurface;');
+  shader.fragmentShader=varyings+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\nmetalnessFactor=vRubbleSurface.y;');
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+  if(vRubbleSurface.x>=0.){
+   vec2 p=vRubbleLocal.xy+vRubbleSurface.x*vec2(.013,.037);
+   float warp=sin(p.y*2.1+sin(p.x*3.7)*.9);
+   float a=1.-smoothstep(.017,.105,abs(sin(p.x*3.35+warp*1.6)));
+   float b=1.-smoothstep(.016,.09,abs(sin(p.y*4.6+sin(p.x*2.8)*1.3)));
+   float h=1.-smoothstep(.018,.065,abs(sin(p.x*14.3+p.y*6.2+warp)));
+   float grit=fract(sin(dot(floor(p*11.),vec2(127.1,311.7)))*43758.5453),flake=smoothstep(.67,.83,grit);
+   diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.055,.041,.033),clamp(max(a*b,h*.23)+flake*.27,0.,.78));
+   diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.32,.28,.24),flake*.12);
+  }`);
+ };m.customProgramCacheKey=()=> 'city-packed-rubble';return m;
+}
+
+export function packRubble(root,material){
+ root.updateMatrixWorld(true);
+ const inv=root.matrixWorld.clone().invert(),positions=[],normals=[],colors=[],local=[],surface=[],m=new THREE.Matrix4(),normalMatrix=new THREE.Matrix3(),p=new THREE.Vector3(),n=new THREE.Vector3(),original=[];
+ root.traverse(o=>{
+  if(!o.isMesh||o.material.map||o.material.transparent)return;
+  const g=o.geometry,mat=o.material,position=g.attributes.position,normal=g.attributes.normal,index=g.index;
+  m.multiplyMatrices(inv,o.matrixWorld);normalMatrix.getNormalMatrix(m);
+  for(let v=0;v<(index?.count||position.count);v++){
+   const i=index?index.getX(v):v;
+   p.fromBufferAttribute(position,i);local.push(p.x,p.y,p.z);p.applyMatrix4(m);positions.push(p.x,p.y,p.z);
+   n.fromBufferAttribute(normal,i).applyNormalMatrix(normalMatrix);normals.push(n.x,n.y,n.z);
+   colors.push(mat.color.r,mat.color.g,mat.color.b);surface.push(mat.userData.cityScarSeed??-1,mat.metalness||0);
+  }
+  original.push(o);
+ });
+ if(!positions.length)return null;
+ for(const o of original){o.removeFromParent();o.geometry.dispose();if(o.material!==material)o.material.dispose();}
+ const g=new THREE.BufferGeometry();for(const [key,data,size] of [['position',positions,3],['normal',normals,3],['color',colors,3],['rubbleLocal',local,3],['rubbleSurface',surface,2]])g.setAttribute(key,new THREE.Float32BufferAttribute(data,size));
+ const mesh=new THREE.Mesh(g,material);root.add(mesh);return mesh;
 }
 const FRAME='#454b4b',GLASS='#71858b',STEEL='#5d615d';
 function box(group,x,y,z,w,h,d,color,metal=0){
