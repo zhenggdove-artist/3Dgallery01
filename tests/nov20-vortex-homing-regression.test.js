@@ -4,7 +4,11 @@ import {readFileSync} from 'node:fs';
 import {createInitialWorld,ensureProfile,applyAction,tickWorld,worldView} from '../src/shared/temple-rules.js';
 import {attackStats,itemById} from '../src/shared/catalog.js';
 import {scaleUltimateFootprint} from '../src/shared/charge-area.js';
-import {rebaseRejectedPose} from '../src/shared/state-reconciliation.js';
+import {rebaseRejectedPose,keepPredictedMoveOnLatencyReject} from '../src/shared/state-reconciliation.js';
+import * as THREE from 'three';
+import {curvePoint} from '../src/native-beam-curve.js';
+import {WeaponSignatureEffects} from '../src/weapon-signature-effects.js';
+import {GOLDFISH_SWIM_MS} from '../src/shared/weapon-abilities.js';
 import {advanceHomingVortex,vortexSpinPoint,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_LOCK_MS} from '../src/shared/vortex-flight.js';
 const NOW=3200000;
 const source=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
@@ -86,4 +90,62 @@ test('returning giraffe has separate building collision histories on both legs',
  tickWorld(world,{now:start+2280,actors:[actor],activeFighters:0,rng:()=>.5});
  assert.ok(fx.structureBackHitIds?.includes('test-structure'),'return path must strike the same house');
  assert.ok(house.hp<first,'return must apply additional building damage');
+});
+
+test('bounded latency rejection keeps recent valid walking poses without bypassing walls',()=>{
+ assert.equal(keepPredictedMoveOnLatencyReject('Movement rejected',[0,0,0],[2,0,0],[4,0,0]),true);
+ assert.equal(keepPredictedMoveOnLatencyReject('Movement rejected',[0,0,0],[2,0,0],[4,0,0],x=>x>3),false);
+ assert.equal(keepPredictedMoveOnLatencyReject('Building collision',[0,0,0],[2,0,0],[4,0,0]),false);
+ assert.equal(keepPredictedMoveOnLatencyReject('Invalid position',[0,0,0],[2,0,0],[4,0,0]),false);
+ assert.equal(keepPredictedMoveOnLatencyReject('Movement rejected',[0,0,0],[2,0,0],[50,0,0]),false);
+ assert.match(source('src/main.js'),/keepPredictedMoveOnLatencyReject\(rejection\.error/);
+});
+test('prism casts a smooth signed S-curve, never a semicircular middle bulge',()=>{
+ const a=new THREE.Vector3(0,2,0),b=new THREE.Vector3(0,3,-20);
+ const start=curvePoint(a,b,2.5,0,'s'),middle=curvePoint(a,b,2.5,.5,'s');
+ const early=curvePoint(a,b,2.5,.27,'s'),late=curvePoint(a,b,2.5,.73,'s');
+ assert.ok(start.distanceTo(a)<1e-9);
+ assert.ok(middle.distanceTo(a.clone().lerp(b,.5))<1e-9,'the middle must be an inflection, not a bulge');
+ assert.ok(early.x*late.x<0,'curvature crosses the straight muzzle-to-target chord');
+ assert.ok(curvePoint(a,b,2.5,1,'s').distanceTo(b)<1e-9);
+ assert.match(source('src/numbered-weapon-effects.js'),/entry\.item\?\.family==='beam'\?'s':'bow'/);
+});
+test('goldfish giant ultimate triples ONLY reach and damage, retaining hitbox width and 3x swimming time',()=>{
+ const item=itemById('goldfish'),basic=attackStats(item,0),charged=attackStats(item,1);
+ assert.equal(charged.damage,item.chargeDamage*3);
+ assert.equal(basic.damage,item.damage);
+ const size=scaleUltimateFootprint({...charged},item);
+ assert.ok(Math.abs(size.range-charged.range*.6*3)<.001);
+ assert.ok(Math.abs(size.radius-charged.radius*.6)<.001);
+ assert.equal(GOLDFISH_SWIM_MS,4800);
+});
+test('goldfish seeks off-axis target from elevated swimming position and syncs visual position',()=>{
+ const {world,actor,result,start}=cast('goldfish',12);
+ const fx=world.persistentAttacks.find(f=>f.kind==='goldfish');
+ assert.ok(fx);
+ assert.ok(fx.origin[1]>3,'giant fish no longer starts half below the water');
+ assert.equal(result.attackEvent.origin[1],fx.origin[1],'visual and server start at identical height');
+ world.monster.position=[73,0,11];
+ const before=world.monster.hp;
+ tickWorld(world,{now:start+700,actors:[actor],rng:()=>.5,activeFighters:0});
+ assert.ok(fx.position[0]>65,'fish homed toward an off-center enemy');
+ assert.ok(fx.direction[0]>0,'server track turned rather than continuing a fixed ray');
+ assert.ok(worldView(world,actor.key,start+700).goldfishFlights.some(v=>v.id===fx.id));
+ const effects=new WeaponSignatureEffects(new THREE.Scene());
+ assert.equal(effects.play(result.attackEvent,itemById('goldfish')),true);
+ effects.update(.08,worldView(world,actor.key,start+700));
+ const visual=effects.active.at(-1).obj;
+ assert.ok(visual.position.y>2);
+ const fish=visual.userData.fish;
+ const mats=[];fish.traverse(node=>{if(node.material)mats.push(node.material);});
+ assert.ok(mats.some(mat=>mat.opacity<.5),'transparent 40% stronger than before');
+ effects.dispose();
+});
+test('White Cat charged shots retain physical muzzle and reticle endpoints',()=>{
+ const src=source('src/weapon-vfx.js');
+ assert.match(src,/if\(data\.ultimate&&Array\.isArray\(impactArea\?\.visualCenter\)&&!item\.firstPerson\)/,
+  'ground AoE center must never override White Cat gun reticle target');
+ const gun=source('src/gun-controller.js');
+ assert.match(gun,/weaponMuzzle\(c\.root,this\.weapon\(\)\)/);
+ assert.match(gun,/direction:point\.clone\(\)\.sub\(origin\)\.normalize\(\)\.toArray\(\)/);
 });
