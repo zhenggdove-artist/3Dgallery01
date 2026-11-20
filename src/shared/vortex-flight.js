@@ -3,7 +3,7 @@ export const VORTEX_FLIGHT_MS=4200;
 export const VORTEX_DAMAGE_INTERVAL_MS=500;
 export const VORTEX_SPIN_MS=2000;
 export const VORTEX_SPIN_LOCK_MS=5000;
-export function advanceHomingVortex(fx,target,elapsedMs){
+export function advanceHomingVortex(fx,target,elapsedMs,flightMs=VORTEX_FLIGHT_MS){
  if(!Array.isArray(fx.position))fx.position=[...fx.origin];
  const dt=Math.max(0,Math.min(500,Number(elapsedMs)||0))/1000;
  let dx=fx.direction[0],dz=fx.direction[2];
@@ -19,7 +19,7 @@ export function advanceHomingVortex(fx,target,elapsedMs){
   }
  }
  const remaining=Math.max(0,fx.range-(fx.travelled||0));
- const step=Math.min(remaining,Math.max(0,fx.range)*dt/(VORTEX_FLIGHT_MS/1000));
+ const step=Math.min(remaining,Math.max(0,fx.range)*dt/(Math.max(1,flightMs)/1000));
  fx.direction=[dx,0,dz];
  fx.position=[fx.position[0]+dx*step,fx.position[1],fx.position[2]+dz*step];
  fx.travelled=(fx.travelled||0)+step;
