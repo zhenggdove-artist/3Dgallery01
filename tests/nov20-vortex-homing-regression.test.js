@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createInitialWorld,ensureProfile,applyAction,tickWorld,worldView} from '../src/shared/temple-rules.js';
+import {createInitialWorld,ensureProfile,applyAction,tickWorld,worldView,isLiveStaffChannel} from '../src/shared/temple-rules.js';
 import {attackStats,itemById} from '../src/shared/catalog.js';
 import {scaleUltimateFootprint} from '../src/shared/charge-area.js';
 import {rebaseRejectedPose,keepPredictedMoveOnLatencyReject} from '../src/shared/state-reconciliation.js';
@@ -148,4 +148,14 @@ test('White Cat charged shots retain physical muzzle and reticle endpoints',()=>
  const gun=source('src/gun-controller.js');
  assert.match(gun,/weaponMuzzle\(c\.root,this\.weapon\(\)\)/);
  assert.match(gun,/direction:point\.clone\(\)\.sub\(origin\)\.normalize\(\)\.toArray\(\)/);
+});
+
+test('lost channel-stop cannot permanently freeze ordinary server movement to 5% speed',()=>{
+ const w=createInitialWorld(NOW),p=ensureProfile(w,'channel-test','Channel','#ffffff',NOW);
+ p.channelWeapon='nova-1';p.channelStartedAt=NOW;p.lastChannelPulseAt=NOW;
+ assert.equal(isLiveStaffChannel(p,NOW+200),true);
+ assert.equal(isLiveStaffChannel(p,NOW+6000),false);
+ tickWorld(w,{now:NOW+6000,actors:[],activeFighters:0,rng:()=>.5});
+ assert.equal(p.channelWeapon,null,'abandoned staff casting is cleared server-side');
+ assert.match(source('cloudflare/worker.js'),/channeling:isLiveStaffChannel\(profile,now\)/);
 });
