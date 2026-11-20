@@ -35,8 +35,8 @@ export function keepPredictedMoveOnLatencyReject(error,accepted,submitted,curren
  if(![accepted,submitted,current].every(a=>Array.isArray(a)&&a.length===3&&a.every(Number.isFinite)))return false;
  const clientAdvance=Math.hypot(...current.map((v,i)=>v-submitted[i]));
  const authorityGap=Math.hypot(...current.map((v,i)=>v-accepted[i]));
- const elapsed=Math.max(0,Math.min(12,Number(sampleAgeMs)||0)/1000);
- const elapsedAuthority=Math.max(elapsed,Math.max(0,Math.min(12,Number(authorityAgeMs)||0)/1000));
+ const elapsed=Math.max(0,Math.min(12,(Number(sampleAgeMs)||0)/1000));
+ const elapsedAuthority=Math.max(elapsed,Math.max(0,Math.min(12,(Number(authorityAgeMs)||0)/1000)));
  // Client max run speed 8.64m/s, Worker normal cap 14m/s.
  // Keep a small network/recovery margin but reject gross local jumps.
  const allowedTravel=5.5+14*elapsed;
