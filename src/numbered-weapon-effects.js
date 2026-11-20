@@ -305,7 +305,7 @@ export class NumberedWeaponEffects {
    // Modulate the ACTUAL original vertex shader, not a separate imitation
    // laser. Zero curvature at both physical endpoints, peak left/right at
    // the midpoint according to the player's lateral movement.
-   updateNativeCurve(fx,origin,end,entry.curveBend||0,this.camera);
+   updateNativeCurve(fx,origin,end,entry.curveBend||0,this.camera,entry.item?.family==='beam'?'s':'bow');
    if(spec.number===8&&entry.item?.family==='lightning'){fx.group.scale.y=2.4;fx.group.scale.z=2.4;}
    if(spec.number===29&&entry.item?.id?.startsWith('prism-')){fx.group.scale.y=5;fx.group.scale.z=5;}
    return;

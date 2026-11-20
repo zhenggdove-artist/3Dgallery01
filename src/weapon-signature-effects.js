@@ -182,8 +182,9 @@ export class WeaponSignatureEffects {
    color,emissive:color,emissiveIntensity:.31,transparent:true,opacity,
    depthWrite:false,side:THREE.DoubleSide
   });
-  const amber=glow('#ec2439',.76),pearl=glow('#ff707a',.55),
-   finMat=glow('#f52b4e',.60),rim=glow('#ffb2a7',.78),eye=glow('#241020',.95);
+  // Transparency increased by 40% (multiply existing opacity by 0.6).
+  const amber=glow('#ec2439',.456),pearl=glow('#ff707a',.33),
+   finMat=glow('#f52b4e',.36),rim=glow('#ffb2a7',.468),eye=glow('#241020',.57);
   const add=(parent,geo,mat,pos,scale)=>{
    const mesh=new THREE.Mesh(geo,mat);mesh.position.set(...pos);mesh.scale.set(...scale);
    parent.add(mesh);return mesh;
@@ -225,11 +226,17 @@ export class WeaponSignatureEffects {
   const orientation=qdir(direction);
   fish.scale.setScalar(1.25*quality);
   group.position.copy(origin);group.quaternion.copy(orientation);group.scale.setScalar(1);
-  this.add(group,duration,age=>{
+  const flightEntry=this.add(group,duration,(age,world,dt=0)=> {
    const progress=Math.min(1,age/duration);
    const travel=(event.range||32)*progress;
-   group.position.copy(origin).addScaledVector(direction,travel);
-   group.quaternion.copy(orientation);
+   const track=world?.goldfishFlights?.find(v=>v.id===event.persistentAttackId);
+   const target=track?.position?vec(track.position):
+    origin.clone().addScaledVector(direction,travel);
+   const desired=track?.direction?vec(track.direction).normalize():direction;
+   // Smooth snapshots but never reset the fish to its initial straight line.
+   if(age<.05)group.position.copy(target);
+   else group.position.lerp(target,Math.min(1,Math.max(.08,dt*24)));
+   group.quaternion.slerp(qdir(desired),Math.min(1,Math.max(.08,dt*20)));
    // The fish is authored facing local +Z; qdir already maps +Z to travel.
    // Any additional 90-degree yaw makes the nose point LEFT. Keep only swim sway.
    const yaw=Math.sin(age*8)*.045;
@@ -239,6 +246,7 @@ export class WeaponSignatureEffects {
    const fade=Math.min(1,age*6,(duration-age)*7);
    group.scale.setScalar(Math.max(0,fade));
   },'goldfish');
+  flightEntry.attackId=event.persistentAttackId||null;
  }
  flower(event){
   const quality=event.qualityScale||1,origin=vec(event.origin),direction=vec(event.direction).normalize();
@@ -410,10 +418,10 @@ export class WeaponSignatureEffects {
   if(item.family==='planter'&&!item.exotic)return this.thorns(event),true;
   return false;
  }
- update(dt){
+ update(dt,world=null){
   for(const entry of [...this.active]){
    try{
-    entry.age+=dt;entry.update(entry.age);
+    entry.age+=dt;entry.update(entry.age,world,dt);
     if(entry.age>=entry.duration)this.remove(entry);
    }catch(error){
     const index=this.active.indexOf(entry);if(index>=0)this.active.splice(index,1);

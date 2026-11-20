@@ -34,7 +34,7 @@ import {uploadMedia} from './media-ui.js';
 import {GunController} from './gun-controller.js';
 import {Minimap} from './minimap.js';
 import {CityWallPainter} from './city-wall-painter.js';
-import {rebaseRejectedPose,shouldIgnoreRejection} from './shared/state-reconciliation.js';
+import {rebaseRejectedPose,shouldIgnoreRejection,keepPredictedMoveOnLatencyReject} from './shared/state-reconciliation.js';
 import {createDamageNumbers} from './reletter/damage-numbers.js';
 
 const canvas=document.getElementById('game'),coarse=matchMedia('(pointer:coarse)').matches,settings=loadEditorSettings();
@@ -307,6 +307,18 @@ network.addEventListener('state-rejected',event=>{
  if(rejection.state?.position&&controller){
   const accepted=rejection.state.position,sent=network.sentStates.get(seq);
   const current=controller.root.position;
+  // Root cause of repeated step-back: a delayed speed-budget rejection was
+  // treated as a new teleport even while the client had a valid newer
+  // position. Do NOT discard several subsequent walking frames for this
+  // transient case. Building collisions and invalid teleports still enforce
+  // the authoritative location.
+  if(sent&&!controller.status.freeze&&!controller.status.root&&!controller.vortexSpin&&
+     keepPredictedMoveOnLatencyReject(rejection.error,accepted,sent.position,
+      current.toArray(),(x,z,y)=>arena.blocked(x,z,y))){
+    network.lastCorrectedSequence=Math.max(network.lastCorrectedSequence,seq);
+    network.lastStateAt=0;
+    return;
+  }
   const recovered=sent&&rejection.error!=='Invalid position'?
    rebaseRejectedPose(accepted,sent.position,current.toArray(),(x,z,y)=>arena.blocked(x,z,y)):
    accepted;

@@ -184,6 +184,9 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
     artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),wallPaint:clone(world.wallPaint||{}),wallPaintRevision:world.wallPaintRevision||0,plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
     vortexes:(world.persistentAttacks||[]).filter(v=>v.kind==='vortex').map(v=>({id:v.id,position:clone(v.position||v.origin),owner:v.owner})),
+    goldfishFlights:(world.persistentAttacks||[]).filter(v=>v.kind==='goldfish').map(v=>({
+      id:v.id,position:clone(v.position||v.origin),direction:clone(v.direction),owner:v.owner
+    })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
     profile:profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null,
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
@@ -196,6 +199,15 @@ function spend(profile,amount,world){if(profile.admin)return true;if(profile.wal
 function earn(profile,amount,world){if(!profile.admin)profile.wallet+=amount;world.activity.coinMinted+=amount;}
 function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>=600)return false;appendInventoryInstance(profile,itemId);return true;}
 
+// A channel interrupted by a lost stop packet MUST NOT impose 5%-speed
+// validation forever. Movement and attack ticks use the same expiry window.
+export function isLiveStaffChannel(profile,now=Date.now()){
+ const staff=profile?.channelWeapon&&itemById(profile.channelWeapon);
+ if(!staff||!isChannelStaff(staff))return false;
+ const latest=Number(profile.lastChannelPulseAt||profile.channelStartedAt)||0;
+ const grace=Math.max(1900,Math.min(4500,(staff.cooldown||700)*2+500));
+ return latest>0&&now-latest<=grace;
+}
 export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,journey=null,now=Date.now(),mobility=null){
   const pose=journeyPose(journey,now);
   if(pose&&role==='fighter')return {state:{position:pose.position,rotation:Math.PI,animation:pose.animation,visible:true}};
@@ -685,6 +697,11 @@ function attack(world,profile,actor,body,context,now){
   const returningGiraffe=weapon.id==='giraffe'&&stats.ultimate;
   const roamingFan=weapon.id==='fan'&&stats.ultimate;
   const swimmingFish=weapon.id==='goldfish'&&stats.ultimate;
+  // Lift the whole creature above ground/water while retaining the muzzle
+  // position for ordinary bubbles. Server collision and render share this.
+  const goldfishOrigin=swimmingFish?[origin[0],origin[1]+2.0,origin[2]]:origin;
+  const horizontalLength=Math.hypot(direction[0],direction[2])||1;
+  const goldfishDirection=swimmingFish?[direction[0]/horizontalLength,0,direction[2]/horizontalLength]:direction;
   let persistentAttackId=null;
   if(returningGiraffe||roamingFan||swimmingFish||waveVortex){
     world.persistentAttacks??=[];
@@ -692,7 +709,7 @@ function attack(world,profile,actor,body,context,now){
     const attackId=id();persistentAttackId=attackId;
     world.persistentAttacks.push({
       id:attackId,kind:waveVortex?'vortex':swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
-      origin:[...origin],direction:[...direction],range:stats.range,position:[...origin],travelled:0,hitTimes:{},
+      origin:[...goldfishOrigin],direction:[...goldfishDirection],range:stats.range,position:[...goldfishOrigin],travelled:0,hitTimes:{},
       damage:stats.damage+bonus*.1,pvpDamage,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
       createdAt:now,lastAt:now,expiresAt:now+duration,
       outHits:[],backHits:[],fanHits:{},fishHits:[]
@@ -786,7 +803,7 @@ function attack(world,profile,actor,body,context,now){
   const city=returningGiraffe||waveVortex?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
- return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin,direction,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+ return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
@@ -1032,8 +1049,17 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
    damagePlayer(world,null,actor,damage,now,'collector',from,'collector-shot',
     [actor.position[0],actor.position[1]+1.15,actor.position[2]],false,false,true)
   )||artworkChanged;
-  for(const profile of Object.values(world.profiles||{}))
+  for(const profile of Object.values(world.profiles||{})){
+   if(profile.channelWeapon&&!isLiveStaffChannel(profile,now)){
+    // Clear orphaned continuous-cast state before validating later movement.
+    profile.channelWeapon=null;profile.channelStartedAt=0;
+    profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
+    world.persistentAttacks=(world.persistentAttacks||[]).filter(fx=>
+     !(fx.owner===profile.key&&fx.channel));
+    changed=true;
+   }
    changed=tickBloomChannelHeal(profile,now)>0||changed;
+  }
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
   if(world.channelContactLocks)for(const [key,expiry] of Object.entries(world.channelContactLocks))
    if(expiry<now-2000)delete world.channelContactLocks[key];
@@ -1565,18 +1591,33 @@ function tickPersistentAttacks(world,actors,now,rng){
     }
    }
   }else if(fx.kind==='goldfish'){
-   // The fish's swept server collider follows precisely the same straight
-   // route, scale, and duration as its visible Three.js body.
-   const length=(next-prev)*fx.range;
+   // A real moving fish: steer toward the nearest live target on every tick,
+   // then sweep the *actual curved segment* instead of the old straight ray.
+   // Targets cannot dodge a tracking fish merely because it changed bearing.
+   const candidates=targets.filter(t=>(t.value.id||t.value.key)!==fx.owner&&
+      t.value.hp!==0&&!(t.kind==='player'&&insideArtSanctuary(t.value.position)));
+   const nearby=candidates.filter(t=>
+    Math.hypot(t.value.position[0]-fx.position[0],t.value.position[2]-fx.position[2])<fx.range*.9+6);
+   const aim=nearby.find(t=>(t.value.id||t.value.key)===fx.targetId)||
+    nearby.sort((a,b)=>Math.hypot(a.value.position[0]-fx.position[0],a.value.position[2]-fx.position[2])-
+     Math.hypot(b.value.position[0]-fx.position[0],b.value.position[2]-fx.position[2]))[0];
+   if(aim)fx.targetId=aim.value.id||aim.value.key;
+   const origin=[...fx.position];
+   advanceHomingVortex(fx,aim?.value,Math.min(now,fx.expiresAt)-fx.lastAt,flight);
+   const ray=fx.position.map((v,j)=>v-origin[j]);
+   const length=Math.hypot(...ray);
    if(length>.001){
-    const origin=fx.origin.map((v,j)=>v+fx.direction[j]*prev*fx.range);
+    const travelDirection=ray.map(v=>v/length);
+    changed=true;
     for(const target of targets){
      const value=target.value,key=value.id||value.key;
      if(key===fx.owner||now<(fx.hitTimes?.[key]||0))continue;
      if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
      const contact=target.kind==='monster'
-      ?monsterRayDistance(origin,fx.direction,length,value,fx.radius)
-      :rayCylinderDistance(origin,fx.direction,length,value.position,1.02+fx.radius,2.35);
+      ?monsterRayDistance(origin,travelDirection,length,value,fx.radius)
+      :rayCylinderDistance(origin,travelDirection,length,value.position,1.02+fx.radius,2.35+fx.radius);
+     // The floating fish spans BELOW its raised centre; vertical overlap
+     // must include its full body, otherwise it ghosts through fighters.
      if(contact===null)continue;
      fx.hitTimes??={};fx.hitTimes[key]=now+contactDamageIntervalMs({id:'goldfish'});
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
