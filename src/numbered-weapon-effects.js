@@ -203,6 +203,7 @@ export class NumberedWeaponEffects {
    live.range=Math.max(.5,Number(event.range)||live.range);
    live.heading=root?.rotation.y||0;
    live.lastPulse=performance.now();
+   if(event.persistentAttackId)live.attackId=event.persistentAttackId;
    if(!live.waves&&!live.cycles)this.align(live);
    return true;
   }
@@ -234,7 +235,7 @@ export class NumberedWeaponEffects {
   const target=areaLocked?vector(event.area.visualCenter,origin):origin.clone();
   const entry={
    spec,fx,group:fx.group,root,item,direction,visualDirection:direction.clone(),origin,target,options,
-   curveBend:0,visualEnd:null,
+   curveBend:0,visualEnd:null,attackId:event.persistentAttackId||null,
    worldScale:ultimateWorldScale(spec.number,event,options),
    range:Math.max(.5,Number(event.range)||12),
    key,channel:!!event.channel,fusionEcho:!!event.fusionEcho,areaLocked,age:0,
@@ -486,7 +487,7 @@ export class NumberedWeaponEffects {
   }
   if(entry.age>=1.88)entry.stopping=true;
  }
- update(dt,camera=null){
+ update(dt,camera=null,world=null){
   if(camera)this.camera=camera;
   const now=performance.now();
   for(const e of [...this.active]){
@@ -522,7 +523,15 @@ export class NumberedWeaponEffects {
     if(!e.channel&&e.age>=e.duration)this.remove(e);
     continue;
    }
-   if(e.cycles){this.updateNativeCycles(e,dt);continue;}
+   if(e.cycles){
+    this.updateNativeCycles(e,dt);
+    if(e.spec.number===20&&e.attackId){
+     const synced=world?.vortexes?.find(v=>v.id===e.attackId);
+     if(synced?.position)for(const copy of e.cycles)
+      copy.fx.group.position.lerp(new THREE.Vector3(...synced.position),Math.min(1,dt*18));
+    }
+    continue;
+   }
 
    if(e.singleTravel){
     const t=Math.min(1,e.age/travelLifetime(e.spec.number));
@@ -539,6 +548,10 @@ export class NumberedWeaponEffects {
     e.stopping=true;e.fx.stop();
    }
    e.fx.update(dt);
+   if(e.spec.number===20&&e.attackId){
+    const synced=world?.vortexes?.find(v=>v.id===e.attackId);
+    if(synced?.position)e.fx.group.position.lerp(new THREE.Vector3(...synced.position),Math.min(1,dt*18));
+   }
    if(e.spec.number===8&&e.item?.family==='lightning'){e.fx.group.scale.y=2.4;e.fx.group.scale.z=2.4;}
    if(e.spec.number===29&&e.item?.id?.startsWith('prism-')){e.fx.group.scale.y=5;e.fx.group.scale.z=5;}
    if(e.worldScale!=null)e.fx.group.scale.setScalar(e.worldScale);
