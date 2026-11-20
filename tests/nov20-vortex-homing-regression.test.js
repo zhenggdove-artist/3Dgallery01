@@ -39,7 +39,8 @@ test('goldfish water projectiles are deep blue without recoloring the giant red 
  const signature=source('src/weapon-signature-effects.js');
  assert.match(signature,/color:'#063276'/);
  assert.match(signature,/emissive:'#041b5d'/);
- assert.match(signature,/const amber=glow\('#ffb18e'/);
+ assert.match(signature,/const dorsal=new THREE.Color\('#e85c32'/);
+  assert.match(signature,/bodyGeo\.setAttribute\('color'/);
 });
 test('wave conch charged range is exactly three times the previous server/client footprint',()=>{
  const item=itemById('nova-1');

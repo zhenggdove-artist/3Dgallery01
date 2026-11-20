@@ -28,7 +28,7 @@ test('giant goldfish creates a visible swimming fish and swept damage/knockback 
  const scene=new THREE.Scene(),effects=new WeaponSignatureEffects(scene);
  assert.equal(effects.play(result.attackEvent,itemById('goldfish')),true);
  const mesh=effects.active.at(-1).obj;
- assert.equal(mesh.name,'Translucent spectral goldfish swimming forward');
+ assert.equal(mesh.name,'Thirty individually consumable goldfish swimming forward');
  assert.ok(mesh.children[0].children.length>12);
  effects.update(.4);
  assert.ok(mesh.position.z>0,'the visible fish must swim forward');

@@ -112,7 +112,7 @@ test('saber ultimate warns with a sword-origin straight rectangle instead of a r
  const quality=weaponQuality(item,fusion),stats=attackStats(item,1);
  stats.range=+(stats.range*quality.range).toFixed(2);
  stats.radius=+(stats.radius*quality.radius).toFixed(2);
- scaleUltimateFootprint(stats);
+ scaleUltimateFootprint(stats,item);
  const world={floatingPlatforms:[]};
  const area=chargedArea(item,[5,1,9],direction,stats,(x,z,y)=>spellGroundHeight(world,x,z,y));
  preview.update(root,item,1,direction,{world},fusion);
@@ -286,7 +286,7 @@ test('doubling the ice timeline retains overlapping channels without a zero-visi
  assert.equal(scene.children.length,0);
 });
 
-test('charged sword warning and radius follow the final 60% collision dimensions',()=>{
+test('charged sword warning and radius follow the halved saber collision reach',()=>{
  const item=itemById('saber-1'),stats=attackStats(item,1);
  const oldReach=Math.max(30,item.range*2,(item.range+item.chargeRange)*1.8)*4;
  assert.ok(Math.abs(stats.range-oldReach*.60)<.01,'ultimate reach must equal 60% of the former 4x baseline');
@@ -296,7 +296,7 @@ test('charged sword warning and radius follow the final 60% collision dimensions
  fx.update(root,item,.95,direction,{world:{floatingPlatforms:[]}},null,muzzle);
  assert.equal(fx.rectangle.group.userData.vfxNumber,59);
  assert.equal(fx.footprint.shape,'rectangle');
- const expected=scaleUltimateFootprint({...stats,radius:+(stats.radius*weaponQuality(item).radius).toFixed(2)});
+ const expected=scaleUltimateFootprint({...stats,radius:+(stats.radius*weaponQuality(item).radius).toFixed(2)},item);
  assert.ok(Math.abs(fx.footprint.length-expected.range)<1e-8);
  assert.ok(Math.abs(fx.footprint.width-Math.max(.5,expected.radius*2))<1e-8);
  assert.ok(Math.abs(fx.footprint.position[2]-(muzzle[2]+expected.range/2))<1e-8);
