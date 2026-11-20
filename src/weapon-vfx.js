@@ -7,7 +7,6 @@ import {WeaponParticleEffects} from './weapon-particle-effects.js';
 import {WeaponSignatureEffects} from './weapon-signature-effects.js';
 import {NumberedWeaponEffects} from './numbered-weapon-effects.js';
 import {VerdantRestorationChannel} from './verdant-restoration-channel.js';
-import {ForwardChannelBeam} from './forward-channel-beam.js';
 import {TripleBindingCurse} from './binding-curse-triple.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
@@ -41,7 +40,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.bindingCurse=new TripleBindingCurse(scene);this.prismCardinalBeams=new Map();}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.bindingCurse=new TripleBindingCurse(scene);}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -320,22 +319,6 @@ export class WeaponVFX{
     }
    }
   }
-  const livePrisms=new Set();
-  for(const entry of this.numberedEffects.active){
-   if(!entry.channel||entry.spec?.number!==29||
-      !/^prism-/.test(entry.item?.id||'')||!entry.root?.parent)continue;
-   livePrisms.add(entry);
-   let cardinal=this.prismCardinalBeams.get(entry);
-   if(!cardinal){cardinal=new ForwardChannelBeam(this.scene,false);this.prismCardinalBeams.set(entry,cardinal);}
-   const start=this.numberedEffects.muzzleAt(entry);
-   const end=entry.visualEnd||start.clone().addScaledVector(entry.visualDirection,entry.range);
-   const ray=end.clone().sub(start),reach=ray.length();
-   if(reach>.1)cardinal.update(start,ray.normalize(),reach,entry.age,
-    Math.max(.35,(entry.item?.tier||1)*.11));
-  }
-  for(const [entry,cardinal] of this.prismCardinalBeams)if(!livePrisms.has(entry)){
-   cardinal.dispose();this.prismCardinalBeams.delete(entry);
-  }
   for(const orb of [...this.staffOrbs]){
    orb.age+=dt;
    const t=Math.min(1,orb.age/orb.duration);
@@ -383,7 +366,7 @@ export class WeaponVFX{
   this.failedAnimations.add(id);
   console.error('Weapon animation failed; quarantined this instance',id,error);
  }
- dispose(){this.bindingCurse.dispose();for(const visual of this.prismCardinalBeams.values())visual.dispose();this.prismCardinalBeams.clear();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
+ dispose(){this.bindingCurse.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
   for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }
