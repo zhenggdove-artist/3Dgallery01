@@ -14,7 +14,7 @@ const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('equipped marker, 3px chat lift, GM help inside S and opaque clean paper doll',()=>{
  const css=source('fidelity-ui.css'),ui=source('src/ui.js'),portrait=source('src/equipment-portrait-view.js');
  assert.match(css,/\.bag-cell\.equipped::after\{top:1px!important;bottom:auto!important/);
- assert.match(css,/#hud #chat-hud\{bottom:max\(160px/);
+ assert.match(css,/#hud #chat-hud\{bottom:max\(163px/);
  assert.match(css,/#gm-help\{display:none!important\}/);
  assert.match(ui,/data-gm-action="help" aria-label="GM instructions and shortcuts"/);
  assert.match(css,/#panel #bag-portrait-frame::after\{display:none!important\}/);
