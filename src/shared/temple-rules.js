@@ -252,14 +252,20 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
       Array.isArray(mobility?.lastWriteLanding)&&distanceTo(next.position,mobility.lastWriteLanding)<=9;
     // Normal run speed is 8.64m/s; airborne wings, delayed packets, and
     // server-authorized knockback need more headroom without allowing teleports.
-    const maxSpeed=(hasWings?28:14)*boostedSpeed*(mobility?.channeling ? .05 : 1)+(recentHit?18:0)+(recentImpulse?18:0);
-    const allowance=maxSpeed*elapsed+(mobility?.channeling ? 1.5 : 5.5)+(recentHit?6:0);
+    // Root cause of periodic walking rubberband: the server validated against
+    // 5% casting speed while the client had already released its staff, because
+    // the channel-stop HTTP response and 90ms position WebSocket are NOT atomic.
+    // Keep local cast slow via PlayerController.castMoveFactor, but validate all
+    // ordinary movement against the normal antiteleport budget. The server
+    // still enforces stun/root, arena bounds, roofs and building collision.
+    const maxSpeed=(hasWings?28:14)*boostedSpeed+(recentHit?18:0)+(recentImpulse?18:0);
+    const allowance=maxSpeed*elapsed+5.5+(recentHit?6:0);
     // Descending from a 30m platform reaches ~39m/s before landing,
     // while ordinary upward jumps start at 10m/s. Validate both axes
     // without turning gravity into a forbidden lateral wall.
     const verticalSpeed=deltaY<0?42:(hasWings?32:18);
     const verticalAllowance=(verticalSpeed+(recentHit||recentImpulse?14:0))*elapsed+
-      (mobility?.channeling?1.5:5.5);
+      5.5;
     if((horizontal>allowance||Math.abs(deltaY)>verticalAllowance)&&
       !justRespawned&&!landedFromWrite)
       return {error:'Movement rejected',state:previous};
@@ -621,6 +627,7 @@ function attack(world,profile,actor,body,context,now){
   if(body.phase==='channel-stop'){
    profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;
    profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
+   delete profile.prismChannelStats;
    if(world.prismLocks)delete world.prismLocks[actor.key];
    world.persistentAttacks=(world.persistentAttacks||[]).filter(
     fx=>!(fx.owner===actor.key&&fx.channel));
