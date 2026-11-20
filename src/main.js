@@ -97,7 +97,18 @@ function clearChargeDelay(){
 }
 function scheduleBeamChannelStart(delay){
  if(beamStartTimer!==null)clearTimeout(beamStartTimer);
- beamStartTimer=setTimeout(()=>{beamStartTimer=null;beginStaffChannel();},Math.max(0,delay));
+ const scheduledWeapon=world?.profile?.equipment?.weapon;
+ beamStartTimer=setTimeout(()=>{
+  beamStartTimer=null;
+  beginStaffChannel();
+  // A single missed browser timer (GPU compile or background throttling)
+  // previously left the prism charged forever with NO active beam. Watch
+  // until the authenticated channel has actually started, even without rAF.
+  if(attackHeld&&chargeStarted!==null&&!staffChannel&&controller?.enabled&&
+     scheduledWeapon===world?.profile?.equipment?.weapon&&
+     ['lightning','beam'].includes(itemById(scheduledWeapon)?.family))
+   scheduleBeamChannelStart(260);
+ },Math.max(0,delay));
 }
 function startHeldCharge(){
  if(!attackHeld||attackHoldStarted===null||chargeStarted!==null||chargeRequest||staffChannel||
