@@ -39,7 +39,7 @@ test('goldfish water projectiles are deep blue without recoloring the giant red 
  const signature=source('src/weapon-signature-effects.js');
  assert.match(signature,/color:'#063276'/);
  assert.match(signature,/emissive:'#041b5d'/);
- assert.match(signature,/const amber=glow\('#ec2439'/);
+ assert.match(signature,/const amber=glow\('#ffb18e'/);
 });
 test('wave conch charged range is exactly three times the previous server/client footprint',()=>{
  const item=itemById('nova-1');
@@ -138,7 +138,8 @@ test('goldfish seeks off-axis target from elevated swimming position and syncs v
  assert.ok(visual.position.y>2);
  const fish=visual.userData.fish;
  const mats=[];fish.traverse(node=>{if(node.material)mats.push(node.material);});
- assert.ok(mats.some(mat=>mat.opacity<.5),'transparent 40% stronger than before');
+ assert.ok(mats.some(mat=>mat.opacity>.9),'outlined opaque goldfish remain individually visible');
+ assert.ok(mats.some(mat=>mat.vertexColors),'goldfish body receives a real dorsal-to-belly gradient');
  effects.dispose();
 });
 test('White Cat charged shots retain physical muzzle and reticle endpoints',()=>{
