@@ -233,6 +233,14 @@ export class WeaponSignatureEffects {
   });
   fish.visible=false;group.add(school);
   group.userData.fish=fish;group.userData.tail=tail;group.userData.school=school;group.userData.schoolParts=parts;
+  // Reuse all transforms every frame: never allocate 30 matrices or vectors
+  // while a school is swimming through simultaneous city combat.
+  group.userData.schoolScratch={
+   base:new THREE.Matrix4(),combined:new THREE.Matrix4(),
+   offset:new THREE.Vector3(),rotation:new THREE.Quaternion(),
+   scale:new THREE.Vector3(1,1,1),axis:new THREE.Vector3(0,1,0),
+   transforms:Array.from({length:GOLDFISH_SCHOOL_COUNT},()=>new THREE.Matrix4())
+  };
   }
   // The original four cloned fish multiplied meshes, draw calls and material
   // allocations by five, causing severe mobile stutters. No clones are built.
@@ -257,15 +265,13 @@ export class WeaponSignatureEffects {
    fish.rotation.z=Math.sin(age*7)*.035;
    tail.rotation.y=Math.sin(age*16)*.44;
    fish.updateMatrixWorld(true);
-   const base=new THREE.Matrix4(),combined=new THREE.Matrix4(),
-    offset=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3(1,1,1),
-    swayAxis=new THREE.Vector3(0,1,0);
-   const transforms=GOLDFISH_SCHOOL_OFFSETS.map(([x,y,z],index)=>{
-    const phase=age*8+index*2.399963;
+   const {base,combined,offset,rotation,scale,axis,transforms}=group.userData.schoolScratch;
+   for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
+    const [x,y,z]=GOLDFISH_SCHOOL_OFFSETS[i],phase=age*8+i*2.399963;
     offset.set(x+Math.sin(phase)*.08,y+Math.sin(phase*.71)*.065,z);
-    rotation.setFromAxisAngle(swayAxis,Math.sin(phase)*.075);
-    return new THREE.Matrix4().compose(offset,rotation,scale);
-   });
+    rotation.setFromAxisAngle(axis,Math.sin(phase)*.075);
+    transforms[i].compose(offset,rotation,scale);
+   }
    for(const {mesh,source} of group.userData.schoolParts){
     base.copy(source.matrix);
     for(let parent=source.parent;parent&&parent!==group;parent=parent.parent)
