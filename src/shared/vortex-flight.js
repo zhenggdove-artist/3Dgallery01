@@ -5,7 +5,7 @@ export const VORTEX_SPIN_MS=2000;
 export const VORTEX_SPIN_LOCK_MS=5000;
 export function advanceHomingVortex(fx,target,elapsedMs,flightMs=VORTEX_FLIGHT_MS){
  if(!Array.isArray(fx.position))fx.position=[...fx.origin];
- const dt=Math.max(0,Math.min(500,Number(elapsedMs)||0))/1000;
+ const dt=Math.max(0,Math.min(2500,Number(elapsedMs)||0))/1000;
  let dx=fx.direction[0],dz=fx.direction[2];
  const length=Math.hypot(dx,dz)||1;dx/=length;dz/=length;
  if(Array.isArray(target?.position)){
