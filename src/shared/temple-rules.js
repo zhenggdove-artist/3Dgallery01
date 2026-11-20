@@ -1,6 +1,7 @@
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks} from './artwork-recovery.js';
-import {chargedArea,insideChargedArea,spellGroundHeight,scaleUltimateFootprint} from './charge-area.js';
+import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint} from './charge-area.js';
+import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,goldfishSchoolPosition} from './goldfish-school.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
@@ -693,6 +694,7 @@ function attack(world,profile,actor,body,context,now){
   if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
    if(weapon.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
    scaleUltimateFootprint(stats,weapon,quality);
+   if(weapon.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
    if(weapon.id==='giraffe'&&stats.ultimate){
     // Preserve the explicitly doubled 56m boomerang reach: the generic
     // ultimate footprint shrink must not undo the item's charged range.
@@ -732,7 +734,7 @@ function attack(world,profile,actor,body,context,now){
     const attackId=id();persistentAttackId=attackId;
     world.persistentAttacks.push({
       id:attackId,kind:waveVortex?'vortex':swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
-      origin:[...goldfishOrigin],direction:[...goldfishDirection],range:stats.range,position:[...goldfishOrigin],travelled:0,hitTimes:{},
+      origin:[...goldfishOrigin],direction:[...goldfishDirection],launchDirection:[...goldfishDirection],range:stats.range,position:[...goldfishOrigin],travelled:0,hitTimes:{},
       damage:stats.damage+bonus*.1,pvpDamage,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
       createdAt:now,lastAt:now,expiresAt:now+duration,
       outHits:[],backHits:[],fanHits:{},fishHits:[]
@@ -759,6 +761,7 @@ function attack(world,profile,actor,body,context,now){
     if(world.persistentAttacks.length>40)world.persistentAttacks.splice(0,world.persistentAttacks.length-40);
   }
   if(stats.ultimate){
+    const primaryFootprint=spellFootprint(weapon,origin,direction,stats,area,groundForSpell);
     for(const [fusionSlot,sourceId] of (profile.fusion?.[weapon.id]?.effects||[]).slice(0,2).entries()){
       const source=itemById(sourceId);if(source?.slot!=='weapon')continue;
       const sourceQuality=weaponQuality(source),full=attackStats(source,1);
@@ -772,8 +775,22 @@ function attack(world,profile,actor,body,context,now){
       secondary.range=+(secondary.range*echoFactor).toFixed(3);
       secondary.radius=+(secondary.radius*echoFactor*(/^whip-[1-5]$/.test(source.id)?1.5:1)).toFixed(3);
       const echoArea=source.id==='goldfish'||source.family==='wave'?null:chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel);
-      if(echoArea?.mode==='area'&&area?.visualCenter&&source.family!=='whip'){
-        echoArea.center=[...area.center];echoArea.visualCenter=[...area.visualCenter];
+      if(echoArea?.mode==='area'){
+        if(primaryFootprint.shape==='circle'&&area?.visualCenter){
+          // Including a fused whip: both the native VFX and the damage center
+          // must be exactly the main weapon's warned impact center.
+          echoArea.center=[...area.center];echoArea.visualCenter=[...area.visualCenter];
+          echoArea.radius=Math.min(echoArea.radius,primaryFootprint.radius);
+        }else if(primaryFootprint.shape==='rectangle'){
+          // A round fused ultimate anchors to the far end of #59, not its
+          // old independent remote ground circle or the caster position.
+          const dx=Math.cos(primaryFootprint.yaw),dz=-Math.sin(primaryFootprint.yaw);
+          const x=primaryFootprint.position[0]+dx*primaryFootprint.length*.5;
+          const z=primaryFootprint.position[2]+dz*primaryFootprint.length*.5;
+          const y=Math.max(.16,groundForSpell(x,z,origin[1])+.16);
+          echoArea.center=[x,y,z];echoArea.visualCenter=[x,y,z];
+          echoArea.radius=Math.min(echoArea.radius,primaryFootprint.width*.5);
+        }
       }
       const exotic=source.family==='wave'?'vortex':source.id==='fan'?'fan':source.id==='giraffe'?'giraffe':source.id==='goldfish'?'goldfish':null;
       const flight=projectileFlightMs(source,true);
@@ -787,7 +804,7 @@ function attack(world,profile,actor,body,context,now){
       const echoPvP=balancedSniper?.pvpDamage??+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
-        origin:[...origin],direction:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,
+        origin:[...origin],direction:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,
         damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*.2,
         tier:sourceQuality.tier,flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
@@ -795,7 +812,7 @@ function attack(world,profile,actor,body,context,now){
         createdAt:now,lastAt:now,expiresAt:now+duration});
       fusionEchoes.push({id:echoId,owner:actor.key,fusionSlot,origin:[...origin],direction:[...direction],
         weapon:source.id,family:source.family,color:source.color,charge:1,ultimate:true,channel:echoChannel,
-        range:secondary.range,radius:secondary.radius,area:echoArea,qualityTier:sourceQuality.tier,
+        range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,qualityTier:sourceQuality.tier,
         qualityScale:sourceQuality.visual*.5,qualityDuration:sourceQuality.duration,
         pellets:secondaryPellets?.map(v=>v.direction)||null,
         fusionEcho:true,echoPower:.2,time:now});
@@ -1378,6 +1395,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    const outcome=(target,position,impact,pellet=null,along=0)=>{
     const enemy=target.value,key=(enemy.id||enemy.key),isPlayer=target.kind==='player';
     if(enemy.key===fx.owner||(isPlayer&&insideSafeZone(enemy.position)))return false;
+    if(fx.echo&&fx.parentFootprint&&!insideSpellFootprint(fx.parentFootprint,position))return false;
     const hitKey=pellet===null?key:pellet+':'+key;
     const interval=contactDamageIntervalMs(weapon);
     fx.hitTimes??={}; // Per visible projectile, not just the first contact.
@@ -1690,39 +1708,58 @@ function tickPersistentAttacks(world,actors,now,rng){
     }
    }
   }else if(fx.kind==='goldfish'){
-   // A real moving fish: steer toward the nearest live target on every tick,
-   // then sweep the *actual curved segment* instead of the old straight ray.
-   // Targets cannot dodge a tracking fish merely because it changed bearing.
-   const candidates=targets.filter(t=>(t.value.id||t.value.key)!==fx.owner&&
-      t.value.hp!==0&&!(t.kind==='player'&&insideArtSanctuary(t.value.position)));
+   // Exclude the caster and everything behind the ORIGINAL launch ray.
+   // A U-turn toward a nearby fighter used to make the goldfish appear
+   // to chase its own owner instead of pursuing forward enemies.
+   const launch=fx.launchDirection||fx.direction;
+   const candidates=targets.filter(t=>{
+    const value=t.value,key=value.id||value.key;
+    if(key===fx.owner||value.hp===0||(t.kind==='player'&&insideArtSanctuary(value.position)))return false;
+    const x=value.position[0]-fx.origin[0],z=value.position[2]-fx.origin[2];
+    const along=x*launch[0]+z*launch[2];
+    return along>0.5&&along<=fx.range+GOLDFISH_SCHOOL_RADIUS*2;
+   });
    const nearby=candidates.filter(t=>
     Math.hypot(t.value.position[0]-fx.position[0],t.value.position[2]-fx.position[2])<fx.range*.9+6);
    const aim=nearby.find(t=>(t.value.id||t.value.key)===fx.targetId)||
     nearby.sort((a,b)=>Math.hypot(a.value.position[0]-fx.position[0],a.value.position[2]-fx.position[2])-
      Math.hypot(b.value.position[0]-fx.position[0],b.value.position[2]-fx.position[2]))[0];
    if(aim)fx.targetId=aim.value.id||aim.value.key;
-   const origin=[...fx.position];
-   advanceHomingVortex(fx,aim?.value,Math.min(now,fx.expiresAt)-fx.lastAt,flight);
-   const ray=fx.position.map((v,j)=>v-origin[j]);
-   const length=Math.hypot(...ray);
-   if(length>.001){
-    const travelDirection=ray.map(v=>v/length);
-    changed=true;
+   else delete fx.targetId;
+   const previous=[...fx.position],heading=[...fx.direction];
+   advanceHomingVortex(fx,aim?.value,Math.max(0,Math.min(now,fx.expiresAt)-fx.lastAt),flight);
+   const travelled=Math.hypot(fx.position[0]-previous[0],fx.position[2]-previous[2]);
+   if(travelled>.001)changed=true;
+   // One authoritative flight; thirty swept fish bodies with independent,
+   // once-per-victim hit histories. Each body deals exactly 20% of the old
+   // fish's hit damage. One knockback/status per victim avoids 30 teleports.
+   if(travelled>.001){
     for(const target of targets){
      const value=target.value,key=value.id||value.key;
-     if(key===fx.owner||now<(fx.hitTimes?.[key]||0))continue;
-     if(target.kind==='player'&&insideArtSanctuary(value.position))continue;
-     const contact=target.kind==='monster'
-      ?monsterRayDistance(origin,travelDirection,length,value,fx.radius)
-      :rayCylinderDistance(origin,travelDirection,length,value.position,1.02+fx.radius,2.35+fx.radius);
-     // The floating fish spans BELOW its raised centre; vertical overlap
-     // must include its full body, otherwise it ghosts through fighters.
-     if(contact===null)continue;
-     fx.hitTimes??={};fx.hitTimes[key]=now+contactDamageIntervalMs({id:'goldfish'});
+     if(key===fx.owner||value.hp===0||(target.kind==='player'&&insideArtSanctuary(value.position)))continue;
+     let contacts=0;
+     for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
+      const hitKey=i+':'+key;
+      if(fx.fishHits.includes(hitKey))continue;
+      const a=goldfishSchoolPosition(previous,heading,i);
+      const b=goldfishSchoolPosition(fx.position,fx.direction,i);
+      const delta=b.map((v,j)=>v-a[j]),length=Math.hypot(...delta);
+      if(length<.0001)continue;
+      const direction=delta.map(v=>v/length),radius=GOLDFISH_CONTACT_RADIUS*Math.max(.7,fx.tier*.15+.6);
+      const collision=target.kind==='monster'
+       ?monsterRayDistance(a,direction,length,value,radius)
+       :rayCylinderDistance(a,direction,length,value.position,1.02+radius,2.35+radius);
+      if(collision===null)continue;
+      fx.fishHits.push(hitKey);contacts++;
+     }
+     if(!contacts)continue;
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
+     const first=!(fx.hitTimes?.[key]);
+     fx.hitTimes??={};fx.hitTimes[key]=now;
+     const multiplier=contacts*GOLDFISH_DAMAGE_PER_FISH;
      if(target.kind==='monster'){
-      const result=damageMonster(world,owner,fx.damage*1.25,now,rng,'giant-goldfish',value,center);
-      if(result&&!result.defeated){
+      const result=damageMonster(world,owner,fx.damage*1.25*multiplier,now,rng,'giant-goldfish',value,center);
+      if(result&&!result.defeated&&first){
        if(fx.echo)applyElementalHit(value,owner,itemById('goldfish'),now,.2);
        else applyStatus(world,owner,value,itemById('goldfish'),{
         direction:fx.direction,charge:1,damage:fx.damage,qualityDuration:1
@@ -1732,15 +1769,17 @@ function tickPersistentAttacks(world,actors,now,rng){
        value.effects??={};value.effects.stun={owner:fx.owner,power:fx.echo?.2:1,until:now+(fx.echo?160:800),next:now+1000};
       }
      }else{
-      const hit=damagePlayer(world,owner,value,(fx.pvpDamage||12)*1.08,now,'goldfish',fx.origin,'giant-goldfish',center);
-      if(hit&&!hit.immune){const profile=world.profiles[value.key];
+      const hit=damagePlayer(world,owner,value,(fx.pvpDamage||12)*1.08*multiplier,now,'goldfish',fx.origin,'giant-goldfish',center);
+      if(hit&&!hit.immune&&first){
+       const profile=world.profiles[value.key];
        if(profile?.hp>0){
         if(fx.echo)applyElementalHit(profile,owner,itemById('goldfish'),now,.2);
         else applyStatus(world,owner,profile,itemById('goldfish'),{
          direction:fx.direction,charge:1,damage:fx.pvpDamage,qualityDuration:1
         },now);
        }
-       if(profile?.hitReaction){profile.hitReaction.stunMs=fx.echo?100:300;profile.hitReaction.knockback=fx.echo?2.8:14;}}
+       if(profile?.hitReaction){profile.hitReaction.stunMs=fx.echo?100:300;profile.hitReaction.knockback=fx.echo?2.8:14;}
+      }
      }
      changed=true;
     }
