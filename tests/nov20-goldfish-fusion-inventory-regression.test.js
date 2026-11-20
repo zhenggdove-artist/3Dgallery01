@@ -80,8 +80,8 @@ test('authoritative fusion hit clipping rejects every point outside the main war
  assert.equal(insideSpellFootprint(box,[1,0,1.1]),false);
  assert.equal(insideSpellFootprint(box,[-8.1,0,0]),false);
  const bag=readFileSync(new URL('../src/bag-view.js',import.meta.url),'utf8');
- assert.match(bag,/src="\$\{esc\(fallbackItemIcon\(item\)\)\}"/);
- assert.match(bag,/await itemPreview\(item\)/);
+ assert.match(bag,/previewMarkup\(item\)/);
+ assert.doesNotMatch(bag,/fallbackItemIcon|drawNext/);
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.doesNotMatch(main,/portraitViewport\.lastWidth=0;requestAnimationFrame/);
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
