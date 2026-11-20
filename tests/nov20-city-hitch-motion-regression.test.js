@@ -107,3 +107,9 @@ test('many simultaneous city collapses pin high-detail deformation caches until 
  assert.equal(city.deformationBasis.size,12,
   'stale cache entries are reclaimed after effects end');
 });
+
+test('HTTP attack reply and same-revision WebSocket event cannot rebuild full scene twice',()=>{
+ const src=read('src/main.js');
+ assert.match(src,/next\.revision<=world\.revision/);
+ assert.match(src,/registerCustomWings\(wings\);world=\{\.\.\.next,customWings:wings\};syncWorld\(\)/);
+});
