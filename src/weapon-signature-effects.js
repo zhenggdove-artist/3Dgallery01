@@ -53,7 +53,11 @@ export class WeaponSignatureEffects {
    area:{mode:'area',center:[0,.1,10],visualCenter:[0,.1,10],radius:4}};
   const stage=new THREE.Scene();
   try{
-   for(const id of ['calico-cat','calico-cat','goldfish','fan','bloom-1','planter-1','giraffe']){
+   // Both first-tap bubbles and charged creatures must already have GPU
+   // buffers and shaders. Warm multiple goldfish schools for overlapping casts.
+   const bubble=itemById('goldfish');
+   if(bubble)this.play({...event,ultimate:false,range:11},bubble,null);
+   for(const id of ['calico-cat','calico-cat','goldfish','goldfish','fan','bloom-1','planter-1','giraffe']){
     const item=itemById(id);
     if(item)this.play(event,item,null);
    }
