@@ -19,3 +19,16 @@ export function shouldIgnoreRejection(rejectionSeq,lastAcceptedSeq,lastCorrected
  return Number.isSafeInteger(rejectionSeq)&&rejectionSeq>0&&
   (rejectionSeq<=lastAcceptedSeq||rejectionSeq<=lastCorrectedSeq);
 }
+
+// A speed-budget rejection during a late frame is not a forced teleport.
+// Keep locally collision-validated movement visible and resend immediately;
+// the Worker can then validate against the elapsed time since its last
+// accepted pose. Hard building/invalid-position rejections still rebase.
+export function keepPredictedMoveOnLatencyReject(error,accepted,submitted,current,blocked=()=>false){
+ if(error!=='Movement rejected')return false;
+ if(![accepted,submitted,current].every(a=>Array.isArray(a)&&a.length===3&&a.every(Number.isFinite)))return false;
+ const clientAdvance=Math.hypot(...current.map((v,i)=>v-submitted[i]));
+ const authorityGap=Math.hypot(...current.map((v,i)=>v-accepted[i]));
+ return clientAdvance<=3.5&&authorityGap<=8&&
+  !blocked(current[0],current[2],current[1]);
+}
