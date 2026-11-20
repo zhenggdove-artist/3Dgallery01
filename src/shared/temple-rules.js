@@ -1372,10 +1372,15 @@ function tickPersistentAttacks(world,actors,now,rng){
  const attacks=world.persistentAttacks||[];
  if(!attacks.length)return false;
  let changed=false;
- const targets=[...(world.monster?.active?[{kind:'monster',value:world.monster}]:[]),
+ const potentialTargets=[...(world.monster?.active?[{kind:'monster',value:world.monster}]:[]),
   ...(world.monsters||[]).filter(v=>v.active).map(value=>({kind:'monster',value})),
   ...actors.filter(v=>v.role==='fighter'&&!insideSafeZone(v.position)).map(value=>({kind:'player',value}))];
  for(const fx of attacks){
+  // All borrowed skills, including wandering vortexes, fish, boomerangs and
+  // fans, inherit the main weapon's warned footprint for hit eligibility.
+  const targets=fx.echo&&fx.parentFootprint?
+   potentialTargets.filter(t=>insideSpellFootprint(fx.parentFootprint,t.value.position)):
+   potentialTargets;
   // Persistent hazards must not cause a final phantom hit AFTER the visual
   // has vanished. Ordinary short projectiles still sweep on a late tick.
   if(fx.kind==='projectile'&&fx.flightMs&&
