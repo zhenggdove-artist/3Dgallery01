@@ -37,6 +37,7 @@ export function pvpShotDamage(weapon,stats,quality={tier:1}){
  // A giraffe ultimate is a two-pass 3x-strength rubber boomerang. Preserve
  // this multiplier for PvP as well as monster and structural damage.
  if(weapon.id==='giraffe'&&stats?.ultimate)base*=3;
+ if(weapon.id==='goldfish'&&stats?.ultimate)base*=3;
  return +(weapon.id==='white-cat'?base*.5:base).toFixed(3);
 }
 // These durations describe the actual visible moving volumes, not an
