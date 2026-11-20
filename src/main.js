@@ -635,6 +635,11 @@ if(localRoot&&profile){arena.setPlayerEquipment(localRoot,profile.equipment);loc
   controller.lastWhipPullId=profile.whipPull.id;
   controller.stunUntil=0;controller.beginWhipPull(profile.whipPull);
  }
+ if(profile.vortexSpin?.id&&profile.vortexSpin.id!==controller.lastVortexSpinId&&
+    Date.now()-profile.vortexSpin.time<profile.vortexSpin.durationMs){
+  controller.lastVortexSpinId=profile.vortexSpin.id;
+  controller.beginVortexSpin(profile.vortexSpin);
+ }
  controller.stats=profile.stats||{speed:1,jump:1,gravity:1};statusVisuals.sync(localRoot,profile.effects);if(profile.impulse&&controller.lastImpulse!==profile.impulse.id){controller.lastImpulse=profile.impulse.id;controller.knockback=new THREE.Vector3(...profile.impulse.vector).multiplyScalar(5);}}if(dead){if(!wasDead&&localRoot){bursts.play(localRoot.position,'death-'+self.key+'-'+profile.deadUntil);audio.play('explosion');}wasDead=true;controller?.setEnabled(false);ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}else if(joined){if(wasDead&&controller){
  const spawn=Array.isArray(profile?.respawnPosition)?profile.respawnPosition:
   (PLAYER_SPAWNS[self.seat]||PLAYER_SPAWNS[0]);
