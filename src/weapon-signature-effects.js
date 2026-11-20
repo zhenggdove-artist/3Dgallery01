@@ -176,7 +176,11 @@ export class WeaponSignatureEffects {
   const quality=event.qualityScale||1,duration=GOLDFISH_SWIM_MS/1000*(event.qualityDuration||1);
   const cached=this.take('goldfish');
   const group=cached||new THREE.Group(),fish=cached?.userData.fish||new THREE.Group();
-  group.name='Translucent spectral goldfish swimming forward';
+  // Every cast gets a fresh monotonic list. Pool reuse must never inherit
+  // consumed indices from the previous school.
+  group.userData.consumedFish=new Set();
+  group.userData.gotServerTrack=false;
+  group.name='Thirty individually consumable goldfish swimming forward';
   let tail=cached?.userData.tail;
   if(!cached){group.add(fish);
   // A glasslike moving fish image rather than a solid stack of toy primitives.
@@ -287,6 +291,16 @@ export class WeaponSignatureEffects {
    const progress=Math.min(1,age/duration);
    const travel=(event.range||32)*progress;
    const track=world?.goldfishFlights?.find(v=>v.id===event.persistentAttackId);
+   if(track){
+    group.userData.gotServerTrack=true;
+    for(const index of track.consumed||[])
+     if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT)
+      group.userData.consumedFish.add(index);
+   }else if(group.userData.gotServerTrack){
+    // Server flight finished (including all thirty impacts): do not keep
+    // simulating a local school whose authoritative collider is gone.
+    group.scale.setScalar(0);return;
+   }
    const target=track?.position?vec(track.position):
     origin.clone().addScaledVector(direction,travel);
    const desired=track?.direction?vec(track.direction).normalize():direction;
@@ -308,7 +322,9 @@ export class WeaponSignatureEffects {
     const [x,y,z]=GOLDFISH_SCHOOL_OFFSETS[i],phase=age*8+i*2.399963;
     offset.set(x+Math.sin(phase)*.085,y+Math.sin(phase*.71)*.09,z+Math.cos(phase)*.025);
     rotation.setFromAxisAngle(axis,Math.sin(phase)*.19+Math.sin(i*3.17)*.14);
-    scale.setScalar(.83+((i*11)%9)*.043);
+    // A collided fish collapses only its own instances; the other
+    // twenty-nine continue swimming and retain independent tail motion.
+    scale.setScalar(group.userData.consumedFish.has(i)?0:.83+((i*11)%9)*.043);
     transforms[i].compose(offset,rotation,scale);
     tailTransforms[i].makeRotationY(Math.sin(age*19+i*2.399963)*.74);
     tailTransforms[i].premultiply(tail.matrix).premultiply(fish.matrix);

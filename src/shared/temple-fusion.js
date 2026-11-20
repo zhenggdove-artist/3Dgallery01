@@ -77,8 +77,11 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  const stats={...(old.templeStats||{})};
  // Remove legacy inherited long-range stats so subsequent server saves no
  // longer retain oversized normal collision dimensions.
- if(target.slot==='weapon'&&(['whip','swatter','pan','planter','palm'].includes(target.family)||
-     target.id==='accordion')){delete stats.range;delete stats.radius;}
+ if(target.slot==='weapon'){
+  // Retroactively strip inherited geometry, including chargeRange, for all
+  // weapon families. Ingredients cannot move the primary ultimate's landing.
+  delete stats.range;delete stats.chargeRange;delete stats.radius;
+ }
  // Affixes always accumulate; only ULTIMATE echoes have the two-source limit.
  const affixIds=[...new Set([...itemAffixes(main),...itemAffixes(material),
   ...itemAffixes(old),...itemAffixes(old.original)])];
@@ -93,9 +96,7 @@ export function fuseTemple(world,profile,body,rng=Math.random){
   if(sniperPower&&grantsEcho)continue;
   // Close-contact strikes retain the primary weapon's own contact reach.
   // Weapon reach is determined by the actual held model, not the ingredient.
-  if(target.slot==='weapon'&&['range','radius'].includes(key)&&
-   (['whip','swatter','pan','planter','palm'].includes(target.family)||
-    target.id==='accordion'))continue;
+  if(target.slot==='weapon'&&['range','chargeRange','radius'].includes(key))continue;
   const a=sniperPower?sniperMaterialStat(source,key):Number(material[key]),b=Number(main[key])||0;
   if(!(a>0))continue;
   const cap=['range','chargeRange'].includes(key)?400:key==='radius'?80:key==='defense'?300:100000;

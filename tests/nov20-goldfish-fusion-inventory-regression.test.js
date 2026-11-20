@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createInitialWorld,ensureProfile,applyAction,tickWorld,worldView} from '../src/shared/temple-rules.js';
-import {insideSpellFootprint,spellFootprint} from '../src/shared/charge-area.js';
+import {insideSpellFootprint,spellFootprint,scaleUltimateFootprint} from '../src/shared/charge-area.js';
+import {attackStats,itemById} from '../src/shared/catalog.js';
+import {weaponQuality,forwardCastRadius} from '../src/shared/weapon-abilities.js';
 import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_SCHOOL_OFFSETS,GOLDFISH_DAMAGE_PER_FISH,
  GOLDFISH_FISH_SCALE,goldfishSchoolPosition} from '../src/shared/goldfish-school.js';
 const NOW=7600000;
@@ -57,7 +59,10 @@ test('borrowed circular whip explosion exactly matches primary circle center',()
  assert.ok(echo?.area?.mode==='area');
  assert.deepEqual(echo.area.visualCenter,primary.visualCenter);
  assert.deepEqual(echo.area.center,primary.center);
- assert.ok(echo.area.radius<=primary.radius);
+ const whip=itemById('whip-1'),quality=weaponQuality(whip),stats=attackStats(whip,1);
+ const native=scaleUltimateFootprint({...stats,range:stats.range*quality.range,
+  radius:forwardCastRadius(whip,quality,stats.radius,false)},whip,quality);
+ assert.equal(echo.area.radius,native.radius,'borrowed circle retains its own radius');
  assert.ok(world.persistentAttacks.find(v=>v.id===echo.id).parentFootprint);
 });
 test('borrowed circular spell is anchored at far end of main rectangular warning',()=>{
@@ -69,9 +74,12 @@ test('borrowed circular spell is anchored at far end of main rectangular warning
  const forward=[Math.cos(box.yaw),-Math.sin(box.yaw)];
  const endpoint=[box.position[0]+forward[0]*box.length*.5,box.position[2]+forward[1]*box.length*.5];
  assert.ok(Math.hypot(echo.area.visualCenter[0]-endpoint[0],echo.area.visualCenter[2]-endpoint[1])<.001);
- assert.ok(echo.area.radius<=box.width*.5);
+ const whip=itemById('whip-1'),quality=weaponQuality(whip),stats=attackStats(whip,1);
+ const native=scaleUltimateFootprint({...stats,range:stats.range*quality.range,
+  radius:forwardCastRadius(whip,quality,stats.radius,false)},whip,quality);
+ assert.equal(echo.area.radius,native.radius,'round blast is never clipped by rectangular sword footprint');
 });
-test('authoritative fusion hit clipping rejects every point outside the main warning',()=>{
+test('primary warning footprint geometry remains precise and independent from anchored echo AoE',()=>{
  const circle={shape:'circle',position:[0,0,0],radius:5};
  const box={shape:'rectangle',position:[0,0,0],yaw:0,length:16,width:2};
  assert.equal(insideSpellFootprint(circle,[4,0,0]),true);

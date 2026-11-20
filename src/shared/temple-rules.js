@@ -1,6 +1,6 @@
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks} from './artwork-recovery.js';
-import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint} from './charge-area.js';
+import {chargedArea,insideChargedArea,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor} from './charge-area.js';
 import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition} from './goldfish-school.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
@@ -194,7 +194,8 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
     ])),
     vortexes:(world.persistentAttacks||[]).filter(v=>v.kind==='vortex').map(v=>({id:v.id,position:clone(v.position||v.origin),owner:v.owner})),
     goldfishFlights:(world.persistentAttacks||[]).filter(v=>v.kind==='goldfish').map(v=>({
-      id:v.id,position:clone(v.position||v.origin),direction:clone(v.direction),owner:v.owner
+      id:v.id,position:clone(v.position||v.origin),direction:clone(v.direction),owner:v.owner,
+       consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
     profile:worldProfileView(world,actorKey,now),
@@ -683,6 +684,10 @@ function attack(world,profile,actor,body,context,now){
    // Restrict ordinary whip contacts to the visible, narrow forward-moving lash.
    if(weapon.family==='whip'&&!weapon.exotic&&!stats.ultimate){stats.range=+(Math.min(stats.range,4.7+(Math.max(1,weapon.tier||1)-1)*1.5)/3).toFixed(3);stats.radius=.16;}
     if(weapon.family==='swatter'&&!weapon.exotic&&!stats.ultimate){stats.range=Math.min(stats.range,1.55+(Math.max(1,weapon.tier||1)-1)*.2);stats.radius=.18;}
+    if(weapon.family==='saber'&&!stats.ultimate){
+     stats.range=Math.min(stats.range,(4.7+(Math.max(1,weapon.tier||1)-1)*1.5)/3);
+     stats.radius=Math.min(stats.radius,.16);
+    }
    // Keep basic contact within each visible swing (+10px). Do not change
    // saber range or charged area ultimates.
    if(!stats.ultimate){
@@ -737,7 +742,7 @@ function attack(world,profile,actor,body,context,now){
       origin:[...goldfishOrigin],direction:[...goldfishDirection],launchDirection:[...goldfishDirection],range:stats.range,position:[...goldfishOrigin],travelled:0,hitTimes:{},
       damage:stats.damage+bonus*.1,pvpDamage,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
       createdAt:now,lastAt:now,expiresAt:now+duration,
-      outHits:[],backHits:[],fanHits:{},fishHits:[]
+      outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[]
     });
     if(world.persistentAttacks.length>32)world.persistentAttacks.splice(0,world.persistentAttacks.length-32);
   }
@@ -765,32 +770,22 @@ function attack(world,profile,actor,body,context,now){
     for(const [fusionSlot,sourceId] of (profile.fusion?.[weapon.id]?.effects||[]).slice(0,2).entries()){
       const source=itemById(sourceId);if(source?.slot!=='weapon')continue;
       const sourceQuality=weaponQuality(source),full=attackStats(source,1);
-      const radius=Math.max(.5,full.radius*sourceQuality.radius*.5);
-      const range=Math.max(1,Math.min(stats.range,full.range*sourceQuality.range)*.5);
+      // All borrowed skills terminate at the primary weapon's warned target.
+      const anchor=fusionEchoAnchor(primaryFootprint,origin);
       const echoChannel=channel&&isChannelStaff(source);
-       const secondary={...full,range,radius:echoChannel?Math.max(.3,forwardCastRadius(source,sourceQuality,full.radius,true)*.5):radius};
-      // A fused pan/whip retains its 20% echo budget but inherits the
-      // same per-weapon footprint shrink as a separately equipped one.
-      const echoFactor=/^pan-[1-5]$/.test(source.id)?.5:/^whip-[1-5]$/.test(source.id)?.2:1;
-      secondary.range=+(secondary.range*echoFactor).toFixed(3);
-      secondary.radius=+(secondary.radius*echoFactor*(/^whip-[1-5]$/.test(source.id)?1.5:1)).toFixed(3);
-      const echoArea=source.id==='goldfish'||source.family==='wave'?null:chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel);
+      const native={...full,range:full.range*sourceQuality.range,
+       radius:forwardCastRadius(source,sourceQuality,full.radius,echoChannel)};
+      scaleUltimateFootprint(native,source,sourceQuality);
+      const secondary={...native,range:anchor.distance};
+      const echoArea=source.id==='goldfish'||source.family==='wave'?null:
+       chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel);
       if(echoArea?.mode==='area'){
-        if(primaryFootprint.shape==='circle'&&area?.visualCenter){
-          // Including a fused whip: both the native VFX and the damage center
-          // must be exactly the main weapon's warned impact center.
-          echoArea.center=[...area.center];echoArea.visualCenter=[...area.visualCenter];
-          echoArea.radius=Math.min(echoArea.radius,primaryFootprint.radius);
-        }else if(primaryFootprint.shape==='rectangle'){
-          // A round fused ultimate anchors to the far end of #59, not its
-          // old independent remote ground circle or the caster position.
-          const dx=Math.cos(primaryFootprint.yaw),dz=-Math.sin(primaryFootprint.yaw);
-          const x=primaryFootprint.position[0]+dx*primaryFootprint.length*.5;
-          const z=primaryFootprint.position[2]+dz*primaryFootprint.length*.5;
-          const y=Math.max(.16,groundForSpell(x,z,origin[1])+.16);
-          echoArea.center=[x,y,z];echoArea.visualCenter=[x,y,z];
-          echoArea.radius=Math.min(echoArea.radius,primaryFootprint.width*.5);
-        }
+       const y=Math.max(0,groundForSpell(anchor.x,anchor.z,origin[1]));
+       echoArea.center=[anchor.x,y+.12,anchor.z];
+       echoArea.visualCenter=[anchor.x,y+.16,anchor.z];
+       echoArea.travel=anchor.distance;echoArea.range=anchor.distance;
+       // A round echo keeps its own source radius, even under a narrow beam.
+       echoArea.radius=secondary.radius;
       }
       const exotic=source.family==='wave'?'vortex':source.id==='fan'?'fan':source.id==='giraffe'?'giraffe':source.id==='goldfish'?'goldfish':null;
       const flight=projectileFlightMs(source,true);
@@ -808,9 +803,9 @@ function attack(world,profile,actor,body,context,now){
         damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*.2,
         tier:sourceQuality.tier,flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
-        outHits:[],backHits:[],fanHits:{},fishHits:[],
+        outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[],
         createdAt:now,lastAt:now,expiresAt:now+duration});
-      fusionEchoes.push({id:echoId,owner:actor.key,fusionSlot,origin:[...origin],direction:[...direction],
+      fusionEchoes.push({id:echoId,persistentAttackId:echoId,owner:actor.key,fusionSlot,origin:[...origin],direction:[...direction],
         weapon:source.id,family:source.family,color:source.color,charge:1,ultimate:true,channel:echoChannel,
         range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,qualityTier:sourceQuality.tier,
         qualityScale:sourceQuality.visual*.5,qualityDuration:sourceQuality.duration,
@@ -1378,9 +1373,7 @@ function tickPersistentAttacks(world,actors,now,rng){
  for(const fx of attacks){
   // All borrowed skills, including wandering vortexes, fish, boomerangs and
   // fans, inherit the main weapon's warned footprint for hit eligibility.
-  const targets=fx.echo&&fx.parentFootprint?
-   potentialTargets.filter(t=>insideSpellFootprint(fx.parentFootprint,t.value.position)):
-   potentialTargets;
+  const targets=potentialTargets;
   // Persistent hazards must not cause a final phantom hit AFTER the visual
   // has vanished. Ordinary short projectiles still sweep on a late tick.
   if(fx.kind==='projectile'&&fx.flightMs&&
@@ -1400,7 +1393,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    const outcome=(target,position,impact,pellet=null,along=0)=>{
     const enemy=target.value,key=(enemy.id||enemy.key),isPlayer=target.kind==='player';
     if(enemy.key===fx.owner||(isPlayer&&insideSafeZone(enemy.position)))return false;
-    if(fx.echo&&fx.parentFootprint&&!insideSpellFootprint(fx.parentFootprint,position))return false;
+    // Each echo collider decides eligibility; the primary supplies only its endpoint.
     const hitKey=pellet===null?key:pellet+':'+key;
     const interval=contactDamageIntervalMs(weapon);
     fx.hitTimes??={}; // Per visible projectile, not just the first contact.
@@ -1478,7 +1471,8 @@ function tickPersistentAttacks(world,actors,now,rng){
    // all travelled segments, so no damage can occur before contact.
    const lanes=fx.pellets||[{direction:fx.direction,radius:fx.radius}];
    const segmentLength=Math.max(0,(next-prev)*fx.range);
-   if(segmentLength>.00001&&fx.area?.mode!=='sector'&&!panBlast){
+   if(segmentLength>.00001&&fx.area?.mode!=='sector'&&!panBlast&&
+       !(fx.echo&&fx.area?.mode==='area')){
     lanes.forEach((pellet,index)=>{
      const start=fx.origin.map((v,j)=>v+pellet.direction[j]*prev*fx.range);
      for(const target of targets){
@@ -1739,13 +1733,13 @@ function tickPersistentAttacks(world,actors,now,rng){
    // once-per-victim hit histories. Each body deals exactly 20% of the old
    // fish's hit damage. One knockback/status per victim avoids 30 teleports.
    if(travelled>.001){
+    fx.fishConsumed??=[];
     for(const target of targets){
      const value=target.value,key=value.id||value.key;
      if(key===fx.owner||value.hp===0||(target.kind==='player'&&insideArtSanctuary(value.position)))continue;
      let contacts=0;
      for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
-      const hitKey=i+':'+key;
-      if(fx.fishHits.includes(hitKey))continue;
+      if(fx.fishConsumed.includes(i))continue;
       const a=goldfishSchoolPosition(previous,heading,i);
       const b=goldfishSchoolPosition(fx.position,fx.direction,i);
       const delta=b.map((v,j)=>v-a[j]),length=Math.hypot(...delta);
@@ -1755,7 +1749,7 @@ function tickPersistentAttacks(world,actors,now,rng){
        ?monsterRayDistance(a,direction,length,value,radius)
        :rayCylinderDistance(a,direction,length,value.position,1.02+radius,2.35+radius);
       if(collision===null)continue;
-      fx.fishHits.push(hitKey);contacts++;
+      fx.fishConsumed.push(i);contacts++;
      }
      if(!contacts)continue;
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
@@ -1804,6 +1798,7 @@ function tickPersistentAttacks(world,actors,now,rng){
      }
      changed=true;
     }
+    if(fx.fishConsumed.length>=GOLDFISH_SCHOOL_COUNT)fx.expiresAt=now;
    }
   }else if(fx.kind==='fan'){
    // Each of the four tornado tracks has a deterministic, independently

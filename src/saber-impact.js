@@ -52,7 +52,7 @@ export class SaberImpact{
   if(this.active.length>=maxSaberEffects)this.remove(this.active[0]);
   const dir=new THREE.Vector3(direction.x,0,direction.z);
   if(dir.lengthSq()<.01)dir.set(0,0,1);dir.normalize();
-  const length=Math.min(35,Math.max(12,Number(event.range)||26)),ground=Math.max(.06,(event.origin?.[1]??origin.y)-.92);
+  const length=Math.min(100,Math.max(.5,Number(event.range)||26)),ground=Math.max(.06,(event.origin?.[1]??origin.y)-.92);
   const root=new THREE.Group();
   root.name='Ground-splitting sword energy: cracks and flying stones';
   root.position.set(event.origin?.[0]??origin.x,ground,event.origin?.[2]??origin.z);

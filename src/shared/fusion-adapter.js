@@ -32,7 +32,11 @@ export function equippedItem(profile,item,instanceRecord=null){
   // Migrate legacy cross-class records at read time without deleting bonuses.
   // The primary melee weapon's real model owns normal-attack reach; range
   // modifiers from a distant rifle ingredient must never turn it into a gun.
-  if(normalMeleeFootprint(item)){fused.range=item.range;fused.radius=item.radius;}
+  if(item.slot==='weapon'){
+   // Fusion grants power and source ultimates, never replaces the primary
+   // weapon's own travel distance, charge reach or collision radius.
+   fused.range=item.range;fused.chargeRange=item.chargeRange;fused.radius=item.radius;
+  }
   // An old save can contain a sniper added as a third+ material before the
   // balance change. Clamp only records that identify a stat-only sniper.
   if(Array.isArray(record.sources)&&record.sources.some(v=>v.id==='black-cat'&&!v.echo))
@@ -47,6 +51,8 @@ export function equippedItem(profile,item,instanceRecord=null){
   return fused;
  }
  const raw=original.stats;if(!raw)return named;
- return {...named,...raw,damage:raw.damage===undefined?item.damage:raw.damage*10,
+ const stats={...named,...raw,damage:raw.damage===undefined?item.damage:raw.damage*10,
   chargeDamage:raw.chargeDamage===undefined?item.chargeDamage:raw.chargeDamage*10};
+ if(item.slot==='weapon'){stats.range=item.range;stats.chargeRange=item.chargeRange;stats.radius=item.radius;}
+ return stats;
 }

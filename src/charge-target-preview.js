@@ -77,7 +77,9 @@ export class ChargeTargetPreview {
  }
  update(root,item,charge,direction,arena,fusion=null,muzzle=null,dt=1/60){
   if(!root||!item||charge<.1||!Array.isArray(direction)){this.hide();return;}
-  const equipped=fusion?.original?.stats?{...item,...fusion.original.stats}:item;
+  // Render the base weapon's charged footprint; material range stats are
+  // never allowed to move the main weapon's authoritative target.
+  const equipped=item;
   const stats=attackStats(equipped,1),quality=weaponQuality(equipped,fusion);
   if(isChannelStaff(equipped))stats.range=Math.max(stats.range,equipped.id==='clam'?10:Math.min(18,equipped.range))*channelReachMultiplier(equipped);
   stats.range=+(stats.range*quality.range).toFixed(2);

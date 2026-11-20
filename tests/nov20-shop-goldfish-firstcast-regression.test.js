@@ -13,7 +13,7 @@ test('T1 school of thirty independent fish can never directly exceed 90 damage p
  const server=source('src/shared/temple-rules.js');
  assert.match(server,/const remaining=Math.max\(0,totalBudget-\(fx\.damageSpent\[key\]\|\|0\)\)/);
  assert.match(server,/const raw=Math.min\(direct,remaining\/Math.max\(\.001,amplification\)\)/);
- assert.match(server,/fx\.fishHits\.push\(hitKey\)/);
+ assert.match(server,/fx\.fishConsumed\.push\(i\)/);
 });
 test('SHOP and BAG render only complete previews; no old glyph or Promise image URLs',()=>{
  const shop=source('src/ui.js'),bag=source('src/bag-view.js'),preview=source('src/item-preview.js');

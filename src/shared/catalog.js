@@ -53,8 +53,13 @@ export function attackStats(item,charge=0){
  }
  if(SPELL_FAMILIES.includes(item.family)&&!item.exotic)result.range=+(result.range/3).toFixed(3);
  // Keep the narrower #59 preview equal to the real server hit tube.
- // The sword fissure is now 60% of the previous full-charge reach.
- // The width contracts to one third of the previous hitbox and warning.
+ // Saber normal hits must stop at the same (tier-matched) whip normal
+ // contact distance. Its charged fissure still uses its own distinct shape.
+ if(item.family==='saber'&&!result.ultimate){
+  const whipReach=(4.7+(Math.max(1,Math.min(5,Number(item.tier)||1))-1)*1.5)/3;
+  result.range=+Math.min(result.range,whipReach).toFixed(3);
+  result.radius=Math.min(result.radius,.16);
+ }
  if(item.family==='saber'&&result.ultimate){
   result.range=+(result.range*2.4).toFixed(3);
   result.radius=+(result.radius*2/9).toFixed(3);

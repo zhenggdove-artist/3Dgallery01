@@ -7,6 +7,25 @@ import {itemById,attackStats} from './catalog.js';
 const AREAS=new Set(['water','ice','fire','lightning','petal','wave']);
 const EXOTIC_AREAS=new Set(['jet','score','gust','echo','jelly','shells']);
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+// Fusion echoes are positioned by the primary's authoritative marker, not
+// by the ingredient's innate range. The returning endpoint is shared by
+// source VFX, hitbox and server-side travel distance.
+export function fusionEchoAnchor(primaryFootprint,origin){
+ const point=primaryFootprint?.position;
+ if(!Array.isArray(point)||point.length!==3)throw Error('Missing main weapon footprint');
+ let x=point[0],z=point[2];
+ if(primaryFootprint.shape==='rectangle'){
+  const half=(Number(primaryFootprint.length)||0)*.5;
+  x+=Math.cos(primaryFootprint.yaw)*half;
+  z-=Math.sin(primaryFootprint.yaw)*half;
+ }else if(primaryFootprint.shape==='sector'){
+  const apex=primaryFootprint.position,reach=Number(primaryFootprint.range||primaryFootprint.radius)||0;
+  x=apex[0]+Math.cos(primaryFootprint.yaw)*reach;
+  z=apex[2]-Math.sin(primaryFootprint.yaw)*reach;
+ }
+ const distance=Math.hypot(x-origin[0],z-origin[2]);
+ return {x,z,distance:Math.max(.5,distance)};
+}
 const safeDirection=direction=>{
  const values=Array.isArray(direction)?direction:[0,0,1];
  const length=Math.hypot(...values)||1;
@@ -28,10 +47,11 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
   const swatter=/^swatter-[1-5]$/.test(item?.id||'');
   const whip=/^whip-[1-5]$/.test(item?.id||'');
   const planter=/^planter-[1-5]$/.test(item?.id||'');
-  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:item?.family==='ice'?1.5:item?.family==='wave'||item?.id==='goldfish'?3:1);
+  const saber=item?.family==='saber';
+  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:saber?.5:item?.family==='ice'?1.5:item?.family==='wave'||item?.id==='goldfish'?3:1);
   // Broaden only the whip's warning/hit radius; retain its travel distance.
   // A threefold goldfish journey must NOT triple its physical collision width.
-  const radiusFactor=(item?.id==='goldfish'?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:1);
+  const radiusFactor=(item?.id==='goldfish'||saber?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:1);
   stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);
   stats.radius=+(Math.max(.1,Number(stats.radius)||0)*radiusFactor).toFixed(3);
   if(item?.id==='telephone'){
