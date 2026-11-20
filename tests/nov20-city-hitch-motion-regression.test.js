@@ -90,3 +90,20 @@ test('a new module release also updates CSS and startup diagnostics to avoid sta
  assert.ok(!html.includes('20261120-soft-giraffe-contact-r29'));
  assert.ok((html.split(newRelease).length-1)>=5);
 });
+
+test('many simultaneous city collapses pin high-detail deformation caches until completion',()=>{
+ const city=Object.create(OuterCity.prototype);
+ city.mobile=true;city.deformationBasis=new Map();
+ city.collapseAnimations=new Map();city.shakes=new Map();
+ for(let i=0;i<26;i++){
+  city.collapseAnimations.set(i,{tier:0,target:7,elapsed:0});
+  city.deformationBasis.set(i,[new Float32Array(2500)]);
+ }
+ city.pruneDeformationBasis();
+ assert.equal(city.deformationBasis.size,26,
+  'active houses cannot evict one another and rebuild their geometry every frame');
+ city.collapseAnimations.clear();
+ city.pruneDeformationBasis();
+ assert.equal(city.deformationBasis.size,12,
+  'stale cache entries are reclaimed after effects end');
+});
