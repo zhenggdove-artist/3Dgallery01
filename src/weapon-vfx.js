@@ -47,6 +47,26 @@ export class WeaponVFX{
   for(const id of Object.keys(factories)){const fx=this.create(id);fx.update(.18);warmScene.add(fx.group);fxs.push([id,fx]);}
   const sniper=createOddEffect(THREE,{charge:1,range:50,origin:[0,0,0],direction:[0,0,-1]},{pattern:'sniper',color:'#ffffff'});warmScene.add(sniper.root);await renderer.compileAsync(warmScene,camera);if(typeof renderer.getRenderTarget==='function'&&typeof renderer.setRenderTarget==='function'&&typeof renderer.render==='function'){const gpuWarmTarget=new THREE.WebGLRenderTarget(32,32),priorTarget=renderer.getRenderTarget();try{renderer.setRenderTarget(gpuWarmTarget);renderer.render(warmScene,camera);}finally{renderer.setRenderTarget(priorTarget);gpuWarmTarget.dispose();}}sniper.root.removeFromParent();sniper.root.material.dispose();
   for(const [id,fx]of fxs){fx.group.removeFromParent();fx.reset();fx.group.visible=false;this.pools.set(id,[fx]);}
+  // Native skills frequently produce two or more simultaneous pooled bursts.
+  // Upload the second copy's vertex buffers before leaving the loading screen.
+  const frequentlyLayered=['tidal-surge','flame-surge','energy-burst','shockwave',
+   'ice-shatter','azure-sweep','arc-ray','charged-beam','thorn-crown',
+   'spiral-gale','plasma-bolt'];
+  const layeredScene=new THREE.Scene(),layered=[];
+  try{
+   for(const id of frequentlyLayered){
+    const fx=this.create(id);fx.update(.18);layeredScene.add(fx.group);layered.push([id,fx]);
+   }
+   await renderer.compileAsync(layeredScene,camera);
+   const target=new THREE.WebGLRenderTarget(32,32),prior=renderer.getRenderTarget();
+   try{renderer.setRenderTarget(target);renderer.render(layeredScene,camera);}
+   finally{renderer.setRenderTarget(prior);target.dispose();}
+  }finally{
+   for(const [id,fx] of layered){
+    fx.group.removeFromParent();fx.reset();fx.group.visible=false;
+    this.pools.get(id).push(fx);
+   }
+  }
   let numbered=0;
   try{numbered=await this.numberedEffects.warm(renderer,camera);}catch(error){console.warn('Ultimate shader prewarm incomplete',error);}
   try{await this.particleSkills.warm(renderer,camera);}catch(error){console.warn('Particle shader prewarm incomplete',error);}
@@ -63,7 +83,7 @@ export class WeaponVFX{
   const entry={id,fx,age:0,stopAt:Infinity,stopped:false};this.scene.add(fx.group);this.active.push(entry);this.replayed++;return entry;
  }
  release(entry){const i=this.active.indexOf(entry);if(i<0)return;this.active.splice(i,1);const {id,fx}=entry;fx.detachWeapon?.();fx.group.removeFromParent();fx.group.visible=false;
-  const pool=this.pools.get(id)||[];if(pool.length<2){pool.push(fx);this.pools.set(id,pool);}else fx.dispose();if(this.charger===entry)this.charger=null;
+  const pool=this.pools.get(id)||[];if(pool.length<3){pool.push(fx);this.pools.set(id,pool);}else fx.dispose();if(this.charger===entry)this.charger=null;
  }
  // The local geometry origin of a real held staff (or clam). Unlike
  // a fixed server event origin, this socket follows walking and hand poses.
