@@ -318,7 +318,15 @@ export class TempleArena{
     this.animateStructureHits();
     this.islandEnemies.update(dt,Date.now(),this.renderer.domElement.height,camera);
     this.insects?.sync(this.world?.plants||[]);this.insects?.update(time);
-    this.presentation.update(dt,time,camera);this.adventure.update(dt,time,playerRoots,camera);if(time-this.lastLightUpdate>.35){this.lastLightUpdate=time;this.updateArtLights(camera);}
+    // Monster bodies spin independent of the normal AI-facing direction.
+     const spinNow=Date.now();
+     for(const [mob,root] of [[this.world?.monster,this.monster],...
+       (this.islandEnemies.extraLive||[]).map(e=>[e.state,e.root])]){
+      const spin=mob?.vortexSpin;
+      if(root&&spin&&spinNow<spin.time+2000)
+       root.rotation.y=(spinNow-spin.time)/2000*Math.PI*4;
+     }
+     this.presentation.update(dt,time,camera,this.world);this.adventure.update(dt,time,playerRoots,camera);if(time-this.lastLightUpdate>.35){this.lastLightUpdate=time;this.updateArtLights(camera);}
   }
   updateArtLights(camera){const visible=[...this.artworks.values()].filter(o=>o.visible).sort((a,b)=>a.position.distanceToSquared(camera.position)-b.position.distanceToSquared(camera.position));this.lightPool.forEach((light,i)=>{const art=visible[i];light.visible=!!art;if(art){light.position.copy(art.position).add(new THREE.Vector3(0,2,2.5));light.color.set(i%2?'#d6dfff':'#ffe1b8');}});}
   nearest(position){
