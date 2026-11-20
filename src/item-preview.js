@@ -90,15 +90,39 @@ function shapeModel(item){
   const trim=new THREE.Mesh(new THREE.TorusGeometry(.65,.063,10,36),new THREE.MeshStandardMaterial({color:'#f3cf88',metalness:.8,roughness:.2}));
   trim.rotation.x=Math.PI/2;trim.position.y=.52;group.add(trim);
  }else if(item.slot==='shield'){
-  // In combat the shield is a luminous spherical barrier.
-  const shell=new THREE.Mesh(new THREE.SphereGeometry(.93,40,28),new THREE.MeshStandardMaterial({
-   color,emissive:color,emissiveIntensity:.45,transparent:true,opacity:.48,
-   metalness:.18,roughness:.12,depthWrite:false,side:THREE.DoubleSide
+  // The old translucent sphere + torus projected as an anonymous pastel disc,
+  // making all ten real shield items appear to be broken inventory entries.
+  // Preview a recognisable physical shield, not the in-combat bubble field.
+  const outline=new THREE.Shape();
+  outline.moveTo(0,-.91);
+  outline.bezierCurveTo(-.44,-.65,-.79,-.10,-.72,.61);
+  outline.quadraticCurveTo(-.35,.90,0,.93);
+  outline.quadraticCurveTo(.35,.90,.72,.61);
+  outline.bezierCurveTo(.79,-.10,.44,-.65,0,-.91);
+  const back=new THREE.Mesh(new THREE.ExtrudeGeometry(outline,{
+   depth:.11,steps:1,curveSegments:12,bevelEnabled:true,
+   bevelSize:.035,bevelThickness:.025,bevelSegments:2
+  }),new THREE.MeshStandardMaterial({
+   color:'#d9b975',metalness:.76,roughness:.27,side:THREE.DoubleSide
   }));
-  const rim=new THREE.Mesh(new THREE.TorusGeometry(.9,.055,12,64),new THREE.MeshStandardMaterial({
-   color:color.clone().lerp(new THREE.Color('#ffffff'),.55),metalness:.65,roughness:.23
-  }));
-  rim.rotation.y=Math.PI/5;group.add(shell,rim);
+  group.add(back);
+  const enamel=new THREE.Mesh(new THREE.ShapeGeometry(outline,16),
+   new THREE.MeshStandardMaterial({color,metalness:.30,roughness:.32,
+    emissive:color,emissiveIntensity:.15,side:THREE.DoubleSide}));
+  enamel.scale.set(.84,.84,1);enamel.position.z=.18;group.add(enamel);
+  const spine=new THREE.Mesh(new THREE.BoxGeometry(.075,1.43,.052),
+   new THREE.MeshStandardMaterial({color:'#f4e0a3',metalness:.76,roughness:.21}));
+  spine.position.set(0,.05,.23);group.add(spine);
+  const gem=new THREE.Mesh(new THREE.OctahedronGeometry(.19,0),
+   new THREE.MeshStandardMaterial({color:color.clone().lerp(new THREE.Color('#ffffff'),.52),
+    emissive:color,emissiveIntensity:.34,metalness:.40,roughness:.18}));
+  gem.position.set(0,.26,.28);gem.rotation.z=Math.PI/4;group.add(gem);
+  // Three separate lower facets keep the shape legible at inventory size.
+  for(const side of [-1,1]){
+   const brace=new THREE.Mesh(new THREE.BoxGeometry(.045,.71,.045),
+    new THREE.MeshStandardMaterial({color:'#ffe4a4',metalness:.68,roughness:.25}));
+   brace.position.set(side*.24,-.25,.22);brace.rotation.z=side*.38;group.add(brace);
+  }
  }else throw Error('No full equipment preview model for '+item.slot);
  return group;
 }
