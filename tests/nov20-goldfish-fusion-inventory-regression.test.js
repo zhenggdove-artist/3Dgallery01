@@ -76,9 +76,9 @@ test('authoritative fusion hit clipping rejects every point outside the main war
  const box={shape:'rectangle',position:[0,0,0],yaw:0,length:16,width:2};
  assert.equal(insideSpellFootprint(circle,[4,0,0]),true);
  assert.equal(insideSpellFootprint(circle,[5.1,0,0]),false);
- assert.equal(insideSpellFootprint(box,[0,0,8]),true);
- assert.equal(insideSpellFootprint(box,[1.1,0,1]),false);
- assert.equal(insideSpellFootprint(box,[0,0,-8.1]),false);
+ assert.equal(insideSpellFootprint(box,[8,0,0]),true);
+ assert.equal(insideSpellFootprint(box,[1,0,1.1]),false);
+ assert.equal(insideSpellFootprint(box,[-8.1,0,0]),false);
  const bag=readFileSync(new URL('../src/bag-view.js',import.meta.url),'utf8');
  assert.match(bag,/src="\$\{esc\(fallbackItemIcon\(item\)\)\}"/);
  assert.match(bag,/await itemPreview\(item\)/);
