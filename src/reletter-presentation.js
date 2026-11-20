@@ -69,7 +69,7 @@ export class ReletterPresentation{
   }
   signature(data){const item=itemById(data.weapon);if(item)this.vfx.play(data,item,null);}
   charging(root,progress){this.vfx.charging(root,progress,itemById(root?.userData.weaponId));}
-  update(dt,time,camera){
+  update(dt,time,camera,world=null){
     setHeldTime(time);for(const root of this.players){if(!root.parent){this.players.delete(root);continue;}const d=root.userData,fx=d.attack;if(d.deadUntil>Date.now()){d.deathLean=Math.min(Math.PI/2,(d.deathLean||0)+dt*4);this.restore.push([d.model,'quaternion',d.model.quaternion.clone()]);d.model.rotateZ(d.deathLean);}else d.deathLean=0;if(fx){fx.age+=dt;if(fx.age<fx.duration){const pose=sampleMeleePose(fx.data.family,fx.combo,fx.age);this.restore.push([d.model,'position',d.model.position.clone()],[d.model,'quaternion',d.model.quaternion.clone()]);d.model.position.add(new THREE.Vector3(...pose.offset).applyAxisAngle(new THREE.Vector3(0,1,0),d.model.rotation.y));d.model.rotateY(pose.turn);d.model.rotateX(pose.bones.Spine2[0]*.35);d.model.rotateZ(pose.bones.Spine2[2]*.3);for(const [name,angles] of Object.entries(pose.bones)){const bone=d.bones?.get(name);if(bone){this.restore.push([bone,'quaternion',bone.quaternion.clone()]);bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...angles)));}}}else d.attack=null;}
       if(d.blade){attachHeldWeapon({model:d.model,character:root.uuid},root,d.blade,d.attack);if(d.blade.userData.spell){
          const casting=!!(d.staffCasting||performance.now()<(d.staffCastingUntil||0));
@@ -78,6 +78,6 @@ export class ReletterPresentation{
         }else d.staffRaise=0;if(d.blade.userData.exotic){if(camera)faceOddWeapon(THREE,d.blade,camera);animateOddWeapon(d.blade,time,d.attack?Math.sin(d.attack.age/d.attack.duration*Math.PI):0);}if(d.attack&&(['planter','palm'].includes(d.attack.data.family)||d.attack.combo===6&&d.attack.data.family==='saber')){for(const name of ['LeftForeArm','LeftArm']){const bone=d.bones?.get(name);if(bone)this.restore.push([bone,'quaternion',bone.quaternion.clone()]);}supportOffhand(d.model,d.blade.localToWorld(new THREE.Vector3(0,d.attack.data.family==='planter'?.25:.18,.02)),Math.sin(Math.min(1,d.attack.age/meleeDuration(d.attack.data.family,d.attack.combo))*Math.PI)*.8);}}if(d.shield)d.shield.material.uniforms.pulse.value=.8+Math.sin(time*2)*.2;if(d.wings)for(let i=0;i<Math.min(2,d.wings.children.length);i++)d.wings.children[i].rotation.y=Math.sin(time*(d.current==='jump'||d.current==='fall'?11:2))* .24*(i?-1:1);
       if(d.wings)animateEpicDust(d.wings,time);
     }
-    this.vfx.update(dt,camera);
+    this.vfx.update(dt,camera,world);
   }
 }
