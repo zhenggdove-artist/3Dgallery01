@@ -133,11 +133,13 @@ test('fish ultimate is half-size and red with no GPU-heavy cloned ghost fish',()
   qualityScale:1,qualityDuration:1,ultimate:true},itemById('goldfish'));
  assert.equal(rendered,true);
  const root=vfx.active[0].obj;
- assert.equal(root.children.length,1,'no extra deep-cloned ghost silhouettes');
- const fish=root.children[0];
- assert.equal(fish.scale.x,1.25,'previous fish scale 2.5 must be halved');
+ assert.equal(root.children.length,2,'one hidden detailed fish prototype and one GPU-instanced school');
+ const fish=root.children[0],school=root.children[1];
+ assert.equal(fish.visible,false,'original authored fish is the shared model source');
+ assert.equal(fish.scale.x,.21,'each fish is reduced to ordinary cannonball scale');
+ assert.ok(school.children.every(c=>c.isInstancedMesh&&c.count===30),'school uses thirty instances per original mesh');
  const meshes=[];root.traverse(o=>{if(o.isMesh)meshes.push(o);});
- assert.ok(meshes.length<40,'reduced drawcalls in the goldfish animation');
+ assert.ok(school.children.length<40,'thirty detailed fish share fewer than forty instanced draw calls');
  assert.ok(meshes.every(m=>!m.material.isMeshPhysicalMaterial),'no high-cost transmission passes');
  assert.ok(meshes[0].material.color.r>meshes[0].material.color.g*2);
  vfx.update(.2);

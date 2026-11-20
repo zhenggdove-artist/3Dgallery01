@@ -1,3 +1,4 @@
+import {GOLDFISH_SCHOOL_RADIUS} from '../src/shared/goldfish-school.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -79,6 +80,7 @@ test('all weapons have dimensional warning contracts derived from identical atta
   if(item.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
   if(item.id==='goldfish'&&stats.ultimate)stats.radius=1.05*quality.visual;
   scaleUltimateFootprint(stats,item);
+  if(item.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
   if(item.id==='clam'){
    assert.equal(a.shape,'sector',item.id);
    nearly(preview.sector.settings.size*preview.sector.group.scale.x,stats.range,item.id);

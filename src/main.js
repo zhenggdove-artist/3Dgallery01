@@ -200,7 +200,7 @@ function refreshEquipmentPortrait(){
  }
 }
 ui.addEventListener('equipment-portrait',()=>{
- portraitViewport.lastWidth=0;requestAnimationFrame(refreshEquipmentPortrait);
+ requestAnimationFrame(refreshEquipmentPortrait);
 });
 boot();
 
