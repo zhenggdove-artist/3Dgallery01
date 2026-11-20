@@ -183,7 +183,10 @@ export class WeaponVFX{
   const impactArea=data.area||(data.ultimate?chargedArea(item,data.origin,data.direction,data):null);
   const groundEffect=!!data.ultimate&&impactArea?.mode==='area';
   const remoteCharged=!!data.ultimate&&(groundEffect||impactArea?.mode==='corridor');
-  if(data.ultimate&&Array.isArray(impactArea?.visualCenter))end.copy(new THREE.Vector3(...impactArea.visualCenter));
+  // Scoped firearm rounds and charged White Cat bullets must converge from
+  // the physical muzzle on the camera reticle, never at a ground-AoE marker.
+  if(data.ultimate&&Array.isArray(impactArea?.visualCenter)&&!item.firstPerson)
+   end.copy(new THREE.Vector3(...impactArea.visualCenter));
   // Every ordinary staff shot, including beam, is a pulsing elemental orb.
   if(isChannelStaff(item)&&item.id!=='clam'&&!data.channel&&(!data.ultimate||['lightning','beam'].includes(item.family))){
    this.staffOrb(data,item,origin,direction);return;
@@ -309,7 +312,7 @@ export class WeaponVFX{
   // An exception in one animation subsystem must never abort the gameplay frame.
   for(const [label,system] of [['saber',this.saberImpact],['particles',this.particleSkills],
     ['signature',this.signatureEffects],['numbered',this.numberedEffects]]){
-   try{system.update(dt,camera,label==='numbered'?world:null);}catch(error){
+   try{if(label==='signature')system.update(dt,world);else system.update(dt,camera,label==='numbered'?world:null);}catch(error){
     this.failedAnimationSystems??=new Set();
     if(!this.failedAnimationSystems.has(label)){
      this.failedAnimationSystems.add(label);
