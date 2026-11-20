@@ -184,7 +184,8 @@ export class WeaponSignatureEffects {
   // flanks and light-gold undersides. Shaded per vertex with no refraction.
   const bodyGeo=new THREE.SphereGeometry(1,20,12);
   const positions=bodyGeo.getAttribute('position'),gradient=new Float32Array(positions.count*3);
-  const dorsal=new THREE.Color('#70302f'),flank=new THREE.Color('#ff7850'),belly=new THREE.Color('#ffe5a3');
+  // Keep bright colour even in an unlit arena: this is a baked gradient, not a scene-lit texture.
+  const dorsal=new THREE.Color('#e85c32'),flank=new THREE.Color('#ffad57'),belly=new THREE.Color('#fff4c1');
   const mixed=new THREE.Color();
   for(let i=0;i<positions.count;i++){
    const y=positions.getY(i),h=THREE.MathUtils.smoothstep(y,-.65,.68);
@@ -193,14 +194,16 @@ export class WeaponSignatureEffects {
    gradient[i*3]=mixed.r;gradient[i*3+1]=mixed.g;gradient[i*3+2]=mixed.b;
   }
   bodyGeo.setAttribute('color',new THREE.BufferAttribute(gradient,3));
-  const glow=(color,opacity,vertexColors=false)=>new THREE.MeshLambertMaterial({
-   color,vertexColors,emissive:new THREE.Color(color).multiplyScalar(.16),
-   emissiveIntensity:.52,transparent:opacity<1,opacity,
-   depthWrite:opacity>=1,side:THREE.DoubleSide
+  // The old Lambert + transparent/depthWrite:false materials mixed all 30
+  // overlapping fish into an almost black slab from behind. Opaque, depth-
+  // writing fish with unlit vertex gradients preserve every silhouette.
+  const glow=(color,vertexColors=false)=>new THREE.MeshBasicMaterial({
+   color,vertexColors,transparent:false,opacity:1,depthWrite:true,
+   depthTest:true,side:THREE.FrontSide,toneMapped:false
   });
-  const amber=glow('#ffb18e',.99,true),pearl=glow('#ffcf92',.96,true),
-   finMat=glow('#ffac54',.88),rim=glow('#711e23',.98),
-   highlight=glow('#ffebbd',.98),eye=glow('#21131a',1);
+  const amber=glow('#ffffff',true),pearl=glow('#fffae7',true),
+   finMat=glow('#ffbc54'),rim=glow('#c85030'),
+   highlight=glow('#fff9d1'),eye=glow('#271c21');
   const add=(parent,geo,mat,pos,scale)=>{
    const mesh=new THREE.Mesh(geo,mat);mesh.position.set(...pos);mesh.scale.set(...scale);
    parent.add(mesh);return mesh;
@@ -227,12 +230,18 @@ export class WeaponSignatureEffects {
   }
   add(fish,bodyGeo,rim,[0,.73,-.23],[.24,.65,.46]);
   add(fish,bodyGeo,finMat,[0,.78,-.22],[.18,.60,.44]);
+  // Contrasting dorsal flecks break up the rear view into independent fish.
+  for(let i=0;i<3;i++)
+   add(fish,bodyGeo,highlight,[Math.sin(i*2.4)*.22,.54,-.63+i*.49],[.055,.045,.16]);
   tail=new THREE.Group();tail.position.z=-1.3;fish.add(tail);
   for(const side of [-1,1]){
-   const edge=add(tail,bodyGeo,rim,[side*.37,.03,-.58],[.61,.88,.13]);
-   edge.rotation.z=side*.35;
-   const blade=add(tail,bodyGeo,finMat,[side*.35,.03,-.55],[.51,.78,.14]);
-   blade.rotation.z=side*.35;
+   // Two separated amber tail lobes, rather than one dark merged silhouette.
+   const edge=add(tail,bodyGeo,rim,[side*.43,.03,-.61],[.60,.87,.12]);
+   edge.rotation.z=side*.42;
+   const blade=add(tail,bodyGeo,finMat,[side*.44,.03,-.58],[.53,.77,.14]);
+   blade.rotation.z=side*.42;
+   const tailTip=add(tail,bodyGeo,highlight,[side*.78,(side*.17),-1.02],[.22,.33,.085]);
+   tailTip.rotation.z=side*.48;
    for(let i=0;i<5;i++){
     const line=new THREE.CatmullRomCurve3([
      new THREE.Vector3(0,0,-.05),
@@ -255,7 +264,7 @@ export class WeaponSignatureEffects {
    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++)
     instances.setColorAt(i,tint.set(tints[(i*7+Math.floor(i/4))%tints.length]));
    instances.instanceColor.needsUpdate=true;
-   school.add(instances);parts.push({mesh:instances,source:node});
+   school.add(instances);parts.push({mesh:instances,source:node,tailPart:node.parent===tail});
   });
   fish.visible=false;group.add(school);
   group.userData.fish=fish;group.userData.tail=tail;group.userData.school=school;group.userData.schoolParts=parts;
@@ -265,7 +274,8 @@ export class WeaponSignatureEffects {
    base:new THREE.Matrix4(),combined:new THREE.Matrix4(),
    offset:new THREE.Vector3(),rotation:new THREE.Quaternion(),
    scale:new THREE.Vector3(1,1,1),axis:new THREE.Vector3(0,1,0),
-   transforms:Array.from({length:GOLDFISH_SCHOOL_COUNT},()=>new THREE.Matrix4())
+   transforms:Array.from({length:GOLDFISH_SCHOOL_COUNT},()=>new THREE.Matrix4()),
+   tailTransforms:Array.from({length:GOLDFISH_SCHOOL_COUNT},()=>new THREE.Matrix4())
   };
   }
   // The original four cloned fish multiplied meshes, draw calls and material
@@ -289,23 +299,36 @@ export class WeaponSignatureEffects {
    const yaw=Math.sin(age*8)*.045;
    fish.rotation.y=yaw;
    fish.rotation.z=Math.sin(age*7)*.035;
-   tail.rotation.y=Math.sin(age*16)*.44;
+   // Apply a separate tail wag to EACH instanced fish, phase-staggered.
+   // The previous tail.rotation affected the hidden source fish identically.
+   tail.rotation.y=0;
    fish.updateMatrixWorld(true);
-   const {base,combined,offset,rotation,scale,axis,transforms}=group.userData.schoolScratch;
+   const {base,combined,offset,rotation,scale,axis,transforms,tailTransforms}=group.userData.schoolScratch;
    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
     const [x,y,z]=GOLDFISH_SCHOOL_OFFSETS[i],phase=age*8+i*2.399963;
-    offset.set(x+Math.sin(phase)*.08,y+Math.sin(phase*.71)*.065,z);
+    offset.set(x+Math.sin(phase)*.085,y+Math.sin(phase*.71)*.09,z+Math.cos(phase)*.025);
     rotation.setFromAxisAngle(axis,Math.sin(phase)*.19+Math.sin(i*3.17)*.14);
     scale.setScalar(.83+((i*11)%9)*.043);
     transforms[i].compose(offset,rotation,scale);
+    tailTransforms[i].makeRotationY(Math.sin(age*19+i*2.399963)*.74);
+    tailTransforms[i].premultiply(tail.matrix).premultiply(fish.matrix);
    }
-   for(const {mesh,source} of group.userData.schoolParts){
-    base.copy(source.matrix);
-    for(let parent=source.parent;parent&&parent!==group;parent=parent.parent)
-     base.premultiply(parent.matrix);
-    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
-     combined.multiplyMatrices(transforms[i],base);
-     mesh.setMatrixAt(i,combined);
+   for(const {mesh,source,tailPart} of group.userData.schoolParts){
+    if(tailPart){
+     // fish -> tail pivot -> independent fin swing -> authored tail mesh.
+     for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
+      combined.multiplyMatrices(tailTransforms[i],source.matrix);
+      combined.premultiply(transforms[i]);
+      mesh.setMatrixAt(i,combined);
+     }
+    }else{
+     base.copy(source.matrix);
+     for(let parent=source.parent;parent&&parent!==group;parent=parent.parent)
+      base.premultiply(parent.matrix);
+     for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
+      combined.multiplyMatrices(transforms[i],base);
+      mesh.setMatrixAt(i,combined);
+     }
     }
     mesh.instanceMatrix.needsUpdate=true;
    }
