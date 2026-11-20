@@ -4,6 +4,7 @@ import {itemById} from './shared/catalog.js';
 import {oddParts} from './reletter/odd-weapon-art.js';
 import {calicoPellets,CALICO_PELLET_COUNT} from './shared/calico-pellets.js';
 import {GOLDFISH_SWIM_MS} from './shared/weapon-abilities.js';
+import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_SCHOOL_OFFSETS,GOLDFISH_FISH_SCALE} from './shared/goldfish-school.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
 import nativeArcRay from '../vendor/00gamedevs/arc-ray.js';
 
@@ -219,12 +220,24 @@ export class WeaponSignatureEffects {
     tail.add(new THREE.Mesh(new THREE.TubeGeometry(line,8,.006,3,false),rim));
    }
   }
-  group.userData.fish=fish;group.userData.tail=tail;
+  // Keep the detailed original fish as a hidden source for GPU instancing.
+  // Every body part, eye, gill and animated tail retains its existing model,
+  // but thirty fish need only one draw call PER part, not thirty draw calls.
+  const school=new THREE.Group();school.name='30 individually swimming goldfish';
+  const parts=[];
+  fish.traverse(node=>{
+   if(!node.isMesh)return;
+   const instances=new THREE.InstancedMesh(node.geometry,node.material,GOLDFISH_SCHOOL_COUNT);
+   instances.frustumCulled=false;instances.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+   school.add(instances);parts.push({mesh:instances,source:node});
+  });
+  fish.visible=false;group.add(school);
+  group.userData.fish=fish;group.userData.tail=tail;group.userData.school=school;group.userData.schoolParts=parts;
   }
   // The original four cloned fish multiplied meshes, draw calls and material
   // allocations by five, causing severe mobile stutters. No clones are built.
   const orientation=qdir(direction);
-  fish.scale.setScalar(1.25*quality);
+  fish.scale.setScalar(GOLDFISH_FISH_SCALE*quality);
   group.position.copy(origin);group.quaternion.copy(orientation);group.scale.setScalar(1);
   const flightEntry=this.add(group,duration,(age,world,dt=0)=> {
    const progress=Math.min(1,age/duration);
@@ -243,6 +256,26 @@ export class WeaponSignatureEffects {
    fish.rotation.y=yaw;
    fish.rotation.z=Math.sin(age*7)*.035;
    tail.rotation.y=Math.sin(age*16)*.44;
+   fish.updateMatrixWorld(true);
+   const base=new THREE.Matrix4(),combined=new THREE.Matrix4(),
+    offset=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3(1,1,1),
+    swayAxis=new THREE.Vector3(0,1,0);
+   const transforms=GOLDFISH_SCHOOL_OFFSETS.map(([x,y,z],index)=>{
+    const phase=age*8+index*2.399963;
+    offset.set(x+Math.sin(phase)*.08,y+Math.sin(phase*.71)*.065,z);
+    rotation.setFromAxisAngle(swayAxis,Math.sin(phase)*.075);
+    return new THREE.Matrix4().compose(offset,rotation,scale);
+   });
+   for(const {mesh,source} of group.userData.schoolParts){
+    base.copy(source.matrix);
+    for(let parent=source.parent;parent&&parent!==group;parent=parent.parent)
+     base.premultiply(parent.matrix);
+    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
+     combined.multiplyMatrices(transforms[i],base);
+     mesh.setMatrixAt(i,combined);
+    }
+    mesh.instanceMatrix.needsUpdate=true;
+   }
    const fade=Math.min(1,age*6,(duration-age)*7);
    group.scale.setScalar(Math.max(0,fade));
   },'goldfish');
