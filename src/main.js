@@ -671,19 +671,6 @@ function syncWorld(){if(!world)return;
   }
  if(arena.monster)statusVisuals.sync(arena.monster,world.monster?.effects);
  for(const {root,state} of arena.islandEnemies.extraLive)statusVisuals.sync(root,state?.effects);const profile=world.profile,dead=profile?.deadUntil>Date.now();
- // An acknowledged flower channel shows +1 every second, even at maximum HP.
- // Actual HP restoration is still capped on the server.
- if(profile&&localRoot){
-  const now=Date.now();
-  const active=staffChannel?.ready&&itemById(staffChannel.weapon)?.family==='petal'&&
-   Number(profile.hp)>0&&!(profile.deadUntil>now);
-  if(active&&now-lastHealVisualAt>=1000){
-   lastHealVisualAt=now;
-   damageNumbers.receive([{id:++healVisualSeq,time:now,
-    kind:'heal',amount:1,position:[localRoot.position.x,localRoot.position.y+2.15,localRoot.position.z]}]);
-  }
-  if(!active)lastHealVisualAt=0;
- }
 // Follow the SERVER's revive timestamp and spawn instead of relying on
 // wasDead: an iOS background tab may miss the five-second death overlay.
 if(controller&&!dead&&Number(profile?.lastRespawnAt)>lastAppliedRespawnAt){
@@ -849,6 +836,17 @@ function update(dt,time,movementDt=dt){
     void Promise.resolve(performAttack(1,'channel')).finally(()=>{staffChannelBusy=false;});
    }
   }
+   // Show +1 on every frame-clock second of a server-approved flower
+   // channel, including at full HP and without requiring state broadcasts.
+   const healNow=Date.now();
+   if(staffChannel?.ready&&heldItem?.family==='petal'&&localRoot&&
+      Number(world?.profile?.hp)>0&&!(world?.profile?.deadUntil>healNow)){
+    if(healNow-lastHealVisualAt>=1000){
+     lastHealVisualAt=healNow;
+     damageNumbers.receive([{id:++healVisualSeq,time:healNow,kind:'heal',amount:1,
+      position:[localRoot.position.x,localRoot.position.y+2.15,localRoot.position.z]}]);
+    }
+   }else lastHealVisualAt=0;
   if(charge>=1&&!isChannelStaff(heldItem)&&heldItem?.autoCharge&&!autoChargeBusy){
    autoChargeBusy=true;const pending=chargeRequest;chargeStarted=null;
    Promise.resolve(pending).then(async()=>{await performAttack(1);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeStarted=performance.now();chargeRequest=sendAction('attack',{phase:'charge'});}}).finally(()=>autoChargeBusy=false);
