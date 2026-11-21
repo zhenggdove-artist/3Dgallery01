@@ -89,12 +89,17 @@ void main(){
      basePosition.z+uReach*min(1.,t*1.5));
    alpha*=.85;
  }else if(uMode<4.5){
-   // Spiral column with readable coloured note silhouettes.
-   float angle=atan(basePosition.z,position.x)+spin*1.15+position.y*.5;
-   float r=length(basePosition.xz)+.18*t;
-   p=vec3(cos(angle)*r,position.y+sin(spin+u*14.)*.25,
-     sin(angle)*r+uReach*min(.9,t*1.12));
-   alpha*=.92;
+   // Large, distinct musical glyphs in one travelling tornado.
+   // Triple the former 1.15 angular rotation rate.
+   float glyph=floor(u*36.),initial=glyph*2.399;
+   float angle=initial+spin*3.45;
+   float height=clamp(position.y/10.5,0.,1.);
+   float r=uRadius*(.23+.60*height);
+   float localX=position.x-cos(initial)*(.55+mod(glyph,6.)*.30);
+   float front=uReach*smoothstep(0.,.70,t);
+   p=vec3(cos(angle)*r+localX,position.y+sin(spin+u*14.)*.16,
+     front-2.1+sin(angle)*r+mod(glyph,4.)*.22);
+   alpha*=.98;
  }else if(uMode<5.5){
    // Complex floor fissures plus exploding point-rocks and a towering sword arc.
    if(w<.58){
@@ -241,7 +246,7 @@ void main(){
  // All point sprites stay fine; bright density comes from many particles.
  vec4 mv=modelViewMatrix*vec4(p,1.);
  gl_Position=projectionMatrix*mv;
- gl_PointSize=clamp((uMode>5.5&&uMode<6.5?3.8+w*3.7:uStyle<.5||(uStyle>1.5&&uStyle<2.5)?3.7+w*3.1:1.1+w*1.65)*34./max(2.,-mv.z),1.25,12.5);
+ gl_PointSize=clamp((uMode>5.5&&uMode<6.5?3.8+w*3.7:uMode>3.5&&uMode<4.5?3.5+w*2.2:uStyle<.5||(uStyle>1.5&&uStyle<2.5)?3.7+w*3.1:1.1+w*1.65)*34./max(2.,-mv.z),1.25,12.5);
  vColor=color*(.85+.23*sin(uAge*16.+v*31.));
  vAlpha=alpha*(.65+.3*uCharge);
 }
@@ -286,12 +291,12 @@ function populate(recipe,amount,range,palette){
      if(shape===4){x=Math.cos(angle)*.55*Math.sqrt(v);y=Math.sin(angle)*.32;ci=3;}
      z=(shape-2)*.55;
    }else if(mode===4){
-     const glyph=Math.floor(u*26),k=v,angle=(glyph*2.399+w*.4),radius=.4+(glyph%4)*.7;
+     const glyph=Math.floor(u*36),k=v,angle=glyph*2.399,radius=.55+(glyph%6)*.30;
      // Note heads are ellipses; stems are thin vertical strokes; the remainder
      // curves around as staffs. 100+ points per note, no geometry silhouettes.
      const head=k<.45;
-     x=Math.cos(angle)*radius+(head?Math.cos(w*6.28)*.23:.22);
-     y=1+glyph%8*.78+(head?Math.sin(w*6.28)*.13:(k-.45)*1.7);
+     x=Math.cos(angle)*radius+(head?Math.cos(w*6.28)*.48:.45);
+     y=1.1+glyph%10*.82+(head?Math.sin(w*6.28)*.27:(k-.45)*2.0);
      z=Math.sin(angle)*radius;
      ci=glyph;
    }else if(mode===5){
@@ -333,7 +338,7 @@ export class WeaponParticleEffects{
   // uniforms, not separate allocation keys, so the first spell reuses them.
   const stage=new THREE.Scene(),entries=[];
   const chargedCount=recipe=>['fissure','rainbow-scatter','boomerang','lotus-veil','thorn-tower'].includes(recipe)?5600:
-    ['music','flies','food'].includes(recipe)?3900:3200;
+    recipe==='music'?5200:['flies','food'].includes(recipe)?3900:3200;
   for(const recipe of new Set([...Object.values(PARTICLE_RECIPES),'prism','tidal','rainbow'])){
    for(const count of [1200,1600,2400,chargedCount(recipe)]){
     const entry=this.make(recipe,{id:'warm-'+recipe,family:recipe},{amount:count,range:16});
@@ -355,7 +360,7 @@ export class WeaponParticleEffects{
  }
  make(recipe,item,{duration=2.1,range=20,amount=2300,charge=1}={}){
   const touch=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
-  const count=Math.min(amount,touch?MAX_PARTICLES_TOUCH:MAX_PARTICLES_DESKTOP);
+  const count=Math.min(amount,touch?(recipe==='music'?3400:MAX_PARTICLES_TOUCH):MAX_PARTICLES_DESKTOP);
   const key=[recipe,count].join(':');
   const stored=this.pools.get(key);
   if(stored?.length){
@@ -392,9 +397,10 @@ export class WeaponParticleEffects{
   if(!charged&&!elementalJet&&!['white-cat','black-cat','calico-cat'].includes(item.id))return;
   const chosen=item.id==='calico-cat'?'rainbow-scatter':item.id?.includes('cat')?'rainbow':item.id==='goldfish'?'tidal':item.id==='clam'&&charged?'tidal':recipe;
   const range=chosen==='rainbow-scatter'?Math.max(2,Number(data.range)||10):Math.max(1,Math.min(charged?100:160,Number(data.range)||source.distanceTo(end)));
-  const amount=charged?['fissure','rainbow-scatter','boomerang','lotus-veil','thorn-tower'].includes(chosen)?5600:chosen==='music'||chosen==='flies'||chosen==='food'?3900:3200:elementalJet?2400:chosen==='rainbow-scatter'?3200:1200;
-  const duration=charged?chosen==='fissure'?3:chosen==='rainbow-scatter'?1.65:2.45:elementalJet?1.05:.65;
+  const amount=charged?['fissure','rainbow-scatter','boomerang','lotus-veil','thorn-tower'].includes(chosen)?5600:chosen==='music'?5200:chosen==='flies'||chosen==='food'?3900:3200:elementalJet?2400:chosen==='rainbow-scatter'?3200:1200;
+  const duration=charged?chosen==='music'?3.3:chosen==='fissure'?3:chosen==='rainbow-scatter'?1.65:2.45:elementalJet?1.05:.65;
   const entry=this.make(chosen,item,{range,duration,amount,charge:charged?1:.75});
+  if(chosen==='music')entry.material.uniforms.uRadius.value=Math.max(.5,Number(data.radius)||5.5);
   entry.root.position.copy(source);
   if(data.channel){entry.channeling=true;entry.material.uniforms.uLooping.value=1;}
   // Server-approved firing direction; charged-area centres are not an aiming
@@ -425,7 +431,7 @@ export class WeaponParticleEffects{
      }else entry.root.scale.setScalar(data.channel?1:charged?1.7:1.35);
     }
   }
-  if(charged&&!elementalJet&&!['rainbow-scatter','rainbow','fissure'].includes(chosen)){
+  if(charged&&!elementalJet&&!['rainbow-scatter','rainbow','fissure','music'].includes(chosen)){
     const targetRadius=Math.max(.35,Number(data.area?.radius)||Number(data.radius)||.35);
     const localRadius=chosen==='food'||chosen==='flies'?1.5:4.9;
     const lateral=Math.max(1,Math.min(10,targetRadius/localRadius));

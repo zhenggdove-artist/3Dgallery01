@@ -86,7 +86,7 @@ function updatePlayerSpeech(now=performance.now()){
 }
 const minimap=new Minimap();
 const damageNumbers=createDamageNumbers(THREE),statusVisuals=new ElementalStatusVisuals();
-let previousHealHp=null,healVisualSeq=0;
+let healVisualSeq=0,lastHealVisualAt=0;
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
 let pendingAInteraction=null,chargeDelayTimer=null,beamStartTimer=null,nextChargeRetryAt=0;
@@ -671,16 +671,18 @@ function syncWorld(){if(!world)return;
   }
  if(arena.monster)statusVisuals.sync(arena.monster,world.monster?.effects);
  for(const {root,state} of arena.islandEnemies.extraLive)statusVisuals.sync(root,state?.effects);const profile=world.profile,dead=profile?.deadUntil>Date.now();
- // Only visualize a confirmed server-side HP increase during a flower channel.
+ // An acknowledged flower channel shows +1 every second, even at maximum HP.
+ // Actual HP restoration is still capped on the server.
  if(profile&&localRoot){
-  const hp=Number(profile.hp);
-  const healing=Number.isFinite(hp)&&previousHealHp!==null&&hp>previousHealHp&&
-   staffChannel?.ready&&itemById(staffChannel.weapon)?.family==='petal'&&
-   Number(profile.maxHp)>previousHealHp;
-  if(healing)for(let i=0;i<Math.min(3,Math.round(hp-previousHealHp));i++)
-   damageNumbers.receive([{id:++healVisualSeq,time:Date.now(),
+  const now=Date.now();
+  const active=staffChannel?.ready&&itemById(staffChannel.weapon)?.family==='petal'&&
+   Number(profile.hp)>0&&!(profile.deadUntil>now);
+  if(active&&now-lastHealVisualAt>=1000){
+   lastHealVisualAt=now;
+   damageNumbers.receive([{id:++healVisualSeq,time:now,
     kind:'heal',amount:1,position:[localRoot.position.x,localRoot.position.y+2.15,localRoot.position.z]}]);
-  previousHealHp=Number.isFinite(hp)?hp:null;
+  }
+  if(!active)lastHealVisualAt=0;
  }
 // Follow the SERVER's revive timestamp and spawn instead of relying on
 // wasDead: an iOS background tab may miss the five-second death overlay.
