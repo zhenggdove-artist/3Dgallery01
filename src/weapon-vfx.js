@@ -238,7 +238,7 @@ export class WeaponVFX{
   }
   this.particleSkills.play(data,item,origin,end);
   // Dedicated point-cloud ultimates: do not summon a shared physical object.
-  if(data.ultimate&&(item.family==='petal'||item.id==='giraffe'))return;
+  if(data.ultimate&&(item.id==='accordion'||item.family==='petal'||item.id==='giraffe'))return;
   // Orient actual 00GameDevs flame/tidal presets along the weapon muzzle.
   // The companion GPU streams travel from the player toward the target.
   const spray=item.family==='fire'||item.family==='water'||item.family==='wave'||item.id==='goldfish'||item.id==='clam'&&data.ultimate;

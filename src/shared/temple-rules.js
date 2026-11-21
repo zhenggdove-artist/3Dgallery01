@@ -1,6 +1,6 @@
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks} from './artwork-recovery.js';
-import {chargedArea,insideChargedArea,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor} from './charge-area.js';
+import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor} from './charge-area.js';
 import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition} from './goldfish-school.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
@@ -1467,11 +1467,34 @@ function tickPersistentAttacks(world,actors,now,rng){
     }
     return !!applied;
    };
+   // Charged music-note cyclone sweeps its visible travelling volume each tick.
+   // Each touched target has its own 1-second authoritative cooldown.
+   const accordionTornado=weapon.id==='accordion'&&fx.charge>=1;
+   if(accordionTornado&&now<fx.expiresAt){
+    const tip=fx.range*next;
+    const tail=Math.max(0,tip-Math.max(5,fx.radius*1.15));
+    const start=fx.origin.map((v,i)=>v+fx.direction[i]*tail);
+    const length=tip-tail;
+    if(length>.001)for(const target of targets){
+     const enemy=target.value;
+     if(enemy.key===fx.owner||(target.kind==='player'&&insideSafeZone(enemy.position)))continue;
+     const distance=target.kind==='player'
+      ?rayCylinderDistance(start,fx.direction,length,enemy.position,1.02+fx.radius,2.35)
+      :monsterRayDistance(start,fx.direction,length,enemy,fx.radius);
+     if(distance===null)continue;
+     const center=target.kind==='player'
+      ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]
+      :[enemy.position[0],enemy.position[1]+ENEMY_HEIGHT*.5,enemy.position[2]];
+     if(fx.echo&&fx.parentFootprint&&!insideSpellFootprint(fx.parentFootprint,center))continue;
+     const impact=start.map((v,i)=>v+fx.direction[i]*distance);
+     if(outcome(target,center,impact,null,tail+distance))changed=true;
+    }
+   }
    // Each travelling sphere uses its own independent ray. The server sweeps
    // all travelled segments, so no damage can occur before contact.
    const lanes=fx.pellets||[{direction:fx.direction,radius:fx.radius}];
    const segmentLength=Math.max(0,(next-prev)*fx.range);
-   if(segmentLength>.00001&&fx.area?.mode!=='sector'&&!panBlast&&
+   if(segmentLength>.00001&&!accordionTornado&&fx.area?.mode!=='sector'&&!panBlast&&
        !(fx.echo&&fx.area?.mode==='area')){
     lanes.forEach((pellet,index)=>{
      const start=fx.origin.map((v,j)=>v+pellet.direction[j]*prev*fx.range);
@@ -1580,7 +1603,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    }
    // A persistent forward corridor remains dangerous only while its authored
    // ultimate effect is visible. Check actual target volumes on every tick.
-   if(fx.area?.mode==='corridor'&&fx.charge>=1&&next>=1&&
+   if(!accordionTornado&&fx.area?.mode==='corridor'&&fx.charge>=1&&next>=1&&
       now<fx.expiresAt&&fx.expiresAt>fx.createdAt+flight){
     for(const target of targets){
      const enemy=target.value,key=enemy.id||enemy.key;

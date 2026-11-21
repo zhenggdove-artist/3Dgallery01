@@ -49,6 +49,7 @@ export function projectileFlightMs(weapon,charged=false,range=null){
  // Synchronize authoritative swept-hit travel with the visible, moving
  // 00GameDevs source. Doubling reach without flight time would silently
  // double speed and make strikes hit before the graphics reach targets.
+ if(charged&&weapon.id==='accordion')return 2300;
  if(charged&&weapon.id==='clam')return 2180; // original #33 crest full eased path
  if(charged&&weapon.family==='palm')return 1650; // triple #31 tower
  if(charged&&weapon.family==='saber')return 1100; // extended #38 fissure
@@ -64,6 +65,7 @@ export function projectileFlightMs(weapon,charged=false,range=null){
 // Intervals vary by weapon but remain in the requested 1–3 second range.
 export function contactDamageIntervalMs(weapon){
  const id=weapon?.id;
+ if(id==='accordion')return 1000;
  if(id==='jellybrella')return 1200;
  if(id==='goldfish')return 1100;
  if(id==='giraffe')return 1200;
