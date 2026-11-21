@@ -8,6 +8,7 @@ import {ECONOMY,RARITIES,SHOP_ITEMS,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats}
 import {SOUND_PROFILES} from './game-audio.js';
 import {pvpShotDamage} from './shared/combat-balance.js';
 import {weaponQuality} from './shared/weapon-abilities.js';
+import {explainEquipment} from './shared/weapon-info.js';
 import {previewMarkup,hydrateItemPreviews} from './item-preview.js';
 import {drawingForm,attachDrawing,mediaMarkup} from './media-ui.js';
 import {SWALLOWTAIL_WINGS} from './reletter/wing-catalog.js';
@@ -498,4 +499,4 @@ export class TempleUI extends EventTarget{
 }
 
 function option(item){return `<option value="${item.id}">${escape(item.name)}</option>`;}
-function itemCard(item,action){const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${pvpShotDamage(item,attackStats(item,0),weaponQuality(item))} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88">${previewMarkup(item)}<small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><h3>${escape(item.name)}</h3><small>${escape(stats)}</small>${action}</article>`;}
+function itemCard(item,action){const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${pvpShotDamage(item,attackStats(item,0),weaponQuality(item))} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88">${previewMarkup(item)}<small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><h3>${escape(item.name)}</h3><small>${escape(stats)}</small><p class="equipment-description">${escape(explainEquipment(item))}</p>${action}</article>`;}
