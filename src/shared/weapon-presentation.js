@@ -56,6 +56,11 @@ export function weaponPresentation(item,record={}){
   bonuses.push('射程 +'+round(stats.range-item.range)+'m');
  if(Number.isFinite(stats.radius)&&Number.isFinite(item.radius)&&stats.radius>item.radius+.01)
   bonuses.push('範圍半徑 +'+round(stats.radius-item.radius)+'m');
+ const labels={hp:'生命上限',attack:'攻擊力',defense:'減傷',speed:'移動速度',jump:'跳躍高度',fusion:'合成成功率'};
+ for(const [ability,value] of Object.entries(record?.templeStats?.bonuses||{})){
+  const extra=(Number(value)||0)-(Number(item.bonuses?.[ability])||0);
+  if(extra>.000001)bonuses.push((labels[ability]||ability)+' +'+(ability==='hp'?round(extra*10,2)+' HP':round(extra*100,2)+'%'));
+ }
  for(const id of (record.effects||[]).slice(0,2))bonuses.push('附加大絕 '+id+' · 20% 傷害 / 50% 範圍');
  if(level&&!bonuses.length)bonuses.push('強化次數 '+level);
  return {title,level,traits,bonuses};

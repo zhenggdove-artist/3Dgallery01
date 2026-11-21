@@ -8,9 +8,14 @@ export function originalEquipmentGame(profile,world={},equippedOnly=false){
  const inventory=equippedOnly?[...new Set(Object.values(profile.equipment||{}))].filter(id=>profile.inventory.includes(id)):profile.inventory;
  const key=profile.key,instances=inventory.filter(id=>equipmentById(id)).map(id=>{
   const record=profile.fusion?.[id],original=record?.original||{};
+  // Project Temple's authoritative successful headgear/outfit fusions into
+  // resolveItem -> traitStats; without this, only the BAG number changes.
+  const templeBonuses=record?.templeStats?.bonuses;
+  const rolledStats=templeBonuses?{...(original.stats||{}),
+   bonuses:{...(original.stats?.bonuses||{}),...templeBonuses}}:original.stats;
   const affixIds=[...new Set([...itemAffixes(original),...itemAffixes(record)])];
   return {id,baseId:id,origin:profile.itemOrigins?.[id]||'monster',sourceLevel:profile.level,
-   obtainedAt:profile.createdAt,...original,affixIds,affixId:affixIds[0]||null};
+   obtainedAt:profile.createdAt,...original,...(rolledStats?{stats:rolledStats}:{}),affixIds,affixId:affixIds[0]||null};
  });
  return {inventories:{[key]:[...inventory]},equipment:{[key]:{...profile.equipment}},weaponInstances:{[key]:instances},garden:world.reletter?.garden,equipmentRevision:0};
 }

@@ -12,7 +12,10 @@ export function fusionChance(profile,targetId,targetIndex){
  if(profile.admin)return Math.max(0,Math.min(1,Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1));
  const raw=fusionRecordForChance(profile,targetId,targetIndex);
  const successfulFusions=Math.max(0,Math.floor(Number(raw.layer)||0));
- return 2**(-(successfulFusions+1));
+ const outfit=itemById(profile.equipment?.outfit);
+ const equipped=outfit?equippedItem(profile,outfit):null;
+ const fusionBonus=Math.max(0,Number(equipped?.bonuses?.fusion)||0);
+ return Math.min(1,2**(-(successfulFusions+1))*(1+fusionBonus));
 }
 function fusionRecordForChance(profile,targetId,targetIndex){
  ensureFusionIdentity(profile);
@@ -75,6 +78,18 @@ export function fuseTemple(world,profile,body,rng=Math.random){
   return result;
  }
  const stats={...(old.templeStats||{})};
+ // The actual headgear/outfit ability values live in nested bonuses, not
+ // top-level weapon stats. Preserve earlier layers and inherit 30% of the
+ // MATERIAL INSTANCE's final (including previously fused) bonuses.
+ if(target.bonuses&&material.bonuses){
+  const combined={...target.bonuses,...(stats.bonuses||{})};
+  for(const [ability,value] of Object.entries(material.bonuses)){
+   const amount=Number(value);
+   if(!Number.isFinite(amount)||amount<=0)continue;
+   combined[ability]=+((Number(combined[ability])||0)+amount*.3).toFixed(5);
+  }
+  stats.bonuses=combined;
+ }
  // Remove legacy inherited long-range stats so subsequent server saves no
  // longer retain oversized normal collision dimensions.
  if(target.slot==='weapon'){
