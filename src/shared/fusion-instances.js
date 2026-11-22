@@ -4,6 +4,20 @@
 import {itemById} from './catalog.js';
 import {rollWeaponAffixes} from './weapon-affixes.js';
 const newUid=()=>crypto.randomUUID();
+// A legacy profile can still contain a pre-instance upgrade projection. Keep
+// it when converting a virgin enchant-only UID record, but NEVER transfer a
+// record already owned by another physical UID.
+function detachedLegacyRecord(profile,itemId,uid,direct){
+ const projected=profile.fusion?.[itemId];
+ if(!projected||typeof projected!=='object'||projected===direct)return null;
+ if(Object.entries(profile.fusionByInstance||{}).some(([id,record])=>id!==uid&&record===projected))
+  return null;
+ if(direct?.layer||direct?.templeStats||direct?.original||direct?.effects?.length||
+    direct?.affixIds?.length)return null;
+ if(!(projected.layer||projected.templeStats||projected.original||
+    projected.effects?.length||projected.affixIds?.length||projected.bonus))return null;
+ return {...direct,...projected,weaponAffixes:direct?.weaponAffixes||projected.weaponAffixes};
+}
 // Server migration is idempotent: previously owned equipment receives a
 // randomly rolled property ONCE, tied to its immutable inventory UID.
 export function ensureWeaponAffixes(profile,rng=Math.random){
@@ -16,8 +30,11 @@ export function ensureWeaponAffixes(profile,rng=Math.random){
  }
  const itemId=profile.equipment?.weapon;
  const uid=profile.equippedInstanceIds?.weapon;
- if(uid&&itemId&&profile.inventoryInstances?.some(row=>row.uid===uid&&row.itemId===itemId))
+ if(uid&&itemId&&profile.inventoryInstances?.some(row=>row.uid===uid&&row.itemId===itemId)){
+  const preserved=detachedLegacyRecord(profile,itemId,uid,profile.fusionByInstance?.[uid]);
+  if(preserved)profile.fusionByInstance[uid]=preserved;
   projectFusionForInstance(profile,itemId,uid);
+ }
  return profile;
 }
 
@@ -95,7 +112,7 @@ export function fusionRecordAt(profile,index){
  const itemId=profile.inventory?.[index],uid=profile.inventoryInstances?.[index]?.uid;
  if(!itemId||!uid)return {};
  const direct=profile.fusionByInstance?.[uid];
- if(direct)return direct;
+ if(direct)return detachedLegacyRecord(profile,itemId,uid,direct)||direct;
  // Older tests or save rehydration can provide a legacy record after
  // initialization; never share a record between two *actual* instances.
  const owned=profile.inventoryInstances||[];
