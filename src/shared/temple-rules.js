@@ -25,7 +25,7 @@ import {calicoPellets} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
-import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS} from './vortex-flight.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
@@ -242,7 +242,7 @@ export function isLiveStaffChannel(profile,now=Date.now()){
  const staff=profile?.channelWeapon&&itemById(profile.channelWeapon);
  if(!staff||!isChannelStaff(staff))return false;
  const latest=Number(profile.lastChannelPulseAt||profile.channelStartedAt)||0;
- const grace=Math.max(1900,Math.min(4500,(staff.cooldown||700)*2+500));
+ const grace=staff.family==='ice'?8500:Math.max(1900,Math.min(4500,(staff.cooldown||700)*2+500));
  return latest>0&&now-latest<=grace;
 }
 export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,journey=null,now=Date.now(),mobility=null){
@@ -788,10 +788,10 @@ function attack(world,profile,actor,body,context,now){
 
   const channel=body.phase==='channel';
   if(channel&&(!isChannelStaff(weapon)||profile.channelWeapon!==weapon.id||
-     !profile.channelStartedAt||now-(profile.lastChannelPulseAt||profile.channelStartedAt)>6000))
+     !profile.channelStartedAt||now-(profile.lastChannelPulseAt||profile.channelStartedAt)>(weapon.family==='ice'?8500:6000)))
     return {error:'Staff channel is not active'};
   if(body.phase==='charge'){profile.chargeStartedAt=now;return {charging:true};}
-  if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};const direction=normalDirection(body.direction);if(!direction)return {error:'Invalid attack direction'};profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
+  if(now-profile.lastAttackAt<(channel&&weapon.family==='ice'?ICE_FREEZE_INTERVAL_MS:weapon.cooldown))return {error:'Weapon is recovering'};const direction=normalDirection(body.direction);if(!direction)return {error:'Invalid attack direction'};profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
   const charge=channel?1:Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
   if(!channel)profile.chargeStartedAt=0;
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
@@ -1643,7 +1643,8 @@ function tickPersistentAttacks(world,actors,now,rng){
    const lanes=fx.pellets||[{direction:fx.direction,radius:fx.radius}];
    const segmentLength=Math.max(0,(next-prev)*fx.range);
    if(segmentLength>.00001&&!accordionTornado&&fx.area?.mode!=='sector'&&!panBlast&&
-       !(fx.echo&&fx.area?.mode==='area')){
+       !(fx.echo&&fx.area?.mode==='area')&&
+       !(weapon.family==='ice'&&fx.charge>=1&&fx.area?.mode==='area')){
     lanes.forEach((pellet,index)=>{
      const start=fx.origin.map((v,j)=>v+pellet.direction[j]*prev*fx.range);
      for(const target of targets){
