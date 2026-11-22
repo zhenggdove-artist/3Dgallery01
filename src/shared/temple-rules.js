@@ -3,6 +3,7 @@ import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recover
 import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor} from './charge-area.js';
 import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition} from './goldfish-school.js';
 import {discGroundHeight} from './artwork-discs.js';
+import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance} from './artwork-library.js';
@@ -1660,6 +1661,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    // enemy's physical body. Never grant an instantaneous cone-wide hit.
    if(fx.area?.mode==='sector'){
     const crest=f=>{
+     if(weapon.family==='saber')return saberWaveCrest(fx.range,f);
      const t=clamp((f*2.18-.2)/1.98,0,1);
      return t*t*(3-2*t)*fx.range;
     };
