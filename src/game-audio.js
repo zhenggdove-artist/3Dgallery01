@@ -41,7 +41,7 @@ export const SOUND_PROFILES=Object.freeze({
  smg:{duration:.13,freq:190,end:56,shape:'square',noise:.75,gain:.8},
  sniper:{duration:.65,freq:390,end:56,shape:'sawtooth',noise:.84,gain:1},
  jump:{duration:.34,freq:460,end:900,shape:'sine',noise:0,gain:.82},
- land:{duration:.23,freq:125,end:49,shape:'sine',noise:.72,gain:.9},
+ land:{duration:.26,freq:650,end:330,shape:'sine',noise:0,gain:.88},
  saber:{duration:.36,freq:510,end:150,shape:'sawtooth',noise:.72,gain:1.0},
  swatter:{duration:.24,freq:330,end:140,shape:'triangle',noise:.68,gain:.9},
  pan:{duration:.36,freq:230,end:82,shape:'triangle',noise:.8,gain:1.0},
@@ -244,6 +244,31 @@ export class GameAudio{
    [[.085,.0001],[.108,.092],[.18,.064],[.24,.0001]],.25);
  }
 
+ // Rounded, playful descending landing plop; no noise or percussion.
+ playCuteLand(ctx,now,amp,pitch){
+  const voice=(shape,notes,envelope,stop)=>{
+   const osc=ctx.createOscillator(),gain=ctx.createGain();
+   osc.type=shape;
+   for(const [i,[offset,frequency]] of notes.entries()){
+    if(i===0)osc.frequency.setValueAtTime(Math.max(35,frequency*pitch),now+offset);
+    else osc.frequency.exponentialRampToValueAtTime(Math.max(35,frequency*pitch),now+offset);
+   }
+   for(const [i,[offset,value]] of envelope.entries()){
+    if(i===0)gain.gain.setValueAtTime(Math.max(.0001,value*amp),now+offset);
+    else gain.gain.exponentialRampToValueAtTime(Math.max(.0001,value*amp),now+offset);
+   }
+   osc.connect(gain);gain.connect(this.sfx);this.voices++;
+   osc.onended=()=>{osc.disconnect();gain.disconnect();this.voices=Math.max(0,this.voices-1);};
+   osc.start(now+notes[0][0]);osc.stop(now+stop);
+  };
+  voice('sine',[[0,650],[.065,420],[.19,300]],
+   [[0,.0001],[.012,.16],[.08,.085],[.205,.0001]],.21);
+  voice('triangle',[[.035,900],[.085,640],[.205,510]],
+   [[.035,.0001],[.049,.063],[.115,.025],[.22,.0001]],.23);
+  voice('sine',[[.115,540],[.16,665],[.245,475]],
+   [[.115,.0001],[.132,.045],[.175,.024],[.25,.0001]],.255);
+ }
+
  play(kind,volume=1,pitch=1){
   if(!this.context)this.unlock(false);
   if(this.muted)return;
@@ -258,6 +283,7 @@ export class GameAudio{
   const p=SOUND_PROFILES[key]||SOUND_PROFILES.shot,amp=Math.max(0,Math.min(1.6,volume))*(this.volumes[key]??1)*p.gain;
   if(amp<=0)return; // An exact zero slider setting must be truly silent.
   if(key==='jump'){this.playCuteJump(ctx,now,amp,pitch);return;}
+  if(key==='land'){this.playCuteLand(ctx,now,amp,pitch);return;}
   const createVoice=(source,filter,amount)=>{
    const gain=ctx.createGain();gain.gain.setValueAtTime(.0001,now);
    gain.gain.exponentialRampToValueAtTime(Math.max(.002,amount),now+.012);

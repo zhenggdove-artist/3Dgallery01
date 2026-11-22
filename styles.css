@@ -30,3 +30,21 @@ html,body,#game,#hud,#dock,#panel,button,#mobile-stick{
 input,textarea,select,[contenteditable="true"]{
  -webkit-user-select:text;user-select:text;-webkit-touch-callout:default;
 }
+
+
+/* Combat controls must not invoke iOS native text-selection/Lookup magnifier.
+   Scope this to gameplay, keeping chat input, forms and BAG scrolling intact. */
+#dock,#dock button,#dock button *,#mobile-stick,#mobile-stick *,
+#chat-resize,#chat-resize *,#game,#hud #identity,#hud #vitals{
+  -webkit-user-select:none!important;user-select:none!important;
+  -webkit-touch-callout:none!important;
+  -webkit-tap-highlight-color:transparent!important;
+}
+#dock button,#dock button *,#mobile-stick,#mobile-stick *,#game{
+  touch-action:none!important;
+}
+#chat-form input,#panel input,#panel textarea,#entry input,
+#panel select,[contenteditable="true"]{
+  -webkit-user-select:text!important;user-select:text!important;
+  -webkit-touch-callout:default!important;
+}

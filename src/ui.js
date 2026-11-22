@@ -50,7 +50,22 @@ export class TempleUI extends EventTarget{
     $('chat-form').onsubmit=event=>{event.preventDefault();if(!composing&&!imeEnter)sendChat();};
   }
   bind(){
-    document.addEventListener('contextmenu',event=>{if(event.target.closest?.('#game,#hud')&&!event.target.closest('input,textarea'))event.preventDefault();});
+    // Suppress native Safari text selection / Lookup / loupe on game controls.
+    // Inputs remain selectable and editable; BAG scrolling and paint tools are untouched.
+    const mobileControl=target=>target?.closest?.('#attack-button,#dock [data-action="jump"],#mobile-stick');
+    const editable=target=>target?.closest?.('input,textarea,select,[contenteditable="true"]');
+    document.addEventListener('selectstart',event=>{
+      if(!editable(event.target)&&event.target?.closest?.('#game,#hud,#dock'))event.preventDefault();
+    },{capture:true});
+    document.addEventListener('contextmenu',event=>{
+      if(!editable(event.target)&&event.target?.closest?.('#game,#hud,#dock'))event.preventDefault();
+    });
+    document.addEventListener('touchstart',event=>{
+      if(mobileControl(event.target))event.preventDefault();
+    },{capture:true,passive:false});
+    document.addEventListener('gesturestart',event=>{
+      if(!editable(event.target)&&event.target?.closest?.('#game,#hud,#dock'))event.preventDefault();
+    },{capture:true,passive:false});
     this.entry.addEventListener('click',event=>{
       const button=event.target.closest('[data-google-login]');
       if(!button||button.disabled)return;

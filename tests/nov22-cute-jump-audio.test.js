@@ -52,6 +52,6 @@ test('the GM jump volume slider can completely silence the new sound',()=>{
 });
 test('jump sound remains independent of landing and weapon sound profiles',()=>{
  assert.ok(SOUND_PROFILES.jump.duration>=.3);
- assert.ok(SOUND_PROFILES.land.noise>0);
+ assert.equal(SOUND_PROFILES.land.noise,0);
  assert.ok(SOUND_PROFILES.saber.noise>0);
 });
