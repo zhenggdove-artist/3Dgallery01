@@ -21,7 +21,7 @@ import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './isl
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
-import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE} from './combat-balance.js';
+import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
@@ -1393,13 +1393,14 @@ function tickPersistentAttacks(world,actors,now,rng){
    const weapon=itemById(fx.weapon);
    if(!weapon){fx.lastAt=now;continue;}
    const panBlast=!fx.echo&&/^pan-[1-5]$/.test(weapon.id)&&fx.charge>=1;
+   const palmStorm=/^palm-[1-5]$/.test(weapon.id)&&fx.charge>=1&&fx.area?.mode==='area';
    const alreadyHit=new Set(fx.hits||[]);
    const outcome=(target,position,impact,pellet=null,along=0)=>{
     const enemy=target.value,key=(enemy.id||enemy.key),isPlayer=target.kind==='player';
     if(enemy.key===fx.owner||(isPlayer&&insideSafeZone(enemy.position)))return false;
     // Each echo collider decides eligibility; the primary supplies only its endpoint.
     const hitKey=pellet===null?key:pellet+':'+key;
-    const interval=contactDamageIntervalMs(weapon);
+    const interval=palmStorm?PALM_STORM_TICK_MS:contactDamageIntervalMs(weapon);
     fx.hitTimes??={}; // Per visible projectile, not just the first contact.
     const channelKey=fx.owner+':'+weapon.id+':'+(fx.echo?'echo'+(fx.fusionSlot??0):'main')+':'+hitKey;
     const due=fx.channel?(world.channelContactLocks?.[channelKey]||0):(fx.hitTimes[hitKey]||0);
@@ -1471,6 +1472,28 @@ function tickPersistentAttacks(world,actors,now,rng){
     }
     return !!applied;
    };
+   // Fixed six-second Coconut Palm hazard: one server-owned collision pulse
+   // at cast/2s/4s, no fourth hit at 6s. Inherited fusion palm echoes use
+   // their existing reduced damage. Skip moving ray and one-shot detonation.
+   if(palmStorm){
+    fx.pulseCount??=0;
+    if(now>=fx.createdAt&&now<fx.expiresAt&&fx.pulseCount<PALM_STORM_DURATION_MS/PALM_STORM_TICK_MS&&
+       now>=(fx.nextPulseAt??fx.createdAt)){
+     fx.pulseCount++;
+     fx.nextPulseAt=now+PALM_STORM_TICK_MS;
+     for(const target of targets){
+      const enemy=target.value;
+      if(enemy.key===fx.owner||(target.kind==='player'&&insideSafeZone(enemy.position)))continue;
+      const point=[enemy.position[0],enemy.position[1]+(target.kind==='player'?1:1.25),enemy.position[2]];
+      if(!insideChargedArea(fx.area,point,target.kind==='player'?1.02:ENEMY_RADIUS))continue;
+      if(fx.echo&&fx.parentFootprint&&!insideSpellFootprint(fx.parentFootprint,point))continue;
+      const center=[enemy.position[0],enemy.position[1]+(target.kind==='player'?1:ENEMY_HEIGHT*.5),enemy.position[2]];
+      if(outcome(target,center,point,null,fx.area.travel))changed=true;
+     }
+    }
+    fx.lastAt=now;
+    continue;
+   }
    // Charged music-note cyclone sweeps its visible travelling volume each tick.
    // Each touched target has its own 1-second authoritative cooldown.
    const accordionTornado=weapon.id==='accordion'&&fx.charge>=1;

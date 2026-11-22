@@ -1,4 +1,6 @@
 import {weaponAffixTotals} from './weapon-affixes.js';
+export const PALM_STORM_DURATION_MS=6000;
+export const PALM_STORM_TICK_MS=2000;
 export const SNIPER_RANGE=256; // Entire 184m-diameter arena from either edge, with margin.
 // The sniper head check is performed on the SERVER against the actual shot ray.
 // The fighter's combat capsule is 2.35m tall; the head is a small sphere near its top.
@@ -82,7 +84,7 @@ export function contactDamageIntervalMs(weapon){
  const family=weapon?.family;
  return ({fire:1000,lightning:1500,water:1400,wave:1500,ice:1800,
   petal:1650,beam:2200,saber:1600,whip:1600,pan:1500,
-  planter:1800,swatter:1400,palm:2200})[family]||2000;
+  planter:1800,swatter:1400,palm:PALM_STORM_TICK_MS})[family]||2000;
 }
 // Lifetimes follow the authored 00GameDevs and signature effect animations.
 // Never leave an invisible damaging field after its visible animation ends.
@@ -99,6 +101,6 @@ export function visibleCollisionLifetimeMs(weapon,ultimate){
  if(duration)return duration;
  const family=weapon?.family;
  return ({petal:2250,wave:4500,fire:2200,ice:1260,
-  lightning:2500,beam:3500,saber:1250,palm:2500,
+  lightning:2500,beam:3500,saber:1250,palm:PALM_STORM_DURATION_MS,
   planter:3400,water:2200})[family]||projectileFlightMs(weapon,true);
 }

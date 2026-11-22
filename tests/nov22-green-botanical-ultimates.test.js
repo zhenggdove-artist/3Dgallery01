@@ -85,7 +85,7 @@ test('the botanical VFX prewarms each 3D emitter before the loading screen close
  system.dispose();
 });
 
-test('palm ultimate warning is half the former fivefold radius and matches collision and green tornado at every tier',()=>{
+test('palm ultimate warnings are enlarged fourfold at all tiers, aligning collision and green tornado',()=>{
  for(let tier=1;tier<=5;tier++){
   const palm=itemById('palm-'+tier),quality=weaponQuality(palm);
   const stats=attackStats(palm,1);
@@ -93,7 +93,7 @@ test('palm ultimate warning is half the former fivefold radius and matches colli
   stats.radius=forwardCastRadius(palm,quality,stats.radius,false);
   const oldRadius=stats.radius*.6,oldRange=stats.range*.6;
   scaleUltimateFootprint(stats,palm,quality);
-  assert.ok(Math.abs(stats.radius-oldRadius*2.5)<.002,'half the previous fivefold radius at tier '+tier);
+  assert.ok(Math.abs(stats.radius-oldRadius*10)<.002,'four times former 2.5x radius at tier '+tier);
   assert.ok(Math.abs(stats.range-oldRange)<.002,'cast reach remains unchanged');
   const area=chargedArea(palm,[0,1,0],[0,0,1],stats,()=>0);
   const warning=spellFootprint(palm,[0,1,0],[0,0,1],stats,area,()=>0);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {PALM_STORM_DURATION_MS} from './shared/combat-balance.js';
 // Unmodified MIT-licensed 00GameDevs source modules. Do not substitute a drawn
 // approximation: the shader geometry, chain links, cracks and lightning are
 // all authored in these two official exports.
@@ -7,7 +8,7 @@ import goldenChainRain from '../vendor/00gamedevs/source/golden-chain-rain.js';
 
 const SOURCES=Object.freeze({
  palm:{id:'lightning-fire-tornado',name:'Green lightning-fire tornado',factory:lightningFireTornado,
-  color:'#42ff78',speed:2.4,duration:15,density:1},
+  color:'#42ff78',speed:2.5,duration:15,density:1},
  planter:{id:'golden-chain-rain',name:'Three waves of eight green falling chains',factory:goldenChainRain,
   color:'#62ff79',speed:1.6,duration:7.5,density:.5}
 });
@@ -29,7 +30,7 @@ function makeNative(kind){
  fx.group.userData.vfxSource='00GameDevs';
  fx.group.userData.vfxId=definition.id;
  group.add(fx.group);
- return {kind,fx,group,age:0,duration:definition.duration/definition.speed+.15};
+ return {kind,fx,group,age:0,duration:kind==='palm'?PALM_STORM_DURATION_MS/1000:definition.duration/definition.speed+.15};
 }
 
 export class PlantUltimateEffects{
@@ -81,7 +82,7 @@ export class PlantUltimateEffects{
   });
   entry.fx.reset?.();
   entry.fx.group.visible=true;
-  entry.age=0;entry.duration=definition.duration/definition.speed+.15;
+  entry.age=0;entry.duration=kind==='palm'?PALM_STORM_DURATION_MS/1000:definition.duration/definition.speed+.15;
   const origin=Array.isArray(event.origin)?event.origin:[0,1,0];
   const direction=Array.isArray(event.direction)?event.direction:[0,0,1];
   const range=Math.max(1,Number(event.range)||12);

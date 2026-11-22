@@ -20,7 +20,7 @@ const familySkills={
  swatter:'Normal: deliver quick fly-swatter strikes. Ultimate: create a wide frontal whirlwind.',
  pan:'Normal: perform a close-range smash. Ultimate: trigger an explosion that knocks back nearby characters.',
  planter:'Normal: swing a potted plant. Ultimate: call down three waves of luminous green chains over the targeted area, striking enemies caught in the chain rain.',
- palm:'Normal: swing a coconut palm. Ultimate: summon a swirling green lightning-fire tornado over the targeted area, engulfing enemies in a powerful electrical storm.'
+ palm:'Normal: swing a coconut palm. Ultimate: summon a green lightning-fire tornado for 6 seconds, damaging enemies inside once every 2 seconds (up to 3 hits). Warning, damage radius and tornado size grow together with weapon quality.'
 };
 const specials={
  accordion:'Red Accordion — Normal: colorful notes spin around the wielder. Ultimate: a dense note tornado travels forward at triple rotation speed; each target in its path can be hit once per second.',
