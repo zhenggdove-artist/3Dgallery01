@@ -60,7 +60,7 @@ export function projectileFlightMs(weapon,charged=false,range=null){
  if(charged&&weapon.id==='accordion')return 2300;
  if(charged&&weapon.id==='clam')return 2180; // original #33 crest full eased path
  if(charged&&weapon.family==='palm')return 1650; // triple #31 tower
- if(charged&&weapon.family==='saber')return 1100; // extended #38 fissure
+ if(charged&&weapon.family==='saber')return 1550; // official five-wave native cast
  if(charged&&weapon.family==='ice')return 1260;  // doubled #70 reach
  if(weapon.pattern==='scatter')return charged?530:360;
  if(weapon.id==='black-cat')return charged?450:310;
@@ -101,6 +101,6 @@ export function visibleCollisionLifetimeMs(weapon,ultimate){
  if(duration)return duration;
  const family=weapon?.family;
  return ({petal:2250,wave:4500,fire:2200,ice:1260,
-  lightning:2500,beam:3500,saber:1250,palm:PALM_STORM_DURATION_MS,
+  lightning:2500,beam:3500,saber:1550,palm:PALM_STORM_DURATION_MS,
   planter:3400,water:2200})[family]||projectileFlightMs(weapon,true);
 }

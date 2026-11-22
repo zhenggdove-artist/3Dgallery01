@@ -1,0 +1,46 @@
+{
+  "id": "energy-sword-wave",
+  "license": "MIT",
+  "sha256": "7ee6ca50a2666900ff8f35162e32dea858e0f8669c1f89fdbb536a5ee01ad552",
+  "url": "https://00gamedevs.com/downloads/effects/energy-sword-wave.js",
+  "byteLength": 69163,
+  "defaultOptions": {
+    "size": 1,
+    "speed": 1,
+    "detail": 1,
+    "theme": "azure",
+    "quantity": 5,
+    "spread": 1
+  },
+  "integration": {
+    "type": "scene-object",
+    "factory": "default: createVFX",
+    "methods": [
+      "update",
+      "reset",
+      "dispose",
+      "setOptions"
+    ],
+    "playback": "single-shot",
+    "lifecycle": {
+      "start": 0.078,
+      "end": 0.31
+    },
+    "notes": "Five simultaneous crescent waves by default. Add group to the scene, call update(deltaSeconds), and reset() to replay from the same placement. Change quantity, fan spread, theme, size, speed and brightness live. Ground marks are visual only. No external assets, collision, damage, camera argument or custom render pass. Named exports retain the single-wave and fan controllers.",
+    "properties": [
+      "group",
+      "settings",
+      "phase",
+      "finished",
+      "elapsed",
+      "duration"
+    ],
+    "duration": 1.55,
+    "timeUnit": "seconds",
+    "plane": "XZ",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "launch-point"
+  },
+  "contentVersion": "16d841b646079ca5af05d99ffcf1f556d9704eee4b6fb8f6aa63bed9cbfee66f"
+}

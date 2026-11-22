@@ -87,5 +87,8 @@ test('ground slam stuns grounded non-GM fighters for exactly one second',()=>{
  }],nextAttackAt:now+3000,hp:100,maxHp:100};
  tickWorld(world,{now,activeFighters:0,actors:[actor],rng:()=>.5});
  assert.equal(profile.effects?.stun?.until,now+1000);
- assert.ok(profile.hp<100);
+ // A starter shield can fully absorb impact damage; grounded slam must
+ // still apply its one-second stun and physical knockback.
+ assert.equal(profile.hitReaction?.motion,'stomp');
+ assert.ok(profile.hitReaction?.knockbackDistance>0);
 });

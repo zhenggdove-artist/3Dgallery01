@@ -391,6 +391,9 @@ export class WeaponParticleEffects{
  play(data,item,source,end){
   if(!data||!item)return;
   const charged=!!data.ultimate,recipe=recipeFor(item);
+  // The official Energy Sword Wave fully replaces the former purple GPU
+  // fissure overlay on charged saber attacks; normal slashes remain intact.
+  if(charged&&item.family==='saber')return;
   // Ordinary shots for all three cats are always rainbow and shotgun charged
   // produces a nearby, very wide waterfall instead of a distant beam.
   const elementalJet=['fire','water','wave'].includes(item.family)||item.id==='goldfish';

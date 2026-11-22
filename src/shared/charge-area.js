@@ -1,4 +1,5 @@
 import {discGroundHeight} from './artwork-discs.js';
+import {SABER_WAVE_FAN_ANGLE_DEG} from './saber-wave.js';
 import {isChannelStaff,weaponQuality,forwardCastRadius} from './weapon-abilities.js';
 import {itemById,attackStats} from './catalog.js';
 
@@ -72,14 +73,14 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
  return stats;
 }
 
-export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=false){
+export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=false,fusionEcho=false){
  const dir=safeDirection(direction);
  const range=clamp(Number(stats?.range)||Number(item?.range)||8,2,100);
  const radius=clamp(Number(stats?.radius)||2,.1,50);
  // Staff/clam streams are fired from the weapon, not an unrelated distant
  // round explosion. Other spell families retain their target-centred circles.
  const areaUltimate=!!stats?.ultimate&&/^(pan|whip|swatter|palm)-[1-5]$/.test(item?.id||'');
- const mode=item?.id==='clam'?'sector':item?.id==='accordion'&&stats?.ultimate?'corridor':channel&&isChannelStaff(item)?'corridor':
+ const mode=(item?.id==='clam'||item?.family==='saber'&&stats?.ultimate&&!fusionEcho)?'sector':item?.id==='accordion'&&stats?.ultimate?'corridor':channel&&isChannelStaff(item)?'corridor':
   (areaUltimate||AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
  const defaultDistance=clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
  const floorAtDistance=ground(origin[0]+dir[0]*defaultDistance,origin[2]+dir[2]*defaultDistance,origin[1]);
@@ -100,7 +101,7 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
   // Sector radius is its forward reach; circle radius is its AoE extent.
   radius,travel:centerDistance,range,
   ...(mode==='sector'?{apex:[origin[0],nearFloor+.12,origin[2]],
-   forward:[dx,dz],angleDeg:CLAM_SECTOR_ANGLE}: {})
+   forward:[dx,dz],angleDeg:item?.family==='saber'?SABER_WAVE_FAN_ANGLE_DEG:CLAM_SECTOR_ANGLE}: {})
  };
 }
 
@@ -153,9 +154,9 @@ export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
  const [dx,dz]=flatDirection(direction);
  const yaw=Math.atan2(-dz,dx); // official effects face local +X
  const at=(x,z)=>Math.max(0,ground(x,z,origin[1]))+.16;
- if(item?.id==='clam'){
+ if(item?.id==='clam'||item?.family==='saber'&&stats?.ultimate){
   return {shape:'sector',position:[origin[0],at(origin[0],origin[2]),origin[2]],
-   yaw,radius:range,angleDeg:CLAM_SECTOR_ANGLE,range,width};
+   yaw,radius:range,angleDeg:item?.family==='saber'?SABER_WAVE_FAN_ANGLE_DEG:CLAM_SECTOR_ANGLE,range,width};
  }
  if(isChannelStaff(item)||(item?.id==='accordion'&&stats?.ultimate)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||item?.id==='goldfish'){
   const x=origin[0]+dx*range*.5,z=origin[2]+dz*range*.5;

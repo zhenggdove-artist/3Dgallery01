@@ -25,7 +25,10 @@ test('access decks have fewer, twice-as-wide stairs and gentle visual-only float
  display.sync();
  const decks=display.discs.filter(d=>d.display),stairs=display.discs.filter(d=>d.stair);
  assert.equal(decks.length,13);
- assert.equal(stairs.length,PLATFORMS.slice(1).reduce((n,p)=>n+Math.max(5,Math.ceil(p.size[1]/1.7)),0));
+ const previousCount=PLATFORMS.slice(1).reduce((n,p)=>n+Math.max(5,Math.ceil(p.size[1]/1.7)),0);
+ assert.equal(stairs.length,PLATFORMS.slice(1).reduce((n,p)=>
+  n+Math.max(1,Math.round(Math.max(5,Math.ceil(p.size[1]/1.7))/3)),0));
+ assert.ok(stairs.length<=previousCount/2,'new GM gallery has at most half the access discs');
  assert.ok(stairs.every(d=>d.radius===5.4));
  assert.ok(decks.every(d=>d.radius>=4.8&&d.radius<=14));
  const step=stairs[0],idx=display.discs.indexOf(step);
