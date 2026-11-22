@@ -574,7 +574,7 @@ function pickupDrop(world,profile,actor,body,now){
 
 function pickupArtwork(world,actor,body,now){
   const platform=artworkDefinitions(world).find(p=>p.id===body.platformId),art=world.artworks[body.platformId];if(!platform||!art)return {error:'Unknown artwork'};
-  if(art.holder||now<art.availableAt)return {error:'Artwork is unavailable'};if(!near(actor,world.artworkLayout?.[platform.id]?.position||platform.artPosition,4.2))return {error:'Move closer to the artwork'};
+  if(art.holder||now<art.availableAt)return {error:'Artwork is unavailable'};if(!near(actor,world.artworkLayout?.[platform.id]?.position||platform.artPosition,5.2))return {error:'Move closer to the artwork'};
   for(const other of Object.values(world.artworks))if(other.holder===actor.key)other.holder=null;
   art.holder=actor.key;art.throwEvent=null;return {notice:'Artwork ready to throw'};
 }
