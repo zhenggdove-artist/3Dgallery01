@@ -37,6 +37,7 @@ const flatDirection=direction=>{
 };
 export const CLAM_SECTOR_ANGLE=90;
 export const ULTIMATE_FOOTPRINT_SCALE=.6;
+export const PALM_ULTIMATE_RADIUS_MULTIPLIER=5;
 // Authoritative damage geometry and warning VFX always use identical dimensions.
 export function scaleUltimateFootprint(stats,item=null,quality=null){
  if(stats?.ultimate){
@@ -53,7 +54,7 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
   // Palm's green tornado, warning and authoritative hit radius grow fivefold,
   // without extending the reach of the cast. Whip retains its 1.5x multiplier.
   // Goldfish retains its narrow physical collision width.
-  const radiusFactor=(item?.id==='goldfish'||saber?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:palm?5:1);
+  const radiusFactor=(item?.id==='goldfish'||saber?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:palm?PALM_ULTIMATE_RADIUS_MULTIPLIER:1);
   stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);
   stats.radius=+(Math.max(.1,Number(stats.radius)||0)*radiusFactor).toFixed(3);
   if(item?.id==='telephone'){
