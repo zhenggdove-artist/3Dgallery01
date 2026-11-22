@@ -89,11 +89,26 @@ export class GameAudio{
   for(const type of ['touchstart','pointerdown','keydown','click'])
    addEventListener(type,activate,{capture:true,passive:true});
   if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{
-   if(document.visibilityState==='hidden')this.primed=false;
+   if(document.visibilityState==='hidden'){
+    this.primed=false;this.rebindSessionOnNextGesture=true;
+   }
    else if(this.context?.state==='running')this.flushQueued();
   });
  }
  unlock(fromGesture=true){
+  // iOS Web Audio defaults to the ambient session and may be inaudible under
+  // the hardware silent switch even when HTMLAudioElement music is audible.
+  // AudioSession playback puts the music and synthesized effects on one route.
+  if(fromGesture&&typeof navigator!=='undefined'&&navigator.audioSession){
+   try{
+    const session=navigator.audioSession;
+    // After backgrounding, WebKit may retain a stale playback category.
+    // Cycling the type restores the GPU-side audio route on affected iPhones.
+    if(this.rebindSessionOnNextGesture&&session.type==='playback')session.type='ambient';
+    if(session.type!=='playback')session.type='playback';
+    this.rebindSessionOnNextGesture=false;
+   }catch(error){}
+  }
   // Async world snapshots cannot authorize AudioContext.start/resume on iOS.
   // A pending unauthorized resume promise must not block a later real gesture.
   if(!this.context){

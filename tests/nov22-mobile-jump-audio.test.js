@@ -118,3 +118,12 @@ test('pre-entry gesture primes a silent buffer without creating audio from netwo
  assert.match(sound,/this\.unlock\(false\);if\(!this\.music\)/);
  assert.match(main,/audio\.unlock\(false\);audio\.startMusic\(\)/);
 });
+
+test('iOS route is set to playback, and background restoration rebinds it',()=>{
+ const source=readFileSync(new URL('../src/game-audio.js',import.meta.url),'utf8');
+ assert.match(source,/navigator\.audioSession/);
+ assert.match(source,/session\.type='playback'/);
+ assert.match(source,/this\.rebindSessionOnNextGesture&&session\.type==='playback'/);
+ assert.match(source,/session\.type='ambient'/);
+ assert.match(source,/this\.rebindSessionOnNextGesture=true/);
+});
