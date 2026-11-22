@@ -58,7 +58,7 @@ export function createInitialWorld(now=Date.now()){
     profiles:{},customWings:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
-    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),removedPlatformIds:[],persistentAttacks:[],prismLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
+    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
     monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],audioSettings:{},musicVersion:0,
     collector:initialCollector(now),lastCollectorSale:null,
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
@@ -70,9 +70,26 @@ export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
   world.profiles??={};world.customWings??=[];registerCustomWings(world.customWings);
-  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.removedPlatformIds??=[];world.persistentAttacks??=[];world.prismLocks??={};world.pendingArtworkFlights??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
+  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.customPedestals??=[];world.platformOverrides??={};world.removedPlatformIds??=[];world.persistentAttacks??=[];world.prismLocks??={};world.pendingArtworkFlights??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
+  // Older uploaded artworks can have a surviving catalog record but no
+  // interactive world state. The renderer loads them, yet pickup and GM save
+  // both fail. Repair that state without disturbing existing ownership.
+  for(const record of world.customArtworks||[]){
+    world.artworks[record.id]??={availableAt:0,holder:null,throwEvent:null};
+    const art=world.artworks[record.id];
+    if(art?.holder&&!world.profiles[art.holder]){art.holder=null;art.throwEvent=null;art.availableAt=0;}
+    if(record.title?.trim()==='22'){
+      if(!Number.isFinite(art.availableAt)||art.availableAt>now+3600000)art.availableAt=0;
+      const layout=world.artworkLayout[record.id];
+      const pos=layout?.position;
+      const invalid=!Array.isArray(pos)||pos.length!==3||!pos.every(Number.isFinite)||
+        Math.hypot(pos[0],pos[2])>ARENA_RADIUS+5||pos[1]<-2||pos[1]>60;
+      if(invalid&&Array.isArray(record.position)&&record.position.every(Number.isFinite))
+        world.artworkLayout[record.id]={...layout,position:[...record.position],revision:(layout?.revision||0)+1,updatedAt:now};
+    }
+  }
   // Old RELETTER farming data must not survive the removal of the Garden game mode.
   if(world.reletter?.garden)delete world.reletter.garden;
   world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];world.audioSettings??={};world.musicVersion??=0;
@@ -189,7 +206,7 @@ export function worldProfileView(world,actorKey,now){
 export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true){
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
-    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),wallPaint:clone(world.wallPaint||{}),wallPaintRevision:world.wallPaintRevision||0,plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
+    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),customPedestals:clone(world.customPedestals||[]),platformOverrides:clone(world.platformOverrides||{}),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),wallPaint:clone(world.wallPaint||{}),wallPaintRevision:world.wallPaintRevision||0,plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
     prismLocks:Object.fromEntries(Object.entries(world.prismLocks||{}).map(([key,lock])=>[
       key,{targetKey:lock.targetKey,kind:lock.kind,position:clone(lock.position),since:lock.since,
         multiplier:prismDamageMultiplier(now-lock.since),range:lock.range}
@@ -475,7 +492,62 @@ export function applyAction(world,actor,body,context={}){
     world.revision=(world.revision||0)+1;
     return {notice:'GM 個人融合成功率 '+body.percent.toFixed(1)+'%',gmFusionChance:profile.gmFusionChance};
    }
-   if(body.action==='create-platform'){if(!profile.admin)return {error:'僅限 GM'};const p=body.position,r=Number(body.radius);if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)||Math.hypot(p[0],p[2])>88||p[1]<0||p[1]>30||!Number.isFinite(r)||r<.6||r>8)return {error:'圓盤位置或半徑無效'};world.floatingPlatforms??=[];if(world.floatingPlatforms.length>=128)return {error:'已達 128 個圓盤上限'};const platform={id:id(),position:[...p],radius:r};world.floatingPlatforms.push(platform);world.revision++;return {platform,notice:'已建立漂浮圓盤，所有玩家皆可使用'};}
+  if(body.action==='create-platform'){
+    if(!profile.admin)return {error:'僅限 GM'};
+    const position=body.position,radius=Number(body.radius),height=Number(body.height??.62),kind=body.kind==='pedestal'?'pedestal':'disc';
+    if(!validPlatformTransform(position,radius,kind==='pedestal'?height:undefined))return {error:'檯座或圓盤位置／尺寸無效'};
+    const key=id();
+    if(kind==='pedestal'){
+      world.customPedestals??=[];
+      if(world.customPedestals.length>=128)return {error:'已達 128 個檯座上限'};
+      const platform={id:key,position:[...position],radius,height};
+      world.customPedestals.push(platform);world.revision++;
+      return {platformId:'pedestal:custom:'+key,platform,notice:'灰色三角檯座已放置'};
+    }
+    world.floatingPlatforms??=[];
+    if(world.floatingPlatforms.length>=128)return {error:'已達 128 個圓盤上限'};
+    // Legacy floating radius was stored at half its visible radius.
+    const platform={id:key,position:[...position],radius:radius/2};
+    world.floatingPlatforms.push(platform);world.revision++;
+    return {platformId:'floating:'+key,platform,notice:'桃紅色圓盤已放置'};
+  }
+  if(body.action==='update-platform'){
+    if(!profile.admin)return {error:'僅限 GM'};
+    const key=String(body.platformId||''),position=body.position,radius=Number(body.radius);
+    const pedestal=key.startsWith('pedestal:');
+    const height=pedestal?Number(body.height):undefined;
+    if(!validPlatformTransform(position,radius,height))return {error:'檯座或圓盤位置／尺寸無效'};
+    if(key.startsWith('floating:')){
+      const record=(world.floatingPlatforms||[]).find(p=>p.id===key.slice(9));
+      if(!record)return {error:'圓盤不存在'};
+      record.position=[...position];record.radius=radius/2;
+    }else if(key.startsWith('pedestal:custom:')){
+      const record=(world.customPedestals||[]).find(p=>p.id===key.slice(16));
+      if(!record)return {error:'檯座不存在'};
+      record.position=[...position];record.radius=radius;record.height=height;
+    }else{
+      if(!validOriginalPlatformKey(key)||world.removedPlatformIds?.includes(key))return {error:'無效或已刪除的展示物件'};
+      world.platformOverrides??={};
+      world.platformOverrides[key]={position:[...position],radius,...(pedestal?{height}:{})};
+    }
+    world.revision++;return {platformId:key,notice:'展示物件位置與尺寸已同步儲存'};
+  }
+  if(body.action==='repair-artwork'){
+    if(!profile.admin)return {error:'GM only'};
+    const record=artworkDefinitions(world).find(p=>p.id===body.platformId);
+    if(!record)return {error:'Unknown artwork'};
+    const p=body.position;
+    if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)||
+       Math.hypot(p[0],p[2])>ARENA_RADIUS||p[1]<0||p[1]>60)return {error:'Invalid recovery position'};
+    world.artworks[record.id]??={availableAt:0,holder:null,throwEvent:null};
+    Object.assign(world.artworks[record.id],{availableAt:0,holder:null,throwEvent:null});
+    world.pendingArtworkFlights=(world.pendingArtworkFlights||[]).filter(f=>f.event?.platformId!==record.id);
+    const current=world.artworkLayout[record.id],existing=current||{position:record.artPosition,rotation:[0,record.artYaw,0],scale:[1,1,1],appearance:validateAppearance({})};
+    world.artworkLayoutHistory??={};(world.artworkLayoutHistory[record.id]??=[]).push(clone(existing));
+    world.artworkLayoutHistory[record.id]=world.artworkLayoutHistory[record.id].slice(-8);
+    world.artworkLayout[record.id]={...existing,position:[...p],revision:(current?.revision||0)+1,updatedAt:now};
+    world.revision++;return {platformId:record.id,artworkLayout:clone(world.artworkLayout[record.id]),notice:'作品已解鎖並移到 GM 前方 · 可以拾取與編輯'};
+  }
   if(body.action==='delete-platform'){
     if(!profile.admin)return {error:'僅限 GM 刪除圓盤'};
     const key=String(body.platformId||'');
@@ -483,14 +555,18 @@ export function applyAction(world,actor,body,context={}){
       const uid=key.slice(9),index=(world.floatingPlatforms||[]).findIndex(p=>p.id===uid);
       if(index<0)return {error:'圓盤不存在或已遭刪除'};
       world.floatingPlatforms.splice(index,1);
+    }else if(key.startsWith('pedestal:custom:')){
+      const index=(world.customPedestals||[]).findIndex(p=>p.id===key.slice(16));
+      if(index<0)return {error:'檯座不存在'};
+      world.customPedestals.splice(index,1);
     }else{
-      const match=/^(display|stair):(platform-\d{2})(?::(\d{1,2}))?$/.exec(key);
-      const valid=match&&PLATFORMS.some(p=>p.id===match[2])&&(match[1]==='stair'?match[3]!==undefined&&+match[3]<=63:match[3]===undefined);
+      const valid=validOriginalPlatformKey(key);
       if(!valid)return {error:'無效的作品展示圓盤'};
       world.removedPlatformIds??=[];
       if(world.removedPlatformIds.includes(key))return {error:'圓盤已被刪除'};
       world.removedPlatformIds.push(key);
     }
+    if(world.platformOverrides)delete world.platformOverrides[key];
     world.revision++;
     return {notice:'圓盤已刪除 · 所有玩家同步',platformId:key};
   }
@@ -573,7 +649,10 @@ function pickupDrop(world,profile,actor,body,now){
 }
 
 function pickupArtwork(world,actor,body,now){
-  const platform=artworkDefinitions(world).find(p=>p.id===body.platformId),art=world.artworks[body.platformId];if(!platform||!art)return {error:'Unknown artwork'};
+  const platform=artworkDefinitions(world).find(p=>p.id===body.platformId);
+  if(!platform)return {error:'Unknown artwork'};
+  // An imported GM artwork can exist without the old pickup-state entry.
+  const art=world.artworks[body.platformId]??=( {availableAt:0,holder:null,throwEvent:null} );
   if(art.holder||now<art.availableAt)return {error:'Artwork is unavailable'};
   const layout=world.artworkLayout?.[platform.id],position=layout?.position||platform.artPosition;
   const reach=artworkPickupReach(layout);
@@ -612,10 +691,22 @@ function buy(world,profile,body){const item=SHOP_ITEMS.find(entry=>entry.id===bo
 function sell(world,profile,body){const item=itemById(body.itemId),index=profile.inventory.indexOf(body.itemId);if(!item||index<0)return {error:'Item is not owned'};if(item.id===STARTER_LOADOUT.weapon||Object.values(profile.equipment).includes(item.id))return {error:'Unequip this item before selling'};removeInventoryInstance(profile,index);earn(profile,item.sell||Math.floor((item.price||0)*.25),world);return {notice:`Sold ${item.name} · +${item.sell||0} coins`};}
 function equip(profile,body){const item=itemById(body.itemId);if(!item||!profile.inventory.includes(item.id)||!EQUIPPABLE_SLOTS.includes(item.slot))return {error:'Item is not owned'};const index=Number.isInteger(body.inventoryIndex)?body.inventoryIndex:profile.inventory.indexOf(item.id);if(profile.inventory[index]!==item.id)return {error:'Inventory changed: choose the equipment again'};selectEquipmentInstance(profile,item.slot,index);return {notice:`Equipped ${item.name}`};}
 
+function validPlatformTransform(position,radius,height){
+  return Array.isArray(position)&&position.length===3&&position.every(Number.isFinite)&&
+    Math.hypot(position[0],position[2])<=ARENA_RADIUS&&position[1]>=0&&position[1]<=60&&
+    Number.isFinite(radius)&&radius>=.6&&radius<=16&&
+    (height===undefined||(Number.isFinite(height)&&height>=.2&&height<=16));
+}
+function validOriginalPlatformKey(key){
+  const match=/^(display|stair|pedestal):(platform-\d{2})(?::(\d{1,2}))?$/.exec(key);
+  return !!match&&PLATFORMS.some(p=>p.id===match[2])&&
+    (match[1]==='stair'?match[3]!==undefined&&+match[3]<=63:match[3]===undefined);
+}
+
 export function setArtworkLayout(world,profile,body,now=Date.now()){
   if(!profile.admin)return {error:'GM only'};
   const platform=artworkDefinitions(world).find(p=>p.id===body.platformId);if(!platform)return {error:'Unknown artwork'};
-  const art=world.artworks[platform.id];if(art.holder||art.availableAt>now)return {error:'Wait until the artwork returns'};
+  const art=world.artworks[platform.id]??=( {availableAt:0,holder:null,throwEvent:null} );
   const current=world.artworkLayout?.[platform.id];if(body.expectedRevision!==(current?.revision||0))return {error:'Layout changed by another GM. Reload and retry.'};
   const layout=body.layout,vec=value=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);
   if(!layout||!vec(layout.position)||!vec(layout.rotation)||!vec(layout.scale))return {error:'Invalid transform'};
@@ -635,6 +726,9 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
    history.push(clone(current));
    if(history.length>8)history.splice(0,history.length-8);
   }
+  // GM edits override stale held/throw cooldown state, including work '22'.
+  Object.assign(art,{availableAt:0,holder:null,throwEvent:null});
+  world.pendingArtworkFlights=(world.pendingArtworkFlights||[]).filter(f=>f.event?.platformId!==platform.id);
   world.artworkLayout[platform.id]={position:[...layout.position],rotation:[...layout.rotation],scale:[...layout.scale],
    ...(original&&proposedRadius!=null?{platformRadius:proposedRadius}:{}),
    appearance,revision:(current?.revision||0)+1,updatedAt:now};world.revision++;
