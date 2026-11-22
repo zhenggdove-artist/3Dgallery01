@@ -11,6 +11,7 @@ import {equippedItem} from '../src/shared/fusion-adapter.js';
 import {playerStats} from '../src/shared/player-stats.js';
 import {explainEquipment,explainWeapon} from '../src/shared/weapon-info.js';
 import {weaponPresentation} from '../src/shared/weapon-presentation.js';
+import {weaponAffixTotals} from '../src/shared/weapon-affixes.js';
 
 const NOW=99000000;
 const approx=(a,b)=>assert.ok(Math.abs(a-b)<1e-4,'expected '+a+' to equal '+b);
@@ -85,7 +86,8 @@ test('outfit fusion grants 30% of source HP and attack to actual playerStats',()
  approx(final.bonuses.hp,2+4*.3);
  approx(final.bonuses.attack,.025+.05*.3);
  const after=playerStats(world,profile);
- approx(after.maxHp-before.maxHp,12);
+ const hpEnchant=weaponAffixTotals(profile.fusion?.[profile.equipment.weapon]).hp;
+ approx(after.maxHp-before.maxHp,12*(1+hpEnchant/100));
  assert.ok(after.attack>before.attack);
  assert.match(explainEquipment(target,profile.fusion[target.id]),/最大生命值/);
 });

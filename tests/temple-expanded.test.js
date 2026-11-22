@@ -175,12 +175,12 @@ test('uploaded art stays projectile equipment, never a damageable BUILD structur
 test('regular strikes damage every player-built structure even after hitting a fighter',()=>{
  const world=createInitialWorld(1000),caster=actor('caster',[75,0,0]),target=actor('target',[75,0,3]);
  ensureProfile(world,caster.key,caster.name,caster.color,1000).equipment.weapon='tide-1';
- ensureProfile(world,target.key,target.name,target.color,1000);
+ const victim=ensureProfile(world,target.key,target.name,target.color,1000),initialHp=victim.hp;
  world.structures=[{id:'shared-cube',kind:'cube',owner:'builder',position:[75,0,5],hp:140,maxHp:140,rotation:0,createdAt:1000}];
  const strike=applyAction(world,caster,{action:'attack',direction:[0,0,1],charge:0},{now:5000,actors:[caster,target]});
  assert.equal(strike.hit,null,'PvP hit resolves only on projectile contact');
  tickWorld(world,{now:5400,actors:[caster,target],rng:()=>.5,activeFighters:0});
- assert.ok(world.profiles.target.hp<100);
+ assert.ok(world.profiles.target.hp<initialHp,'fighter HP must decrease from its own randomized maximum');
  assert.ok(strike.structureHit,JSON.stringify(strike.error||strike));
  assert.equal(strike.structureHits.length,1);
  assert.ok(world.structures[0].hp<140);
