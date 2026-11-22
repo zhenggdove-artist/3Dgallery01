@@ -215,7 +215,8 @@ export class PlantUltimateEffects {
     [origin[0]+direction[0]*distance,0,origin[2]+direction[2]*distance];
   entry.age=0;entry.group.visible=true;
   entry.group.position.set(Number(center[0])||0,Math.max(.08,Number(center[1])||0),Number(center[2])||0);
-  entry.group.scale.setScalar(clamp(radius/3.3,.35,3));
+  if(kind==='palm')entry.group.scale.set(clamp(radius/1.82,.35,15),clamp(radius/3.3,.35,3.5),clamp(radius/1.82,.35,15));
+  else entry.group.scale.setScalar(clamp(radius/3.5,.35,10));
   entry.group.rotation.set(0,0,0);
   if(kind==='palm')updateTornado(entry);else updateChainRain(entry);
   this.scene.add(entry.group);this.active.push(entry);
