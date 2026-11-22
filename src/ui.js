@@ -22,7 +22,7 @@ const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(
 
 export class TempleUI extends EventTarget{
   constructor(){
-    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.wingPaymentStatus=null;this.firebaseIdToken='';this.authMode='firebase';
+    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.wingPaymentStatus=null;this.firebaseIdToken='';this.authMode='firebase';this.pendingLoginMode='firebase';this.joining=false;
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
     bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
     this.bind();$('gm-help').onclick=()=>this.openPanel('help');$('gm-menu').onclick=()=>this.openPanel('gm');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag'&&cell.dataset.inventoryIndex!==undefined){
@@ -99,13 +99,23 @@ export class TempleUI extends EventTarget{
       if(this.googleLoginBusy)return;
       this.googleLoginBusy=true;
       this.firebaseIdToken='';
+      this.pendingLoginMode='firebase';
       this.form.hidden=true;
       $('entry-error').textContent='';
       $('account-login-status').textContent='正在開啟 Google 帳號選擇視窗…';
       this.emit('firebase-login');
     });
+    $('guest-form').addEventListener('submit',event=>{
+      event.preventDefault();
+      if(this.joining)return;
+      $('guest-error').textContent='';
+      this.pendingLoginMode='guest';
+      this.emit('join',{name:$('guest-name').value.trim(),color:$('guest-color').value,
+        mode:'guest',backendUrl:window.TEMPLE_CONFIG.backendUrl});
+    });
     this.form.addEventListener('submit',event=>{
       event.preventDefault();$('entry-error').textContent='';
+      this.pendingLoginMode='firebase';
       if(!this.firebaseIdToken)return this.joinError('Select a Google account first.');
       this.emit('join',{name:$('player-name').value.trim(),color:$('clothing-color').value,
         firebaseIdToken:this.firebaseIdToken,backendUrl:window.TEMPLE_CONFIG.backendUrl});
@@ -157,6 +167,7 @@ export class TempleUI extends EventTarget{
   }
   selectFirebaseAccount(token,profile=null){
     this.googleLoginBusy=false;
+    this.pendingLoginMode='firebase';
     this.entry.querySelector('[data-google-login]').disabled=false;
     this.firebaseIdToken=token;
     const existing=!!profile;
@@ -172,8 +183,26 @@ export class TempleUI extends EventTarget{
     $('player-name').required=true;
     if(!existing)$('player-name').focus();
   }
-  joinBusy(value){$('enter-button').disabled=value;$('enter-button').textContent=value?'Connecting…':this.entryExistingProfile?'Enter Game':'Create & Enter';}
-  joinError(message){const details=String(message||'Sign-in failed');$('entry-error').textContent=details;const status=$('account-login-status');if(status&&this.entry&&!this.entry.hidden)status.textContent='Character loading failed. '+details+' Select your Google account to retry.';this.googleLoginBusy=false;this.entry.querySelector('[data-google-login]').disabled=false;this.joinBusy(false);}
+  joinBusy(value){
+    this.joining=!!value;
+    $('enter-button').disabled=value;
+    $('enter-button').textContent=value?'Connecting…':this.entryExistingProfile?'Enter Game':'Create & Enter';
+    $('guest-enter').disabled=value;
+    $('guest-enter').textContent=value&&this.pendingLoginMode==='guest'?'Connecting…':'Enter as Guest';
+  }
+  joinError(message){
+    const details=String(message||'Sign-in failed');
+    if(this.pendingLoginMode==='guest')$('guest-error').textContent=details;
+    else{
+      $('entry-error').textContent=details;
+      const status=$('account-login-status');
+      if(status&&this.entry&&!this.entry.hidden)
+       status.textContent='Character loading failed. '+details+' Select your Google account to retry.';
+    }
+    this.googleLoginBusy=false;
+    this.entry.querySelector('[data-google-login]').disabled=false;
+    this.joinBusy(false);
+  }
   enter(data){document.activeElement?.blur();this.self=data.self;this.authMode=data.authMode||'firebase';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;$('gm-menu').hidden=!data.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;$('gm-menu').hidden=!this.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();if(this.panelName&&this.panelName!=='bag')this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
