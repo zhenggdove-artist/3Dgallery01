@@ -83,7 +83,8 @@ export class GameAudio{
     }
     return true;
    }).catch(()=>false);
-  for(const type of ['pointerdown','keydown'])addEventListener(type,()=>{this.unlock();if(this.music?.paused)this.startMusic();},{passive:true});
+  // Capture a real touch gesture BEFORE the jump-button target dispatches its cue.
+  for(const type of ['touchstart','pointerdown','keydown'])addEventListener(type,()=>{this.unlock();if(this.music?.paused)this.startMusic();},{capture:true,passive:true});
  }
  unlock(){
   if(!this.context){
@@ -98,7 +99,14 @@ export class GameAudio{
    for(let i=0;i<n;i++)data[i]=Math.random()*2-1;
    this.noise=buffer;
   }
-  if(this.context.state==='suspended')this.context.resume().catch(()=>{});
+  // iOS Safari may transition to "interrupted" on background/resume.
+  // Start the resume synchronously in the trusted event (not a later microtask).
+  if(this.context.state!=='running'&&!this.resumePending){
+   try{
+    const pending=this.context.resume();
+    this.resumePending=Promise.resolve(pending).catch(()=>{}).finally(()=>{this.resumePending=null;});
+   }catch(error){this.resumePending=null;}
+  }
  }
  setVolumes(settings={}){
   for(const [key,value] of Object.entries(settings||{}))if(/^[a-z][a-z0-9-]{0,60}$/.test(key)&&Number.isFinite(Number(value)))
@@ -142,11 +150,14 @@ export class GameAudio{
  play(kind,volume=1,pitch=1){
   if(!this.context)this.unlock();
   if(!this.context||this.muted||this.voices>=34)return;
-  if(this.context.state==='suspended'){
-   this.context.resume().then(()=>{if(this.context?.state==='running')this.play(kind,volume,pitch);}).catch(()=>{});
-   return;
+  if(this.context.state!=='running'){
+   this.unlock();
+   if(this.context.state!=='running'){
+    // Play once after gesture-authorized audio resumes, never lose the jump cue.
+    this.resumePending?.then(()=>{if(this.context?.state==='running')this.play(kind,volume,pitch);});
+    return;
+   }
   }
-  if(this.context.state!=='running')return;
   const ctx=this.context,now=ctx.currentTime,key=kind||'shot';
   if(now-(this.last?.[key]??-10)<.04)return;
   (this.last??={})[key]=now;this.played[key]=(this.played[key]||0)+1;
