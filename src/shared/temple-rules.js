@@ -81,6 +81,12 @@ export function migrateWorld(raw,now=Date.now()){
     const art=world.artworks[record.id];
     if(art?.holder&&!world.profiles[art.holder]){art.holder=null;art.throwEvent=null;art.availableAt=0;}
     if(record.title?.trim()==='22'){
+      // One-time unlock of the specifically reported stuck exhibit; do not
+      // reset legitimate pickups on every room migration/snapshot.
+      if(!world.artwork22UnlockMigrationApplied){
+        art.holder=null;art.throwEvent=null;art.availableAt=0;
+        world.artwork22UnlockMigrationApplied=true;world.revision=(world.revision||0)+1;
+      }
       if(!Number.isFinite(art.availableAt)||art.availableAt>now+3600000)art.availableAt=0;
       const layout=world.artworkLayout[record.id];
       const pos=layout?.position;
