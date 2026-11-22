@@ -8,7 +8,8 @@ import arcRay from '../vendor/00gamedevs/source/arc-ray.js';
 import energyVortex from '../vendor/00gamedevs/source/energy-vortex.js';
 import frostWheel from '../vendor/00gamedevs/source/frost-wheel.js';
 import tidalSurge from '../vendor/00gamedevs/source/tidal-surge.js';
-import magmaFissure from '../vendor/00gamedevs/source/magma-fissure.js';
+import energySwordWave from '../vendor/00gamedevs/source/energy-sword-wave.js';
+import {SABER_WAVE_COUNT,SABER_WAVE_FAN_ANGLE_DEG} from './shared/saber-wave.js';
 import revivalBloom from '../vendor/00gamedevs/source/revival-bloom.js';
 import dimensionalRend from '../vendor/00gamedevs/source/dimensional-rend.js';
 import blackHole from '../vendor/00gamedevs/source/black-hole.js';
@@ -23,7 +24,7 @@ export const REQUESTED_VFX=Object.freeze({
  'clam:channel':{number:33,asset:'tidal-surge',original:true},
  'clam:ultimate':{number:33,asset:'tidal-surge',original:true},
  'beam:channel':{number:29,asset:'charged-beam',original:true},
- 'saber:ultimate':{number:38,asset:'magma-fissure',original:true},
+ 'saber:ultimate':{number:0,asset:'energy-sword-wave',original:true},
  'petal:channel':{number:43,asset:'revival-bloom',original:true},
  'petal:ultimate':{number:43,asset:'revival-bloom',original:true},
  'swatter:ultimate':{number:53,asset:'darkchain-detonation',original:true},
@@ -39,7 +40,7 @@ export const REQUESTED_VFX=Object.freeze({
 });
 const FACTORIES={
  'arc-ray':arcRay,'energy-vortex':energyVortex,'frost-wheel':frostWheel,
- 'tidal-surge':tidalSurge,'magma-fissure':magmaFissure,'revival-bloom':revivalBloom,
+ 'tidal-surge':tidalSurge,'energy-sword-wave':energySwordWave,'revival-bloom':revivalBloom,
  'dimensional-rend':dimensionalRend,'black-hole':blackHole,
  'darkchain-detonation':darkchain,'rolling-fireburst':rollingFireburst,
  'ice-lance-study':iceLance,'anime-flame-shield':animeFlame,'radiant-beam':radiantBeam,
@@ -131,7 +132,7 @@ export class NumberedWeaponEffects {
   const fx=factory(budgetedNativeOptions(spec,options));
   if(!fx?.group?.isObject3D||typeof fx.update!=='function'||typeof fx.dispose!=='function')
    throw Error('Invalid original 00GameDevs VFX #'+spec.number);
-  fx.group.name=spec.asset==='charged-beam'?'00GameDevs original VFX charged-beam':'00GameDevs original VFX #'+String(spec.number).padStart(2,'0')+' '+spec.asset;
+  fx.group.name=!spec.number?'00GameDevs original VFX '+spec.asset:spec.asset==='charged-beam'?'00GameDevs original VFX charged-beam':'00GameDevs original VFX #'+String(spec.number).padStart(2,'0')+' '+spec.asset;
   fx.group.userData.vfxSource='00GameDevs';
   fx.group.userData.vfxId=spec.asset;
   fx.group.userData.vfxNumber=spec.number;
@@ -212,7 +213,7 @@ export class NumberedWeaponEffects {
   let size=spec.number===70?normalSize*.5*(event.ultimate?1.5:1):normalSize;
   // The nozzle and authored free flame have a 10-local-metre reach.
   // Scale its world container to the server's range, not its actual props.
-  if(spec.number===73)size=1;
+  if(spec.number===73||spec.asset==='energy-sword-wave')size=1;
   if(spec.number===31)size=Math.max(.25,Math.min(3.5,quality));
   if(event.ultimate&&!event.channel&&Number.isFinite(event.area?.radius)&&![26,29,31,38,70].includes(spec.number)){
    // Reconstruct the old vendor size first. Applying only the matching
@@ -221,7 +222,8 @@ export class NumberedWeaponEffects {
    const originalRadius=cosmeticRadius/(spec.number===68?.5:spec.number===48?.2:1);
    size=Math.max(.25,Math.min(3.5,originalRadius/4.5));
   }
-  const options={size,quality,detail:event.fusionEcho?.55:1,density:event.fusionEcho?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined};
+  const options={size,quality,detail:event.fusionEcho?.55:1,density:event.fusionEcho?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined,
+    ...(spec.asset==='energy-sword-wave'?{theme:'void',quantity:SABER_WAVE_COUNT,spread:SABER_WAVE_FAN_ANGLE_DEG/60,speed:1}: {})};
   if(!options.color)delete options.color;
   if(spec.number===47)for(const old of [...this.active])if(old.spec.number===47)this.remove(old);
   const fx=this.acquire(spec,options);
@@ -229,7 +231,7 @@ export class NumberedWeaponEffects {
   // The official charged-beam ray starts at the weapon muzzle, not
   // at an unrelated remote ground-circle centre.
   // Sword cracks begin from the hand, not a distant ground-target position.
-  const areaLocked=!!event.ultimate&&!event.channel&&![20,29,31,33,38,43].includes(spec.number)&&Array.isArray(event.area?.visualCenter);
+  const areaLocked=!!event.ultimate&&!event.channel&&spec.asset!=='energy-sword-wave'&&![20,29,31,33,38,43].includes(spec.number)&&Array.isArray(event.area?.visualCenter);
   const target=areaLocked?vector(event.area.visualCenter,origin):origin.clone();
   const entry={
    spec,fx,group:fx.group,root,item,direction,visualDirection:direction.clone(),origin,target,options,
@@ -238,7 +240,7 @@ export class NumberedWeaponEffects {
    worldScale:ultimateWorldScale(spec.number,event,options),
    range:Math.max(.5,Number(event.range)||12),
    key,channel:!!event.channel,fusionEcho:!!event.fusionEcho,areaLocked,age:0,
-   duration:event.channel?Infinity:(spec.number===31?2.5:spec.number===20?4.5:spec.number===33?3.3:spec.number===43?2.25:spec.number===48?6.5:spec.number===53?7:5),
+   duration:event.channel?Infinity:(spec.asset==='energy-sword-wave'?1.55:spec.number===31?2.5:spec.number===20?4.5:spec.number===33?3.3:spec.number===43?2.25:spec.number===48?6.5:spec.number===53?7:5),
    lastPulse:performance.now(),stopping:false,
    heading:root?.rotation.y||0,
    // These original assets are one-shot. Each next copy begins before the
@@ -328,6 +330,17 @@ export class NumberedWeaponEffects {
    return;
   }
   fx.group.position.copy(origin);
+  if(spec.asset==='energy-sword-wave'){
+   // The untouched 00GameDevs source emits five violet crescents on XZ,
+   // facing +Z in a symmetrical 60-degree spread. Match actual server range.
+   const forward=dir.clone().setY(0);
+   if(forward.lengthSq()<.001)forward.set(0,0,1);
+   forward.normalize();
+   fx.group.position.y=Math.max(.12,origin.y-1.16);
+   fx.group.quaternion.setFromUnitVectors(FORWARD,forward);
+   fx.group.scale.setScalar(range/17.5);
+   return;
+  }
   if(spec.number===38){
    // The exact original #38 has an authored local +X crack spanning
    // -2.25..+2.43. Its former position at the muzzle put half the crack
