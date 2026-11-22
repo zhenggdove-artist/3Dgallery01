@@ -63,16 +63,16 @@ test('ordinary water clam needs 8–10 strikes and never inflicts charged-only s
 });
 test('damage is absent on firing and while the sphere has not yet reached the avatar',()=>{
  const {w,caster,victim,b}=scenario('calico-cat',[75,0,8]);
- const at=T+2000,shot=fire(w,caster,at);
+ const at=T+2000,initialHp=b.hp,shot=fire(w,caster,at);
  assert.equal(shot.attackEvent.pellets.length,20);
- assert.equal(b.hp,100);
+ assert.equal(b.hp,initialHp);
  assert.equal((w.damageEvents||[]).length,0);
  assert.equal(shot.hit,null);
  advance(w,at+90,[caster,victim]);
- assert.equal(b.hp,100,'90ms pellet travel cannot reach the eight-metre victim');
+ assert.equal(b.hp,initialHp,'90ms pellet travel cannot reach the eight-metre victim');
  assert.equal((w.damageEvents||[]).length,0);
  advance(w,at+365,[caster,victim]);
- assert.ok(b.hp<100);
+ assert.ok(b.hp<initialHp);
  const events=worldView(w,'victim',at+366).damageEvents.filter(e=>e.target==='victim');
  assert.ok(events.length>0,'damage digits appear only at actual contact');
  const old=b.hp;
@@ -81,12 +81,12 @@ test('damage is absent on firing and while the sphere has not yet reached the av
 });
 test('moving out of the trajectory before impact avoids all hits',()=>{
  const {w,caster,victim,b}=scenario('calico-cat',[75,0,8]);
- const at=T+2000;
+ const at=T+2000,initialHp=b.hp;
  fire(w,caster,at);
  advance(w,at+80,[caster,victim]);
  victim.position=[89,0,8];
  advance(w,at+365,[caster,victim]);
- assert.equal(b.hp,100);
+ assert.equal(b.hp,initialHp);
  assert.equal((w.damageEvents||[]).filter(e=>e.target==='victim').length,0);
 });
 test('shotgun uses twenty unique randomly scattered 3-D sphere trajectories, each with a complex multicolour surface',()=>{
@@ -129,9 +129,10 @@ test('black-cat rifle retains slow high-damage long-range shots unlike regular 8
  assert.equal(fire(w,caster,at+500).error,'Weapon is recovering');
  assert.equal(fire(w,caster,at+3700).error,undefined);
  const {w:charged,caster:c,victim:v,b:target}=scenario('black-cat',[75,0,30]);
+ const initialChargedHp=target.hp;
  assert.ok(applyAction(charged,c,{action:'attack',phase:'charge',scoped:true},{now:T+1000}).charging);
  const ultimate=fire(charged,c,T+4000,{charge:1});
  assert.equal(ultimate.attackEvent.ultimate,true);
  advance(charged,T+4500,[c,v]);
- assert.ok(target.hp<65,'longer charge increases black-cat ultimate damage');
+ assert.ok(initialChargedHp-target.hp>35,'longer charge increases black-cat ultimate damage');
 });
