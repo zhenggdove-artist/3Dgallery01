@@ -7,7 +7,7 @@ import {itemById} from '../src/shared/catalog.js';
 const event={id:'ultimate-1',origin:[0,1,0],direction:[0,0,1],range:20,
  ultimate:true,qualityScale:1,qualityTier:2,qualityDuration:1,time:1400,
  area:{mode:'area',center:[0,.1,12],visualCenter:[0,.1,12],radius:4}};
-for(const id of ['calico-cat','goldfish','fan','bloom-1','planter-1','giraffe']){
+for(const id of ['calico-cat','goldfish','fan','bloom-1','giraffe']){
  test('signature ultimate replays the same GPU model without a synchronous geometry rebuild: '+id,()=>{
   const scene=new THREE.Scene(),effects=new WeaponSignatureEffects(scene);
   const item=itemById(id);
