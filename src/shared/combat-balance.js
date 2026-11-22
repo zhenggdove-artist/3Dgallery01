@@ -1,3 +1,4 @@
+import {weaponAffixTotals} from './weapon-affixes.js';
 export const SNIPER_RANGE=256; // Entire 184m-diameter arena from either edge, with margin.
 // The sniper head check is performed on the SERVER against the actual shot ray.
 // The fighter's combat capsule is 2.35m tall; the head is a small sphere near its top.
@@ -38,6 +39,11 @@ export function pvpShotDamage(weapon,stats,quality={tier:1}){
  // this multiplier for PvP as well as monster and structural damage.
  if(weapon.id==='giraffe'&&stats?.ultimate)base*=3;
  if(weapon.id==='goldfish'&&stats?.ultimate)base*=3;
+ const enchant=weaponAffixTotals(weapon);
+ // The per-instance bonus applies to PvP as well as the server's monster
+ // damage, without changing the weapon's physical reach or collision shape.
+ base*=1+(enchant.damage+enchant.attack)/100;
+ if(stats?.ultimate)base*=1+enchant.charge/100;
  return +(weapon.id==='white-cat'?base*.5:base).toFixed(3);
 }
 // These durations describe the actual visible moving volumes, not an

@@ -23,6 +23,7 @@ import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
+import {weaponAffixTotals} from './weapon-affixes.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS} from './vortex-flight.js';
@@ -673,7 +674,9 @@ function attack(world,profile,actor,body,context,now){
   const charge=channel?1:Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
   if(!channel)profile.chargeStartedAt=0;
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
-  stats.damage=+(stats.damage*quality.damage).toFixed(2);
+  const enchants=weaponAffixTotals(weapon);
+  stats.damage=+(stats.damage*quality.damage*(1+enchants.damage/100)*
+   (stats.ultimate?1+enchants.charge/100:1)).toFixed(3);
   // A held staff actually projects forward. Its visual spray and authoritative
   // collision must use exactly the same range; no 11m decorative overshoot.
   if(channel)stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range))*channelReachMultiplier(weapon);
@@ -758,7 +761,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
-      radius:stats.radius,area,damage:stats.damage+bonus*.1,pvpDamage,charge,
+      radius:stats.radius,area,damage:stats.damage+bonus*.1,pvpDamage,charge,critChance:weapon.critChance,
       qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,
       flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
       hits:[],pelletHits:{},areaResolved:false,
@@ -1401,7 +1404,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     const channelKey=fx.owner+':'+weapon.id+':'+(fx.echo?'echo'+(fx.fusionSlot??0):'main')+':'+hitKey;
     const due=fx.channel?(world.channelContactLocks?.[channelKey]||0):(fx.hitTimes[hitKey]||0);
     if(now<due)return false;
-    const modifiers=directHitModifiers(weapon,{origin:fx.origin,direction:pellet===null?fx.direction:fx.pellets[pellet].direction,range:fx.range},
+    const modifiers=directHitModifiers(Number.isFinite(fx.critChance)?{...weapon,critChance:fx.critChance}:weapon,{origin:fx.origin,direction:pellet===null?fx.direction:fx.pellets[pellet].direction,range:fx.range},
       {...enemy,island:true,visualScale:isPlayer?1:ENEMY_HEIGHT/1.575},position,now,rng);
     const power=isPlayer?fx.pvpDamage:fx.damage;
     const critical=isPlayer?Math.min(1.14,modifiers.multiplier):modifiers.multiplier;
