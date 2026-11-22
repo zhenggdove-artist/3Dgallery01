@@ -94,8 +94,9 @@ test('Collector spawning atop a fighter requires exit and reentry before aggress
  tickWorld(world,{now:NOW,actors:[fighter('early',spot)],rng:()=>.4});
  assert.equal(world.collector.active,true);
  assert.equal(world.collector.shots.length,0);
+ const hpBefore=p.hp;
  tickWorld(world,{now:NOW+100,actors:[fighter('early',spot)]});
- assert.equal(p.hp,100);
+ assert.equal(p.hp,hpBefore,'Collector must not shoot before exit and reentry');
 });
 
 test('Collector appraisals never expire automatically and only dismiss on pointerdown',()=>{

@@ -60,6 +60,7 @@ test('artwork does not damage fighters or collapse buildings until actual ballis
  const from=ensureProfile(world,'caster','caster','#aaaaaa',T),
   to=ensureProfile(world,'victim','victim','#aaaaaa',T);
  to.spawnProtectedUntil=0;
+ const initialVictimHp=to.hp;
  const id=Object.keys(world.artworks)[0];world.artworks[id].holder='caster';
  world.structures=[{id:'nearby-house',kind:'house',position:[45,0,45],
   rotation:0,owner:'player',hp:120,maxHp:120}];

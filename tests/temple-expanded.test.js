@@ -21,11 +21,11 @@ test('every weapon has finite charge distance and a target rune outside the cast
  assert.equal(insideChargedArea(area,[area.center[0]+1,1,area.center[2]]),true);
  assert.equal(insideChargedArea(area,[999,1,999]),false);
 });
-test('all authored art-route discs have double visual/collision radii',()=>{
- assert.equal(ARTWORK_DISCS.length,75);
- assert.ok(ARTWORK_DISCS.every(d=>d.radius>=4.8));
+test('three authored art routes use fewer, lower and twice-as-wide discs',()=>{
+ assert.equal(ARTWORK_DISCS.length,39);
+ assert.ok(ARTWORK_DISCS.every(d=>d.radius>=9.6&&d.radius<=16));
  const p=ARTWORK_DISCS[0];
- assert.equal(discGroundHeight(p.position[0],p.position[2],p.top),p.top);
+ assert.ok(discGroundHeight(p.position[0],p.position[2],p.top)>=p.top);
 });
 test('players own their uploaded artworks; ownership, size, and limits are enforced',()=>{
  const world=createInitialWorld(1000),owner=actor('owner'),other=actor('other');
