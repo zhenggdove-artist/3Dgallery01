@@ -37,7 +37,7 @@ export class PlantUltimateEffects{
   this.scene=scene;
   this.active=[];
   this.pools={palm:[],planter:[]};
-  this.limit=8;
+  this.limit=6;
  }
  create(kind){return makeNative(kind);}
  async warm(renderer,camera){

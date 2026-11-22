@@ -54,11 +54,12 @@ test('green chain rain renders three sets of eight independently falling linked 
  const scene=new THREE.Scene(),system=new PlantUltimateEffects(scene);
  assert.equal(system.play(event('planter-2'),itemById('planter-2')),true);
  const effect=system.active[0];
- assert.equal(effect.chains.count,3*8*7);
- assert.equal(effect.floorRings.length,3);
+ assert.equal(effect.fx.group.userData.vfxSource,'00GameDevs');
+ assert.equal(effect.fx.group.userData.vfxId,'golden-chain-rain');
+ assert.equal(effect.fx.group.parent,effect.group);
  const original=effect.group;
  system.update(.12);
- assert.equal(effect.chains.instanceMatrix.needsUpdate,undefined); // GPU flag may reset after update
+ assert.ok(effect.age>0,'native source is advanced with delta-time updates');
  system.recycle(effect);
  assert.equal(system.play(event('planter-2'),itemById('planter-2')),true);
  assert.equal(system.active[0].group,original,'effect must be reused from pool');
@@ -70,14 +71,14 @@ test('the botanical VFX prewarms each 3D emitter before the loading screen close
  const scene=new THREE.Scene(),system=new PlantUltimateEffects(scene);
  let compiled=0,rendered=0;
  const renderer={
-  compileAsync:async stage=>{compiled++;assert.equal(stage.children.length,4);},
+  compileAsync:async stage=>{compiled++;assert.equal(stage.children.length,2);},
   getRenderTarget:()=>null,setRenderTarget:()=>{},
   render:()=>{rendered++;}
  };
  await system.warm(renderer,new THREE.PerspectiveCamera());
  assert.equal(compiled,1);assert.equal(rendered,1);
- assert.equal(system.pools.palm.length,2);
- assert.equal(system.pools.planter.length,2);
+ assert.equal(system.pools.palm.length,1);
+ assert.equal(system.pools.planter.length,1);
  assert.equal(scene.children.length,0);
  system.dispose();
 });

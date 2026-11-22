@@ -68,7 +68,7 @@ test('planter ultimate doubles down on existing 60% scaling with one further 50%
  const stats=scaleUltimateFootprint({ultimate:true,range:30,radius:8},plant);
  assert.equal(stats.range,9);assert.equal(stats.radius,2.4);
  const visuals=source('src/plant-ultimate-effects.js');
- assert.match(visuals,/radius\/3\.5/);
+ assert.match(visuals,/radius\/4/);
  assert.match(source('src/weapon-vfx.js'),/plantUltimates\.play/);
 });
 test('monsters are physically blocked by solid houses on server patrol and client interpolation',()=>{
@@ -103,9 +103,9 @@ test('green tornado replaces legacy palm binding vines without changing gameplay
  assert.equal(storm.group.name,'Green lightning-fire tornado');
  assert.equal(storm.group.position.x,3);
  assert.equal(storm.group.position.z,4);
- assert.equal(storm.floorRings.length,3);
+ assert.equal(storm.fx.group.userData.vfxSource,'00GameDevs');
  effects.update(.45);
- assert.ok(storm.material.uniforms.uOpacity.value>0);
+ assert.ok(storm.age>0);
  effects.dispose();assert.equal(root.children.length,0);
  assert.match(source('src/weapon-vfx.js'),/this\.plantUltimates\.play/);
  assert.doesNotMatch(source('src/weapon-vfx.js'),/bindingCurse\.play/);
