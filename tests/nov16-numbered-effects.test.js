@@ -12,7 +12,7 @@ import {attackStats,itemById} from '../src/shared/catalog.js';
 import {WeaponVFX} from '../src/weapon-vfx.js';
 
 const references=[
- ['clam',33,'channel'],['prism-1',29,'channel'],['saber-1',38,'ultimate'],['bloom-1',43,'channel'],
+ ['clam',33,'channel'],['prism-1',29,'channel'],['saber-1',0,'ultimate'],['bloom-1',43,'channel'],
  ['swatter-1',53,'ultimate'],['ember-1',73,'channel'],['pan-1',68,'ultimate'],
  ['frost-1',70,'channel'],['storm-1',8,'channel'],['nova-1',20,'channel'],
  ['saber-4',47,'combo'],['jellybrella',26,'ultimate'],['whip-1',48,'ultimate']
@@ -40,6 +40,15 @@ test('numbered effects retain verified originals; prism alone switches to origin
    assert.match(source.toString(),/"id": "charged-beam"/);
    continue; // The old numbered #29 is retained on disk for other effects.
   }
+  if(weapon==='saber-1'){
+   const native=JSON.parse(await readFile(new URL('../vendor/00gamedevs/energy-sword-wave-manifest.json',import.meta.url)));
+   assert.equal(spec.asset,'energy-sword-wave');
+   assert.equal(native.license,'MIT');
+   assert.equal(native.url,'https://00gamedevs.com/downloads/effects/energy-sword-wave.js');
+   const source=await readFile(new URL('../vendor/00gamedevs/source/energy-sword-wave.js',import.meta.url));
+   assert.equal(createHash('sha256').update(source).digest('hex'),native.sha256);
+   continue;
+  }
   const manifestEntry=manifest.assets.find(a=>a.number===num);
   assert.equal(manifestEntry?.id,spec.asset,weapon);
   assert.equal(manifestEntry.license,'MIT');
@@ -62,18 +71,16 @@ test('every numbered attack instantiates an actual source module, never a partic
   assert.equal(entry.group.userData.vfxNumber,num);
   assert.equal(scene.children.includes(entry.group),true);
   if(kind==='ultimate'){
-   if(num===38){
-    assert.ok(entry.group.position.z>0,'#38 cannot be centred at the actor');
-    const length=entry.range;
-    const tip=entry.group.position.clone().add(new THREE.Vector3(-2.25,0,0)
-       .multiply(entry.group.scale).applyQuaternion(entry.group.quaternion));
-    tip.y=1; // the ground crack starts below the hand, on the terrain
-    assert.ok(Math.abs(tip.z)<.02,'first crack must start at the sword');
-    assert.ok(Math.abs(entry.group.userData.fissureRange-length)<1e-8);
-    const axis=new THREE.Vector3(1,0,0).applyQuaternion(entry.group.quaternion);
-    assert.ok(axis.distanceTo(new THREE.Vector3(0,0,1))<1e-8,'crack must point along the sword ray');
-    assert.ok(Math.abs(entry.group.scale.x-entry.range/4.68)<1e-8,'length follows server range, not sideways stretch');
-    assert.ok(Math.abs(entry.group.scale.z-2/3)<1e-8,'side-to-side fissure is one-third prior width');
+   if(num===0){
+    assert.equal(entry.fx.settings.theme,'void','Energy Sword Wave is violet');
+    assert.equal(entry.fx.settings.quantity,5,'exactly five native sword crescents');
+    assert.equal(entry.fx.settings.spread,1,'source 60-degree fan');
+    assert.ok(Math.abs(entry.group.position.z)<1e-8,'sword fan starts at the player');
+    assert.ok(Math.abs(entry.group.position.y-.12)<1e-8,'sword fan starts at ground level');
+    assert.ok(Math.abs(entry.group.scale.x-entry.range/17.5)<1e-8,
+     'native 17.5m travel scales to server-approved sword reach');
+    const axis=new THREE.Vector3(0,0,1).applyQuaternion(entry.group.quaternion);
+    assert.ok(axis.distanceTo(new THREE.Vector3(0,0,1))<1e-8,'five blades point down the sword ray');
    }else assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,.16,8))<1e-8,weapon);
   }
   effects.update(.01);
@@ -100,7 +107,7 @@ test('continuous original follows the weapon nozzle across movement and aim upda
  root.removeFromParent();
 });
 
-test('saber ultimate warns with a sword-origin straight rectangle instead of a remote circle',()=>{
+test('saber ultimate warns with a sword-origin 60-degree sector, matching five native blades',()=>{
  const item=itemById('saber-1'),scene=new THREE.Scene(),root=new THREE.Group();
  root.position.set(5,0,9);
  const preview=new ChargeTargetPreview(scene);
@@ -112,11 +119,12 @@ test('saber ultimate warns with a sword-origin straight rectangle instead of a r
  const world={floatingPlatforms:[]};
  const area=chargedArea(item,[5,1,9],direction,stats,(x,z,y)=>spellGroundHeight(world,x,z,y));
  preview.update(root,item,1,direction,{world},fusion);
- assert.equal(preview.rectangle.group.visible,true);
- assert.equal(preview.footprint.shape,'rectangle');
- assert.ok(preview.footprint.position[2]>root.position.z);
- assert.ok(Math.abs(preview.footprint.length-stats.range)<1e-7);
- assert.ok(preview.rectangle.group.position.distanceTo(new THREE.Vector3(...area.visualCenter))>1);
+ assert.equal(preview.sector.group.visible,true);
+ assert.equal(preview.footprint.shape,'sector');
+ assert.ok(Math.abs(preview.footprint.position[2]-root.position.z)<1e-7);
+ assert.ok(Math.abs(preview.footprint.radius-stats.range)<1e-7);
+ assert.equal(preview.footprint.angleDeg,60);
+ assert.ok(preview.sector.group.position.distanceTo(new THREE.Vector3(...area.visualCenter))>1);
  preview.dispose();
  assert.equal(scene.children.length,0);
 });
@@ -290,12 +298,12 @@ test('charged sword warning and radius follow the halved saber collision reach',
  const scene=new THREE.Scene(),fx=new ChargeTargetPreview(scene);
  const root=new THREE.Group(),muzzle=[2,1.1,3],direction=[0,0,1];
  fx.update(root,item,.95,direction,{world:{floatingPlatforms:[]}},null,muzzle);
- assert.equal(fx.rectangle.group.userData.vfxNumber,59);
- assert.equal(fx.footprint.shape,'rectangle');
+ assert.equal(fx.sector.group.userData.vfxNumber,58);
+ assert.equal(fx.footprint.shape,'sector');
  const expected=scaleUltimateFootprint({...stats,radius:+(stats.radius*weaponQuality(item).radius).toFixed(2)},item);
- assert.ok(Math.abs(fx.footprint.length-expected.range)<1e-8);
- assert.ok(Math.abs(fx.footprint.width-Math.max(.5,expected.radius*2))<1e-8);
- assert.ok(Math.abs(fx.footprint.position[2]-(muzzle[2]+expected.range/2))<1e-8);
+ assert.ok(Math.abs(fx.footprint.radius-expected.range)<1e-8);
+ assert.equal(fx.footprint.angleDeg,60);
+ assert.ok(Math.abs(fx.footprint.position[2]-muzzle[2])<1e-8);
  fx.dispose();
 });
 
@@ -332,7 +340,7 @@ test('fully charged release also uses original wave/flower/conch sources, never 
 test('native ice / sword / coconut travel durations agree with their extended visual paths',async()=>{
  const {projectileFlightMs}=await import('../src/shared/combat-balance.js');
  assert.equal(projectileFlightMs(itemById('frost-1'),true),1260);
- assert.equal(projectileFlightMs(itemById('saber-1'),true),1100);
+ assert.equal(projectileFlightMs(itemById('saber-1'),true),1550);
  assert.equal(projectileFlightMs(itemById('palm-1'),true),1650);
  assert.equal(projectileFlightMs(itemById('palm-1'),false),245);
 });
