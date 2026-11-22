@@ -66,6 +66,14 @@ export class TempleUI extends EventTarget{
       const selection=window.getSelection?.();
       if(selection?.rangeCount)selection.removeAllRanges();
     },{capture:true});
+    document.addEventListener('selectionchange',()=>{
+      // Safari may select the A/JUMP label after a long press even when
+      // selectstart was canceled. Clear only selection anchored in gameplay.
+      const selection=window.getSelection?.(),anchor=selection?.anchorNode;
+      const element=anchor?.nodeType===1?anchor:anchor?.parentElement;
+      if(selection?.rangeCount&&element?.closest?.('#dock,#mobile-stick,#game'))
+       selection.removeAllRanges();
+    });
     document.addEventListener('contextmenu',event=>{
       if(!editable(event.target)&&event.target?.closest?.('#game,#hud,#dock'))event.preventDefault();
     });

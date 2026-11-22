@@ -15,10 +15,10 @@ function activeWorld(){
 
 test('empty-handed entry triggers exactly one 50 HP server shot; standing inside does not spam damage',()=>{
  const world=activeWorld(),profile=ensureProfile(world,'alice','Alice','#abcdef',NOW);
- const inside=[...world.collector.position];
+ const inside=[...world.collector.position],startingHp=profile.hp;
  tickWorld(world,{now:NOW+100,actors:[fighter('alice',inside)],rng:()=>.2});
  assert.equal(COLLECTOR_SHOT_DAMAGE,50);
- assert.equal(profile.hp,50);
+ assert.equal(profile.hp,startingHp-50);
  assert.equal(world.collector.shots.length,1);
  const shot=world.collector.shots[0];
  assert.equal(shot.target,'alice');
@@ -28,32 +28,42 @@ test('empty-handed entry triggers exactly one 50 HP server shot; standing inside
  assert.equal(worldView(world,'alice',NOW+100).collector.shots[0].id,shot.id);
  for(const elapsed of [200,600,1200,8000]){
   tickWorld(world,{now:NOW+elapsed,actors:[fighter('alice',inside)],rng:()=>.8});
-  assert.equal(profile.hp,50,'same-circle presence must not fire again');
+  assert.equal(profile.hp,startingHp-50,'same-circle presence must not fire again');
  }
 });
 
-test('leaving and entering again triggers second 50 HP shot and ordinary death flow',()=>{
+test('re-entry triggers one 50 HP shot per visit and ordinary death at actual maximum HP',()=>{
  const world=activeWorld(),profile=ensureProfile(world,'bob','Bob','#abcdef',NOW);
  const inside=world.collector.position,away=[inside[0]+COLLECTOR_RADIUS+8,0,inside[2]];
+ const startingHp=profile.hp;
  tickWorld(world,{now:NOW+10,actors:[fighter('bob',inside)]});
- assert.equal(profile.hp,50);
+ assert.equal(profile.hp,startingHp-50);
  tickWorld(world,{now:NOW+100,actors:[fighter('bob',away)]});
- assert.equal(profile.hp,50);
+ assert.equal(profile.hp,startingHp-50);
  tickWorld(world,{now:NOW+200,actors:[fighter('bob',inside)]});
+ assert.equal(profile.hp,Math.max(0,startingHp-100));
+ // A randomly generated Vital affix raises a new character above 100 HP.
+ // Collector must still deal 50 per entry, not silently bypass extra HP.
+ let fatalHitAt=NOW+200,expectedShots=2;
+ if(profile.hp>0){
+  tickWorld(world,{now:NOW+300,actors:[fighter('bob',away)]});
+  tickWorld(world,{now:NOW+400,actors:[fighter('bob',inside)]});
+  fatalHitAt=NOW+400;expectedShots=3;
+ }
  assert.equal(profile.hp,0);
- assert.equal(profile.deadUntil,NOW+200+5000);
+ assert.equal(profile.deadUntil,fatalHitAt+5000);
  assert.equal(profile.lastKilledBy.name,'COLLECTOR');
  assert.equal(world.killEvents.at(-1).killerName,'COLLECTOR');
  assert.equal(world.killEvents.at(-1).cause,'collector');
- assert.equal(world.collector.shots.length,2);
+ assert.equal(world.collector.shots.length,expectedShots);
 });
 
 test('carrying a real artwork results in purchase, not shooting',()=>{
  const world=activeWorld(),p=ensureProfile(world,'carol','Carol','#abcdef',NOW);
  world.artworks['platform-01'].holder='carol';
- const position=world.collector.position;
+ const position=world.collector.position,startingHp=p.hp;
  tickWorld(world,{now:NOW+100,actors:[fighter('carol',position)],rng:()=>.2});
- assert.equal(p.hp,100);
+ assert.equal(p.hp,startingHp);
  assert.equal(world.collector.shots.length,0);
  assert.equal(world.collector.active,false);
  assert.equal(world.lastCollectorSale.buyer,'carol');

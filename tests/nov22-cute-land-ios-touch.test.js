@@ -56,3 +56,10 @@ test('iOS game-control pointerdown clears an old text selection but not editable
  assert.match(ui,/if\(editable\(active\)\)active\.blur\(\)/);
  assert.match(ui,/selection\.removeAllRanges\(\)/);
 });
+
+test('Safari selectionchange clears accidental labels on game buttons without touching chat selection',()=>{
+ const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
+ assert.match(ui,/addEventListener\('selectionchange'/);
+ assert.match(ui,/element\?\.closest\?\.\('#dock,#mobile-stick,#game'\)/);
+ assert.match(ui,/selection\.removeAllRanges\(\)/);
+});
