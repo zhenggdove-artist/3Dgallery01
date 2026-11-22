@@ -9,7 +9,7 @@ import {normalizedWeaponAffixes,weaponAffixLabel,weaponAffixTotals} from './weap
 // English descriptions reflect effective Temple mechanics, not retired moves.
 const familySkills={
  water:'Normal: launch a water projectile toward the reticle. Ultimate: unleash a tidal blast forward.',
- ice:'Normal: fire an ice crystal. Ultimate: create an icy field with shattering impacts.',
+ ice:'Normal: fire an ice crystal. Ultimate: summon Ice Shatter inside a forward magic circle, freezing enemies for 3 seconds (6-second activation interval).',
  fire:'Normal: spray fire forward. Ultimate: maintain a burning field that ignites targets on contact.',
  lightning:'Normal: strike with an electric arc. Ultimate: channel a stream of lightning that locks onto and tracks an enemy.',
  beam:'Normal: attack with a beam. Ultimate: focus on one enemy, increasing damage through continuous hits.',
