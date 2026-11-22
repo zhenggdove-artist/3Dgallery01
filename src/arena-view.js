@@ -386,7 +386,25 @@ export class TempleArena{
   }
   updateArtLights(camera){const visible=[...this.artworks.values()].filter(o=>o.visible).sort((a,b)=>a.position.distanceToSquared(camera.position)-b.position.distanceToSquared(camera.position));this.lightPool.forEach((light,i)=>{const art=visible[i];light.intensity=art?(i?18:24):0;if(art){light.position.copy(art.position).add(new THREE.Vector3(0,2,2.5));light.color.set(i%2?'#d6dfff':'#ffe1b8');}});}
   nearest(position){
-    if(!this.world)return null;const candidates=[];for(const p of artworkDefinitions(this.world)){const art=this.world.artworks?.[p.id],coin=this.world.coins?.[p.id];if(art&&!art.holder&&Date.now()>=(art.availableAt||0))candidates.push({type:'artwork',id:p.id,distance:distance2d(position,(this.world.artworkLayout?.[p.id]?.position||p.artPosition))});if(coin?.available)candidates.push({type:'coin',id:p.id,distance:distance2d(position,p.coinPosition)});}for(const drop of this.world.groundDrops||[])candidates.push({type:'drop',id:drop.id,distance:distance2d(position,drop.position)});for(const structure of this.world.structures||[])candidates.push({type:'structure',id:structure.id,distance:distance2d(position,structure.position)});for(const plant of this.world.plants||[])candidates.push({type:'plant',id:plant.id,distance:distance2d(position,plant.position)});return candidates.filter(c=>c.distance<4.4).sort((a,b)=>a.distance-b.distance)[0]||null;
+    if(!this.world)return null;
+    const artworks=[],candidates=[];
+    for(const p of artworkDefinitions(this.world)){
+      const art=this.world.artworks?.[p.id],coin=this.world.coins?.[p.id];
+      const artPosition=this.world.artworkLayout?.[p.id]?.position||p.artPosition;
+      // Match the server's vertical pickup restriction. A nearby structure or
+      // decorative plant must never hide an otherwise reachable art pickup.
+      if(art&&!art.holder&&Date.now()>=(art.availableAt||0)&&
+         Math.abs((position[1]||0)-artPosition[1])<=8){
+        const distance=distance2d(position,artPosition);
+        if(distance<=4.2)artworks.push({type:'artwork',id:p.id,distance});
+      }
+      if(coin?.available)candidates.push({type:'coin',id:p.id,distance:distance2d(position,p.coinPosition)});
+    }
+    for(const drop of this.world.groundDrops||[])candidates.push({type:'drop',id:drop.id,distance:distance2d(position,drop.position)});
+    for(const structure of this.world.structures||[])candidates.push({type:'structure',id:structure.id,distance:distance2d(position,structure.position)});
+    for(const plant of this.world.plants||[])candidates.push({type:'plant',id:plant.id,distance:distance2d(position,plant.position)});
+    return artworks.sort((a,b)=>a.distance-b.distance)[0]||
+      candidates.filter(c=>c.distance<4.4).sort((a,b)=>a.distance-b.distance)[0]||null;
   }
   groundHeight(x,z,y=0){
     const platforms=this.displayPlatforms?.ground(x,z,y)||0;
