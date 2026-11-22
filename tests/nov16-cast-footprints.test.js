@@ -81,9 +81,10 @@ test('all weapons have dimensional warning contracts derived from identical atta
   if(item.id==='goldfish'&&stats.ultimate)stats.radius=1.05*quality.visual;
   scaleUltimateFootprint(stats,item);
   if(item.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
-  if(item.id==='clam'){
+  if(item.id==='clam'||item.family==='saber'){
    assert.equal(a.shape,'sector',item.id);
    nearly(preview.sector.settings.size*preview.sector.group.scale.x,stats.range,item.id);
+   assert.equal(preview.sector.settings.angleDeg,item.family==='saber'?60:90,item.id);
   }else if(isChannelStaff(item)||(item.id==='accordion'&&stats.ultimate)||item.firstPerson||item.family==='saber'||(item.family==='palm'&&!stats.ultimate)||item.pattern==='scatter'||item.id==='goldfish'){
    assert.equal(a.shape,'rectangle',item.id);
    nearly(preview.rectangle.settings.length*preview.rectangle.group.scale.x,stats.range,item.id);
