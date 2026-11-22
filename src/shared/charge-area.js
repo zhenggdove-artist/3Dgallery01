@@ -80,7 +80,7 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  // Staff/clam streams are fired from the weapon, not an unrelated distant
  // round explosion. Other spell families retain their target-centred circles.
  const areaUltimate=!!stats?.ultimate&&/^(pan|whip|swatter|palm)-[1-5]$/.test(item?.id||'');
- const mode=(item?.id==='clam'||item?.family==='saber'&&stats?.ultimate&&!fusionEcho)?'sector':item?.id==='accordion'&&stats?.ultimate?'corridor':channel&&isChannelStaff(item)?'corridor':
+ const mode=(item?.id==='clam'||item?.family==='saber'&&stats?.ultimate&&!fusionEcho)?'sector':item?.id==='accordion'&&stats?.ultimate?'corridor':channel&&isChannelStaff(item)&&item?.family!=='ice'?'corridor':
   (areaUltimate||AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
  const defaultDistance=clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
  const floorAtDistance=ground(origin[0]+dir[0]*defaultDistance,origin[2]+dir[2]*defaultDistance,origin[1]);
