@@ -260,7 +260,8 @@ export class WeaponSignatureEffects {
   const school=new THREE.Group();school.name='30 individually swimming goldfish';
   const parts=[];
   fish.traverse(node=>{
-   if(!node.isMesh)return;
+   // Replace opaque orange tail blades with blue dissolving particles.
+   if(!node.isMesh||node.parent===tail)return;
    const instances=new THREE.InstancedMesh(node.geometry,node.material,GOLDFISH_SCHOOL_COUNT);
    instances.frustumCulled=false;instances.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
    const tints=['#ffffff','#ffe7bd','#fff4dc','#ffd0ae','#fff9ce','#ffdbbc'];
@@ -270,6 +271,32 @@ export class WeaponSignatureEffects {
    instances.instanceColor.needsUpdate=true;
    school.add(instances);parts.push({mesh:instances,source:node,tailPart:node.parent===tail});
   });
+  // A single 480-point GPU cloud serves all thirty independently swimming
+  // tails; positions and vertex colours are updated in-place without mesh
+  // clones, per-frame geometry allocations, or extra draw calls per fish.
+  const perFish=16,particleCount=GOLDFISH_SCHOOL_COUNT*perFish;
+  const tailPositions=new Float32Array(particleCount*3);
+  const tailColors=new Float32Array(particleCount*3);
+  const bluePalette=['#43acff','#50d4ff','#a2f2ff','#1d67ee'];
+  for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++)for(let j=0;j<perFish;j++){
+   const t=(j+.5)/perFish;
+   const tint=new THREE.Color(bluePalette[(i*7+j*3)%bluePalette.length]);
+   tint.multiplyScalar(1-.84*t*t);
+   const p=(i*perFish+j)*3;
+   tailColors[p]=tint.r;tailColors[p+1]=tint.g;tailColors[p+2]=tint.b;
+  }
+  const tailGeometry=new THREE.BufferGeometry();
+  tailGeometry.setAttribute('position',new THREE.BufferAttribute(tailPositions,3).setUsage(THREE.DynamicDrawUsage));
+  tailGeometry.setAttribute('color',new THREE.BufferAttribute(tailColors,3));
+  const tailCloud=new THREE.Points(tailGeometry,new THREE.PointsMaterial({
+   color:'#ffffff',vertexColors:true,size:.095,transparent:true,opacity:.87,
+   sizeAttenuation:true,depthWrite:false,depthTest:true,
+   blending:THREE.AdditiveBlending,toneMapped:false
+  }));
+  tailCloud.name='Blue dissolving fish-tail particles';
+  tailCloud.frustumCulled=false;
+  school.add(tailCloud);
+  group.userData.tailParticles={cloud:tailCloud,positions:tailPositions,perFish};
   fish.visible=false;group.add(school);
   group.userData.fish=fish;group.userData.tail=tail;group.userData.school=school;group.userData.schoolParts=parts;
   // Reuse all transforms every frame: never allocate 30 matrices or vectors
@@ -328,6 +355,30 @@ export class WeaponSignatureEffects {
     transforms[i].compose(offset,rotation,scale);
     tailTransforms[i].makeRotationY(Math.sin(age*19+i*2.399963)*.74);
     tailTransforms[i].premultiply(tail.matrix).premultiply(fish.matrix);
+   }
+   // Position the blue gradient cloud behind each fish and fan the sparks
+   // outward with a phase-staggered tail wag, fading into empty water.
+   const particleTail=group.userData.tailParticles;
+   if(particleTail){
+    const array=particleTail.positions,perFish=particleTail.perFish;
+    const fishScale=GOLDFISH_FISH_SCALE*quality;
+    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
+     const hidden=group.userData.consumedFish.has(i),m=transforms[i].elements;
+     const wag=Math.sin(age*19+i*2.399963)*.74;
+     for(let j=0;j<perFish;j++){
+      const t=(j+.5)/perFish,seed=i*2.399963+j*2.17;
+      const radial=.18+t*.88;
+      const ox=(Math.sin(seed+age*(4+j%3))*.23+Math.sin(wag)*radial)*fishScale;
+      const oy=(Math.cos(seed*1.7-age*3.1)*.36*t)*fishScale;
+      const oz=(-1.42-.32*t-1.85*t*t+Math.sin(seed+age*5)*.12*t)*fishScale;
+      const k=(i*perFish+j)*3;
+      if(hidden){array[k]=array[k+1]=array[k+2]=1e5;continue;}
+      array[k]=m[0]*ox+m[4]*oy+m[8]*oz+m[12];
+      array[k+1]=m[1]*ox+m[5]*oy+m[9]*oz+m[13];
+      array[k+2]=m[2]*ox+m[6]*oy+m[10]*oz+m[14];
+     }
+    }
+    particleTail.cloud.geometry.attributes.position.needsUpdate=true;
    }
    for(const {mesh,source,tailPart} of group.userData.schoolParts){
     if(tailPart){
