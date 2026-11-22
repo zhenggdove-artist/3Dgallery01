@@ -81,6 +81,7 @@ export function explainWeapon(item,fusion=null){
  return [cls+'武器',description,
   '普通有效距離約 '+num(normal.range)+'m',extent,
   ...(enchants.length?['隨機詞條：'+enchants.map(weaponAffixLabel).join('、')]:[]),
+  ...(Number(fusion?.layer)>0?['融合詞條按素材原有效數值的 30% 依序繼承；相同詞條名稱允許重複']:[]),
   damage,'滿集氣 '+num((item.chargeMs||1500)/1000,2)+' 秒；攻擊間隔 '+num(effective.cooldown/1000,3)+' 秒'].join(' · ');
 }
 export function explainEquipment(item,record=null){

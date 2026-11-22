@@ -122,14 +122,15 @@ test('player-published artwork bomb uses ballistic collision and server damage a
  world.customArtworks=[{id:'bomb-test',bomb:true,owner:thrower.key,position:[75,2,0],type:'image',mediaId:'not-needed-for-throw'}];
  world.artworks['bomb-test']={holder:thrower.key,availableAt:0,throwEvent:null};
  world.artworkLayout['bomb-test']={position:[75,2,0],rotation:[0,0,0],scale:[1,1,1],revision:1};
+ const initialHp=world.profiles[target.key].hp;
  const result=applyAction(world,thrower,{action:'throw-artwork',direction:[0,0,1],power:1},{now:5000,actors:[thrower,target],rng:()=>0});
  assert.ok(result.throwEvent?.bomb,JSON.stringify(result));
  assert.equal(result.hit,undefined,'the projectile has not yet reached the victim');
- assert.equal(world.profiles[target.key].hp,100,'no damage on launch');
+ assert.equal(world.profiles[target.key].hp,initialHp,'no damage on launch');
  tickWorld(world,{now:5100,actors:[thrower,target],activeFighters:0,rng:()=>0});
- assert.equal(world.profiles[target.key].hp,100,'artwork has not touched the target');
+ assert.equal(world.profiles[target.key].hp,initialHp,'artwork has not touched the target');
  tickWorld(world,{now:5380,actors:[thrower,target],activeFighters:0,rng:()=>0});
- assert.ok(world.profiles[target.key].hp<100,'impact applies only after the artwork reaches its target');
+ assert.ok(world.profiles[target.key].hp<initialHp,'impact applies only after the artwork reaches its target');
  assert.ok((world.damageEvents||[]).some(hit=>hit.target===target.key));
 });
 
