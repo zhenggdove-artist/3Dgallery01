@@ -17,7 +17,6 @@ import rollingFireburst from '../vendor/00gamedevs/source/rolling-fireburst.js';
 import iceLance from '../vendor/00gamedevs/source/ice-lance-study.js';
 import radiantBeam from '../vendor/00gamedevs/source/radiant-beam.js';
 import chargedBeam from '../vendor/00gamedevs/charged-beam.js';
-import thornCrown from '../vendor/00gamedevs/source/thorn-crown.js';
 import animeFlame from '../vendor/00gamedevs/source/anime-flame-shield.js';
 
 export const REQUESTED_VFX=Object.freeze({
@@ -25,7 +24,6 @@ export const REQUESTED_VFX=Object.freeze({
  'clam:ultimate':{number:33,asset:'tidal-surge',original:true},
  'beam:channel':{number:29,asset:'charged-beam',original:true},
  'saber:ultimate':{number:38,asset:'magma-fissure',original:true},
- 'palm:ultimate':{number:31,asset:'thorn-crown',original:true},
  'petal:channel':{number:43,asset:'revival-bloom',original:true},
  'petal:ultimate':{number:43,asset:'revival-bloom',original:true},
  'swatter:ultimate':{number:53,asset:'darkchain-detonation',original:true},
@@ -46,7 +44,6 @@ const FACTORIES={
  'darkchain-detonation':darkchain,'rolling-fireburst':rollingFireburst,
  'ice-lance-study':iceLance,'anime-flame-shield':animeFlame,'radiant-beam':radiantBeam,
   'charged-beam':chargedBeam,
- 'thorn-crown':thornCrown
 };
 const UP=new THREE.Vector3(0,1,0);
 const FORWARD=new THREE.Vector3(0,0,1);
@@ -67,7 +64,7 @@ const vector=(value,fallback)=>Array.isArray(value)&&value.length===3&&value.eve
 const channelColors=Object.freeze({
  'arc-ray':'#2878ff','tidal-surge':'#66cddd','revival-bloom':'#ff1493',
  'anime-flame-shield':'#ff761f','ice-lance-study':'#d4e8ed',
- 'energy-vortex':'#66d7ff','radiant-beam':'#b874ff','charged-beam':'#f6c76c','thorn-crown':'#88d49a'
+ 'energy-vortex':'#66d7ff','radiant-beam':'#b874ff','charged-beam':'#f6c76c'
 });
 // Scale the ORIGINAL authored effect, rather than replacing its artwork.
 // #68 and #48 retain their pre-change vendor size and apply the exact same
@@ -158,7 +155,7 @@ export class NumberedWeaponEffects {
     // native instances on their first cast. Create these before entering play.
     // Reserve simultaneous native pan/whip bursts and their GPU buffers up
     // front; no geometric or particle simplification occurs at cast time.
-    const copiesByNumber={31:3,33:4,20:2,43:2,70:2,68:3,48:3};
+    const copiesByNumber={33:4,20:2,43:2,70:2,68:3,48:3};
     let warmed=0;
     const target=new THREE.WebGLRenderTarget(32,32,{depthBuffer:true});
     const view=camera.clone();view.position.set(10,8,16);view.lookAt(0,1,0);
