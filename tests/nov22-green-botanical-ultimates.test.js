@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {itemById} from '../src/shared/catalog.js';
+import {itemById,attackStats} from '../src/shared/catalog.js';
+import {chargedArea,insideChargedArea,spellFootprint,scaleUltimateFootprint} from '../src/shared/charge-area.js';
+import {weaponQuality,forwardCastRadius} from '../src/shared/weapon-abilities.js';
 import {explainWeapon} from '../src/shared/weapon-info.js';
 import {WeaponVFX,effectFor} from '../src/weapon-vfx.js';
 import {PlantUltimateEffects} from '../src/plant-ultimate-effects.js';
@@ -81,4 +83,28 @@ test('the botanical VFX prewarms each 3D emitter before the loading screen close
  assert.equal(system.pools.planter.length,1);
  assert.equal(scene.children.length,0);
  system.dispose();
+});
+
+test('palm ultimate radius is fivefold at every tier and matches warning, collision and green tornado',()=>{
+ for(let tier=1;tier<=5;tier++){
+  const palm=itemById('palm-'+tier),quality=weaponQuality(palm);
+  const stats=attackStats(palm,1);
+  stats.range=+(stats.range*quality.range).toFixed(2);
+  stats.radius=forwardCastRadius(palm,quality,stats.radius,false);
+  const oldRadius=stats.radius*.6,oldRange=stats.range*.6;
+  scaleUltimateFootprint(stats,palm,quality);
+  assert.ok(Math.abs(stats.radius-oldRadius*5)<.002,'fivefold radius at tier '+tier);
+  assert.ok(Math.abs(stats.range-oldRange)<.002,'cast reach remains unchanged');
+  const area=chargedArea(palm,[0,1,0],[0,0,1],stats,()=>0);
+  const warning=spellFootprint(palm,[0,1,0],[0,0,1],stats,area,()=>0);
+  assert.equal(warning.shape,'circle');
+  assert.equal(warning.radius,area.radius,'authoritative and preview radius match');
+  assert.ok(insideChargedArea(area,[area.center[0]+area.radius-.1,area.center[1],area.center[2]],0));
+  assert.ok(!insideChargedArea(area,[area.center[0]+area.radius+.1,area.center[1],area.center[2]],0));
+  const scene=new THREE.Scene(),system=new PlantUltimateEffects(scene);
+  assert.ok(system.play({...event(palm.id),radius:stats.radius,area},palm));
+  assert.ok(Math.abs(system.active[0].group.scale.x-area.radius/4)<.001,
+   'green tornado scales with damage circle at tier '+tier);
+  system.dispose();
+ }
 });

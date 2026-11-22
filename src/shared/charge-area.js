@@ -47,11 +47,13 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
   const swatter=/^swatter-[1-5]$/.test(item?.id||'');
   const whip=/^whip-[1-5]$/.test(item?.id||'');
   const planter=/^planter-[1-5]$/.test(item?.id||'');
+  const palm=/^palm-[1-5]$/.test(item?.id||'');
   const saber=item?.family==='saber';
   const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:saber?.5:item?.family==='ice'?1.5:item?.family==='wave'||item?.id==='goldfish'?3:1);
-  // Broaden only the whip's warning/hit radius; retain its travel distance.
-  // A threefold goldfish journey must NOT triple its physical collision width.
-  const radiusFactor=(item?.id==='goldfish'||saber?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:1);
+  // Palm's green tornado, warning and authoritative hit radius grow fivefold,
+  // without extending the reach of the cast. Whip retains its 1.5x multiplier.
+  // Goldfish retains its narrow physical collision width.
+  const radiusFactor=(item?.id==='goldfish'||saber?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:palm?5:1);
   stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);
   stats.radius=+(Math.max(.1,Number(stats.radius)||0)*radiusFactor).toFixed(3);
   if(item?.id==='telephone'){

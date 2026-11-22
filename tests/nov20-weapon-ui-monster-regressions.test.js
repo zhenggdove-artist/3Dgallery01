@@ -61,7 +61,7 @@ test('palm ultimate is a real authoritative circle with an identical warning',()
  const area=chargedArea(item,[0,1.16,0],[0,-.12,1],stats,()=>0);
  const foot=spellFootprint(item,[0,1.16,0],[0,-.12,1],stats,area,()=>0);
  assert.equal(area.mode,'area');assert.equal(foot.shape,'circle');
- assert.equal(foot.radius,area.radius);assert.equal(stats.radius,7*.6);
+ assert.equal(foot.radius,area.radius);assert.equal(stats.radius,7*.6*5);
 });
 test('planter ultimate doubles down on existing 60% scaling with one further 50% for warning and server hits',()=>{
  const plant=equipmentById('planter-3');
