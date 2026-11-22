@@ -6,36 +6,35 @@ import {scaleUltimateFootprint} from './charge-area.js';
 import {GOLDFISH_SCHOOL_RADIUS} from './goldfish-school.js';
 import {normalizedWeaponAffixes,weaponAffixLabel,weaponAffixTotals} from './weapon-affixes.js';
 
-// Descriptions are based on game mechanics. They are deliberately independent
-// of old text in imported equipment catalogs, which may describe retired moves.
+// English descriptions reflect effective Temple mechanics, not retired moves.
 const familySkills={
- water:'普通：向準心發射水系彈體。大絕：沿前方釋放潮水衝擊。',
- ice:'普通：發射冰晶。大絕：冰霜區域與碎晶衝擊。',
- fire:'普通：燼火法器向前方噴火。大絕：持續火焰區域，命中附帶燃燒。',
- lightning:'普通：電弧攻擊。大絕：電流衝擊，持續施法可追蹤鎖定方向。',
- beam:'普通：光束法器攻擊。大絕：持續聚焦敵人，連續命中提高傷害。',
- petal:'普通：射出花瓣與法術彈。大絕：花瓣荊棘區域；持續施法每秒恢復 1 HP，滿血仍顯示 +1。',
- wave:'普通：潮浪衝擊。大絕：追蹤敵人的漩渦，沿途持續造成傷害。',
- saber:'普通：近身連續揮砍。大絕：沿準心方向推進的劍氣裂隙。',
- whip:'普通：連續鞭打。大絕：前方範圍攻擊並牽引敵人。',
- swatter:'普通：快速蒼蠅拍近戰。大絕：前方大範圍旋風。',
- pan:'普通：近距離重擊。大絕：範圍爆炸並擊飛接觸的角色。',
- planter:'普通：盆栽近身敲擊。大絕：生成荊棘與植物範圍攻擊。',
- palm:'普通：椰子樹揮擊。大絕：向前產生大型衝擊。',
+ water:'Normal: launch a water projectile toward the reticle. Ultimate: unleash a tidal blast forward.',
+ ice:'Normal: fire an ice crystal. Ultimate: create an icy field with shattering impacts.',
+ fire:'Normal: spray fire forward. Ultimate: maintain a burning field that ignites targets on contact.',
+ lightning:'Normal: strike with an electric arc. Ultimate: channel a stream of lightning that locks onto and tracks an enemy.',
+ beam:'Normal: attack with a beam. Ultimate: focus on one enemy, increasing damage through continuous hits.',
+ petal:'Normal: fire petals and magical shots. Ultimate: create a thorn-and-petal field; channeling restores 1 HP per second and displays +1 even at full HP.',
+ wave:'Normal: release a wave. Ultimate: summon a homing vortex that damages enemies along its path.',
+ saber:'Normal: chain close-range sword slashes. Ultimate: send a blade fissure toward the reticle.',
+ whip:'Normal: perform successive whip strikes. Ultimate: hit enemies in front and pull them closer.',
+ swatter:'Normal: deliver quick fly-swatter strikes. Ultimate: create a wide frontal whirlwind.',
+ pan:'Normal: perform a close-range smash. Ultimate: trigger an explosion that knocks back nearby characters.',
+ planter:'Normal: swing a potted plant. Ultimate: create a damaging thorn-and-plant field.',
+ palm:'Normal: swing a coconut palm. Ultimate: release a powerful frontal shockwave.'
 };
 const specials={
- accordion:'紅色手風琴：普通攻擊在身旁旋繞大型彩色音符。大絕只生成高密度音符龍捲風，以三倍旋轉速度沿前方行進；路徑內每個接觸目標每秒受傷一次。',
- giraffe:'柔軟長頸鹿迴旋棒：普通攻擊揮甩近戰。大絕拋出會擺動的迴旋棒，向外及返回時碰撞造成傷害。',
- goldfish:'金魚水砲：普通攻擊發射水砲。大絕召喚立體金魚魚群沿前方游動，接觸時造成傷害。',
- clam:'大花蛤：普通攻擊開闔貝殼揮擊。大絕向前釋放旋轉貝殼攻擊。',
- 'white-cat':'貓貓衝鋒槍：第一人稱準心連射彩色子彈；集氣可使用連續彩虹彈幕。',
- 'black-cat':'黑貓狙擊槍：只有開啟狙擊鏡才能射擊；大絕釋放高傷害遠距離狙擊光彈。',
- 'calico-cat':'花貓散彈槍：向前散射多顆可碰撞彈丸；大絕提高散射範圍與威力。',
- fan:'暴走電風扇：普通攻擊揮擊推風；大絕生成多股會移動的旋風並減速敵人。',
- telephone:'尖叫電話聽筒：普通攻擊揮舞彈簧電話線；大絕放出環狀音波，附帶削弱效果。',
- jellybrella:'水母雨傘：普通攻擊以雨傘敲擊；大絕生成大型旋轉水母光霧並緩速。',
+ accordion:'Red Accordion — Normal: colorful notes spin around the wielder. Ultimate: a dense note tornado travels forward at triple rotation speed; each target in its path can be hit once per second.',
+ giraffe:'Giraffe Boomerang — Normal: swing a flexible giraffe club. Ultimate: throw a wobbling boomerang that damages targets on outbound and return contact.',
+ goldfish:'Goldfish Water Cannon — Normal: launch water jets. Ultimate: summon a three-dimensional school of goldfish that swim forward and damage enemies on contact.',
+ clam:'Giant Clam — Normal: swing a snapping shell. Ultimate: fire spinning clams forward.',
+ 'white-cat':'White Cat SMG — Rapid-fire colorful bullets using the first-person reticle. Charge for a continuous rainbow barrage.',
+ 'black-cat':'Black Cat Sniper Rifle — Fire only while aiming through the sniper scope. Ultimate: launch a powerful long-range energy round.',
+ 'calico-cat':'Calico Cat Shotgun — Scatter independently colliding pellets. Ultimate: increase the spread and power.',
+ fan:'Rampaging Electric Fan — Normal: swing to generate gusts. Ultimate: unleash moving tornadoes that slow enemies.',
+ telephone:'Screaming Telephone — Normal: swing the coiled handset cord. Ultimate: emit weakening rings of sound.',
+ jellybrella:'Jellyfish Umbrella — Normal: swing the umbrella. Ultimate: summon a wide rotating cloud of luminous jellyfish that slows enemies.'
 };
-const bonusNames={hp:'最大生命值',attack:'攻擊加成',speed:'移動速度',jump:'跳躍高度',defense:'減少受到傷害',fusion:'融合成功機率'};
+const bonusNames={hp:'Maximum HP',attack:'Attack Power',speed:'Movement Speed',jump:'Jump Height',defense:'Damage Reduction',fusion:'Fusion Success Chance'};
 const num=(value,decimal=1)=>Number(value).toFixed(decimal).replace(/\.0+$/,'');
 function actualBonuses(item,record){
  return {...(item.bonuses||{}),...(record?.templeStats?.bonuses||{})};
@@ -50,7 +49,6 @@ function describeBonuses(item,record){
  }).filter(Boolean);
 }
 export function weaponClass(item){return weaponRangeClass(item);}
-
 export function explainWeapon(item,fusion=null){
  if(!item)return '';
  if(item.slot!=='weapon')return explainEquipment(item,fusion);
@@ -58,7 +56,7 @@ export function explainWeapon(item,fusion=null){
  const effective={...item,...(fusion?.templeStats||{}),weaponAffixes:enchants,
   critChance:Math.min(.85,(Number(item.critChance)||0)+totals.crit/100),
   cooldown:Math.max(70,Math.round((Number(item.cooldown)||800)*(1-totals.haste/100)))};
- // The primary weapon never inherits a material weapon's attack reach.
+ // The primary weapon always determines the base reach.
  effective.range=item.range;effective.radius=item.radius;
  effective.chargeRange=item.chargeRange;
  const quality=weaponQuality(effective,fusion);
@@ -71,43 +69,39 @@ export function explainWeapon(item,fusion=null){
  scaleUltimateFootprint(charged,effective,quality);
  if(item.id==='goldfish')charged.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
  if(item.id==='giraffe')charged.range=+(item.chargedRange*quality.range).toFixed(2);
- const cls=({near:'近距離',mid:'中距離',far:'遠距離'})[weaponClass(item)]||'特殊';
- const description=specials[item.id]||familySkills[item.family]||item.description||'按住攻擊鍵集氣，大絕使用不同的傷害與範圍。';
+ const cls=({near:'Close-Range',mid:'Mid-Range',far:'Long-Range'})[weaponClass(item)]||'Special';
+ const description=specials[item.id]||familySkills[item.family]||item.description||'Hold the attack button to charge an ultimate with a different range and damage profile.';
  const extent=item.id==='accordion'
-  ?'大絕移動碰撞範圍：長 '+num(charged.range)+'m、寬 '+num(charged.radius*2)+'m，每目標每秒最多受傷一次'
-  :'大絕預示範圍：射程 '+num(charged.range)+'m、半徑約 '+num(charged.radius)+'m';
- const damage='PvP 基礎單次命中約 '+num(pvpShotDamage(item,normal,quality),2)+
-  '；大絕約 '+num(pvpShotDamage(item,charged,quality),2)+'（實際傷害受命中次數、暴擊與減傷影響）';
- return [cls+'武器',description,
-  '普通有效距離約 '+num(normal.range)+'m',extent,
-  ...(enchants.length?['隨機詞條：'+enchants.map(weaponAffixLabel).join('、')]:[]),
-  ...(Number(fusion?.layer)>0?['融合詞條按素材原有效數值的 30% 依序繼承；相同詞條名稱允許重複']:[]),
-  damage,'滿集氣 '+num((item.chargeMs||1500)/1000,2)+' 秒；攻擊間隔 '+num(effective.cooldown/1000,3)+' 秒'].join(' · ');
+  ?'Ultimate collision corridor: '+num(charged.range)+' m long, '+num(charged.radius*2)+' m wide; each target can be hit at most once per second'
+  :'Ultimate preview: range '+num(charged.range)+' m, approximately '+num(charged.radius)+' m radius';
+ const damage='Approximate PvP base damage per hit: '+num(pvpShotDamage(item,normal,quality),2)+
+  '; ultimate: '+num(pvpShotDamage(item,charged,quality),2)+' (actual damage depends on hit count, critical hits and damage reduction)';
+ return [cls+' Weapon',description,
+  'Normal effective range: '+num(normal.range)+' m',extent,
+  ...(enchants.length?['Random affixes: '+enchants.map(weaponAffixLabel).join(', ')]:[]),
+  ...(Number(fusion?.layer)>0?['Fusion affixes inherit 30% of each ingredient affix in acquisition order; repeated names are preserved']:[]),
+  damage,'Full charge: '+num((item.chargeMs||1500)/1000,2)+' s; attack interval: '+num(effective.cooldown/1000,3)+' s'].join(' · ');
 }
 export function explainEquipment(item,record=null){
  if(!item)return '';
  if(item.slot==='weapon')return explainWeapon(item,record);
  const bonuses=describeBonuses(item,record);
- const fusionInfo=Number(record?.layer)>0?'；已成功融合 '+Math.floor(record.layer)+' 次（每次繼承素材有效能力的 30%）':'';
- if(item.slot==='head'){
-  const description=bonuses.length?bonuses.join('、'):'裝備於頭飾欄';
-  return '頭飾：'+description+fusionInfo;
- }
- if(item.slot==='outfit')return '服裝：'+(bonuses.length?bonuses.join('、'):'服裝外觀')+fusionInfo;
+ const fusionInfo=Number(record?.layer)>0?' · Fused '+Math.floor(record.layer)+' time(s), inheriting 30% of ingredient stats per success':'';
+ if(item.slot==='head')return 'Headgear: '+(bonuses.length?bonuses.join(', '):'Cosmetic headwear')+fusionInfo;
+ if(item.slot==='outfit')return 'Outfit: '+(bonuses.length?bonuses.join(', '):'Cosmetic outfit')+fusionInfo;
  if(item.slot==='armor'){
   const defense=Number(record?.templeStats?.defense??item.defense)||0;
-  return '護甲：直接傷害減免 '+num(Math.min(.65,defense/100)*100)+'%（單件護甲上限 65%）'+fusionInfo;
+  return 'Armor: '+num(Math.min(.65,defense/100)*100)+'% direct damage reduction (65% maximum per armor piece)'+fusionInfo;
  }
  if(item.slot==='shield'){
   const capacity=Number(record?.templeStats?.capacity??item.capacity)||0;
-  return '護盾：最大可吸收 '+num(capacity*10,2)+' 傷害；未受到攻擊 '+num(item.recharge||0)+' 秒後恢復'+fusionInfo;
+  return 'Shield: absorbs up to '+num(capacity*10,2)+' damage; regenerates after '+num(item.recharge||0)+' seconds without taking damage'+fusionInfo;
  }
  if(item.slot==='wings'){
   const impulse=Number(record?.templeStats?.impulse??item.impulse)||0;
-  const gravity=Number(item.gravity);
-  const flap=Number(item.flapMs);
-  return '翅膀：跳躍推進力 '+num(impulse,2)+(Number.isFinite(gravity)?'、重力倍率 '+num(gravity,2):'')+
-   (Number.isFinite(flap)?'、拍翼間隔 '+num(flap/1000,2)+' 秒':'')+fusionInfo;
+  const gravity=Number(item.gravity),flap=Number(item.flapMs);
+  return 'Wings: jump impulse '+num(impulse,2)+(Number.isFinite(gravity)?', gravity multiplier '+num(gravity,2):'')+
+   (Number.isFinite(flap)?', wing-flap cooldown '+num(flap/1000,2)+' s':'')+fusionInfo;
  }
  return [item.description||item.family||item.slot,...bonuses].filter(Boolean).join(' · ')+fusionInfo;
 }
