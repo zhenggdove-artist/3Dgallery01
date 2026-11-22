@@ -606,7 +606,7 @@ ui.addEventListener('gm-audio-setting',event=>{if(!self?.profile?.admin)return;a
  });
 
 function createLocalPlayer(data){
-   audio.unlock();audio.startMusic();
+   audio.unlock(false);audio.startMusic();
   localRoot=arena.createPlayer(data.self.color,data.self.profile?.admin,data.self.name);scene.add(localRoot);roots.set(data.self.key,localRoot);controller=new PlayerController({camera,arena,canvas,root:localRoot,role:data.role,seat:data.seat,mobileStick:document.getElementById('mobile-stick')});controller.setRole(data.role);controller.setEnabled(true);controller.onJump=()=>audio.play('jump',1.2);
 }
 

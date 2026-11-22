@@ -68,7 +68,53 @@ test('touch activation precedes mobile jump and jump callback reaches audio',()=
  const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
  assert.ok(main.includes("ui.addEventListener('jump',()=>{audio.unlock();controller?.jump();});"));
  assert.ok(main.includes("controller.onJump=()=>audio.play('jump',1.2)"));
- assert.ok(audio.includes("['touchstart','pointerdown','keydown']"));
+ assert.ok(audio.includes("['touchstart','pointerdown','keydown','click']"));
  assert.ok(audio.includes("{capture:true,passive:true}"));
  assert.ok(ui.includes("jump.onpointerdown="));
+});
+
+test('a later gesture retries an interrupted context despite a stalled Safari resume',async()=>{
+ const audio=Object.create(GameAudio.prototype);
+ let calls=0,finish;
+ const stalled=new Promise(resolve=>{finish=resolve;});
+ audio.context={state:'interrupted',resume(){
+  calls++;
+  if(calls===1)return stalled;
+  audio.context.state='running';
+  return Promise.resolve();
+ }};
+ audio.unlock(true);audio.unlock(true);
+ assert.equal(calls,1);
+ audio.lastResumeAttemptAt=performance.now()-400;
+ audio.unlock(true);
+ assert.equal(calls,2);
+ await audio.resumePending;
+ assert.equal(audio.context.state,'running');
+ assert.equal(audio.resumePending,null);
+ finish();await Promise.resolve();
+});
+
+test('a jump triggered during Web Audio resumption plays once after unlock',async()=>{
+ const audio=Object.create(GameAudio.prototype);
+ let finish;
+ const pending=new Promise(resolve=>{finish=resolve;});
+ audio.context={state:'suspended',resume:()=>pending};
+ audio.played={};audio.volumes={};audio.voices=0;
+ audio.unlock(true);
+ audio.play('jump',1.2);audio.play('jump',1.2);
+ assert.equal(audio.queuedCues.length,1);
+ const heard=[];audio.play=(kind,volume)=>heard.push([kind,volume]);
+ audio.context.state='running';finish();
+ await audio.resumePending;
+ assert.deepEqual(heard,[['jump',1.2]]);
+ assert.equal(audio.queuedCues.length,0);
+});
+
+test('pre-entry gesture primes a silent buffer without creating audio from network callbacks',()=>{
+ const sound=readFileSync(new URL('../src/game-audio.js',import.meta.url),'utf8');
+ const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ assert.match(sound,/source\.buffer=ctx\.createBuffer\(1,1,ctx\.sampleRate\)/);
+ assert.match(sound,/gain\.gain\.value=0;source\.connect\(gain\)/);
+ assert.match(sound,/this\.unlock\(false\);if\(!this\.music\)/);
+ assert.match(main,/audio\.unlock\(false\);audio\.startMusic\(\)/);
 });

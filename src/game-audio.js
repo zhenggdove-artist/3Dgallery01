@@ -83,30 +83,77 @@ export class GameAudio{
     }
     return true;
    }).catch(()=>false);
-  // Capture a real touch gesture BEFORE the jump-button target dispatches its cue.
-  for(const type of ['touchstart','pointerdown','keydown'])addEventListener(type,()=>{this.unlock();if(this.music?.paused)this.startMusic();},{capture:true,passive:true});
+  // The effects graph must be primed before jump/attack handlers run.
+  // Music is HTMLAudioElement; all transient SFX use the Web Audio graph.
+  const activate=()=>{this.unlock(true);if(this.music?.paused)this.startMusic();};
+  for(const type of ['touchstart','pointerdown','keydown','click'])
+   addEventListener(type,activate,{capture:true,passive:true});
+  if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{
+   if(document.visibilityState==='hidden')this.primed=false;
+   else if(this.context?.state==='running')this.flushQueued();
+  });
  }
- unlock(){
+ unlock(fromGesture=true){
+  // Async world snapshots cannot authorize AudioContext.start/resume on iOS.
+  // A pending unauthorized resume promise must not block a later real gesture.
   if(!this.context){
-   const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;
-   this.context=new Audio();this.master=this.context.createGain();this.master.gain.value=db(-3)*(this.volumes.master??1);
-   this.sfx=this.context.createGain();this.sfx.gain.value=db(0);this.sfx.connect(this.master);
-   const limiter=this.context.createDynamicsCompressor();
-   limiter.threshold.value=-9;limiter.knee.value=5;limiter.ratio.value=12;limiter.attack.value=.002;limiter.release.value=.16;
-   this.master.connect(limiter);limiter.connect(this.context.destination);
-   const n=Math.floor(this.context.sampleRate),buffer=this.context.createBuffer(1,n,this.context.sampleRate);
-   const data=buffer.getChannelData(0);
-   for(let i=0;i<n;i++)data[i]=Math.random()*2-1;
-   this.noise=buffer;
-  }
-  // iOS Safari may transition to "interrupted" on background/resume.
-  // Start the resume synchronously in the trusted event (not a later microtask).
-  if(this.context.state!=='running'&&!this.resumePending){
+   if(!fromGesture)return false;
+   const Audio=typeof window==='undefined'?null:(window.AudioContext||window.webkitAudioContext);
+   if(!Audio)return false;
    try{
-    const pending=this.context.resume();
-    this.resumePending=Promise.resolve(pending).catch(()=>{}).finally(()=>{this.resumePending=null;});
-   }catch(error){this.resumePending=null;}
+    this.context=new Audio();
+    this.master=this.context.createGain();this.master.gain.value=db(-3)*(this.volumes.master??1);
+    this.sfx=this.context.createGain();this.sfx.gain.value=db(0);this.sfx.connect(this.master);
+    const limiter=this.context.createDynamicsCompressor();
+    limiter.threshold.value=-9;limiter.knee.value=5;limiter.ratio.value=12;limiter.attack.value=.002;limiter.release.value=.16;
+    this.master.connect(limiter);limiter.connect(this.context.destination);
+    const n=Math.floor(this.context.sampleRate),buffer=this.context.createBuffer(1,n,this.context.sampleRate);
+    const data=buffer.getChannelData(0);
+    for(let i=0;i<n;i++)data[i]=Math.random()*2-1;
+    this.noise=buffer;
+    this.context.addEventListener?.('statechange',()=>{
+     if(this.context.state==='running')this.flushQueued();
+     else this.primed=false;
+    });
+   }catch(error){console.warn('Unable to initialize game sound effects',error);return false;}
   }
+  const ctx=this.context;
+  if(fromGesture&&!this.primed){
+   // iOS WebKit requires a silent buffer source started synchronously on touch.
+   try{
+    const source=ctx.createBufferSource(),gain=ctx.createGain();
+    source.buffer=ctx.createBuffer(1,1,ctx.sampleRate);
+    gain.gain.value=0;source.connect(gain);gain.connect(ctx.destination);
+    source.onended=()=>{source.disconnect();gain.disconnect();};
+    source.start(0);this.primed=true;
+   }catch(error){this.primed=false;}
+  }
+  if(ctx.state==='running'){this.flushQueued();return true;}
+  if(!fromGesture)return false;
+  const now=performance.now();
+  // Deduplicate touch/pointer from one gesture; retry on subsequent gestures
+  // even if WebKit never resolves a previous resume() promise.
+  if(this.resumePending&&now-(this.lastResumeAttemptAt??-Infinity)<350)return false;
+  this.lastResumeAttemptAt=now;
+  try{
+   const attempt=Promise.resolve(ctx.resume());
+   const tracked=attempt.then(()=>{this.flushQueued();return ctx.state==='running';},()=>false)
+    .finally(()=>{if(this.resumePending===tracked)this.resumePending=null;});
+   this.resumePending=tracked;
+  }catch(error){this.resumePending=null;}
+  return false;
+ }
+ queueCue(kind,volume,pitch){
+  if(this.muted)return;
+  const now=performance.now(),queue=this.queuedCues??=([]);
+  if(queue.some(cue=>cue.kind===kind&&now-cue.at<80))return;
+  queue.push({kind,volume,pitch,at:now});
+  if(queue.length>10)queue.splice(0,queue.length-10);
+ }
+ flushQueued(){
+  if(this.context?.state!=='running'||!this.queuedCues?.length)return;
+  const now=performance.now(),cues=this.queuedCues.splice(0);
+  for(const cue of cues)if(now-cue.at<1000)this.play(cue.kind,cue.volume,cue.pitch);
  }
  setVolumes(settings={}){
   for(const [key,value] of Object.entries(settings||{}))if(/^[a-z][a-z0-9-]{0,60}$/.test(key)&&Number.isFinite(Number(value)))
@@ -130,7 +177,7 @@ export class GameAudio{
   }
  }
  startMusic(){
-  this.unlock();if(!this.music){
+  this.unlock(false);if(!this.music){
    this.music=new Audio();this.music.loop=true;this.music.preload='auto';
    this.music.addEventListener('error',()=>{if(++this.musicIndex<this.trackSources.length){this.music.src=this.trackSources[this.musicIndex];this.music.play().catch(()=>{});}});
    this.music.src=this.trackSources[0];
@@ -148,16 +195,13 @@ export class GameAudio{
  }
 
  play(kind,volume=1,pitch=1){
-  if(!this.context)this.unlock();
-  if(!this.context||this.muted||this.voices>=34)return;
-  if(this.context.state!=='running'){
-   this.unlock();
-   if(this.context.state!=='running'){
-    // Play once after gesture-authorized audio resumes, never lose the jump cue.
-    this.resumePending?.then(()=>{if(this.context?.state==='running')this.play(kind,volume,pitch);});
-    return;
-   }
+  if(!this.context)this.unlock(false);
+  if(this.muted)return;
+  if(!this.context||this.context.state!=='running'){
+   this.queueCue(kind||'shot',volume,pitch);
+   return;
   }
+  if(this.voices>=34)return;
   const ctx=this.context,now=ctx.currentTime,key=kind||'shot';
   if(now-(this.last?.[key]??-10)<.04)return;
   (this.last??={})[key]=now;this.played[key]=(this.played[key]||0)+1;
