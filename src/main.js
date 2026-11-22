@@ -746,7 +746,7 @@ const heardStompLandings=new Set();
 function update(dt,time,movementDt=dt){
   if(queuedWorld){const pending=queuedWorld;queuedWorld=null;acceptWorldView(pending);}
   damageNumbers.update(camera,innerWidth,innerHeight);vitalModels?.update(time,world?.profile?.hp||0,world?.profile?.maxHp||100);
-  if(joined)minimap.update(time,roots,self?.key,world?.monster,world?.monsters||[]);
+  if(joined)minimap.update(time,roots,self?.key,world?.monster,world?.monsters||[],world?.collector);
   if(joined&&controller){
    const nowMs=Date.now(),debuffs=world?.profile?.effects||{};
    controller.status={freeze:(debuffs.freeze?.until||0)>nowMs||(debuffs.stun?.until||0)>nowMs,

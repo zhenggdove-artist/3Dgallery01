@@ -10,14 +10,14 @@
   <title>Temple</title>
   <link rel="icon" href="data:,">
   <link rel="preload" href="./src/reletter/FONTS/Golden%20Girdle.otf" as="font" type="font/otf" crossorigin>
-  <link rel="stylesheet" href="./styles.css?v=20261122-palm-storm-fourfold-dot-r67">
+  <link rel="stylesheet" href="./styles.css?v=20261122-minimap-guest-r68">
   <link rel="stylesheet" href="./src/reletter/fonts.css">
   <link rel="stylesheet" href="./reletter-theme.css">
   <link rel="stylesheet" href="./gun.css">
   <link rel="stylesheet" href="./sketch-hud.css">
-  <link rel="stylesheet" href="./fidelity-ui.css?v=20261122-palm-storm-fourfold-dot-r67">
-  <link rel="stylesheet" href="./wing-atelier.css?v=20261122-palm-storm-fourfold-dot-r67">
-  <link rel="stylesheet" href="./wall-paint.css?v=20261122-palm-storm-fourfold-dot-r67">
+  <link rel="stylesheet" href="./fidelity-ui.css?v=20261122-minimap-guest-r68">
+  <link rel="stylesheet" href="./wing-atelier.css?v=20261122-minimap-guest-r68">
+  <link rel="stylesheet" href="./wall-paint.css?v=20261122-minimap-guest-r68">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
   <script src="./temple-config.js"></script>
@@ -29,7 +29,7 @@
     // Stable for one deployment: 15-second URL rotation previously defeated Safari cache
     // and forced every 4G reload to download the whole large module graph.
     // Bump this token when changing the boot graph or deployed JS modules.
-    const release = '20261122-palm-storm-fourfold-dot-r67';
+    const release = '20261122-minimap-guest-r68';
     const imports = {
       "three": "./vendor/three/build/three.module.js",
       "three/addons/": "./vendor/three/examples/jsm/"
@@ -43,7 +43,7 @@
   // Import/link failures happen before main.js can enter its boot try/catch.
   (() => {
     let moduleFailure = "";
-    window.templeStartupDiagnostics = {release: "20261122-palm-storm-fourfold-dot-r67", failures: []};
+    window.templeStartupDiagnostics = {release: "20261122-minimap-guest-r68", failures: []};
     function displayFailure(message) {
       if (!message || document.body?.classList.contains("ready")) return;
       // Do not replace the original module/import error with a later timeout.
@@ -96,13 +96,25 @@
         <h1 id="entry-title" class="reletter-wordmark">GGTEMPLE</h1>
       </header>
       <div id="account-login" class="temple-entry-login" aria-label="Google Account Sign In">
-        <h2>Sign In</h2>
+        <h2>Continue with Google</h2>
         <button type="button" class="temple-google-button" data-google-login disabled>
           <span class="temple-google-g" aria-hidden="true">G</span><span>Choose Google Account</span>
         </button>
         <p id="account-login-status" role="status" aria-live="polite">Preparing sign-in…</p>
-        <p class="temple-entry-privacy" lang="zh-Hant">僅使用 Google 登入驗證所需的基本帳號資訊，不會讀取 Gmail、聯絡人或雲端硬碟內容，也不會公開您的 Google 帳號資料。</p>
+        <p class="temple-entry-privacy" lang="zh-Hant">Google 登入用於儲存及恢復角色進度；僅使用 Google 登入驗證所需的基本帳號資訊，不會讀取 Gmail、聯絡人或雲端硬碟內容。</p>
       </div>
+      <form id="guest-form" class="temple-guest-entry" aria-label="Play as Guest">
+        <h2>Play as Guest</h2>
+        <label for="guest-name">Character Name
+          <input id="guest-name" name="name" maxlength="24" autocomplete="nickname" required placeholder="Enter a name">
+        </label>
+        <label for="guest-color">Outfit Color
+          <input id="guest-color" type="color" value="#43b59a" aria-label="Guest outfit color">
+        </label>
+        <button id="guest-enter" type="submit">Enter as Guest</button>
+        <p id="guest-error" role="alert"></p>
+        <p class="temple-guest-notice" lang="zh-Hant">訪客無須 Google 帳號即可遊玩，但無法恢復角色進度。</p>
+      </form>
       <form id="entry-form" hidden>
         <h2 id="entry-profile-heading">Create Character</h2>
         <label for="player-name">Character Name
