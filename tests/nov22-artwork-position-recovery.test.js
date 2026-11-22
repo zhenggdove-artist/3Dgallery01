@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PLATFORMS} from '../src/shared/arena.js';
+import {readFileSync} from 'node:fs';
 import {recoverMisplacedArtworkPosition} from '../src/shared/artwork-recovery.js';
 
 function example(){
@@ -51,4 +52,15 @@ test('custom user-uploaded artwork uses the creation position, never another art
  const r=recoverMisplacedArtworkPosition(world,true);
  assert.equal(r.ok,true);
  assert.deepEqual(world.artworkLayout['art-custom'].position,[3,0,-7]);
+});
+
+test('GM panel and chat provide a server-authoritative lost-artwork recovery action',()=>{
+ const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
+ const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const rules=readFileSync(new URL('../src/shared/temple-rules.js',import.meta.url),'utf8');
+ assert.match(ui,/data-gm-action="recover-misplaced-artwork"/);
+ assert.match(ui,/this\.emit\('server-action',\{action:'recover-misplaced-artwork'\}\)/);
+ assert.match(main,/recoverposition/);
+ assert.match(rules,/if\(body\.action==='recover-misplaced-artwork'\)/);
+ assert.match(rules,/world\.artworkLayoutHistory\[platform\.id\]/);
 });
