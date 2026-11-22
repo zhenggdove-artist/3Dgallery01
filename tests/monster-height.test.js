@@ -6,7 +6,8 @@ test('monster cannot damage a player twenty metres above it',()=>{
  const world=createInitialWorld(1000),actor={key:'height-test',name:'Height',role:'fighter',position:[20,20,20]},p=ensureProfile(world,actor.key,actor.name,null,1000);
  world.monster={active:true,id:'ground-enemy',variant:'warden',position:[20,0,20],hp:100,maxHp:100,nextAttackAt:0};
  for(let i=0;i<8;i++)tickWorld(world,{now:5000+i*500,activeFighters:1,actors:[actor],rng:()=>.5});
- assert.equal(p.hp,100);
+ // Level-ups may increase max HP during the simulated fight; verify no damage.
+ assert.equal(p.hp,p.maxHp);
 });
 test('directional hits emit original critical damage events; direct-hit bypass is rejected',()=>{
  const w=createInitialWorld(1000),actor={key:'fighter',name:'Tester',role:'fighter',position:[20,0,20]},p=ensureProfile(w,actor.key,actor.name,null,1000);
