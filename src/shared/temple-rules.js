@@ -715,6 +715,10 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
   if(!profile.admin)return {error:'GM only'};
   const platform=artworkDefinitions(world).find(p=>p.id===body.platformId);if(!platform)return {error:'Unknown artwork'};
   const art=world.artworks[platform.id]??=( {availableAt:0,holder:null,throwEvent:null} );
+  const isLockedExhibit=(world.customArtworks||[]).some(a=>a.id===platform.id&&a.title?.trim()==='22');
+  // Preserve ordinary players' held or airborne artworks; only the reported
+  // stuck exhibit can be force-released by a GM layout save.
+  if((art.holder||art.availableAt>now)&&!isLockedExhibit)return {error:'Wait until the artwork returns'};
   const current=world.artworkLayout?.[platform.id];if(body.expectedRevision!==(current?.revision||0))return {error:'Layout changed by another GM. Reload and retry.'};
   const layout=body.layout,vec=value=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);
   if(!layout||!vec(layout.position)||!vec(layout.rotation)||!vec(layout.scale))return {error:'Invalid transform'};
@@ -734,9 +738,10 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
    history.push(clone(current));
    if(history.length>8)history.splice(0,history.length-8);
   }
-  // GM edits override stale held/throw cooldown state, including work '22'.
-  Object.assign(art,{availableAt:0,holder:null,throwEvent:null});
-  world.pendingArtworkFlights=(world.pendingArtworkFlights||[]).filter(f=>f.event?.platformId!==platform.id);
+  if(isLockedExhibit){
+    Object.assign(art,{availableAt:0,holder:null,throwEvent:null});
+    world.pendingArtworkFlights=(world.pendingArtworkFlights||[]).filter(f=>f.event?.platformId!==platform.id);
+  }
   world.artworkLayout[platform.id]={position:[...layout.position],rotation:[...layout.rotation],scale:[...layout.scale],
    ...(original&&proposedRadius!=null?{platformRadius:proposedRadius}:{}),
    appearance,revision:(current?.revision||0)+1,updatedAt:now};world.revision++;
