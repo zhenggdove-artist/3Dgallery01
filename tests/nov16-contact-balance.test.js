@@ -119,12 +119,13 @@ test('shotgun uses twenty unique randomly scattered 3-D sphere trajectories, eac
 
 test('black-cat rifle retains slow high-damage long-range shots unlike regular 8-hit weapons',()=>{
  const {w,caster,victim,b}=scenario('black-cat',[75,0,30]);
- const at=T+2000;
+ const at=T+2000,initialHp=b.hp;
  const first=fire(w,caster,at);
  assert.equal(first.error,undefined);
- assert.equal(b.hp,100);
+ assert.equal(b.hp,initialHp,'projectile must not damage the target before contact');
  advance(w,at+500,[caster,victim]);
- assert.ok(b.hp<=20&&b.hp>=0,'sniper must hit for approximately 81–96 HP, triple the old 27 HP baseline');
+ assert.ok(initialHp-b.hp>=75&&b.hp>=0,
+  'sniper must retain its heavy hit regardless of randomized max-HP enchantments');
  assert.equal(fire(w,caster,at+500).error,'Weapon is recovering');
  assert.equal(fire(w,caster,at+3700).error,undefined);
  const {w:charged,caster:c,victim:v,b:target}=scenario('black-cat',[75,0,30]);

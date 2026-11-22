@@ -71,6 +71,13 @@ export class DisplayPlatforms{
   };
   this.mesh=draw(discs,'Original artwork platforms and access stairs',this.geometry,this.material);
   this.pedestals=draw(cones,'Gray triangular-cone artwork pedestals',this.coneGeometry,this.coneMaterial);
+  // Precompute each deterministic drift phase once per world sync.
+  const seedPhase=(key)=>{
+   let hash=2166136261;
+   for(const c of key){hash^=c.charCodeAt(0);hash=Math.imul(hash,16777619);}
+   return (hash>>>0)/4294967296;
+  };
+  for(const d of [...discs,...cones])d.floatPhase=seedPhase(d.key);
   this.discs=discs;this.cones=cones;this.select(this.selectedKey);
   this.lastFloatAt=-Infinity;this.update(a.clock||0);
  }
@@ -80,9 +87,7 @@ export class DisplayPlatforms{
   if(!this.mesh||!Number.isFinite(time)||time-this.lastFloatAt<.04)return;
   this.lastFloatAt=time;
   const drift=(d)=>{
-   let hash=2166136261;
-   for(const c of d.key){hash^=c.charCodeAt(0);hash=Math.imul(hash,16777619);}
-   const phase=(hash>>>0)/4294967296;
+   const phase=d.floatPhase;
    return [Math.sin(time*(.29+phase*.12)+phase*19)*.09,
     Math.sin(time*(.39+phase*.15)+phase*21)*.075,
     Math.cos(time*(.32+phase*.1)+phase*17)*.09];
