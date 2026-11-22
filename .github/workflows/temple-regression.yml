@@ -28,6 +28,8 @@ jobs:
           node-version: '22'
       - name: Verify production Google Auth config, CORS and profile readiness
         run: node tests/firebase-live-config.mjs
+      - name: Diagnose production guest login backend version
+        run: node tests/production-guest-probe.mjs
 
   firebase-google-login-browser:
     runs-on: ubuntu-latest
