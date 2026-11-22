@@ -115,6 +115,8 @@ export class WeaponVFX{
    this.waterStreams.set(key,entry);
   }
   entry.waterKey=key;entry.host=root;entry.waterWeapon=item;
+  entry.waterOrigin??=origin.clone();
+  entry.waterDirection??=direction.clone();
   entry.waterOrigin.copy(origin); // overwritten by live weapon tip when present
   entry.waterDirection.copy(direction);
   entry.waterRange=range;
