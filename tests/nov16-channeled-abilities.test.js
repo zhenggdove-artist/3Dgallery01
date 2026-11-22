@@ -108,7 +108,6 @@ test('shotgun is twenty half-sized glowing rainbow spheres, charged larger; othe
   'all twenty marbled orbs have an additive luminous halo');
  const cases=[
   ['bloom-3','One enormous forward rotating translucent particle blossom','Points'],
-  ['planter-3','Three stacked solid thorn-vine tiers','Mesh'],
   ['fan','Four independent wandering volumetric tornadoes','Points'],
   ['giraffe','Visible spinning yellow giraffe model, outbound and returning','Mesh']
  ];
@@ -120,9 +119,7 @@ test('shotgun is twenty half-sized glowing rainbow spheres, charged larger; othe
   assert.ok(found,id+' uses '+type);
  }
  const flower=vfx.active.find(e=>e.obj.name.includes('particle blossom'));
- const thorn=vfx.active.find(e=>e.obj.name.includes('thorn-vine tiers'));
- assert.notEqual(flower.obj,thorn.obj);
- assert.ok(thorn.obj.children.length>120,'three-tier thorns need sculpted spikes');
+ assert.ok(flower.obj.children.length>0,'the flower ultimate retains its own visual construction');
  for(let i=0;i<10;i++)vfx.update(.1);
  vfx.dispose();assert.equal(scene.children.length,0);
 });

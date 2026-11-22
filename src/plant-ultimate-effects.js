@@ -86,7 +86,7 @@ function updateTornado(e){
  e.arcGeometry.attributes.position.needsUpdate=true;
  for(let i=0;i<e.floorRings.length;i++){
   const r=e.floorRings[i],pulse=clamp((t-i*.22)/.85,0,1);
-  r.scale.setScalar((.3+pulse*3.2));
+  r.scale.setScalar(.3+pulse*1.48);
   r.material.opacity=.48*(1-pulse)*fade;
   r.rotation.z=t*(i%2?-.45:.45);
  }

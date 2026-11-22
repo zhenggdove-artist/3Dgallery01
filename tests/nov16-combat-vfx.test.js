@@ -93,11 +93,12 @@ test('flower staff, planter, giraffe and giant clam use distinct soft particle r
  assert.equal(recipeFor(itemById('giraffe')),'boomerang');
  const scene=new THREE.Scene(),signature=new WeaponSignatureEffects(scene),particles=new WeaponParticleEffects(scene);
  const origin=new THREE.Vector3(0,1,0),end=new THREE.Vector3(0,1,22);
- for(const id of ['bloom-1','planter-1','giraffe']){
+ for(const id of ['bloom-1','giraffe']){
   const item=itemById(id);
   signature.play({origin:[0,1,0],ultimate:true,charge:1,direction:[0,0,1],range:22},item);
  }
- assert.deepEqual(signature.active.map(v=>v.obj.name),['One enormous forward rotating translucent particle blossom','Three stacked solid thorn-vine tiers','Visible spinning yellow giraffe model, outbound and returning']);
+ assert.deepEqual(signature.active.map(v=>v.obj.name),['One enormous forward rotating translucent particle blossom','Visible spinning yellow giraffe model, outbound and returning']);
+ assert.equal(signature.play({origin:[0,1,0],ultimate:true,direction:[0,0,1]},itemById('planter-1')),false,'retired thorn forest must never play');
  assert.ok(signature.active[0].obj.children[0].geometry.getAttribute('position').count>=2000);
  particles.play({ultimate:true,charge:1,direction:[0,0,1],range:22},itemById('clam'),origin,end);
  assert.ok(particles.active.some(v=>v.recipe==='tidal'));

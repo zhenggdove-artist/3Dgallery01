@@ -8,7 +8,7 @@ import {applyElementalHit} from '../src/shared/combat-status.js';
 import {scaleUltimateFootprint,chargedArea,spellFootprint} from '../src/shared/charge-area.js';
 import {CITY_LOTS,CITY_MAX_HP,cityBlocked} from '../src/shared/city-layout.js';
 import {moveMonster} from '../src/shared/temple-rules.js';
-import {TripleBindingCurse} from '../src/binding-curse-triple.js';
+import {PlantUltimateEffects} from '../src/plant-ultimate-effects.js';
 const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('equipped marker, 3px chat lift, GM help inside S and opaque clean paper doll',()=>{
  const css=source('fidelity-ui.css'),ui=source('src/ui.js'),portrait=source('src/equipment-portrait-view.js');
@@ -67,8 +67,9 @@ test('planter ultimate doubles down on existing 60% scaling with one further 50%
  const plant=equipmentById('planter-3');
  const stats=scaleUltimateFootprint({ultimate:true,range:30,radius:8},plant);
  assert.equal(stats.range,9);assert.equal(stats.radius,2.4);
- const visuals=source('src/weapon-signature-effects.js');
- assert.match(visuals,/const scale=Math\.max\(\.2,/);
+ const visuals=source('src/plant-ultimate-effects.js');
+ assert.match(visuals,/radius\/3\.5/);
+ assert.match(source('src/weapon-vfx.js'),/plantUltimates\.play/);
 });
 test('monsters are physically blocked by solid houses on server patrol and client interpolation',()=>{
  const lot=CITY_LOTS.find(v=>v.index===15),dx=Math.cos(lot.yaw),dz=-Math.sin(lot.yaw);
@@ -92,18 +93,22 @@ test('single guided native Prism beam, water surf and colored music notes in act
  assert.match(vfx,/item\.id==='accordion'&&!data\.ultimate/);
  assert.match(source('src/reletter/odd-weapon-effects.js'),/pattern===5\?2400:650/);
 });
-test('three binding vine levels fill palm circle without multiplying draw calls per skill tick',()=>{
- const root=new THREE.Group(),field=new TripleBindingCurse(root);
- const event={area:{visualCenter:[3,0,4],radius:4}};
- const vines=field.play(event);
- assert.equal(vines.userData.vines.length,3);
- assert.equal(vines.userData.rings.length,3);
- assert.equal(vines.children.filter(x=>x.isInstancedMesh).length,1);
- field.update(.45);
- assert.ok(vines.scale.y>.5);
- field.update(3.1);assert.equal(field.active.length,0);
- field.dispose();
- assert.match(source('src/weapon-vfx.js'),/item\.family==='palm'&&data\.ultimate/);
+test('green tornado replaces legacy palm binding vines without changing gameplay status',()=>{
+ const root=new THREE.Group(),effects=new PlantUltimateEffects(root),item=equipmentById('palm-3');
+ const event={ultimate:true,origin:[0,1,0],direction:[0,0,1],range:20,
+  area:{mode:'area',visualCenter:[3,.16,4],radius:4}};
+ assert.equal(effects.play(event,item),true);
+ assert.equal(effects.active.length,1);
+ const storm=effects.active[0];
+ assert.equal(storm.group.name,'Green lightning-fire tornado');
+ assert.equal(storm.group.position.x,3);
+ assert.equal(storm.group.position.z,4);
+ assert.equal(storm.floorRings.length,3);
+ effects.update(.45);
+ assert.ok(storm.material.uniforms.uOpacity.value>0);
+ effects.dispose();assert.equal(root.children.length,0);
+ assert.match(source('src/weapon-vfx.js'),/this\.plantUltimates\.play/);
+ assert.doesNotMatch(source('src/weapon-vfx.js'),/bindingCurse\.play/);
 });
 test('attached boomerang native electrical arc and no held duplicate',()=>{
  const sourceEffects=source('src/weapon-signature-effects.js');
