@@ -26,7 +26,7 @@ const gardenMelee=[['swatter','Fly Swatter','#9be6dc',1.3,3.4,630],['pan','Fryin
 for(const [family,name,color,damage,range,cooldown] of gardenMelee)EQUIPMENT.push(...ranks.map((rank,i)=>({id:family+'-'+(i+1),name:rank+' '+name,slot:'weapon',family,color,tier:i+1,price:[12,30,65,110,180][i],damage:+(damage+i*.65).toFixed(2),chargeDamage:+(damage*2.2+i).toFixed(2),range:range*(1+i*.35),chargeRange:2+i*.3,radius:1.2+i*.45,cooldown:cooldown-i*20})));
 EQUIPMENT.push(...ODD_WEAPONS);
 EQUIPMENT.push(...HEADGEAR,...OUTFITS,...WINGS,...SEEDS,...HARVESTS);
-EQUIPMENT.push({id:'chiang-token',name:'蔣家令牌',slot:'weapon',family:'pan',color:'#ae7bd5',tier:5,price:0,notForSale:true,element:'dark',damage:8,chargeDamage:30,range:5,chargeRange:20,radius:2,cooldown:380,description:'Dark melee · Life drain + poison · Full charge summons three spectral bronze guardians for 2 seconds.'});
+EQUIPMENT.push({id:'chiang-token',name:'Chiang Family Token',slot:'weapon',family:'pan',color:'#ae7bd5',tier:5,price:0,notForSale:true,element:'dark',damage:8,chargeDamage:30,range:5,chargeRange:20,radius:2,cooldown:380,description:'Dark melee · Life drain + poison · Full charge summons three spectral bronze guardians for 2 seconds.'});
 // Classification is independent from upgrade-tier range. Every casting
 // staff belongs to MID, including Rank V and the original starter staff.
 const STAFF_FAMILIES=new Set(['water','ice','fire','lightning','beam','petal','wave']);

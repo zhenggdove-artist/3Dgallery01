@@ -1,15 +1,15 @@
 // Authored toy weapons. Statistics are authoritative; category describes the charged reach.
 export const ODD_WEAPONS=[
- ['giraffe','長頸鹿迴旋棒','whip','near','#e6b95d',4,3.6,56,310,16,'boomerang',2,'握長頸甩動四肢；蓄力放出往返兩段的長頸鹿光粒迴旋鏢。'],
- ['goldfish','金魚水砲','water','mid','#ff963c',2.5,11,32,115,22,'jet',5,'握尾甩魚；滿蓄力召喚巨大金魚向前游動，碰撞敵人造成傷害及擊退。'],
- ['clam','大花蛤','pan','near','#e7a9c7',5,3,8,310,18,'shells',6,'貝殼隨揮擊開闔；滿蓄力自動發射六枚旋轉貝殼，持續按住循環釋放。'],
- ['white-cat','貓貓衝鋒槍','water','mid','#f4f2e6',2,22,28,220,18,'rainbow',7,'白貓雙手持握；第一人稱瞄準；蓄力七發七彩連射。'],
- ['black-cat','黑貓狙擊槍','beam','far','#343347',10,80,140,3600,48,'sniper',1,'黑貓重型狙擊姿態；第一人稱縮放；滿蓄力穿行極遠的強力光彈。'],
- ['calico-cat','花貓散彈槍','water','near','#e6ac76',8,10,17,850,36,'scatter',10,'十顆獨立可碰撞的彩色散彈；集氣更大更遠，但射程仍短於貓貓衝鋒槍。'],
- ['accordion','紅色手風琴','pan','near','#d43c57',4,3.5,30,275,24,'score',6,'揮舞散出彩色音符；蓄力釋放樂譜粒子龍捲風。'],
- ['fan','暴走電風扇','swatter','mid','#85d4bd',3,4,20,450,16,'gust',4,'扇葉旋轉，揮擊推風；蓄力四股螺旋風束並施加短暫緩速。'],
- ['telephone','尖叫電話聽筒','whip','mid','#bd7fce',4,4,24,550,20,'echo',3,'彈簧電話線隨手擺動；蓄力三道環狀聲波，短暫削弱敵人。'],
- ['jellybrella','水母雨傘','planter','mid','#91d8ed',5,4,9,800,22,'jelly',5,'傘蓋與觸鬚柔軟擺動；蓄力散出五團水母光霧並緩速。']
+ ['giraffe','Giraffe Boomerang','whip','near','#e6b95d',4,3.6,56,310,16,'boomerang',2,'Swing a flexible giraffe-shaped club. Charge to throw a swaying boomerang that damages targets on its outbound and return paths.'],
+ ['goldfish','Goldfish Water Cannon','water','mid','#ff963c',2.5,11,32,115,22,'jet',5,'Spray water from a goldfish cannon. Full charge summons a school of giant fish that swim forward and damage enemies on contact.'],
+ ['clam','Giant Clam','pan','near','#e7a9c7',5,3,8,310,18,'shells',6,'Swing a snapping clam. Full charge fires six spinning shells; hold the button to repeat the volley.'],
+ ['white-cat','White Cat SMG','water','mid','#f4f2e6',2,22,28,220,18,'rainbow',7,'Rapid-fire colorful bullets in first person. Charge to launch seven rainbow shots.'],
+ ['black-cat','Black Cat Sniper Rifle','beam','far','#343347',10,80,140,3600,48,'sniper',1,'Aim through a first-person sniper scope. Fully charged shots launch powerful long-range energy rounds.'],
+ ['calico-cat','Calico Cat Shotgun','water','near','#e6ac76',8,10,17,850,36,'scatter',10,'Fire independently colliding colorful pellets. Charging increases the spread and reach, but remains shorter than the White Cat SMG.'],
+ ['accordion','Red Accordion','pan','near','#d43c57',4,3.5,30,275,24,'score',6,'Swing to scatter colorful musical notes. Full charge releases a traveling tornado of score particles.'],
+ ['fan','Rampaging Electric Fan','swatter','mid','#85d4bd',3,4,20,450,16,'gust',4,'Swing spinning fan blades to create gusts. Full charge releases four twisting wind streams that briefly slow enemies.'],
+ ['telephone','Screaming Telephone','whip','mid','#bd7fce',4,4,24,550,20,'echo',3,'Swing a coiled telephone cable. Full charge emits three rings of sound that temporarily weaken enemies.'],
+ ['jellybrella','Jellyfish Umbrella','planter','mid','#91d8ed',5,4,9,800,22,'jelly',5,'Swing a soft jellyfish umbrella. Full charge releases five luminous jellyfish clouds that slow enemies.']
 ].map(([id,name,family,rangeClass,color,damage,range,chargedRange,cooldown,chargeDamage,pattern,burst,description])=>({id,name,slot:'weapon',family,rangeClass,color,damage,range,chargedRange,chargeRange:chargedRange-range,cooldown,chargeDamage,pattern,burst,description,radius:.3,price:45+Math.round(chargeDamage*2),tier:3,exotic:true,firstPerson:(id.includes('cat')&&id!=='calico-cat')||id==='goldfish',autoCharge:id==='clam',chargeMs:({'giraffe':1900,goldfish:1570,clam:1170,'white-cat':970,'black-cat':2850,'calico-cat':1450,accordion:1770,fan:1330,telephone:1660,jellybrella:1810})[id],element:['goldfish','clam','jellybrella'].includes(id)?'water':id==='fan'?'wind':id==='accordion'?'light':'earth'}));
 export const oddWeapon=id=>ODD_WEAPONS.find(w=>w.id===id);
 export const weaponRangeClass=w=>w.rangeClass||(w.range<12?'near':w.range<30?'mid':'far');
