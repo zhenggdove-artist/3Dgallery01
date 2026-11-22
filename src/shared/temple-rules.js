@@ -903,7 +903,7 @@ function attack(world,profile,actor,body,context,now){
       scaleUltimateFootprint(native,source,sourceQuality);
       const secondary={...native,range:anchor.distance};
       const echoArea=source.id==='goldfish'||source.family==='wave'?null:
-       chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel);
+       chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel,true);
       if(echoArea?.mode==='area'){
        const y=Math.max(0,groundForSpell(anchor.x,anchor.z,origin[1]));
        echoArea.center=[anchor.x,y+.12,anchor.z];
