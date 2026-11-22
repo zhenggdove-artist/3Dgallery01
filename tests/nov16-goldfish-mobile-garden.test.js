@@ -11,6 +11,10 @@ const fighter=(key='caster',position=[75,0,0])=>({key,name:key,color:'#ffffff',r
 function game(weapon='goldfish',monsterZ=12){
  const world=createInitialWorld(NOW),actor=fighter(),profile=ensureProfile(world,actor.key,actor.name,actor.color,NOW);
  profile.inventory.push(weapon);profile.equipment.weapon=weapon;
+ // Ballistics tests isolate pellet randomness from randomized affix effects.
+ ensureProfile(world,actor.key,actor.name,actor.color,NOW);
+ const uid=profile.inventoryInstances[profile.inventory.indexOf(weapon)].uid;
+ profile.fusionByInstance[uid].weaponAffixes=[{id:'aerial',percent:3}];
  world.monster={id:'target-monster',active:true,model:'uncle',variant:'uncle',position:[75,0,monsterZ],hp:100000,maxHp:100000,skills:[],nextAttackAt:NOW+100000};
  return {world,actor,profile};
 }

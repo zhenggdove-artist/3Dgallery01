@@ -101,9 +101,10 @@ test('fully charged area spell damages two opponents and player-built architectu
  const cast=applyAction(world,caster,{action:'attack',direction:[0,0,1],charge:1},{now:3000,actors:[caster,t1,t2],rng:()=>.4});
  assert.equal(cast.attackEvent?.ultimate,true,JSON.stringify(cast.error));
  assert.equal(cast.hits?.length,0,'charged attacks cannot damage on release');
- assert.equal(world.profiles[t1.key].hp,100);
+ const initialHp1=world.profiles[t1.key].hp,initialHp2=world.profiles[t2.key].hp;
+  assert.equal(initialHp1,world.profiles[t1.key].maxHp);
  tickWorld(world,{now:3700,actors:[caster,t1,t2],rng:()=>.4,activeFighters:0});
- assert.ok(world.profiles[t1.key].hp<100&&world.profiles[t2.key].hp<100);
+ assert.ok(world.profiles[t1.key].hp<initialHp1&&world.profiles[t2.key].hp<initialHp2);
  assert.ok(cast.structureHit?.hp<140,JSON.stringify(cast));
 });
 

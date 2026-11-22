@@ -47,7 +47,7 @@ test('different physical copies of same base weapon never share fusion attempts'
  assert.equal(failed.fusion.nextChance,.5);
  assert.equal(failed.fusion.nextAttempt,1);
  assert.equal(p.fusionByInstance[uidA].attempts,0);
- assert.equal(p.fusionByInstance[uidB],undefined);
+ assert.equal(p.fusionByInstance[uidB].layer,undefined,'virgin copy has an enchant but no fusion layer');
  const bIndex=p.inventoryInstances.findIndex(x=>x.uid===uidB);
  const aIndex=p.inventoryInstances.findIndex(x=>x.uid===uidA);
  assert.equal(fusionChance(p,'ember-1',aIndex),.5);
@@ -101,7 +101,7 @@ test('swaps and equipment selection retain the exact copy UID and upgrade',()=>{
   p.inventory.indexOf('frost-1'),idxB,'fuse-only-b-123'),{now:TIME+100,rng:()=>0});
  assert.equal(f.fusion.success,true);
  assert.equal(p.fusionByInstance[uidB].layer,1);
- assert.equal(p.fusionByInstance[uidA],undefined);
+ assert.equal(p.fusionByInstance[uidA].layer,undefined,'other copy keeps only its own enchant');
  const newIndexA=p.inventoryInstances.findIndex(x=>x.uid===uidA);
  const newIndexB=p.inventoryInstances.findIndex(x=>x.uid===uidB);
  assert.equal(applyAction(w,actor,{action:'equip',itemId:'ember-1',inventoryIndex:newIndexB},{now:TIME+200}).error,undefined);
@@ -113,7 +113,7 @@ test('swaps and equipment selection retain the exact copy UID and upgrade',()=>{
  assert.equal(fusionChance(p,'ember-1',newIndexA),.25);
  assert.equal(applyAction(w,actor,{action:'equip',itemId:'ember-1',inventoryIndex:newIndexB},{now:TIME+400}).error,undefined);
  assert.equal(p.equippedInstanceIds.weapon,uidA);
- assert.equal(p.fusion['ember-1'],undefined,'virgin physical copy must not inherit previous +1');
+ assert.equal(p.fusion['ember-1'].layer,undefined,'virgin copy has no inherited upgrade');
 });
 
 test('legacy saved failed rolls do not stack across unrelated item instances',()=>{
@@ -146,7 +146,7 @@ test('existing profiles already on physical inventory UIDs migrate old failure p
  assert.deepEqual(record.effects,['storm-1']);
  assert.equal(fusionChance(p,'ember-1',first),.25);
  assert.equal(fusionChance(p,'ember-1',second),.5);
- assert.equal(p.fusionByInstance[untouchedUid],undefined);
+ assert.equal(p.fusionByInstance[untouchedUid].layer,undefined,'virgin UID has no fusion level');
  // Migration is idempotent: no further chance reductions after another login.
  ensureProfile(world,'upgraded','upgraded','#aabbcc',TIME+3);
  assert.equal(fusionChance(p,'ember-1',first),.25);

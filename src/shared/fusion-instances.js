@@ -26,7 +26,10 @@ export function ensureWeaponAffixes(profile,rng=Math.random){
   if(itemById(row.itemId)?.slot!=='weapon')continue;
   const old=profile.fusionByInstance?.[row.uid]||{};
   if(Array.isArray(old.weaponAffixes)&&old.weaponAffixes.length)continue;
-  profile.fusionByInstance[row.uid]={...old,weaponAffixes:rollWeaponAffixes(itemById(row.itemId),rng)};
+  // Do not clone previously projected records: the original reference still
+  // identifies the upgraded physical UID, not a different virgin copy.
+  if(profile.fusionByInstance[row.uid])old.weaponAffixes=rollWeaponAffixes(itemById(row.itemId),rng);
+  else profile.fusionByInstance[row.uid]={weaponAffixes:rollWeaponAffixes(itemById(row.itemId),rng)};
  }
  const itemId=profile.equipment?.weapon;
  const uid=profile.equippedInstanceIds?.weapon;

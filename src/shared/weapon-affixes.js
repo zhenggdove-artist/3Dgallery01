@@ -51,7 +51,7 @@ export function weaponAffixTotals(record){
 }
 export function weaponAffixLabel(entry){
  const descriptor=weaponAffixById(entry?.id);
- return descriptor?descriptor.name+'的：'+descriptor.label+' +'+Number(entry.percent).toFixed(2).replace(/\\.?0+$/,'')+'%':'';
+ return descriptor?descriptor.name+'的：'+descriptor.label+' +'+Number(entry.percent).toFixed(2).replace(/\.?0+$/,'')+'%':'';
 }
 export function weaponAffixPrefix(record){
  return normalizedWeaponAffixes(record).map(a=>table.get(a.id).name).join('');

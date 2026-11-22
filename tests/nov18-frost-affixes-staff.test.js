@@ -36,8 +36,9 @@ test('fusion inherits every distinct weapon affix as a composite name and live s
  assert.equal(result.fusion.success,true);
  assert.deepEqual(profile.fusion['ember-1'].affixIds,['brutal','stalwart']);
  const visual=weaponPresentation(itemById('ember-1'),profile.fusion['ember-1']);
- assert.ok(visual.title.startsWith('殘暴堅韌的'),visual.title);
- assert.ok(visual.traits.some(x=>x.name==='殘暴的'));
+ assert.ok(visual.title.startsWith('殘暴堅韌'),visual.title);
+ assert.match(visual.title,/的Seed Ember（\+1）$/);
+  assert.ok(visual.traits.some(x=>x.name==='殘暴的'));
  assert.ok(visual.traits.some(x=>x.name==='堅韌的'));
  assert.ok(playerStats(world,profile,now).defense<.8,'stalwart defense is inherited by game stats');
 });
