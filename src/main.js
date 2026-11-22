@@ -388,6 +388,30 @@ network.addEventListener('connection',event=>{if(joined)ui.toast(event.detail.co
 ui.addEventListener('attack',()=>performAttack());
 ui.addEventListener('gun-fire',()=>{if(gun.mode)void performAttack(0);});
 ui.addEventListener('create-platform',event=>sendAction('create-platform',event.detail));
+ui.addEventListener('gm-platform-tool',event=>{
+ if(!self?.profile?.admin)return;
+ platformDelete.begin(event.detail.mode,event.detail.kind);
+});
+ui.addEventListener('gm-artwork-select',async event=>{
+ if(!self?.profile?.admin||!controller)return;
+ const {id,repair}=event.detail;
+ if(artEditor.dirty)return ui.toast('請先儲存或取消目前作品修改');
+ if(repair){
+  const position=controller.buildPosition(4);
+  if(!position)return ui.toast('無法取得 GM 前方位置');
+  position[1]=Math.max(0,position[1])+1.5;
+  const result=await sendAction('repair-artwork',{platformId:id,position});
+  if(!result)return;
+ }
+ ui.closePanel();
+ let root=arena.artworks.get(id);
+ if(!root){
+  try{await arena.loadCustomArtworks(world?.customArtworks||[],network.base);}catch(error){ui.toast(error.message);return;}
+  root=arena.artworks.get(id);
+ }
+ if(!root)return ui.toast('作品模型尚未載入：'+id);
+ artEditor.select(root);
+});
 ui.addEventListener('art-bomb-resize',event=>sendAction('resize-art-bomb',event.detail));
 ui.addEventListener('art-bomb-appearance',event=>sendAction('update-art-bomb-appearance',event.detail));
 ui.addEventListener('art-bomb-upload',async event=>{
@@ -770,6 +794,7 @@ function update(dt,time,movementDt=dt){
     let state;
     for(let step=0;step<substeps;step++)state=controller.update(simulationDt/substeps);
     if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
+  platformDelete.update();
   collectorView.update(time,camera);
   statusVisuals.update(dt);
   const castingItem=itemById(world?.profile?.equipment?.weapon);
