@@ -6,7 +6,7 @@ import {STARTER_LOADOUT,itemById} from '../src/shared/catalog.js';
 
 test('new fighter profiles start with the cat SMG in inventory and equipment',()=>{
   assert.equal(STARTER_LOADOUT.weapon,'white-cat');
-  assert.equal(itemById('white-cat')?.name,'貓貓衝鋒槍');
+  assert.equal(itemById('white-cat')?.name,'White Cat SMG');
   const profile=createProfile('new','Player','#abcdef');
   assert.deepEqual(profile.inventory,['white-cat']);
   assert.equal(profile.equipment.weapon,'white-cat');

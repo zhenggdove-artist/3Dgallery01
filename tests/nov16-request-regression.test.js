@@ -14,7 +14,7 @@ test('new players begin with the cat SMG, not the former giant clam or saber',()
  assert.equal(STARTER_LOADOUT.weapon,'white-cat');
  assert.equal(p.equipment.weapon,'white-cat');
  assert.ok(p.inventory.includes('white-cat'));
- assert.equal(itemById('white-cat').name,'貓貓衝鋒槍');
+ assert.equal(itemById('white-cat').name,'White Cat SMG');
 });
 test('GM deletes floating disks and selected original exhibit disks, but not artwork',()=>{
  const w=createInitialWorld(1000);

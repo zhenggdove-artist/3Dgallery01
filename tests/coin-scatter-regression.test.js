@@ -31,7 +31,7 @@ test('chiang token is no longer a Temple weapon, including old accounts',()=>{
  assert.ok(!user.inventory.includes('chiang-token'));
  assert.equal(user.equipment.weapon,STARTER_LOADOUT.weapon);
  assert.equal(STARTER_LOADOUT.weapon,'white-cat');
- assert.equal(itemById(STARTER_LOADOUT.weapon).name,'貓貓衝鋒槍');
+ assert.equal(itemById(STARTER_LOADOUT.weapon).name,'White Cat SMG');
 });
 test('calico shot spread is wider when charged and particles use a 3D cone',()=>{
  const weapon=itemById('calico-cat'),shot={direction:[0,0,1],charge:0,damage:50},charged={...shot,charge:1};

@@ -30,14 +30,14 @@ test('all weapons have a readable near/mid/far classification and exact combat s
  for(const item of WEAPONS){
   assert.ok(['near','mid','far'].includes(weaponClass(item)),item.id);
   const text=explainWeapon(item);
-  assert.match(text,/滿集氣/);
+  assert.match(text,/Full charge/);
   assert.match(text,/m/);
   assert.ok(text.length>50,item.id);
  }
  const gl=WEAPONS.find(x=>x.id==='frost-1'),ember=WEAPONS.find(x=>x.id==='ember-3');
  assert.equal(weaponClass(gl),'mid');
- assert.ok(explainWeapon(gl).includes('冰晶'));
- assert.ok(explainWeapon(ember).includes('燼火'));
+ assert.ok(explainWeapon(gl).includes('ice crystal'));
+ assert.ok(explainWeapon(ember).includes('spray fire'));
 });
 
 test('preview ground height agrees with server geometry, including doubled GM platforms',()=>{

@@ -49,9 +49,9 @@ test('giraffe charged collision is wider than the visible revolving rod and deal
  const fx=world.persistentAttacks.find(v=>v.kind==='giraffe');
  assert.ok(fx.radius>=5.9*1.85,'server collision uses actual revolving rod width');
  assert.ok(fx.damage>0);
- assert.equal(victim.hp,100,'ultimate hit is not applied before the rod touches');
+ assert.equal(victim.hp,victim.maxHp,'ultimate hit is not applied before the rod touches');
  tickWorld(world,{now:T+6650,actors:[attacker,defender],activeFighters:0,rng:()=>.7});
- assert.ok(victim.hp<100,'outbound sweep touches defender');
+ assert.ok(victim.hp<victim.maxHp,'outbound sweep touches defender');
 });
 
 test('artwork does not damage fighters or collapse buildings until actual ballistic collision',()=>{
