@@ -91,6 +91,7 @@ export function migrateWorld(raw,now=Date.now()){
       const layout=world.artworkLayout[record.id];
       const pos=layout?.position;
       const invalid=!Array.isArray(pos)||pos.length!==3||!pos.every(Number.isFinite)||
+        pos.some(v=>Math.abs(v+100)<1e-6)||
         Math.hypot(pos[0],pos[2])>ARENA_RADIUS+5||pos[1]<-2||pos[1]>60;
       if(invalid&&Array.isArray(record.position)&&record.position.every(Number.isFinite))
         world.artworkLayout[record.id]={...layout,position:[...record.position],revision:(layout?.revision||0)+1,updatedAt:now};
