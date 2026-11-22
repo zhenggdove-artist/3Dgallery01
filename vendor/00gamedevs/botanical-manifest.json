@@ -1,0 +1,94 @@
+{
+  "origin": "https://00gamedevs.com",
+  "contentVersion": "16d841b646079ca5af05d99ffcf1f556d9704eee4b6fb8f6aa63bed9cbfee66f",
+  "downloadedFrom": "official AI catalog v2",
+  "packaging": "byte-identical original JavaScript, not a visual re-creation",
+  "assets": [
+    {
+      "id": "lightning-fire-tornado",
+      "url": "https://00gamedevs.com/downloads/effects/lightning-fire-tornado.js",
+      "sha256": "c00fb5b80913d72f722cdd4fab1f1550e36e0cd90fb3f95c5c423f6682462736",
+      "byteLength": 111749,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "reset",
+          "dispose",
+          "setOptions",
+          "seek"
+        ],
+        "playback": "single-shot",
+        "lifecycle": {
+          "start": 0.9,
+          "end": 0.9
+        },
+        "notes": "One 15-second cast at speed 1: 0.9s ignition, 13.2s sustained funnel and 0.9s fade. Add group, use the normal Three.js renderer and call update(deltaSeconds). seek(seconds) samples visual time; reset() replays. The named LightningFireTornadoVFX class retains looping and palette controls. No external assets or collision.",
+        "properties": [
+          "group",
+          "settings",
+          "phase",
+          "finished",
+          "elapsed",
+          "duration",
+          "particleCount"
+        ],
+        "duration": 15,
+        "timeUnit": "seconds",
+        "plane": "XZ",
+        "up": "+Y",
+        "origin": "ground-center"
+      },
+      "defaultOptions": {
+        "color": "#d91644",
+        "size": 1,
+        "density": 1,
+        "speed": 1,
+        "detail": 1
+      }
+    },
+    {
+      "id": "golden-chain-rain",
+      "url": "https://00gamedevs.com/downloads/effects/golden-chain-rain.js",
+      "sha256": "0223c7b6ea716acb65155b88a137da710b8b708d541dc0c4f648d3d7a252e29d",
+      "byteLength": 633231,
+      "license": "MIT",
+      "integration": {
+        "type": "scene-object",
+        "factory": "default: createVFX",
+        "methods": [
+          "update",
+          "stop",
+          "hit",
+          "reset",
+          "dispose",
+          "setOptions"
+        ],
+        "playback": "one-shot",
+        "lifecycle": {
+          "start": 0.35,
+          "end": 1.1
+        },
+        "notes": "Three deterministic waves, complete by 7.5 visual seconds. Each 0.64-unit arrow contacts at strand age 0.35s, then advances 0.32 along its flight axis over 0.08s. Arrows share the links’ dark gold base and animated irregular liquid shading, including color, textureDensity and detail controls; model-space sampling keeps arrow facet seams continuous, with arrow-only spatial texture density tripled; chain density and animation time coefficients remain unchanged. Arrows remain half embedded and erode with attached links. Buried surfaces clip at local y=0. Eight yellow-gold branched cracks per landing have a separate soft local bloom layer, reveal in 0.18s and remain for 3s from each contact, including a final 0.3s fade. Rising golden crack chips are 8x the prior allocation: 616 at default density and 1232 at maximum. Erosion chips remain 179 default / 358 max; existing decorative capacity 1590. Each rising chip lives 1.95s (200% longer), with movement halved again to 25% of the original. After its existing 0.105s fade-in, each chip keeps full size and brightness through age 1.6s, then fades opacity over 0.35s without shrinking. The same fixed pool recycles after each full life, stops births by 3s from contact, and lets existing chips fade naturally; all chips clear by 7.45s. Spin, pool size and impact shards are unchanged. Impact shard size is 0.5x the initial burst version (visible length about 0.04-0.08 local units); count, paths and timing are unchanged. Separate golden impact shards burst within 0-0.025s of contact, travel outward and upward, then fall and fade by 0.65s: 3-24 per contact (12 default), 288 per default cast. They preserve the previous chip counts; total 1083 default, global maximum 2454 at 12 chains per wave and full density. Aerial ripple cores, soft edges and halos fade together over strand ages 1.10-1.55s, retaining the held size and peak opacity. Only aerial endpoints have golden ripples; no ground ripples or impact flashes. density changes erosion, rising and impact chips only; size scales everything, spread changes horizontal placement only. Both sprite and solid links share attachment and timing. No terrain detection, deformation or collision.",
+        "units": "local-scene-units",
+        "up": "+Y",
+        "plane": "XZ"
+      },
+      "defaultOptions": {
+        "spriteChains": true,
+        "color": "#ffd166",
+        "size": 1,
+        "density": 0.5,
+        "speed": 1,
+        "detail": 1,
+        "quantity": 8,
+        "spread": 1,
+        "crackBloomSpread": 1,
+        "crackBloom": 0.15,
+        "textureDensity": 0.7
+      }
+    }
+  ]
+}

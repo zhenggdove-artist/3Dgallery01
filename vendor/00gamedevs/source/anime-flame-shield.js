@@ -104,9 +104,15 @@ three = __toESM(three, 1);
 	const AF_START = .25;
 	const AF_END = 2;
 	const AF_RATE = 24;
+	const AF_COAT_SPREAD_PER_HIT = .043;
+	const AF_COAT_SPREAD_STEP = .07;
+	const AF_COAT_REFUEL_PER_HIT = .13;
+	const AF_CONTACT_GAP = .35;
+	const AF_COAT_TAIL = 1.45;
 	const AF_CAPACITY = 384;
 	const AF_GPU = 64;
 	const AF_SPEED = 12;
+	const AF_CONTACT_REACH = 2.4;
 	const AF_PIPELINES = /* @__PURE__ */ new WeakMap();
 	const AF_OWNERS = /* @__PURE__ */ new WeakMap();
 	const afClamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -114,6 +120,17 @@ three = __toESM(three, 1);
 		const f = afClamp((x - a) / (b - a), 0, 1);
 		return f * f * (3 - 2 * f);
 	};
+	function afSurfaceContactAge(birth, distance, centerAge) {
+		let lo = 0, hi = centerAge;
+		for (let i = 0; i < 7; i++) {
+			const age = (lo + hi) * .5, travel = age * AF_SPEED;
+			const radius = (.3 + .085 * travel) * Math.max(.72, .94 + .22 * Math.sin(birth * 8.3 - age * 3) + .12 * Math.sin(birth * 13 + age * 3));
+			if (travel + AF_CONTACT_REACH * radius >= distance) hi = age;
+			else lo = age;
+		}
+		return hi;
+	}
+	const afCoatSpread = (target, age) => target.coatSpread + (target.coatSpreadGoal - target.coatSpread) * afSmooth(0, AF_COAT_SPREAD_STEP, age);
 	const AF_COMMON = `uniform float uTime,uBloom;uniform vec3 uFire;
 float sat(float x){return clamp(x,0.,1.);}float sm(float a,float b,float x){float f=sat((x-a)/(b-a));return f*f*(3.-2.*f);}
 float hash31(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
@@ -286,7 +303,9 @@ Rec evalRec(){
 		}].map((t) => Object.assign(t, {
 			exposure: 0,
 			lastArrival: -100,
-			firstArrival: -100,
+			coatSpread: 0,
+			coatSpreadGoal: 0,
+			coatRecovery: 0,
 			arrivedGeneration: -1,
 			impact: new three.Vector3(),
 			normal: new three.Vector3(-1, 0, 0),
@@ -530,20 +549,33 @@ Rec evalRec(){
 				"aNormal",
 				"aSurf"
 			]) blobGeometry.attributes[key].addUpdateRange(o, 4);
-			if (r.targetIndex >= 0) queueEvent(birth + r.delay, r);
+			if (hit) queueEvent(birth + afSurfaceContactAge(birth, r.distance, r.delay), r);
 		}
-		function arrive(r) {
-			r.arrived = true;
-			const t = targets[r.targetIndex], at = r.birth + r.delay;
+		function arrive(r, at) {
+			const t = targets[r.targetIndex], age = at - t.lastArrival, e = t.envelope;
+			const cooling = age + t.coatRecovery;
 			t.exposure += 1 / AF_RATE;
-			if (at >= t.lastArrival) {
-				if (at - t.lastArrival > .35) t.firstArrival = at;
-				t.lastArrival = at;
-				t.impact.copy(r.point);
-				t.normal.copy(r.normal);
-				t.incoming.copy(r.direction);
-				t.uniforms.tImpact.value.copy(r.point).sub(t.center);
+			const fresh = cooling >= AF_COAT_TAIL;
+			t.coatSpread = fresh ? 0 : afCoatSpread(t, age);
+			t.uniforms.tImpact.value.copy(r.point).sub(t.center);
+			if (fresh) {
+				t.coatSpreadGoal = 0;
+				t.coatRecovery = 0;
+				e.tImpact.value.copy(t.uniforms.tImpact.value);
+				e.tNormal.value.copy(r.normal);
+				e.tIncoming.value.copy(r.direction);
+			} else {
+				const interrupted = age > AF_CONTACT_GAP;
+				t.coatSpreadGoal = interrupted ? t.coatSpread : Math.min(1, t.coatSpreadGoal + AF_COAT_SPREAD_PER_HIT);
+				t.coatRecovery = interrupted ? cooling : Math.max(0, t.coatRecovery - AF_COAT_REFUEL_PER_HIT);
+				e.tImpact.value.lerp(t.uniforms.tImpact.value, .34);
+				e.tNormal.value.lerp(r.normal, .34).normalize();
+				e.tIncoming.value.lerp(r.direction, .34).normalize();
 			}
+			t.lastArrival = at;
+			t.impact.copy(r.point);
+			t.normal.copy(r.normal);
+			t.incoming.copy(r.direction);
 			if (r.generation > t.arrivedGeneration) {
 				t.arrivedGeneration = r.generation;
 				contactArrivalCount++;
@@ -558,6 +590,7 @@ Rec evalRec(){
 				return false;
 			}
 			const after = age - r.delay, phase = r.seed * Math.PI * 2, p = r.position;
+			r.arrived = r.targetIndex >= 0 && after >= 0;
 			if (r.targetIndex < 0) {
 				const late = Math.max(0, age - .55), deceleration = 2 / .2025;
 				const distance = age * AF_SPEED - deceleration * late * late, forwardSpeed = AF_SPEED - 2 * deceleration * late;
@@ -744,7 +777,7 @@ void main(){
 				tCool: { value: 0 },
 				tNormal: { value: new three.Vector3(-1, 0, 0) },
 				tIncoming: { value: new three.Vector3(1, 0, 0) },
-				tImpact: target.uniforms.tImpact
+				tImpact: { value: new three.Vector3() }
 			};
 			const shell = ownGeometry(target.shape ? new three.BoxGeometry(2.4, 2.4, 2.4, 10, 10, 10) : new three.SphereGeometry(1.2, 40, 28));
 			if (target.shape) {
@@ -814,18 +847,17 @@ void main(){
 			}
 			const mergeEnvelope = solo < 0 && layerVisibility[7] && layerVisibility[11];
 			for (const target of targets) {
-				const cool = elapsed - target.lastArrival, active = cool >= 0 && cool < 1.45, e = target.envelope;
+				const age = elapsed - target.lastArrival, cool = age + target.coatRecovery;
+				const active = age >= 0 && cool < AF_COAT_TAIL, e = target.envelope;
 				for (let i = 0; i < target.shells.length; i++) {
 					const shell = target.shells[i];
 					shell.visible = active && (!mergeEnvelope || i === 0);
 					shell.material.uniforms.uEnvMode.value = mergeEnvelope && i === 0 ? -1 : i;
 				}
 				if (active) {
-					e.tActive.value = 1 - afSmooth(.12, 1.45, cool);
-					e.tOpening.value = afSmooth(0, .25, elapsed - target.firstArrival);
+					e.tActive.value = 1 - afSmooth(.12, AF_COAT_TAIL, cool);
+					e.tOpening.value = afCoatSpread(target, age);
 					e.tCool.value = cool;
-					e.tNormal.value.copy(target.normal);
-					e.tIncoming.value.copy(target.incoming);
 				}
 				target.uniforms.tHeat.value = Math.min(1, target.exposure) * (1 - afSmooth(.35, 1.8, elapsed - target.lastArrival));
 				target.uniforms.tSoot.value = Math.min(1, target.exposure / 2.8);
@@ -925,11 +957,11 @@ void main(){
 					nextBirth = Math.max(nextBirth, last + 1);
 					while (pendingEvents.length && pendingEvents[0].time <= time) {
 						const event = popEvent();
-						const r = event.record;
+						const r = event.record, at = event.time;
 						freeEvents.push(event);
 						if (time - r.birth >= AF_END) continue;
 						eventsProcessed++;
-						arrive(r);
+						arrive(r, at);
 					}
 				}
 				elapsed = time;
@@ -967,7 +999,8 @@ void main(){
 				}
 				for (const t of targets) {
 					t.exposure = 0;
-					t.lastArrival = t.firstArrival = -100;
+					t.lastArrival = -100;
+					t.coatSpread = t.coatSpreadGoal = t.coatRecovery = 0;
 					t.arrivedGeneration = -1;
 					t.impact.set(0, 0, 0);
 					t.normal.set(-1, 0, 0);
@@ -1093,7 +1126,7 @@ void main(){
 				worldSource: root.localToWorld(source.clone()).toArray(),
 				worldAim: root.localToWorld(aim.clone()).toArray(),
 				targetExposures: Object.fromEntries(targets.map((t) => [t.id, t.exposure])),
-				activeContacts: targets.filter((t) => elapsed - t.lastArrival < .35).map((t) => t.id),
+				activeContacts: targets.filter((t) => elapsed - t.lastArrival < AF_CONTACT_GAP).map((t) => t.id),
 				birthRecords: born,
 				smoke: {
 					live: smoke.length,
