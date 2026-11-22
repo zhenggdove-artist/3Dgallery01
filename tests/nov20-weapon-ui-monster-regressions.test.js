@@ -19,9 +19,12 @@ test('equipped marker, 3px chat lift, GM help inside S and opaque clean paper do
  assert.match(css,/#panel #bag-portrait-frame::after\{display:none!important\}/);
  assert.match(portrait,/alpha:false/);assert.match(portrait,/setClearColor\(0xf5f4f7,1\)/);
 });
-test('store classes all original staffs as mid and giraffe melee and jellybrella as mid',()=>{
- for(const id of ['water','tide-1','tide-5','frost-5','storm-5','prism-5','ember-5','bloom-5','nova-5']){
+test('store moves storm and prism staffs into Far while retaining other Mid staffs and melee categories',()=>{
+ for(const id of ['water','tide-1','tide-5','frost-5','ember-5','bloom-5','nova-5']){
   assert.equal(weaponRangeClass(equipmentById(id)),'mid',id);
+ }
+ for(const id of ['storm-1','storm-5','prism-1','prism-5']){
+  assert.equal(weaponRangeClass(equipmentById(id)),'far',id);
  }
  assert.equal(weaponRangeClass(equipmentById('giraffe')),'near');
  assert.equal(weaponRangeClass(equipmentById('jellybrella')),'mid');
