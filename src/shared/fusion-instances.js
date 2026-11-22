@@ -10,6 +10,8 @@ const newUid=()=>crypto.randomUUID();
 function detachedLegacyRecord(profile,itemId,uid,direct){
  const projected=profile.fusion?.[itemId];
  if(!projected||typeof projected!=='object'||projected===direct)return null;
+ const equippedSlot=Object.entries(profile.equipment||{}).find(([,selected])=>selected===itemId)?.[0];
+ if(equippedSlot&&profile.equippedInstanceIds?.[equippedSlot]&&profile.equippedInstanceIds[equippedSlot]!==uid)return null;
  if(Object.entries(profile.fusionByInstance||{}).some(([id,record])=>id!==uid&&record===projected))
   return null;
  if(direct?.layer||direct?.templeStats||direct?.original||direct?.effects?.length||

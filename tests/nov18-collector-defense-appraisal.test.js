@@ -79,7 +79,7 @@ test('simultaneous intruders receive separate authoritative shot events',()=>{
  b=ensureProfile(world,'b','B','#abcdef',NOW);
  const pos=world.collector.position;
  tickWorld(world,{now:NOW+100,actors:[fighter('a',pos),fighter('b',pos)]});
- assert.equal(a.hp,50);assert.equal(b.hp,50);
+ assert.ok(Math.abs(a.hp-(a.maxHp-50))<.00001);assert.ok(Math.abs(b.hp-(b.maxHp-50))<.00001);
  assert.deepEqual(world.collector.shots.map(s=>s.target),['a','b']);
  assert.equal(new Set(world.collector.shots.map(s=>s.id)).size,2);
 });

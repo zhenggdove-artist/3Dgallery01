@@ -102,7 +102,7 @@ test('fully charged area spell damages two opponents and player-built architectu
  assert.equal(cast.attackEvent?.ultimate,true,JSON.stringify(cast.error));
  assert.equal(cast.hits?.length,0,'charged attacks cannot damage on release');
  const initialHp1=world.profiles[t1.key].hp,initialHp2=world.profiles[t2.key].hp;
-  assert.equal(initialHp1,world.profiles[t1.key].maxHp);
+  assert.ok(Math.abs(initialHp1-world.profiles[t1.key].maxHp)<.00001);
  tickWorld(world,{now:3700,actors:[caster,t1,t2],rng:()=>.4,activeFighters:0});
  assert.ok(world.profiles[t1.key].hp<initialHp1&&world.profiles[t2.key].hp<initialHp2);
  assert.ok(cast.structureHit?.hp<140,JSON.stringify(cast));
@@ -222,7 +222,7 @@ test('all cat guns keep their advertised normal and charged range and deal PvP d
         {now:5000,actors:[shooter,target],rng:()=>.8});
       assert.equal(result.hit,null,id+' must not hit instantaneously');
       tickWorld(world,{now:5900,actors:[shooter,target],activeFighters:0,rng:()=>.8});
-      assert.ok(world.profiles.target.hp<100,id+' charge '+charge+' must damage a fighter upon contact');
+      assert.ok(world.profiles.target.hp<world.profiles.target.maxHp,id+' charge '+charge+' must damage a fighter upon contact');
     }
   }
   const spell=WEAPONS.find(w=>w.id==='tide-1');

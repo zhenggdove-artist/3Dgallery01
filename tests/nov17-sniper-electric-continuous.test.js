@@ -17,6 +17,8 @@ function room(weapon,victimPosition=[75,0,30]){
  const world=createInitialWorld(NOW),shooter=actor('shooter',[75,0,0]),target=actor('victim',victimPosition);
  const profile=ensureProfile(world,shooter.key,shooter.name,shooter.color,NOW);
  const victim=ensureProfile(world,target.key,target.name,target.color,NOW);
+ // Isolate sniper contact baseline from a randomly rolled defensive affix.
+ victim.fusionByInstance[victim.equippedInstanceIds.weapon].weaponAffixes=[{id:'aerial',percent:3}];
  if(!profile.inventory.includes(weapon))profile.inventory.push(weapon);
  profile.equipment.weapon=weapon;
  return {world,shooter,target,profile,victim};

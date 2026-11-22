@@ -19,7 +19,7 @@ export function playerStats(world,profile,now=Date.now()){
   const weaponEnchants=weaponAffixTotals(profile.fusion?.[profile.equipment?.weapon]);
   const rawWing=itemById(profile.equipment.wings),wing=rawWing&&equippedItem(profile,rawWing);
   const ability=wing?.design==='painted-wing'?wing.ability:null;
-  return {maxHp:(100+(profile.level-1)*4+traits.hp*10)*(1+weaponEnchants.hp/100),
+  return {maxHp:+((100+(profile.level-1)*4+traits.hp*10)*(1+weaponEnchants.hp/100)).toFixed(3),
     attack:(traits.attack+fusedAttack)*(1+weaponEnchants.attack/100)*(1-(effectActive(profile,'weak',now)?.power||0)),speed:traits.speed*(1+weaponEnchants.speed/100)*(ability==='swift'?1.1:1)*(1-(effectActive(profile,'slow',now)?.power||0))*(effectActive(profile,'stun',now)||effectActive(profile,'root',now)?0:1),
     jump:traits.jump*(1+weaponEnchants.jump/100)*(ability==='aerial'?1.15:1),defense:Math.max(.35,traits.defense*(ability==='guardian'?.9:1)*(1+(effectActive(profile,'expose',now)?.power||0))*(1-Math.min(.5,fusedDefense/300))*(1-weaponEnchants.defense/100)),
     gravity:(wing?.gravity||1)*(ability==='glide'?.85:1),impulse:wing?.impulse||0,flapMs:wing?.flapMs||0};
