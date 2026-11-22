@@ -1,0 +1,31 @@
+name: Vendor Energy Sword Wave for GGTEMPLE
+on:
+  push:
+    branches: [fix/gm-platform-artwork22-20261123]
+    paths:
+      - 'scripts/vendor-energy-sword-wave.mjs'
+      - '.github/workflows/vendor-energy-sword-wave.yml'
+permissions:
+  contents: write
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify and download exact original MIT module
+        run: node scripts/vendor-energy-sword-wave.mjs
+      - name: Add verified exact VFX to feature branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor/00gamedevs/source/energy-sword-wave.js vendor/00gamedevs/energy-sword-wave-manifest.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Vendor official 00GameDevs Energy Sword Wave effect"
+            git push origin HEAD:fix/gm-platform-artwork22-20261123
+          fi
