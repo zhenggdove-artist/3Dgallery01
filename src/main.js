@@ -257,7 +257,7 @@ ui.addEventListener('firebase-login',async()=>{
   }
 });
 ui.addEventListener('join',async event=>{
-  if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;previousHealHp=null;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();
+  if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();
     void resumeWingCheckout(network,ui);
     void arena.loadCustomArtworks(data.world.customArtworks,network.base).catch(error=>console.warn('Deferred artwork loading',error));
     network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
