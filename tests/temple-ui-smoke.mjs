@@ -25,9 +25,11 @@ try{
   }));
   throw new Error('Temple never loaded: '+JSON.stringify(debug)+'; PAGEERRORS='+errors.join('; ').slice(0,2400),{cause:error});
  }
- // In isolated local test mode, inject a test profile through the UI event.
- // Production entry exposes ONLY Google Firebase Auth.
- await page.evaluate(()=>templeTest.ui.emit('join',{name:'CIBrowser',color:'#43b59a',backendUrl:window.TEMPLE_CONFIG.backendUrl}));
+ // Join through the real guest character form (name/color -> network -> Worker).
+ // Google login remains an independent authenticated path.
+ await page.locator('#guest-form').waitFor({state:'visible'});
+ await page.locator('#guest-name').fill('CIBrowser');
+ await page.locator('#guest-enter').click();
  await page.locator('#hud').waitFor({state:'visible'});
  await page.waitForFunction(()=>window.templeTest?.controller()&&JSON.parse(window.render_game_to_text()).connected);
  // SHOP must display the complete 3D equipment models in the FIRST frame,
