@@ -7,7 +7,7 @@ import {WeaponParticleEffects} from './weapon-particle-effects.js';
 import {WeaponSignatureEffects} from './weapon-signature-effects.js';
 import {NumberedWeaponEffects} from './numbered-weapon-effects.js';
 import {VerdantRestorationChannel} from './verdant-restoration-channel.js';
-import {TripleBindingCurse} from './binding-curse-triple.js';
+import {PlantUltimateEffects} from './plant-ultimate-effects.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
@@ -40,7 +40,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.bindingCurse=new TripleBindingCurse(scene);}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.plantUltimates=new PlantUltimateEffects(scene);}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -71,6 +71,7 @@ export class WeaponVFX{
   try{numbered=await this.numberedEffects.warm(renderer,camera);}catch(error){console.warn('Ultimate shader prewarm incomplete',error);}
   try{await this.particleSkills.warm(renderer,camera);}catch(error){console.warn('Particle shader prewarm incomplete',error);}
   try{await this.signatureEffects.warm(renderer,camera);}catch(error){console.warn('Signature shader prewarm incomplete',error);}
+  try{await this.plantUltimates.warm(renderer,camera);}catch(error){console.warn('Green botanical ultimate GPU prewarm incomplete',error);}
   try{await this.warmStaffOrbs(renderer,camera);}catch(error){console.warn('Orb GPU warmup incomplete',error);}
   try{await this.restoration.warm(renderer,camera);}catch(error){console.warn('Original Verdant Restoration warmup incomplete',error);}
   return {source:'00GameDevs',effects:fxs.length,numbered};
@@ -185,7 +186,6 @@ export class WeaponVFX{
   // Repeated server pulses refresh ONE pooled ring, never spawn duplicates.
   if(data.channel&&!data.fusionEcho&&item.family==='petal'&&root)this.restoration.pulse(root);
   const id=effectFor(item,data.ultimate),direction=new THREE.Vector3(...(data.direction||[0,0,1])).normalize(),origin=new THREE.Vector3(...data.origin),range=Math.max(1,data.range||4),end=data.aimPoint?new THREE.Vector3(...data.aimPoint):data.impactPoint?new THREE.Vector3(...data.impactPoint):origin.clone().addScaledVector(direction,range);
-  if(item.family==='palm'&&data.ultimate&&!data.fusionEcho)this.bindingCurse.play(data);
   if(item.id==='accordion'&&!data.ultimate&&!data.fusionEcho){
    const notes=createOddEffect(THREE,{
     ...data,charge:0,origin:origin.toArray(),direction:direction.toArray(),range:3.2
@@ -206,6 +206,11 @@ export class WeaponVFX{
   // the physical muzzle on the camera reticle, never at a ground-AoE marker.
   if(data.ultimate&&Array.isArray(impactArea?.visualCenter)&&!item.firstPerson)
    end.copy(new THREE.Vector3(...impactArea.visualCenter));
+  // Retire the palm thorn crowns/binding curse and planter thorn forest.
+  // Server-authoritative collision, warning and fusion footprints are unchanged.
+  if(data.ultimate&&!item.exotic&&['palm','planter'].includes(item.family)){
+   this.plantUltimates.play({...data,area:impactArea},item);return;
+  }
   // Every ordinary staff shot, including beam, is a pulsing elemental orb.
   if(isChannelStaff(item)&&item.id!=='clam'&&!data.channel&&(!data.ultimate||['lightning','beam'].includes(item.family))){
    this.staffOrb(data,item,origin,direction);return;
@@ -307,7 +312,6 @@ export class WeaponVFX{
 
  update(dt,camera=null,world=null){
   this.restoration.update(dt,camera);
-  this.bindingCurse.update(dt);
   for(const [key,entry] of [...this.channelStreams]){
    if(!this.particleSkills.active.includes(entry)||!entry.host?.parent){
     this.channelStreams.delete(key);continue;
@@ -330,7 +334,7 @@ export class WeaponVFX{
   }
   // An exception in one animation subsystem must never abort the gameplay frame.
   for(const [label,system] of [['saber',this.saberImpact],['particles',this.particleSkills],
-    ['signature',this.signatureEffects],['numbered',this.numberedEffects]]){
+    ['signature',this.signatureEffects],['numbered',this.numberedEffects],['botanical',this.plantUltimates]]){
    try{if(label==='signature')system.update(dt,world);else system.update(dt,camera,label==='numbered'?world:null);}catch(error){
     this.failedAnimationSystems??=new Set();
     if(!this.failedAnimationSystems.has(label)){
@@ -386,7 +390,7 @@ export class WeaponVFX{
   this.failedAnimations.add(id);
   console.error('Weapon animation failed; quarantined this instance',id,error);
  }
- dispose(){this.bindingCurse.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
+ dispose(){this.plantUltimates.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
   for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }
