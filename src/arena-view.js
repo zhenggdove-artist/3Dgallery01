@@ -224,6 +224,7 @@ export class TempleArena{
   if(!previous||previous.wallPaintRevision!==world.wallPaintRevision)
    this.outerCity?.wallPaint?.sync(world.wallPaint||{},world.wallPaintRevision||0);
   if(!previous||previous.floatingPlatforms!==world.floatingPlatforms||
+    previous.customPedestals!==world.customPedestals||previous.platformOverrides!==world.platformOverrides||
     previous.artworkLayout!==world.artworkLayout||previous.customArtworks!==world.customArtworks||
     previous.removedPlatformIds!==world.removedPlatformIds)this.displayPlatforms.sync();
   if(!previous||previous.structures!==world.structures)this.syncStructures();
