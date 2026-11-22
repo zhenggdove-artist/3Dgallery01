@@ -88,7 +88,7 @@ test('all non-saber melee swings recover rapidly and music note particles are vi
  }
  for(const id of ['giraffe','accordion','clam'])assert.ok(itemById(id).cooldown<=310);
  const shader=source('src/reletter/odd-weapon-effects.js');
- assert.match(shader,/pattern>4\.5&&pattern<5\.5\?12\.:5\./);
+ assert.match(shader,/pattern>4\.5&&pattern<5\.5\?17\.:5\./);
  const main=source('src/main.js');
  assert.match(main,/if\(weapon\?\.id==='goldfish'\)\{/);
  assert.match(main,/if\(charge>=1\)await performAttack\(1\)/);
