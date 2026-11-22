@@ -57,6 +57,15 @@ export class TempleUI extends EventTarget{
     document.addEventListener('selectstart',event=>{
       if(!editable(event.target)&&event.target?.closest?.('#game,#hud,#dock'))event.preventDefault();
     },{capture:true});
+    document.addEventListener('pointerdown',event=>{
+      if(!mobileControl(event.target))return;
+      // A selection left by the chat field can make iOS magnify the A button.
+      // Clear it only on gameplay controls, never during text editing.
+      const active=document.activeElement;
+      if(editable(active))active.blur();
+      const selection=window.getSelection?.();
+      if(selection?.rangeCount)selection.removeAllRanges();
+    },{capture:true});
     document.addEventListener('contextmenu',event=>{
       if(!editable(event.target)&&event.target?.closest?.('#game,#hud,#dock'))event.preventDefault();
     });

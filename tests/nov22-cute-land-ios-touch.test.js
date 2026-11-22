@@ -48,3 +48,11 @@ test('mobile controls prevent Safari selection and native loupe while preserving
  assert.match(css,/-webkit-touch-callout:none!important/);
  assert.match(css,/#chat-form input/);
 });
+
+test('iOS game-control pointerdown clears an old text selection but not editable content',()=>{
+ const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
+ assert.match(ui,/addEventListener\('pointerdown',event=>\{/);
+ assert.match(ui,/if\(!mobileControl\(event\.target\)\)return/);
+ assert.match(ui,/if\(editable\(active\)\)active\.blur\(\)/);
+ assert.match(ui,/selection\.removeAllRanges\(\)/);
+});
