@@ -5,7 +5,8 @@ export const artworkAppearanceDefaults=record=>record?.format==='png'||record?.m
 export function validateAppearance(value={},record=null){const out={...artworkAppearanceDefaults(record),...value};for(const [key,min,max] of [['depth',0,2],['brightness',0,3],['contrast',0,3],['saturation',0,3],['blackPoint',0,.95]])if(!Number.isFinite(out[key])||out[key]<min||out[key]>max)return null;if(!/^#[0-9a-f]{6}$/i.test(out.tint))return null;return out;}
 // Interactive pickup radius grows with a GM-scaled artwork's physical footprint.
 // Client and server share the same reach contract; the server adds only
-// a 1m synchronization allowance to the horizontal distance.
+// a 1m synchronization allowance to the horizontal distance;
+// neither side changes the authoritative artwork layout or throw mechanics.
 export function artworkPickupReach(layout){
  const scale=Array.isArray(layout?.scale)?layout.scale:[1,1,1];
  const horizontalScale=Math.max(1,Number(scale[0])||1,Number(scale[2])||1);

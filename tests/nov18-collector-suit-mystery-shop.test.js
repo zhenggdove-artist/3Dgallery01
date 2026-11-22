@@ -40,7 +40,8 @@ test('Far-tab sniper retains its premium price and server validates purchase',()
  const p=ensureProfile(world,'collector','collector','#abcdef',now);
  const item=SHOP_ITEMS.find(i=>i.id==='black-cat');
  assert.equal(item.mysteryWeapon,false);
- assert.equal(item.price,5*(ranks[0]+Math.min(180,EQUIPMENT.find(i=>i.id==='black-cat').price)));
+ const original=EQUIPMENT.find(i=>i.id==='black-cat');
+ assert.equal(item.price,5*(ranks[original.tier-1]+Math.min(180,original.price)));
  p.wallet=item.price-1;
  const actor={key:'collector',name:'collector',color:'#abcdef',role:'fighter',position:[15,0,0],admin:false};
  const body={action:'buy',itemId:item.id};
