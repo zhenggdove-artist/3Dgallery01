@@ -51,7 +51,7 @@ test('weapons gain effective crit, damage reduction, HP and haste from owned enc
  near(totals.crit,10);
  near(augmented.maxHp,107);
  assert.ok(augmented.defense<1);
- assert.match(weaponPresentation(weapon,record).title,/殘暴堅韌豐沛迅捷的紅色手風琴/);
+ assert.match(weaponPresentation(weapon,record).title,/Brutal Stalwart Vital Swift Red Accordion/);
 });
 
 test('fusion preserves each prefix in acquisition order and inherits 30 percent of source value',()=>{
@@ -66,7 +66,7 @@ test('fusion preserves each prefix in acquisition order and inherits 30 percent 
  assert.equal(result.fusion.success,true);
  const record=p.fusionByInstance[p.equippedInstanceIds.weapon];
  assert.deepEqual(record.weaponAffixes,[{id:'brutal',percent:10},{id:'stalwart',percent:4.5}]);
- assert.equal(weaponPresentation(target,record).title,'殘暴堅韌的紅色手風琴（+1）');
+ assert.equal(weaponPresentation(target,record).title,'Brutal Stalwart Red Accordion (+1)');
  assert.ok(playerStats(world,p).defense<1);
  const same=mergeWeaponAffixes(record,{weaponAffixes:[{id:'brutal',percent:11}]});
  assert.equal(same.length,3,'repeated prefixes are not collapsed');
