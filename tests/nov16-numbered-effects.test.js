@@ -12,7 +12,7 @@ import {attackStats,itemById} from '../src/shared/catalog.js';
 import {WeaponVFX} from '../src/weapon-vfx.js';
 
 const references=[
- ['clam',33,'channel'],['prism-1',29,'channel'],['saber-1',38,'ultimate'],['palm-1',31,'ultimate'],['bloom-1',43,'channel'],
+ ['clam',33,'channel'],['prism-1',29,'channel'],['saber-1',38,'ultimate'],['bloom-1',43,'channel'],
  ['swatter-1',53,'ultimate'],['ember-1',73,'channel'],['pan-1',68,'ultimate'],
  ['frost-1',70,'channel'],['storm-1',8,'channel'],['nova-1',20,'channel'],
  ['saber-4',47,'combo'],['jellybrella',26,'ultimate'],['whip-1',48,'ultimate']
@@ -47,7 +47,7 @@ test('numbered effects retain verified originals; prism alone switches to origin
   const file=await readFile(new URL('../vendor/00gamedevs/source/'+spec.asset+'.js',import.meta.url));
   assert.equal(createHash('sha256').update(file.toString('utf8').replace(/\r\n/g,'\n')).digest('hex'),manifestEntry.sha256);
  }
- assert.equal(Object.keys(REQUESTED_VFX).length,17);
+ assert.equal(Object.keys(REQUESTED_VFX).length,16);
 });
 
 test('every numbered attack instantiates an actual source module, never a particle imitation',()=>{
@@ -62,11 +62,7 @@ test('every numbered attack instantiates an actual source module, never a partic
   assert.equal(entry.group.userData.vfxNumber,num);
   assert.equal(scene.children.includes(entry.group),true);
   if(kind==='ultimate'){
-   if(num===31){
-    assert.equal(entry.palmLayers.length,3,'stack of three authentic #31 originals');
-    assert.equal(entry.palmLayers.every(fx=>fx.group.userData.vfxNumber===31),true);
-    assert.ok(entry.group.position.distanceTo(new THREE.Vector3(0,1,0))<1e-8);
-   }else if(num===38){
+   if(num===38){
     assert.ok(entry.group.position.z>0,'#38 cannot be centred at the actor');
     const length=entry.range;
     const tip=entry.group.position.clone().add(new THREE.Vector3(-2.25,0,0)
@@ -339,29 +335,6 @@ test('native ice / sword / coconut travel durations agree with their extended vi
  assert.equal(projectileFlightMs(itemById('saber-1'),true),1100);
  assert.equal(projectileFlightMs(itemById('palm-1'),true),1650);
  assert.equal(projectileFlightMs(itemById('palm-1'),false),245);
-});
-
-test('official #31 coconut tree ultimate stacks three real crowns and rotates rapidly as it travels forward',()=>{
- const scene=new THREE.Scene(),effects=new NumberedWeaponEffects(scene);
- const item=itemById('palm-3'),event={...evt('ultimate'),range:32,origin:[2,1,4],direction:[0,0,1],
-  area:{mode:'corridor',visualCenter:[99,.16,99],radius:7}};
- assert.equal(requestedEffect(item,event)?.number,31);
- assert.equal(effects.play(event,item),true);
- const entry=effects.active[0];
- assert.ok(entry.palmLayers?.length===3);
- assert.equal(scene.children.length,3);
- assert.ok(entry.palmLayers.every(fx=>fx.group.userData.vfxSource==='00GameDevs'&&fx.group.userData.vfxNumber===31));
- const heights=entry.palmLayers.map(fx=>fx.group.position.y);
- assert.ok(heights[1]>heights[0]&&heights[2]>heights[1], 'exactly three ascending layers');
- const start=entry.palmLayers[0].group.position.z;
- effects.update(.5);
- assert.ok(entry.palmLayers.every(fx=>fx.group.position.z>start+5),'all layers move rapidly forward');
- assert.ok(entry.palmLayers.every(fx=>fx.group.rotation.y>5),'layers rotate while advancing');
- assert.ok(entry.palmLayers.every(fx=>Math.abs(fx.group.position.z-entry.palmLayers[0].group.position.z)<1e-8),'one shared projectile path');
- effects.update(1.0);
- assert.ok(entry.palmLayers[0].group.position.z>start+20,'rapid advance covers the actual spell reach');
- effects.dispose();
- assert.equal(scene.children.length,0,'three native scenes all disposed');
 });
 
 test('500ms A hold threshold is shared by tap vs charge and client and server ice reach',async()=>{
