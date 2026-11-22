@@ -57,7 +57,7 @@ export class WeaponSignatureEffects {
    // buffers and shaders. Warm multiple goldfish schools for overlapping casts.
    const bubble=itemById('goldfish');
    if(bubble)this.play({...event,ultimate:false,range:11},bubble,null);
-   for(const id of ['calico-cat','calico-cat','goldfish','goldfish','fan','bloom-1','planter-1','giraffe']){
+   for(const id of ['calico-cat','calico-cat','goldfish','goldfish','fan','bloom-1','giraffe']){
     const item=itemById(id);
     if(item)this.play(event,item,null);
    }
@@ -387,54 +387,6 @@ export class WeaponSignatureEffects {
    m.opacity=Math.min(.95,t*6)*(1-Math.pow(t,3))*.9;
   },key);
  }
- thorns(event){
-   const quality=event.qualityScale||1;
-   // Match the now-halved authoritative area: the whole thorn tree,
-  // leaves and vine branches shrink together rather than keeping a
-  // minimum visual size at a previous quality-scaled radius.
-   const scale=Math.max(.2,(Number(event.area?.radius)||Number(event.radius)||3.6)/1.95);
-   const center=vec(event.area?.center||event.impactPoint||event.origin);
-  center.y=Math.max(.05,center.y);
-  const key='thorns:'+scale.toFixed(3),group=this.take(key)||new THREE.Group();
-  group.name='Three stacked solid thorn-vine tiers';
-  if(!group.children.length){
-  const leaves=[];
-  for(let tier=0;tier<3;tier++){
-   const baseY=tier*3.45;
-   for(let coil=0;coil<3;coil++){
-    const pts=[],turns=2.3+(tier%2)*.3;
-    for(let k=0;k<=90;k++){
-     const t=k/90,angle=t*TAU*turns+coil*TAU/3+tier*1.4;
-     const radius=(1.55+Math.sin(t*Math.PI)*.4)*scale;
-     pts.push(new THREE.Vector3(Math.cos(angle)*radius,baseY+3.6*t,Math.sin(angle)*radius));
-    }
-    const curve=new THREE.CatmullRomCurve3(pts),tube=new THREE.Mesh(
-      new THREE.TubeGeometry(curve,100,(.10+tier*.012)*scale,6,false),
-      material(tier===1?'#84ed93':coil===0?'#477f52':'#79cd78'));
-    group.add(tube);
-    // Clearly articulated three-dimensional thorns, not a three-layer dust cloud.
-    for(let i=4;i<87;i+=5){
-     const position=curve.getPoint(i/90),tangent=curve.getTangent(i/90);
-     const radial=new THREE.Vector3(position.x,0,position.z).normalize();
-     const thorn=new THREE.Mesh(geomCone,material(i%3?'#d3ff87':'#91ff9a'));
-     thorn.scale.set(.17*scale,(.52+stable(i*11+tier)*.39)*scale,.17*scale);
-     thorn.position.copy(position).addScaledVector(radial,.14);
-     thorn.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),radial.clone().addScaledVector(tangent,.35).normalize());
-     group.add(thorn);leaves.push(thorn);
-    }
-   }
-  }
-  }
-  group.position.copy(center);group.rotation.y=0;group.scale.set(1,1,1);
-  for(const child of group.children)child.material.opacity=1;
-  this.add(group,3.6*(event.qualityDuration||1),age=>{
-   const t=Math.min(1,age/.85);
-   group.position.copy(center);group.rotation.y=age*.7;
-   group.scale.set(1,Math.max(.02,t*t*(3-2*t)),1);
-   const fade=Math.min(1,(3.6*(event.qualityDuration||1)-age)*2);
-   for(const child of group.children)child.material.opacity=fade;
-  },key);
- }
  tornado(event){
   const quality=event.qualityScale||1,origin=vec(event.origin),direction=vec(event.direction).normalize(),
     right=new THREE.Vector3(direction.z,0,-direction.x),range=event.range||20,tier=event.qualityTier||3,
@@ -520,7 +472,6 @@ export class WeaponSignatureEffects {
   if(item.id==='goldfish')return this.goldfish(event),true;
   if(item.id==='fan')return this.tornado(event),true;
   if(item.family==='petal')return this.flower(event),true;
-  if(item.family==='planter'&&!item.exotic)return this.thorns(event),true;
   return false;
  }
  update(dt,world=null){
