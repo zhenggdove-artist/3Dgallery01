@@ -40,7 +40,7 @@ export const SOUND_PROFILES=Object.freeze({
   'ground-crack':{duration:.46,freq:450,end:40,shape:'sawtooth',noise:1,gain:1.2},
  smg:{duration:.13,freq:190,end:56,shape:'square',noise:.75,gain:.8},
  sniper:{duration:.65,freq:390,end:56,shape:'sawtooth',noise:.84,gain:1},
- jump:{duration:.34,freq:340,end:780,shape:'triangle',noise:.25,gain:1.0},
+ jump:{duration:.34,freq:460,end:900,shape:'sine',noise:0,gain:.82},
  land:{duration:.23,freq:125,end:49,shape:'sine',noise:.72,gain:.9},
  saber:{duration:.36,freq:510,end:150,shape:'sawtooth',noise:.72,gain:1.0},
  swatter:{duration:.24,freq:330,end:140,shape:'triangle',noise:.68,gain:.9},
@@ -209,6 +209,41 @@ export class GameAudio{
   this.play(key,volume*perWeapon*level,pitch);
  }
 
+
+ // A soft, springy two-note chirp rather than the old heavy jump/noise impact.
+ // Each voice follows a separate short envelope; nothing streams or decodes.
+ playCuteJump(ctx,now,amp,pitch){
+  const voice=(wave,frequencies,levels,end)=>{
+   const oscillator=ctx.createOscillator(),gain=ctx.createGain();
+   oscillator.type=wave;
+   frequencies.forEach(([offset,hz],index)=>{
+    const frequency=Math.max(35,hz*pitch),time=now+offset;
+    if(!index)oscillator.frequency.setValueAtTime(frequency,time);
+    else oscillator.frequency.exponentialRampToValueAtTime(frequency,time);
+   });
+   levels.forEach(([offset,level],index)=>{
+    const value=Math.max(.0001,level*amp),time=now+offset;
+    if(!index)gain.gain.setValueAtTime(value,time);
+    else gain.gain.exponentialRampToValueAtTime(value,time);
+   });
+   oscillator.connect(gain);gain.connect(this.sfx);this.voices++;
+   oscillator.onended=()=>{
+    oscillator.disconnect();gain.disconnect();
+    this.voices=Math.max(0,this.voices-1);
+   };
+   oscillator.start(now+frequencies[0][0]);oscillator.stop(now+end);
+  };
+  // Soft bubbly spring that rises with the character's takeoff.
+  voice('sine',[[0,460],[.045,650],[.13,900],[.31,690]],
+   [[0,.0001],[.015,.18],[.1,.13],[.31,.0001]],.32);
+  // Tiny, rounded pop at the beginning, without broadband noise.
+  voice('triangle',[[0,250],[.038,330],[.14,370],[.25,300]],
+   [[0,.0001],[.009,.075],[.07,.045],[.25,.0001]],.26);
+  // Second upward note: a playful, bell-like 'pyoin' tail.
+  voice('sine',[[.085,980],[.14,1240],[.24,1080]],
+   [[.085,.0001],[.108,.092],[.18,.064],[.24,.0001]],.25);
+ }
+
  play(kind,volume=1,pitch=1){
   if(!this.context)this.unlock(false);
   if(this.muted)return;
@@ -222,6 +257,7 @@ export class GameAudio{
   (this.last??={})[key]=now;this.played[key]=(this.played[key]||0)+1;
   const p=SOUND_PROFILES[key]||SOUND_PROFILES.shot,amp=Math.max(0,Math.min(1.6,volume))*(this.volumes[key]??1)*p.gain;
   if(amp<=0)return; // An exact zero slider setting must be truly silent.
+  if(key==='jump'){this.playCuteJump(ctx,now,amp,pitch);return;}
   const createVoice=(source,filter,amount)=>{
    const gain=ctx.createGain();gain.gain.setValueAtTime(.0001,now);
    gain.gain.exponentialRampToValueAtTime(Math.max(.002,amount),now+.012);
