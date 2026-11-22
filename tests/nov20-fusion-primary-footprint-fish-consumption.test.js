@@ -30,16 +30,17 @@ test('swatter primary: borrowed saber ray stops at the centre of the warned swat
  assert.ok(echo.range<attackStats(itemById('saber-5'),1).range,
   'longer source blade is shortened to the main circle');
 });
-test('saber primary: borrowed swatter circle detonates at the blade endpoint without rectangle clipping',()=>{
+test('saber primary: borrowed swatter circle lands at the violet fan endpoint and is clipped to its sector',()=>{
  const {event}=cast('saber-3','swatter-3');
  const echo=event.fusionEchoes[0],box=echo.parentFootprint;
- assert.equal(box.shape,'rectangle');
+ assert.equal(box.shape,'sector');
+ assert.equal(box.angleDeg,60);
  assert.equal(echo.area.mode,'area');
  const target=fusionEchoAnchor(box,event.origin);
  assert.ok(Math.hypot(target.x-echo.area.center[0],target.z-echo.area.center[2])<.002);
  assert.ok(Math.abs(echo.range-target.distance)<.002);
- assert.ok(echo.area.radius>box.width*.5,
-  'the borrowed circular blast extends laterally beyond the sword ray');
+ assert.ok(echo.parentFootprint.radius>0,
+  'the borrowed circular blast remains clipped to the main 60-degree sword fan');
 });
 test('older fused reach modifiers cannot override the original weapon footprint',()=>{
  const blade=itemById('saber-2');
