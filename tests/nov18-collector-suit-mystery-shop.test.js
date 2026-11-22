@@ -7,12 +7,11 @@ import {createInitialWorld,applyAction,ensureProfile} from '../src/shared/temple
 
 const ranks=[240,620,1450,3300,7600];
 const premiumIds=new Set([
- ...['whip','pan','swatter'].flatMap(family=>Array.from({length:5},(_,i)=>family+'-'+(i+1))),
- 'black-cat'
+ ...['whip','pan','swatter'].flatMap(family=>Array.from({length:5},(_,i)=>family+'-'+(i+1)))
 ]);
 
 test('every specified colour/rank is exactly five times its former shop price',()=>{
- assert.equal(premiumIds.size,16);
+ assert.equal(premiumIds.size,15);
  for(const original of EQUIPMENT.filter(i=>premiumIds.has(i.id))){
   const item=RELETTER_ITEMS.find(i=>i.id===original.id);
   const originalPrice=ranks[Math.max(1,Math.min(5,original.tier||1))-1]+Math.min(180,original.price||0);
@@ -25,10 +24,8 @@ test('every specified colour/rank is exactly five times its former shop price',(
  const actual=SHOP_ITEMS.filter(item=>item.mysteryWeapon).map(item=>item.id);
  assert.deepEqual(new Set(actual),new Set([...premiumIds,'giraffe']));
  const giraffe=SHOP_ITEMS.find(item=>item.id==='giraffe');
- const originalGiraffe=EQUIPMENT.find(item=>item.id==='giraffe');
  assert.ok(giraffe?.mysteryWeapon,'giraffe belongs only to the Mystery tab');
- assert.equal(giraffe.price,ranks[2]+Math.min(180,originalGiraffe.price),
-  'changing shops must not silently quintuple giraffe price');
+ assert.equal(giraffe.price,19999,'Giraffe Boomerang has a fixed Mystery price');
  // Exotic weapons may share 'whip', 'swatter' or 'pan' families but
  // should not inherit a 5x price multiplier.
  for(const id of ['goldfish','telephone','fan','accordion','clam','white-cat','planter-1']){
@@ -38,10 +35,12 @@ test('every specified colour/rank is exactly five times its former shop price',(
  }
 });
 
-test('buying Mystery weapons is rechecked against 5x server catalog price',()=>{
+test('Far-tab sniper retains its premium price and server validates purchase',()=>{
  const now=2_000_000,world=createInitialWorld(now);
  const p=ensureProfile(world,'collector','collector','#abcdef',now);
  const item=SHOP_ITEMS.find(i=>i.id==='black-cat');
+ assert.equal(item.mysteryWeapon,false);
+ assert.equal(item.price,5*(ranks[0]+Math.min(180,EQUIPMENT.find(i=>i.id==='black-cat').price)));
  p.wallet=item.price-1;
  const actor={key:'collector',name:'collector',color:'#abcdef',role:'fighter',position:[15,0,0],admin:false};
  const body={action:'buy',itemId:item.id};
