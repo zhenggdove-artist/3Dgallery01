@@ -18,7 +18,7 @@ export function channelVisualRadius(item,quality=weaponQuality(item),range=Numbe
  return +((base[item?.family]||1)*quality.visual).toFixed(3);
 }
 export function forwardCastRadius(item,quality=weaponQuality(item),statsRadius=1,channel=false){
- if(channel)return channelVisualRadius(item,quality);
+ if(channel)return item?.family==='ice'?+(statsRadius*quality.radius).toFixed(2):channelVisualRadius(item,quality);
  // #31 is a slender forward-travelling three-crown projectile, not an AoE.
  if(item?.family==='palm')return +(1.35*quality.visual).toFixed(3);
  return +(statsRadius*quality.radius).toFixed(2);
@@ -36,7 +36,8 @@ export function chargeProgress(heldMs,weaponChargeMs){return Math.max(0,Math.min
 export function isStaffTap(item,heldMs){
  return isChannelStaff(item)&&Number.isFinite(heldMs)&&heldMs>=0&&heldMs<=STAFF_TAP_MAX_MS;
 }
-export function channelInterval(item){return Math.max(260,Number(item?.cooldown)||700);}
+export const ICE_FREEZE_INTERVAL_MS=6000;
+export function channelInterval(item){return item?.family==='ice'?ICE_FREEZE_INTERVAL_MS:Math.max(260,Number(item?.cooldown)||700);}
 // One shared duration/radius for the visible giant fish and server-owned swept hitbox.
 // Triple duration keeps the original swimming speed over the tripled reach.
 export const GOLDFISH_SWIM_MS=4800;
