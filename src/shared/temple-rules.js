@@ -1,5 +1,5 @@
 import {journeyPose,journeyAction} from './write-journey.js';
-import {recoverArtworks} from './artwork-recovery.js';
+import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor} from './charge-area.js';
 import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition} from './goldfish-school.js';
 import {discGroundHeight} from './artwork-discs.js';
@@ -450,6 +450,7 @@ export function applyAction(world,actor,body,context={}){
     resetMessages:true,clearedMediaIds};
   }
   if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
+  if(body.action==='recover-misplaced-artwork')return recoverMisplacedArtworkPosition(world,profile.admin,body.platformId,now);
   if(body.action==='reset-player-artworks')return resetPlayerArtworks(world,profile.admin,now);
    if(body.action==='gm-audio-setting'){
     if(!profile.admin)return {error:'GM only'};
@@ -621,6 +622,14 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
   if(proposedRadius!==undefined&&proposedRadius!==null&&(!original||!Number.isFinite(proposedRadius)||proposedRadius<1.5||proposedRadius>14))
    return {error:'Platform radius must be 1.5–14, available for original artworks only'};
   world.artworkLayout??={};
+  // Retain a bounded server-side undo snapshot for exact future recoveries.
+  // The previous (pre-history) edit cannot be reconstructed retrospectively.
+  if(current){
+   world.artworkLayoutHistory??={};
+   const history=world.artworkLayoutHistory[platform.id]??=[];
+   history.push(clone(current));
+   if(history.length>8)history.splice(0,history.length-8);
+  }
   world.artworkLayout[platform.id]={position:[...layout.position],rotation:[...layout.rotation],scale:[...layout.scale],
    ...(original&&proposedRadius!=null?{platformRadius:proposedRadius}:{}),
    appearance,revision:(current?.revision||0)+1,updatedAt:now};world.revision++;

@@ -54,7 +54,7 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           const url = 'https://temple-arena.zhenggdove-artist.workers.dev/health';
-          const required = ['artMediaUpload', 'artBombPlace', 'gmReset', 'compactCombat'];
+          const required = ['artMediaUpload', 'artBombPlace', 'gmReset', 'compactCombat', 'guestLogin', 'artworkCoordinateRecovery'];
           let verified = false;
           for (let attempt = 1; attempt <= 6; attempt++) {
             try {

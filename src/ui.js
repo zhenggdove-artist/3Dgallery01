@@ -147,6 +147,7 @@ export class TempleUI extends EventTarget{
   if(invincible)this.emit('gm-invincible',{enabled:invincible.checked});
  });
      this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');else if(action==='wing-painter')this.openPanel('wing-painter');else if(action==='wing-manage')this.openPanel('wing-manage');
+      else if(action==='recover-misplaced-artwork')this.emit('server-action',{action:'recover-misplaced-artwork'});
       else if(action==='reset-buildings')this.emit('server-action',{action:'reset-buildings'});
        else if(action==='clean-graffiti'&&window.confirm('確定清除全部永久保存的房屋塗鴉？這個操作無法復原。'))this.emit('server-action',{action:'clean-graffiti'});
       else if(action==='reset-messages'&&window.confirm('確定要永久清空所有留言樹記錄與聊天室訊息？'))this.emit('server-action',{action:'reset-messages'});});
@@ -348,12 +349,14 @@ export class TempleUI extends EventTarget{
         <button type="button" data-gm-action="help" aria-label="GM instructions and shortcuts">！ GM 說明與快捷鍵</button>
         <button type="button" data-gm-action="wing-painter">畫翅膀／上架翅膀</button>
         <button type="button" data-gm-action="wing-manage">翅膀上架管理／刪除／中獎率</button>
+        <button type="button" data-gm-action="recover-misplaced-artwork">找回座標 -100 的失蹤作品</button>
         <button type="button" data-gm-action="reset-buildings">/reset building · 復原所有房屋（保留塗鴉）</button>
          <button type="button" data-gm-action="clean-graffiti">/clean graffic · 永久清除牆面塗鴉</button>
         <button type="button" data-gm-action="reset-messages">/reset message · 清空留言</button>
         <button type="button" data-gm-action="refresh">${this.gmPresenceLoading?'讀取中…':'重新整理紀錄'}</button>
       </div>
-      <p><strong>GM 指令：</strong><code>/reset building</code> 復原房屋（保留塗鴉） · <code>/clean graffic</code> 清除塗鴉 · <code>/reset message</code> 清空留言 · <code>/reset</code> 清空玩家作品 · <code>/recovery</code> 還原藝術品</p>
+      <p><strong>作品位置復原：</strong>當僅有一件作品的 XYZ 數值被誤設為 -100，將其恢復至原始展示座標；其他位置、縮放、旋轉、外觀保留。</p>
+      <p><strong>GM 指令：</strong><code>/recoverposition</code> 找回座標 -100 的作品 · <code>/reset building</code> 復原房屋（保留塗鴉） · <code>/clean graffic</code> 清除塗鴉 · <code>/reset message</code> 清空留言 · <code>/reset</code> 清空玩家作品 · <code>/recovery</code> 還原藝術品</p>
       <h3>GM 個人設定</h3>
        <label style="display:flex;gap:10px;align-items:center"><input data-gm-invincible type="checkbox" ${this.world?.profile?.gmInvincible!==false?'checked':''}>自身無敵（可關閉以接受正常傷害）</label>
        <label style="display:grid;grid-template-columns:7em 1fr 4em;align-items:center;gap:8px">合成成功率
