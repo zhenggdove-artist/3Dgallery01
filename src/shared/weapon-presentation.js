@@ -45,7 +45,9 @@ export function weaponPresentation(item,record={}){
  }
  if(item.slot==='weapon'){
   const crit=Number(item.critChance);
-  if(Number.isFinite(crit)&&crit>=.3&&!affixIds.includes('brutal'))
+  if(item.id==='accordion')
+   traits.push({name:'樂音',details:'大絕：音符龍捲風沿前方移動，每秒對碰觸的目標造成傷害'});
+  else if(Number.isFinite(crit)&&crit>=.3&&!affixIds.includes('brutal'))
    traits.push({name:'殘暴',details:'基礎暴擊率 '+Math.round(crit*100)+'%'});
   else if(item.family&&elementNames[item.family])
    traits.push({name:elementNames[item.family],details: '屬性：'+(item.element||item.family)});

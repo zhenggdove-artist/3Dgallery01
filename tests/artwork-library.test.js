@@ -13,7 +13,7 @@ test('GM artwork upload requires verified media; appearance and custom IDs survi
 });
 test('damage produces authoritative 100ms hit reaction away from attacker',()=>{
  const world=createInitialWorld(1000),a={key:'a',name:'A',role:'fighter',position:[20,0,0]},b={key:'b',name:'B',role:'fighter',position:[21,0,0]};ensureProfile(world,'a','A',null,1000);ensureProfile(world,'b','B',null,1000);
- const result=applyAction(world,a,{action:'attack',direction:[1,0,0],charge:0},{now:10000,actors:[a,b],rng:()=>.99});assert.equal(result.hit,null);tickWorld(world,{now:10300,activeFighters:0,actors:[a,b],rng:()=>.99});assert.ok(world.profiles.b.hp<100);assert.equal(world.profiles.b.hitReaction.stunMs,100);assert.deepEqual(world.profiles.b.hitReaction.vector,[1,0,0]);
+ const result=applyAction(world,a,{action:'attack',direction:[1,0,0],charge:0},{now:10000,actors:[a,b],rng:()=>.99});assert.equal(result.hit,null);tickWorld(world,{now:10300,activeFighters:0,actors:[a,b],rng:()=>.99});assert.ok(world.profiles.b.hp<world.profiles.b.maxHp);assert.equal(world.profiles.b.hitReaction.stunMs,100);assert.deepEqual(world.profiles.b.hitReaction.vector,[1,0,0]);
  assert.equal(applyAction(world,b,{action:'attack',direction:[-1,0,0]},{now:10399,actors:[a,b]}).error,'Recovering from hit');
  assert.notEqual(applyAction(world,b,{action:'attack',direction:[-1,0,0]},{now:10400,actors:[a,b]}).error,'Recovering from hit');
 });

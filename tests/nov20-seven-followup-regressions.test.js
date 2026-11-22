@@ -67,15 +67,15 @@ test('artwork does not damage fighters or collapse buildings until actual ballis
   {now:T+4000,actors:[caster,victim],rng:()=>.8});
  assert.ok(fired.throwEvent);
  assert.equal(fired.hit,undefined);
- assert.equal(to.hp,100);
+ assert.equal(to.hp,initialVictimHp);
  assert.equal(world.structures[0].hp,120);
  assert.equal(world.pendingArtworkFlights.length,1);
  assert.equal(Math.round(artworkPosition(fired.throwEvent,.9)[2]),45);
  tickWorld(world,{now:T+4250,actors:[caster,victim],activeFighters:0,rng:()=>.8});
- assert.equal(to.hp,100,'victim must not react to a distant thrown artwork');
+ assert.equal(to.hp,initialVictimHp,'victim must not react to a distant thrown artwork');
  assert.equal(world.structures[0].hp,120,'house must not collapse before contact');
  tickWorld(world,{now:T+5000,actors:[caster,victim],activeFighters:0,rng:()=>.8});
- assert.ok(to.hp<100,'fighter damage begins after actual flight crosses target');
+ assert.ok(to.hp<initialVictimHp,'fighter damage begins after actual flight crosses target');
  assert.ok(world.structures[0].hp<120,'building damage begins at impact, not launch');
  assert.ok(world.pendingArtworkVisualEvents.some(e=>e.kind==='structure-hit'));
 });
