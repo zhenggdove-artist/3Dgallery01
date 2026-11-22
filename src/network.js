@@ -11,10 +11,10 @@ export class TempleNetwork extends EventTarget{
   ensureConfigured(){if(!/^https?:\/\//.test(this.base)||this.base.includes('REPLACE_WITH_ACCOUNT'))throw new Error('Temple backend URL has not been deployed yet');}
   // The Firebase JWT is used ONLY on the HTTPS join request. WebSocket and
   // gameplay continue to use the short random Temple session token.
-  async join({name,color='#43b59a',firebaseIdToken=''}) {
+  async join({name,color='#43b59a',firebaseIdToken='',mode='firebase'}) {
     this.ensureConfigured();
     const data=await this.request('/api/join',{
-      method:'POST',body:{name,color},auth:false,identityToken:firebaseIdToken,timeoutMs:20_000
+      method:'POST',body:{name,color,...(mode==='guest'?{mode:'guest'}:{})},auth:false,identityToken:firebaseIdToken,timeoutMs:20_000
     });
     this.token=data.token;this.joinData=data;this.closedByUser=false;this.spawnConfirmed=false;
     sessionStorage.setItem('temple-session-token',this.token);
@@ -123,7 +123,7 @@ export class TempleNetwork extends EventTarget{
       ...(controller?{signal:controller.signal}:{})
     });}
     catch(error){
-      if(error?.name==='AbortError')throw new Error(path==='/api/join'?'Sign-in timed out. Retry Google account selection.':'伺服器上架回覆逾時；請確認上架清單後重試');
+      if(error?.name==='AbortError')throw new Error(path==='/api/join'?'Sign-in timed out. Retry your connection.':'伺服器上架回覆逾時；請確認上架清單後重試');
       throw new Error('Cannot reach the Temple server');
     }finally{if(timer!==null)clearTimeout(timer);}
     let data={};try{data=await response.json();}catch{}if(!response.ok)throw new Error(data.error||`Temple server ${response.status}`);return data;
