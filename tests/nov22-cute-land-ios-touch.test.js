@@ -63,3 +63,9 @@ test('Safari selectionchange clears accidental labels on game buttons without to
  assert.match(ui,/element\?\.closest\?\.\('#dock,#mobile-stick,#game'\)/);
  assert.match(ui,/selection\.removeAllRanges\(\)/);
 });
+
+test('iOS control drag previews are suppressed without disabling BAG item drag',()=>{
+ const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
+ assert.match(ui,/addEventListener\('dragstart',event=>/);
+ assert.match(ui,/if\(mobileControl\(event\.target\)\)event\.preventDefault\(\)/);
+});

@@ -74,6 +74,11 @@ export class TempleUI extends EventTarget{
       if(selection?.rangeCount&&element?.closest?.('#dock,#mobile-stick,#game'))
        selection.removeAllRanges();
     });
+    document.addEventListener('dragstart',event=>{
+      // Stop native drag previews over touch controls without interfering
+      // with equipment drag-and-drop in BAG.
+      if(mobileControl(event.target))event.preventDefault();
+    },{capture:true});
     document.addEventListener('contextmenu',event=>{
       if(!editable(event.target)&&event.target?.closest?.('#game,#hud,#dock'))event.preventDefault();
     });

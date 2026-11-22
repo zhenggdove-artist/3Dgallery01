@@ -98,7 +98,7 @@ test('pan explosion hits all victims once, recoils onto caster for exactly 15 HP
  const afterHits=structuredClone(panAttack.hitTimes);
  tickWorld(world,{now:at+1400,actors:[caster,victim,other],activeFighters:0,rng:()=>.5});
  assert.deepEqual(panAttack.hitTimes,afterHits,'one-shot pan cannot inflict repeated blast damage');
- assert.equal(p.hp,85,'the caster receives fixed self-damage exactly once');
+ assert.equal(p.hp,beforeCast-15,'the caster receives fixed self-damage exactly once, regardless of bonus maximum HP');
 });
 
 test('high-platform falls pass authoritative gravity validation, horizontal teleports do not',()=>{
