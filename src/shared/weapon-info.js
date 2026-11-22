@@ -4,13 +4,14 @@ import {pvpShotDamage,SNIPER_RANGE} from './combat-balance.js';
 import {weaponQuality,forwardCastRadius,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
 import {scaleUltimateFootprint} from './charge-area.js';
 import {GOLDFISH_SCHOOL_RADIUS} from './goldfish-school.js';
+import {normalizedWeaponAffixes,weaponAffixLabel,weaponAffixTotals} from './weapon-affixes.js';
 
 // Descriptions are based on game mechanics. They are deliberately independent
 // of old text in imported equipment catalogs, which may describe retired moves.
 const familySkills={
  water:'普通：向準心發射水系彈體。大絕：沿前方釋放潮水衝擊。',
  ice:'普通：發射冰晶。大絕：冰霜區域與碎晶衝擊。',
- fire:'普通：前方火焰攻擊。大絕：持續火焰區域，命中附帶燃燒。',
+ fire:'普通：燼火法器向前方噴火。大絕：持續火焰區域，命中附帶燃燒。',
  lightning:'普通：電弧攻擊。大絕：電流衝擊，持續施法可追蹤鎖定方向。',
  beam:'普通：光束法器攻擊。大絕：持續聚焦敵人，連續命中提高傷害。',
  petal:'普通：射出花瓣與法術彈。大絕：花瓣荊棘區域；持續施法每秒恢復 1 HP，滿血仍顯示 +1。',
@@ -53,7 +54,10 @@ export function weaponClass(item){return weaponRangeClass(item);}
 export function explainWeapon(item,fusion=null){
  if(!item)return '';
  if(item.slot!=='weapon')return explainEquipment(item,fusion);
- const effective={...item,...(fusion?.templeStats||{})};
+ const enchants=normalizedWeaponAffixes(fusion),totals=weaponAffixTotals(enchants);
+ const effective={...item,...(fusion?.templeStats||{}),weaponAffixes:enchants,
+  critChance:Math.min(.85,(Number(item.critChance)||0)+totals.crit/100),
+  cooldown:Math.max(70,Math.round((Number(item.cooldown)||800)*(1-totals.haste/100)))};
  // The primary weapon never inherits a material weapon's attack reach.
  effective.range=item.range;effective.radius=item.radius;
  effective.chargeRange=item.chargeRange;
@@ -76,7 +80,8 @@ export function explainWeapon(item,fusion=null){
   '；大絕約 '+num(pvpShotDamage(item,charged,quality),2)+'（實際傷害受命中次數、暴擊與減傷影響）';
  return [cls+'武器',description,
   '普通有效距離約 '+num(normal.range)+'m',extent,
-  damage,'集氣 '+num((item.chargeMs||1500)/1000,2)+' 秒；攻擊間隔 '+num(item.cooldown/1000,3)+' 秒'].join(' · ');
+  ...(enchants.length?['隨機詞條：'+enchants.map(weaponAffixLabel).join('、')]:[]),
+  damage,'滿集氣 '+num((item.chargeMs||1500)/1000,2)+' 秒；攻擊間隔 '+num(effective.cooldown/1000,3)+' 秒'].join(' · ');
 }
 export function explainEquipment(item,record=null){
  if(!item)return '';

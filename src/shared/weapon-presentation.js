@@ -1,4 +1,5 @@
 import {affixById} from '../reletter/combat-traits.js';
+import {normalizedWeaponAffixes,weaponAffixById,weaponAffixTotals} from './weapon-affixes.js';
 
 const round=(n,digits=1)=>Number(n.toFixed(digits));
 const elementNames={
@@ -30,9 +31,18 @@ export function weaponPresentation(item,record={}){
  const level=Math.max(0,Math.min(99,Math.floor(count)));
  const affixIds=[...new Set([...(origin.affixIds||[]),origin.affixId,...(record?.affixIds||[]),record?.affixId].filter(Boolean))];
  const prefixes=affixIds.map(id=>affixById(id)?.name.replace(/的$/,'')).filter(Boolean);
- const title=(prefixes.length?prefixes.join('')+'的 ':'')+item.name+(level?' +'+level:'');
+ const enchantList=item.slot==='weapon'?normalizedWeaponAffixes(record):[];
+ const enchantPrefixes=enchantList.map(x=>weaponAffixById(x.id)?.name||'');
+ const prefix=[...prefixes,...enchantPrefixes].filter(Boolean).join('');
+ const title=(prefix?prefix+'的':'')+item.name+(level?'（+'+level+'）':'');
  const traits=[];
  for(const id of affixIds){const a=affixById(id);if(a)traits.push({name:a.name,details:affixDescriptions[id]||a.description});}
+ // One visible entry for EACH original and inherited enchant, including
+ // repeated prefixes. Fused values keep their 30% material contribution.
+ for(const entry of enchantList){
+  const def=weaponAffixById(entry.id);
+  if(def)traits.push({name:def.name+'的',details:def.label+' +'+entry.percent+'%'});
+ }
  if(item.slot==='weapon'){
   const crit=Number(item.critChance);
   if(Number.isFinite(crit)&&crit>=.3&&!affixIds.includes('brutal'))
@@ -41,6 +51,9 @@ export function weaponPresentation(item,record={}){
    traits.push({name:elementNames[item.family],details: '屬性：'+(item.element||item.family)});
  }
  const bonuses=[];
+ if(enchantList.length){const totals=weaponAffixTotals(enchantList);
+  bonuses.push('隨機詞條 '+enchantList.length+' 個 · '+Object.entries(totals).filter(([,v])=>v>0).map(([k,v])=>({crit:'暴擊率',defense:'減傷',attack:'攻擊力',damage:'武器傷害',charge:'大絕傷害',haste:'攻擊速度',hp:'生命上限',speed:'移速',jump:'跳高'}[k]+' +'+v+'%')).join(' · '));}
+
  if(Number.isFinite(record.bonus)&&record.bonus>0)bonuses.push('合成增傷 +'+round(record.bonus));
  if(Number.isFinite(stats.damage)&&Number.isFinite(item.damage)){
   const difference=(record.templeStats?stats.damage:stats.damage*10)-item.damage;
