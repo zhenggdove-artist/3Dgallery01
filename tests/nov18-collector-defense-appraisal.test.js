@@ -62,16 +62,17 @@ test('carrying a real artwork results in purchase, not shooting',()=>{
 test('spectators, unreachable vertical positions and respawn shields cannot lose HP',()=>{
  const world=activeWorld(),p=ensureProfile(world,'sue','Sue','#abcdef',NOW);
  const at=world.collector.position;
+ const safeHealth=p.hp;
  tickWorld(world,{now:NOW+100,actors:[{...fighter('sue',at),role:'spectator'}]});
  tickWorld(world,{now:NOW+200,actors:[fighter('sue',[at[0],30,at[2]])]});
- assert.equal(p.hp,100);
+ assert.equal(p.hp,safeHealth);
  assert.equal(world.collector.shots.length,0);
  p.spawnProtectedUntil=NOW+10000;
  tickWorld(world,{now:NOW+300,actors:[fighter('sue',at)]});
- assert.equal(p.hp,100,'respawn protection must be respected');
+ assert.equal(p.hp,safeHealth,'respawn protection must be respected');
  assert.equal(world.collector.shots[0].damage,0);
  tickWorld(world,{now:NOW+10_001,actors:[fighter('sue',at)]});
- assert.equal(p.hp,100,'standing inside after protection expires is not re-entry');
+ assert.equal(p.hp,safeHealth,'standing inside after protection expires is not re-entry');
 });
 
 test('simultaneous intruders receive separate authoritative shot events',()=>{

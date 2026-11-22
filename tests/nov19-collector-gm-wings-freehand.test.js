@@ -36,14 +36,14 @@ test('Collector allows one sale per player per unique artwork, persists receipts
  w.artworks[id].holder='a';
  tickWorld(w,{now:T+102+COLLECTOR_INTERVAL_MS,actors:[player('a',second)],rng:()=>.4});
  assert.equal(a.wallet,6080,'a duplicate must never mint coins');
- assert.equal(a.hp,100-COLLECTOR_SHOT_DAMAGE);
+ assert.equal(a.hp,a.maxHp-COLLECTOR_SHOT_DAMAGE);
  assert.equal(w.artworks[id].holder,'a','duplicate should not consume the carried artwork');
  assert.equal(w.collector.active,true,'collector stays to trade with other players');
  assert.equal(w.collector.shots.at(-1).reason,'already-collected');
  assert.equal(w.collector.shots.at(-1).artworkId,id);
  assert.ok(COLLECTOR_REPEAT_LINES.includes(w.collector.shots.at(-1).taunt));
  tickWorld(w,{now:T+200+COLLECTOR_INTERVAL_MS,actors:[player('a',second)],rng:()=>.2});
- assert.equal(a.hp,50,'standing inside does not cause repeated shots');
+ assert.equal(a.hp,a.maxHp-COLLECTOR_SHOT_DAMAGE,'standing inside does not cause repeated shots');
  // Player B may sell exactly the same artwork once.
  w.artworks[id].holder='b';
  tickWorld(w,{now:T+300+COLLECTOR_INTERVAL_MS,actors:[player('b',second)],rng:()=>.2});
