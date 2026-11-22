@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {SHOP_ITEMS,itemById,isMysteryWeapon} from '../src/shared/catalog.js';
 import {weaponRangeClass} from '../src/reletter/odd-weapons.js';
 import {PLATFORMS} from '../src/shared/arena.js';
+import {artworkPickupReach} from '../src/shared/artwork-library.js';
 import {applyAction,createInitialWorld,ensureProfile} from '../src/shared/temple-rules.js';
 
 test('sniper, prism and lightning weapons appear in FAR, not MID or Mystery',()=>{
@@ -45,10 +46,23 @@ test('artwork pickup respects its GM saved display location and small motion lat
   assert.equal(applyAction(world,actor('another',[18,5,15]),{action:'pickup-artwork',platformId:id},{now}).error,'Artwork is unavailable');
 });
 
+test('GM-enlarged artwork remains collectible near its rendered edge',()=>{
+  const now=54_000,world=createInitialWorld(now),id=PLATFORMS[1].id;
+  const layout={position:[18,11,15],rotation:[0,0,0],scale:[4,2,4],revision:7};
+  world.artworkLayout[id]=layout;
+  const reach=artworkPickupReach(layout);
+  assert.equal(reach.horizontal,7.8);
+  assert.equal(reach.vertical,8);
+  const actor=(key,x)=>({key,name:key,color:'#abcdef',role:'fighter',position:[x,11,15]});
+  assert.equal(applyAction(world,actor('far',28),{action:'pickup-artwork',platformId:id},{now}).error,'Move closer to the artwork');
+  assert.equal(applyAction(world,actor('near',25.5),{action:'pickup-artwork',platformId:id},{now}).error,undefined);
+  assert.equal(world.artworks[id].holder,'near');
+});
+
 test('artwork interaction takes priority over decorations and exposes server errors',()=>{
   const arena=readFileSync(new URL('../src/arena-view.js',import.meta.url),'utf8');
   const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
   assert.match(arena,/return artworks\.sort\(\(a,b\)=>a\.distance-b\.distance\)\[0\]/);
-  assert.match(arena,/Math\.abs\(\(position\[1\]\|\|0\)-artPosition\[1\]\)<=8/);
+  assert.match(arena,/artworkPickupReach\(layout\)/);
   assert.match(main,/action==='pickup-artwork'\|\|!/);
 });

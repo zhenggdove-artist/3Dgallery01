@@ -3,6 +3,18 @@ export const APPEARANCE_DEFAULTS={depth:.1,brightness:1,contrast:1,saturation:1,
 export const PNG_APPEARANCE_DEFAULTS=Object.freeze({depth:0,brightness:.4,contrast:1,saturation:1.43,blackPoint:.1,tint:'#ffffff'});
 export const artworkAppearanceDefaults=record=>record?.format==='png'||record?.mime==='image/png'||record?.type==='image/png'||record?.mimeType==='image/png'?PNG_APPEARANCE_DEFAULTS:APPEARANCE_DEFAULTS;
 export function validateAppearance(value={},record=null){const out={...artworkAppearanceDefaults(record),...value};for(const [key,min,max] of [['depth',0,2],['brightness',0,3],['contrast',0,3],['saturation',0,3],['blackPoint',0,.95]])if(!Number.isFinite(out[key])||out[key]<min||out[key]>max)return null;if(!/^#[0-9a-f]{6}$/i.test(out.tint))return null;return out;}
+// Interactive pickup radius grows with a GM-scaled artwork's physical footprint.
+// Client and server share the same reach contract; the server adds only
+// a small synchronization allowance to the horizontal distance.
+export function artworkPickupReach(layout){
+ const scale=Array.isArray(layout?.scale)?layout.scale:[1,1,1];
+ const horizontalScale=Math.max(1,Number(scale[0])||1,Number(scale[2])||1);
+ const verticalScale=Math.max(1,Number(scale[1])||1);
+ return {
+  horizontal:Math.min(12,4.2+1.2*(Math.min(20,horizontalScale)-1)),
+  vertical:Math.min(16,Math.max(8,2.5*Math.min(20,verticalScale)+1.5))
+ };
+}
 export function artworkDefinitions(world){return [...PLATFORMS,...(world?.customArtworks||[]).map((a,index)=>({id:a.id,index:PLATFORMS.length+index,artPosition:a.position,position:[a.position[0],0,a.position[2]],artYaw:0,size:[4,4,4]}))];}
 export function addArtwork(world,profile,actor,body,now){
  if(!profile.admin)return {error:'GM only'};const record=body.artwork,media=body.verifiedArtMedia;

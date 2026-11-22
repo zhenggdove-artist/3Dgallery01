@@ -4,7 +4,7 @@ import {OuterCity} from './outer-city.js';
 import {cityGroundHeight,cityBlocked} from './shared/city-layout.js';
 import {DisplayPlatforms} from './display-platforms.js';
 import {artworkPosition,artworkLanding,artworkRenderFlight} from './shared/artwork-flight.js';
-import {artworkDefinitions} from './shared/artwork-library.js';
+import {artworkDefinitions,artworkPickupReach} from './shared/artwork-library.js';
 import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork} from './artwork-surface.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
@@ -390,13 +390,15 @@ export class TempleArena{
     const artworks=[],candidates=[];
     for(const p of artworkDefinitions(this.world)){
       const art=this.world.artworks?.[p.id],coin=this.world.coins?.[p.id];
-      const artPosition=this.world.artworkLayout?.[p.id]?.position||p.artPosition;
-      // Match the server's vertical pickup restriction. A nearby structure or
-      // decorative plant must never hide an otherwise reachable art pickup.
+      const layout=this.world.artworkLayout?.[p.id];
+      const artPosition=layout?.position||p.artPosition;
+      const reach=artworkPickupReach(layout);
+      // A large displayed work must remain reachable at its visible edge,
+      // and decorative structures cannot mask an available artwork.
       if(art&&!art.holder&&Date.now()>=(art.availableAt||0)&&
-         Math.abs((position[1]||0)-artPosition[1])<=8){
+         Math.abs((position[1]||0)-artPosition[1])<=reach.vertical){
         const distance=distance2d(position,artPosition);
-        if(distance<=4.2)artworks.push({type:'artwork',id:p.id,distance});
+        if(distance<=reach.horizontal)artworks.push({type:'artwork',id:p.id,distance});
       }
       if(coin?.available)candidates.push({type:'coin',id:p.id,distance:distance2d(position,p.coinPosition)});
     }

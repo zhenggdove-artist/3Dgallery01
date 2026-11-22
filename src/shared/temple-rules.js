@@ -5,7 +5,7 @@ import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GO
 import {discGroundHeight} from './artwork-discs.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
-import {addArtwork,artworkDefinitions,validateAppearance} from './artwork-library.js';
+import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
@@ -574,7 +574,12 @@ function pickupDrop(world,profile,actor,body,now){
 
 function pickupArtwork(world,actor,body,now){
   const platform=artworkDefinitions(world).find(p=>p.id===body.platformId),art=world.artworks[body.platformId];if(!platform||!art)return {error:'Unknown artwork'};
-  if(art.holder||now<art.availableAt)return {error:'Artwork is unavailable'};if(!near(actor,world.artworkLayout?.[platform.id]?.position||platform.artPosition,5.2))return {error:'Move closer to the artwork'};
+  if(art.holder||now<art.availableAt)return {error:'Artwork is unavailable'};
+  const layout=world.artworkLayout?.[platform.id],position=layout?.position||platform.artPosition;
+  const reach=artworkPickupReach(layout);
+  if(distance2d(actor.position,position)>reach.horizontal+1||
+     Math.abs((actor.position?.[1]||0)-position[1])>reach.vertical)
+    return {error:'Move closer to the artwork'};
   for(const other of Object.values(world.artworks))if(other.holder===actor.key)other.holder=null;
   art.holder=actor.key;art.throwEvent=null;return {notice:'Artwork ready to throw'};
 }
