@@ -18,19 +18,20 @@ test('water makes target take 1.5x damage for precisely five seconds',()=>{
  assert.ok(!effectActive(victim,'soaked',T+5000));
 });
 
-test('freeze prevents actions for three seconds, with five-second proc lock',()=>{
+test('freeze prevents actions for three seconds, with six-second proc lock',()=>{
  const victim=target();
  assert.equal(hit(victim,'ice','water'),'freeze');
  assert.equal(victim.effects.freeze.until,T+3000);
  assert.equal(hit(victim,'ice','water',T+1200),null);
  assert.equal(victim.effects.freeze.until,T+3000);
- assert.equal(hit(victim,'ice','water',T+5000),'freeze');
+ assert.equal(hit(victim,'ice','water',T+5000),null);
+ assert.equal(hit(victim,'ice','water',T+6000),'freeze');
  const profile=createProfile('fighter','Fighter','#ffffff',T,false);
  profile.effects=victim.effects;
  assert.ok(publicProfile(profile).effects.freeze);
  const previous={position:[75,0,0],rotation:.2,animation:'idle',visible:true},
   next={position:[78,0,0],rotation:1.1,animation:'walk',visible:true};
- const stuck=validateState(previous,next,120,'fighter',null,null,T+5000,{effects:victim.effects});
+ const stuck=validateState(previous,next,120,'fighter',null,null,T+6000,{effects:victim.effects});
  assert.deepEqual(stuck.state.position,previous.position);
  assert.equal(stuck.state.rotation,previous.rotation);
 });
