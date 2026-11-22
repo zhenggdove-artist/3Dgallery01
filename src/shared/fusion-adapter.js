@@ -3,6 +3,7 @@ import {equipmentById} from '../reletter/equipment-catalog.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
 import {sniperMaterialStat} from './fusion-balance.js';
 import {itemById} from './catalog.js';
+import {weaponAffixTotals,normalizedWeaponAffixes} from './weapon-affixes.js';
 
 export function originalEquipmentGame(profile,world={},equippedOnly=false){
  const inventory=equippedOnly?[...new Set(Object.values(profile.equipment||{}))].filter(id=>profile.inventory.includes(id)):profile.inventory;
@@ -30,7 +31,15 @@ export function fuseOriginal(world,profile,body,rng){
 export function equippedItem(profile,item,instanceRecord=null){
  const record=instanceRecord??profile.fusion?.[item.id],original=record?.original||{};
  const affixIds=[...new Set([...itemAffixes(item),...itemAffixes(original),...itemAffixes(record)])];
- const named={...item,affixId:affixIds[0]||null,affixIds};
+ const enchants=normalizedWeaponAffixes(record);
+ const totals=weaponAffixTotals(enchants);
+ const named={...item,affixId:affixIds[0]||null,affixIds,
+  ...(item.slot==='weapon'?{
+   weaponAffixes:enchants,
+   // Crit and cooldown affect combat even if weapon stats are fused.
+   critChance:Math.min(.85,(Number(item.critChance)||0)+totals.crit/100),
+   cooldown:Math.max(70,Math.round((Number(item.cooldown)||800)*(1-totals.haste/100)))
+  }:{})};
  if(record?.templeStats){
   const fused={...named,...record.templeStats};
   // Migrate legacy cross-class records at read time without deleting bonuses.
@@ -52,6 +61,11 @@ export function equippedItem(profile,item,instanceRecord=null){
     },0);
     if(Number.isFinite(fused[key]))fused[key]=Math.min(fused[key],base+bonus);
    }
+  if(item.slot==='weapon'){
+   fused.critChance=named.critChance;
+   fused.cooldown=named.cooldown;
+   fused.weaponAffixes=enchants;
+  }
   return fused;
  }
  const raw=original.stats;if(!raw)return named;

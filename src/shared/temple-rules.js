@@ -15,7 +15,7 @@ import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-st
 import {playerStats,refreshStats} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
 import {fuseTemple} from './temple-fusion.js';
-import {ensureFusionIdentity,appendInventoryInstance,removeInventoryInstance,selectEquipmentInstance,swapInventoryInstances} from './fusion-instances.js';
+import {ensureFusionIdentity,ensureWeaponAffixes,appendInventoryInstance,removeInventoryInstance,selectEquipmentInstance,swapInventoryInstances} from './fusion-instances.js';
 import {fusionSniperEchoDamage} from './fusion-balance.js';
 import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './island-combat.js';
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
@@ -163,6 +163,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
     current.equipment.wings=null;
    delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
   ensureFusionIdentity(current);
+  ensureWeaponAffixes(current); // Server-owned one-time roll, persisted on join.
   refreshStats(world,current,now);
   if(current.deadUntil>0&&current.deadUntil<=now&&current.hp<=0)
    reviveProfile(current,now);

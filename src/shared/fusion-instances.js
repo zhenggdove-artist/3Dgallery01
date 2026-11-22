@@ -1,7 +1,25 @@
 // A BAG slot contains a real individual gear instance, not just a catalog ID.
 // Existing combat and UI continue to use profile.fusion[itemId] as a projected
 // equipped/selected view; the authoritative ledger is keyed by instance UID.
+import {itemById} from './catalog.js';
+import {rollWeaponAffixes} from './weapon-affixes.js';
 const newUid=()=>crypto.randomUUID();
+// Server migration is idempotent: previously owned equipment receives a
+// randomly rolled property ONCE, tied to its immutable inventory UID.
+export function ensureWeaponAffixes(profile,rng=Math.random){
+ if(!profile.inventoryInstances)ensureFusionIdentity(profile);
+ for(const row of profile.inventoryInstances||[]){
+  if(itemById(row.itemId)?.slot!=='weapon')continue;
+  const old=profile.fusionByInstance?.[row.uid]||{};
+  if(Array.isArray(old.weaponAffixes)&&old.weaponAffixes.length)continue;
+  profile.fusionByInstance[row.uid]={...old,weaponAffixes:rollWeaponAffixes(itemById(row.itemId),rng)};
+ }
+ const itemId=profile.equipment?.weapon;
+ const uid=profile.equippedInstanceIds?.weapon;
+ if(uid&&itemId&&profile.inventoryInstances?.some(row=>row.uid===uid&&row.itemId===itemId))
+  projectFusionForInstance(profile,itemId,uid);
+ return profile;
+}
 
 export function ensureFusionIdentity(profile){
  profile.inventory??=[];
@@ -122,7 +140,12 @@ export function selectEquipmentInstance(profile,slot,index){
 export function appendInventoryInstance(profile,itemId){
  ensureFusionIdentity(profile);
  profile.inventory.push(itemId);
- profile.inventoryInstances.push({uid:newUid(),itemId});
+ const uid=newUid();
+ profile.inventoryInstances.push({uid,itemId});
+ if(itemById(itemId)?.slot==='weapon'){
+  profile.fusionByInstance??={};
+  profile.fusionByInstance[uid]={weaponAffixes:rollWeaponAffixes(itemById(itemId))};
+ }
 }
 
 export function removeInventoryInstance(profile,index,replacementUid=null){

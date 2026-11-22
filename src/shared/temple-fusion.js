@@ -3,6 +3,7 @@ import {equippedItem} from './fusion-adapter.js';
 import {ensureFusionIdentity,fusionRecordAt,inventoryIndexFor,projectFusionForInstance,removeInventoryInstance} from './fusion-instances.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
 import {sniperMaterialStat} from './fusion-balance.js';
+import {mergeWeaponAffixes} from './weapon-affixes.js';
 
 // Only SUCCESSFUL fusions lower the odds for this physical target:
 // 0 successes -> 50%, 1 -> 25%, 2 -> 12.5% and so forth.
@@ -59,7 +60,9 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  const chance=fusionChance(profile,target.id,targetIndex);
  const sample=Math.max(0,Math.min(1,Number(rng())));
  const main=equippedItem(profile,target,old);
- const material=equippedItem(profile,source,fusionRecordAt(profile,sourceIndex));
+ const ingredientRecord=fusionRecordAt(profile,sourceIndex);
+ const material=equippedItem(profile,source,ingredientRecord);
+ const combinedEnchants=target.slot==='weapon'?mergeWeaponAffixes(old,ingredientRecord):null;
  // Exactly one physical ingredient is consumed on success or failure.
  removeInventoryInstance(profile,sourceIndex,targetInstance.uid);
  if(source.id==='white-cat'&&!profile.inventory.includes(source.id))profile.spentStarterWeapon=true;
@@ -122,6 +125,7 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  // A successful upgrade is the ONLY event advancing fusion progression.
  const attempts=layer;
  profile.fusionByInstance[targetInstance.uid]={...old,layer,attempts,bonus,templeStats:stats,effects,affixIds,affixId:affixIds[0]||null,
+  ...(combinedEnchants?{weaponAffixes:combinedEnchants}:{}),
   sources:[...(old.sources||[]),{id:source.id,name:source.name,statPercent:30,echo:grantsEcho}]};
  projectFusionForInstance(profile,target.id,targetInstance.uid);
  const result={notice:'FUSION SUCCESS · '+target.name+' +'+layer+
