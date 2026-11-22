@@ -14,7 +14,7 @@ export class TempleNetwork extends EventTarget{
   async join({name,color='#43b59a',firebaseIdToken=''}) {
     this.ensureConfigured();
     const data=await this.request('/api/join',{
-      method:'POST',body:{name,color},auth:false,identityToken:firebaseIdToken
+      method:'POST',body:{name,color},auth:false,identityToken:firebaseIdToken,timeoutMs:20_000
     });
     this.token=data.token;this.joinData=data;this.closedByUser=false;this.spawnConfirmed=false;
     sessionStorage.setItem('temple-session-token',this.token);
@@ -123,7 +123,7 @@ export class TempleNetwork extends EventTarget{
       ...(controller?{signal:controller.signal}:{})
     });}
     catch(error){
-      if(error?.name==='AbortError')throw new Error('伺服器上架回覆逾時；請確認上架清單後重試');
+      if(error?.name==='AbortError')throw new Error(path==='/api/join'?'Sign-in timed out. Retry Google account selection.':'伺服器上架回覆逾時；請確認上架清單後重試');
       throw new Error('Cannot reach the Temple server');
     }finally{if(timer!==null)clearTimeout(timer);}
     let data={};try{data=await response.json();}catch{}if(!response.ok)throw new Error(data.error||`Temple server ${response.status}`);return data;
