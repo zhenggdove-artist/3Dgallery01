@@ -111,17 +111,24 @@ export class TempleRoom extends DurableObject{
     if(!this.consumeRate('join:'+clientKey,firebaseEnabled?40:240,60_000))
       return json({error:'Too many join attempts'},429);
     const body=await readBody(request,8_000);
+    const presentedToken=this.token(request,new URL(request.url));
+    const guestRequested=body.mode==='guest';
     let identity=null;
     if(firebaseEnabled){
-      try{identity=await verifyFirebaseIdToken(this.token(request,new URL(request.url)),this.env);}
-      catch(error){return json({error:'必須透過 Firebase Google 帳號登入：'+error.message},401);}
+      // Only an explicit guest choice can bypass Google authentication.
+      // A supplied but invalid Firebase token must never silently fall back to guest.
+      if(presentedToken){
+        try{identity=await verifyFirebaseIdToken(presentedToken,this.env);}
+        catch(error){return json({error:'Google account verification failed: '+error.message},401);}
+      }else if(!guestRequested)return json({error:'Choose Google or guest sign-in'},401);
+      if(guestRequested&&!identity&&!this.consumeRate('guest-join:'+clientKey,12,60_000))
+        return json({error:'Too many guest join attempts'},429);
     }
-    // Guest entry is restricted to localhost only while Firebase has not been
-    // configured, so CI/local WebGL smoke tests keep working. Public entry
-    // always requires a verified Firebase Google identity.
-    const memory=identity?'':String(body.memoryCode||body.saveCode||'').trim();
+    // Public guests always receive fresh, unprivileged identities. Legacy
+    // admin/save-code access remains available only in local no-Firebase tests.
+    const memory=identity||firebaseEnabled?'':String(body.memoryCode||body.saveCode||'').trim();
     const admin=identity?isFirebaseGm(identity,this.env):
-      body.name==='Ely'&&memory.length>0&&
+      !firebaseEnabled&&body.name==='Ely'&&memory.length>0&&
       constantTime(memory,String(this.env.TEMPLE_ADMIN_KEY||''));
     const saveCode=identity||admin?'':normalizeCode(memory);
     if(!identity&&saveCode==='INVALID')return json({error:'Invalid legacy save code'},400);
@@ -181,7 +188,7 @@ export class TempleRoom extends DurableObject{
     this.broadcastRoster();await this.armAlarm();
     return json({
       ok:true,token:id,role,seat,saveCode:saveCode||null,
-      authMode:identity?'firebase':'legacy',
+      authMode:identity?'firebase':firebaseEnabled?'guest':'legacy',
       self:this.self(this.session(id)),world:worldView(world,profileKey),players:this.roster()
     });
   }
