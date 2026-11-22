@@ -88,9 +88,11 @@ export class PlantUltimateEffects{
   const center=event.area?.visualCenter||event.area?.center||event.impactPoint||
     [origin[0]+direction[0]*range*.65,0,origin[2]+direction[2]*range*.65];
   entry.group.position.set(Number(center[0])||0,Math.max(.08,Number(center[1])||0),Number(center[2])||0);
-  // Server-owned impact radius determines visual world scale. No hitbox changes.
+  // Server-owned impact radius determines visual world scale. The original
+  // tornado's ground ring is 8.6m across (4.3m radius), so fit it exactly
+  // to the warning circle without the old 3.5x scale cap. Planter is unchanged.
   const radius=Math.max(.1,Number(event.area?.radius)||Number(event.radius)||4);
-  const scale=clamp(radius/4,.35,3.5);
+  const scale=kind==='palm'?radius/4.3:clamp(radius/4,.35,3.5);
   entry.group.scale.setScalar(scale);
   entry.group.rotation.set(0,0,0);
   this.scene.add(entry.group);this.active.push(entry);

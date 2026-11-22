@@ -85,7 +85,7 @@ test('the botanical VFX prewarms each 3D emitter before the loading screen close
  system.dispose();
 });
 
-test('palm ultimate radius is fivefold at every tier and matches warning, collision and green tornado',()=>{
+test('palm ultimate warning is half the former fivefold radius and matches collision and green tornado at every tier',()=>{
  for(let tier=1;tier<=5;tier++){
   const palm=itemById('palm-'+tier),quality=weaponQuality(palm);
   const stats=attackStats(palm,1);
@@ -93,7 +93,7 @@ test('palm ultimate radius is fivefold at every tier and matches warning, collis
   stats.radius=forwardCastRadius(palm,quality,stats.radius,false);
   const oldRadius=stats.radius*.6,oldRange=stats.range*.6;
   scaleUltimateFootprint(stats,palm,quality);
-  assert.ok(Math.abs(stats.radius-oldRadius*5)<.002,'fivefold radius at tier '+tier);
+  assert.ok(Math.abs(stats.radius-oldRadius*2.5)<.002,'half the previous fivefold radius at tier '+tier);
   assert.ok(Math.abs(stats.range-oldRange)<.002,'cast reach remains unchanged');
   const area=chargedArea(palm,[0,1,0],[0,0,1],stats,()=>0);
   const warning=spellFootprint(palm,[0,1,0],[0,0,1],stats,area,()=>0);
@@ -103,8 +103,17 @@ test('palm ultimate radius is fivefold at every tier and matches warning, collis
   assert.ok(!insideChargedArea(area,[area.center[0]+area.radius+.1,area.center[1],area.center[2]],0));
   const scene=new THREE.Scene(),system=new PlantUltimateEffects(scene);
   assert.ok(system.play({...event(palm.id),radius:stats.radius,area},palm));
-  assert.ok(Math.abs(system.active[0].group.scale.x-area.radius/4)<.001,
-   'green tornado scales with damage circle at tier '+tier);
+  assert.ok(Math.abs(system.active[0].group.scale.x*4.3-area.radius)<.001,
+   'native 8.6m-diameter green tornado fits warning and damage circle at tier '+tier);
   system.dispose();
  }
+});
+
+test('palm tornado visual has no scale cap that could shrink it below the telegraph',()=>{
+ const scene=new THREE.Scene(),system=new PlantUltimateEffects(scene);
+ const palm=itemById('palm-5'),large={...event('palm-5'),area:{...event('palm-5').area,radius:34}};
+ assert.equal(system.play(large,palm),true);
+ assert.ok(system.active[0].group.scale.x>3.5,'no old 3.5x rendering cap');
+ assert.ok(Math.abs(system.active[0].group.scale.x*4.3-34)<.001);
+ system.dispose();
 });

@@ -37,7 +37,7 @@ const flatDirection=direction=>{
 };
 export const CLAM_SECTOR_ANGLE=90;
 export const ULTIMATE_FOOTPRINT_SCALE=.6;
-export const PALM_ULTIMATE_RADIUS_MULTIPLIER=5;
+export const PALM_ULTIMATE_RADIUS_MULTIPLIER=2.5;
 // Authoritative damage geometry and warning VFX always use identical dimensions.
 export function scaleUltimateFootprint(stats,item=null,quality=null){
  if(stats?.ultimate){
@@ -51,8 +51,8 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
   const palm=/^palm-[1-5]$/.test(item?.id||'');
   const saber=item?.family==='saber';
   const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:saber?.5:item?.family==='ice'?1.5:item?.family==='wave'||item?.id==='goldfish'?3:1);
-  // Palm's green tornado, warning and authoritative hit radius grow fivefold,
-  // without extending the reach of the cast. Whip retains its 1.5x multiplier.
+  // Palm's green tornado, warning and authoritative hit radius are half
+  // the former fivefold size (now 2.5x), without extending cast reach. Whip retains its 1.5x multiplier.
   // Goldfish retains its narrow physical collision width.
   const radiusFactor=(item?.id==='goldfish'||saber?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:palm?PALM_ULTIMATE_RADIUS_MULTIPLIER:1);
   stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);
