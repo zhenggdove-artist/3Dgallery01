@@ -72,7 +72,7 @@ test('every numbered attack instantiates an actual source module, never a partic
   assert.equal(scene.children.includes(entry.group),true);
   if(kind==='ultimate'){
    if(num===0){
-    assert.equal(entry.fx.settings.theme,'void','Energy Sword Wave is violet');
+    assert.equal(entry.fx.settings.theme,'solar','Energy Sword Wave is yellow');
     assert.equal(entry.fx.settings.quantity,5,'exactly five native sword crescents');
     assert.equal(entry.fx.settings.spread,1,'source 60-degree fan');
     assert.ok(Math.abs(entry.group.position.z)<1e-8,'sword fan starts at the player');
