@@ -840,11 +840,11 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
   const appearance=validateAppearance(layout.appearance||current?.appearance);if(!appearance)return {error:'Invalid appearance settings'};
   const original=PLATFORMS.some(p=>p.id===platform.id);
   const uploadedRecord=(world.customArtworks||[]).find(a=>a.id===platform.id);
-  // Only GM-edited uploads have editable titles; built-in gallery titles
-  // remain immutable. Validate before touching authoritative saved state.
-  if(layout.title!==undefined&&!uploadedRecord)return {error:'Original artworks cannot be renamed'};
-  const proposedTitle=layout.title===undefined?uploadedRecord?.title:String(layout.title).trim();
-  if(uploadedRecord&&(!proposedTitle||proposedTitle.length>120))
+  // GM can name both original gallery works and later uploads. Existing
+  // untitled original layouts stay unchanged until the GM explicitly saves.
+  const proposedTitle=layout.title===undefined?
+   (current?.title??uploadedRecord?.title):String(layout.title).trim();
+  if(proposedTitle!==undefined&&(!proposedTitle||proposedTitle.length>120))
    return {error:'Artwork name must be 1–120 characters'};
   const proposedRadius=layout.platformRadius??current?.platformRadius;
   if(proposedRadius!==undefined&&proposedRadius!==null&&(!original||!Number.isFinite(proposedRadius)||proposedRadius<1.5||proposedRadius>14))
@@ -864,7 +864,7 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
   }
   world.artworkLayout[platform.id]={position:[...layout.position],rotation:[...layout.rotation],scale:[...layout.scale],
    ...(original&&proposedRadius!=null?{platformRadius:proposedRadius}:{}),
-   appearance,...(uploadedRecord?{title:proposedTitle}:{}),revision:(current?.revision||0)+1,updatedAt:now};
+   appearance,...(proposedTitle!==undefined?{title:proposedTitle}:{}),revision:(current?.revision||0)+1,updatedAt:now};
   if(uploadedRecord)uploadedRecord.title=proposedTitle;
   world.revision++;
   return {notice:'ARTWORK DEFAULT SAVED · ALL PLAYERS',artworkLayout:clone(world.artworkLayout[platform.id])};
