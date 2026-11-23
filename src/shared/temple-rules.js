@@ -1589,6 +1589,30 @@ export function tickTidalChannels(world,actors,now=Date.now(),rng=Math.random){
  return changed;
 }
 
+// Health is applied once per contact bundle, but every actual fish must
+// display its own floating damage number. Split the single server event
+// after damage resolution; do not create additional damage or HP changes.
+function splitGoldfishDamageNumbers(world,originalEventCount,contacts,center){
+ if(contacts<2||!Array.isArray(world.damageEvents)||world.damageEvents.length<=originalEventCount)return;
+ const event=world.damageEvents[world.damageEvents.length-1];
+ if(!event||!(event.amount>0))return;
+ const total=Number(event.amount);
+ const share=Math.floor(total*100/contacts)/100;
+ const amounts=Array(contacts).fill(share);
+ // Exactly preserve authoritative total after decimal rounding.
+ amounts[contacts-1]=+(total-share*(contacts-1)).toFixed(2);
+ event.amount=amounts[0];event.kind='goldfish';
+ for(let i=1;i<contacts;i++){
+  world.damageSequence=(world.damageSequence||0)+1;
+  world.damageEvents.push({...event,id:world.damageSequence,kind:'goldfish',
+   amount:amounts[i],position:[
+    center[0]+Math.sin(i*2.39996)*(.12+Math.sqrt(i)*.12),
+    center[1]+(.08*(i%6)),center[2]+Math.cos(i*2.39996)*(.12+Math.sqrt(i)*.12)
+   ]});
+ }
+ if(world.damageEvents.length>128)world.damageEvents.splice(0,world.damageEvents.length-128);
+}
+
 // Timed server-owned abilities: a returning giraffe can hit each target once
 // on the outward leg AND once on its return. Four independent fan vortices
 // wander for longer at higher qualities. Never trust a client hit report.
@@ -2052,8 +2076,9 @@ function tickPersistentAttacks(world,actors,now,rng){
      const baseFish=fx.damage*1.25*GOLDFISH_DAMAGE_PER_FISH;
      const direct=Math.min(remaining,contacts*Math.min(perFishCap,baseFish));
      if(direct<=0)continue;
+     const damageEventStart=world.damageEvents?.length||0;
      if(target.kind==='monster'){
-      // Soaked/exposed damage multipliers cannot bypass the 90-point cap.
+      // Soaked/exposed damage multipliers cannot bypass the new budget.
       const amplification=(1+(effectActive(value,'expose',now)?.power||0))*
        (1+(effectActive(value,'soaked',now)?.power||0));
       const raw=Math.min(direct,remaining/Math.max(.001,amplification));
@@ -2083,6 +2108,7 @@ function tickPersistentAttacks(world,actors,now,rng){
        if(profile?.hitReaction){profile.hitReaction.stunMs=fx.echo?100:300;profile.hitReaction.knockback=fx.echo?2.8:14;}
       }
      }
+     splitGoldfishDamageNumbers(world,damageEventStart,contacts,center);
      changed=true;
     }
     if(fx.fishConsumed.length>=GOLDFISH_SCHOOL_COUNT)fx.expiresAt=now;
