@@ -1,0 +1,29 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+
+const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
+
+test('only the A · TAKE ARTWORK interaction uses the compact hint class',()=>{
+ const ui=read('src/ui.js');
+ assert.match(ui,/near\?\.type==='artwork'\)text='A · TAKE ARTWORK'/);
+ assert.match(ui,/prompt\.classList\.toggle\('artwork-pickup-hint',text==='A · TAKE ARTWORK'\)/);
+ assert.match(ui,/prompt\.classList\.toggle\('visible',!!text\)/);
+});
+
+test('compact pickup hint is smaller and 50% opaque when shown',()=>{
+ const css=read('fidelity-ui.css');
+ const compact=css.match(/#prompt\.artwork-pickup-hint\s*\{([^}]+)\}/)?.[1];
+ const shown=css.match(/#prompt\.artwork-pickup-hint\.visible\s*\{([^}]+)\}/)?.[1];
+ assert.ok(compact,'pickup-only CSS selector exists');
+ assert.match(compact,/font-size:\s*11px/);
+ assert.match(compact,/scale\(\.82\)/);
+ assert.match(shown||'',/opacity:\s*\.5/);
+ assert.doesNotMatch(css,/#prompt\.visible\s*\{\s*opacity:\s*\.5/);
+});
+
+test('release token is bumped to avoid stale Safari UI modules',()=>{
+ const html=read('index.html');
+ assert.match(html,/20261124-compact-artwork-prompt-r97/);
+ assert.doesNotMatch(html,/20261124-giraffe-corridor-avatar-label-r96/);
+});
