@@ -545,7 +545,7 @@ export class TempleUI extends EventTarget{
    const groups=new Map();
    for(const item of items){
     const match=item.slot==='weapon'&&item.id.match(ranked);
-    const key=item.slot==='weapon'&&item.baseId?'quality:'+item.baseId:match?'quality:'+match[1]:item.id;
+    const key=item.slot==='weapon'&&item.exotic?'quality:'+(item.baseId||item.id):match?'quality:'+match[1]:item.id;
     if(!groups.has(key))groups.set(key,[]);
     if(!groups.get(key).some(v=>v.id===item.id))groups.get(key).push(item);
    }
