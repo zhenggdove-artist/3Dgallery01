@@ -107,7 +107,7 @@ export class PlayerController{
   }
   jump(){if(this.awaitingSpawn||this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;this.onJump?.();return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
   setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pinch=null;this.pointers.clear();}}
-  setRole(role){this.role=role;this.root.visible=role==='fighter';this.followTarget=null;this.spectatorLift=0;this.cameraLocked=false;}
+  setRole(role){this.role=role;this.root.visible=role==='fighter';this.followTarget=null;this.spectatorLift=0;this.cameraLocked=false;this.authorityHoldUntil=0;this.stunUntil=0;}
   setFollowTarget(root=null){this.followTarget=root;}
   teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;this.vortexSpin=null;}
   beginPanBlast(hit){
