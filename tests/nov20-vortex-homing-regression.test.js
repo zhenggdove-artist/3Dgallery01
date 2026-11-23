@@ -32,7 +32,7 @@ test('late acknowledgement can replay several real strides without teleporting b
  const net=source('src/network.js'),main=source('src/main.js');
  assert.match(net,/data\.submitted=\[\.\.\.this\.sentStates\.get\(seq\)\.position\]/);
  assert.match(main,/rebaseRejectedPose\(ack\.position,ack\.submitted/);
- assert.match(main,/const goldfishUltimate=item\.id==='goldfish'/);
+ assert.match(main,/const goldfishUltimate=authoredId\(item\)==='goldfish'/);
  assert.match(main,/goldfishUltimate\?cameraAimDirection\(camera\)/);
 });
 test('goldfish water projectiles are deep blue without recoloring the giant red fish',()=>{
