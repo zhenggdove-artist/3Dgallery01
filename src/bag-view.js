@@ -44,7 +44,8 @@ function showConsumableSlotPicker(ui,item,profile){
 export function renderOriginalBag(ui,profile){
  const scroll={content:ui.content.scrollTop,items:ui.content.querySelector('#bag-items')?.scrollTop||0,tabs:ui.content.querySelector('#bag-tabs')?.scrollLeft||0};
  ui.bagObserver?.disconnect();const tab=ui.bagCategory==='garden'?'all':ui.bagCategory||'all',items=(profile.inventory||[]).map((id,index)=>({item:itemById(id),index})).filter(v=>v.item),equipped=(i,index)=>profile.equipment?.[i.slot]===i.id&&(!Number.isInteger(index)||!profile.equippedInstanceIds?.[i.slot]||profile.equippedInstanceIds[i.slot]===profile.inventoryInstances?.[index]?.uid),recordAt=(i,index)=>Number.isInteger(index)?fusionRecordAt(profile,index):profile.fusion?.[i.id];
- const cell=(item,index=null,count=1)=>{const f=weaponPresentation(item,recordAt(item,index));return `<button class="bag-cell ${equipped(item,index)?'equipped':''}" data-bag-item="${item.id}" ${Number.isInteger(index)?`data-inventory-index="${index}"`:``} data-rarity="${item.rarity}" style="--rarity:${RARITIES.find(r=>r.id===item.rarity)?.color||'#eadcf4'}" draggable="true" title="${esc(f.title)}" aria-label="${esc(f.title)}${count>1?' ×'+count:''}">${previewMarkup(item)}${item.slot==='weapon'?`<small class="range-mark">${({near:'C',mid:'M',far:'L'})[weaponClass(item)]||''}</small>`:''}${f.level?`<small class="fusion-level">+${f.level}</small>`:''}${count>1?`<span class="bag-stack-count" aria-hidden="true">×${count}</span>`:''}</button>`;};
+ const unseenIds=new Set((profile.inventoryInstances||[]).filter(row=>row.viewed===false).map(row=>row.itemId));
+ const cell=(item,index=null,count=1)=>{const f=weaponPresentation(item,recordAt(item,index));return `<button class="bag-cell ${equipped(item,index)?'equipped':''}" data-bag-item="${item.id}" ${Number.isInteger(index)?`data-inventory-index="${index}"`:``} data-rarity="${item.rarity}" style="--rarity:${RARITIES.find(r=>r.id===item.rarity)?.color||'#eadcf4'}" draggable="true" title="${esc(f.title)}" aria-label="${esc(f.title)}${count>1?' ×'+count:''}">${previewMarkup(item)}${item.slot==='weapon'?`<small class="range-mark">${({near:'C',mid:'M',far:'L'})[weaponClass(item)]||''}</small>`:''}${f.level?`<small class="fusion-level">+${f.level}</small>`:''}${count>1?`<span class="bag-stack-count" aria-hidden="true">×${count}</span>`:''}${unseenIds.has(item.id)?'<small class="bag-new-mark" aria-label="New item">NEW</small>':''}</button>`;};
  let body='';if(tab==='equipment'){const slot=s=>{const i=itemById(profile.equipment?.[s]),index=profile.inventoryInstances?.findIndex(v=>v.uid===profile.equippedInstanceIds?.[s]&&v.itemId===i?.id)??-1;return `<div class="equip-position"><b>${s.toUpperCase()}${i?.slot==='weapon'?' · '+({near:'Close Range',mid:'Mid Range',far:'Long Range'}[weaponClass(i)]||''):''}</b>${i?cell(i,index>=0?index:null):'<div class="bag-cell"></div>'}<span>${esc(i?weaponPresentation(i,recordAt(i,index>=0?index:null)).title:'Empty')}</span></div>`;};body=`<div class="equipment-layout"><div class="equip-column">${['head','outfit','weapon','shield'].map(slot).join('')}</div><div id="bag-portrait-frame"><canvas id="bag-portrait" role="img" aria-label="Front-facing full 3D character wearing current equipment"></canvas></div><div class="equip-column">${['wings','armor'].map(slot).join('')}</div></div>`;}else{const filter={weapons:['weapon'],head:['head'],outfit:['outfit'],wings:['wings'],shields:['shield'],comfort:['consumable']}[tab];const list=items.filter(({item:i})=>['near','mid','far'].includes(tab)?i.slot==='weapon'&&weaponClass(i)===tab:!filter||filter.includes(i.slot));
  const grouped=groupInventoryStacks(list,recordAt);
  body=grouped.map(({item,index,count})=>cell(item,index,count)).join('')+
@@ -108,7 +109,17 @@ export function renderOriginalBag(ui,profile){
    ui.selectedQuickSlot=Number(target.dataset.quickSlotTarget);
    renderOriginalBag(ui,ui.world.profile);return;
   }
-  const b=e.target.closest('[data-bag-item]'),i=b&&itemById(b.dataset.bagItem);if(!i)return;const index=b.hasAttribute('data-inventory-index')?Number(b.dataset.inventoryIndex):-1,key=profile.inventoryInstances?.[index]?.uid||i.id,now=performance.now(),twice=ui.bagTap?.id===key&&now-ui.bagTap.time<400;ui.bagTap={id:twice?null:key,time:now};ui.content.querySelectorAll('.selected').forEach(n=>n.classList.remove('selected'));b.classList.add('selected');const record=recordAt(i,index>=0?index:null),f=weaponPresentation(i,record);
+  const b=e.target.closest('[data-bag-item]'),i=b&&itemById(b.dataset.bagItem);if(!i)return;
+  // Acknowledgement occurs on explicit BAG inspection only, not on purchase,
+  // drag, hover, tab changes or automatic equipment rendering.
+  if(unseenIds.has(i.id)){
+   unseenIds.delete(i.id);
+   for(const instance of profile.inventoryInstances||[])
+    if(instance.itemId===i.id)instance.viewed=true;
+   for(const cell of ui.content.querySelectorAll('[data-bag-item]'))
+    if(cell.dataset.bagItem===i.id)cell.querySelector('.bag-new-mark')?.remove();
+   ui.emit('server-action',{action:'inspect-item',itemId:i.id});
+  }const index=b.hasAttribute('data-inventory-index')?Number(b.dataset.inventoryIndex):-1,key=profile.inventoryInstances?.[index]?.uid||i.id,now=performance.now(),twice=ui.bagTap?.id===key&&now-ui.bagTap.time<400;ui.bagTap={id:twice?null:key,time:now};ui.content.querySelectorAll('.selected').forEach(n=>n.classList.remove('selected'));b.classList.add('selected');const record=recordAt(i,index>=0?index:null),f=weaponPresentation(i,record);
  const odds=fusionChance(profile,i.id,index>=0?index:undefined),completed=Math.max(0,Math.floor(Number(record?.layer)||0));
  const ownedCount=profile.inventory.filter(id=>id===i.id).length;
  const comfort=i.slot==='consumable';
