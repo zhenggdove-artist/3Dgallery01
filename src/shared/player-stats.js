@@ -34,7 +34,6 @@ export function refreshStats(world,profile,now=Date.now()){
   else{
    profile.shield.maxHp=shield.capacity*10;
    if(now-profile.shield.lastHit>=shield.recharge*1000)profile.shield.hp=profile.shield.maxHp;
-   else profile.shield.hp=Math.min(profile.shield.maxHp,Math.max(0,profile.shield.hp));
   }
   return stats;
 }
