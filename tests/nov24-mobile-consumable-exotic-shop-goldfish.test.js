@@ -10,12 +10,12 @@ const player=(key,position=[75,0,0])=>({key,id:'actor-'+key,name:key,color:'#aad
 const act=(world,who,now,payload,actors=[who])=>
  applyAction(world,who,payload,{now,actors,rng:()=>.5});
 
-test('every exotic weapon has four stable-ID qualities with increasing prices and power',()=>{
- assert.deepEqual(SHOP_EXOTIC_TIERS,[1,2,3,4]);
+test('every exotic weapon has five stable-ID qualities with increasing prices and power',()=>{
+ assert.deepEqual(SHOP_EXOTIC_TIERS,[1,2,3,4,5]);
  for(const id of ['telephone','jellybrella','goldfish','black-cat','white-cat','giraffe','accordion','fan','clam']){
   const base=itemById(id),variants=SHOP_EXOTIC_TIERS.map(tier=>shopWeaponVariant(base,tier));
   assert.ok(variants.every(v=>v.id===base.id));
-  assert.deepEqual(variants.map(v=>v.tier),[1,2,3,4]);
+  assert.deepEqual(variants.map(v=>v.tier),[1,2,3,4,5]);
   assert.ok(variants.every((v,i)=>i===0||v.price>variants[i-1].price),id+' prices rise');
   assert.ok(variants.every((v,i)=>i===0||v.damage>variants[i-1].damage),id+' power rises');
   assert.equal(variants[2].price,base.price,id+' legacy tier stays original');

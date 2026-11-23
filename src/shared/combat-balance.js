@@ -2,6 +2,22 @@ import {weaponAffixTotals} from './weapon-affixes.js';
 export const PALM_STORM_DURATION_MS=6000;
 export const PALM_STORM_TICK_MS=2000;
 export const SNIPER_RANGE=256; // Entire 184m-diameter arena from either edge, with margin.
+export const SNIPER_SHOULDER_RETICLE_DIAMETER_PX=132;
+export const SNIPER_SHOULDER_FOV_DEG=62;
+// Uniform server-owned cone whose projection stays within the 132px reticle.
+export function shoulderSniperSpread(direction,viewportHeight=720,rng=Math.random){
+ if(!Array.isArray(direction)||direction.length!==3||!direction.every(Number.isFinite))return null;
+ const length=Math.hypot(...direction);if(length<1e-8)return null;
+ const d=direction.map(x=>x/length),h=clamp(Number(viewportHeight)||720,320,2160);
+ const cone=Math.tan(SNIPER_SHOULDER_FOV_DEG*Math.PI/360)*SNIPER_SHOULDER_RETICLE_DIAMETER_PX/h;
+ const radius=Math.sqrt(clamp(Number(rng()),0,1))*cone;
+ const a=clamp(Number(rng()),0,1)*Math.PI*2;
+ const hx=Math.hypot(d[0],d[2]),right=hx>1e-6?[d[2]/hx,0,-d[0]/hx]:[1,0,0];
+ const up=[d[1]*right[2],d[2]*right[0]-d[0]*right[2],-d[1]*right[0]];
+ const x=Math.cos(a)*radius,y=Math.sin(a)*radius;
+ const changed=d.map((v,i)=>v+right[i]*x+up[i]*y),n=Math.hypot(...changed);
+ return changed.map(v=>v/n);
+}
 // The sniper head check is performed on the SERVER against the actual shot ray.
 // The fighter's combat capsule is 2.35m tall; the head is a small sphere near its top.
 export function sniperHitsHead(origin,direction,range,position){
@@ -46,7 +62,9 @@ export function pvpShotDamage(weapon,stats,quality={tier:1}){
  // damage, without changing the weapon's physical reach or collision shape.
  base*=1+(enchant.damage+enchant.attack)/100;
  if(stats?.ultimate)base*=1+enchant.charge/100;
- return +(weapon.id==='white-cat'?base*.5:base).toFixed(3);
+  // Piercing ultimate: multiple targets but at most 42 HP per target.
+  if(weapon.id==='black-cat'&&stats?.ultimate)base=Math.min(base,42);
+  return +(weapon.id==='white-cat'?base*.5:base).toFixed(3);
 }
 // These durations describe the actual visible moving volumes, not an
 // arbitrary instant-hit timer. Damage cannot precede projectile intersection.

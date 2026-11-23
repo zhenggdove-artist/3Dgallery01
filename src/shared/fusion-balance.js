@@ -13,7 +13,7 @@ export function sniperMaterialStat(sniper,key){
  const raw=Math.max(0,Number(sniper?.[key])||0);
  if(sniper?.id!=='black-cat'||!['damage','chargeDamage'].includes(key))return raw;
  const reference=sniperFusionReference(sniper);
- return Math.min(raw,Math.max(0,Number(reference?.[key])||0));
+ return Math.min(raw,Math.max(0,Number(reference?.[key])||0)*.45);
 }
 export function fusionSniperEchoDamage(sniper=itemById('black-cat')){
  const reference=sniperFusionReference(sniper),full=attackStats(sniper,1),
@@ -21,10 +21,10 @@ export function fusionSniperEchoDamage(sniper=itemById('black-cat')){
  return {
   // Always use the usual fusion echo multiplier, and cap to a conventional
   // staff of the same rarity; the original sniper itself remains untouched.
-  damage:+Math.min(full.damage*.2,referenceFull.damage*.2).toFixed(3),
-  pvpDamage:+Math.min(
-   pvpShotDamage(sniper,full,weaponQuality(sniper))*.2,
-   pvpShotDamage(reference,referenceFull,referenceQuality)*.2
-  ).toFixed(3)
+  damage:+Math.min(full.damage*.08,referenceFull.damage*.10).toFixed(3),
+   pvpDamage:+Math.min(2.5,
+    pvpShotDamage(sniper,full,weaponQuality(sniper))*.08,
+    pvpShotDamage(reference,referenceFull,referenceQuality)*.10
+   ).toFixed(3)
  };
 }

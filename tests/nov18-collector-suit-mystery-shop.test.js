@@ -57,8 +57,8 @@ test('Far-tab sniper retains its premium price and server validates purchase',()
 test('shop places premium weapons only in the exclusive Mystery tab',()=>{
  const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
  assert.match(ui,/mystery:'Mystery Weapons'/);
- assert.match(ui,/tab==='mystery'&&i\.mysteryWeapon/);
- assert.match(ui,/!i\.mysteryWeapon&&weaponRangeClass\(i\)===tab/);
+ assert.match(ui,/tab==='mystery'\)return base\.mysteryWeapon/);
+ assert.match(ui,/!base\.mysteryWeapon&&weaponRangeClass\(base\)===tab/);
 });
 
 test('Collector retains native skinned player model and transparent purple name',()=>{

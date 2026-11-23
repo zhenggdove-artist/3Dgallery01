@@ -9,6 +9,15 @@ const newUid=()=>crypto.randomUUID();
 // record already owned by another physical UID.
 function detachedLegacyRecord(profile,itemId,uid,direct){
  const projected=profile.fusion?.[itemId];
+ // Persisted JSON detaches legacy projection objects from their owning UID.
+ // A collapsed ×N stack cannot inherit one target copy's fusion progress.
+ if(profile.fusionIdentityMigrated){
+  const copies=profile.inventoryInstances?.filter(row=>row.itemId===itemId)||[];
+  if(copies.some(row=>row.uid!==uid&&
+    (profile.fusionByInstance?.[row.uid]?.layer||profile.fusionByInstance?.[row.uid]?.templeStats)))
+   return null;
+  if(copies[0]?.uid!==uid)return null;
+ }
  if(!projected||typeof projected!=='object'||projected===direct)return null;
  const equippedSlot=Object.entries(profile.equipment||{}).find(([,selected])=>selected===itemId)?.[0];
  if(equippedSlot&&profile.equippedInstanceIds?.[equippedSlot]&&profile.equippedInstanceIds[equippedSlot]!==uid)return null;
@@ -132,8 +141,10 @@ export function fusionRecordAt(profile,index){
  // Older tests or save rehydration can provide a legacy record after
  // initialization; never share a record between two *actual* instances.
  const owned=profile.inventoryInstances||[];
- if(owned.some(row=>row.itemId===itemId&&profile.fusionByInstance?.[row.uid]))return {};
- return profile.fusion?.[itemId]||{};
+  if(owned.some(row=>row.itemId===itemId&&profile.fusionByInstance?.[row.uid]))return {};
+  // No direct UID record: at most the FIRST legacy physical copy can inherit.
+  if(profile.fusionIdentityMigrated&&owned.find(row=>row.itemId===itemId)?.uid!==uid)return {};
+  return profile.fusion?.[itemId]||{};
 }
 
 export function inventoryIndexFor(profile,itemId,index){

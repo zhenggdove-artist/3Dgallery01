@@ -132,7 +132,7 @@ function startHeldCharge(){
     (!sniperScopeAtPress||(gun.mode!==2&&!(gun.mode===1&&hasBlackCatFusionUltimate()))))return;
  chargeStarted=performance.now();
  chargeRequest=sendAction('attack',{phase:'charge',...(sniperScopeAtPress?{
-  scoped:gun.mode===2,aimMode:gun.mode===1?'shoulder':'scope'
+  scoped:gun.mode===2,aimMode:gun.mode===1?'shoulder':'scope',viewportHeight:innerHeight
  }:{})}).then(result=>{
   if(!result?.charging&&attackHeld){
    chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;
@@ -927,7 +927,7 @@ function performAttack(charge=0,phase=null){
   shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
   ...(item.id==='black-cat'?{
-   scoped:gun.mode===2,aimMode:gun.mode===1?'shoulder':'scope'
+   scoped:gun.mode===2,aimMode:gun.mode===1?'shoulder':'scope',viewportHeight:innerHeight
   }:{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
 }

@@ -22,7 +22,7 @@ import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './isl
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets} from './calico-pellets.js';
-import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
+import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,shoulderSniperSpread,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
@@ -977,14 +977,10 @@ function attack(world,profile,actor,body,context,now){
   profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
   if(!channel)profile.chargeStartedAt=0;
   if(shoulderSniper){
-    // The server, NOT the browser, determines wide random drift. Each shot
-    // misses the camera centre by up to ~12° sideways / 9° vertically.
-    const random=typeof context?.rng==='function'?context.rng:Math.random;
-    const yaw=(random()-.5)*.42,pitch=(random()-.5)*.30;
-    const x=direction[0]*Math.cos(yaw)-direction[2]*Math.sin(yaw);
-    const z=direction[0]*Math.sin(yaw)+direction[2]*Math.cos(yaw);
-    direction=normalDirection([x,direction[1]+Math.tan(pitch),z]);
-  }
+     // Server-owned drift stays inside the actual doubled 132px crosshair.
+     const random=typeof context?.rng==='function'?context.rng:Math.random;
+     direction=shoulderSniperSpread(direction,body.viewportHeight,random)||direction;
+   }
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
   const enchants=weaponAffixTotals(weapon);
   stats.damage=+(stats.damage*quality.damage*(1+enchants.damage/100)*
@@ -1123,15 +1119,18 @@ function attack(world,profile,actor,body,context,now){
       const duration=exotic==='vortex'?VORTEX_FLIGHT_MS:exotic==='goldfish'?Math.round(GOLDFISH_SWIM_MS*sourceQuality.duration):
         exotic==='giraffe'?2300:exotic==='fan'?Math.round((1400+sourceQuality.tier*850)*sourceQuality.duration):
         Math.max(flight,visibleCollisionLifetimeMs(source,true));
-      // Sniper fusion echo must not exceed 30% of the original sniper
-       // ultimate's damage; it also cannot cause instant-lethal headshots.
+      // Borrowed sniper fusion deals only a small, per-target echo. It
+       // cannot transfer the original one-shot power to another weapon.
        const balancedSniper=source.id==='black-cat'?fusionSniperEchoDamage(source):null;
-       const echoId=id(),echoDamage=balancedSniper?.damage??+(full.damage*.2).toFixed(3);
-      const echoPvP=balancedSniper?.pvpDamage??+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
+       // Sniper-as-primary borrows at most 8% of each fused ultimate: both
+       // echoes together must remain less powerful than a direct charged hit.
+       const echoScale=weapon.id==='black-cat'?.08:.2;
+       const echoId=id(),echoDamage=balancedSniper?.damage??+Math.min(full.damage*echoScale,weapon.id==='black-cat'?32:Infinity).toFixed(3);
+      const echoPvP=balancedSniper?.pvpDamage??+Math.min(pvpShotDamage(source,full,sourceQuality)*echoScale,weapon.id==='black-cat'?3.5:Infinity).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],launchDirection:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,
-        damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*.2,
+        damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*echoScale,
         tier:sourceQuality.tier,flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
         outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[],
@@ -1141,7 +1140,7 @@ function attack(world,profile,actor,body,context,now){
         range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,qualityTier:sourceQuality.tier,
         qualityScale:sourceQuality.visual*.5,qualityDuration:sourceQuality.duration,
         pellets:secondaryPellets?.map(v=>v.direction)||null,
-        fusionEcho:true,echoPower:.2,time:now});
+        fusionEcho:true,echoPower:echoScale,time:now});
     }
     if(world.persistentAttacks.length>44)world.persistentAttacks.splice(0,world.persistentAttacks.length-44);
   }
@@ -1859,11 +1858,11 @@ function tickPersistentAttacks(world,actors,now,rng){
     // No uncharged weapon may bypass the 8-hit baseline through a lucky
     // crit or a ten-ball shotgun burst. The pellets remain individually
     // damaging, with a full 5x+ per-pellet random damage window.
-    const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?150:96):
+    const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?42:96):
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
     const shotgunPellet=!fx.echo&&isPlayer&&weapon.pattern==='scatter'&&pellet!==null;
     const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage)*(frostProc?1.5:1);
-    const lethalHeadshot=!fx.echo&&!fx.shoulderSpread&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
+    const lethalHeadshot=!fx.echo&&fx.charge<1&&!fx.shoulderSpread&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
      fx.origin,fx.direction,fx.range,enemy.position);
     const hitKind=lethalHeadshot?(modifiers.critical?'critical-headshot':'headshot'):modifiers.kind;
     let applied;

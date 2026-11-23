@@ -4,7 +4,7 @@ import {ART_ACCEPT} from './artwork-upload.js';
 import {bindBagDrag} from './bag-drag.js';
 import {PLATFORMS} from './shared/arena.js';
 import {playerArtworkAppearanceMarkup} from './art-editor-panel.js';
-import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_EXOTIC_TIERS,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant} from './shared/catalog.js';
+import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_WEAPON_GRADES,shopWeaponGroups,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant} from './shared/catalog.js';
 import {SOUND_PROFILES} from './game-audio.js';
 import {pvpShotDamage} from './shared/combat-balance.js';
 import {weaponQuality} from './shared/weapon-abilities.js';
@@ -587,77 +587,72 @@ export class TempleUI extends EventTarget{
   showSaveCode(code){this.saveCode=String(code||'');this.openPanel('save');this.content.querySelector('#save-code-output')?.select();}
   renderBag(profile){renderOriginalBag(this,profile);}
   renderShop(profile){
-   const tab=this.shopTab||'near',tabs={
-    near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',
-    comfort:'Comfort for the Soul',shield:'Shields',head:'Headwear',
-    outfit:'Outfits',wings:'Wings',owned:'Owned'};
-   const saleIds=new Set(SHOP_ITEMS.map(i=>i.id));
-   const source=tab==='owned'?(profile.inventory||[]).map(itemById).filter(i=>i&&saleIds.has(i.id)):SHOP_ITEMS;
-   const items=source.filter(i=>tab==='owned'||tab==='mystery'&&i.mysteryWeapon||
-    ['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab||
-    tab==='comfort'&&i.slot==='consumable'||i.slot===tab);
-   const groups=new Map();
-    for(const item of items){
-     const weapon=item.slot==='weapon';
-     const key=weapon?'quality:'+item.id:item.id;
-     if(!groups.has(key))groups.set(key,weapon?
-       SHOP_EXOTIC_TIERS.map(tier=>shopWeaponVariant(item,tier)):[]);
-     if(!weapon&&!groups.get(key).some(v=>v.id===item.id))
-       groups.get(key).push(item);
-    }
-   // Exotic ranks share a canonical item ID but live in separate physical
-   // inventory instances. Count and equip the exact quality, never a sibling.
-   const ownedIndicesFor=variant=>(profile.inventory||[]).flatMap((id,index)=>{
-    if(id!==variant.id)return [];
-    if(!variant.shopTier)return [index];
-    const instance=profile.inventoryInstances?.[index];
-    const base=itemById(id);
-     const tier=profile.fusionByInstance?.[instance?.uid]?.shopTier??instance?.shopTier??
-       (base?.exotic?Math.min(4,base.tier):3);
-    return Number(tier)===variant.shopTier?[index]:[];
-   });
-   this.shopVariantChoice??={};this.shopQuantities??={};
-   const cards=[...groups].map(([key,variants])=>{
-    variants.sort((a,b)=>(a.tier||1)-(b.tier||1));
-    const selected=variants.find(v=>
-      (v.shopTier?String(v.shopTier):v.id)===this.shopVariantChoice[key])||
-      (tab==='owned'?variants.find(v=>ownedIndicesFor(v).length>0):null)||
-      variants.find(v=>v.shopTier===3)||variants[0];
-    const ownedIndices=ownedIndicesFor(selected),ownedCount=ownedIndices.length;
-    const equippedTier=profile.fusion?.[selected.id]?.shopTier??
-      profile.fusionByInstance?.[profile.equippedInstanceIds?.[selected.slot]]?.shopTier??
-      (itemById(selected.id)?.exotic?Math.min(4,itemById(selected.id)?.tier):3);
-    const selectedEquipped=profile.equipment?.[selected.slot]===selected.id&&
-      (!selected.shopTier||Number(equippedTier)===selected.shopTier);
-    const quantity=this.shopQuantities[key]??1;
-    const valid=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=99;
-    const total=valid?selected.price*quantity:0;
-    const affordable=profile.admin||Number(profile.wallet)>=total;
-    const room=(profile.inventory?.length||0)+quantity<=600;
-    const selection=variants.length>1?`<label class="shop-quality-picker">QUALITY / PRICE
-      <select data-shop-variant="${escape(key)}" aria-label="Choose quality for ${escape(selected.name)}">
-      ${variants.map(v=>{const rarity=RARITIES.find(r=>r.id===v.rarity)||RARITIES[0];
-       const own=ownedIndicesFor(v).length;
-       const choice=v.shopTier?String(v.shopTier):v.id;
-       const selectedChoice=selected.shopTier?String(selected.shopTier):selected.id;
-       return `<option value="${escape(choice)}" ${choice===selectedChoice?'selected':''}>${escape(rarity.name)} · T${v.tier} — ${Number(v.price).toLocaleString('en-US')} Coins${own?' · ×'+own:''}</option>`;}).join('')}
-      </select></label>`:'';
-    const actions=`<div class="shop-purchase">
-      <div class="shop-stock">OWNED ×${ownedCount}${selectedEquipped?' · EQUIPPED':''}</div>
-      <label class="shop-quantity-label">QUANTITY
-        <input type="number" min="1" max="99" step="1" inputmode="numeric"
-         data-shop-quantity="${escape(key)}" value="${escape(quantity)}" aria-label="Purchase quantity for ${escape(selected.name)}">
-      </label>
-      <output data-buy-total>TOTAL · ${valid?total.toLocaleString('en-US'):'—'}</output>
-      <button type="button" data-buy="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''} ${!valid||!affordable||!room?'disabled':''}>BUY ×${valid?quantity:1} · ${total.toLocaleString('en-US')} COINS</button>
-      ${ownedCount&&selected.slot!=='consumable'?`<button type="button" data-equip="${escape(selected.id)}" ${selected.shopTier?`data-equip-index="${ownedIndices[0]}"`:''} ${selectedEquipped?'disabled':''}>${selectedEquipped?'EQUIPPED':'EQUIP OWNED'}</button>`:''}
-    </div>`;
-    return itemCard(selected,selection+actions);
-   });
-   this.content.innerHTML=`<div class="armory-balance"><span>Equipment · quantity purchases</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
-    <nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>
-    <div class="shop-items">${cards.join('')||'<p>There are no items in this category.</p>'}</div>`;
-   void hydrateItemPreviews(this.content);
+    const tab=this.shopTab||'near',tabs={
+     near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',
+     comfort:'Comfort for the Soul',shield:'Shields',head:'Headwear',
+     outfit:'Outfits',wings:'Wings',owned:'Owned'};
+    // One card per family: the shop has five qualities, not five separate
+    // native weapon IDs each with a second set of grades.
+    const groups=shopWeaponGroups(SHOP_ITEMS);
+    const ownedIndicesFor=variant=>(profile.inventory||[]).flatMap((id,index)=>{
+     if(id!==variant.id)return [];
+     if(!variant.shopTier)return [index];
+     const row=profile.inventoryInstances?.[index],base=itemById(id);
+     const tier=profile.fusionByInstance?.[row?.uid]?.shopTier??row?.shopTier??
+       (base?.exotic?Math.min(5,base.tier):base?.tier);
+     return Number(tier)===variant.shopTier?[index]:[];
+    });
+    const visible=groups.filter(group=>{
+     const base=group.base;
+     if(tab==='owned')return group.variants.some(v=>ownedIndicesFor(v).length>0);
+     if(tab==='mystery')return base.mysteryWeapon;
+     if(['near','mid','far'].includes(tab))return base.slot==='weapon'&&!base.mysteryWeapon&&weaponRangeClass(base)===tab;
+     return base.slot===tab||(tab==='comfort'&&base.slot==='consumable');
+    });
+    this.shopVariantChoice??={};this.shopQuantities??={};
+    const cards=visible.map(group=>{
+     const {key,variants}=group;
+     const selected=variants.find(v=>String(v.shopTier??v.id)===this.shopVariantChoice[key])||
+       (tab==='owned'?variants.find(v=>ownedIndicesFor(v).length>0):null)||
+       variants.find(v=>v.shopTier===3)||variants[0];
+     const ownedIndices=ownedIndicesFor(selected),ownedCount=ownedIndices.length;
+     const equippedUid=profile.equippedInstanceIds?.[selected.slot];
+     const equippedInstance=profile.inventoryInstances?.find(row=>row.uid===equippedUid);
+     const equippedTier=profile.fusionByInstance?.[equippedUid]?.shopTier??equippedInstance?.shopTier??
+       itemById(selected.id)?.tier;
+     const selectedEquipped=profile.equipment?.[selected.slot]===selected.id&&
+       (!selected.shopTier||Number(equippedTier)===selected.shopTier);
+     const quantity=this.shopQuantities[key]??1;
+     const valid=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=99;
+     const total=valid?selected.price*quantity:0;
+     const affordable=profile.admin||Number(profile.wallet)>=total;
+     const room=(profile.inventory?.length||0)+quantity<=600;
+     const familyName=selected.slot==='weapon'&&!selected.exotic?
+       selected.name.replace(/^(?:Seed|Dawn|Radiant|Celestial|Eternal)\\s+/,''):group.base.name;
+     const selection=variants.length>1?`<label class="shop-quality-picker">WEAPON QUALITY / PRICE
+       <select data-shop-variant="${escape(key)}" aria-label="Choose quality for ${escape(familyName)}">
+       ${variants.map(v=>{
+        const grade=SHOP_WEAPON_GRADES[(v.shopTier||3)-1];
+        const own=ownedIndicesFor(v).length;
+        return `<option value="${v.shopTier}" ${v.shopTier===selected.shopTier?'selected':''}>${escape(grade.label)} · ${escape(grade.rarity.toUpperCase())} — ${Number(v.price).toLocaleString('en-US')} Coins${own?' · ×'+own:''}</option>`;
+       }).join('')}
+       </select></label>`:'';
+     const actions=`<div class="shop-purchase">
+       <div class="shop-stock">OWNED ×${ownedCount}${selectedEquipped?' · EQUIPPED':''}</div>
+       <label class="shop-quantity-label">QUANTITY
+         <input type="number" min="1" max="99" step="1" inputmode="numeric"
+          data-shop-quantity="${escape(key)}" value="${escape(quantity)}" aria-label="Purchase quantity for ${escape(familyName)}">
+       </label>
+       <output data-buy-total>TOTAL · ${valid?total.toLocaleString('en-US'):'—'}</output>
+       <button type="button" data-buy="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''} ${!valid||!affordable||!room?'disabled':''}>BUY ×${valid?quantity:1} · ${total.toLocaleString('en-US')} COINS</button>
+       ${ownedCount&&selected.slot!=='consumable'?`<button type="button" data-equip="${escape(selected.id)}" ${selected.shopTier?`data-equip-index="${ownedIndices[0]}"`:''} ${selectedEquipped?'disabled':''}>${selectedEquipped?'EQUIPPED':'EQUIP OWNED'}</button>`:''}
+     </div>`;
+     return itemCard({...selected,name:familyName},selection+actions);
+    });
+    this.content.innerHTML=`<div class="armory-balance"><span>Equipment · quantity purchases</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
+     <nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>
+     <div class="shop-items">${cards.join('')||'<p>There are no items in this category.</p>'}</div>`;
+    void hydrateItemPreviews(this.content);
   }
 
   // SUPPORT sells one authoring entitlement, not chance-based capsules.
