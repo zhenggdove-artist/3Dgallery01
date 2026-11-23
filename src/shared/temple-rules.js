@@ -184,7 +184,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
     if(wing.personalWing||wing.ownerKey&&wing.ownerKey!==key)continue;
     if(known.has(wing.id))continue;
     if(!owned.has(wing.id)&&current.inventory.length<600){
-     current.inventory.push(wing.id);owned.add(wing.id);
+     appendInventoryInstance(current,wing.id,'grant');owned.add(wing.id);
     }
     known.add(wing.id);
    }
