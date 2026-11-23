@@ -166,7 +166,7 @@ export class NumberedWeaponEffects {
   }
   if(spec.number===73){
    // Opacity is shader-authored, so material.opacity alone has no effect.
-   // Reduce ALL visible flame pass alpha to exactly 60% without modifying the
+   // Reduce ALL visible flame pass alpha to 40% opacity (60% transparency) without modifying the
    // signed source module, its geometry, timing, or gameplay collision.
    fx.group.traverse(node=>{
     const layer=node.userData?.animeFlameLayer;
@@ -174,9 +174,9 @@ export class NumberedWeaponEffects {
     const m=node.material;
     if(!m?.isShaderMaterial||m.userData.templeFireOpacity)return;
     if(!m.fragmentShader.includes('gl_FragColor'))return;
-    m.fragmentShader=m.fragmentShader.replace(/}\s*$/, '  gl_FragColor.a *= 0.6;\n}');
+    m.fragmentShader=m.fragmentShader.replace(/}\s*$/, '  gl_FragColor.a *= 0.4;\n}');
     m.transparent=true;m.depthWrite=false;m.needsUpdate=true;
-    m.userData.templeFireOpacity=.6;
+    m.userData.templeFireOpacity=.4;
    });
   }
   this.scene.add(fx.group);
