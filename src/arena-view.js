@@ -104,7 +104,7 @@ export class TempleArena{
    // Read the player's actual PNG/video/GLB from the Temple Worker before PLACE.
    if(!this.buildPreview||this.buildPreview.userData.kind!=='art-bomb')return;
    const group=this.buildPreview,record={id:'pending-upload-'+crypto.randomUUID(),title:upload.title||'Uploaded artwork',mediaId:upload.mediaId,
-    type:upload.mediaType?.startsWith('image/')?'image':upload.mediaType?.startsWith('video/')?'video':'model',mime:upload.mediaType,position:[0,0,0]};
+    type:upload.mediaType?.startsWith('image/')?'image':upload.mediaType?.startsWith('video/')?'video':'model',mime:upload.mediaType,position:[0,0,0],appearance:{labelBackground:upload.labelBackground||'#000000'}};
    const root=await loadCustomArtwork(this,record,base);
    if(this.buildPreview!==group){disposeArtworkRoot(root);return;}
    group.userData.previewTexture?.dispose();delete group.userData.previewTexture;
