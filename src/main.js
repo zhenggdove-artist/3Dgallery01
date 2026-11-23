@@ -29,6 +29,7 @@ import {canBuildAt,canPlaceArtworkAt} from './shared/temple-rules.js';
 import {itemById,ITEMS,EQUIPPABLE_SLOTS} from './shared/catalog.js';
 import {warmItemPreviews,setOutfitPreviewCharacter} from './item-preview.js';
 import {ArtworkEditor} from './artwork-editor.js';
+import {applyArtworkAppearance} from './artwork-surface.js';
 import {PlatformDeleteEditor} from './platform-delete-editor.js';
 import {uploadMedia} from './media-ui.js';
 
@@ -446,6 +447,31 @@ ui.addEventListener('gm-artwork-select',async event=>{
  artEditor.select(root);
 });
 ui.addEventListener('art-bomb-resize',event=>sendAction('resize-art-bomb',event.detail));
+
+ui.addEventListener('art-bomb-appearance-preview',event=>{
+ const {id,appearance}=event.detail;
+ const record=(world?.customArtworks||[]).find(a=>a.id===id&&a.bomb&&a.owner===self?.key);
+ if(!record)return; // Other players' labels are never previewed or overridden.
+ const root=arena.artworks.get(id);if(!root)return;
+ root.userData.previewAppearance={...appearance};
+ applyArtworkAppearance(root,world?.artworkLayout?.[id]?.appearance);
+});
+ui.addEventListener('apply-my-label-style',async event=>{
+ const result=await sendAction('apply-my-artwork-label-style',event.detail);
+ if(result?.updatedCount)ui.toast('已將名稱樣式套用至自己上傳的 '+result.updatedCount+' 件作品');
+});
+ui.addEventListener('panel',event=>{
+ if(event.detail?.open)return;
+ // A dismissed player editor must roll back only its local unsaved previews.
+ // Authoritatively saved colour is restored by the latest room snapshot.
+ for(const root of arena.artworks.values()){
+  if(root.userData.previewAppearance){
+   delete root.userData.previewAppearance;
+   applyArtworkAppearance(root,world?.artworkLayout?.[root.userData.platformId]?.appearance);
+  }
+ }
+});
+
 ui.addEventListener('art-bomb-appearance',async event=>{
  const saved=await sendAction('update-art-bomb-appearance',event.detail);
  if(!saved?.artworkLayout)return;
