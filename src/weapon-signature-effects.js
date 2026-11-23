@@ -499,7 +499,7 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
    if(bursts){
     const scratch=group.userData.goldfishBubbleScratch;
     scratch.rotation.copy(group.quaternion).invert();
-    const inverseScale=1/Math.max(.001,group.scale.x);
+    const inverseScale=1/Math.max(.001,Math.min(1,age*6,(totalDuration-age)*7));
     for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
      const elapsed=age-bursts.births[i],alive=elapsed>=0&&elapsed<.78;
      const base=i*3;
