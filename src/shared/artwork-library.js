@@ -1,8 +1,24 @@
 import {PLATFORMS,ARENA_RADIUS} from './arena.js';
-export const APPEARANCE_DEFAULTS={depth:.1,brightness:1,contrast:1,saturation:1,blackPoint:0,tint:'#ffffff',labelBackground:'#000000'};
-export const PNG_APPEARANCE_DEFAULTS=Object.freeze({depth:0,brightness:.4,contrast:1,saturation:1.43,blackPoint:.1,tint:'#ffffff',labelBackground:'#000000'});
+export const LABEL_STYLE_DEFAULTS=Object.freeze({labelBackground:'#000000',labelColor:'#ffffff',labelFontSize:44,labelWidth:3.5,labelHeight:.492,labelOffsetX:0,labelOffsetY:0});
+export const LABEL_STYLE_BATCH_FIELDS=Object.freeze(['labelBackground','labelColor','labelFontSize','labelWidth','labelHeight']);
+export const APPEARANCE_DEFAULTS={depth:.1,brightness:1,contrast:1,saturation:1,blackPoint:0,tint:'#ffffff',...LABEL_STYLE_DEFAULTS};
+export const PNG_APPEARANCE_DEFAULTS=Object.freeze({depth:0,brightness:.4,contrast:1,saturation:1.43,blackPoint:.1,tint:'#ffffff',...LABEL_STYLE_DEFAULTS});
 export const artworkAppearanceDefaults=record=>record?.format==='png'||record?.mime==='image/png'||record?.type==='image/png'||record?.mimeType==='image/png'?PNG_APPEARANCE_DEFAULTS:APPEARANCE_DEFAULTS;
-export function validateAppearance(value={},record=null){const out={...artworkAppearanceDefaults(record),...value};for(const [key,min,max] of [['depth',0,2],['brightness',0,3],['contrast',0,3],['saturation',0,3],['blackPoint',0,.95]])if(!Number.isFinite(out[key])||out[key]<min||out[key]>max)return null;if(!/^#[0-9a-f]{6}$/i.test(out.tint)||!/^#[0-9a-f]{6}$/i.test(out.labelBackground))return null;return out;}
+export function validateAppearance(value={},record=null){
+ if(!value||typeof value!=='object'||Array.isArray(value))return null;
+ const out={...artworkAppearanceDefaults(record),...value};
+ for(const [key,min,max] of [
+  ['depth',0,2],['brightness',0,3],['contrast',0,3],['saturation',0,3],
+  ['blackPoint',0,.95],['labelFontSize',18,120],['labelWidth',.5,12],
+  ['labelHeight',.18,4],['labelOffsetX',-10,10],['labelOffsetY',-10,10]
+ ])if(typeof out[key]!=='number'||!Number.isFinite(out[key])||out[key]<min||out[key]>max)return null;
+ for(const key of ['tint','labelBackground','labelColor'])
+  if(!/^#[0-9a-f]{6}$/i.test(out[key]))return null;
+ return out;
+}
+export function labelStyleOnly(appearance){
+ return Object.fromEntries(LABEL_STYLE_BATCH_FIELDS.map(key=>[key,appearance[key]]));
+}
 // Interactive pickup radius grows with a GM-scaled artwork's physical footprint.
 // Client and server share the same reach contract; the server adds only
 // a 1m synchronization allowance to the horizontal distance;
