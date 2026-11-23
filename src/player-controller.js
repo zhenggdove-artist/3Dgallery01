@@ -8,12 +8,12 @@ import {vortexSpinPoint,VORTEX_SPIN_MS} from './shared/vortex-flight.js';
 export const RELETTER_MOVEMENT=Object.freeze({speed:8.64,acceleration:6,deceleration:12,gravity:25,jump:10});
 export class PlayerController{
   constructor({camera,canvas,arena,root,role='fighter',seat=0,mobileStick}){
-    Object.assign(this,{camera,canvas,arena,root,role,seat});this.enabled=false;this.keys=new Set();this.yaw=0;this.pitch=.2;this.distance=7;this.speed=0;this.velocityY=0;this.grounded=true;this.animation='idle';this.move=new THREE.Vector2();this.jumpVelocity=new THREE.Vector3();this.direction=new THREE.Vector3();this.target=new THREE.Vector3();this.drag=null;this.pointers=new Map();this.followTarget=null;this.stats={speed:1,jump:1,gravity:1};this.castMoveFactor=1;this.status={};this.whipPull=null;this.vortexSpin=null;
+    Object.assign(this,{camera,canvas,arena,root,role,seat});this.enabled=false;this.keys=new Set();this.yaw=0;this.pitch=.2;this.distance=7;this.speed=0;this.velocityY=0;this.grounded=true;this.animation='idle';this.move=new THREE.Vector2();this.jumpVelocity=new THREE.Vector3();this.direction=new THREE.Vector3();this.target=new THREE.Vector3();this.drag=null;this.pinch=null;this.pointers=new Map();this.followTarget=null;this.stats={speed:1,jump:1,gravity:1};this.castMoveFactor=1;this.status={};this.whipPull=null;this.vortexSpin=null;
     root.position.fromArray(PLAYER_SPAWNS[seat]||PLAYER_SPAWNS[0]);root.position.y=arena.groundHeight(root.position.x,root.position.z);this.bind(mobileStick);this.updateCamera(1);
   }
   bind(stick){
     addEventListener('keydown',e=>{if(!this.enabled||/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName))return;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();this.keys.add(e.code);if(e.code==='Space'&&!e.repeat)this.jump();});
-    addEventListener('keyup',e=>this.keys.delete(e.code));addEventListener('blur',()=>{this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();this.channelAiming=false;this.channelMouseLast=null;});
+    addEventListener('keyup',e=>this.keys.delete(e.code));addEventListener('blur',()=>{this.keys.clear();this.move.set(0,0);this.drag=null;this.pinch=null;this.pointers.clear();this.channelAiming=false;this.channelMouseLast=null;});
      // A-button pointer capture delivers mouse movement to the document,
      // NOT to the game canvas. Listen in CAPTURE phase even when LMB is held.
      // Only one camera handler runs; canvas drag is suppressed while channeling.
@@ -30,14 +30,60 @@ export class PlayerController{
       this.yaw-=dx/innerWidth*4;
       this.pitch=THREE.MathUtils.clamp(this.pitch+dy/innerHeight*2,-1.15,1.4);
      },true);
-    this.canvas.addEventListener('pointerdown',e=>{if(!this.enabled||this.status.freeze||e.button>0)return;this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});this.canvas.setPointerCapture(e.pointerId);this.drag={id:e.pointerId,x:e.clientX,y:e.clientY,yaw:this.yaw,pitch:this.pitch};if(this.pointers.size===2){const [a,b]=[...this.pointers.values()];this.pinch={span:Math.hypot(a.x-b.x,a.y-b.y),distance:this.distance};}});
-    this.canvas.addEventListener('pointermove',e=>{if(!this.enabled||this.status.freeze||!this.pointers.has(e.pointerId))return;this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(this.pointers.size===2){const [a,b]=[...this.pointers.values()];this.distance=THREE.MathUtils.clamp(this.pinch.distance*this.pinch.span/Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),3,50);return;}if(this.drag?.id!==e.pointerId)return;if(this.channelAiming&&e.pointerType==='mouse')return;this.yaw=this.drag.yaw-(e.clientX-this.drag.x)/innerWidth*4;this.pitch=THREE.MathUtils.clamp(this.drag.pitch+(e.clientY-this.drag.y)/innerHeight*2,-1.15,1.4);});
-    const release=e=>{this.pointers.delete(e.pointerId);this.drag=null;};this.canvas.addEventListener('pointerup',release);this.canvas.addEventListener('pointercancel',release);
+    // A gesture belongs to the pointers that actually started on the canvas.
+    // Losing capture or lifting either finger must retire the pinch immediately;
+    // otherwise a subsequent SINGLE finger can inherit a stale zoom gesture.
+    this.canvas.style.touchAction='none';
+    const rebuildCameraGesture=()=>{
+      const entries=[...this.pointers];
+      const touches=entries.filter(([,point])=>point.type==='touch');
+      if(touches.length===2&&entries.length===2){
+        const ids=touches.map(([id])=>id);
+        if(!this.pinch||ids.some(id=>!this.pinch.ids.includes(id))){
+          const [a,b]=touches.map(([,point])=>point);
+          this.pinch={ids,span:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),distance:this.distance};
+        }
+        this.drag=null;
+        return;
+      }
+      this.pinch=null;
+      const [id,point]=entries[0]||[];
+      this.drag=point?{id,x:point.x,y:point.y,yaw:this.yaw,pitch:this.pitch}:null;
+    };
+    this.canvas.addEventListener('pointerdown',e=>{
+      if(!this.enabled||this.status.freeze||e.button>0)return;
+      if(this.pointers.has(e.pointerId)||(e.pointerType==='touch'&&this.pointers.size>=2))return;
+      this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
+      try{this.canvas.setPointerCapture(e.pointerId);}catch{}
+      rebuildCameraGesture();
+    });
+    this.canvas.addEventListener('pointermove',e=>{
+      if(!this.enabled||this.status.freeze||!this.pointers.has(e.pointerId))return;
+      const point=this.pointers.get(e.pointerId);
+      point.x=e.clientX;point.y=e.clientY;
+      if(this.pinch&&this.pinch.ids.every(id=>this.pointers.has(id))){
+        const [a,b]=this.pinch.ids.map(id=>this.pointers.get(id));
+        this.distance=THREE.MathUtils.clamp(
+          this.pinch.distance*this.pinch.span/Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),3,50);
+        return;
+      }
+      // One active touch is ALWAYS an orbit, never a zoom.
+      if(this.pointers.size!==1||this.drag?.id!==e.pointerId)return;
+      if(this.channelAiming&&e.pointerType==='mouse')return;
+      this.yaw=this.drag.yaw-(e.clientX-this.drag.x)/innerWidth*4;
+      this.pitch=THREE.MathUtils.clamp(this.drag.pitch+(e.clientY-this.drag.y)/innerHeight*2,-1.15,1.4);
+    });
+    const release=e=>{
+      if(!this.pointers.delete(e.pointerId))return;
+      rebuildCameraGesture();
+    };
+    for(const event of ['pointerup','pointercancel','lostpointercapture'])
+      this.canvas.addEventListener(event,release);
     this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
     if(stick){let pointer=null;const knob=stick.firstElementChild;const move=e=>{if(e.pointerId!==pointer)return;const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,radius=Math.max(20,(r.width-knob.offsetWidth)/2-4),f=radius/Math.max(radius,Math.hypot(x,y));this.move.set(x*f/radius,y*f/radius);knob.style.transform=`translate(${x*f}px,${y*f}px)`;};stick.onpointerdown=e=>{e.preventDefault();if(pointer!==null)return;pointer=e.pointerId;stick.setPointerCapture(pointer);move(e);};stick.onpointermove=move;stick.onpointerup=stick.onpointercancel=stick.onlostpointercapture=e=>{if(e.pointerId!==pointer)return;pointer=null;this.move.set(0,0);knob.style.transform='';};}
   }
   jump(){if(this.awaitingSpawn||this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;this.onJump?.();return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
-  setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();}}
+  setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pinch=null;this.pointers.clear();}}
   setRole(role){this.role=role;this.root.visible=role==='fighter';}
   setFollowTarget(root=null){this.followTarget=root;}
   teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;this.vortexSpin=null;}
