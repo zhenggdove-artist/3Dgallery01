@@ -131,7 +131,7 @@ export function migrateWorld(raw,now=Date.now()){
 
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
-    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
+    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,starterWeaponId:STARTER_LOADOUT.weapon,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
     gmAllItemsGranted:!!admin,gmKnownCustomWingIds:[],collectorSoldArtworks:{},
     fusion:{},wingTrialDraws:0,wingPaidDraws:0,wingDesignCredits:0,createdAt:now,updatedAt:now,lastAttackAt:0};
 }
@@ -150,6 +150,11 @@ function reviveProfile(profile,now,seatIndex=0){
 
 export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   const current=world.profiles[key]??=createProfile(key,name,color,now,admin);
+  // Existing players retain their previous White Cat starter identity and
+  // any personally chosen weapon. Only NEW profiles begin with green saber-2.
+  // The per-profile starter ID prevents a free saber from being repeatedly
+  // inserted into old inventories on every join.
+  current.starterWeaponId??='white-cat';
   if(name)current.name=String(name).slice(0,24);if(validColor(color))current.color=color;current.admin=!!admin;current.updatedAt=now;
   current.wallet=Number.isFinite(current.wallet)?Math.max(0,Math.floor(current.wallet)):0;
   current.level=Math.max(1,Math.floor(current.level||1));current.xp=Math.max(0,Math.floor(current.xp||0));
@@ -158,7 +163,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.wingDesignCredits=Number.isSafeInteger(current.wingDesignCredits)?Math.max(0,Math.min(1000,current.wingDesignCredits)):0;
   if(!current.collectorSoldArtworks||typeof current.collectorSoldArtworks!=='object'||Array.isArray(current.collectorSoldArtworks))
    current.collectorSoldArtworks={};
-  current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
+  current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[current.starterWeaponId];
   // Preserve chosen item even when its stack is empty: it will be shown
   // with a red depleted overlay and automatically reactivate after restock.
   const savedQuickSlots=Array.isArray(current.quickSlots)?current.quickSlots:[];
@@ -190,16 +195,16 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    }
    current.gmKnownCustomWingIds=[...known];
   }
-  // Keep migrating old profiles to the SMG baseline, except after deliberate
-  // fusion consumption. This also repairs older missing/corrupt inventories.
-  if(!current.inventory.includes(STARTER_LOADOUT.weapon)&&!current.spentStarterWeapon)
-   current.inventory.unshift(STARTER_LOADOUT.weapon);
-  current.equipment??={...STARTER_LOADOUT};
+  // Repair a player's own original starter weapon unless it was deliberately
+  // fused away. Never convert or overwrite a returning player's saved choice.
+  if(!current.inventory.includes(current.starterWeaponId)&&!current.spentStarterWeapon)
+   current.inventory.unshift(current.starterWeaponId);
+  current.equipment??={...STARTER_LOADOUT,weapon:current.starterWeaponId};
    if(current.admin&&!current.gmWingsInitialized)current.gmWingsInitialized=true;
    if(current.admin&&typeof current.gmInvincible!=='boolean')current.gmInvincible=true;
    // Preserve legacy selected weapons while the inventory migration runs.
    // Fusion itself clears the equipped material when the final copy is spent.
-   if(current.equipment.weapon&&!itemById(current.equipment.weapon))current.equipment.weapon=STARTER_LOADOUT.weapon;
+   if(current.equipment.weapon&&!itemById(current.equipment.weapon))current.equipment.weapon=current.starterWeaponId;
    // Remove all old wing IDs from BAG and clear obsolete equipped slots.
    if(current.equipment.wings&&!itemById(current.equipment.wings))
     current.equipment.wings=null;
@@ -804,7 +809,7 @@ function useConsumable(world,profile,actor,body,now){
  return {notice:`Restored ${restored} HP · ${item.name}`,
   healed:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
 }
-function sell(world,profile,body){const item=itemById(body.itemId),index=profile.inventory.indexOf(body.itemId);if(!item||index<0)return {error:'Item is not owned'};if(item.id===STARTER_LOADOUT.weapon||Object.values(profile.equipment).includes(item.id))return {error:'Unequip this item before selling'};removeInventoryInstance(profile,index);earn(profile,item.sell||Math.floor((item.price||0)*.25),world);return {notice:`Sold ${item.name} · +${item.sell||0} coins`};}
+function sell(world,profile,body){const item=itemById(body.itemId),index=profile.inventory.indexOf(body.itemId);if(!item||index<0)return {error:'Item is not owned'};if(item.id===(profile.starterWeaponId||STARTER_LOADOUT.weapon)||Object.values(profile.equipment).includes(item.id))return {error:'Unequip this item before selling'};removeInventoryInstance(profile,index);earn(profile,item.sell||Math.floor((item.price||0)*.25),world);return {notice:`Sold ${item.name} · +${item.sell||0} coins`};}
 function equip(profile,body){const item=itemById(body.itemId);if(!item||!profile.inventory.includes(item.id)||!EQUIPPABLE_SLOTS.includes(item.slot))return {error:'Item is not owned'};const index=Number.isInteger(body.inventoryIndex)?body.inventoryIndex:profile.inventory.indexOf(item.id);if(profile.inventory[index]!==item.id)return {error:'Inventory changed: choose the equipment again'};selectEquipmentInstance(profile,item.slot,index);return {notice:`Equipped ${item.name}`};}
 
 function validPlatformTransform(position,radius,height){
