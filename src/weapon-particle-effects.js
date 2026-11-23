@@ -45,7 +45,7 @@ function recipePalette(recipe,item){
  return (palettes[recipe]||[item?.color||'#b1e9ff','#ffffff','#a9d1ff']).map(v=>new THREE.Color(v));
 }
 function modeFor(recipe){
- if(recipe==='rainbow-spiral')return 7;
+ if(recipe==='rainbow-spiral')return 8;
  if(recipe==='rainbow')return 1;
  if(recipe==='flies')return 2;
  if(recipe==='food')return 3;
@@ -134,7 +134,7 @@ void main(){
      (row*spreadY*front+sin(theta)*bulletRadius)*normalization,
      front*normalization-w*mix(.24,.5,charged));
    alpha*=1.-smoothstep(.82,1.,t);
- }else if(uMode<7.5){
+ }else if(uMode>7.5){
    // Fused Black Cat shoulder ultimate: seven-colour spiral with a moving
    // high-energy core. The visual follows the SAME server-randomised ray.
    float front=uReach*min(1.,t*2.6);
