@@ -54,7 +54,17 @@ export class ReletterPresentation{
      if(d.wings)disposeGardenModel(d.wings);d.wings=wing?attachWings(THREE,d.model,wing):null;
     }
     if(next[5]!==last[5]){
-     if(d.shield)disposeVisual(d.shield);d.shield=null;const shield=itemById(equipment.shield);if(shield){const mat=new THREE.ShaderMaterial({uniforms:{tint:{value:new THREE.Color(shield.color)},pulse:{value:1},hit:{value:0}},vertexShader:'varying vec3 n;varying vec3 v;void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-p.xyz);gl_Position=projectionMatrix*p;}',fragmentShader:'uniform vec3 tint;uniform float pulse;uniform float hit;varying vec3 n;varying vec3 v;void main(){float rim=pow(1.-abs(dot(normalize(n),normalize(v))),2.5);vec3 blue=mix(tint,vec3(1.,.035,.075),hit);float alpha=clamp((.04+rim*.55)*pulse+hit*(.70+rim*.30),0.,.96);gl_FragColor=vec4(blue,alpha);}',transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});d.shield=new THREE.Mesh(new THREE.SphereGeometry(1.35,32,20),mat);d.shield.position.y=1;root.add(d.shield);}
+     if(d.shield)disposeVisual(d.shield);d.shield=null;const shield=itemById(equipment.shield);if(shield){const mat=new THREE.ShaderMaterial({uniforms:{tint:{value:new THREE.Color(shield.color)},pulse:{value:1},hit:{value:0}},vertexShader:'varying vec3 n;varying vec3 v;void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-p.xyz);gl_Position=projectionMatrix*p;}',fragmentShader:'uniform vec3 tint;uniform float pulse;uniform float hit;varying vec3 n;varying vec3 v;void main(){float rim=pow(1.-abs(dot(normalize(n),normalize(v))),2.5);vec3 blue=mix(tint,vec3(1.,.035,.075),hit);float alpha=clamp((.04+rim*.55)*pulse+hit*(.70+rim*.30),0.,.96);gl_FragColor=vec4(blue,alpha);}',transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});d.shield=new THREE.Mesh(new THREE.SphereGeometry(1.35,32,20),mat);d.shield.position.y=1;
+      // Alpha-blended, near-opaque scarlet hit shell. Unlike the original
+      // additive tint, this remains conspicuously red against bright scenery.
+      // Share the sphere geometry: one extra draw call while shields exist.
+      const redFlash=new THREE.Mesh(d.shield.geometry,new THREE.MeshBasicMaterial({
+       color:'#ff0030',transparent:true,opacity:0,depthWrite:false,
+       blending:THREE.NormalBlending,side:THREE.DoubleSide,toneMapped:false
+      }));
+      redFlash.scale.setScalar(1.025);redFlash.renderOrder=2;
+      d.shield.add(redFlash);d.shield.userData.redFlash=redFlash;
+      root.add(d.shield);}
     }
     if(!d.bones){d.bones=new Map();d.model.traverse(o=>{if(o.isBone)d.bones.set(o.name.replace(/[^a-z0-9]/gi,'').replace(/^mixamorig\d*/,''),o);});}
     d.equipmentVisualSlots=next;d.equipmentSignature=JSON.stringify(next);
@@ -91,7 +101,19 @@ export class ReletterPresentation{
          const casting=!!(d.staffCasting||performance.now()<(d.staffCastingUntil||0));
          d.staffRaise=advanceStaffRaise(d.staffRaise||0,casting,dt);
          if(d.staffRaise>0)poseOverheadStaff(root,d.blade,d.bones,this.restore,d.staffRaise);
-        }else d.staffRaise=0;if(d.blade.userData.exotic){if(camera)faceOddWeapon(THREE,d.blade,camera);animateOddWeapon(d.blade,time,d.attack?Math.sin(d.attack.age/d.attack.duration*Math.PI):0);}if(d.attack&&(['planter','palm'].includes(d.attack.data.family)||d.attack.combo===6&&d.attack.data.family==='saber')){for(const name of ['LeftForeArm','LeftArm']){const bone=d.bones?.get(name);if(bone)this.restore.push([bone,'quaternion',bone.quaternion.clone()]);}supportOffhand(d.model,d.blade.localToWorld(new THREE.Vector3(0,d.attack.data.family==='planter'?.25:.18,.02)),Math.sin(Math.min(1,d.attack.age/meleeDuration(d.attack.data.family,d.attack.combo))*Math.PI)*.8);}}if(d.shield){const flash=Math.max(0,Math.min(1,((d.shieldFlashUntil||0)-performance.now())/900));d.shield.material.uniforms.hit.value=flash*(.65+.35*Math.abs(Math.sin(time*28)));d.shield.material.uniforms.pulse.value=.8+Math.sin(time*2)*.2+flash*.75;}if(d.wings)for(let i=0;i<Math.min(2,d.wings.children.length);i++)d.wings.children[i].rotation.y=Math.sin(time*(d.current==='jump'||d.current==='fall'?11:2))* .24*(i?-1:1);
+        }else d.staffRaise=0;if(d.blade.userData.exotic){if(camera)faceOddWeapon(THREE,d.blade,camera);animateOddWeapon(d.blade,time,d.attack?Math.sin(d.attack.age/d.attack.duration*Math.PI):0);}if(d.attack&&(['planter','palm'].includes(d.attack.data.family)||d.attack.combo===6&&d.attack.data.family==='saber')){for(const name of ['LeftForeArm','LeftArm']){const bone=d.bones?.get(name);if(bone)this.restore.push([bone,'quaternion',bone.quaternion.clone()]);}supportOffhand(d.model,d.blade.localToWorld(new THREE.Vector3(0,d.attack.data.family==='planter'?.25:.18,.02)),Math.sin(Math.min(1,d.attack.age/meleeDuration(d.attack.data.family,d.attack.combo))*Math.PI)*.8);}}if(d.shield){
+       const remaining=(d.shieldFlashUntil||0)-performance.now();
+       const flashing=remaining>0;
+       const elapsed=1300-Math.max(0,remaining);
+       const blink=.5+.5*Math.sin(elapsed*Math.PI*10/1000);
+       d.shield.material.uniforms.hit.value=flashing?1:0;
+       d.shield.material.uniforms.pulse.value=.8+Math.sin(time*2)*.2+(flashing?1.2:0);
+       const red=d.shield.userData.redFlash;
+       if(red){
+        red.visible=flashing;
+        red.material.opacity=flashing?.4+.59*blink:0;
+       }
+      }if(d.wings)for(let i=0;i<Math.min(2,d.wings.children.length);i++)d.wings.children[i].rotation.y=Math.sin(time*(d.current==='jump'||d.current==='fall'?11:2))* .24*(i?-1:1);
       if(d.wings)animateEpicDust(d.wings,time);
     }
     this.vfx.update(dt,camera,world);
