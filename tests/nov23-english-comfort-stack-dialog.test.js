@@ -34,5 +34,5 @@ test('slot picker is explicit and badges render upper-left',()=>{
 });
 test('purchase success is authoritative',()=>{
  assert.match(read('src/shared/temple-rules.js'),/notice:`PURCHASE SUCCESSFUL ·/);
- assert.match(read('src/main.js'),/if\(result\.notice\)ui\.toast\(result\.notice\)/);
+ assert.match(read('src/main.js'),/if\(result\.purchased\)/);
 });
