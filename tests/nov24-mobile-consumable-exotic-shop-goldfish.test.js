@@ -79,3 +79,10 @@ test('goldfish's homing school never selects or hits its own caster',()=>{
  assert.equal(p.hp,before,'shooter never loses HP to their own fish');
  assert.equal((world.damageEvents||[]).some(event=>event.target===owner.key&&event.kind==='giant-goldfish'),false);
 });
+
+test('the rainbow spiral shader mode does not replace every unrelated spell',()=>{
+ const particles=readFileSync(new URL('../src/weapon-particle-effects.js',import.meta.url),'utf8');
+ assert.match(particles,/if\(recipe==='rainbow-spiral'\)return 8/);
+ assert.match(particles,/else if\(uMode>7\.5\)/);
+ assert.match(particles,/item\.id==='black-cat'&&charged&&data\.piercing/);
+});
