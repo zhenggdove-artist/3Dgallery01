@@ -10,6 +10,38 @@ export const RARITIES = Object.freeze([
 ]);
 
 const TIER_PRICES = [240,620,1450,3300,7600];
+// Weapon quality is WHITE → GREEN → BLUE → GOLD → PURPLE.
+// The legacy RARITIES array remains intact for non-weapon content.
+export const SHOP_WEAPON_GRADES=Object.freeze([
+ {rank:1,label:'White',rarity:'common',color:'#d7d2c6'},
+ {rank:2,label:'Green',rarity:'uncommon',color:'#76d59a'},
+ {rank:3,label:'Blue',rarity:'rare',color:'#71aef4'},
+ {rank:4,label:'Gold',rarity:'relic',color:'#f1cc62'},
+ {rank:5,label:'Purple',rarity:'epic',color:'#bd7bea'}
+]);
+const SHOP_NATIVE_FAMILIES=new Set(['tide','frost','ember','storm','prism','bloom','nova','saber','whip','swatter','pan','planter','palm']);
+export function shopWeaponGroupKey(item){
+ if(item?.slot!=='weapon')return item?.id||'';
+ const match=/^([a-z]+)-([1-5])$/.exec(item.id);
+ return 'weapon:'+(match&&SHOP_NATIVE_FAMILIES.has(match[1])?match[1]:item.id);
+}
+export function shopWeaponGroups(items){
+ const groups=new Map();
+ for(const item of items||[]){
+  const key=shopWeaponGroupKey(item);
+  if(!groups.has(key))groups.set(key,{key,variants:[],base:item});
+  const group=groups.get(key);
+  if(item.slot!=='weapon'){group.variants.push(item);continue;}
+  const native=/^([a-z]+)-([1-5])$/.exec(item.id);
+  if(native&&SHOP_NATIVE_FAMILIES.has(native[1])){
+   group.variants.push(shopWeaponVariant(item,Number(native[2])));
+   if(Number(native[2])===1)group.base=item;
+  }else{
+   group.variants=SHOP_EXOTIC_TIERS.map(tier=>shopWeaponVariant(item,tier));
+  }
+ }
+ return [...groups.values()].map(group=>({...group,variants:group.variants.sort((a,b)=>(a.shopTier||0)-(b.shopTier||0))}));
+}
 // Mystery is limited to five-quality whip/pan/swatter sets and the giraffe.
 // Family labels alone are insufficient: many unrelated exotics are 'pan'.
 export const isMysteryWeapon=item=>!!item&&item.slot==='weapon'&&
@@ -37,30 +69,36 @@ export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(o
   // Keeping the sniper's premium price does not require keeping it in Mystery.
   const premiumPrice=basePrice*(mysteryWeapon||original.id==='black-cat'?5:1);
   const price=original.id==='giraffe'?19999:premiumPrice;
-  return Object.freeze({...original,price,mysteryWeapon,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*(original.id==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*(original.id==='white-cat'?.5:1),cooldown:original.id==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
+  return Object.freeze({...original,price,mysteryWeapon,sell:Math.floor(price*.25),rarity:original.slot==='weapon'?SHOP_WEAPON_GRADES[tier-1].rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*(original.id==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*(original.id==='white-cat'?.5:1),cooldown:original.id==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
 }));
 export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'));
  // Exotic weapons must keep their stable canonical IDs: fusion records, held
  // 3D models and skill dispatch all refer to IDs like "telephone" directly.
  // The purchased quality belongs to the unique inventory instance, not its ID.
-export const SHOP_EXOTIC_TIERS=Object.freeze([1,2,3,4]);
+export const SHOP_EXOTIC_TIERS=Object.freeze([1,2,3,4,5]);
 const EXOTIC_QUALITY=Object.freeze([
   {price:.48,power:.64,reach:.84,tempo:1.18},
   {price:.72,power:.82,reach:.92,tempo:1.08},
   {price:1,power:1,reach:1,tempo:1},
-  {price:1.60,power:1.26,reach:1.12,tempo:.91}
+  {price:1.60,power:1.26,reach:1.12,tempo:.91},
+  {price:2.50,power:1.55,reach:1.22,tempo:.85}
 ]);
 export function shopWeaponVariant(item,tier=3){
   if(!item||item.slot!=='weapon')return item;
   const rank=Number(tier);
-  if(!Number.isInteger(rank)||rank<1||rank>4)return null;
+  if(!Number.isInteger(rank)||rank<1||rank>5)return null;
+  const grade=SHOP_WEAPON_GRADES[rank-1];
+  const match=/^([a-z]+)-([1-5])$/.exec(item.id);
+  const native=match&&SHOP_NATIVE_FAMILIES.has(match[1]);
+  // Real native rank (tide-1…5) already has authored stats and geometry.
+  // Do not apply a second rank multiplier to new shop purchases.
+  if(native&&item.tier===rank)return {...item,shopTier:rank,rarity:grade.rarity};
   const scale=EXOTIC_QUALITY[rank-1];
   const range=Number.isFinite(item.range)?+(item.range*scale.reach).toFixed(2):null;
   const chargedRange=Number.isFinite(item.chargedRange)?+(item.chargedRange*scale.reach).toFixed(2):null;
-  // Every shop weapon has four grades. Non-exotic rank IDs (tide-1…5)
-  // stay unchanged; each purchased instance carries a separate shopTier.
-  return {...item,shopTier:rank,tier:item.exotic?rank:item.tier,rarity:RARITIES[rank-1].id,
-   name:rank===3?item.name:`${RARITIES[rank-1].name} ${item.name}`,
+  // Legacy purchases with a non-native grade preserve their original item ID.
+  return {...item,shopTier:rank,tier:item.exotic?rank:item.tier,rarity:grade.rarity,
+   name:rank===3?item.name:`${grade.label} ${item.name}`,
    price:rank===3?item.price:Math.max(100,Math.ceil(item.price*scale.price/10)*10),
    ...(Number.isFinite(item.damage)?{damage:+(item.damage*scale.power).toFixed(3)}:{}),
    ...(Number.isFinite(item.chargeDamage)?{chargeDamage:+(item.chargeDamage*scale.power).toFixed(3)}:{}),
