@@ -17,7 +17,7 @@ test('shop groups only true tier variants; selected ID remains authoritative',()
  assert.match(src,/shopVariantChoice/);
  assert.match(src,/data-shop-variant/);
  assert.match(src,/variants\.find\(v=>v\.id===this\.shopVariantChoice\[key\]\)/);
- assert.match(src,/data-\$\{owned\?'equip':'buy'\}/);
+ assert.match(src,/data-buy=\"\$\{escape\(selected\.id\)\}\"/);
  assert.match(src,/SHOP_ITEMS/);
 });
 test('only real tide staff has a triple-width ultimate channel',()=>{
