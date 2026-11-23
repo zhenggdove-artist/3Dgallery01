@@ -187,7 +187,7 @@ function beginStaffChannel(){
 const writer=new WriteCinematic({scene,controller:()=>controller,arena,ui,send:sendAction,audio,bursts,upload:file=>uploadMedia(network,file)});
 const plantHover=bindPlantHover({canvas,camera,arena,controller:()=>controller,ui});
 ui.addEventListener('write-start',()=>writer.begin());
-const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>itemById(world?.profile?.equipment?.weapon),ui,attack:performAttack});
+const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>itemById(world?.profile?.equipment?.weapon),ui,attack:performAttack,canShoulderCharge:()=>hasBlackCatFusionUltimate()});
 const artEditor=new ArtworkEditor({scene,camera,canvas,arena,player:()=>localRoot,isGM:()=>!!self?.profile?.admin,ownerKey:()=>self?.key,send:sendAction,control:enabled=>{if(controller){controller.setEnabled(enabled&&!ui.panelName&&!wasDead);controller.cameraLocked=!!artEditor.mode&&artEditor.mode!=='follow';}},toast:text=>ui.toast(text)});
 const platformDelete=new PlatformDeleteEditor({canvas,camera,arena,ui,editor:artEditor,isGM:()=>!!self?.profile?.admin,send:sendAction,controller:()=>controller,cancelBuild:cancelBuildPlacement});
 const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>controller,
@@ -535,8 +535,9 @@ ui.addEventListener('quick-use',event=>{
 // On-screen A/Q is the sole interaction/throw control on desktop and mobile.
 // For firearms A ONLY switches
 // camera: standard > shoulder > sniper scope > standard; canvas tap fires.
-ui.addEventListener('attack-start',()=>{
+ui.addEventListener('attack-start',event=>{
  if(wallPainter.active||!controller?.enabled||self?.role!=='fighter')return;
+ const shoulderMouse=event.detail?.origin==='shoulder-mouse';
  if(coarse&&buildPlacement){confirmBuildPlacement();return;}
  // A held artwork overrides the currently equipped firearm/camera mode.
  // Query the live world as holdingArt can lag behind a pickup response.
@@ -557,8 +558,8 @@ ui.addEventListener('attack-start',()=>{
  // A tap picks up nearby items; holding must still charge any weapon except unscoped Black Cat.
  // For first-person guns a tap cycles the camera, while a hold charges.
  pendingAInteraction=null;
- if(!artworkThrow.started){
-  const nearbyArt=arena.nearest(controller.root.position.toArray());
+ if(!artworkThrow.started&&!shoulderMouse){
+   const nearbyArt=arena.nearest(controller.root.position.toArray());
   if(nearbyArt?.type==='artwork'||['coin','drop'].includes(nearbyArt?.type))
    pendingAInteraction=nearbyArt;
  }
@@ -566,8 +567,9 @@ ui.addEventListener('attack-start',()=>{
  attackHoldStarted=performance.now();
  chargeStarted=null;chargeRequest=null;nextChargeRetryAt=0;
  clearChargeDelay();
- chargeDelayTimer=setTimeout(()=>{chargeDelayTimer=null;startHeldCharge();},STAFF_TAP_MAX_MS);
- if(isChannelStaff(weapon)&&localRoot)localRoot.userData.staffCastingUntil=attackHoldStarted+1800;
+ if(shoulderMouse)startHeldCharge();
+  else chargeDelayTimer=setTimeout(()=>{chargeDelayTimer=null;startHeldCharge();},STAFF_TAP_MAX_MS);
+  if(isChannelStaff(weapon)&&localRoot)localRoot.userData.staffCastingUntil=attackHoldStarted+1800;
 });
 ui.addEventListener('attack-release',async()=>{
  // This check must precede gun handling. The initial SMG previously left

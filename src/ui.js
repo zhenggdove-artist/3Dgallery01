@@ -42,7 +42,11 @@ export class TempleUI extends EventTarget{
     const quickUse=event=>{
       const button=event.target.closest?.('[data-quick-use]');
       if(!button||button.disabled||this.panelName||this.self?.role!=='fighter')return;
-      this.emit('quick-use',{slot:Number(button.dataset.quickUse)});
+      const slot=Number(button.dataset.quickUse),now=performance.now();
+       this.lastQuickUseAt??=new Map();
+       if(now-(this.lastQuickUseAt.get(slot)??-Infinity)<140)return;
+       this.lastQuickUseAt.set(slot,now);
+       this.emit('quick-use',{slot});
     };
     // Dispatch on pointer DOWN, independently of the held left-thumb joystick.
     // iOS may suppress the later synthetic click during simultaneous touches.
@@ -53,8 +57,15 @@ export class TempleUI extends EventTarget{
       event.preventDefault();event.stopPropagation();
       quickUse(event);
     },{passive:false});
-    // Keyboard / accessibility activation has no preceding pointerdown.
-    hotbar?.addEventListener('click',event=>{
+    // iOS sometimes suppresses pointerdown on a second finger while moving.
+     hotbar?.addEventListener('touchstart',event=>{
+       const button=event.target.closest?.('[data-quick-use]');
+       if(!button||button.disabled)return;
+       event.preventDefault();event.stopPropagation();
+       quickUse(event);
+     },{capture:true,passive:false});
+     // Keyboard / accessibility activation has no preceding pointerdown.
+     hotbar?.addEventListener('click',event=>{
       if(event.detail===0)quickUse(event);
     });
     this.content.addEventListener('input',event=>{

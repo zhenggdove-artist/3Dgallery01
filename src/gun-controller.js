@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {weaponMuzzle} from './weapon-muzzle.js';
 import {SNIPER_RANGE} from './shared/combat-balance.js';
 import {crosshairNdc} from './aiming.js';
+import {STAFF_TAP_MAX_MS} from './shared/weapon-abilities.js';
 
 // CSS uses a transparent 35vmin-radius circular sniper viewport. Touching
 // the opaque mask exits on mobile; desktop mouse clicks always shoot.
@@ -17,8 +18,8 @@ export function shouldDismissScopePointer(pointerType,x,y,width,height){
 
 // RELETTER gun-additions: shoulder / sniper scope, original sensitivity and FOV.
 export class GunController {
-  constructor({canvas,camera,controller,weapon,ui,attack}) {
-    Object.assign(this,{canvas,camera,controller,weapon,ui,attack});this.mode=0;this.held=false;this.nextShot=0;this.recoilOffset=0;this.recoilAmount=0;this.lastKick=-Infinity;
+  constructor({canvas,camera,controller,weapon,ui,attack,canShoulderCharge=()=>false}) {
+    Object.assign(this,{canvas,camera,controller,weapon,ui,attack,canShoulderCharge});this.mode=0;this.held=false;this.nextShot=0;this.recoilOffset=0;this.recoilAmount=0;this.lastKick=-Infinity;
     this.overlay=document.createElement('div');this.overlay.id='gun-overlay';this.overlay.hidden=true;
     this.overlay.innerHTML='<div class="gun-reticle"></div><div class="scope-lines"></div><button type="button" class="sniper-fire-button" aria-label="Fire sniper rifle">A</button><span>A/Q · CAMERA / TAP · FIRE / FUSED HOLD A · RAINBOW SPIRAL</span>';document.body.append(this.overlay);
     this.fireButton=this.overlay.querySelector('.sniper-fire-button');
@@ -36,6 +37,18 @@ export class GunController {
     addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)||ui.panelName)return;if(e.code==='KeyV'&&weapon()?.firstPerson&&!e.repeat){e.preventDefault();e.stopImmediatePropagation();this.cycle();}if(e.code==='Escape'&&this.mode){this.end();}},true);
     addEventListener('pointermove',e=>{if(!this.mode||controller()?.status?.freeze||(e.target!==canvas&&document.pointerLockElement!==canvas))return;e.stopImmediatePropagation();const c=controller(),s=.002*(this.mode===2?.3:1);const previous=this.lookPointer?.id===e.pointerId?this.lookPointer:null,dx=e.pointerType==='touch'?(previous?e.clientX-previous.x:0):e.movementX,dy=e.pointerType==='touch'?(previous?e.clientY-previous.y:0):e.movementY;if(e.pointerType==='touch')this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};c.yaw-=dx*s;c.pitch=THREE.MathUtils.clamp(c.pitch+dy*s,-1.1,1.2);},true);
     for(const type of ['pointerdown','pointerup','pointercancel'])addEventListener(type,e=>{
+      // A desktop mouse hold charges a fused Black Cat in shoulder view.
+      if(type!=='pointerdown'&&this.shoulderPress?.id===e.pointerId){
+        const press=this.shoulderPress;this.shoulderPress=null;
+        if(type==='pointerup'){
+          if(performance.now()-press.at<STAFF_TAP_MAX_MS){
+            this.ui.emit('attack-cancel');this.ui.emit('gun-fire');
+          }else this.ui.emit('attack-release');
+        }else this.ui.emit('attack-cancel');
+        this.lookPointer=null;this.held=false;
+        e.preventDefault();e.stopImmediatePropagation();
+        return;
+      }
       const button=e.target.closest?.('#attack-button');if(!weapon()?.firstPerson||!controller()?.enabled||controller()?.holdingArt)return;
       // A/Q cycles CAMERA only. Direct canvas taps shoot while aiming;
       // neither the first nor subsequent A presses may trigger gunfire.
@@ -51,13 +64,18 @@ export class GunController {
       if(!onCanvas&&!aimSurface)return;
       e.preventDefault();e.stopImmediatePropagation();
       if(type==='pointerdown'){this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};if(!document.pointerLockElement){try{canvas.setPointerCapture(e.pointerId);}catch{}}if(this.mode===2&&e.pointerType==='touch')return; // Touch inside the scope only aims; dedicated FIRE is the sole trigger.
+        if(this.mode===1&&weapon().id==='black-cat'&&e.pointerType==='mouse'&&this.canShoulderCharge()){
+          this.shoulderPress={id:e.pointerId,at:performance.now()};
+          ui.emit('attack-start',{origin:'shoulder-mouse'});
+          return;
+        }
         if(weapon().id==='white-cat'||weapon().id==='goldfish'){this.held=true;this.nextShot=0;}else ui.emit('gun-fire');}
       else{this.lookPointer=null;this.held=false;}
     },true);
     addEventListener('blur',()=>this.end());document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement){this.held=false;ui.emit('attack-cancel');}});
   }
-  cycle(){const c=this.controller(),w=this.weapon();if(!c?.enabled||!w?.firstPerson)return;if(!this.mode){this.savedFov=this.camera.fov;this.weaponId=w.id;this.mode=1;}else if(w.id==='black-cat'&&this.mode===1)this.mode=2;else return this.end();this.held=false;this.ui.emit('attack-cancel');if(matchMedia('(pointer:fine)').matches){try{this.canvas.requestPointerLock()?.catch(()=>{});}catch{}}}
-  end(){document.body.classList.remove('sniper-scoped');if(!this.mode)return;this.mode=0;this.held=false;this.recoilAmount=0;this.recoilOffset=0;this.lookPointer=null;this.overlay.hidden=true;this.ui.emit('attack-cancel');this.camera.fov=this.savedFov;this.camera.updateProjectionMatrix();const root=this.controller()?.root;if(root){root.userData.model.visible=true;if(root.userData.blade)root.userData.blade.visible=true;}if(document.pointerLockElement===this.canvas)document.exitPointerLock();}
+  cycle(){if(this.shoulderPress){this.shoulderPress=null;this.ui.emit('attack-cancel');}const c=this.controller(),w=this.weapon();if(!c?.enabled||!w?.firstPerson)return;if(!this.mode){this.savedFov=this.camera.fov;this.weaponId=w.id;this.mode=1;}else if(w.id==='black-cat'&&this.mode===1)this.mode=2;else return this.end();this.held=false;this.ui.emit('attack-cancel');if(matchMedia('(pointer:fine)').matches){try{this.canvas.requestPointerLock()?.catch(()=>{});}catch{}}}
+  end(){if(this.shoulderPress){this.shoulderPress=null;this.ui.emit('attack-cancel');}document.body.classList.remove('sniper-scoped');if(!this.mode)return;this.mode=0;this.held=false;this.recoilAmount=0;this.recoilOffset=0;this.lookPointer=null;this.overlay.hidden=true;this.ui.emit('attack-cancel');this.camera.fov=this.savedFov;this.camera.updateProjectionMatrix();const root=this.controller()?.root;if(root){root.userData.model.visible=true;if(root.userData.blade)root.userData.blade.visible=true;}if(document.pointerLockElement===this.canvas)document.exitPointerLock();}
   direction(){const c=this.controller();return new THREE.Vector3(-Math.sin(c.yaw)*Math.cos(c.pitch),-Math.sin(c.pitch),-Math.cos(c.yaw)*Math.cos(c.pitch));}
   shot(){const ray=new THREE.Raycaster();this.camera.updateMatrixWorld();ray.setFromCamera(crosshairNdc(),this.camera);const c=this.controller(),sniper=this.weapon().id==='black-cat',range=sniper?SNIPER_RANGE:(this.weapon().id==='goldfish'?this.weapon().range:(this.weapon().chargedRange||this.weapon().range)),origin=sniper?ray.ray.origin.clone():(weaponMuzzle(c.root,this.weapon())||c.root.position.clone().add(new THREE.Vector3(0,1,0)));let point=ray.ray.at(range,new THREE.Vector3());
     // Sniper uses the exact centre-camera ray, not a displaced muzzle aim point,
