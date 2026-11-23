@@ -131,7 +131,10 @@ export function renderOriginalBag(ui,profile){
   ${f.traits.length&&!comfort?`<div class="weapon-traits">${f.traits.map(t=>`<span class="weapon-trait" title="${esc(t.details)}">${esc(t.name)} · ${esc(t.details)}</span>`).join('')}</div>`:''}
   ${f.bonuses.length&&!comfort?`<div class="weapon-bonuses">${f.bonuses.map(x=>`<span>${esc(x)}</span>`).join(' · ')}</div>`:''}
   <div>${comfort?'Double tap to assign':equipped(i,index>=0?index:null)?'Equipped · Double tap to remove':'Double tap to equip'}
-   ${!equipped(i,index>=0?index:null)?`<button data-sell="${i.id}">SELL · +${i.sell||0}</button>`:''}</div>`;
+   ${!comfort&&EQUIPPABLE_SLOTS.includes(i.slot)?equipped(i,index>=0?index:null)?
+   `<button type="button" data-unequip="${esc(i.slot)}">UNEQUIP</button>`:
+   `<button type="button" data-equip="${esc(i.id)}" ${index>=0?`data-equip-index="${index}"`:''}>EQUIP NOW</button>`:''}
+  ${!equipped(i,index>=0?index:null)?`<button data-sell="${i.id}">SELL · +${i.sell||0}</button>`:''}</div>`;
  if(twice){
   if(comfort)showConsumableSlotPicker(ui,i,profile);
   else if(EQUIPPABLE_SLOTS.includes(i.slot))
