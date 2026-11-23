@@ -13,7 +13,7 @@ const TIER_PRICES = [240,620,1450,3300,7600];
 // Mystery is limited to five-quality whip/pan/swatter sets and the giraffe.
 // Family labels alone are insufficient: many unrelated exotics are 'pan'.
 export const isMysteryWeapon=item=>!!item&&item.slot==='weapon'&&
- (item.id==='giraffe'||/^(whip|pan|swatter)-[1-5]$/.test(item.id));
+ ((item.baseId||item.id)==='giraffe'||/^(whip|pan|swatter)-[1-5]$/.test(item.id));
 
 export const ARMOR = Object.freeze([
   ['moss-guard','Moss Guard','armor','#73936c',1,310,14],
