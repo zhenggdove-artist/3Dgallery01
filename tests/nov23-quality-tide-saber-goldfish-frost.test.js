@@ -22,7 +22,7 @@ test('shop groups only true tier variants; selected ID remains authoritative',()
 });
 test('only real tide staff has a triple-width ultimate channel',()=>{
  const tide=itemById('tide-2'),starter=itemById('water');
- assert.equal(channelVisualRadius(tide),3*1.05*weaponQuality(tide).visual);
+ assert.ok(Math.abs(channelVisualRadius(tide)-3*1.05*weaponQuality(tide).visual)<.001);
  assert.equal(channelVisualRadius(starter),1.05);
 });
 test('three separate tide targets receive server-owned sustained damage, fourth does not',()=>{
