@@ -570,6 +570,7 @@ export class TempleUI extends EventTarget{
     variants.sort((a,b)=>(a.tier||1)-(b.tier||1));
     const selected=variants.find(v=>
       (v.shopTier?String(v.shopTier):v.id)===this.shopVariantChoice[key])||
+      (tab==='owned'?variants.find(v=>ownedIndicesFor(v).length>0):null)||
       variants.find(v=>v.shopTier===3)||variants[0];
     const ownedIndices=ownedIndicesFor(selected),ownedCount=ownedIndices.length;
     const equippedTier=profile.fusion?.[selected.id]?.shopTier??
