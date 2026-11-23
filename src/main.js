@@ -446,7 +446,18 @@ ui.addEventListener('gm-artwork-select',async event=>{
  artEditor.select(root);
 });
 ui.addEventListener('art-bomb-resize',event=>sendAction('resize-art-bomb',event.detail));
-ui.addEventListener('art-bomb-appearance',event=>sendAction('update-art-bomb-appearance',event.detail));
+ui.addEventListener('art-bomb-appearance',async event=>{
+ const saved=await sendAction('update-art-bomb-appearance',event.detail);
+ if(!saved?.artworkLayout)return;
+ // The BUILD form stays open after a successful colour save; refresh its
+ // authoritative revision for additional edits without forcing a panel
+ // re-render or discarding the user's currently chosen colour.
+ for(const form of ui.content.querySelectorAll('[data-form="art-bomb-appearance"]')){
+  if(form.querySelector('[name="id"]')?.value!==event.detail.id)continue;
+  const revision=form.querySelector('[name="revision"]');
+  if(revision)revision.value=String(saved.artworkLayout.revision);
+ }
+});
 ui.addEventListener('art-bomb-upload',async event=>{
  if(self?.role!=='fighter')return ui.toast('JOIN AS A FIGHTER TO PLACE ARTWORK');
  if(artBombUploading)return;
