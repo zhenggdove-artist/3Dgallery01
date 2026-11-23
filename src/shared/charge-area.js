@@ -38,7 +38,11 @@ const flatDirection=direction=>{
 };
 export const CLAM_SECTOR_ANGLE=90;
 export const ULTIMATE_FOOTPRINT_SCALE=.6;
-export const PALM_ULTIMATE_RADIUS_MULTIPLIER=10;
+// Purple (tier 4) Coconut Palm now has the ORIGINAL green (tier 2)
+// ultimate radius. The common quality curve remains proportional: all five
+// tiers are scaled by the same factor, without touching cast reach/damage.
+// Original green/purple visual ratios = 1.4/2.4.
+export const PALM_ULTIMATE_RADIUS_MULTIPLIER=10*(1.4/2.4);
 // Authoritative damage geometry and warning VFX always use identical dimensions.
 export function scaleUltimateFootprint(stats,item=null,quality=null){
  if(stats?.ultimate){
@@ -52,7 +56,7 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
   const palm=/^palm-[1-5]$/.test(item?.id||'');
   const saber=item?.family==='saber';
   const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:saber?.25:item?.family==='ice'?1.5:item?.family==='wave'||item?.id==='goldfish'?3:1);
-  // Coconut Palm's radius is four times the former 2.5x size (now 10x).
+  // Coconut Palm's radius is rescaled so purple matches its former green size.
   // The server AoE, warning and original tornado scale together at every tier.
   // Cast reach remains unchanged. Whip retains its 1.5x multiplier.
   // Goldfish retains its narrow physical collision width.

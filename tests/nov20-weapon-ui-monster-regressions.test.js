@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {equipmentById,attackStats} from '../src/reletter/equipment-catalog.js';
 import {weaponRangeClass} from '../src/reletter/odd-weapons.js';
 import {applyElementalHit} from '../src/shared/combat-status.js';
-import {scaleUltimateFootprint,chargedArea,spellFootprint} from '../src/shared/charge-area.js';
+import {scaleUltimateFootprint,PALM_ULTIMATE_RADIUS_MULTIPLIER,chargedArea,spellFootprint} from '../src/shared/charge-area.js';
 import {CITY_LOTS,CITY_MAX_HP,cityBlocked} from '../src/shared/city-layout.js';
 import {moveMonster} from '../src/shared/temple-rules.js';
 import {PlantUltimateEffects} from '../src/plant-ultimate-effects.js';
@@ -65,7 +65,7 @@ test('palm ultimate is a real authoritative circle with an identical warning',()
  const area=chargedArea(item,[0,1.16,0],[0,-.12,1],stats,()=>0);
  const foot=spellFootprint(item,[0,1.16,0],[0,-.12,1],stats,area,()=>0);
  assert.equal(area.mode,'area');assert.equal(foot.shape,'circle');
- assert.equal(foot.radius,area.radius);assert.equal(stats.radius,7*.6*10);
+ assert.equal(foot.radius,area.radius);assert.equal(stats.radius,+(7*.6*PALM_ULTIMATE_RADIUS_MULTIPLIER).toFixed(3));
 });
 test('planter ultimate doubles down on existing 60% scaling with one further 50% for warning and server hits',()=>{
  const plant=equipmentById('planter-3');

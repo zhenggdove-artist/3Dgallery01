@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {itemById,attackStats} from '../src/shared/catalog.js';
-import {chargedArea,insideChargedArea,spellFootprint,scaleUltimateFootprint} from '../src/shared/charge-area.js';
+import {chargedArea,insideChargedArea,spellFootprint,scaleUltimateFootprint,PALM_ULTIMATE_RADIUS_MULTIPLIER} from '../src/shared/charge-area.js';
 import {weaponQuality,forwardCastRadius} from '../src/shared/weapon-abilities.js';
 import {explainWeapon} from '../src/shared/weapon-info.js';
 import {WeaponVFX,effectFor} from '../src/weapon-vfx.js';
@@ -85,7 +85,7 @@ test('the botanical VFX prewarms each 3D emitter before the loading screen close
  system.dispose();
 });
 
-test('palm ultimate warnings are enlarged fourfold at all tiers, aligning collision and green tornado',()=>{
+test('palm ultimate warning scales to purple=former green at all tiers, matching tornado collision',()=>{
  for(let tier=1;tier<=5;tier++){
   const palm=itemById('palm-'+tier),quality=weaponQuality(palm);
   const stats=attackStats(palm,1);
@@ -93,7 +93,7 @@ test('palm ultimate warnings are enlarged fourfold at all tiers, aligning collis
   stats.radius=forwardCastRadius(palm,quality,stats.radius,false);
   const oldRadius=stats.radius*.6,oldRange=stats.range*.6;
   scaleUltimateFootprint(stats,palm,quality);
-  assert.ok(Math.abs(stats.radius-oldRadius*10)<.002,'four times former 2.5x radius at tier '+tier);
+  assert.ok(Math.abs(stats.radius-oldRadius*PALM_ULTIMATE_RADIUS_MULTIPLIER)<.002,'rebalanced proportional radius at tier '+tier);
   assert.ok(Math.abs(stats.range-oldRange)<.002,'cast reach remains unchanged');
   const area=chargedArea(palm,[0,1,0],[0,0,1],stats,()=>0);
   const warning=spellFootprint(palm,[0,1,0],[0,0,1],stats,area,()=>0);

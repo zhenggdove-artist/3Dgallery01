@@ -4,19 +4,20 @@ import {readFileSync} from 'node:fs';
 import {createInitialWorld,createProfile,ensureProfile} from '../src/shared/temple-rules.js';
 import {STARTER_LOADOUT,itemById} from '../src/shared/catalog.js';
 
-test('new fighter profiles start with the cat SMG in inventory and equipment',()=>{
-  assert.equal(STARTER_LOADOUT.weapon,'white-cat');
-  assert.equal(itemById('white-cat')?.name,'White Cat SMG');
+test('new fighter profiles start with the green Starlight saber in inventory and equipment',()=>{
+  assert.equal(STARTER_LOADOUT.weapon,'saber-2');
+  assert.equal(itemById('saber-2')?.name,'Dawn Starlight');
   const profile=createProfile('new','Player','#abcdef');
-  assert.deepEqual(profile.inventory,['white-cat']);
-  assert.equal(profile.equipment.weapon,'white-cat');
+  assert.deepEqual(profile.inventory,['saber-2']);
+  assert.equal(profile.equipment.weapon,'saber-2');
   const world=createInitialWorld();world.profiles.new=profile;
-  assert.equal(ensureProfile(world,'new','Player','#abcdef').equipment.weapon,'white-cat');
+  assert.equal(ensureProfile(world,'new','Player','#abcdef').equipment.weapon,'saber-2');
 });
 
-test('existing saved loadouts are preserved while the SMG becomes a baseline owned weapon',()=>{
+test('legacy profiles retain White Cat starter ownership while preserving equipped gear',()=>{
   const world=createInitialWorld();
   world.profiles.old=createProfile('old','Veteran','#abcdef');
+  delete world.profiles.old.starterWeaponId;
   world.profiles.old.inventory=['clam'];
   world.profiles.old.equipment.weapon='clam';
   const profile=ensureProfile(world,'old','Veteran','#abcdef');

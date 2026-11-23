@@ -65,7 +65,7 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  const combinedEnchants=target.slot==='weapon'?mergeWeaponAffixes(old,ingredientRecord):null;
  // Exactly one physical ingredient is consumed on success or failure.
  removeInventoryInstance(profile,sourceIndex,targetInstance.uid);
- if(source.id==='white-cat'&&!profile.inventory.includes(source.id))profile.spentStarterWeapon=true;
+ if(source.id===(profile.starterWeaponId||'white-cat')&&!profile.inventory.includes(source.id))profile.spentStarterWeapon=true;
  const completed=Math.max(0,Math.floor(Number(old.layer)||0));
  if(!(sample<chance)){
   // Retain successful progress unchanged after a miss: no progression penalty.
