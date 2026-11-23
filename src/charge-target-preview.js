@@ -81,22 +81,23 @@ export class ChargeTargetPreview {
   // never allowed to move the main weapon's authoritative target.
   const equipped=item;
   const stats=attackStats(equipped,1),quality=weaponQuality(equipped,fusion);
-  if(isChannelStaff(equipped))stats.range=Math.max(stats.range,equipped.id==='clam'?10:Math.min(18,equipped.range))*channelReachMultiplier(equipped);
+  if(isChannelStaff(equipped))stats.range=Math.max(stats.range,(equipped.baseId||equipped.id)==='clam'?10:Math.min(18,equipped.range))*channelReachMultiplier(equipped);
   stats.range=+(stats.range*quality.range).toFixed(2);
   // Use the same thin hit tube as server-owned continuous casting, rather
   // than the giant charged blast radius.
   stats.radius=forwardCastRadius(equipped,quality,stats.radius,isChannelStaff(equipped));
-   if(equipped.id==='black-cat')stats.range=SNIPER_RANGE;
-   if(equipped.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
-   if(equipped.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
+   if((equipped.baseId||equipped.id)==='black-cat')stats.range=SNIPER_RANGE;
+   if((equipped.baseId||equipped.id)==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
+   if((equipped.baseId||equipped.id)==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
    scaleUltimateFootprint(stats,equipped,quality);
-   if(equipped.id==='giraffe'&&stats.ultimate){
+   if((equipped.baseId||equipped.id)==='black-cat')stats.range=SNIPER_RANGE;
+   if((equipped.baseId||equipped.id)==='giraffe'&&stats.ultimate){
     // Match the Durable Object's 56m boomerang path and swept collision radius.
     // The generic charged-area shrink must not shorten this returning weapon.
     stats.range=+(equipped.chargedRange*quality.range).toFixed(2);
     stats.radius=Math.max(stats.radius,5.9*quality.visual);
    }
-   if(equipped.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
+   if((equipped.baseId||equipped.id)==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
   const ground=(x,z,y)=>spellGroundHeight(arena?.world,x,z,y);
   const origin=Array.isArray(muzzle)&&muzzle.length===3&&muzzle.every(Number.isFinite)
    ?[...muzzle]:[root.position.x,root.position.y+1,root.position.z];
