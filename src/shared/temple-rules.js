@@ -616,7 +616,12 @@ export function applyAction(world,actor,body,context={}){
   }
   if(body.action==='add-artwork')return addArtwork(world,profile,actor,body,now);
   if(body.action==='set-artwork-layout')return setArtworkLayout(world,profile,body,now);
-  const denied=requireFighter(actor);if(denied)return denied;const dead=requireAlive(profile,now);if(dead&&!['respawn'].includes(body.action))return dead;
+  // Inventory bookkeeping does not involve combat or world-space actions.
+  // Allow purchasing, inspecting and equipping while a room is full and the
+  // account is spectating. Combat/building still requires an active fighter.
+  const inventoryAction=['buy','equip','unequip','sell','inspect-item','assign-consumable','swap-inventory'].includes(body.action);
+  const denied=inventoryAction?null:requireFighter(actor);if(denied)return denied;
+  const dead=inventoryAction?null:requireAlive(profile,now);if(dead&&!['respawn'].includes(body.action))return dead;
   if(body.action.startsWith('write-')){const result=journeyAction(world,profile,actor,body,now);if(!result.error)world.revision++;return result;}
   // WebGL-heavy clients may not have sent their final landing pose when WRITE
   // finishes. Trust the server's own timed journey, not stale socket coords.
@@ -630,7 +635,7 @@ export function applyAction(world,actor,body,context={}){
     if(now<landingAt-250)return {error:'WRITE landing still in progress'};
     actor={...actor,position:[...journey.landing]};
   }
-  if(!insideArena(actor.position,2))return {error:'Invalid actor position'};
+  if(!inventoryAction&&!insideArena(actor.position,2))return {error:'Invalid actor position'};
   if(ORIGINAL_ACTIONS.has(body.action)){const result=originalAction(world,profile,actor,body,now,rng);if(!result.error)world.revision++;return result;}
   let result;
   switch(body.action){
