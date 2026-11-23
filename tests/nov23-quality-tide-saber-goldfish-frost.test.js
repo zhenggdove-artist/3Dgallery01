@@ -30,8 +30,8 @@ test('three separate tide targets receive server-owned sustained damage, fourth 
  profile.inventory.push('tide-2');profile.equipment.weapon='tide-2';
  const target=(id,x,z)=>({id,active:true,model:'uncle',variant:'uncle',
   position:[x,0,z],hp:10000,maxHp:10000,nextAttackAt:T+100000,skills:[]});
- world.monster=target('mob-a',75,8);
- world.monsters=[target('mob-b',78,11),target('mob-c',72,14),target('mob-d',83,18)];
+ world.monster=target('mob-a',75,5);
+ world.monsters=[target('mob-b',76,6),target('mob-c',74,7),target('mob-d',77,8)];
  const attack=(now,body)=>applyAction(world,actor,{action:'attack',direction:[0,0,1],...body},
   {now,actors:[actor],rng:()=>.5});
  assert.equal(attack(T+1000,{phase:'charge'}).charging,true);
