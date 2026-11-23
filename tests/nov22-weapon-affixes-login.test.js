@@ -13,33 +13,33 @@ import {weaponPresentation} from '../src/shared/weapon-presentation.js';
 const NOW=7200000,near=(a,b)=>assert.ok(Math.abs(a-b)<1e-5,JSON.stringify({a,b}));
 const prepare=()=>{const world=createInitialWorld(NOW);const p=ensureProfile(world,'affix-gm','AffixGM','#abcdef',NOW,true);return {world,p};};
 
-test('all weapons roll stable single-instance random properties from 3% to 15%',()=>{
+test('only ground loot rolls affixes; shop and GM equipment are fixed-stat',()=>{
  const item=itemById('accordion');
- const weak=rollWeaponAffixes(item,()=>0),strong=rollWeaponAffixes(item,()=>.9999);
- assert.deepEqual(weak,[{id:'brutal',percent:3}]);
- assert.deepEqual(strong,[{id:'aerial',percent:15}]);
+ assert.deepEqual(rollWeaponAffixes(item,()=>0),[{id:'brutal',percent:3}]);
+ assert.deepEqual(rollWeaponAffixes(item,()=>.9999),[{id:'aerial',percent:15}]);
  assert.deepEqual(rollWeaponAffixes(itemById('hat-dinosaur'),()=>.2),[]);
  const {p}=prepare();
- for(const [i,id]of p.inventory.entries()){
-  if(itemById(id)?.slot!=='weapon')continue;
-  const record=fusionRecordAt(p,i);
-  assert.equal(record.weaponAffixes.length,1,'every owned weapon '+id+' has an independent roll');
-  assert.ok(record.weaponAffixes[0].percent>=3&&record.weaponAffixes[0].percent<=15);
- }
+ for(const [i,id] of p.inventory.entries())if(itemById(id)?.slot==='weapon')
+  assert.ok(!fusionRecordAt(p,i).weaponAffixes?.length,'GM-granted weapon cannot roll '+id);
  const first=p.inventory.indexOf('accordion'),firstUid=p.inventoryInstances[first].uid;
- const firstRoll=fusionRecordAt(p,first).weaponAffixes;
- appendInventoryInstance(p,'accordion');
+ appendInventoryInstance(p,'accordion','ground');
  const second=p.inventory.length-1,secondUid=p.inventoryInstances[second].uid;
  assert.notEqual(firstUid,secondUid);
- assert.deepEqual(fusionRecordAt(p,first).weaponAffixes,firstRoll,'existing enchant must not reroll');
+ const rolled=fusionRecordAt(p,second).weaponAffixes;
+ assert.equal(rolled.length,1,'ground weapon must roll');
+ appendInventoryInstance(p,'accordion','shop');
+ const shopIndex=p.inventory.length-1;
+ assert.equal(p.inventoryInstances[shopIndex].origin,'shop');
+ assert.ok(!fusionRecordAt(p,shopIndex).weaponAffixes?.length);
  ensureWeaponAffixes(p,()=>0);
- assert.deepEqual(fusionRecordAt(p,first).weaponAffixes,firstRoll,'join must not reroll');
- assert.equal(fusionRecordAt(p,second).weaponAffixes.length,1);
+ assert.deepEqual(fusionRecordAt(p,second).weaponAffixes,rolled,'ground roll survives');
+ assert.ok(!fusionRecordAt(p,shopIndex).weaponAffixes?.length,'shop equipment never rerolls on join');
 });
 
 test('weapons gain effective crit, damage reduction, HP and haste from owned enchant',()=>{
  const {world,p}=prepare(),index=p.inventory.indexOf('accordion');
  selectEquipmentInstance(p,'weapon',index);
+ p.fusionByInstance[p.inventoryInstances[index].uid]??={};
  const record=fusionRecordAt(p,index);
  const weapon=itemById('accordion'),baseCrit=weapon.critChance;
  record.weaponAffixes=[{id:'brutal',percent:10},{id:'stalwart',percent:9},
@@ -58,6 +58,8 @@ test('fusion preserves each prefix in acquisition order and inherits 30 percent 
  const {world,p}=prepare(),target=itemById('accordion'),source=itemById('fan');
  const tIndex=p.inventory.indexOf(target.id),sIndex=p.inventory.indexOf(source.id);
  selectEquipmentInstance(p,'weapon',tIndex);
+ p.fusionByInstance[p.inventoryInstances[tIndex].uid]??={};
+ p.fusionByInstance[p.inventoryInstances[sIndex].uid]??={};
  const t=fusionRecordAt(p,tIndex),s=fusionRecordAt(p,sIndex);
  t.weaponAffixes=[{id:'brutal',percent:10}];
  s.weaponAffixes=[{id:'stalwart',percent:15}];
