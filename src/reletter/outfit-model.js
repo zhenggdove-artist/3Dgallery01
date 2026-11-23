@@ -11,6 +11,53 @@ function fabric(T,item){const c=document.createElement('canvas');c.width=c.heigh
   texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;
   texture.anisotropy=2;return texture;
  }
+ // Creature suits use the same UV-weighted cloth shader as the original
+ // fifty outfits. Individual patterns are woven on the character's skinned
+ // surface instead of assembling a rigid mannequin from boxes.
+ if(item.design==='creature'){
+  const k=item.creature;
+  const palette={
+   elephant:['#d5dde1','#658398'],rooster:['#e9c077','#b13c47'],
+   anteater:['#e6c2a2','#765c4d'],'guinea-pig':['#fff4db','#ab7863'],
+   penguin:['#f3f0e7','#263247'],'polar-bear':['#fbfdfc','#a5bbc6'],
+   jellyfish:['#e8f9ff','#6ba5d4'],'crab-claw':['#f8bf8b','#a43e36'],
+   lion:['#f0d080','#9d633c'],'banana-bunch':['#ffeb8d','#a58332'],
+   eggplant:['#c4a5d7','#4e346e']
+  };
+  const [light,dark]=palette[k]||['#ffffff','#3d3d3d'];
+  x.strokeStyle=dark;x.fillStyle=light;x.lineWidth=2.5;
+  x.globalAlpha=k==='polar-bear'?.18:.38;
+  for(let y=12;y<512;y+=48){
+   for(let xx=(Math.floor(y/48)%2)*24;xx<512;xx+=48){
+    const t=(xx+y)%4;
+    x.save();x.translate(xx,y);
+    if(['elephant','polar-bear','lion','guinea-pig','anteater'].includes(k)){
+     x.beginPath();x.ellipse(0,0,7+t,12,Math.sin(xx+y)*.5,0,Math.PI*2);x.stroke();
+     if(k==='guinea-pig'||k==='anteater'){x.beginPath();x.arc(0,0,2,0,Math.PI*2);x.fill();}
+    }else if(k==='penguin'){
+     x.beginPath();x.moveTo(-7,-7);x.quadraticCurveTo(0,0,0,11);x.quadraticCurveTo(0,0,7,-7);x.stroke();
+    }else if(k==='jellyfish'){
+     x.beginPath();x.arc(0,0,11,Math.PI,0);x.stroke();for(const dx of [-6,0,6]){x.beginPath();x.moveTo(dx,0);x.quadraticCurveTo(dx+5,8,dx,13);x.stroke();}
+    }else if(k==='rooster'){
+     for(let j=0;j<3;j++){x.beginPath();x.moveTo(j*5-7,-12);x.quadraticCurveTo(j*4-5,0,j*5-7,13);x.stroke();}
+    }else if(k==='crab-claw'){
+     x.beginPath();x.arc(0,0,8,0,Math.PI);x.stroke();x.beginPath();x.moveTo(-7,2);x.lineTo(0,11);x.lineTo(7,2);x.stroke();
+    }else if(k==='banana-bunch'){
+     x.beginPath();x.moveTo(-8,-12);x.quadraticCurveTo(13,0,-6,12);x.quadraticCurveTo(9,-2,-8,-12);x.stroke();
+    }else if(k==='eggplant'){
+     x.beginPath();x.ellipse(0,2,9,14,0,0,Math.PI*2);x.stroke();x.beginPath();x.moveTo(-5,-9);x.lineTo(0,-15);x.lineTo(5,-9);x.stroke();
+    }
+    x.restore();
+   }
+  }
+  x.globalAlpha=1;
+  // Thin tonal threads preserve cloth shading and UV folds during movement.
+  x.strokeStyle=light;x.globalAlpha=.08;x.lineWidth=1;
+  for(let n=0;n<512;n+=5){x.beginPath();x.moveTo(n,0);x.lineTo(n,512);x.stroke();}
+  x.globalAlpha=1;
+  const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;
+  texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.anisotropy=2;return texture;
+ }
  x.strokeStyle='#f6eee2';x.fillStyle='#f3eadb';x.lineWidth=5;const p=item.pattern;
  if(p===0){for(let i=-512;i<1024;i+=48){x.beginPath();x.moveTo(i,0);x.lineTo(i+512,512);x.stroke();}}
  if(p===2){x.globalAlpha=.3;for(let i=0;i<512;i+=64){x.fillRect(i,0,22,512);x.fillRect(0,i,512,22);}x.globalAlpha=1;}
@@ -32,58 +79,94 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
  // and fabric accents are bone-attached. Hood is suppressed when a separate
  // HEAD item is equipped, exactly like other outfits.
  if(d==='creature'){
-  const kind=item.creature;
-  const paws=['elephant','guinea-pig','polar-bear','lion','penguin','anteater','crab-claw'];
-  for(const side of ['LeftFoot','RightFoot']){
-   const foot=anchor(side);
-   ball(foot,[0,-.06,.28],[paws.includes(kind)?.25:.2,.16,.34],kind==='penguin'?trim:main);
-   for(let n=-1;n<=1;n++)ball(foot,[n*.12,-.08,.54],[.055,.06,.11],kind==='polar-bear'?dark:cream);
-  }
-  if(['penguin','polar-bear','guinea-pig','elephant','anteater'].includes(kind))
-   ball(chest,[0,-.21,.45],[.4,.56,.12],cream);
-  if(kind==='elephant'){
-   for(const side of [-1,1])ball(chest,[side*.57,.17,-.08],[.25,.32,.20],main);
-   tube(hips,[[0,-.2,-.28],[0,-.45,-.65],[.14,-.72,-.64]],.05,main);
-  }
-  if(kind==='rooster'){
-   for(let i=-2;i<=2;i++){const feather=tube(hips,[[i*.10,.05,-.2],[i*.23,.6,-.65],[i*.30,.22,-1]],.12,i%2?trim:main);feather.rotation.y=i*.14;}
-   for(const side of [-1,1])ball(chest,[side*.26,.28,.4],[.17,.22,.09],trim);
-  }
-  if(kind==='anteater')tube(hips,[[0,-.1,-.25],[0,-.28,-.78],[.2,-.50,-1.15],[.36,-.64,-1.28]],.19,main);
-  if(kind==='guinea-pig')for(const side of [-1,1]){
-   ball(chest,[side*.3,-.2,.37],[.20,.25,.13],side<0?cream:main);
-  }
-  if(kind==='penguin')for(const side of [-1,1]){
-   const fin=ball(chest,[side*.65,-.3,.02],[.15,.58,.23],main);fin.rotation.z=side*.34;
-  }
-  if(kind==='polar-bear')for(const side of ['LeftForeArm','RightForeArm']){
-   const arm=anchor(side);ball(arm,[0,-.05,.12],[.27,.36,.24],main);
-   for(let i=-1;i<=1;i++)ball(arm,[i*.14,-.23,.3],[.08,.07,.13],dark);
-  }
-  if(kind==='jellyfish'){
-   for(let i=0;i<8;i++){const a=i*Math.PI/4;
-    tube(hips,[[Math.cos(a)*.42,-.1,Math.sin(a)*.3],[Math.cos(a+.3)*.49,-.55,Math.sin(a)*.4],[Math.cos(a+.7)*.42,-1.05,Math.sin(a+.7)*.3]],.045,i%2?cream:main);
+  const kind=item.creature, fur=['polar-bear','guinea-pig','lion'],beak=['rooster','penguin'];
+  const shell=mat(kind==='polar-bear'?'#ebf4f5':kind==='lion'?'#b6874f':'#edf0ec');
+  const cuff=mat(kind==='crab-claw'?'#ad4d4b':kind==='eggplant'?'#4c315c':'#e0d3c1');
+  const seam=mat(kind==='penguin'?'#dfe6ed':'#faf0df');
+  // Anatomical cuffs, lapels and boot edges are attached to moving Mixamo
+  // bones. Main clothing remains the full original skinned player mesh.
+  for(const side of ['LeftForeArm','RightForeArm']){
+   const arm=anchor(side);
+   const border=ball(arm,[0,-.19,.06],[.195,.065,.19],cuff);
+   border.rotation.x=.1;
+   if(fur.includes(kind)){
+    for(let n=0;n<7;n++){
+     const a=n*6.283/7;
+     const tufts=cone(arm,[Math.cos(a)*.17,-.25,Math.sin(a)*.16],.035,.18,main);
+     tufts.rotation.z=Math.cos(a)*.6;
+    }
    }
   }
-  if(kind==='crab-claw')for(const side of ['LeftForeArm','RightForeArm']){
-   const arm=anchor(side),sign=side==='LeftForeArm'?-1:1;
-   ball(arm,[0,-.1,.22],[.33,.28,.36],main);
-   for(const k of [-1,1]){const claw=cone(arm,[k*.17,-.34,.55],.13,.42,main);claw.rotation.x=Math.PI/2;claw.rotation.z=sign*k*.18;}
+  for(const side of ['LeftFoot','RightFoot']){
+   const foot=anchor(side);
+   ball(foot,[0,-.05,.24],[.24,.13,.34],kind==='penguin'?shell:main);
+   if(['elephant','lion','crab-claw','polar-bear','anteater'].includes(kind)){
+    for(let n=-1;n<=1;n++){
+     const nail=ball(foot,[n*.13,-.085,.55],[.05,.06,.09],shell);
+     nail.rotation.y=n*.13;
+    }
+   }
+  }
+  // Cloth seams rather than box-shaped chest plates.
+  for(const side of [-1,1]){
+   const stitch=tube(chest,[[side*.31,.26,.32],[side*.39,.04,.32],[side*.36,-.37,.37]],.017,seam);
+   stitch.rotation.z=side*.04;
+  }
+  if(['penguin','polar-bear','elephant','guinea-pig','anteater'].includes(kind))
+   ball(chest,[0,-.27,.38],[.39,.57,.055],kind==='penguin'?shell:seam);
+  if(kind==='rooster'){
+   for(let n=0;n<5;n++){
+    const a=(n-2)*.28;
+    const plume=tube(hips,[[0,-.01,-.25],[a*.65,.45,-.55],[a, .32,-1.02],[a*1.2,-.12,-1.17]],.075,n%2?cuff:main);
+    plume.rotation.y=a;
+   }
+  }
+  if(kind==='anteater'){
+   const tail=tube(hips,[[0,-.05,-.32],[0,-.26,-.73],[.16,-.41,-1.18],[.3,-.50,-1.28]],.16,main);
+   tail.rotation.y=.07;
+  }
+  if(kind==='elephant')tube(hips,[[0,-.20,-.29],[0,-.34,-.65],[.08,-.55,-.82]],.043,main);
+  if(kind==='jellyfish'){
+   const sheer=mat('#b6dff4');sheer.transparent=true;sheer.opacity=.58;sheer.depthWrite=false;
+   for(let n=0;n<8;n++){
+    const a=n*6.283/8;
+    tube(hips,[[Math.cos(a)*.36,-.16,Math.sin(a)*.30],
+      [Math.cos(a+.35)*.42,-.56,Math.sin(a+.35)*.35],
+      [Math.cos(a+.7)*.40,-.95,Math.sin(a+.7)*.30]],.035,n%2?sheer:seam);
+   }
+  }
+  if(kind==='crab-claw'){
+   for(const side of ['LeftForeArm','RightForeArm']){
+    const arm=anchor(side);
+    for(const sign of [-1,1]){
+     const claw=cone(arm,[sign*.16,-.25,.32],.095,.30,main);
+     claw.rotation.x=Math.PI/2;claw.rotation.z=sign*.22;
+    }
+   }
   }
   if(kind==='lion'){
-   tube(hips,[[0,-.15,-.3],[0,-.25,-.85],[.15,-.45,-1.2],[.28,-.52,-1.3]],.085,main);
-   ball(hips,[.28,-.52,-1.3],[.15,.22,.17],trim);
-   for(const side of [-1,1])ball(chest,[side*.47,.22,.24],[.2,.28,.15],trim);
+   tube(hips,[[0,-.10,-.28],[0,-.25,-.66],[.14,-.45,-1.03],[.30,-.48,-1.16]],.07,main);
+   ball(hips,[.30,-.48,-1.16],[.13,.15,.13],cuff);
   }
-  if(kind==='banana-bunch')for(let i=0;i<5;i++){
-   const a=i*6.283/5,peel=ball(hips,[Math.cos(a)*.44,-.32,Math.sin(a)*.44],[.16,.62,.14],main);
-   peel.rotation.z=Math.cos(a)*.36;
+  if(kind==='banana-bunch'){
+   // Pleated banana peel skirt: curved thin sheets, never cube body geometry.
+   for(let n=0;n<5;n++){
+    const a=n*6.283/5;
+    const peel=ball(hips,[Math.cos(a)*.42,-.42,Math.sin(a)*.30],[.13,.43,.09],main);
+    peel.rotation.z=Math.cos(a)*.33;peel.rotation.x=Math.sin(a)*.28;
+   }
   }
   if(kind==='eggplant'){
-   for(let i=0;i<6;i++){const a=i*6.283/6,leaf=cone(chest,[Math.cos(a)*.43,.44,Math.sin(a)*.43],.23,.44,trim);leaf.rotation.z=-Math.cos(a)*.6;}
-   tube(hips,[[0,-.1,-.28],[0,-.4,-.60]],.085,main);
+   const leaf=mat('#6e995d');
+   for(let n=0;n<5;n++){
+    const a=n*6.283/5;
+    const blade=cone(chest,[Math.cos(a)*.31,.35,Math.sin(a)*.22],.18,.36,leaf);
+    blade.rotation.z=-Math.cos(a)*.48;
+   }
   }
   if(hood){
+   // The original headgear sculptor also provides the matching outfit hood.
+   // A separate HEAD-slot item suppresses this hood, never the whole suit.
    const h=anchor('Head'),headpiece=createHeadgear(T,{...item,design:kind});
    h.add(headpiece);headpiece.position.set(0,.20,.04);
    record.materials.push(...(headpiece.userData.materials||[]));
