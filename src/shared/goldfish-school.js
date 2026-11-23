@@ -1,6 +1,7 @@
 // One deterministic school layout is shared by the Worker damage sweeps and
 // the 30-instanced-fish client. Local +Z is the initial travel direction.
 // A sparse nose/tail and dense middle form an irregular spindle, not a grid.
+export const GOLDFISH_TRAVEL_SCALE=.5; // Charged school moves half its former distance; normal shot unchanged.
 export const GOLDFISH_SCHOOL_COUNT=30;
 export const GOLDFISH_DAMAGE_PER_FISH=.05;
 // Absolute T1 direct-hit budget for any single target across all 30 fish.
