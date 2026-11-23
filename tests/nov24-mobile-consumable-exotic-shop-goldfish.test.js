@@ -77,5 +77,5 @@ test('goldfish's homing school never selects or hits its own caster',()=>{
   tickWorld(world,{now:NOW+1000+weapon.chargeMs+20+i*160,
    actors:[owner,enemy],activeFighters:2,rng:()=>.5});
  assert.equal(p.hp,before,'shooter never loses HP to their own fish');
- assert.equal(world.damageEvents?.some(event=>event.target===owner.key&&event.kind==='giant-goldfish'),false);
+ assert.equal((world.damageEvents||[]).some(event=>event.target===owner.key&&event.kind==='giant-goldfish'),false);
 });
