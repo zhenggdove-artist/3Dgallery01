@@ -62,7 +62,7 @@ export function ensureFusionIdentity(profile){
   // Per-instance provenance. Never infer a newly purchased item's stats from catalog ID.
   const source=profile.itemOrigins?.[itemId];
   const origin=found?.origin||(source==='monster'||source==='ground'?'ground':source==='shop'?'shop':'grant');
-  return {uid,itemId,origin};
+  return {uid,itemId,origin,viewed:found?.viewed!==false};
  });
  profile.inventoryInstances=current;
  profile.fusionByInstance??={};
@@ -172,7 +172,7 @@ export function appendInventoryInstance(profile,itemId,origin='ground'){
  ensureFusionIdentity(profile);
  profile.inventory.push(itemId);
  const uid=newUid();
- profile.inventoryInstances.push({uid,itemId,origin});
+ profile.inventoryInstances.push({uid,itemId,origin,viewed:false});
  if(itemById(itemId)?.slot==='weapon'){
   profile.fusionByInstance??={};
   profile.fusionByInstance[uid]={weaponAffixes:origin==='ground'?rollWeaponAffixes(itemById(itemId)):[]};
