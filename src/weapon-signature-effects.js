@@ -4,7 +4,7 @@ import {itemById} from './shared/catalog.js';
 import {oddParts} from './reletter/odd-weapon-art.js';
 import {calicoPellets,CALICO_PELLET_COUNT} from './shared/calico-pellets.js';
 import {GOLDFISH_SWIM_MS} from './shared/weapon-abilities.js';
-import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_SCHOOL_OFFSETS,GOLDFISH_FISH_SCALE} from './shared/goldfish-school.js';
+import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_SCHOOL_OFFSETS,GOLDFISH_FISH_SCALE,goldfishSchoolPosition} from './shared/goldfish-school.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
 import nativeArcRay from '../vendor/00gamedevs/arc-ray.js';
 
@@ -184,7 +184,10 @@ export class WeaponSignatureEffects {
   if(group.userData.goldfishBubbleBursts){
    group.userData.goldfishBubbleBursts.births.fill(-99);
    group.userData.goldfishBubbleBursts.positions.fill(1e5);
+   group.userData.goldfishBubbleBursts.opacities.fill(0);
+   group.userData.goldfishBubbleBursts.centers.fill(0);
    group.userData.goldfishBubbleBursts.cloud.geometry.attributes.position.needsUpdate=true;
+   group.userData.goldfishBubbleBursts.cloud.geometry.attributes.bubbleOpacity.needsUpdate=true;
   }
   group.name='Thirty individually consumable goldfish swimming forward';
   let tail=cached?.userData.tail;
@@ -326,23 +329,67 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
   tailCloud.frustumCulled=false;
   school.add(tailCloud);
   group.userData.tailParticles={cloud:tailCloud,positions:tailPositions,perFish};
-  // GPU-pooled water bubble burst: 8 radial dots per fish, just one draw call.
-  const bubblePerFish=8,bubblePositions=new Float32Array(GOLDFISH_SCHOOL_COUNT*bubblePerFish*3);
+  // Impact bursts: 14 independently sized translucent blue bubble rings
+  // per fish, batched in one GPU draw call across all thirty fish. Each ring
+  // expands, catches a white glint and bursts into transparency.
+  const bubblePerFish=14,particleTotal=GOLDFISH_SCHOOL_COUNT*bubblePerFish;
+  const bubblePositions=new Float32Array(particleTotal*3);
+  const bubbleSizes=new Float32Array(particleTotal);
+  const bubbleGrowth=new Float32Array(particleTotal);
+  const bubbleOpacities=new Float32Array(particleTotal);
+  const bubbleColors=new Float32Array(particleTotal*3);
+  const palette=['#087bff','#29baff','#7aeaff','#178aff','#d1faff'];
   bubblePositions.fill(1e5);
+  for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++)for(let j=0;j<bubblePerFish;j++){
+   const k=i*bubblePerFish+j,shade=new THREE.Color(palette[(i*3+j*7)%palette.length]);
+   bubbleSizes[k]=.25+stable(i*13.9+j*17.1)*.74;
+   bubbleColors[k*3]=shade.r;bubbleColors[k*3+1]=shade.g;bubbleColors[k*3+2]=shade.b;
+  }
   const bubbleGeo=new THREE.BufferGeometry();
   bubbleGeo.setAttribute('position',new THREE.BufferAttribute(bubblePositions,3)
    .setUsage(THREE.DynamicDrawUsage));
-  const bubbleCloud=new THREE.Points(bubbleGeo,new THREE.PointsMaterial({
-   color:'#b7f6ff',size:.12,transparent:true,opacity:.76,
-   depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending,
-   sizeAttenuation:true,toneMapped:false
-  }));
-  bubbleCloud.name='Per-fish bubble-pop impact particles';
-  bubbleCloud.frustumCulled=false;
+  bubbleGeo.setAttribute('bubbleSize',new THREE.BufferAttribute(bubbleSizes,1));
+  bubbleGeo.setAttribute('bubbleGrowth',new THREE.BufferAttribute(bubbleGrowth,1)
+   .setUsage(THREE.DynamicDrawUsage));
+  bubbleGeo.setAttribute('bubbleOpacity',new THREE.BufferAttribute(bubbleOpacities,1)
+   .setUsage(THREE.DynamicDrawUsage));
+  bubbleGeo.setAttribute('bubbleColor',new THREE.BufferAttribute(bubbleColors,3));
+  const bubbleMaterial=new THREE.ShaderMaterial({
+   transparent:true,depthWrite:false,depthTest:false,
+   blending:THREE.NormalBlending,toneMapped:false,
+   vertexShader:`attribute float bubbleSize;attribute float bubbleGrowth;
+    attribute float bubbleOpacity;attribute vec3 bubbleColor;
+    varying float vBubbleOpacity;varying vec3 vBubbleColor;
+    void main(){
+     vBubbleOpacity=bubbleOpacity;vBubbleColor=bubbleColor;
+     vec4 mv=modelViewMatrix*vec4(position,1.);
+     gl_Position=projectionMatrix*mv;
+     gl_PointSize=clamp(bubbleSize*bubbleGrowth*300./max(.35,-mv.z),2.,90.);
+    }`,
+   fragmentShader:`varying float vBubbleOpacity;varying vec3 vBubbleColor;
+    void main(){
+     vec2 p=gl_PointCoord*2.-1.;float radius=length(p);
+     if(radius>1.||vBubbleOpacity<=.001)discard;
+     float rim=smoothstep(.56,.80,radius)*(1.-smoothstep(.91,1.,radius));
+     float glint=1.-smoothstep(.05,.25,length(p-vec2(-.32,.34)));
+     float fill=.14*(1.-smoothstep(.14,.77,radius));
+     float alpha=clamp((rim*.96+glint*.66+fill)*vBubbleOpacity,0.,1.);
+     gl_FragColor=vec4(vBubbleColor,alpha);
+     #include <colorspace_fragment>
+    }`
+  });
+  const bubbleCloud=new THREE.Points(bubbleGeo,bubbleMaterial);
+  bubbleCloud.name='Large mixed-size blue bubble pop rings at exact fish impact';
+  bubbleCloud.frustumCulled=false;bubbleCloud.renderOrder=4;
   school.add(bubbleCloud);
   group.userData.goldfishBubbleBursts={
-   cloud:bubbleCloud,positions:bubblePositions,perFish:bubblePerFish,
+   cloud:bubbleCloud,positions:bubblePositions,opacities:bubbleOpacities,
+   growth:bubbleGrowth,perFish:bubblePerFish,
+   centers:new Float32Array(GOLDFISH_SCHOOL_COUNT*3),
    births:new Float32Array(GOLDFISH_SCHOOL_COUNT).fill(-99)
+  };
+  group.userData.goldfishBubbleScratch={
+   rotation:new THREE.Quaternion(),relative:new THREE.Vector3()
   };
   fish.visible=false;group.add(school);
   group.userData.fish=fish;group.userData.tail=tail;group.userData.school=school;group.userData.schoolParts=parts;
@@ -361,7 +408,8 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
   const orientation=qdir(direction);
   fish.scale.setScalar(GOLDFISH_FISH_SCALE*quality);
   group.position.copy(origin);group.quaternion.copy(orientation);group.scale.setScalar(1);
-  const flightEntry=this.add(group,duration,(age,world,dt=0)=> {
+  const totalDuration=duration+.8; // Let the blue bubbles complete their pop after the last fish disappears.
+  const flightEntry=this.add(group,totalDuration,(age,world,dt=0)=> {
    if(group.userData.fishVhsTime)group.userData.fishVhsTime.value=age;
    const progress=Math.min(1,age/duration);
    const travel=(event.range||32)*progress;
@@ -369,27 +417,31 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
    const impacts=(world?.goldfishImpactEvents||[]).filter(v=>
     v.attackId===event.persistentAttackId);
    if(impacts.length)group.userData.gotServerTrack=true;
+   const bursts=group.userData.goldfishBubbleBursts;
+   const capture=(index,position)=>{
+    if(group.userData.consumedFish.has(index))return;
+    bursts.births[index]=age;
+    if(Array.isArray(position)&&position.length===3)
+     bursts.centers.set(position,index*3);
+    group.userData.consumedFish.add(index);
+   };
    for(const impact of impacts){
     const index=impact.fishIndex;
-    if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT){
-     if(!group.userData.consumedFish.has(index))
-      group.userData.goldfishBubbleBursts.births[index]=age;
-     group.userData.consumedFish.add(index);
-    }
+    if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT)
+     capture(index,impact.position);
    }
    if(track){
     group.userData.gotServerTrack=true;
     for(const index of track.consumed||[])
      if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT){
-      if(!group.userData.consumedFish.has(index))
-       group.userData.goldfishBubbleBursts.births[index]=age;
-      group.userData.consumedFish.add(index);
+      const center=goldfishSchoolPosition(track.position,track.direction,index);
+      capture(index,center);
      }
    }else if(group.userData.gotServerTrack){
     // No stale ghost fish after the server removes the final flight; keep
     // only the last half-second of per-fish bubble pops alive.
     const births=group.userData.goldfishBubbleBursts.births;
-    if(!births.some(t=>age>=t&&age-t<.48)){
+    if(!births.some(t=>age>=t&&age-t<.78)){
      group.scale.setScalar(0);return;
     }
     for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++)group.userData.consumedFish.add(i);
@@ -441,23 +493,42 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
     tailTransforms[i].makeRotationY(Math.sin(age*19+i*2.399963)*.74);
     tailTransforms[i].premultiply(tail.matrix).premultiply(fish.matrix);
    }
-   // Colliding fish burst into a short, expanding ring of water bubbles.
-   // Each fish has an independent birth timestamp in a single GPU cloud.
+   // Bubble rings remain at the actual WORLD-SPACE enemy contact point,
+   // instead of sliding away with the moving school after a hit.
    const bursts=group.userData.goldfishBubbleBursts;
    if(bursts){
+    const scratch=group.userData.goldfishBubbleScratch;
+    scratch.rotation.copy(group.quaternion).invert();
+    const inverseScale=1/Math.max(.001,group.scale.x);
     for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
-     const elapsed=age-bursts.births[i],alive=elapsed>=0&&elapsed<.48;
-     const [x,y,z]=GOLDFISH_SCHOOL_OFFSETS[i];
+     const elapsed=age-bursts.births[i],alive=elapsed>=0&&elapsed<.78;
+     const base=i*3;
+     if(alive){
+      scratch.relative.set(
+       bursts.centers[base]-group.position.x,
+       bursts.centers[base+1]-group.position.y,
+       bursts.centers[base+2]-group.position.z
+      ).applyQuaternion(scratch.rotation).multiplyScalar(inverseScale);
+     }
      for(let j=0;j<bursts.perFish;j++){
-      const k=(i*bursts.perFish+j)*3;
-      if(!alive){bursts.positions[k]=bursts.positions[k+1]=bursts.positions[k+2]=1e5;continue;}
-      const a=j*2.399963+i*.17,radius=.08+elapsed*1.5;
-      bursts.positions[k]=x+Math.cos(a)*radius;
-      bursts.positions[k+1]=y+Math.sin(a*1.7)*radius*.8+elapsed*.32;
-      bursts.positions[k+2]=z+Math.sin(a)*radius;
+      const index=i*bursts.perFish+j,k=index*3;
+      if(!alive){
+       bursts.positions[k]=bursts.positions[k+1]=bursts.positions[k+2]=1e5;
+       bursts.opacities[index]=0;bursts.growth[index]=0;continue;
+      }
+      const angle=j*2.399963+i*.17,spread=.12+elapsed*(1.3+stable(index*2.3)*2.4);
+      bursts.positions[k]=scratch.relative.x+Math.cos(angle)*spread;
+      bursts.positions[k+1]=scratch.relative.y+Math.sin(angle*1.7)*spread*.71+
+       elapsed*(.22+stable(index*3.7)*.95);
+      bursts.positions[k+2]=scratch.relative.z+Math.sin(angle)*spread*.86;
+      const fade=Math.max(0,1-elapsed/.78);
+      bursts.opacities[index]=fade*fade*(.72+stable(index*5.1)*.28);
+      bursts.growth[index]=.65+elapsed*1.6;
      }
     }
     bursts.cloud.geometry.attributes.position.needsUpdate=true;
+    bursts.cloud.geometry.attributes.bubbleOpacity.needsUpdate=true;
+    bursts.cloud.geometry.attributes.bubbleGrowth.needsUpdate=true;
    }
    // Position the blue gradient cloud behind each fish and fan the sparks
    // outward with a phase-staggered tail wag, fading into empty water.
@@ -502,7 +573,7 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
     }
     mesh.instanceMatrix.needsUpdate=true;
    }
-   const fade=Math.min(1,age*6,(duration-age)*7);
+   const fade=Math.min(1,age*6,(totalDuration-age)*7);
    group.scale.setScalar(Math.max(0,fade));
   },'goldfish');
   flightEntry.attackId=event.persistentAttackId||null;
