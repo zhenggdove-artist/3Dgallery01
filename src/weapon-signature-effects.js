@@ -366,6 +366,17 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
    const progress=Math.min(1,age/duration);
    const travel=(event.range||32)*progress;
    const track=world?.goldfishFlights?.find(v=>v.id===event.persistentAttackId);
+   const impacts=(world?.goldfishImpactEvents||[]).filter(v=>
+    v.attackId===event.persistentAttackId);
+   if(impacts.length)group.userData.gotServerTrack=true;
+   for(const impact of impacts){
+    const index=impact.fishIndex;
+    if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT){
+     if(!group.userData.consumedFish.has(index))
+      group.userData.goldfishBubbleBursts.births[index]=age;
+     group.userData.consumedFish.add(index);
+    }
+   }
    if(track){
     group.userData.gotServerTrack=true;
     for(const index of track.consumed||[])
@@ -375,9 +386,13 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
       group.userData.consumedFish.add(index);
      }
    }else if(group.userData.gotServerTrack){
-    // Server flight finished (including all thirty impacts): do not keep
-    // simulating a local school whose authoritative collider is gone.
-    group.scale.setScalar(0);return;
+    // No stale ghost fish after the server removes the final flight; keep
+    // only the last half-second of per-fish bubble pops alive.
+    const births=group.userData.goldfishBubbleBursts.births;
+    if(!births.some(t=>age>=t&&age-t<.48)){
+     group.scale.setScalar(0);return;
+    }
+    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++)group.userData.consumedFish.add(i);
    }
    const motion=group.userData.goldfishMotion;
    let target;
