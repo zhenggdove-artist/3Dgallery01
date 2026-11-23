@@ -40,6 +40,32 @@ export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(o
   return Object.freeze({...original,price,mysteryWeapon,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*(original.id==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*(original.id==='white-cat'?.5:1),cooldown:original.id==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
 }));
 export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'));
+ // Exotic weapons must keep their stable canonical IDs: fusion records, held
+ // 3D models and skill dispatch all refer to IDs like "telephone" directly.
+ // The purchased quality belongs to the unique inventory instance, not its ID.
+export const SHOP_EXOTIC_TIERS=Object.freeze([1,2,3,4]);
+const EXOTIC_QUALITY=Object.freeze([
+  {price:.48,power:.64,reach:.84,tempo:1.18},
+  {price:.72,power:.82,reach:.92,tempo:1.08},
+  {price:1,power:1,reach:1,tempo:1},
+  {price:1.60,power:1.26,reach:1.12,tempo:.91}
+]);
+export function shopWeaponVariant(item,tier=item?.tier){
+ if(!item||item.slot!=='weapon'||!item.exotic)return item;
+ const rank=Number(tier);
+ if(!Number.isInteger(rank)||rank<1||rank>4)return null;
+ const scale=EXOTIC_QUALITY[rank-1];
+ const range=+(item.range*scale.reach).toFixed(2);
+ const chargedRange=+(item.chargedRange*scale.reach).toFixed(2);
+ return {...item,shopTier:rank,tier:rank,rarity:RARITIES[rank-1].id,
+  name:rank===3?item.name:`${RARITIES[rank-1].name} ${item.name}`,
+  price:rank===3?item.price:Math.max(100,Math.ceil(item.price*scale.price/10)*10),
+  damage:+(item.damage*scale.power).toFixed(3),
+  chargeDamage:+(item.chargeDamage*scale.power).toFixed(3),
+  range,chargedRange,chargeRange:+(chargedRange-range).toFixed(2),
+  cooldown:Math.round(item.cooldown*scale.tempo)};
+}
+
 export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','armor','head','outfit','shield','wings']);
 export const SPELL_FAMILIES=Object.freeze(['water','ice','fire','lightning','beam','petal','wave']);
 export function attackStats(item,charge=0){
