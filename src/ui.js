@@ -38,10 +38,24 @@ export class TempleUI extends EventTarget{
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
     bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
     this.bind();
-    $('comfort-hotbar')?.addEventListener('click',event=>{
-     const button=event.target.closest('[data-quick-use]');
-     if(button&&!button.disabled&&!this.panelName)this.emit('quick-use',{slot:Number(button.dataset.quickUse)});
-    });
+    const quickBar=$('comfort-hotbar');
+    const useQuickSlot=event=>{
+     const button=event.target.closest?.('[data-quick-use]');
+     if(!button||button.disabled||this.panelName)return;
+     const slot=Number(button.dataset.quickUse);
+     if(event.type==='pointerdown'){
+      // iOS does not reliably synthesize click for a SECOND finger while
+      // the first keeps the movement joystick down. Dispatch immediately,
+      // without capturing the joystick pointer or blurring gameplay.
+      if(event.pointerType==='mouse')return;
+      event.preventDefault();event.stopPropagation();
+      this.lastQuickTouch={slot,at:performance.now()};
+     }else if(this.lastQuickTouch?.slot===slot&&
+              performance.now()-this.lastQuickTouch.at<800)return;
+     this.emit('quick-use',{slot});
+    };
+    quickBar?.addEventListener('pointerdown',useQuickSlot,{passive:false});
+    quickBar?.addEventListener('click',useQuickSlot);
     this.content.addEventListener('input',event=>{
      const input=event.target.closest('[data-shop-quantity]');
      if(!input||this.panelName!=='shop')return;
