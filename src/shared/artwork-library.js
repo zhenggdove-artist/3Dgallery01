@@ -16,6 +16,17 @@ export function artworkPickupReach(layout){
   vertical:Math.min(16,Math.max(8,2.5*Math.min(20,verticalScale)+1.5))
  };
 }
+// Match the uploaded IMAGE FILENAME, not only the editable display title.
+// Existing rooms use both '22' and '22.png' (possibly including a path),
+// so the former title-only migration could silently skip the stuck work.
+export function isArtwork22(record){
+ if(!record||typeof record!=='object')return false;
+ const names=[record.title,record.fileName,record.filename,record.originalName,
+  record.originalFilename,record.sourceFilename,record.mediaFilename,
+  record.media?.filename,record.media?.name];
+ return names.some(v=>typeof v==='string'&&
+  /(?:^|[\\/])22(?:\.(?:png|jpe?g|webp|gif|avif))?$/i.test(v.trim()));
+}
 export function artworkDefinitions(world){return [...PLATFORMS,...(world?.customArtworks||[]).map((a,index)=>({id:a.id,index:PLATFORMS.length+index,artPosition:a.position,position:[a.position[0],0,a.position[2]],artYaw:0,size:[4,4,4]}))];}
 export function addArtwork(world,profile,actor,body,now){
  if(!profile.admin)return {error:'GM only'};const record=body.artwork,media=body.verifiedArtMedia;
