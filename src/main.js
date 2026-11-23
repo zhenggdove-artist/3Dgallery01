@@ -661,7 +661,7 @@ function applyShieldHit(root,profile){
  if(!root||!shield?.hitId||root.userData.lastShieldHitId===shield.hitId)return;
  root.userData.lastShieldHitId=shield.hitId;
  if(Date.now()-Number(shield.lastHit||0)>1500)return; // No flash from stale reconnect snapshots.
- root.userData.shieldFlashUntil=performance.now()+900;
+ root.userData.shieldFlashUntil=performance.now()+1300;
 }
 function applyHitReaction(root,profile){const hit=profile?.hitReaction;if(!root||!hit||root.userData.lastHitReaction===hit.id||Date.now()-hit.time>2500)return;root.userData.lastHitReaction=hit.id;audio.play('hit',root===localRoot?1:.35);root.userData.hitFlashUntil=performance.now()+250;
  if((hit.stunMs||0)>=900){const remaining=Math.max(0,hit.stunMs-(Date.now()-hit.time));root.userData.knockdown={start:performance.now(),duration:remaining};}if(root===localRoot){
