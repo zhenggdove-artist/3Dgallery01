@@ -164,6 +164,21 @@ export class NumberedWeaponEffects {
    fx.setLayerVisible(5,false);
    fx.setLayerVisible(14,false);
   }
+  if(spec.number===73){
+   // Opacity is shader-authored, so material.opacity alone has no effect.
+   // Reduce ALL visible flame pass alpha to 40% opacity (60% transparency) without modifying the
+   // signed source module, its geometry, timing, or gameplay collision.
+   fx.group.traverse(node=>{
+    const layer=node.userData?.animeFlameLayer;
+    if(layer===undefined||[4,5,14].includes(layer))return;
+    const m=node.material;
+    if(!m?.isShaderMaterial||m.userData.templeFireOpacity)return;
+    if(!m.fragmentShader.includes('gl_FragColor'))return;
+    m.fragmentShader=m.fragmentShader.replace(/}\s*$/, '  gl_FragColor.a *= 0.4;\n}');
+    m.transparent=true;m.depthWrite=false;m.needsUpdate=true;
+    m.userData.templeFireOpacity=.4;
+   });
+  }
   this.scene.add(fx.group);
   return fx;
  }
@@ -283,6 +298,9 @@ export class NumberedWeaponEffects {
    const nativeStart=Math.max(0,Number(fx.lifecycle?.start)||0);
    fx.update(nativeStart+1/60);
   }
+  // A sustained conch vortex must reach steady state ONCE; restarting its
+  // 1.1-second reveal for each damage pulse caused repeated visible flashes.
+  if(entry.channel&&spec.number===20)fx.update((fx.lifecycle?.start||1.1)+.02);
   if(entry.worldScale!=null)fx.group.scale.setScalar(entry.worldScale);
   // The vendor clamps 'size' at 2. Double the physical world-space group.
   if(spec.number===26)fx.group.scale.setScalar(entry.worldScale||2*quality);
@@ -298,7 +316,7 @@ export class NumberedWeaponEffects {
    // Breaking Tidal Surge modules, progressing out from the shell.
    entry.waves=[];
    this.spawnClamWave(entry,fx);
-  }else if(key&&CYCLE_INTERVAL[spec.number]) {
+  }else if(key&&spec.number!==20&&CYCLE_INTERVAL[spec.number]) {
    entry.cycles=[this.makeCycle(entry,fx)];
   }
   // Only the server's projectile/sector collision applies any damage.
@@ -578,6 +596,20 @@ export class NumberedWeaponEffects {
     continue;
    }
 
+   if(e.channel&&e.spec.number===20){
+    // The native vortex is an indefinitely active non-burst effect. One
+    // instance follows the authoritative projectile until key release;
+    // repeated pulses must NEVER recycle / reconstruct its shader or phase.
+    const synced=e.attackId?world?.vortexes?.find(v=>v.id===e.attackId):null;
+    const destination=synced?.position?
+     new THREE.Vector3(...synced.position):
+     e.origin.clone().addScaledVector(e.visualDirection,
+      e.range*Math.min(1,e.age/travelLifetime(20)));
+    e.fx.group.position.lerp(destination,Math.min(1,dt*14));
+    e.fx.group.quaternion.setFromUnitVectors(FORWARD,e.visualDirection);
+    e.fx.update(dt);
+    continue;
+   }
    if(e.singleTravel){
     const t=Math.min(1,e.age/travelLifetime(e.spec.number));
     const ease=t*t*(3-2*t);

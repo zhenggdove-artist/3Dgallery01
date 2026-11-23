@@ -269,6 +269,29 @@ export class GameAudio{
    [[.115,.0001],[.132,.045],[.175,.024],[.25,.0001]],.255);
  }
 
+ // Fire has no pitched bass or percussion: filtered turbulent flame air.
+ // Keep its envelope soft and continuous instead of the generic falling
+ // sawtooth + low sub-tone that sounded like a large drum.
+ playFireHiss(ctx,now,amp){
+  const source=ctx.createBufferSource();
+  source.buffer=this.noise;source.loop=true;
+  const high=ctx.createBiquadFilter();high.type='highpass';high.frequency.value=780;
+  const spray=ctx.createBiquadFilter();spray.type='bandpass';
+  spray.Q.value=.65;spray.frequency.setValueAtTime(1950,now);
+  spray.frequency.exponentialRampToValueAtTime(3200,now+.74);
+  const gain=ctx.createGain();
+  gain.gain.setValueAtTime(.0001,now);
+  gain.gain.exponentialRampToValueAtTime(Math.max(.0002,.18*amp),now+.055);
+  gain.gain.setValueAtTime(Math.max(.0002,.14*amp),now+.3);
+  gain.gain.exponentialRampToValueAtTime(.0001,now+.82);
+  source.connect(high);high.connect(spray);spray.connect(gain);gain.connect(this.sfx);
+  this.voices++;
+  source.onended=()=>{
+   source.disconnect();high.disconnect();spray.disconnect();gain.disconnect();
+   this.voices=Math.max(0,this.voices-1);
+  };
+  source.start(now);source.stop(now+.84);
+ }
  play(kind,volume=1,pitch=1){
   if(!this.context)this.unlock(false);
   if(this.muted)return;
@@ -284,6 +307,7 @@ export class GameAudio{
   if(amp<=0)return; // An exact zero slider setting must be truly silent.
   if(key==='jump'){this.playCuteJump(ctx,now,amp,pitch);return;}
   if(key==='land'){this.playCuteLand(ctx,now,amp,pitch);return;}
+  if(key==='fire'){this.playFireHiss(ctx,now,amp);return;}
   const createVoice=(source,filter,amount)=>{
    const gain=ctx.createGain();gain.gain.setValueAtTime(.0001,now);
    gain.gain.exponentialRampToValueAtTime(Math.max(.002,amount),now+.012);
