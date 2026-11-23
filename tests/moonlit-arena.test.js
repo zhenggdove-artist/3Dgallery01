@@ -74,7 +74,7 @@ test('creator can edit uploaded artwork colour, while another player cannot',()=
  assert.match(applyAction(world,owner,{action:'update-art-bomb-appearance',id,appearance:{...appearance,brightness:8}},{now:2200}).error,/Invalid/);
  const saved=applyAction(world,owner,{action:'update-art-bomb-appearance',id,appearance,expectedRevision:1},{now:2300});
  assert.equal(saved.error,undefined);
- assert.deepEqual(world.artworkLayout[id].appearance,appearance);
+ assert.deepEqual(world.artworkLayout[id].appearance,{...appearance,labelBackground:'#000000'});
  assert.equal(worldView(world,'owner',2300).artworkLayout[id].appearance.saturation,2.3);
  assert.match(applyAction(world,owner,{action:'update-art-bomb-appearance',id,appearance,expectedRevision:1},{now:2400}).error,/Reload/);
 });
