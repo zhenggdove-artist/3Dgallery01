@@ -227,6 +227,16 @@ export class NumberedWeaponEffects {
   if(!options.color)delete options.color;
   if(spec.number===47)for(const old of [...this.active])if(old.spec.number===47)this.remove(old);
   const fx=this.acquire(spec,options);
+  if(spec.asset==='energy-sword-wave'){
+   // The official five crescents remain. Render only half of each vendor
+   // InstancedMesh's particles/debris; keep the MIT vendor source unchanged.
+   // Remember its ORIGINAL pool size so recycling never halves it again.
+   fx.group.traverse(node=>{
+    if(!node.isInstancedMesh)return;
+    node.userData.fullParticleCount??=node.count;
+    node.count=Math.max(1,Math.ceil(node.userData.fullParticleCount*.5));
+   });
+  }
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
   // The official charged-beam ray starts at the weapon muzzle, not
   // at an unrelated remote ground-circle centre.
