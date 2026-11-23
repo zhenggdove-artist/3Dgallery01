@@ -219,7 +219,7 @@ export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
     level:profile.level,xp:profile.xp,wingTrialDraws:profile.wingTrialDraws||0,wingPaidDraws:Math.max(0,Number(profile.wingPaidDraws)||0),wingDesignCredits:Math.max(0,Number(profile.wingDesignCredits)||0),deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
     respawnPosition:clone(profile.respawnPosition||null),
-    spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
+    spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),shield:clone(profile.shield||null),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
 
 export function worldProfileView(world,actorKey,now){
@@ -256,7 +256,7 @@ function requireAlive(profile,now){return profile.hp>0&&profile.deadUntil<=now?n
 function near(actor,position,radius){return distance2d(actor.position,position)<=radius&&Math.abs((actor.position?.[1]||0)-position[1])<=8;}
 function spend(profile,amount,world){if(profile.admin)return true;if(profile.wallet<amount)return false;profile.wallet-=amount;world.activity.coinBurned+=amount;return true;}
 function earn(profile,amount,world){if(!profile.admin)profile.wallet+=amount;world.activity.coinMinted+=amount;}
-function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>=600)return false;appendInventoryInstance(profile,itemId);return true;}
+function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>=600)return false;appendInventoryInstance(profile,itemId,'ground');return true;}
 
 // A channel interrupted by a lost stop packet MUST NOT impose 5%-speed
 // validation forever. Movement and attack ticks use the same expiry window.
@@ -730,7 +730,7 @@ function buy(world,profile,body){
  const total=item.price*quantity;
  if(!Number.isSafeInteger(total)||total<0)return {error:'Invalid purchase amount'};
  if(!spend(profile,total,world))return {error:'Not enough coins'};
- for(let i=0;i<quantity;i++)appendInventoryInstance(profile,item.id);
+ for(let i=0;i<quantity;i++)appendInventoryInstance(profile,item.id,'shop');
  profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';
  return {notice:`PURCHASE SUCCESSFUL · ${item.name} ×${quantity} · ${total} coins`,
   purchased:{itemId:item.id,quantity,total}};
@@ -1081,7 +1081,7 @@ function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosit
     Math.max(1,+((amount)*(forceKill?1:1-reduction)*(forceKill?1:stats.defense)*(1+(effectActive(target,'soaked',now)?.power||0))).toFixed(1));
   if(forceKill)damage=Math.max(damage,target.hp); // A verified sniper headshot ignores armour and shields.
   if(shotgunPellet)damage=+Math.max(5,Math.min(20,damage)).toFixed(1); // Per pellet after armour; shields still absorb.
-   if(target.shield&&!forceKill&&!fixedDamage){const absorbed=Math.min(target.shield.hp,damage);target.shield.hp-=absorbed;target.shield.lastHit=now;damage-=absorbed;}
+   if(target.shield&&!forceKill&&!fixedDamage){const absorbed=Math.min(Math.max(0,target.shield.hp),damage);if(absorbed>0){target.shield.hp=Math.max(0,target.shield.hp-absorbed);target.shield.lastHit=now;target.shield.hitId=id();}damage-=absorbed;}
   const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
   if(target.hp>0)return {target:targetActor.key,damage,defeated:false};
