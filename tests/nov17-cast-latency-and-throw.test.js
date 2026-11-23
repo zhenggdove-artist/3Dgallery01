@@ -75,5 +75,5 @@ test('desktop artwork control uses the on-screen A and does not create an extra 
  assert.doesNotMatch(html, /data-action="interact"/);
  assert.match(html, /id="attack-button"/);
  assert.match(script, /nearbyArt\?\.type==='artwork'/);
- assert.match(script, /if\(!artworkThrow\.started\)/);
+ assert.match(script, /if\(!artworkThrow\.started&&!shoulderMouse\)/);
 });
