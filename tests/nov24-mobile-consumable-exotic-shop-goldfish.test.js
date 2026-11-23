@@ -58,7 +58,7 @@ test('single-touch orbit survives pinch cancellation and consumable taps while m
  assert.match(ui,/this\.emit\('quick-use'/);
 });
 
-test('goldfish's homing school never selects or hits its own caster',()=>{
+test('goldfish school never selects or hits its own caster',()=>{
  const world=createInitialWorld(NOW),owner=player('fish-owner'),enemy=player('target',[75,0,10]);
  const p=ensureProfile(world,owner.key,owner.name,owner.color,NOW);
  const victim=ensureProfile(world,enemy.key,enemy.name,enemy.color,NOW);
