@@ -92,6 +92,12 @@ export class WeaponVFX{
    entry.waterParticles.material.dispose();
    entry.waterParticles=null;
   }
+  if(entry.tideCores){
+   entry.tideCores.removeFromParent();
+   entry.tideCores.geometry.dispose();
+   entry.tideCores.material.dispose();
+   entry.tideCores=null;
+  }
   const {id,fx}=entry;fx.detachWeapon?.();fx.group.removeFromParent();fx.group.visible=false;
   const pool=this.pools.get(id)||[];if(pool.length<3){pool.push(fx);this.pools.set(id,pool);}else fx.dispose();if(this.charger===entry)this.charger=null;
  }
@@ -146,6 +152,22 @@ export class WeaponVFX{
   entry.waterOwner=data.owner||null;
   entry.waterWidthFactor=/^tide-[1-5]$/.test(item.id)?3:1;
   if(entry.waterParticles)entry.waterParticles.material.size=.19*entry.waterWidthFactor;
+  if(entry.waterWidthFactor===3&&!entry.tideCores){
+   // Three translucent guided tubes share one draw call and one geometry.
+   // 8 radial segments keep the curved Venom nozzle mobile-friendly.
+   const coreGeo=new THREE.CylinderGeometry(.36,.36,1,8,1,true);
+   const coreMat=new THREE.MeshBasicMaterial({color:'#62d8ff',transparent:true,
+    opacity:.35,depthWrite:false,blending:THREE.AdditiveBlending,
+    side:THREE.DoubleSide,toneMapped:false});
+   entry.tideCores=new THREE.InstancedMesh(coreGeo,coreMat,3);
+   entry.tideCores.name='Three targeted Tide Staff luminous water rays';
+   entry.tideCores.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+   entry.tideCores.frustumCulled=false;
+   entry.tideScratch={m:new THREE.Matrix4(),pos:new THREE.Vector3(),
+    dir:new THREE.Vector3(),q:new THREE.Quaternion(),scale:new THREE.Vector3(),
+    up:new THREE.Vector3(0,1,0)};
+   this.scene.add(entry.tideCores);
+  }
   entry.waterOrigin??=origin.clone();
   entry.waterDirection??=direction.clone();
   entry.waterOrigin.copy(origin); // overwritten by live weapon tip when present
@@ -169,6 +191,19 @@ export class WeaponVFX{
   // Retain one native blue Venom Stream, connected to the closest locked
   // target. Two additional guided rays share ONE buffered 128-point cloud.
   entry.fx.setEndpoints(source,ends[0]);
+  if(entry.tideCores){
+   const {m,pos,dir,q,scale,up}=entry.tideScratch;
+   entry.tideCores.count=Math.min(3,ends.length);
+   for(let i=0;i<entry.tideCores.count;i++){
+    dir.copy(ends[i]).sub(source);
+    const len=Math.max(.001,dir.length());
+    q.setFromUnitVectors(up,dir.divideScalar(len));
+    pos.copy(source).add(ends[i]).multiplyScalar(.5);
+    scale.set(1,len,1);m.compose(pos,q,scale);
+    entry.tideCores.setMatrixAt(i,m);
+   }
+   entry.tideCores.instanceMatrix.needsUpdate=true;
+  }
   const buffer=entry.waterParticles?.geometry?.attributes?.position;
   if(!buffer)return;
   const a=buffer.array,count=buffer.count,n=ends.length;
