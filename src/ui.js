@@ -17,15 +17,35 @@ import {wingIcon} from './reletter/garden-art.js';
 import {wingRarity,WING_QUALITY_NAMES,WING_QUALITY_COLORS} from './shared/wing-shop.js';
 import {mountWingPainter} from './gm-wing-painter.js';
 import {bindChatLayout} from './chat-layout.js';
+import {comfortCashImage} from './comfort-cash-art.js';
 
 const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
 export class TempleUI extends EventTarget{
   constructor(){
-    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.wingPaymentStatus=null;this.firebaseIdToken='';this.authMode='firebase';this.pendingLoginMode='firebase';this.joining=false;
+    super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.wingPaymentStatus=null;this.firebaseIdToken='';this.authMode='firebase';this.pendingLoginMode='firebase';this.joining=false;this.selectedQuickSlot=null;this.quickBarSignature='';this.shopQuantities={};
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
     bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
-    this.bind();this.content.addEventListener('change',event=>{
+    this.bind();
+    $('comfort-hotbar')?.addEventListener('click',event=>{
+     const button=event.target.closest('[data-quick-use]');
+     if(button&&!button.disabled&&!this.panelName)this.emit('quick-use',{slot:Number(button.dataset.quickUse)});
+    });
+    this.content.addEventListener('input',event=>{
+     const input=event.target.closest('[data-shop-quantity]');
+     if(!input||this.panelName!=='shop')return;
+     const card=input.closest('.item'),item=itemById(card?.querySelector('[data-buy]')?.dataset.buy);
+     if(!item)return;
+     const raw=Number(input.value),quantity=Number.isSafeInteger(raw)?raw:0;
+     this.shopQuantities[input.dataset.shopQuantity]=quantity;
+     const valid=quantity>=1&&quantity<=99,profile=this.world?.profile;
+     const affordable=profile?.admin||Number(profile?.wallet)>=item.price*quantity;
+     const room=(profile?.inventory?.length||0)+quantity<=600;
+     const button=card.querySelector('[data-buy]'),label=card.querySelector('[data-buy-total]');
+     if(button){button.disabled=!valid||!affordable||!room;button.textContent='BUY '+(valid?'×'+quantity:'')+' · '+(valid?(item.price*quantity).toLocaleString('en-US'):'—')+' COINS';}
+     if(label)label.textContent=valid?'TOTAL · '+(item.price*quantity).toLocaleString('en-US'):'QUANTITY 1–99';
+    });
+    this.content.addEventListener('change',event=>{
      const select=event.target.closest('[data-shop-variant]');
      if(!select||this.panelName!=='shop')return;
      this.shopVariantChoice??={};
@@ -163,7 +183,10 @@ export class TempleUI extends EventTarget{
       else if(action==='reset-messages'&&window.confirm('確定要永久清空所有留言樹記錄與聊天室訊息？'))this.emit('server-action',{action:'reset-messages'});});
     this.content.addEventListener('click',event=>{const b=event.target.closest('button');if(b?.dataset.unequip)this.emit('server-action',{action:'unequip',slot:b.dataset.unequip});if(b?.dataset.use)this.emit('use-item',b.dataset.use);});
     this.content.addEventListener('click',event=>{const b=event.target.closest('[data-original]');if(!b)return;this.emit('original-action',{action:b.dataset.original,id:b.dataset.id,hole:b.dataset.hole,item:b.dataset.item,pond:b.dataset.pond});});
-    addEventListener('keydown',event=>{if(event.code==='Escape'&&this.panelName){event.preventDefault();this.closePanel();return;}if(/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName))return;const code=event.code;if(this.buildKind){if(code==='KeyE'){event.preventDefault();this.emit('build-confirm');}if(code==='KeyR')this.emit('build-rotate');if(code==='Escape')this.emit('build-cancel');return;}if(code==='Tab'&&this.self?.role==='spectator'){event.preventDefault();this.emit('spectator-cycle');return;}if(code==='KeyJ')this.emit('attack');if(code==='KeyB')this.openPanel('bag');if(code==='KeyI')this.openPanel('shop');if(code==='KeyV')this.openPanel('build');if(code==='KeyC')this.openPanel('social');if(code==='Escape')this.closePanel();if(code==='KeyY'&&event.shiftKey){event.preventDefault();this.openPanel('editor');}});
+    addEventListener('keydown',event=>{if(!this.panelName&&this.self?.role==='fighter'&&!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&
+      !/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)&&/^Digit[123]$/.test(event.code)){
+      event.preventDefault();this.emit('quick-use',{slot:Number(event.code.slice(-1))-1});return;
+     }if(event.code==='Escape'&&this.panelName){event.preventDefault();this.closePanel();return;}if(/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName))return;const code=event.code;if(this.buildKind){if(code==='KeyE'){event.preventDefault();this.emit('build-confirm');}if(code==='KeyR')this.emit('build-rotate');if(code==='Escape')this.emit('build-cancel');return;}if(code==='Tab'&&this.self?.role==='spectator'){event.preventDefault();this.emit('spectator-cycle');return;}if(code==='KeyJ')this.emit('attack');if(code==='KeyB')this.openPanel('bag');if(code==='KeyI')this.openPanel('shop');if(code==='KeyV')this.openPanel('build');if(code==='KeyC')this.openPanel('social');if(code==='Escape')this.closePanel();if(code==='KeyY'&&event.shiftKey){event.preventDefault();this.openPanel('editor');}});
   }
   setLoading(progress,label){$('loading-fill').style.width=`${Math.round(progress*100)}%`;$('loading-detail').textContent=label;$('loading-percent').textContent=`${Math.round(progress*100)}%`;}
   ready(){document.body.classList.add('ready');document.body.classList.remove('booting');}
@@ -217,12 +240,37 @@ export class TempleUI extends EventTarget{
   enter(data){document.activeElement?.blur();this.self=data.self;this.authMode=data.authMode||'firebase';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin;$('gm-menu').hidden=!data.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;$('gm-menu').hidden=!this.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();if(this.panelName&&this.panelName!=='bag')this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
-  setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','wing-shop'].includes(this.panelName)&&this.panelSignature!==JSON.stringify([world.profile.inventory,world.profile.equipment,world.profile.wallet,world.profile.fusion,world.profile.wingDesignCredits])&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
+  setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','wing-shop'].includes(this.panelName)&&this.panelSignature!==JSON.stringify([world.profile.inventory,world.profile.equipment,world.profile.wallet,world.profile.fusion,world.profile.wingDesignCredits,world.profile.quickSlots])&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
   refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);const held=itemById(profile.equipment?.weapon);
- $('weapon').textContent=(held?weaponPresentation(held,profile.fusion?.[held.id]).title:'UNARMED').toUpperCase();}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();
+ $('weapon').textContent=(held?weaponPresentation(held,profile.fusion?.[held.id]).title:'UNARMED').toUpperCase();}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();this.renderQuickBar(profile);
     const gift=$('wing-gift-button');
     if(gift)gift.hidden=!(Number(profile?.wingDesignCredits)||0);
     const monster=this.world?.monster,visible=false;$('monster-hud').hidden=!visible;if(visible){$('monster-name').textContent=`${String(monster.variant).toUpperCase()} · GENERATION ${monster.generation}`;$('monster-hp').max=monster.maxHp;$('monster-hp').value=monster.hp;}}
+  renderQuickBar(profile){
+   const root=$('comfort-hotbar');if(!root)return;
+   if(!this.self||this.self.role!=='fighter'){root.hidden=true;return;}
+   root.hidden=false;
+   const assigned=Array.isArray(profile?.quickSlots)?profile.quickSlots:[null,null,null];
+   const inventory=profile?.inventory||[];
+   const slots=Array.from({length:3},(_,i)=>{
+    const item=itemById(assigned[i]),count=item?.slot==='consumable'?
+     inventory.reduce((n,id)=>n+(id===item.id),0):0;
+    return {item:item?.slot==='consumable'?item:null,count};
+   });
+   const signature=JSON.stringify(slots.map(v=>[v.item?.id||null,v.count]));
+   if(this.quickBarSignature===signature)return;
+   this.quickBarSignature=signature;
+   root.innerHTML=slots.map(({item,count},i)=>{
+    const empty=!item,depleted=!!item&&count===0;
+    const label=item?`${item.name}，剩餘 ${count} 個`:`快捷欄 ${i+1}，尚未裝備`;
+    return `<button type="button" class="comfort-quick-slot ${depleted?'depleted':''}" data-quick-use="${i}" ${empty||depleted?'disabled':''}
+     aria-label="${escape(label)}" title="${escape(label)}">
+     ${item?`<img src="${escape(comfortCashImage(item))}" alt="" draggable="false">`:''}
+     <span class="comfort-quick-key">${i+1}</span>
+     ${item?`<span class="comfort-quick-count">×${count}</span>`:'<span class="comfort-quick-blank">+</span>'}
+    </button>`;
+   }).join('');
+  }
   renderRoster(){
     const box=$('player-roster');if(!box)return;
     const signature=JSON.stringify(this.players.map(p=>[p.key,p.name,p.role,p.profile?.hp,p.profile?.maxHp]));
@@ -324,7 +372,7 @@ export class TempleUI extends EventTarget{
     if(name==='wing-shop'){$('panel-close').focus({preventScroll:true});this.emit('wing-payment-status-request');}
     if(name==='gm')this.requestGmPresence();}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;document.body.classList.remove('panel-open','panel-wing-painter','panel-wing-shop');this.wingGalleryObserver?.disconnect();this.panelName='';this.emit('panel',{open:false});}
-  renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion,this.world?.profile?.wingDesignCredits]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
+  renderPanel(){this.panelSignature=JSON.stringify([this.world?.profile?.inventory,this.world?.profile?.equipment,this.world?.profile?.wallet,this.world?.profile?.fusion,this.world?.profile?.wingDesignCredits,this.world?.profile?.quickSlots]);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
     if(this.panelName==='gm'){this.renderGm();return;}
      if(this.panelName==='wing-painter'){mountWingPainter(this);return;}
     if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + D：圓盤／三角檯座編輯（點選變藍，可修改座標與尺寸、DELETE 刪除、ESC 離開）<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p><h3>GM 指令</h3><p><code>/reset building</code>：復原全部破損房屋（保留塗鴉）<br><code>/clean graffic</code>：永久清除牆面塗鴉<br><code>/reset message</code>：永久清空中央留言與聊天室<br><code>/reset</code>：清空玩家上傳作品<br><code>/recovery</code>：還原藝術品</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(this.panelName==='shop')this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='wing-manage')this.renderWingManage(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<section class="gm-wing-workspace"><h3>GM 翅膀編輯工作區</h3><p>繪製、上架、設定中獎率及下架管理。</p><div class="gm-tools"><button type="button" data-gm-action="wing-painter">畫翅膀／上架</button><button type="button" data-gm-action="wing-manage">已上架翅膀／機率／下架</button></div></section><hr><h3>編輯展示圓盤與檯座</h3>
@@ -408,34 +456,55 @@ export class TempleUI extends EventTarget{
   showSaveCode(code){this.saveCode=String(code||'');this.openPanel('save');this.content.querySelector('#save-code-output')?.select();}
   renderBag(profile){renderOriginalBag(this,profile);}
   renderShop(profile){
-   const tab=this.shopTab||'near',tabs={near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',shield:'Shields',head:'Headwear',outfit:'Outfits',wings:'Wings',owned:'Owned'};
-   const items=(tab==='owned'?(profile.inventory||[]).map(itemById).filter(Boolean):SHOP_ITEMS).filter(i=>
-    tab==='owned'||(tab==='mystery'&&i.mysteryWeapon)||
-    (['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab)||i.slot===tab);
-   // Only genuine five-rank weapon families are variants. Distinct shields,
-   // headgear and exotics must never be folded into unrelated merchandise.
+   const tab=this.shopTab||'near',tabs={
+    near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',
+    comfort:'撫慰心靈的物品',shield:'Shields',head:'Headwear',
+    outfit:'Outfits',wings:'Wings',owned:'Owned'};
+   const saleIds=new Set(SHOP_ITEMS.map(i=>i.id));
+   const source=tab==='owned'?(profile.inventory||[]).map(itemById).filter(i=>i&&saleIds.has(i.id)):SHOP_ITEMS;
+   const items=source.filter(i=>tab==='owned'||tab==='mystery'&&i.mysteryWeapon||
+    ['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab||
+    tab==='comfort'&&i.slot==='consumable'||i.slot===tab);
    const ranked=/^(tide|frost|ember|storm|prism|bloom|nova|saber|whip|swatter|pan|planter|palm)-[1-5]$/;
    const groups=new Map();
    for(const item of items){
     const match=item.slot==='weapon'&&item.id.match(ranked);
     const key=match?'quality:'+match[1]:item.id;
     if(!groups.has(key))groups.set(key,[]);
-    if(!groups.get(key).some(existing=>existing.id===item.id))groups.get(key).push(item);
+    if(!groups.get(key).some(v=>v.id===item.id))groups.get(key).push(item);
    }
-   this.shopVariantChoice??={};
+   this.shopVariantChoice??={};this.shopQuantities??={};
    const cards=[...groups].map(([key,variants])=>{
     variants.sort((a,b)=>(a.tier||1)-(b.tier||1));
     const selected=variants.find(v=>v.id===this.shopVariantChoice[key])||variants[0];
-    const owned=profile.inventory.includes(selected.id),equipped=profile.equipment[selected.slot]===selected.id;
-    const selection=variants.length>1?`<label class="shop-quality-picker" style="display:grid;gap:5px;margin:9px 0;font-size:12px">
-      QUALITY · SELECT PRICE
-      <select data-shop-variant="${escape(key)}" aria-label="Choose quality and price for ${escape(selected.name)}" style="width:100%;max-width:100%;padding:9px;background:#181a27;color:#fff;border:1px solid #747a92;border-radius:5px">
-      ${variants.map(v=>{const rarity=RARITIES.find(r=>r.id===v.rarity)||RARITIES[0];return `<option value="${escape(v.id)}" ${v.id===selected.id?'selected':''}>${escape(rarity.name)} · T${v.tier} — ${Number(v.price).toLocaleString('en-US')} Coins${profile.inventory.includes(v.id)?' · OWNED':''}</option>`;}).join('')}
+    const ownedCount=(profile.inventory||[]).filter(id=>id===selected.id).length;
+    const selectedEquipped=profile.equipment?.[selected.slot]===selected.id;
+    const quantity=this.shopQuantities[key]??1;
+    const valid=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=99;
+    const total=valid?selected.price*quantity:0;
+    const affordable=profile.admin||Number(profile.wallet)>=total;
+    const room=(profile.inventory?.length||0)+quantity<=600;
+    const selection=variants.length>1?`<label class="shop-quality-picker">QUALITY / PRICE
+      <select data-shop-variant="${escape(key)}" aria-label="Choose quality for ${escape(selected.name)}">
+      ${variants.map(v=>{const rarity=RARITIES.find(r=>r.id===v.rarity)||RARITIES[0];
+       const own=(profile.inventory||[]).filter(id=>id===v.id).length;
+       return `<option value="${escape(v.id)}" ${v.id===selected.id?'selected':''}>${escape(rarity.name)} · T${v.tier} — ${Number(v.price).toLocaleString('en-US')} Coins${own?' · ×'+own:''}</option>`;}).join('')}
       </select></label>`:'';
-    const action=`<button data-${owned?'equip':'buy'}="${escape(selected.id)}" ${equipped||!owned&&!profile.admin&&profile.wallet<selected.price?'disabled':''}>${equipped?'EQUIPPED':owned?'EQUIP':`BUY · ${Number(selected.price).toLocaleString('en-US')}`}</button>`;
-    return itemCard(selected,selection+action);
+    const actions=`<div class="shop-purchase">
+      <div class="shop-stock">OWNED ×${ownedCount}${selectedEquipped?' · EQUIPPED':''}</div>
+      <label class="shop-quantity-label">QUANTITY
+        <input type="number" min="1" max="99" step="1" inputmode="numeric"
+         data-shop-quantity="${escape(key)}" value="${escape(quantity)}" aria-label="Purchase quantity for ${escape(selected.name)}">
+      </label>
+      <output data-buy-total>TOTAL · ${valid?total.toLocaleString('en-US'):'—'}</output>
+      <button type="button" data-buy="${escape(selected.id)}" ${!valid||!affordable||!room?'disabled':''}>BUY ×${valid?quantity:1} · ${total.toLocaleString('en-US')} COINS</button>
+      ${ownedCount&&selected.slot!=='consumable'?`<button type="button" data-equip="${escape(selected.id)}" ${selectedEquipped?'disabled':''}>${selectedEquipped?'EQUIPPED':'EQUIP OWNED'}</button>`:''}
+    </div>`;
+    return itemCard(selected,selection+actions);
    });
-   this.content.innerHTML=`<div class="armory-balance"><span>Equipment · collections</span><b>${profile.admin?'∞':profile.wallet} coins</b></div><nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav><div class="shop-items">${cards.join('')||'<p>Your collection starts here. Earn coins by exploring the arena.</p>'}</div>`;
+   this.content.innerHTML=`<div class="armory-balance"><span>Equipment · quantity purchases</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
+    <nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>
+    <div class="shop-items">${cards.join('')||'<p>There are no items in this category.</p>'}</div>`;
    void hydrateItemPreviews(this.content);
   }
 
@@ -618,7 +687,12 @@ export class TempleUI extends EventTarget{
      this.emit('server-action',{action:'gm-wing-remove',wingId});return;
     }
     if(button.hasAttribute('data-draw-wing')){if(this.beginWingDraw())this.emit('server-action',{action:this.self?.profile?.admin?'gm-wing-draw':'wing-draw'});return;}
-    if(button.dataset.bagTab){this.bagTab=button.dataset.bagTab;this.renderPanel();return;}if(button.dataset.shopTab){this.shopTab=button.dataset.shopTab;this.renderPanel();return;}try{if(button.dataset.buy)this.emit('server-action',{action:'buy',itemId:button.dataset.buy});if(button.dataset.equip)this.emit('server-action',{action:'equip',itemId:button.dataset.equip});if(button.dataset.sell)this.emit('server-action',{action:'sell',itemId:button.dataset.sell});if(button.dataset.build){this.buildKind=button.dataset.build;$('build-kind').textContent=this.buildKind.toUpperCase();$('build-mode').hidden=false;this.closePanel();this.emit('build-start',{kind:this.buildKind,file:this.content.querySelector('[data-build-skin]')?.files[0]});}if(button.dataset.role)this.emit('role-change',button.dataset.role);if(button.hasAttribute('data-follow'))this.emit('spectator-follow',button.dataset.follow);if(button.hasAttribute('data-destroy-near'))this.emit('destroy-near');if(button.dataset.removeStructure)this.emit('server-action',{action:'remove-structure',structureId:button.dataset.removeStructure});if(button.hasAttribute('data-save-code'))this.emit('save-code');if(button.hasAttribute('data-copy-save-code')){const value=this.saveCode||this.self?.saveCode;if(value){if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);else{this.content.querySelector('#save-code-output')?.select();document.execCommand('copy');}this.toast('已複製存檔代碼');}}if(button.hasAttribute('data-export-layout'))this.exportLayout();}catch(error){this.toast(error.message);}}
+    if(button.dataset.bagTab){this.bagTab=button.dataset.bagTab;this.renderPanel();return;}if(button.dataset.shopTab){this.shopTab=button.dataset.shopTab;this.renderPanel();return;}try{if(button.dataset.buy){
+     const quantity=Number(button.closest('.item')?.querySelector('[data-shop-quantity]')?.value??1);
+     if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)return this.toast('QUANTITY 1–99');
+     button.blur();
+     this.emit('server-action',{action:'buy',itemId:button.dataset.buy,quantity});
+    }if(button.dataset.equip)this.emit('server-action',{action:'equip',itemId:button.dataset.equip});if(button.dataset.sell)this.emit('server-action',{action:'sell',itemId:button.dataset.sell});if(button.dataset.build){this.buildKind=button.dataset.build;$('build-kind').textContent=this.buildKind.toUpperCase();$('build-mode').hidden=false;this.closePanel();this.emit('build-start',{kind:this.buildKind,file:this.content.querySelector('[data-build-skin]')?.files[0]});}if(button.dataset.role)this.emit('role-change',button.dataset.role);if(button.hasAttribute('data-follow'))this.emit('spectator-follow',button.dataset.follow);if(button.hasAttribute('data-destroy-near'))this.emit('destroy-near');if(button.dataset.removeStructure)this.emit('server-action',{action:'remove-structure',structureId:button.dataset.removeStructure});if(button.hasAttribute('data-save-code'))this.emit('save-code');if(button.hasAttribute('data-copy-save-code')){const value=this.saveCode||this.self?.saveCode;if(value){if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);else{this.content.querySelector('#save-code-output')?.select();document.execCommand('copy');}this.toast('已複製存檔代碼');}}if(button.hasAttribute('data-export-layout'))this.exportLayout();}catch(error){this.toast(error.message);}}
   async panelSubmit(event){event.preventDefault();const form=new FormData(event.target),kind=event.target.dataset.form;if(kind==='art-bomb-upload'){const files=[...event.target.querySelector('[name=artwork]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('art-bomb-upload',{files,title,size:Number(form.get('size'))});return;}if(kind==='art-bomb-resize'){this.emit('art-bomb-resize',{id:String(form.get('id')),size:Number(form.get('size'))});return;}if(kind==='art-bomb-appearance'){const appearance={depth:+form.get('depth'),brightness:+form.get('brightness'),contrast:+form.get('contrast'),saturation:+form.get('saturation'),blackPoint:+form.get('blackPoint'),tint:String(form.get('tint'))};this.emit('art-bomb-appearance',{id:String(form.get('id')),expectedRevision:Number(form.get('revision')),appearance});return;}if(kind==='gm-platform'){this.emit('create-platform',{position:['x','y','z'].map(k=>Number(form.get(k))),radius:Number(form.get('radius'))});return;}if(kind==='upload-artwork'){const files=[...event.target.querySelector('input[type=file]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('upload-artwork',{files,title});return;}if(kind==='fusion')this.emit('server-action',{action:'fuse',sourceId:form.get('source'),targetId:form.get('target'),requestId:crypto.randomUUID()});if(kind==='chat'){const text=String(form.get('text')||'').trim();if(text)this.emit('chat',text);event.target.reset();}if(kind==='plant'||kind==='plant-reply'){const text=String(form.get('text')||'').trim();let file=form.get('media');if(!file?.size)file=null;const drawing=event.target.querySelector('[data-drawing][data-used]');if(drawing)file=await new Promise(resolve=>drawing.toBlob(resolve,'image/webp',.8));if(text||file)this.emit('plant',{text,file,parentId:kind==='plant-reply'?this.selectedPlant?.id:null});}if(kind==='editor'){const settings={pixelRatio:+form.get('pixelRatio'),fog:+form.get('fog'),artFloat:+form.get('artFloat')};localStorage.setItem('temple-editor-settings',JSON.stringify(settings));this.emit('editor-settings',settings);this.toast('已儲存編輯結果');}}
   clearChat(){
     this.chat=[];const log=$('chat-messages');if(log)log.replaceChildren();
