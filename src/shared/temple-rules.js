@@ -6,7 +6,7 @@ import {discGroundHeight} from './artwork-discs.js';
 import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
-import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance} from './artwork-library.js';
+import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
@@ -81,21 +81,31 @@ export function migrateWorld(raw,now=Date.now()){
     world.artworks[record.id]??={availableAt:0,holder:null,throwEvent:null};
     const art=world.artworks[record.id];
     if(art?.holder&&!world.profiles[art.holder]){art.holder=null;art.throwEvent=null;art.availableAt=0;}
-    if(record.title?.trim()==='22'){
-      // One-time unlock of the specifically reported stuck exhibit; do not
-      // reset legitimate pickups on every room migration/snapshot.
-      if(!world.artwork22UnlockMigrationApplied){
-        art.holder=null;art.throwEvent=null;art.availableAt=0;
-        world.artwork22UnlockMigrationApplied=true;world.revision=(world.revision||0)+1;
+    if(isArtwork22(record)){
+      // v1 used a single room-wide boolean keyed on display title '22'.
+      // A subsequent upload or an original filename '22.png' could bypass it.
+      // Restore each matching record exactly once, then keep normal pickup
+      // ownership intact until another GM explicitly changes its layout.
+      world.artwork22RecoveryV2??={};
+      if(!world.artwork22RecoveryV2[record.id]){
+        Object.assign(art,{holder:null,throwEvent:null,availableAt:0});
+        world.pendingArtworkFlights=(world.pendingArtworkFlights||[])
+          .filter(f=>f.event?.platformId!==record.id);
+        world.artwork22RecoveryV2[record.id]=true;
+        world.revision=(world.revision||0)+1;
       }
       if(!Number.isFinite(art.availableAt)||art.availableAt>now+3600000)art.availableAt=0;
-      const layout=world.artworkLayout[record.id];
-      const pos=layout?.position;
+      const layout=world.artworkLayout[record.id],pos=layout?.position;
       const invalid=!Array.isArray(pos)||pos.length!==3||!pos.every(Number.isFinite)||
         pos.some(v=>Math.abs(v+100)<1e-6)||
         Math.hypot(pos[0],pos[2])>ARENA_RADIUS+5||pos[1]<-2||pos[1]>60;
-      if(invalid&&Array.isArray(record.position)&&record.position.every(Number.isFinite))
-        world.artworkLayout[record.id]={...layout,position:[...record.position],revision:(layout?.revision||0)+1,updatedAt:now};
+      if(invalid&&Array.isArray(record.position)&&record.position.every(Number.isFinite)){
+        world.artworkLayout[record.id]={...layout,position:[...record.position],
+          rotation:layout?.rotation||[0,0,0],scale:layout?.scale||[1,1,1],
+          appearance:validateAppearance(layout?.appearance||{}),
+          revision:(layout?.revision||0)+1,updatedAt:now};
+        world.revision++;
+      }
     }
   }
   // Old RELETTER farming data must not survive the removal of the Garden game mode.
@@ -715,11 +725,11 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
   if(!profile.admin)return {error:'GM only'};
   const platform=artworkDefinitions(world).find(p=>p.id===body.platformId);if(!platform)return {error:'Unknown artwork'};
   const art=world.artworks[platform.id]??=( {availableAt:0,holder:null,throwEvent:null} );
-  const isLockedExhibit=(world.customArtworks||[]).some(a=>a.id===platform.id&&a.title?.trim()==='22');
+  const isLockedExhibit=(world.customArtworks||[]).some(a=>a.id===platform.id&&isArtwork22(a));
   // Preserve ordinary players' held or airborne artworks; only the reported
   // stuck exhibit can be force-released by a GM layout save.
   if((art.holder||art.availableAt>now)&&!isLockedExhibit)return {error:'Wait until the artwork returns'};
-  const current=world.artworkLayout?.[platform.id];if(body.expectedRevision!==(current?.revision||0))return {error:'Layout changed by another GM. Reload and retry.'};
+  const current=world.artworkLayout?.[platform.id];if(body.expectedRevision!==(current?.revision||0)&&!isLockedExhibit)return {error:'Layout changed by another GM. Reload and retry.'};
   const layout=body.layout,vec=value=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);
   if(!layout||!vec(layout.position)||!vec(layout.rotation)||!vec(layout.scale))return {error:'Invalid transform'};
   if(Math.hypot(layout.position[0],layout.position[2])>ARENA_RADIUS+5||layout.position[1]<-2||layout.position[1]>60||layout.scale.some(v=>v<.05||v>20)||layout.rotation.some(v=>Math.abs(v)>Math.PI*8))return {error:'Transform exceeds bounds'};
