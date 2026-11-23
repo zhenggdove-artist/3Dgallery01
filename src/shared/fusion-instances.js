@@ -30,6 +30,8 @@ export function ensureWeaponAffixes(profile,rng=Math.random){
    // Shop and grants have the same fixed stats, but still need an editable
    // per-instance record so fusion and existing gameplay retain their contract.
    profile.fusionByInstance[row.uid]??={weaponAffixes:[]};
+   // Legacy and freshly migrated instances must retain their price-paid tier.
+   if(Number.isInteger(row.shopTier))profile.fusionByInstance[row.uid].shopTier=row.shopTier;
    continue;
   }
   const old=profile.fusionByInstance?.[row.uid]||{};
@@ -62,7 +64,7 @@ export function ensureFusionIdentity(profile){
   // Per-instance provenance. Never infer a newly purchased item's stats from catalog ID.
   const source=profile.itemOrigins?.[itemId];
   const origin=found?.origin||(source==='monster'||source==='ground'?'ground':source==='shop'?'shop':'grant');
-  return {uid,itemId,origin,viewed:found?.viewed!==false};
+  return {uid,itemId,origin,viewed:found?.viewed!==false,...(Number.isInteger(found?.shopTier)?{shopTier:found.shopTier}:{})};
  });
  profile.inventoryInstances=current;
  profile.fusionByInstance??={};
@@ -168,14 +170,18 @@ export function selectEquipmentInstance(profile,slot,index){
  return true;
 }
 
-export function appendInventoryInstance(profile,itemId,origin='ground'){
+export function appendInventoryInstance(profile,itemId,origin='ground',shopTier=null){
  ensureFusionIdentity(profile);
  profile.inventory.push(itemId);
  const uid=newUid();
- profile.inventoryInstances.push({uid,itemId,origin,viewed:false});
+ profile.inventoryInstances.push({uid,itemId,origin,viewed:false,
+  ...(Number.isInteger(shopTier)?{shopTier}:{})});
  if(itemById(itemId)?.slot==='weapon'){
   profile.fusionByInstance??={};
-  profile.fusionByInstance[uid]={weaponAffixes:origin==='ground'?rollWeaponAffixes(itemById(itemId)):[]};
+  profile.fusionByInstance[uid]={
+   weaponAffixes:origin==='ground'?rollWeaponAffixes(itemById(itemId)):[],
+   ...(Number.isInteger(shopTier)?{shopTier}:{})
+  };
  }
 }
 
