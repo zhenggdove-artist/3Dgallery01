@@ -18,7 +18,14 @@ export function editorPanelMarkup(appearance,platformRadius,originalArtwork,titl
    </label>`).join('');
  const radius=originalArtwork?`<label class="art-editor-field"><span class="art-field-name">展示圓盤半徑</span>
    <span class="art-editor-values"><input data-platform-radius type="number" min="1.5" max="14" step=".1" value="${Number(platformRadius||3).toFixed(2)}"></span></label>`:'';
- return `<h3>GM · 藝術品配置</h3><p data-art-name></p>
+ return `<header class="gm-floating-head">
+   <span class="gm-floating-grab" data-gm-panel-drag role="button" tabindex="-1" aria-label="拖曳移動 GM 藝術品配置視窗">GM · 配置</span>
+   <button type="button" data-gm-panel-toggle aria-expanded="true" aria-label="展開或收合編輯視窗">收合</button>
+   <button type="button" data-action="save" class="gm-floating-quick-save" aria-label="儲存目前作品配置">儲存</button>
+   <button type="button" data-action="cancel" class="gm-floating-close" aria-label="取消並關閉藝術品配置">×</button>
+  </header>
+  <div class="gm-floating-body">
+  <p data-art-name></p>
   <p class="art-editor-help">Shift+T 縮放／Shift+R 旋轉／Shift+G 移動；Esc 取消</p>
   <div class="art-editor-toolbar"><button data-action="scale">尺寸</button><button data-action="rotate">旋轉</button><button data-action="translate">位置</button><button data-action="label-resize">編輯名稱底色框</button></div>
   <p class="art-editor-help">點擊畫面中的作品名稱底色框，出現八個控制點；四角等比、四邊中點單邊拉伸，文字維持置中。</p>
@@ -34,7 +41,8 @@ export function editorPanelMarkup(appearance,platformRadius,originalArtwork,titl
   <p data-status>已選取 · 尚無修改</p>
   <div class="art-editor-actions"><button data-action="follow">跟隨 GM</button>
    <button data-action="save">儲存預設值</button><button data-action="apply-own-labels">將這組名稱樣式套用到我上傳的全部作品</button><button data-action="cancel">取消／關閉</button>
-   <button data-action="export">匯出配置</button></div>`;
+   <button data-action="export">匯出配置</button><button data-gm-panel-reset type="button">視窗位置／尺寸重設</button></div>
+  </div><button type="button" class="gm-floating-resize" data-gm-panel-resize aria-label="拖曳以調整 GM 編輯視窗寬度與高度">↘</button>`;
 }
 
 export function playerArtworkAppearanceMarkup(record,layout,escape){
