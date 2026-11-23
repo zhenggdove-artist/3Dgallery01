@@ -80,12 +80,16 @@ test('all weapons have dimensional warning contracts derived from identical atta
   if(item.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
   if(item.id==='goldfish'&&stats.ultimate)stats.radius=1.05*quality.visual;
   scaleUltimateFootprint(stats,item);
+  if(item.id==='giraffe'&&stats.ultimate){
+   stats.range=+(item.chargedRange*quality.range).toFixed(2);
+   stats.radius=Math.max(stats.radius,5.9*quality.visual);
+  }
   if(item.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
   if(item.id==='clam'||item.family==='saber'){
    assert.equal(a.shape,'sector',item.id);
    nearly(preview.sector.settings.size*preview.sector.group.scale.x,stats.range,item.id);
    assert.equal(preview.sector.settings.angleDeg,item.family==='saber'?60:90,item.id);
-  }else if((isChannelStaff(item)&&item.family!=='ice')||(item.id==='accordion'&&stats.ultimate)||item.firstPerson||item.family==='saber'||(item.family==='palm'&&!stats.ultimate)||item.pattern==='scatter'||item.id==='goldfish'){
+  }else if((item.id==='giraffe'&&stats.ultimate)||(isChannelStaff(item)&&item.family!=='ice')||(item.id==='accordion'&&stats.ultimate)||item.firstPerson||item.family==='saber'||(item.family==='palm'&&!stats.ultimate)||item.pattern==='scatter'||item.id==='goldfish'){
    assert.equal(a.shape,'rectangle',item.id);
    nearly(preview.rectangle.settings.length*preview.rectangle.group.scale.x,stats.range,item.id);
    nearly(preview.rectangle.settings.width*preview.rectangle.group.scale.z,stats.radius*2,item.id);
