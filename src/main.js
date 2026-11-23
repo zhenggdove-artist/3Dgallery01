@@ -91,7 +91,10 @@ let healVisualSeq=0,lastHealVisualAt=0;
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
 let pendingAInteraction=null,chargeDelayTimer=null,beamStartTimer=null,nextChargeRetryAt=0;
-let sniperScopeAtPress=false; // Black Cat A-holds may charge only when already scoped.
+let sniperShoulderAtPress=false; // A-holds can charge only fused Black Cat from shoulder.
+const authoredId=item=>item?.baseId||item?.id;
+const canShoulderSniperUltimate=weaponId=>(world?.profile?.fusion?.[weaponId]?.effects||[])
+ .some(id=>{const item=itemById(id);return item?.slot==='weapon'&&Number(item.chargeDamage)>0&&Number(item.chargeMs)>0;});
 // Begin charging after the 500ms tap threshold without relying on render FPS.
 // After a stun/rejected request, retry only while the A/Q button is still held.
 function clearChargeDelay(){
@@ -120,11 +123,11 @@ function startHeldCharge(){
     !controller?.enabled||performance.now()<nextChargeRetryAt)return;
  // Goldfish changes camera on a tap, but its original giant red fish
  // ultimate must remain chargeable ONLY before entering shoulder mode.
- if(itemById(world?.profile?.equipment?.weapon)?.id==='goldfish'&&gun.mode!==0)return;
+ if(authoredId(itemById(world?.profile?.equipment?.weapon))==='goldfish'&&gun.mode!==0)return;
  // Never begin a Black Cat charge while outside the actual sniper scope.
- if(itemById(world?.profile?.equipment?.weapon)?.id==='black-cat'&&(!sniperScopeAtPress||gun.mode!==2))return;
+ if(authoredId(itemById(world?.profile?.equipment?.weapon))==='black-cat'&&(!sniperShoulderAtPress||gun.mode!==1))return;
  chargeStarted=performance.now();
- chargeRequest=sendAction('attack',{phase:'charge',...(sniperScopeAtPress?{scoped:true}:{})}).then(result=>{
+ chargeRequest=sendAction('attack',{phase:'charge',...(sniperShoulderAtPress?{aimMode:'shoulder'}:{})}).then(result=>{
   if(!result?.charging&&attackHeld){
    chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;
   }
@@ -135,7 +138,7 @@ function startHeldCharge(){
  // Do not wait for a future render frame to request that pulse: slow mobile
  // GPU compilation can starve the rAF-driven transition for several seconds.
  const weapon=itemById(world?.profile?.equipment?.weapon);
- if(weapon&&['lightning','beam'].includes(weapon.family))
+ if(isChannelStaff(weapon)&&['lightning','beam'].includes(weapon.family))
   scheduleBeamChannelStart((Number(weapon.chargeMs)||1500)+75);
 }
 let staffChannel=null,staffChannelPromise=null,staffChannelBusy=false,staffChannelShotAt=0,staffChannelSerial=0;
@@ -536,14 +539,14 @@ ui.addEventListener('attack-start',()=>{
  // lingered. Do not let that stale preview block pickup of a respawned work.
  if(!carryingArtwork&&artworkThrow.started!==null)artworkThrow.cancel();
  if(carryingArtwork){
-  clearChargeDelay();pendingAInteraction=null;attackHeld=false;sniperScopeAtPress=false;
+  clearChargeDelay();pendingAInteraction=null;attackHeld=false;sniperShoulderAtPress=false;
   attackHoldStarted=null;chargeStarted=null;chargeRequest=null;
   artworkThrow.begin();return;
  }
  if(attackHeld||staffChannel)return;
  const weapon=itemById(world?.profile?.equipment?.weapon);
  // Record scope at key-down, so holding A before aiming can never charge/fire.
- sniperScopeAtPress=weapon?.id==='black-cat'&&gun.mode===2;
+ sniperShoulderAtPress=authoredId(weapon)==='black-cat'&&gun.mode===1&&canShoulderSniperUltimate(weapon.id);
  // A tap picks up nearby items; holding must still charge any weapon except unscoped Black Cat.
  // For first-person guns a tap cycles the camera, while a hold charges.
  pendingAInteraction=null;
@@ -584,7 +587,7 @@ ui.addEventListener('attack-release',async()=>{
  const weapon=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
  const heldMs=performance.now()-attackHoldStarted;
  const charge=chargeProgress(heldMs,weapon?.chargeMs||1500);
- const wasScopedAtPress=sniperScopeAtPress;sniperScopeAtPress=false;
+ const wasShoulderAtPress=sniperShoulderAtPress;sniperShoulderAtPress=false;
  attackHoldStarted=null;chargeStarted=null;
  const pending=chargeRequest;chargeRequest=null;
  if(heldMs<STAFF_TAP_MAX_MS&&tapInteraction){
@@ -592,7 +595,7 @@ ui.addEventListener('attack-release',async()=>{
  }
  // Outside the scope Black Cat A/Q only changes cameras, even on long holds.
  // Fused weapons cannot turn this camera input into an ordinary or ultimate hit.
- if(weapon?.id==='goldfish'){
+ if(authoredId(weapon)==='goldfish'){
   if(gun.mode===1){gun.cycle();return;} // scoped A remains camera-only
   if(heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
   if(pending)await pending;
@@ -600,7 +603,15 @@ ui.addEventListener('attack-release',async()=>{
   else void sendAction('attack',{phase:'channel-stop'}); // clear interrupted charge
   return;
  }
- if(weapon?.id==='black-cat'&&!wasScopedAtPress){gun.cycle();return;}
+ if(authoredId(weapon)==='black-cat'){
+  if(!wasShoulderAtPress||gun.mode!==1||heldMs<STAFF_TAP_MAX_MS){
+   gun.cycle();return;
+  }
+  if(pending)await pending;
+  if(charge>=1&&canShoulderSniperUltimate(weapon.id))await performAttack(1);
+  else void sendAction('attack',{phase:'channel-stop'});
+  return;
+ }
  if(weapon?.firstPerson&&heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
  if(heldMs>=STAFF_TAP_MAX_MS&&pending)await pending;
  if(isChannelStaff(weapon)){
@@ -623,7 +634,7 @@ ui.addEventListener('attack-release',async()=>{
 });
 ui.addEventListener('attack-cancel',()=>{
  gun.held=false;
- attackHeld=false;sniperScopeAtPress=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();artworkThrow.cancel();
+ attackHeld=false;sniperShoulderAtPress=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();artworkThrow.cancel();
  if(localRoot)localRoot.userData.staffCastingUntil=0;
  if(staffChannel){
   const pending=staffChannelPromise;
@@ -847,17 +858,18 @@ function performAttack(charge=0,phase=null){
  if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
  const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
  // Centralized guard covers UI A/Q, canvas clicks, auto-charge and fusion.
- if(item.id==='black-cat'&&gun.mode!==2)return;
- if(item.id==='goldfish'&&gun.mode!==1&&charge<1)return;
+ if(authoredId(item)==='black-cat'&&gun.mode!==1&&gun.mode!==2)return;
+  if(authoredId(item)==='black-cat'&&charge>0&&(gun.mode!==1||!canShoulderSniperUltimate(item.id)))return;
+ if(authoredId(item)==='goldfish'&&gun.mode!==1&&charge<1)return;
  // Unscoped goldfish ultimate follows the camera forward ray; an 11m
  // third-person muzzle intersection can otherwise aim behind the avatar.
- const goldfishUltimate=item.id==='goldfish'&&charge>=1&&gun.mode===0;
+ const goldfishUltimate=authoredId(item)==='goldfish'&&charge>=1&&gun.mode===0;
  const shot=item.firstPerson&&!goldfishUltimate?gun.shot():null;
  const muzzle=isChannelStaff(item)||item.family==='saber'||item.id==='calico-cat'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
  const direction=goldfishUltimate?cameraAimDirection(camera).toArray():
   shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
-  ...(item.id==='black-cat'?{scoped:true}:{}),
+  ...(authoredId(item)==='black-cat'?(gun.mode===1?{aimMode:'shoulder'}:{scoped:true}):{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
 }
 function performInteract(target=null){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=target||arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
