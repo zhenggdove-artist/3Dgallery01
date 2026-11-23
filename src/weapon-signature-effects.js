@@ -690,12 +690,12 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
   },key);
  }
  play(event,item,ownerRoot){
-  if(item.id==='goldfish'&&!event.ultimate)return this.goldfishBubble(event),true;
-  if(item.id==='calico-cat')return this.shotgun(event),true;
+  if((item.baseId||item.id)==='goldfish'&&!event.ultimate)return this.goldfishBubble(event),true;
+  if((item.baseId||item.id)==='calico-cat')return this.shotgun(event),true;
   if(!event.ultimate)return false;
-  if(item.id==='giraffe')return this.giraffe(event,ownerRoot),true;
-  if(item.id==='goldfish')return this.goldfish(event),true;
-  if(item.id==='fan')return this.tornado(event),true;
+  if((item.baseId||item.id)==='giraffe')return this.giraffe(event,ownerRoot),true;
+  if((item.baseId||item.id)==='goldfish')return this.goldfish(event),true;
+  if((item.baseId||item.id)==='fan')return this.tornado(event),true;
   if(item.family==='petal')return this.flower(event),true;
   return false;
  }
