@@ -23,24 +23,25 @@ import shock from '../vendor/00gamedevs/shockwave.js';
 import shatter from '../vendor/00gamedevs/ice-shatter.js';
 import flame from '../vendor/00gamedevs/flame-surge.js';
 import tidal from '../vendor/00gamedevs/tidal-surge.js';
+import venomStream from '../vendor/00gamedevs/venom-stream.js';
 import thorn from '../vendor/00gamedevs/thorn-crown.js';
 import gale from '../vendor/00gamedevs/spiral-gale.js';
 import astral from '../vendor/00gamedevs/astral-convergence.js';
 import barrier from '../vendor/00gamedevs/magic-barrier.js';
 import burning from '../vendor/00gamedevs/burning-ground.js';
 
-const factories={'azure-sweep':sweep,'weapon-smear':smear,'plasma-bolt':plasma,'ice-shard':ice,'arcane-missile':arcane,'pulse-beam':pulse,'charged-beam':charged,'arc-ray':arc,'energy-burst':burst,shockwave:shock,'ice-shatter':shatter,'flame-surge':flame,'tidal-surge':tidal,'thorn-crown':thorn,'spiral-gale':gale,'astral-convergence':astral,'magic-barrier':barrier,'burning-ground':burning};
+const factories={'azure-sweep':sweep,'weapon-smear':smear,'plasma-bolt':plasma,'ice-shard':ice,'arcane-missile':arcane,'pulse-beam':pulse,'charged-beam':charged,'arc-ray':arc,'energy-burst':burst,shockwave:shock,'ice-shatter':shatter,'flame-surge':flame,'tidal-surge':tidal,'venom-stream':venomStream,'thorn-crown':thorn,'spiral-gale':gale,'astral-convergence':astral,'magic-barrier':barrier,'burning-ground':burning};
 const projectiles=new Set(['plasma-bolt','ice-shard','arcane-missile']);
 const beams=new Set(['pulse-beam','charged-beam','arc-ray']);
 const continuous=new Set([...projectiles,...beams,'magic-barrier','burning-ground','flame-surge','tidal-surge','thorn-crown','spiral-gale']);
 export const WEAPON_VFX=Object.freeze({
- water:['tidal-surge','tidal-surge'],ice:['ice-shard','ice-shatter'],fire:['flame-surge','flame-surge'],lightning:['arc-ray','energy-burst'],beam:['pulse-beam','charged-beam'],petal:['arcane-missile','arcane-missile'],wave:['tidal-surge','spiral-gale'],
+ water:['venom-stream','venom-stream'],ice:['ice-shard','ice-shatter'],fire:['flame-surge','flame-surge'],lightning:['arc-ray','energy-burst'],beam:['pulse-beam','charged-beam'],petal:['arcane-missile','arcane-missile'],wave:['tidal-surge','spiral-gale'],
  saber:['azure-sweep','azure-sweep'],whip:['azure-sweep','arc-ray'],swatter:['azure-sweep','spiral-gale'],pan:['shockwave','energy-burst'],planter:['thorn-crown','golden-chain-rain'],palm:['shockwave','lightning-fire-tornado'],
  'white-cat':['plasma-bolt','pulse-beam'],'black-cat':['pulse-beam','charged-beam'],'calico-cat':['plasma-bolt','energy-burst'],giraffe:['azure-sweep','arc-ray'],goldfish:['tidal-surge','tidal-surge'],clam:['shockwave','tidal-surge'],accordion:['shockwave','spiral-gale'],fan:['azure-sweep','spiral-gale'],telephone:['arc-ray','energy-burst'],jellybrella:['arcane-missile','magic-barrier'],'chiang-token':['arcane-missile','astral-convergence']
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.plantUltimates=new PlantUltimateEffects(scene);}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.waterStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.plantUltimates=new PlantUltimateEffects(scene);}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -83,7 +84,7 @@ export class WeaponVFX{
   fx.setOptions({size:1,speed:1,color:options.color||'#a5eaff',...options});
   const entry={id,fx,age:0,stopAt:Infinity,stopped:false};this.scene.add(fx.group);this.active.push(entry);this.replayed++;return entry;
  }
- release(entry){const i=this.active.indexOf(entry);if(i<0)return;this.active.splice(i,1);const {id,fx}=entry;fx.detachWeapon?.();fx.group.removeFromParent();fx.group.visible=false;
+ release(entry){const i=this.active.indexOf(entry);if(i<0)return;this.active.splice(i,1);if(entry.waterKey)this.waterStreams.delete(entry.waterKey);const {id,fx}=entry;fx.detachWeapon?.();fx.group.removeFromParent();fx.group.visible=false;
   const pool=this.pools.get(id)||[];if(pool.length<3){pool.push(fx);this.pools.set(id,pool);}else fx.dispose();if(this.charger===entry)this.charger=null;
  }
  // The local geometry origin of a real held staff (or clam). Unlike
@@ -98,8 +99,43 @@ export class WeaponVFX{
   }
   return root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,1.1,0));
  }
+ playWaterStream(data,item,root,origin,direction,range){
+  // Native 00GameDevs venom-stream beam. One recycled source per caster,
+  // blue re-tint only; collisions remain exclusively server-owned.
+  const key=root?.uuid||data.owner;
+  if(!key)return;
+  let entry=this.waterStreams.get(key);
+  if(entry&&!this.active.includes(entry)){this.waterStreams.delete(key);entry=null;}
+  if(!entry){
+   entry=this.acquire('venom-stream',{
+    color:'#2d9fff',quantity:8,density:.55,
+    size:Math.max(.35,Math.min(2,(Number(data.radius)||1.05)/1.5))
+   });
+   entry.waterChannel=true;
+   this.waterStreams.set(key,entry);
+  }
+  entry.waterKey=key;entry.host=root;entry.waterWeapon=item;
+  entry.waterOrigin??=origin.clone();
+  entry.waterDirection??=direction.clone();
+  entry.waterOrigin.copy(origin); // overwritten by live weapon tip when present
+  entry.waterDirection.copy(direction);
+  entry.waterRange=range;
+  entry.lastWaterPulseAt=performance.now();
+  this.alignWaterStream(entry);
+ }
+ alignWaterStream(entry){
+  if(!this.active.includes(entry))return;
+  const source=entry.host?this.channelMuzzle(entry.host,entry.waterWeapon,entry.waterOrigin.clone()):entry.waterOrigin.clone();
+  const ray=entry.host?.userData?.staffAimDirection;
+  const dir=Array.isArray(ray)&&ray.length===3&&ray.every(Number.isFinite)?
+   new THREE.Vector3(...ray).normalize():entry.waterDirection;
+  const target=source.clone().addScaledVector(dir,entry.waterRange);
+  entry.fx.setEndpoints(source,target);
+ }
  stopChannel(root){
   this.restoration.stop(root);
+  for(const entry of [...this.waterStreams.values()])
+   if(entry.host===root)this.release(entry);
   this.numberedEffects.stop(root);
   for(const [key,entry] of [...this.channelStreams])if(entry.host===root){
    this.particleSkills.remove(entry);this.channelStreams.delete(key);
@@ -214,6 +250,26 @@ export class WeaponVFX{
   // Every ordinary staff shot, including beam, is a pulsing elemental orb.
   if(isChannelStaff(item)&&item.id!=='clam'&&!data.channel&&(!data.ultimate||['lightning','beam'].includes(item.family))){
    this.staffOrb(data,item,origin,direction);return;
+  }
+  // Ice staff summons the original Shattering Frostburst at the exact
+  // server-owned forward circle; never release the old travelling ice spear.
+  if(item.family==='ice'&&data.ultimate&&impactArea?.mode==='area'){
+   const spell=this.acquire('ice-shatter',{
+    color:'#a7e4ff',size:1,density:.65,quantity:9,speed:1
+   });
+   spell.fx.group.position.fromArray(impactArea.visualCenter||impactArea.center||origin.toArray());
+   spell.fx.group.position.y+=.28;
+   spell.fx.update(.02);
+   spell.iceRadius=Math.max(.35,(Number(impactArea.radius)||2)/2.5);
+   spell.fx.group.scale.setScalar(spell.iceRadius);
+   spell.stopAt=3;
+   return;
+  }
+  // Water staff projects the actual 00GameDevs Corrosive Venom Jet in blue.
+  // Do not stack the former tidal-surge prefab or custom stream.
+  if(item.family==='water'&&data.channel&&!data.fusionEcho){
+   this.playWaterStream(data,item,root,origin,direction,range);
+   return;
   }
   // Charged and sustained spells keep their original 00GameDevs effects.
   if(this.numberedEffects.play(data,item,root))return;
@@ -366,6 +422,12 @@ export class WeaponVFX{
   }
   for(const e of [...this.active]){
    try{
+    if(e.waterChannel){
+     if(performance.now()-e.lastWaterPulseAt>Math.max(3100,Number(e.waterWeapon?.cooldown||650)*2+650)){
+      this.release(e);continue;
+     }
+     this.alignWaterStream(e);
+    }
     e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
     if(e.start&&!e.stopped)e.fx.group.position.lerpVectors(e.start,e.end,Math.min(1,e.age/e.travel));
     if(!e.stopped&&e.age>=e.stopAt){
@@ -374,7 +436,8 @@ export class WeaponVFX{
      e.stopped=true;
     }
     e.fx.update(dt);
-    if(e.fx.finished||e.age>12)this.release(e);
+    if(e.iceRadius)e.fx.group.scale.setScalar(e.iceRadius);
+    if(e.fx.finished||(!e.waterChannel&&e.age>12))this.release(e);
    }catch(error){
     // The failed native instance cannot go back to the reusable GPU pool.
     const index=this.active.indexOf(e);if(index>=0)this.active.splice(index,1);
@@ -390,7 +453,7 @@ export class WeaponVFX{
   this.failedAnimations.add(id);
   console.error('Weapon animation failed; quarantined this instance',id,error);
  }
- dispose(){this.plantUltimates.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
+ dispose(){this.waterStreams.clear();this.plantUltimates.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
   for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }

@@ -27,9 +27,29 @@ test('each ordinary elemental staff tap creates a 3D sphere spell, not a spray',
 test('full-charge fire and water staff streams point straight along server aim; no sideways prefab jets',()=>{
  for(const id of ['tide-1','ember-1','nova-1','frost-1','clam']){
   const scene=new THREE.Scene(),vfx=new WeaponVFX(scene),item=itemById(id);
-  const event={...attack(item,true),area:{mode:'area',center:[100,-4,-99],radius:8}};
+  const event={...attack(item,true),owner:id,area:{
+   mode:'area',center:[100,-4,-99],visualCenter:[100,-3.84,-99],radius:8}};
   vfx.play(event,item);
   assert.equal(vfx.staffOrbs.length,0);
+  if(id==='tide-1'){
+   assert.equal(vfx.waterStreams.size,1);
+   assert.equal(vfx.active.length,1);
+   const beam=[...vfx.waterStreams.values()][0];
+   assert.equal(beam.id,'venom-stream');
+   assert.equal(beam.fx.settings.color,'#2d9fff');
+   assert.ok(beam.fx.group.position.distanceTo(new THREE.Vector3(4,1,13))<.001);
+   vfx.dispose();assert.equal(scene.children.length,0);
+   continue;
+  }
+  if(id==='frost-1'){
+   const frost=vfx.active.find(e=>e.id==='ice-shatter');
+   assert.ok(frost,'no travelling ice-lance; summon Shatter at the magic circle');
+   assert.equal(frost.fx.group.position.x,100);
+   assert.equal(frost.fx.group.position.z,-99);
+   assert.equal(vfx.numberedEffects.active.length,0);
+   vfx.dispose();assert.equal(scene.children.length,0);
+   continue;
+  }
   assert.equal(vfx.active.length,0,'no prefab with incorrect local axis for '+id);
   const numbered=vfx.numberedEffects.active.at(-1);
   const stream=numbered||vfx.particleSkills.active[0];
@@ -64,19 +84,18 @@ test('repeated server pulses do not restart the moving water stream',()=>{
  const item=itemById('tide-1');scene.add(root);
  const event={...attack(item,true)};
  vfx.play(event,item,root);
- const stream=vfx.channelStreams.get(root.uuid+':'+item.id);
+ const stream=vfx.waterStreams.get(root.uuid);
  assert.ok(stream);
+ assert.equal(stream.id,'venom-stream');
  vfx.update(.6);
- const age=stream.age;
- const prior=stream.material.uniforms.uAge.value;
+ const age=stream.fx.elapsed;
  vfx.play({...event,time:1700},item,root);
- assert.equal(stream.age,age);
- assert.equal(stream.material.uniforms.uAge.value,prior);
- assert.equal(stream.material.uniforms.uLooping.value,1);
+ assert.equal(vfx.waterStreams.get(root.uuid),stream);
+ assert.equal(stream.fx.elapsed,age,'native GPU flow keeps its playback age on later pulses');
  vfx.update(3.1);
- assert.equal(vfx.particleSkills.active.includes(stream),true,'continuous stream does not expire after one-shot duration');
+ assert.equal(vfx.active.includes(stream),true,'continuous water stream does not expire as a one-shot');
  vfx.stopChannel(root);
- assert.equal(vfx.particleSkills.active.includes(stream),false);
+ assert.equal(vfx.active.includes(stream),false);
  vfx.dispose();root.removeFromParent();
  assert.equal(scene.children.length,0);
 });

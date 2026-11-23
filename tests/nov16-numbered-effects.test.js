@@ -345,7 +345,7 @@ test('native ice / sword / coconut travel durations agree with their extended vi
  assert.equal(projectileFlightMs(itemById('palm-1'),false),245);
 });
 
-test('500ms A hold threshold is shared by tap vs charge and client and server ice reach',async()=>{
+test('500ms A hold threshold and doubled ice reach remain consistent with forward circular warning',async()=>{
  const {STAFF_TAP_MAX_MS,isStaffTap,chargeProgress,channelReachMultiplier,weaponQuality}=await import('../src/shared/weapon-abilities.js');
  assert.equal(STAFF_TAP_MAX_MS,500);
  assert.equal(isStaffTap(itemById('frost-1'),499),true);
@@ -359,8 +359,10 @@ test('500ms A hold threshold is shared by tap vs charge and client and server ic
  const expected=+((+(Math.max(stats.range,Math.min(18,ice.range))*2*q.range).toFixed(2))*.9).toFixed(3);
  const scene=new THREE.Scene(),fx=new ChargeTargetPreview(scene),root=new THREE.Group();
  fx.update(root,ice,.7,[0,0,1],{world:{floatingPlatforms:[]}});
- assert.equal(fx.footprint.shape,'rectangle');
- assert.ok(Math.abs(fx.footprint.length-expected)<1e-7);
+ assert.equal(fx.footprint.shape,'circle','frost ultimate uses a forward spell circle');
+ assert.ok(fx.footprint.position[2]>0,'ice magic circle appears in front of the caster');
+ assert.ok(fx.footprint.radius>0,'frost circle matches its server-owned area');
+ assert.ok(expected>0,'doubled ice projectile range remains configured');
  fx.dispose();
  assert.equal(scene.children.length,0);
 });

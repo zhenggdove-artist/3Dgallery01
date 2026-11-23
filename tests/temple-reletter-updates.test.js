@@ -34,21 +34,21 @@ test('PNG-specific authored artwork defaults are exact, with non-PNG unaffected'
  assert.deepEqual(validateAppearance({}, {type:'image/jpeg'}),APPEARANCE_DEFAULTS);
  assert.equal(validateAppearance({contrast:1.6},{type:'image/png'}).contrast,1.6);
 });
-test('five outer-arena monster spawns avoid the art sanctuary and are sixfold large',()=>{
+test('ten outer-arena monster spawns avoid the art sanctuary and are sixfold large',()=>{
  const world=createInitialWorld(1000);
- assert.equal(MONSTER_PACK_SIZE,5);
+ assert.equal(MONSTER_PACK_SIZE,10);
  const rng=(()=>{let seed=291;return()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/4294967296)})();
  assert.equal(spawnMonsterPack(world,2000,rng),true);
- assert.equal(world.monsters.length,5);
+ assert.equal(world.monsters.length,10);
  assert.ok(world.monsters.every(m=>m.active&&m.hp>0&&Math.hypot(m.position[0],m.position[2])>=60));
  assert.equal(ENEMY_HEIGHT,1.575*6);
  assert.equal(ENEMY_RADIUS,.42*6);
- assert.equal(new Set(world.monsters.map(m=>m.id)).size,5);
+ assert.equal(new Set(world.monsters.map(m=>m.id)).size,10);
  assert.equal(spawnMonsterPack(world,2001,rng),false);
  world.monsters[3].active=false;
  assert.equal(spawnMonsterPack(world,2002,rng),true);
- assert.equal(world.monsters.filter(m=>m.active).length,5);
- assert.equal(worldView(world,'visitor').monsters.length,5);
+ assert.equal(world.monsters.filter(m=>m.active).length,10);
+ assert.equal(worldView(world,'visitor').monsters.length,10);
 });
 test('creator or GM can remove built structure immediately but strangers cannot',()=>{
  const world=createInitialWorld(1000),owner=actor('builder'),stranger=actor('visitor');

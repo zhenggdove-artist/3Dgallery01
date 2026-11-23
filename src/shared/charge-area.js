@@ -80,7 +80,7 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  // Staff/clam streams are fired from the weapon, not an unrelated distant
  // round explosion. Other spell families retain their target-centred circles.
  const areaUltimate=!!stats?.ultimate&&/^(pan|whip|swatter|palm)-[1-5]$/.test(item?.id||'');
- const mode=(item?.id==='clam'||item?.family==='saber'&&stats?.ultimate&&!fusionEcho)?'sector':item?.id==='accordion'&&stats?.ultimate?'corridor':channel&&isChannelStaff(item)?'corridor':
+ const mode=(item?.id==='clam'||item?.family==='saber'&&stats?.ultimate&&!fusionEcho)?'sector':item?.id==='accordion'&&stats?.ultimate?'corridor':channel&&isChannelStaff(item)&&item?.family!=='ice'?'corridor':
   (areaUltimate||AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
  const defaultDistance=clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
  const floorAtDistance=ground(origin[0]+dir[0]*defaultDistance,origin[2]+dir[2]*defaultDistance,origin[1]);
@@ -158,7 +158,7 @@ export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
   return {shape:'sector',position:[origin[0],at(origin[0],origin[2]),origin[2]],
    yaw,radius:range,angleDeg:item?.family==='saber'?SABER_WAVE_FAN_ANGLE_DEG:CLAM_SECTOR_ANGLE,range,width};
  }
- if(isChannelStaff(item)||(item?.id==='accordion'&&stats?.ultimate)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||item?.id==='goldfish'){
+ if((isChannelStaff(item)&&!(item?.family==='ice'&&stats?.ultimate))||(item?.id==='accordion'&&stats?.ultimate)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||item?.id==='goldfish'){
   const x=origin[0]+dx*range*.5,z=origin[2]+dz*range*.5;
   return {shape:'rectangle',position:[x,at(x,z),z],yaw,length:range,width,range};
  }

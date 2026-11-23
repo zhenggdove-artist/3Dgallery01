@@ -71,11 +71,12 @@ test('continuous staff fusion produces three simultaneous native VFX streams and
  const presentation=new ReletterPresentation(scene);
  presentation.play(event,root);
  const originals=presentation.vfx.numberedEffects;
- assert.deepEqual(originals.active.map(e=>e.spec.number).sort((a,b)=>a-b),[8,70,73]);
- assert.equal(originals.active.filter(e=>!!e.key).length,3,'primary and 2 unique fusion channels');
+ assert.deepEqual(originals.active.map(e=>e.spec.number).sort((a,b)=>a-b),[8,73]);
+ assert.ok(presentation.vfx.active.some(e=>e.id==='ice-shatter'),'fused ice skill uses the ground frost burst');
+ assert.equal(originals.active.filter(e=>!!e.key).length,2,'primary and lightning channels remain continuous');
  const next=action(NOW+4200,{phase:'channel'}).attackEvent;
  presentation.play(next,root);
- assert.equal(originals.active.length,3,'repeat damage pulse must reuse VFX objects');
+ assert.equal(originals.active.length,2,'repeat damage pulse must reuse sustained VFX objects');
  presentation.vfx.stopChannel(root);
  assert.equal(originals.active.length,0,'channel release removes all three streams');
  presentation.vfx.dispose();

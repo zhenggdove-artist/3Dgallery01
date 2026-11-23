@@ -139,7 +139,8 @@ test('fish ultimate is half-size and red with no GPU-heavy cloned ghost fish',()
  const fish=root.children[0],school=root.children[1];
  assert.equal(fish.visible,false,'original authored fish is the shared model source');
  assert.equal(fish.scale.x,.21,'each fish is reduced to ordinary cannonball scale');
- assert.ok(school.children.every(c=>c.isInstancedMesh&&c.count===30),'school uses thirty instances per original mesh');
+ assert.ok(school.children.filter(c=>c.isInstancedMesh).every(c=>c.count===30),'thirty bodies share GPU instances');
+ assert.equal(school.children.filter(c=>c.isPoints).length,1,'all blue tails share one GPU points buffer');
  const meshes=[];root.traverse(o=>{if(o.isMesh)meshes.push(o);});
  assert.ok(school.children.length<50,'thirty detailed fish share fewer than fifty instanced draw calls');
  assert.ok(meshes.every(m=>!m.material.isMeshPhysicalMaterial),'no high-cost transmission passes');

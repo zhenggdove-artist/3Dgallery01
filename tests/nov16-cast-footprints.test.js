@@ -85,7 +85,7 @@ test('all weapons have dimensional warning contracts derived from identical atta
    assert.equal(a.shape,'sector',item.id);
    nearly(preview.sector.settings.size*preview.sector.group.scale.x,stats.range,item.id);
    assert.equal(preview.sector.settings.angleDeg,item.family==='saber'?60:90,item.id);
-  }else if(isChannelStaff(item)||(item.id==='accordion'&&stats.ultimate)||item.firstPerson||item.family==='saber'||(item.family==='palm'&&!stats.ultimate)||item.pattern==='scatter'||item.id==='goldfish'){
+  }else if((isChannelStaff(item)&&item.family!=='ice')||(item.id==='accordion'&&stats.ultimate)||item.firstPerson||item.family==='saber'||(item.family==='palm'&&!stats.ultimate)||item.pattern==='scatter'||item.id==='goldfish'){
    assert.equal(a.shape,'rectangle',item.id);
    nearly(preview.rectangle.settings.length*preview.rectangle.group.scale.x,stats.range,item.id);
    nearly(preview.rectangle.settings.width*preview.rectangle.group.scale.z,stats.radius*2,item.id);
@@ -123,13 +123,18 @@ test('the blue #59 strip is narrower than old charged AoE and matches each staff
    const stat=attackStats(item,1);
    stat.range=Math.max(stat.range,Math.min(18,item.range))*channelReachMultiplier(item);
    stat.range=+(stat.range*q.range).toFixed(2);
-   stat.radius=channelVisualRadius(item,q,stat.range);
+   stat.radius=family==='ice'?forwardCastRadius(item,q,stat.radius,true):channelVisualRadius(item,q,stat.range);
 
    scaleUltimateFootprint(stat,item);
 
-   const width=2*stat.radius;
-   nearly(v.footprint.width,width,item.id+' width');
-   assert.ok(width<2*attackStats(item,1).radius*q.radius,item.id+' must shrink versus old blast');
+   if(family==='ice'){
+    assert.equal(v.footprint.shape,'circle',item.id+' is a forward frost magic circle');
+    nearly(v.footprint.radius,stat.radius,item.id+' frozen AoE radius');
+   }else{
+    const width=2*stat.radius;
+    nearly(v.footprint.width,width,item.id+' width');
+    assert.ok(width<2*attackStats(item,1).radius*q.radius,item.id+' must shrink versus old blast');
+   }
   }
  }
  v.dispose();
