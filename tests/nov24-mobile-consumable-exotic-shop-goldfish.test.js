@@ -86,3 +86,8 @@ test('the rainbow spiral shader mode does not replace every unrelated spell',()=
  assert.match(particles,/else if\(uMode>7\.5\)/);
  assert.match(particles,/item\.id==='black-cat'&&charged&&data\.piercing/);
 });
+
+test('legacy weapon copies remain tier three when another copy is upgraded',()=>{
+ const bag=readFileSync(new URL('../src/bag-view.js',import.meta.url),'utf8');
+ assert.match(bag,/index>=0\?base\.tier/);
+});
