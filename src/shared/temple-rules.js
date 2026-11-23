@@ -626,8 +626,10 @@ export function applyAction(world,actor,body,context={}){
   // Allow purchasing, inspecting and equipping while a room is full and the
   // account is spectating. Combat/building still requires an active fighter.
   const inventoryAction=['buy','equip','unequip','sell','inspect-item','assign-consumable','swap-inventory'].includes(body.action);
-  const denied=inventoryAction?null:requireFighter(actor);if(denied)return denied;
-  const dead=inventoryAction?null:requireAlive(profile,now);if(dead&&!['respawn'].includes(body.action))return dead;
+   // Viewers can write and reply at the central tree, but cannot fight/build.
+   const spectatorWrite=actor.role==='spectator'&&body.action==='plant';
+   const denied=inventoryAction||spectatorWrite?null:requireFighter(actor);if(denied)return denied;
+   const dead=inventoryAction||spectatorWrite?null:requireAlive(profile,now);if(dead&&!['respawn'].includes(body.action))return dead;
   if(body.action.startsWith('write-')){const result=journeyAction(world,profile,actor,body,now);if(!result.error)world.revision++;return result;}
   // WebGL-heavy clients may not have sent their final landing pose when WRITE
   // finishes. Trust the server's own timed journey, not stale socket coords.

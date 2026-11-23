@@ -6,6 +6,7 @@ import {resetPlayerArtworks} from '../src/shared/art-bomb.js';
 import {DurableObject} from 'cloudflare:workers';
 import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,releasePlayerWorldState,tickWorld,validateState,isLiveStaffChannel,validColor,validName,worldView,worldProfileView,MAX_FIGHTERS,MAX_SPECTATORS} from '../src/shared/temple-rules.js';
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
+import {availableRoleSeat} from '../src/shared/spectator-seats.js';
 import {playerStats} from '../src/shared/player-stats.js';
 import {changedWorldFields,createWorldPatch} from '../src/shared/world-patch.js';
 
@@ -39,7 +40,11 @@ export class TempleRoom extends DurableObject{
        CREATE TABLE IF NOT EXISTS gm_music_meta (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, bytes INTEGER NOT NULL, chunks INTEGER NOT NULL);
        CREATE TABLE IF NOT EXISTS gm_music_chunks (version INTEGER NOT NULL, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(version,part));
     `);
-    initializeArtMedia(this.sql);
+         // SQLite Durable Objects already deployed before this schema extension
+     // receive a nullable fighter-seat reservation for GM spectator testing.
+     if(!this.sql.exec('PRAGMA table_info(sessions)').toArray().some(c=>c.name==='preview_seat'))
+       this.sql.exec('ALTER TABLE sessions ADD COLUMN preview_seat INTEGER');
+     initializeArtMedia(this.sql);
      initializeWingOrders(this.sql);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
@@ -160,11 +165,11 @@ export class TempleRoom extends DurableObject{
       return json({error:'This name is reserved for the GM'},403);
     this.prune();
     const now=Date.now(),occupied=this.sql.exec(
-      'SELECT role,seat FROM sessions WHERE expires>? ORDER BY seat',now).toArray();
-    const fighterSeats=new Set(occupied.filter(r=>r.role==='fighter').map(r=>r.seat));
-    const spectatorSeats=new Set(occupied.filter(r=>r.role==='spectator').map(r=>r.seat));
-    let role='fighter',seat=FIGHTER_SEATS.find(i=>!fighterSeats.has(i));
-    if(seat===undefined){role='spectator';seat=SPECTATOR_SEATS.find(i=>!spectatorSeats.has(i));}
+      'SELECT role,seat,preview_seat FROM sessions WHERE expires>? ORDER BY seat',now).toArray();
+     let role='fighter',seat=availableRoleSeat(occupied,'fighter',MAX_FIGHTERS,MAX_SPECTATORS);
+     // A GM spectator test uses the exact same seat and controls as a public
+     // observer, but the original fighter seat remains reserved until return.
+     if(seat===undefined){role='spectator';seat=availableRoleSeat(occupied,'spectator',MAX_FIGHTERS,MAX_SPECTATORS);}
     if(seat===undefined)return json({error:'Temple is full (4 fighters + 100 spectators)'},409);
     const id=crypto.randomUUID(),expires=now+SESSION_MS;
     const profile=ensureProfile(world,profileKey,existing?null:name,
@@ -202,12 +207,41 @@ export class TempleRoom extends DurableObject{
     return new Response(null,{status:101,webSocket:client});
   }
 
-  async changeRole(request,session){
-    const body=await readBody(request,2_000),target=body.role;if(!['fighter','spectator'].includes(target))return json({error:'Choose fighter or spectator'},400);if(target===session.role)return json({ok:true,role:session.role,seat:session.seat,self:this.self(session),players:this.roster()});
-    const occupied=this.sql.exec('SELECT role,seat FROM sessions WHERE expires>? AND id<>?',Date.now(),session.id).toArray(),seats=target==='fighter'?FIGHTER_SEATS:SPECTATOR_SEATS,used=new Set(occupied.filter(row=>row.role===target).map(row=>row.seat)),seat=seats.find(value=>!used.has(value));if(seat===undefined)return json({error:target==='fighter'?'All fighter seats are occupied':'All spectator seats are occupied'},409);
-    this.sql.exec('UPDATE sessions SET role=?,seat=?,state=NULL,expires=? WHERE id=?',target,seat,Date.now()+SESSION_MS,session.id);for(const ws of this.ctx.getWebSockets(session.id)){const meta=ws.deserializeAttachment()||{};ws.serializeAttachment({...meta,role:target,seat});}
-    const updated=this.session(session.id);this.broadcastRoster();return json({ok:true,role:target,seat,self:this.self(updated),players:this.roster(),world:worldView(this.world(),updated.profile_key)});
-  }
+     async changeRole(request,session){
+     const body=await readBody(request,2_000),target=body.role;
+     if(!['fighter','spectator'].includes(target))return json({error:'Choose fighter or spectator'},400);
+     const gmPreview=body.gmPreview===true;
+     if(gmPreview&&this.world().profiles?.[session.profile_key]?.admin!==true)
+       return json({error:'GM spectator testing requires GM authorization'},403);
+     if(target===session.role)return json({ok:true,role:session.role,seat:session.seat,self:this.self(session),players:this.roster(),world:worldView(this.world(),session.profile_key)});
+     const occupied=this.sql.exec('SELECT role,seat,preview_seat FROM sessions WHERE expires>? AND id<>?',Date.now(),session.id).toArray();
+     let seat,previewSeat=null;
+     if(target==='spectator'){
+       seat=availableRoleSeat(occupied,'spectator',MAX_FIGHTERS,MAX_SPECTATORS);
+       if(gmPreview&&session.role==='fighter')previewSeat=session.seat;
+     }else if(gmPreview&&session.role==='spectator'&&Number.isInteger(session.preview_seat)){
+       // Only the owner of this reservation may reclaim the slot.
+       seat=session.preview_seat;
+       if(occupied.some(row=>row.role==='fighter'&&row.seat===seat))
+         return json({error:'Reserved GM fighter seat unexpectedly occupied'},409);
+     }else{
+       seat=availableRoleSeat(occupied,'fighter',MAX_FIGHTERS,MAX_SPECTATORS);
+     }
+     if(seat===undefined)return json({error:target==='fighter'?'All fighter seats are occupied':'All spectator seats are occupied'},409);
+     this.sql.exec('UPDATE sessions SET role=?,seat=?,state=NULL,preview_seat=?,expires=? WHERE id=?',
+       target,seat,previewSeat,Date.now()+SESSION_MS,session.id);
+     for(const ws of this.ctx.getWebSockets(session.id)){
+       const meta=ws.deserializeAttachment()||{};
+       ws.serializeAttachment({...meta,role:target,seat});
+     }
+     if(session.role==='fighter'){
+       const world=this.world();
+       if(releasePlayerWorldState(world,session.profile_key)){this.save(world);this.broadcastWorld(world);}
+     }
+     const updated=this.session(session.id);
+     this.broadcastRoster();
+     return json({ok:true,role:target,seat,self:this.self(updated),players:this.roster(),world:worldView(this.world(),updated.profile_key)});
+   }
 
   async webSocketMessage(ws,message){
     const meta=ws.deserializeAttachment();if(!meta||this.closed.has(ws))return;const session=this.session(meta.sessionId);if(!session){this.closed.add(ws);ws.close(4001,'Session expired');return;}
@@ -245,8 +279,12 @@ export class TempleRoom extends DurableObject{
     const body=await readBody(request,320_000),requestId=String(body.requestId||'');if(!/^[A-Za-z0-9:_-]{8,100}$/.test(requestId))return json({error:'Valid requestId required'},400);
     const receipt=this.sql.exec('SELECT response FROM request_receipts WHERE session_id=? AND request_id=?',session.id,requestId).toArray()[0];if(receipt)return json(JSON.parse(receipt.response));
      if(body.action==='paint-building'&&!this.consumeRate('paint:'+session.profile_key,180,60_000))return json({error:'Painting rate limit reached'},429);
-    const state=session.state?JSON.parse(session.state):null;if(!state?.position)return json({error:'Connect and enter the Temple first'},409);
-    const world=this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:state.position},actors=this.actors();
+    const state=session.state?JSON.parse(session.state):null;
+     const spectatorWrite=session.role==='spectator'&&body.action==='plant';
+     // Public spectators do not transmit a player pose. Only WRITE is allowed
+     // to use the fixed central plant position, never combat or BUILD actions.
+     if(!state?.position&&!spectatorWrite)return json({error:'Connect and enter the Temple first'},409);
+     const world=this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:spectatorWrite?[0,0,0]:state.position},actors:this.actors();
     delete body.verifiedArtMedia;if(body.action==='add-artwork'||body.action==='publish-art-bomb'){const media=this.sql.exec('SELECT id,type,owner FROM art_media WHERE id=?',String(body.artwork?.mediaId||'')).toArray()[0];if(!media||media.owner!==session.profile_key||body.action==='add-artwork'&&!actor.admin||body.action==='publish-art-bomb'&&session.role!=='fighter')return json({error:'Upload your own validated artwork with the required role first'},403);body.verifiedArtMedia={id:media.id,type:media.type};}
     if(body.media||body.surface){const mediaId=body.media?.id||body.surface,media=this.sql.exec('SELECT id,type,owner FROM plant_media WHERE id=?',mediaId).toArray()[0];if(!media||media.owner!==session.profile_key||body.surface&&!media.type.startsWith('image/'))return json({error:'Upload your own media first'},400);if(body.media)body.media={id:media.id,type:media.type};}
     const previousRespawnAt=world.profiles[session.profile_key]?.lastRespawnAt||0;
@@ -362,7 +400,7 @@ export class TempleRoom extends DurableObject{
     return json({ok:true,version,bytes});
   }
   async uploadMedia(request,session){
-    if(session.role!=='fighter')return json({error:'Spectators cannot upload'},403);
+    if(!['fighter','spectator'].includes(session.role))return json({error:'Invalid role for WRITE upload'},403);
     if(!this.consumeRate('media:'+session.profile_key,12,60_000))return json({error:'Upload limit reached'},429);
     const type=(request.headers.get('Content-Type')||'').split(';')[0];
     if(!['image/png','image/jpeg','image/webp','audio/mpeg','audio/ogg','audio/webm','video/webm','video/mp4'].includes(type))return json({error:'Unsupported media type'},400);
@@ -441,7 +479,7 @@ export class TempleRoom extends DurableObject{
    return rows.map(row=>({id:row.id,key:row.profile_key,name:row.name,color:row.color,role:row.role,
     seat:row.seat,position:JSON.parse(row.state).position})).filter(actor=>Array.isArray(actor.position));
   }
-  self(session){const world=this.readWorld(),profile=world.profiles[session.profile_key];return {id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,saveCode:session.save_code||null,profile:profile?publicProfile(profile):null};}
+  self(session){const world=this.readWorld(),profile=world.profiles[session.profile_key];return {id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,gmSpectatorPreview:session.role==='spectator'&&Number.isInteger(session.preview_seat),saveCode:session.save_code||null,profile:profile?publicProfile(profile):null};}
   prune(){const now=Date.now();for(const row of this.sql.exec('SELECT id FROM sessions WHERE expires<=?',now).toArray())this.disconnectSession(row.id,false);this.sql.exec('DELETE FROM rate_limits WHERE window_start<?',now-3_600_000);}
   disconnectSession(id,broadcast=true){const row=this.sql.exec('SELECT profile_key,name,role FROM sessions WHERE id=?',id).toArray()[0];for(const ws of this.ctx.getWebSockets(id)){this.closed.add(ws);try{ws.close(1000,'Disconnected');}catch{}}this.sql.exec('DELETE FROM sessions WHERE id=?',id);if(row){this.recordPresence(row,'offline');const world=this.world();if(releasePlayerWorldState(world,row.profile_key,Date.now())){this.save(world);this.broadcastWorld(world);}}if(broadcast)this.broadcastRoster();}
   broadcast(type,data,except){const text=JSON.stringify({type,data});for(const ws of this.sockets())if(ws!==except)try{ws.send(text);}catch{this.closed.add(ws);}}

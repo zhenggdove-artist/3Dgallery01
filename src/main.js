@@ -730,6 +730,7 @@ ui.addEventListener('save-code',async()=>{try{const data=await network.createSav
 ui.addEventListener('gm-presence-request',async()=>{if(!self?.profile?.admin)return;try{ui.setGmPresence(await network.gmPresence());}catch(error){ui.setGmPresenceError(error.message);}});
 function applyRoleTransition(data){
    if(!data?.self||!data.world)throw Error('Role transition missing authoritative world');
+   gun.end();
    network.spawnConfirmed=data.role==='fighter'&&self?.role==='fighter'&&network.spawnConfirmed;
    cancelBuildPlacement();
    self={...self,...data.self,role:data.role,seat:data.seat};
