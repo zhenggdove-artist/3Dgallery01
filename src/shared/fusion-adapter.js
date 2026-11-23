@@ -30,8 +30,8 @@ export function fuseOriginal(world,profile,body,rng){
 }
 export function equippedItem(profile,item,instanceRecord=null){
  const record=instanceRecord??profile.fusion?.[item.id],original=record?.original||{};
- if(item.slot==='weapon'&&item.exotic)
-  item=shopWeaponVariant(item,record?.shopTier??item.tier)||item;
+ if(item.slot==='weapon'&&(item.exotic||Number.isInteger(record?.shopTier)))
+   item=shopWeaponVariant(item,record?.shopTier??Math.min(4,item.tier||3))||item;
  const affixIds=[...new Set([...itemAffixes(item),...itemAffixes(original),...itemAffixes(record)])];
  const enchants=normalizedWeaponAffixes(record);
  const totals=weaponAffixTotals(enchants);

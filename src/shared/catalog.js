@@ -50,20 +50,24 @@ const EXOTIC_QUALITY=Object.freeze([
   {price:1,power:1,reach:1,tempo:1},
   {price:1.60,power:1.26,reach:1.12,tempo:.91}
 ]);
-export function shopWeaponVariant(item,tier=item?.tier){
- if(!item||item.slot!=='weapon'||!item.exotic)return item;
- const rank=Number(tier);
- if(!Number.isInteger(rank)||rank<1||rank>4)return null;
- const scale=EXOTIC_QUALITY[rank-1];
- const range=+(item.range*scale.reach).toFixed(2);
- const chargedRange=+(item.chargedRange*scale.reach).toFixed(2);
- return {...item,shopTier:rank,tier:rank,rarity:RARITIES[rank-1].id,
-  name:rank===3?item.name:`${RARITIES[rank-1].name} ${item.name}`,
-  price:rank===3?item.price:Math.max(100,Math.ceil(item.price*scale.price/10)*10),
-  damage:+(item.damage*scale.power).toFixed(3),
-  chargeDamage:+(item.chargeDamage*scale.power).toFixed(3),
-  range,chargedRange,chargeRange:+(chargedRange-range).toFixed(2),
-  cooldown:Math.round(item.cooldown*scale.tempo)};
+export function shopWeaponVariant(item,tier=3){
+  if(!item||item.slot!=='weapon')return item;
+  const rank=Number(tier);
+  if(!Number.isInteger(rank)||rank<1||rank>4)return null;
+  const scale=EXOTIC_QUALITY[rank-1];
+  const range=Number.isFinite(item.range)?+(item.range*scale.reach).toFixed(2):null;
+  const chargedRange=Number.isFinite(item.chargedRange)?+(item.chargedRange*scale.reach).toFixed(2):null;
+  // Every shop weapon has four grades. Non-exotic rank IDs (tide-1…5)
+  // stay unchanged; each purchased instance carries a separate shopTier.
+  return {...item,shopTier:rank,tier:item.exotic?rank:item.tier,rarity:RARITIES[rank-1].id,
+   name:rank===3?item.name:`${RARITIES[rank-1].name} ${item.name}`,
+   price:rank===3?item.price:Math.max(100,Math.ceil(item.price*scale.price/10)*10),
+   ...(Number.isFinite(item.damage)?{damage:+(item.damage*scale.power).toFixed(3)}:{}),
+   ...(Number.isFinite(item.chargeDamage)?{chargeDamage:+(item.chargeDamage*scale.power).toFixed(3)}:{}),
+   ...(range!==null?{range}:{}),
+   ...(chargedRange!==null?{chargedRange,chargeRange:+(chargedRange-range).toFixed(2)}:
+      Number.isFinite(item.chargeRange)?{chargeRange:+(item.chargeRange*scale.reach).toFixed(2)}:{}),
+   ...(Number.isFinite(item.cooldown)?{cooldown:Math.max(70,Math.round(item.cooldown*scale.tempo))}:{})};
 }
 
 export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','armor','head','outfit','shield','wings']);

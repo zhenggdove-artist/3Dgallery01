@@ -1,7 +1,7 @@
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor} from './charge-area.js';
-import {GOLDFISH_TRAVEL_SCALE,GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition} from './goldfish-school.js';
+import {GOLDFISH_TRAVEL_SCALE,GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition,advanceGoldfishSchool} from './goldfish-school.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
@@ -763,10 +763,10 @@ function throwArtwork(world,profile,actor,body,context,now){
 function buy(world,profile,body){
  const base=SHOP_ITEMS.find(entry=>entry.id===body.itemId);
  if(!base)return {error:'Item is not sold'};
- const exotic=base.slot==='weapon'&&base.exotic;
- const qualityTier=body.qualityTier===undefined?base.tier:body.qualityTier;
- const item=exotic?shopWeaponVariant(base,qualityTier):base;
- if(!item||(!exotic&&body.qualityTier!==undefined))
+ const weaponChoice=base.slot==='weapon';
+  const qualityTier=body.qualityTier===undefined?3:body.qualityTier;
+  const item=weaponChoice?shopWeaponVariant(base,qualityTier):base;
+  if(!item||(!weaponChoice&&body.qualityTier!==undefined))
   return {error:'Invalid weapon quality'};
  const quantity=body.quantity===undefined?1:body.quantity;
  // The server chooses both PRICE and COMBAT tier from its catalog; a client
@@ -778,10 +778,10 @@ function buy(world,profile,body){
  if(!Number.isSafeInteger(total)||total<0)return {error:'Invalid purchase amount'};
  if(!spend(profile,total,world))return {error:'Not enough coins'};
  for(let i=0;i<quantity;i++)
-  appendInventoryInstance(profile,base.id,'shop',exotic?item.shopTier:null);
+  appendInventoryInstance(profile,base.id,'shop',weaponChoice?item.shopTier:null);
  profile.itemOrigins??={};profile.itemOrigins[base.id]='shop';
  return {notice:`PURCHASE SUCCESSFUL · ${item.name} ×${quantity} · ${total} coins`,
-  purchased:{itemId:base.id,qualityTier:exotic?item.shopTier:null,quantity,total}};
+  purchased:{itemId:base.id,qualityTier:weaponChoice?item.shopTier:null,quantity,total}};
 }
 function assignConsumable(profile,body){
  const index=body.slot;
@@ -1128,7 +1128,7 @@ function attack(world,profile,actor,body,context,now){
       const echoPvP=balancedSniper?.pvpDamage??+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
-        origin:[...origin],direction:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,
+        origin:[...origin],direction:[...direction],launchDirection:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,
         damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*.2,
         tier:sourceQuality.tier,flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
@@ -1196,7 +1196,7 @@ function applyMonsterImpactReaction(player,target,skill,now){
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false,fixedDamage=false){
   // Explicit last-line guard: the goldfish school cannot damage its caster,
   // even if an actor is represented by both an id and a player key.
-  if(kind==='giant-goldfish'&&sourceProfile?.key===targetActor.key)
+  if(kind==='giant-goldfish'&&(sourceProfile?.key===targetActor.key||sourceProfile===world.profiles?.[targetActor.key]))
     return {target:targetActor.key,damage:0,defeated:false,immune:true};
   const target=world.profiles[targetActor.key];if(!target||target.hp<=0||target.deadUntil>now)return null;
    if((target.spawnProtectedUntil||0)>now)return {target:targetActor.key,damage:0,defeated:false,immune:true};
@@ -2212,7 +2212,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    const candidates=targets.filter(t=>{
     const value=t.value;
     if(value.key===fx.owner||value.id===fx.owner||value.hp===0||
-       (t.kind==='player'&&insideArtSanctuary(value.position)))return false;
+        (t.kind==='player'&&(world.profiles[value.key]===owner||insideArtSanctuary(value.position))))return false;
     const x=value.position[0]-fx.origin[0],z=value.position[2]-fx.origin[2];
     const along=x*launch[0]+z*launch[2];
     return along>0.5&&along<=fx.range+GOLDFISH_SCHOOL_RADIUS*2;
@@ -2233,7 +2233,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    // behind the fish between server ticks.
    if(fx.direction[0]*launch[0]+fx.direction[2]*launch[2]<.35)
     fx.direction=[...launch];
-   advanceHomingVortex(fx,aim?.value,Math.max(0,Math.min(now,fx.expiresAt)-fx.lastAt),flight);
+   advanceGoldfishSchool(fx,aim?.value,Math.max(0,Math.min(now,fx.expiresAt)-fx.lastAt),flight);
    const travelled=Math.hypot(fx.position[0]-previous[0],fx.position[2]-previous[2]);
    if(travelled>.001)changed=true;
    // One authoritative flight; thirty swept fish bodies with independent,
@@ -2244,7 +2244,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     for(const target of targets){
      const value=target.value,key=value.key||value.id;
      if(value.key===fx.owner||value.id===fx.owner||value.hp===0||
-        (target.kind==='player'&&insideArtSanctuary(value.position)))continue;
+         (target.kind==='player'&&(world.profiles[value.key]===owner||insideArtSanctuary(value.position))))continue;
      let contacts=0;
      for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
       if(fx.fishConsumed.includes(i))continue;

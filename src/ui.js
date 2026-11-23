@@ -42,7 +42,11 @@ export class TempleUI extends EventTarget{
     const quickUse=event=>{
       const button=event.target.closest?.('[data-quick-use]');
       if(!button||button.disabled||this.panelName||this.self?.role!=='fighter')return;
-      this.emit('quick-use',{slot:Number(button.dataset.quickUse)});
+      const slot=Number(button.dataset.quickUse),now=performance.now();
+       this.lastQuickUseAt??=new Map();
+       if(now-(this.lastQuickUseAt.get(slot)??-Infinity)<140)return;
+       this.lastQuickUseAt.set(slot,now);
+       this.emit('quick-use',{slot});
     };
     // Dispatch on pointer DOWN, independently of the held left-thumb joystick.
     // iOS may suppress the later synthetic click during simultaneous touches.
@@ -53,8 +57,15 @@ export class TempleUI extends EventTarget{
       event.preventDefault();event.stopPropagation();
       quickUse(event);
     },{passive:false});
-    // Keyboard / accessibility activation has no preceding pointerdown.
-    hotbar?.addEventListener('click',event=>{
+    // iOS sometimes suppresses pointerdown on a second finger while moving.
+     hotbar?.addEventListener('touchstart',event=>{
+       const button=event.target.closest?.('[data-quick-use]');
+       if(!button||button.disabled)return;
+       event.preventDefault();event.stopPropagation();
+       quickUse(event);
+     },{capture:true,passive:false});
+     // Keyboard / accessibility activation has no preceding pointerdown.
+     hotbar?.addEventListener('click',event=>{
       if(event.detail===0)quickUse(event);
     });
     this.content.addEventListener('input',event=>{
@@ -545,24 +556,24 @@ export class TempleUI extends EventTarget{
    const items=source.filter(i=>tab==='owned'||tab==='mystery'&&i.mysteryWeapon||
     ['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab||
     tab==='comfort'&&i.slot==='consumable'||i.slot===tab);
-   const ranked=/^(tide|frost|ember|storm|prism|bloom|nova|saber|whip|swatter|pan|planter|palm)-[1-5]$/;
    const groups=new Map();
-   for(const item of items){
-    const match=item.slot==='weapon'&&item.id.match(ranked);
-    const exotic=item.slot==='weapon'&&item.exotic;
-    const key=match?'quality:'+match[1]:exotic?'quality:'+item.id:item.id;
-    if(!groups.has(key))groups.set(key,exotic?
-      SHOP_EXOTIC_TIERS.map(tier=>shopWeaponVariant(item,tier)):[]);
-    if(!exotic&&!groups.get(key).some(v=>v.id===item.id))
-      groups.get(key).push(item);
-   }
+    for(const item of items){
+     const weapon=item.slot==='weapon';
+     const key=weapon?'quality:'+item.id:item.id;
+     if(!groups.has(key))groups.set(key,weapon?
+       SHOP_EXOTIC_TIERS.map(tier=>shopWeaponVariant(item,tier)):[]);
+     if(!weapon&&!groups.get(key).some(v=>v.id===item.id))
+       groups.get(key).push(item);
+    }
    // Exotic ranks share a canonical item ID but live in separate physical
    // inventory instances. Count and equip the exact quality, never a sibling.
    const ownedIndicesFor=variant=>(profile.inventory||[]).flatMap((id,index)=>{
     if(id!==variant.id)return [];
     if(!variant.shopTier)return [index];
     const instance=profile.inventoryInstances?.[index];
-    const tier=profile.fusionByInstance?.[instance?.uid]?.shopTier??instance?.shopTier??itemById(id)?.tier;
+    const base=itemById(id);
+     const tier=profile.fusionByInstance?.[instance?.uid]?.shopTier??instance?.shopTier??
+       (base?.exotic?Math.min(4,base.tier):3);
     return Number(tier)===variant.shopTier?[index]:[];
    });
    this.shopVariantChoice??={};this.shopQuantities??={};
@@ -575,7 +586,7 @@ export class TempleUI extends EventTarget{
     const ownedIndices=ownedIndicesFor(selected),ownedCount=ownedIndices.length;
     const equippedTier=profile.fusion?.[selected.id]?.shopTier??
       profile.fusionByInstance?.[profile.equippedInstanceIds?.[selected.slot]]?.shopTier??
-      itemById(selected.id)?.tier;
+      (itemById(selected.id)?.exotic?Math.min(4,itemById(selected.id)?.tier):3);
     const selectedEquipped=profile.equipment?.[selected.slot]===selected.id&&
       (!selected.shopTier||Number(equippedTier)===selected.shopTier);
     const quantity=this.shopQuantities[key]??1;

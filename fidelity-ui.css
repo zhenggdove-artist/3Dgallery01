@@ -871,3 +871,6 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
  transform-origin:center bottom;
 }
 #prompt.artwork-pickup-hint.visible{opacity:.5}
+
+/* Quick healing is an independent simultaneous touch, not browser zoom. */
+#comfort-hotbar,#comfort-hotbar .comfort-quick-slot{touch-action:none!important;overscroll-behavior:contain;-webkit-user-select:none;user-select:none}

@@ -26,3 +26,39 @@ export function goldfishSchoolPosition(center,direction,index){
  const dx=direction[0]/length,dz=direction[2]/length;
  return [center[0]+dz*o[0]+dx*o[2],center[1]+o[1],center[2]-dx*o[0]+dz*o[2]];
 }
+
+// Goldfish can home toward enemies, but must retain a strong component of
+// its ORIGINAL launch vector. Never allow a U-turn toward the caster.
+export function advanceGoldfishSchool(fx,target,elapsedMs,flightMs){
+ if(!Array.isArray(fx.position))fx.position=[...fx.origin];
+ const dt=Math.max(0,Math.min(2500,Number(elapsedMs)||0))/1000;
+ const launch=fx.launchDirection||fx.direction;
+ const launchLength=Math.hypot(launch[0],launch[2])||1;
+ const forward=[launch[0]/launchLength,launch[2]/launchLength];
+ let dx=fx.direction[0],dz=fx.direction[2];
+ const length=Math.hypot(dx,dz)||1;dx/=length;dz/=length;
+ if(Array.isArray(target?.position)){
+  const tx=target.position[0]-fx.position[0],tz=target.position[2]-fx.position[2];
+  const distance=Math.hypot(tx,tz);
+  if(distance>.001&&tx*forward[0]+tz*forward[1]>0){
+   const steer=1-Math.exp(-3.5*dt);
+   dx=dx*(1-steer)+tx/distance*steer;
+   dz=dz*(1-steer)+tz/distance*steer;
+   const n=Math.hypot(dx,dz)||1;dx/=n;dz/=n;
+  }
+ }
+ // Constrain the heading to +/-45.57 degrees from launch.
+ const dot=dx*forward[0]+dz*forward[1];
+ if(dot<.70){
+  const sideX=-forward[1],sideZ=forward[0];
+  const sign=Math.sign(dx*sideX+dz*sideZ)||1;
+  dx=forward[0]*.70+sideX*sign*Math.sqrt(1-.70**2);
+  dz=forward[1]*.70+sideZ*sign*Math.sqrt(1-.70**2);
+ }
+ const remaining=Math.max(0,fx.range-(fx.travelled||0));
+ const step=Math.min(remaining,Math.max(0,fx.range)*dt/(Math.max(1,flightMs)/1000));
+ fx.direction=[dx,0,dz];
+ fx.position=[fx.position[0]+dx*step,fx.position[1],fx.position[2]+dz*step];
+ fx.travelled=(fx.travelled||0)+step;
+ return fx.position;
+}

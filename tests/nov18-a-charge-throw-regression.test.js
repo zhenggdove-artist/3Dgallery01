@@ -24,7 +24,7 @@ test('server validates fully charged ultimates for melee, odd weapons and first-
 
 test('A/Q prioritizes held art, and charged firearm release cannot trap an artwork',async()=>{
  const source=await readFile(new URL('../src/main.js',import.meta.url),'utf8');
- const start=source.split("ui.addEventListener('attack-start',()=>{")[1]
+ const start=source.split("ui.addEventListener('attack-start',event=>{")[1]
   .split("ui.addEventListener('attack-release',async()=>{")[0];
  const release=source.split("ui.addEventListener('attack-release',async()=>{")[1]
   .split("ui.addEventListener('attack-cancel',()=>{")[0];

@@ -77,8 +77,31 @@ export class PlayerController{
       if(!this.pointers.delete(e.pointerId))return;
       rebuildCameraGesture();
     };
-    for(const event of ['pointerup','pointercancel','lostpointercapture'])
+    for(const event of ['pointerup','pointercancel','lostpointercapture']){
       this.canvas.addEventListener(event,release);
+      addEventListener(event,release,true);
+    }
+    // Safari may omit pointer-up during simultaneous touches. The live native
+    // touch list is authoritative; purge any ghost pointer before a drag.
+    const reconcileTouches=event=>{
+      const live=[...event.touches].filter(t=>t.target===this.canvas);
+      const saved=[...this.pointers].filter(([,point])=>point.type==='touch');
+      const keep=new Set();
+      for(const touch of live){
+        let chosen=null,nearest=Infinity;
+        for(const [id,point] of saved){
+          if(keep.has(id))continue;
+          const d=Math.hypot(point.x-touch.clientX,point.y-touch.clientY);
+          if(d<nearest){nearest=d;chosen=id;}
+        }
+        if(chosen!==null)keep.add(chosen);
+      }
+      let changed=false;
+      for(const [id] of saved)if(!keep.has(id)){this.pointers.delete(id);changed=true;}
+      if(changed)rebuildCameraGesture();
+    };
+    for(const event of ['touchend','touchcancel'])
+      addEventListener(event,reconcileTouches,{capture:true,passive:true});
     this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
     if(stick){let pointer=null;const knob=stick.firstElementChild;const move=e=>{if(e.pointerId!==pointer)return;const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,radius=Math.max(20,(r.width-knob.offsetWidth)/2-4),f=radius/Math.max(radius,Math.hypot(x,y));this.move.set(x*f/radius,y*f/radius);knob.style.transform=`translate(${x*f}px,${y*f}px)`;};stick.onpointerdown=e=>{e.preventDefault();if(pointer!==null)return;pointer=e.pointerId;stick.setPointerCapture(pointer);move(e);};stick.onpointermove=move;stick.onpointerup=stick.onpointercancel=stick.onlostpointercapture=e=>{if(e.pointerId!==pointer)return;pointer=null;this.move.set(0,0);knob.style.transform='';};}
   }
