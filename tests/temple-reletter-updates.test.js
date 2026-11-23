@@ -26,7 +26,7 @@ test('every elemental staff spell uses exactly one third of RELETTER effective r
  assert.equal(attackStats(melee,1).range,originalStats(melee,1).range);
 });
 test('PNG-specific authored artwork defaults are exact, with non-PNG unaffected',()=>{
- const expected={depth:0,brightness:.4,contrast:1,saturation:1.43,blackPoint:.1,tint:'#ffffff'};
+ const expected={depth:0,brightness:.4,contrast:1,saturation:1.43,blackPoint:.1,tint:'#ffffff',labelBackground:'#000000'};
  assert.deepEqual(PNG_APPEARANCE_DEFAULTS,expected);
  assert.deepEqual(validateAppearance({}, {type:'image/png'}),expected);
  assert.deepEqual(artworkAppearanceDefaults({format:'png'}),expected);
