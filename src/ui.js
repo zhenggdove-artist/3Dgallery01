@@ -367,7 +367,7 @@ export class TempleUI extends EventTarget{
   purchaseNotice(itemName,quantity){
     const notice=$('purchase-notice');if(!notice)return;
     clearTimeout(this.purchaseNoticeTimer);
-    notice.textContent='已成功購買「'+String(itemName||'物品')+'」'+String(quantity)+'個';
+    notice.textContent='PURCHASE SUCCESSFUL · '+String(itemName||'ITEM')+' ×'+String(quantity||1);
     notice.hidden=false;notice.classList.remove('visible');
     void notice.offsetWidth; // Restart the 500 ms fade on a later purchase.
     notice.classList.add('visible');
