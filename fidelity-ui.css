@@ -640,3 +640,35 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
 .comfort-slot-choices button:focus-visible{outline:3px solid #237ee2;outline-offset:2px;}
 .comfort-slot-cancel{padding:9px;background:#fff;border:1px solid #b69ccc;
  color:#493653;border-radius:6px;font-weight:700;cursor:pointer;}
+
+/* Separate HP and shield rows: the blue heart never covers the HP counter. */
+#vitals{min-width:205px;min-height:104px;padding-left:52px;}
+#vitals #vital-readouts{position:absolute;left:52px;top:7px;display:grid;gap:2px;justify-items:start;white-space:nowrap;min-width:0;}
+#vitals #vital-readouts>label{position:static;display:flex;align-items:center;height:24px;margin:0;min-width:0;}
+#vitals #shield-readout{display:flex;align-items:center;gap:5px;height:27px;min-width:0;}
+#vitals #shield-readout[hidden]{display:none!important;}
+#vitals .shield-heart{display:block;width:23px;height:23px;flex:0 0 23px;filter:drop-shadow(0 0 3px #3eaeffba);}
+#vitals #player-level,#vitals #hp-label,#vitals #shield-label{
+ font-family:Arial,'Noto Sans TC',sans-serif!important;font-size:clamp(13px,1.4vw,16px)!important;
+ font-weight:900!important;line-height:1.25;color:#fff!important;white-space:nowrap;
+ -webkit-text-stroke:.7px #182337;paint-order:stroke fill;
+ text-shadow:1px 1px 0 #111a32,-1px 1px 0 #111a32,1px -1px 0 #111a32,-1px -1px 0 #111a32,0 2px 4px #000c;
+}
+#vitals #player-level{left:0;top:-20px;font-size:15px!important;}
+#vitals #shield-label{color:#abedff!important;}
+#vitals #wallet{top:67px;left:52px;}
+@media(max-width:720px),(pointer:coarse){
+ #vitals{min-width:181px;max-width:min(210px,calc(100vw - 20px));padding-right:5px;}
+ #vitals #vital-readouts{left:52px;top:7px;}
+ #vitals #player-level,#vitals #hp-label,#vitals #shield-label{font-size:13px!important;}
+ #vitals #wallet{font-size:19px!important;top:68px;}
+}
+@media(max-width:600px){#vitals{top:max(71px,env(safe-area-inset-top) + 62px);}}
+#purchase-notice{position:fixed;z-index:67;left:50%;top:26%;transform:translate(-50%,0);
+ width:max-content;max-width:calc(100vw - 28px);padding:10px 16px;pointer-events:none;
+ background:#f8efff;color:#392a57;border:2px solid #9f7ac8;border-radius:9px;
+ text-align:center;overflow-wrap:anywhere;font:800 clamp(13px,3vw,18px)/1.4 Arial,'Noto Sans TC',sans-serif;
+ box-shadow:0 8px 28px #0005;opacity:0;}
+#purchase-notice[hidden]{display:none!important;}
+#purchase-notice.visible{animation:purchase-confirm-fade 500ms ease-out forwards;}
+@keyframes purchase-confirm-fade{0%,22%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-9px)}}
