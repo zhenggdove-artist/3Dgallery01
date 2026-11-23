@@ -202,7 +202,7 @@ export class WeaponSignatureEffects {
   // overlapping fish into an almost black slab from behind. Opaque, depth-
   // writing fish with unlit vertex gradients preserve every silhouette.
   const glow=(color,vertexColors=false)=>new THREE.MeshBasicMaterial({
-   color,vertexColors,transparent:false,opacity:1,depthWrite:true,
+   color,vertexColors,transparent:true,opacity:.5,depthWrite:false,
    depthTest:true,side:THREE.FrontSide,toneMapped:false
   });
   const amber=glow('#ffffff',true),pearl=glow('#fffae7',true),
@@ -289,7 +289,7 @@ export class WeaponSignatureEffects {
   tailGeometry.setAttribute('position',new THREE.BufferAttribute(tailPositions,3).setUsage(THREE.DynamicDrawUsage));
   tailGeometry.setAttribute('color',new THREE.BufferAttribute(tailColors,3));
   const tailCloud=new THREE.Points(tailGeometry,new THREE.PointsMaterial({
-   color:'#ffffff',vertexColors:true,size:.095,transparent:true,opacity:.87,
+   color:'#ffffff',vertexColors:true,size:.095,transparent:true,opacity:.435,
    sizeAttenuation:true,depthWrite:false,depthTest:true,
    blending:THREE.AdditiveBlending,toneMapped:false
   }));
