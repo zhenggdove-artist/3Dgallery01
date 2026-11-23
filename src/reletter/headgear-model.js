@@ -2,20 +2,53 @@
 export function createHeadgear(T,item){const root=new T.Group();root.name=item.name;root.userData.headgear=item.id;const mats=[],mat=(color,metal=.1)=>{const m=new T.MeshStandardMaterial({color,roughness:.4,metalness:metal});mats.push(m);return m;},main=mat(item.color),white=mat('#f5eee2'),dark=mat('#24303d'),gold=mat('#e8bd65',.65),pink=mat('#e6aab6'),green=mat('#78ab73'),glass=new T.MeshStandardMaterial({color:'#c0edff',transparent:true,opacity:.2,roughness:.1,metalness:.2});mats.push(glass);
 const mesh=(geo,p,scale=[1,1,1],m=main)=>{const o=new T.Mesh(geo,m);o.position.set(...p);o.scale.set(...scale);root.add(o);return o;},ball=(p,s,m=main)=>mesh(new T.SphereGeometry(1,20,14),p,s,m),box=(p,s,m=main)=>mesh(new T.BoxGeometry(1,1,1),p,s,m),cone=(p,r,h,m=main)=>mesh(new T.ConeGeometry(r,h,20),p,[1,1,1],m),tube=(pts,r=.06,m=main)=>mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>new T.Vector3(...p))),24,r,7,false),[0,0,0],[1,1,1],m),ring=(p,r=.6,t=.045,m=main)=>mesh(new T.TorusGeometry(r,t,8,36),p,[1,1,1],m),eyes=(y=.15,z=.62)=>{for(const x of [-.24,.24]){ball([x,y,z],[.14,.17,.07],white);ball([x,y,z+.055],[.07,.11,.04],dark);}},cap=()=>mesh(new T.SphereGeometry(.69,24,16,0,Math.PI*2,0,Math.PI*.58),[0,.15,0]),wing=(side,y=.4)=>{for(let i=0;i<6;i++){const f=ball([side*(.55+i*.12),y+i*.1,-.05],[.13,.42-i*.04,.08],white);f.rotation.z=-side*(.4+i*.14);}},horn=(side,y=.5)=>tube([[side*.45,y,0],[side*.8,y+.35,0],[side*.8,y+.8,0],[side*.5,y+1,0]],.085,gold),mask=()=>ball([0,.05,.52],[.57,.68,.13]);
 const d=item.design;
-if(['dinosaur','shark','dragon'].includes(d)){cap();ball([0,.25,.65],[.53,.3,.55]);eyes(.45,.8);for(let i=0;i<7;i++){cone([0,.7+i*.05,-.55+i*.19],.13,.3,d==='dragon'?gold:green);if(i<5)for(const side of [-1,1]){const tooth=cone([side*.43,.06,.3+i*.18],.07,.18,white);tooth.rotation.z=Math.PI;}}if(d==='dragon'){horn(-1);horn(1);}if(d==='shark'){const fin=cone([0,.97,-.1],.25,.65);fin.scale.z=.25;}}
+if(['elephant','rooster','anteater','guinea-pig','penguin','polar-bear','lion','eggplant'].includes(d)){
+ cap();
+ if(d==='elephant'){
+  for(const side of [-1,1]){ball([side*.69,.36,.08],[.44,.58,.13]);ball([side*.72,.35,.22],[.28,.39,.055],pink);}
+  eyes(.27,.62);
+  tube([[0,.15,.63],[0,-.14,.89],[.10,-.47,1.03],[.25,-.50,1.03]],.16);
+  for(const side of [-1,1]){const tusk=cone([side*.32,-.18,.84],.07,.28,white);tusk.rotation.x=Math.PI/2;}
+ }else if(d==='rooster'){
+  for(let i=0;i<5;i++)ball([0,.76+i*.13,-.29+i*.11],[.20,.24,.12],i%2?pink:main);
+  eyes(.25,.65);const beak=cone([0,.05,.79],.19,.35,gold);beak.rotation.x=Math.PI/2;
+  ball([0,-.22,.73],[.14,.17,.12],pink);
+ }else if(d==='anteater'){
+  ball([0,.20,.66],[.40,.27,.42]);const snout=cone([0,-.14,.99],.22,.83);
+  snout.rotation.x=Math.PI/2;ball([0,-.17,1.31],[.12,.09,.10],dark);
+  for(const side of [-1,1]){ball([side*.46,.72,0],[.16,.35,.13]);ball([side*.33,.27,.69],[.08,.09,.04],dark);}
+ }else if(d==='guinea-pig'){
+  ball([0,.23,.50],[.60,.48,.40],white);for(const side of [-1,1]){ball([side*.43,.68,.12],[.23,.26,.12],pink);ball([side*.23,.25,.85],[.10,.12,.04],dark);}
+  ball([0,.05,.92],[.12,.09,.07],pink);for(const side of [-1,1])ball([side*.15,-.10,.85],[.08,.05,.04],white);
+ }else if(d==='penguin'){
+  ball([0,.19,.55],[.47,.55,.22],white);for(const side of [-1,1]){ball([side*.24,.26,.75],[.08,.10,.04],dark);ball([side*.60,.1,0],[.15,.3,.12]);}
+  const beak=cone([0,.01,.82],.13,.25,gold);beak.rotation.x=Math.PI/2;
+ }else if(d==='polar-bear'){
+  for(const side of [-1,1]){ball([side*.49,.68,0],[.24,.25,.14]);ball([side*.49,.68,.13],[.13,.13,.025],pink);}
+  ball([0,.03,.58],[.32,.25,.22],white);eyes(.28,.60);ball([0,.04,.82],[.13,.11,.09],dark);
+ }else if(d==='lion'){
+  for(let i=0;i<14;i++){const a=i*Math.PI*2/14;ball([Math.sin(a)*.61,.25+Math.cos(a)*.55,-.10],[.25,.31,.23],i%2?gold:main);}
+  for(const side of [-1,1]){ball([side*.42,.66,.16],[.20,.20,.13],gold);ball([side*.20,.21,.68],[.085,.11,.035],dark);}
+  ball([0,.02,.73],[.30,.22,.23],white);ball([0,.11,.92],[.12,.10,.08],dark);
+ }else if(d==='eggplant'){
+  ball([0,.40,0],[.53,.79,.50]);for(let i=0;i<5;i++){const a=i*6.283/5;const leaf=cone([Math.cos(a)*.35,1.12,Math.sin(a)*.35],.26,.36,green);leaf.rotation.z=-Math.cos(a)*.6;}
+  tube([[0,1.2,0],[0,1.55,0],[.25,1.72,0]],.12,green);eyes(.23,.52);
+ }
+}
+else if(['dinosaur','shark','dragon'].includes(d)){cap();ball([0,.25,.65],[.53,.3,.55]);eyes(.45,.8);for(let i=0;i<7;i++){cone([0,.7+i*.05,-.55+i*.19],.13,.3,d==='dragon'?gold:green);if(i<5)for(const side of [-1,1]){const tooth=cone([side*.43,.06,.3+i*.18],.07,.18,white);tooth.rotation.z=Math.PI;}}if(d==='dragon'){horn(-1);horn(1);}if(d==='shark'){const fin=cone([0,.97,-.1],.25,.65);fin.scale.z=.25;}}
 else if(d==='poop'){for(let i=0;i<4;i++)ball([Math.sin(i)*.08,.55+i*.2,0],[.62-i*.12,.22,.5-i*.09]);cone([.04,1.35,0],.18,.4);eyes(.62,.45);}
 else if(d==='angel'||d==='bat'){for(const side of [-1,1]){wing(side);if(d==='bat')root.children.slice(-6).forEach(o=>o.material=main);}if(d==='angel'){const halo=ring([0,1.15,0],.45,.045,gold);halo.rotation.x=Math.PI/2;}}
 else if(d==='hockey'){mask();for(const side of [-1,1]){ball([side*.22,.23,.66],[.12,.08,.025],dark);for(let j=0;j<5;j++)ball([side*(.12+(j%2)*.15),-.03-Math.floor(j/2)*.16,.66],[.035,.035,.02],dark);}tube([[-.4,.43,.64],[0,.29,.68],[.4,.43,.64]],.035,main);}
 else if(d==='hero'){cap();mask();for(const side of [-1,1])ball([side*.25,.17,.67],[.23,.28,.1],pink);box([0,.18,.7],[.07,1,.08],gold);for(const side of [-1,1])tube([[side*.12,.65,0],[side*.23,1.12,.08]],.035,dark);}
 else if(['cat','bear','fox','frog','bunny'].includes(d)){cap();for(const side of [-1,1]){if(d==='frog')ball([side*.4,.73,.2],[.28,.25,.23],main);else if(d==='bear')ball([side*.5,.72,0],[.24,.25,.14]);else if(d==='bunny'){ball([side*.25,1.05,0],[.18,.65,.13]);ball([side*.25,1.08,.11],[.09,.48,.04],pink);}else{cone([side*.48,.85,0],.25,.5);cone([side*.48,.85,.11],.13,.35,pink);}}eyes(d==='frog'?.77:.22,d==='frog'?.4:.63);if(d==='fox')ball([0,-.08,.65],[.3,.2,.25],white);ball([0,.03,.79],[.08,.065,.05],dark);}
-else if(d==='squid'||d==='jelly'){ball([0,.65,0],[.65,d==='squid'?.8:.4,.6]);for(let i=0;i<8;i++){const a=i*Math.PI/4;tube([[Math.cos(a)*.55,.45,Math.sin(a)*.55],[Math.cos(a)*.75,-.05,Math.sin(a)*.75],[Math.cos(a+.4)*.6,-.4,Math.sin(a+.4)*.6]],.045);}if(d==='squid')eyes(.6,.6);}
+else if(d==='squid'||d==='jelly'||d==='jellyfish'){ball([0,.65,0],[.65,d==='squid'?.8:.4,.6]);for(let i=0;i<8;i++){const a=i*Math.PI/4;tube([[Math.cos(a)*.55,.45,Math.sin(a)*.55],[Math.cos(a)*.75,-.05,Math.sin(a)*.75],[Math.cos(a+.4)*.6,-.4,Math.sin(a+.4)*.6]],.045);}if(d==='squid')eyes(.6,.6);}
 else if(d==='cactus'||d==='flower'||d==='lotus'){if(d==='cactus'){box([0,.55,0],[.75,.4,.65],gold);ball([0,1.08,0],[.22,.55,.23],green);for(const side of [-1,1])tube([[0,.95,0],[side*.36,.95,0],[side*.4,1.25,0]],.1,green);for(let i=0;i<16;i++)cone([Math.sin(i*2.4)*.22,.75+i*.035,Math.cos(i*2.4)*.23],.02,.12,white);}else{const n=d==='lotus'?12:16;for(let i=0;i<n;i++){const a=i*6.283/n,p=ball([Math.cos(a)*.52,.6+(d==='lotus'?Math.sin(a)*.15:Math.sin(a)*.5),d==='lotus'?Math.sin(a)*.52:.25],[.2,.38,.1]);p.rotation.z=-a;}ball([0,.6,.3],[.31,.31,.2],gold);}}
 else if(d==='teapot'){ball([0,.7,0],[.6,.44,.5]);ball([0,1.12,0],[.45,.08,.4],white);ball([0,1.25,0],[.08,.1,.08],gold);tube([[-.4,.65,0],[-.85,.72,0],[-1,.98,0]],.14);ring([.62,.7,0],.3,.07,gold);}
 else if(d==='crown'||d==='samurai'){const band=ring([0,.5,0],.62,.1,gold);band.rotation.x=Math.PI/2;for(let i=0;i<7;i++){const a=i*6.283/7;cone([Math.cos(a)*.58,.78,Math.sin(a)*.58],.14,.5,gold);ball([Math.cos(a)*.58,.62,Math.sin(a)*.58],[.08,.1,.07],pink);}if(d==='samurai'){cap();horn(-1,.6);horn(1,.6);}}
 else if(d==='pumpkin'){for(let i=0;i<8;i++){const a=i*6.283/8;ball([Math.cos(a)*.25,.15,Math.sin(a)*.25],[.45,.65,.45]);}eyes(.3,.65);box([0,-.1,.68],[.5,.13,.05],dark);tube([[0,.75,0],[.04,1.05,0],[.2,1.1,0]],.09,green);}
 else if(d==='mushroom'){ball([0,.55,0],[.28,.35,.25],white);ball([0,.95,0],[.85,.32,.75]);for(let i=0;i<12;i++){const a=i*2.4,r=.2+i%3*.18;ball([Math.cos(a)*r,1.19-r*.13,Math.sin(a)*r],[.09,.03,.09],white);}}
 else if(d==='ghost'){ball([0,.24,0],[.7,.8,.62],white);eyes(.35,.59);ball([0,-.1,.65],[.14,.2,.05],dark);for(const side of [-1,1])tube([[side*.55,.3,0],[side*.9,.4,.1],[side*1,.6,.1]],.12,white);}
-else if(d==='crab'){ball([0,.7,0],[.7,.25,.5]);for(const side of [-1,1]){for(let i=0;i<3;i++)tube([[side*.5,.7,(i-1)*.3],[side*.85,.6,(i-1)*.4]],.04);tube([[side*.5,.7,.3],[side*.9,1,.5]],.09);for(const k of [-1,1])tube([[side*.9,1,.5],[side*(.9+k*.15),1.3,.5],[side*.9,1.4,.5]],.06);}eyes(.82,.49);}
+else if(d==='crab'||d==='crab-claw'){ball([0,.7,0],[.7,.25,.5]);for(const side of [-1,1]){for(let i=0;i<3;i++)tube([[side*.5,.7,(i-1)*.3],[side*.85,.6,(i-1)*.4]],.04);tube([[side*.5,.7,.3],[side*.9,1,.5]],.09);for(const k of [-1,1])tube([[side*.9,1,.5],[side*(.9+k*.15),1.3,.5],[side*.9,1.4,.5]],.06);}eyes(.82,.49);}
 else if(d==='snail'){ball([0,.7,0],[.6,.6,.38]);const pts=[];for(let i=0;i<80;i++){const a=i*.17,r=.03+i*.006;pts.push([Math.cos(a)*r,.7+Math.sin(a)*r,.38]);}tube(pts,.035,gold);for(const side of [-1,1]){tube([[side*.3,.45,.3],[side*.4,.85,.7]],.04);ball([side*.4,.85,.7],[.08,.08,.08],dark);}}
 else if(d==='ufo'||d==='saturn'){ball([0,.8,0],d==='ufo'?[.5,.25,.5]:[.45,.45,.45],d==='ufo'?glass:main);const r=ring([0,.72,0],.85,.12,gold);r.rotation.x=d==='ufo'?Math.PI/2:1.1;for(let i=0;i<10;i++){const a=i*.628;ball([Math.sin(a)*.85,.72,Math.cos(a)*.85],[.055,.055,.055],pink);}}
 else if(['toaster','tv','dice','book','clock'].includes(d)){box([0,.25,0],[1.25,1.15,.95]);if(d==='tv'){box([0,.25,.5],[1,.8,.08],glass);for(const side of [-1,1])tube([[0,.8,0],[side*.4,1.3,0]],.025,dark);}if(d==='toaster'){for(const z of [-.2,.2]){box([0,.86,z],[.85,.08,.12],dark);box([0,1.03,z],[.7,.35,.11],white);}}if(d==='dice'){for(const [x,y] of [[-.35,.55],[.35,.55],[0,.25],[-.35,-.05],[.35,-.05]])ball([x,y,.49],[.085,.085,.025],dark);}if(d==='book'){box([0,.25,.5],[.95,.95,.04],gold);for(let i=0;i<7;i++)box([0,.55-i*.1,.53],[.68,.018,.02],white);}if(d==='clock'){const dial=ring([0,.25,.5],.43,.04,gold);ball([0,.25,.5],[.4,.4,.03],white);tube([[0,.55,.55],[0,.25,.55],[.22,.15,.55]],.025,dark);}}
@@ -30,7 +63,7 @@ else if(d==='wizard'){const brim=ring([0,.55,0],.72,.18);brim.rotation.x=Math.PI
 else if(d==='knight'){cap();box([0,.1,.6],[1,.7,.12]);for(let i=0;i<7;i++)box([-.36+i*.12,.1,.67],[.05,.4,.02],dark);tube([[0,.8,-.45],[0,1,.1],[0,.85,.5]],.12,pink);}
 else if(d==='jester'){cap();for(let i=-1;i<=1;i++){tube([[i*.3,.6,0],[i*.6,1.3,0],[i*.8,.95,.1]],.16,i%2?pink:main);ball([i*.8,.95,.1],[.12,.12,.12],gold);}}
 else if(d==='pirate'){const brim=ball([0,.55,0],[.95,.18,.6]);cap();ball([0,.65,.58],[.16,.17,.04],white);for(const side of [-1,1])ball([side*.065,.69,.62],[.04,.05,.02],dark);}
-else if(d==='banana'){for(let i=0;i<4;i++){const a=i*1.57;tube([[0,.7,0],[Math.cos(a)*.5,.5,Math.sin(a)*.5],[Math.cos(a)*.8,.1,Math.sin(a)*.8]],.13);}cone([0,1,0],.17,.7,white);}
+else if(d==='banana'||d==='banana-bunch'){for(let i=0;i<4;i++){const a=i*1.57;tube([[0,.7,0],[Math.cos(a)*.5,.5,Math.sin(a)*.5],[Math.cos(a)*.8,.1,Math.sin(a)*.8]],.13);}cone([0,1,0],.17,.7,white);}
 else if(d==='cloud'){for(let i=0;i<7;i++)ball([Math.sin(i*2.4)*.5,.65+i%2*.15,Math.cos(i*2.4)*.35],[.38,.3,.32],white);for(let i=0;i<5;i++)ball([-.5+i*.25,.16,0],[.04,.13,.04],glass);}
 root.userData.materials=mats;return root;}
 export function disposeHeadgear(root){const geo=new Set(),mat=new Set(root.userData.materials||[]);root.traverse(o=>{if(o.geometry)geo.add(o.geometry);if(o.material)mat.add(o.material);});root.removeFromParent();geo.forEach(g=>g.dispose());mat.forEach(m=>m.dispose());}

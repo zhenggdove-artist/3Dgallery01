@@ -29,7 +29,7 @@ export function itemPreview(item){
  const job=queue.then(async()=>{
   try{
    let url;
-   if(item.slot==='outfit'){
+   if(item.slot==='outfit'&&!item.creature){
     // These are actual authored outfit illustrations, not old inventory icons.
     url='./art/outfits/'+encodeURIComponent(item.id)+'.webp';
     await preloadImage(url);
@@ -132,6 +132,47 @@ function shapeModel(item){
  }else throw Error('No full equipment preview model for '+item.slot);
  return group;
 }
+// Shop renders the complete luminous blue blade and its contrasting hilt.
+// This dedicated camera-facing model changes only the product portrait.
+// Lightweight 3D SHOP portrait for procedurally created creature outfits.
+// Uses the exact same animal hood sculpture as the equipped costume.
+function creatureOutfitProductPortrait(item){
+ const g=new THREE.Group(),color=new THREE.Color(item.color||'#94b8cb');
+ const fabric=new THREE.MeshStandardMaterial({color,roughness:.76});
+ const pale=new THREE.MeshStandardMaterial({color:'#f0e7d9',roughness:.8});
+ const metal=new THREE.MeshStandardMaterial({color:'#363c48',roughness:.64});
+ const add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);g.add(m);return m;};
+ add(new THREE.CylinderGeometry(.45,.52,1.35,12),fabric,0,-.45,0);
+ add(new THREE.SphereGeometry(.30,16,12),pale,0,-.35,.45).scale.set(1,1.25,.2);
+ for(const side of [-1,1]){
+  const arm=add(new THREE.CapsuleGeometry(.16,.82,4,8),fabric,side*.62,-.35,0);arm.rotation.z=-side*.28;
+  add(new THREE.CapsuleGeometry(.18,.45,4,8),fabric,side*.27,-1.38,0);
+  add(new THREE.BoxGeometry(.32,.16,.45),metal,side*.27,-1.68,.09);
+ }
+ const hood=createHeadgear(THREE,{...item,design:item.creature});
+ hood.scale.setScalar(.57);hood.position.set(0,.61,.06);g.add(hood);
+ return g;
+}
+function saberProductPortrait(){
+ const g=new THREE.Group();
+ const dark=new THREE.MeshStandardMaterial({color:'#152334',metalness:.62,roughness:.32});
+ const chrome=new THREE.MeshStandardMaterial({color:'#a8c2d7',metalness:.85,roughness:.18});
+ const blue=new THREE.MeshBasicMaterial({color:'#238dff'});
+ const white=new THREE.MeshBasicMaterial({color:'#d9f7ff'});
+ const aura=new THREE.MeshBasicMaterial({color:'#188fff',transparent:true,opacity:.36,depthWrite:false,blending:THREE.AdditiveBlending});
+ const add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);g.add(m);return m;};
+ add(new THREE.CylinderGeometry(.13,.12,.86,16),dark,0,-.96,0);
+ add(new THREE.CylinderGeometry(.16,.16,.13,16),chrome,0,-1.44,0);
+ for(let i=0;i<7;i++)add(new THREE.TorusGeometry(.132,.013,6,24),chrome,0,-1.27+i*.105,0).rotation.x=Math.PI/2;
+ add(new THREE.CylinderGeometry(.21,.16,.16,16),chrome,0,-.47,0);
+ add(new THREE.BoxGeometry(.62,.10,.17),chrome,0,-.44,0);
+ add(new THREE.CylinderGeometry(.11,.12,2.55,16),aura,0,.93,0);
+ add(new THREE.CylinderGeometry(.076,.086,2.51,16),blue,0,.95,0);
+ add(new THREE.CylinderGeometry(.026,.039,2.49,12),white,0,.96,.069);
+ add(new THREE.SphereGeometry(.092,12,8),white,0,2.20,0);
+ g.rotation.z=-.12;
+ return g;
+}
 async function renderPreview(item){
  if(!renderer){
   renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true});
@@ -141,11 +182,11 @@ async function renderPreview(item){
   const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(3,5,4);scene.add(light);
   camera=new THREE.PerspectiveCamera(35,1,.01,1000);
  }
- const model=shapeModel(item);
+ const model=item.family==='saber'?saberProductPortrait():item.slot==='outfit'&&item.creature?creatureOutfitProductPortrait(item):shapeModel(item);
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
  const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*2.2;
- camera.position.copy(center).add(new THREE.Vector3(.65,.35,1).normalize().multiplyScalar(distance));
+ camera.position.copy(center).add((item.family==='saber'?new THREE.Vector3(0,.06,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
  camera.lookAt(center);
  try{
   await renderer.compileAsync(scene,camera);

@@ -11,3 +11,28 @@ const collections=[
  ['astronaut',['Milk Rocket','Sea Explorer','Mars Walker','Golden Orbit','Void Pioneer'],['#d5d1c7','#a3bacb','#c7a49a','#c9b688','#aca6c5'],'defense',.04,'speed',.02]
 ];
 export const OUTFITS=collections.flatMap(([design,names,colors,key,gain,second,secondary])=>names.map((name,i)=>{const tier=i+1,bonuses={[key]:+(gain*tier).toFixed(3),[second]:+(secondary*tier).toFixed(3)};if(['silk','witch','angel'].includes(design))bonuses.fusion=+(.025*tier).toFixed(3);return {id:`outfit-${design}-${tier}`,name,slot:'outfit',family:'outfit',design,pattern:i,tier,color:colors[i],price:[20,45,90,160,260][i],bonuses,description:Object.entries(bonuses).map(([k,v])=>`${k==='hp'?'+'+v:'+'+Math.round(v*100)+'%'} ${k==='hp'?'max HP':k==='defense'?'damage reduction':k==='speed'?'movement speed':k==='jump'?'jump height':k==='fusion'?'fusion chance multiplier':'attack'}`).join(' · ')};}));
+
+
+// Eleven explicitly requested creature and food outfits. These are separate
+// wearable body suits, not recolours of the existing animal head slot.
+const creatureOutfits=[
+ ['elephant','Elephant Parade Suit','#94adb7',4,{hp:2.4,defense:.14}],
+ ['rooster','Rooster Parade Suit','#d98e48',2,{attack:.11,speed:.10}],
+ ['anteater','Anteater Forager Suit','#bba187',3,{attack:.11,defense:.08}],
+ ['guinea-pig','Guinea Pig Fleece Suit','#d5ad95',2,{hp:1.5,speed:.12}],
+ ['penguin','Penguin Tuxedo Suit','#34485f',3,{defense:.12,jump:.16}],
+ ['polar-bear','Polar Bear Winter Suit','#d9e5e8',5,{hp:2.6,defense:.19}],
+ ['jellyfish','Jellyfish Drift Suit','#84c4d4',3,{jump:.24,speed:.09}],
+ ['crab-claw','Crab Armour Suit','#ce7768',4,{defense:.20,attack:.07}],
+ ['lion','Lion Pride Suit','#bc9453',5,{attack:.18,hp:1.2}],
+ ['banana-bunch','Banana Peel Suit','#efcf4f',2,{speed:.20,jump:.15}],
+ ['eggplant','Eggplant Garden Suit','#845eaa',3,{defense:.11,jump:.10}]
+];
+OUTFITS.push(...creatureOutfits.map(([creature,name,color,tier,bonuses])=>({
+ id:'outfit-creature-'+creature,name,slot:'outfit',family:'outfit',
+ design:'creature',creature,pattern:(creature.length%5),tier,color,
+ price:[0,350,850,1550,2800,4400][tier],bonuses,
+ description:Object.entries(bonuses).map(([k,v])=>
+  k==='hp'?'+ '+Math.round(v*10)+' max HP':
+  '+ '+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed',jump:'jump height',attack:'attack'}[k]||k)).join(' · ')
+})));
