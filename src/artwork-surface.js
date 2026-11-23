@@ -24,7 +24,10 @@ export function titleOpacityByDistance(distance,revealDistance=LABEL_STYLE_DEFAU
 export function updateArtworkTitleVisibility(root,viewerPosition,force=false){
  const plate=root?.userData?.titlePlate;
  if(!plate?.material)return 0;
- const distance=root.getWorldPosition(new THREE.Vector3()).distanceTo(viewerPosition);
+ // No local player yet: keep the name hidden rather than falling back to
+ // camera distance (which changes when the user zooms in or out).
+ const distance=viewerPosition?.isVector3?
+  root.getWorldPosition(new THREE.Vector3()).distanceTo(viewerPosition):Infinity;
  const alpha=force||root.userData.editing?1:
   titleOpacityByDistance(distance,root.userData.appearance?.labelRevealDistance);
  if(plate.material.opacity!==alpha)plate.material.opacity=alpha;
