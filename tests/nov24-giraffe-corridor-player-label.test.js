@@ -66,6 +66,6 @@ test('runtime passes the local player into label visibility and preserves giraff
  assert.match(warning,/equipped\.id==='giraffe'&&stats\.ultimate/);
  assert.match(warning,/stats\.range=\+\(equipped\.chargedRange\*quality\.range\)/);
  assert.match(warning,/5\.9\*quality\.visual/);
- assert.match(rules,/weapon\.id==='giraffe'&&stats\.ultimate/);
+ assert.match(rules,/\(weapon\.baseId\|\|weapon\.id\)==='giraffe'&&stats\.ultimate/);
  assert.match(rules,/stats\.radius=Math\.max\(stats\.radius,5\.9\*quality\.visual\)/);
 });
