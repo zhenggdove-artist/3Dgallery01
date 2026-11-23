@@ -861,3 +861,13 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
  display:block;
  text-align:right;
 }
+
+/* Nearby artwork pickup only: compact and 50% translucent on desktop and mobile. */
+#prompt.artwork-pickup-hint{
+ padding:5px 8px;
+ font-size:11px;
+ line-height:1.2;
+ transform:translateX(-50%) scale(.82);
+ transform-origin:center bottom;
+}
+#prompt.artwork-pickup-hint.visible{opacity:.5}
