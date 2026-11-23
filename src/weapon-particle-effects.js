@@ -16,6 +16,7 @@ function rand(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;re
 function recipePalette(recipe,item){
  const palettes={
  rainbow:['#ff414a','#ffb44e','#f9ff60','#58ff9f','#48deff','#7e71ff','#fb70f9'],
+ 'rainbow-spiral':['#ff414a','#ffb44e','#f9ff60','#58ff9f','#48deff','#7e71ff','#fb70f9'],
  'rainbow-scatter':['#ff394e','#ffc04b','#eaff70','#45f7a2','#55bbff','#a66cff','#ff7cd1'],
  flies:['#05070a','#0c0f17','#202333','#55566a','#9a9ab0'],
  food:['#ffd37a','#ff764c','#fff5db','#f8bc87','#d3e678','#e7a3f0'],
@@ -44,6 +45,7 @@ function recipePalette(recipe,item){
  return (palettes[recipe]||[item?.color||'#b1e9ff','#ffffff','#a9d1ff']).map(v=>new THREE.Color(v));
 }
 function modeFor(recipe){
+ if(recipe==='rainbow-spiral')return 7;
  if(recipe==='rainbow')return 1;
  if(recipe==='flies')return 2;
  if(recipe==='food')return 3;
@@ -132,6 +134,15 @@ void main(){
      (row*spreadY*front+sin(theta)*bulletRadius)*normalization,
      front*normalization-w*mix(.24,.5,charged));
    alpha*=1.-smoothstep(.82,1.,t);
+ }else if(uMode<7.5){
+   // Fused Black Cat shoulder ultimate: seven-colour spiral with a moving
+   // high-energy core. The visual follows the SAME server-randomised ray.
+   float front=uReach*min(1.,t*2.6);
+   float depth=front-u*min(8.,uReach*.15);
+   float theta=phase*1.6+depth*.43+uAge*14.;
+   float radius=(.14+sqrt(w)*.95)*(1.-smoothstep(.6,1.,u));
+   p=vec3(cos(theta)*radius,sin(theta)*radius,depth);
+   alpha*=1.-smoothstep(.84,1.,t);
  }else{
    // Individual weapon families have different silhouette, path and movement,
    // all formed from small independent points rather than solid summoned meshes.
@@ -398,9 +409,13 @@ export class WeaponParticleEffects{
   // produces a nearby, very wide waterfall instead of a distant beam.
   const elementalJet=['fire','water','wave'].includes(item.family)||item.id==='goldfish';
   if(!charged&&!elementalJet&&!['white-cat','black-cat','calico-cat'].includes(item.id))return;
-  const chosen=item.id==='calico-cat'?'rainbow-scatter':item.id?.includes('cat')?'rainbow':item.id==='goldfish'?'tidal':item.id==='clam'&&charged?'tidal':recipe;
-  const range=chosen==='rainbow-scatter'?Math.max(2,Number(data.range)||10):Math.max(1,Math.min(charged?100:160,Number(data.range)||source.distanceTo(end)));
-  const amount=charged?['fissure','rainbow-scatter','boomerang','lotus-veil','thorn-tower'].includes(chosen)?5600:chosen==='music'?5200:chosen==='flies'||chosen==='food'?3900:3200:elementalJet?2400:chosen==='rainbow-scatter'?3200:1200;
+  const chosen=item.id==='black-cat'&&charged&&data.piercing?'rainbow-spiral':
+   item.id==='calico-cat'?'rainbow-scatter':item.id?.includes('cat')?'rainbow':
+   item.id==='goldfish'?'tidal':item.id==='clam'&&charged?'tidal':recipe;
+  const range=chosen==='rainbow-spiral'?Math.max(2,Number(data.range)||10):
+   chosen==='rainbow-scatter'?Math.max(2,Number(data.range)||10):
+   Math.max(1,Math.min(charged?100:160,Number(data.range)||source.distanceTo(end)));
+  const amount=charged?['fissure','rainbow-scatter','rainbow-spiral','boomerang','lotus-veil','thorn-tower'].includes(chosen)?5600:chosen==='music'?5200:chosen==='flies'||chosen==='food'?3900:3200:elementalJet?2400:chosen==='rainbow-scatter'?3200:1200;
   const duration=charged?chosen==='music'?3.3:chosen==='fissure'?3:chosen==='rainbow-scatter'?1.65:2.45:elementalJet?1.05:.65;
   const entry=this.make(chosen,item,{range,duration,amount,charge:charged?1:.75});
   if(chosen==='music')entry.material.uniforms.uRadius.value=Math.max(.5,Number(data.radius)||5.5);
@@ -422,7 +437,7 @@ export class WeaponParticleEffects{
     entry.root.quaternion.identity();
   }else{
     entry.root.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),direction.normalize());
-    if(chosen!=='rainbow')entry.root.position.y=Math.max(.7,entry.root.position.y);
+    if(!['rainbow','rainbow-spiral'].includes(chosen))entry.root.position.y=Math.max(.7,entry.root.position.y);
     if(elementalJet){
      if((data.channel||charged)&&['tidal','inferno','singularity'].includes(chosen)){
       // Local authored tidal jet reaches ~4.9m to either side at full
