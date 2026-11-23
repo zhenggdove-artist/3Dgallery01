@@ -7,6 +7,8 @@ export function bindChatLayout(){
  const toggle=document.getElementById('chat-toggle');
  if(!panel||!handle||!toggle)return;
  const mobile=matchMedia('(pointer:coarse)').matches;
+ // Suppress browser long-press selection menus only on non-interactive chat surfaces.
+ panel.addEventListener('contextmenu',e=>{if(!e.target.closest('button,input,textarea,select,form'))e.preventDefault();});
  const STORAGE_KEY='temple-chat-position-v3';
  const DRAG_HOLD_MS=1500;
  const sizes=['max','medium','min'];
