@@ -27,8 +27,8 @@ export function editorPanelMarkup(appearance,platformRadius,originalArtwork,titl
   <div class="gm-floating-body">
   <p data-art-name></p>
   <p class="art-editor-help">Shift+T 縮放／Shift+R 旋轉／Shift+G 移動；Esc 取消</p>
-  <div class="art-editor-toolbar"><button data-action="scale">尺寸</button><button data-action="rotate">旋轉</button><button data-action="translate">位置</button><button data-action="label-resize">編輯名稱底色框</button></div>
-  <p class="art-editor-help">點擊畫面中的作品名稱底色框，出現八個控制點；四角等比、四邊中點單邊拉伸，文字維持置中。</p>
+  <div class="art-editor-toolbar"><button data-action="scale">尺寸</button><button data-action="rotate">旋轉</button><button data-action="translate">位置</button><button data-action="label-resize">編輯名稱底色框</button><button data-action="label-center">名稱條回到水平置中</button></div>
+  <p class="art-editor-help">點擊「編輯名稱底色框」，即可用八個控制點變形；手機長按名稱條約 0.6 秒後拖曳，可自由調整上下左右的位置。名稱條偏移不會移動作品本身。</p>
   <div class="art-editor-fields">${`<label class="art-editor-field"><span class="art-field-name">作品名稱</span><span class="art-editor-values"><input type="text" data-art-title maxlength="120" value="${String(title).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}" aria-label="作品名稱"></span></label>`}${axes}${radius}
    <h4>表面屬性</h4>${numbers}
    <label class="art-editor-field"><span class="art-field-name">色彩</span><span class="art-editor-values"><input data-appearance="tint" type="color" value="${appearance.tint}"></span></label>
@@ -37,6 +37,9 @@ export function editorPanelMarkup(appearance,platformRadius,originalArtwork,titl
    <label class="art-editor-field"><span class="art-field-name">字體大小（px）</span><span class="art-editor-values"><input type="range" min="18" max="120" step="1" data-appearance="labelFontSize" value="${appearance.labelFontSize||44}" aria-label="作品名稱字體大小"><output data-label-font-output>${appearance.labelFontSize||44}px</output></span></label>
    <label class="art-editor-field"><span class="art-field-name">名稱底色寬度</span><span class="art-editor-values"><input type="number" min=".5" max="12" step=".05" data-appearance="labelWidth" value="${appearance.labelWidth||3.5}"></span></label>
    <label class="art-editor-field"><span class="art-field-name">名稱底色高度</span><span class="art-editor-values"><input type="number" min=".18" max="4" step=".02" data-appearance="labelHeight" value="${appearance.labelHeight||.492}"></span></label>
+   <label class="art-editor-field"><span class="art-field-name">名稱漸顯距離（公尺）</span>
+    <span class="art-editor-values"><input type="range" min="3" max="80" step="1" data-appearance="labelRevealDistance" value="${appearance.labelRevealDistance??12}" aria-label="距離作品多少公尺開始漸顯名稱"><output data-label-distance-output>${appearance.labelRevealDistance??12} m</output></span></label>
+   <p class="art-editor-help">從設定距離開始漸顯，接近作品約 3 公尺後完全顯示。GM 編輯時名稱條保持可見。</p>
   </div>
   <p data-status>已選取 · 尚無修改</p>
   <div class="art-editor-actions"><button data-action="follow">跟隨 GM</button>
