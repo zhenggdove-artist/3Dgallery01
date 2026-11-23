@@ -33,7 +33,7 @@ export class PlayerController{
     // A gesture belongs to the pointers that actually started on the canvas.
     // Losing capture or lifting either finger must retire the pinch immediately;
     // otherwise a subsequent SINGLE finger can inherit a stale zoom gesture.
-    this.canvas.style.touchAction='none';
+    if(this.canvas.style)this.canvas.style.touchAction='none';
     const rebuildCameraGesture=()=>{
       const entries=[...this.pointers];
       const touches=entries.filter(([,point])=>point.type==='touch');
