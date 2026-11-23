@@ -6,7 +6,7 @@ import {discGroundHeight} from './artwork-discs.js';
 import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
-import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22} from './artwork-library.js';
+import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
@@ -621,6 +621,7 @@ export function applyAction(world,actor,body,context={}){
   }
   if(body.action==='add-artwork')return addArtwork(world,profile,actor,body,now);
   if(body.action==='set-artwork-layout')return setArtworkLayout(world,profile,body,now);
+  if(body.action==='apply-my-artwork-label-style')return applyMyArtworkLabelStyle(world,actor,body,now);
   // Inventory bookkeeping does not involve combat or world-space actions.
   // Allow purchasing, inspecting and equipping while a room is full and the
   // account is spectating. Combat/building still requires an active fighter.
@@ -822,6 +823,37 @@ function validOriginalPlatformKey(key){
   const match=/^(display|stair|pedestal):(platform-\d{2})(?::(\d{1,2}))?$/.exec(key);
   return !!match&&PLATFORMS.some(p=>p.id===match[2])&&
     (match[1]==='stair'?match[3]!==undefined&&+match[3]<=63:match[3]===undefined);
+}
+
+// Atomic, strictly owner-scoped bulk nameplate style update. In particular
+// GM permission does NOT widen the target scope to other players' artworks.
+export function applyMyArtworkLabelStyle(world,actor,body,now=Date.now()){
+ const style=body?.style;
+ if(!style||typeof style!=='object'||Array.isArray(style)||
+    LABEL_STYLE_BATCH_FIELDS.some(key=>!Object.hasOwn(style,key)))
+  return {error:'Provide all nameplate style fields'};
+ const validated=validateAppearance(style);
+ if(!validated)return {error:'Invalid nameplate colour, font size or bounds'};
+ const patch=labelStyleOnly(validated);
+ const owned=(world.customArtworks||[]).filter(record=>record.owner===actor.key);
+ if(!owned.length)return {error:'You have not uploaded any artworks'};
+ const updates=[];
+ for(const record of owned){
+  const layout=world.artworkLayout?.[record.id];
+  if(!layout)continue;
+  const next=validateAppearance({...layout.appearance,...patch},record);
+  if(!next)return {error:'Invalid appearance for artwork '+record.id};
+  updates.push({record,layout,appearance:next});
+ }
+ if(!updates.length)return {error:'No owned artwork layouts found'};
+ for(const {layout,appearance} of updates){
+  layout.appearance=appearance;
+  layout.revision=(layout.revision||0)+1;
+  layout.updatedAt=now;
+ }
+ world.revision=(world.revision||0)+1;
+ return {notice:'Nameplate style saved to '+updates.length+' of your artworks',
+  updatedCount:updates.length,appliedIds:updates.map(({record})=>record.id)};
 }
 
 export function setArtworkLayout(world,profile,body,now=Date.now()){
