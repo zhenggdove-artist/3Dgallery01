@@ -1187,6 +1187,10 @@ function applyMonsterImpactReaction(player,target,skill,now){
   vector:[dx/length,.08,dz/length]});
 }
 function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosition,kind='normal',hitPosition=null,forceKill=false,shotgunPellet=false,fixedDamage=false){
+  // Explicit last-line guard: the goldfish school cannot damage its caster,
+  // even if an actor is represented by both an id and a player key.
+  if(kind==='giant-goldfish'&&sourceProfile?.key===targetActor.key)
+    return {target:targetActor.key,damage:0,defeated:false,immune:true};
   const target=world.profiles[targetActor.key];if(!target||target.hp<=0||target.deadUntil>now)return null;
    if((target.spawnProtectedUntil||0)>now)return {target:targetActor.key,damage:0,defeated:false,immune:true};
   const stats=refreshStats(world,target,now);if(target.admin&&target.gmInvincible!==false){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
@@ -2199,20 +2203,29 @@ function tickPersistentAttacks(world,actors,now,rng){
    // to chase its own owner instead of pursuing forward enemies.
    const launch=fx.launchDirection||fx.direction;
    const candidates=targets.filter(t=>{
-    const value=t.value,key=value.id||value.key;
-    if(key===fx.owner||value.hp===0||(t.kind==='player'&&insideArtSanctuary(value.position)))return false;
+    const value=t.value;
+    if(value.key===fx.owner||value.id===fx.owner||value.hp===0||
+       (t.kind==='player'&&insideArtSanctuary(value.position)))return false;
     const x=value.position[0]-fx.origin[0],z=value.position[2]-fx.origin[2];
     const along=x*launch[0]+z*launch[2];
     return along>0.5&&along<=fx.range+GOLDFISH_SCHOOL_RADIUS*2;
    });
-   const nearby=candidates.filter(t=>
-    Math.hypot(t.value.position[0]-fx.position[0],t.value.position[2]-fx.position[2])<fx.range*.9+6);
+   const nearby=candidates.filter(t=>{
+    const dx=t.value.position[0]-fx.position[0],dz=t.value.position[2]-fx.position[2];
+    // Pursue only bodies ahead of the moving fish; never U-turn into the caster.
+    return dx*launch[0]+dz*launch[2]>GOLDFISH_SCHOOL_RADIUS*.45&&
+      Math.hypot(dx,dz)<fx.range*.9+6;
+   });
    const aim=nearby.find(t=>(t.value.id||t.value.key)===fx.targetId)||
     nearby.sort((a,b)=>Math.hypot(a.value.position[0]-fx.position[0],a.value.position[2]-fx.position[2])-
      Math.hypot(b.value.position[0]-fx.position[0],b.value.position[2]-fx.position[2]))[0];
    if(aim)fx.targetId=aim.value.id||aim.value.key;
    else delete fx.targetId;
    const previous=[...fx.position],heading=[...fx.direction];
+   // Retain at least a forward component if a former homing target dashed
+   // behind the fish between server ticks.
+   if(fx.direction[0]*launch[0]+fx.direction[2]*launch[2]<.35)
+    fx.direction=[...launch];
    advanceHomingVortex(fx,aim?.value,Math.max(0,Math.min(now,fx.expiresAt)-fx.lastAt),flight);
    const travelled=Math.hypot(fx.position[0]-previous[0],fx.position[2]-previous[2]);
    if(travelled>.001)changed=true;
@@ -2222,8 +2235,9 @@ function tickPersistentAttacks(world,actors,now,rng){
    if(travelled>.001){
     fx.fishConsumed??=[];
     for(const target of targets){
-     const value=target.value,key=value.id||value.key;
-     if(key===fx.owner||value.hp===0||(target.kind==='player'&&insideArtSanctuary(value.position)))continue;
+     const value=target.value,key=value.key||value.id;
+     if(value.key===fx.owner||value.id===fx.owner||value.hp===0||
+        (target.kind==='player'&&insideArtSanctuary(value.position)))continue;
      let contacts=0;
      for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
       if(fx.fishConsumed.includes(i))continue;
