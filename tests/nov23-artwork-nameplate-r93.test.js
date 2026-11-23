@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as THREE from 'three';
 import {addArtworkTitlePlate,applyArtworkAppearance} from '../src/artwork-surface.js';
+import {ArtworkEditor} from '../src/artwork-editor.js';
 import {editorPanelMarkup,playerArtworkAppearanceMarkup} from '../src/art-editor-panel.js';
 import {APPEARANCE_DEFAULTS,validateAppearance} from '../src/shared/artwork-library.js';
 import {createInitialWorld,applyMyArtworkLabelStyle} from '../src/shared/temple-rules.js';
@@ -115,4 +116,47 @@ test('bulk label changes affect precisely the authenticated uploader, not other 
  assert.match(applyMyArtworkLabelStyle(world,{key:'owner-one'},{
   style:{...style,labelFontSize:999}},5000).error,/Invalid nameplate/);
  assert.equal(world.artworkLayout['mine-1'].revision,3,'invalid update leaves revisions unchanged');
+});
+
+test('corner drag remains uniform and edge midpoint drag changes only one dimension',()=>{
+ const originalDocument=globalThis.document;
+ try{
+  globalThis.document={createElement:()=>({
+   width:0,height:0,getContext:()=>({
+    font:'',fillStyle:'',textAlign:'',textBaseline:'',
+    fillRect(){},fillText(){},measureText:v=>({width:v.length*21})
+   })
+  })};
+  const root=new THREE.Group();root.userData={record:{title:'Framed',mediaId:'media'}};
+  root.add(new THREE.Mesh(new THREE.BoxGeometry(2,2,1),new THREE.MeshBasicMaterial()));
+  const state={
+   selected:root,appearance:{...APPEARANCE_DEFAULTS},
+   panel:{querySelector:()=>null},
+   status:()=>{},updateLabelHandles:()=>{},dirty:false
+  };
+  const rect={width:300,height:100,right:new THREE.Vector3(1,0,0),
+   up:new THREE.Vector3(0,1,0),rootScale:new THREE.Vector3(1,1,1),
+   rootQuaternion:new THREE.Quaternion()};
+  state.labelDrag={pointer:42,index:0,x:100,y:100,rect,style:{...state.appearance}};
+  const move=(x,y)=>ArtworkEditor.prototype.resizeLabel.call(state,{
+   pointerId:42,clientX:x,clientY:y,preventDefault(){},stopPropagation(){}
+  });
+  move(70,70);
+  assert.ok(Math.abs(state.appearance.labelWidth/3.5-1.2)<1e-9);
+  assert.ok(Math.abs(state.appearance.labelHeight/.492-1.2)<1e-9);
+  const textScale=root.userData.titlePlate.scale.x*
+   root.userData.titlePlate.userData.textSprite.scale.x;
+  const newWidth=state.appearance.labelWidth,newHeight=state.appearance.labelHeight;
+  state.labelDrag={pointer:42,index:3,x:100,y:100,rect,
+   style:{...state.appearance}};
+  move(150,100);
+  assert.ok(state.appearance.labelWidth>newWidth,'right midpoint stretches width');
+  assert.equal(state.appearance.labelHeight,newHeight,'right midpoint does not alter height');
+  assert.ok(Math.abs(
+   root.userData.titlePlate.scale.x*
+   root.userData.titlePlate.userData.textSprite.scale.x-textScale)<1e-9,
+   'lettering stays centered and unscaled across all backdrop transformations');
+  assert.equal(root.userData.titlePlate.userData.textSprite.position.x,0);
+  assert.equal(root.userData.titlePlate.userData.textSprite.position.y,0);
+ }finally{if(originalDocument===undefined)delete globalThis.document;else globalThis.document=originalDocument;}
 });
