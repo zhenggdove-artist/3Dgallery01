@@ -28,7 +28,7 @@ const specials={
  goldfish:'Goldfish Water Cannon — Normal: launch water jets. Ultimate: summon a three-dimensional school of goldfish that swim forward and damage enemies on contact.',
  clam:'Giant Clam — Normal: swing a snapping shell. Ultimate: fire spinning clams forward.',
  'white-cat':'White Cat SMG — Rapid-fire colorful bullets using the first-person reticle. Charge for a continuous rainbow barrage.',
- 'black-cat':'Black Cat Sniper Rifle — Fire only while aiming through the sniper scope. Ultimate: launch a powerful long-range energy round.',
+ 'black-cat':'Black Cat Sniper Rifle — Scoped shots are precise; shoulder taps fire inaccurate shots. Only after fusing a charged weapon, hold A in shoulder view to fire a widely drifting, long-range piercing rainbow spiral cannon.',
  'calico-cat':'Calico Cat Shotgun — Scatter independently colliding pellets. Ultimate: increase the spread and power.',
  fan:'Rampaging Electric Fan — Normal: swing to generate gusts. Ultimate: unleash moving tornadoes that slow enemies.',
  telephone:'Screaming Telephone — Normal: swing the coiled handset cord. Ultimate: emit weakening rings of sound.',
@@ -63,15 +63,15 @@ export function explainWeapon(item,fusion=null){
  const normal=attackStats(effective,0),charged=attackStats(effective,1);
  charged.range=+(charged.range*quality.range).toFixed(2);
  charged.radius=forwardCastRadius(effective,quality,charged.radius,false);
- if(item.id==='black-cat')charged.range=SNIPER_RANGE;
- if(item.id==='jellybrella')charged.radius=Math.max(10,charged.radius*2);
- if(item.id==='goldfish')charged.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
+ if((item.baseId||item.id)==='black-cat')charged.range=SNIPER_RANGE;
+ if((item.baseId||item.id)==='jellybrella')charged.radius=Math.max(10,charged.radius*2);
+ if((item.baseId||item.id)==='goldfish')charged.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
  scaleUltimateFootprint(charged,effective,quality);
- if(item.id==='goldfish')charged.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
- if(item.id==='giraffe')charged.range=+(item.chargedRange*quality.range).toFixed(2);
+ if((item.baseId||item.id)==='goldfish')charged.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
+ if((item.baseId||item.id)==='giraffe')charged.range=+(item.chargedRange*quality.range).toFixed(2);
  const cls=({near:'Close-Range',mid:'Mid-Range',far:'Long-Range'})[weaponClass(item)]||'Special';
- const description=specials[item.id]||familySkills[item.family]||item.description||'Hold the attack button to charge an ultimate with a different range and damage profile.';
- const extent=item.id==='accordion'
+ const description=specials[item.baseId||item.id]||familySkills[item.family]||item.description||'Hold the attack button to charge an ultimate with a different range and damage profile.';
+ const extent=(item.baseId||item.id)==='accordion'
   ?'Ultimate collision corridor: '+num(charged.range)+' m long, '+num(charged.radius*2)+' m wide; each target can be hit at most once per second'
   :'Ultimate preview: range '+num(charged.range)+' m, approximately '+num(charged.radius)+' m radius';
  const damage='Approximate PvP base damage per hit: '+num(pvpShotDamage(item,normal,quality),2)+
