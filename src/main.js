@@ -458,7 +458,13 @@ ui.addEventListener('art-bomb-appearance-preview',event=>{
 });
 ui.addEventListener('apply-my-label-style',async event=>{
  const result=await sendAction('apply-my-artwork-label-style',event.detail);
- if(result?.updatedCount)ui.toast('已將名稱樣式套用至自己上傳的 '+result.updatedCount+' 件作品');
+ if(!result?.updatedCount)return;
+ for(const form of ui.content.querySelectorAll('[data-form="art-bomb-appearance"]')){
+  const id=form.querySelector('[name="id"]')?.value;
+  const revision=result.revisions?.[id];
+  if(Number.isFinite(revision))form.querySelector('[name="revision"]').value=String(revision);
+ }
+ ui.toast('已將名稱樣式套用至自己上傳的 '+result.updatedCount+' 件作品');
 });
 ui.addEventListener('panel',event=>{
  if(event.detail?.open)return;
