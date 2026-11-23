@@ -990,7 +990,7 @@ function update(dt,time,movementDt=dt){
   const chargedWeapon=itemById(world?.profile?.equipment?.weapon);
   if(charge>.08&&!staffChannel&&chargedWeapon&&controller){
    const muzzle=isChannelStaff(chargedWeapon)||chargedWeapon.family==='saber'?arena.presentation.vfx.channelMuzzle(localRoot,chargedWeapon):null;
-   const direction=chargedWeapon.id==='goldfish'&&gun.mode===0?cameraAimDirection(camera).toArray():
+   const direction=authoredId(chargedWeapon)==='goldfish'&&gun.mode===0?cameraAimDirection(camera).toArray():
      chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1,muzzle);
    chargePreview.update(localRoot,chargedWeapon,charge,direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null,muzzle?.toArray(),dt);
   }else chargePreview.hide();
