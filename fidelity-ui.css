@@ -827,3 +827,37 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
 #art-editor.gm-mobile-floating[data-gm-collapsed="true"] .gm-floating-resize{
  display:none!important;
 }
+
+/* r95: touch-target in the actual title rectangle. A 600ms long press enters
+ * drag mode; resize handles remain above the draggable interior. */
+#art-label-handles .label-drag-target{
+ position:absolute;
+ pointer-events:auto;
+ touch-action:none;
+ -webkit-touch-callout:none;
+ -webkit-user-select:none;
+ user-select:none;
+ transform:translate(-50%,-50%);
+ box-sizing:border-box;
+ border:1px dashed rgba(54,150,246,.55);
+ background:rgba(54,150,246,.07);
+ cursor:grab;
+ z-index:0;
+}
+#art-label-handles .label-drag-target.label-moving{
+ cursor:grabbing;
+ background:rgba(54,150,246,.19);
+ border-color:#267bd2;
+}
+#art-label-handles .label-handle{
+ z-index:1;
+}
+#art-editor [data-appearance="labelRevealDistance"]{
+ width:100%;
+ min-width:80px;
+}
+#art-editor [data-label-distance-output]{
+ font:12px system-ui,sans-serif;
+ display:block;
+ text-align:right;
+}

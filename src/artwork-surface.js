@@ -12,6 +12,26 @@ export function addArtworkDepth(root,texture,width,height){
 export function applyArtworkAppearance(root,value){const appearance={...artworkAppearanceDefaults(root.userData.record),...value,...root.userData.previewAppearance},signature=JSON.stringify(appearance);const title=root.userData.editTitleDraft??root.userData.titleOverride??(root.userData.record?.mediaId?root.userData.record.title:'');if(title||root.userData.titlePlate)addArtworkTitlePlate(root,title,appearance.labelBackground,appearance);if(root.userData.appearanceSignature===signature)return;root.userData.appearanceSignature=signature;root.userData.appearance=appearance;const p=root.userData.depthParts;if(p){p.back.visible=appearance.depth>0;const side=appearance.depth>0?THREE.FrontSide:THREE.DoubleSide;if(p.front.material.side!==side){p.front.material.side=side;p.front.material.needsUpdate=true;}p.front.position.z=appearance.depth/2;p.back.position.z=-appearance.depth/2;p.side.scale.z=Math.max(.00001,appearance.depth);p.side.visible=appearance.depth>0;}
  root.traverse(o=>{for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[]){if(!m.isMeshStandardMaterial&&!m.isMeshPhongMaterial)continue;let state=m.userData.artAdjust;if(!state){state=m.userData.artAdjust={gain:{value:new THREE.Vector4()},tint:{value:new THREE.Color()}};const old=m.onBeforeCompile;m.onBeforeCompile=shader=>{old?.(shader);shader.uniforms.artGain=state.gain;shader.uniforms.artTint=state.tint;shader.fragmentShader='uniform vec4 artGain;uniform vec3 artTint;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`vec3 adjusted=max(vec3(0.),(outgoingLight-vec3(artGain.w))/max(.05,1.-artGain.w));adjusted=(adjusted-.5)*artGain.y+.5;float gray=dot(adjusted,vec3(.2126,.7152,.0722));outgoingLight=max(vec3(0.),mix(vec3(gray),adjusted,artGain.z)*artGain.x*artTint);\n#include <opaque_fragment>`);};m.customProgramCacheKey=()=> 'temple-art-adjust-v1';m.needsUpdate=true;}state.gain.value.set(appearance.brightness,appearance.contrast,appearance.saturation,appearance.blackPoint);state.tint.value.set(appearance.tint);}});
 }
+// Proximity fade operates on existing SpriteMaterial opacity; unlike texture
+// regeneration it is safe to evaluate on every render frame.
+export function titleOpacityByDistance(distance,revealDistance=LABEL_STYLE_DEFAULTS.labelRevealDistance){
+ if(!Number.isFinite(distance))return 0;
+ const far=THREE.MathUtils.clamp(Number(revealDistance)||LABEL_STYLE_DEFAULTS.labelRevealDistance,3,80);
+ const fadeSpan=Math.min(3,far*.45);
+ const t=THREE.MathUtils.clamp((far-distance)/fadeSpan,0,1);
+ return t*t*(3-2*t);
+}
+export function updateArtworkTitleVisibility(root,viewerPosition,force=false){
+ const plate=root?.userData?.titlePlate;
+ if(!plate?.material)return 0;
+ const distance=root.getWorldPosition(new THREE.Vector3()).distanceTo(viewerPosition);
+ const alpha=force||root.userData.editing?1:
+  titleOpacityByDistance(distance,root.userData.appearance?.labelRevealDistance);
+ if(plate.material.opacity!==alpha)plate.material.opacity=alpha;
+ const text=plate.userData.textSprite;
+ if(text?.material&&text.material.opacity!==alpha)text.material.opacity=alpha;
+ return alpha;
+}
 export async function loadCustomArtwork(arena,record,base){const root=new THREE.Group();root.name='Artwork '+record.title;root.userData={platformId:record.id,record,base:record.position};const url=base+'/api/art-media/'+encodeURIComponent(record.mediaId);
  if(record.type==='model'){const gltf=await arena.loader.loadAsync(url),model=gltf.scene;model.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(model,true),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),scale=3/Math.max(size.x,size.y,size.z,.001);model.position.copy(center).negate();const holder=new THREE.Group();holder.add(model);holder.scale.setScalar(scale);root.add(holder);root.userData.model=true;if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);mixer.clipAction(gltf.animations[0]).play();arena.mixers.push(mixer);}}
  else{let texture,width,height;if(record.type==='video'){const v=document.createElement('video');v.crossOrigin='anonymous';v.muted=true;v.loop=true;v.playsInline=true;v.preload='auto';await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Video load timed out: '+record.title)),20000);v.onloadeddata=()=>{clearTimeout(timeout);resolve();};v.onerror=()=>{clearTimeout(timeout);reject(Error('Video cannot be decoded: '+record.title));};v.src=url;});texture=new THREE.VideoTexture(v);width=v.videoWidth;height=v.videoHeight;root.userData.video=v;}else{texture=await new THREE.TextureLoader().loadAsync(url);width=texture.image.width;height=texture.image.height;}texture.colorSpace=THREE.SRGBColorSpace;const h=3,w=3*width/height,mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshStandardMaterial({map:texture,alphaTest:.035,side:THREE.DoubleSide,roughness:.7,emissive:0xffffff,emissiveMap:texture,emissiveIntensity:.16}));root.add(mesh);addArtworkDepth(root,texture,w,h);}
@@ -53,7 +73,7 @@ export function addArtworkTitlePlate(root,title,background='#000000',options={})
  const backgroundTexture=new THREE.CanvasTexture(canvas);
  backgroundTexture.colorSpace=THREE.SRGBColorSpace;
  const sprite=new THREE.Sprite(new THREE.SpriteMaterial({
-  map:backgroundTexture,transparent:false,depthTest:false,depthWrite:false,toneMapped:false
+  map:backgroundTexture,transparent:true,opacity:1,depthTest:false,depthWrite:false,toneMapped:false
  }));
  const textCanvas=document.createElement('canvas');
  textCanvas.width=1024;textCanvas.height=320;

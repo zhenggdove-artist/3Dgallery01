@@ -1,5 +1,5 @@
 import {PLATFORMS,ARENA_RADIUS} from './arena.js';
-export const LABEL_STYLE_DEFAULTS=Object.freeze({labelBackground:'#000000',labelColor:'#ffffff',labelFontSize:44,labelWidth:3.5,labelHeight:.492,labelOffsetX:0,labelOffsetY:0});
+export const LABEL_STYLE_DEFAULTS=Object.freeze({labelBackground:'#000000',labelColor:'#ffffff',labelFontSize:44,labelWidth:3.5,labelHeight:.492,labelOffsetX:0,labelOffsetY:0,labelRevealDistance:12});
 export const LABEL_STYLE_BATCH_FIELDS=Object.freeze(['labelBackground','labelColor','labelFontSize','labelWidth','labelHeight']);
 export const APPEARANCE_DEFAULTS={depth:.1,brightness:1,contrast:1,saturation:1,blackPoint:0,tint:'#ffffff',...LABEL_STYLE_DEFAULTS};
 export const PNG_APPEARANCE_DEFAULTS=Object.freeze({depth:0,brightness:.4,contrast:1,saturation:1.43,blackPoint:.1,tint:'#ffffff',...LABEL_STYLE_DEFAULTS});
@@ -10,7 +10,7 @@ export function validateAppearance(value={},record=null){
  for(const [key,min,max] of [
   ['depth',0,2],['brightness',0,3],['contrast',0,3],['saturation',0,3],
   ['blackPoint',0,.95],['labelFontSize',18,120],['labelWidth',.5,12],
-  ['labelHeight',.18,4],['labelOffsetX',-10,10],['labelOffsetY',-10,10]
+  ['labelHeight',.18,4],['labelOffsetX',-10,10],['labelOffsetY',-10,10],['labelRevealDistance',3,80]
  ])if(typeof out[key]!=='number'||!Number.isFinite(out[key])||out[key]<min||out[key]>max)return null;
  for(const key of ['tint','labelBackground','labelColor'])
   if(!/^#[0-9a-f]{6}$/i.test(out[key]))return null;

@@ -5,7 +5,7 @@ import {cityGroundHeight,cityBlocked} from './shared/city-layout.js';
 import {DisplayPlatforms} from './display-platforms.js';
 import {artworkPosition,artworkLanding,artworkRenderFlight} from './shared/artwork-flight.js';
 import {artworkDefinitions,artworkPickupReach} from './shared/artwork-library.js';
-import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork} from './artwork-surface.js';
+import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork,updateArtworkTitleVisibility} from './artwork-surface.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
@@ -349,6 +349,10 @@ export class TempleArena{
      if(t>=1){fly.mesh.removeFromParent();this.dropCoinFlights.splice(i,1);}
     }
     for(const p of artworkDefinitions(this.world)){const root=this.artworks.get(p.id),state=this.world?.artworks?.[p.id];if(!root||!state||root.userData.editing)continue;const layout=this.world?.artworkLayout?.[p.id]||this.defaultLayout[p.id]||{position:p.artPosition,rotation:[0,p.artYaw,0],scale:[1,1,1]};root.userData.titleOverride=layout.title;applyArtworkAppearance(root,layout.appearance);if(root.userData.video){const near=camera.position.distanceToSquared(root.position)<900;if(near&&!root.userData.videoPlaying){root.userData.videoPlaying=true;root.userData.video.play().catch(()=>{root.userData.videoPlaying=false;});}else if(!near&&root.userData.videoPlaying){root.userData.video.pause();root.userData.videoPlaying=false;}}const now=Date.now(),visual=artworkRenderFlight(state,this.localArtworkFlights.get(p.id),now);if(!visual.local)this.localArtworkFlights.delete(p.id);if(visual.waiting){root.visible=false;continue;}const holder=state.holder&&playerRoots.get(state.holder);if(holder&&!visual.local){root.visible=true;root.position.copy(holder.position).add(new THREE.Vector3(0,1.6,0));root.rotation.set(0,holder.rotation.y+Math.PI,Math.sin(time*2)*.05);root.scale.fromArray(layout.scale).multiplyScalar(.48);continue;}root.scale.fromArray(layout.scale);const flight=visual.event;if(flight&&root.userData.flightId!==flight.id){root.userData.flightId=flight.id;root.userData.flightLanding=artworkLanding(flight,(x,z,y)=>this.groundHeight(x,z,y));}if(flight&&now-flight.time<root.userData.flightLanding.time*1000){const age=Math.max(0,(now-flight.time)/1000);root.visible=true;root.position.fromArray(artworkPosition(flight,age));root.rotation.set(...layout.rotation);continue;}const available=Date.now()>=(state.availableAt||0);root.visible=available;if(available){root.position.fromArray(layout.position);root.position.y+=Math.sin(time*.72+p.index)*(this.artFloat??.17);root.rotation.set(...layout.rotation);}}
+    // Fade nameplates per local camera distance, including moving/held art.
+    // This never triggers texture allocation or alters other player styles.
+    for(const root of this.artworks.values())
+     if(root.userData.titlePlate)updateArtworkTitleVisibility(root,camera.position);
     if(this.monster?.visible&&this.world?.monster?.position){
       const before=this.monster.position.clone();
       // Durable Object snapshots arrive much slower than the render loop.

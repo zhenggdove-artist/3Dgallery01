@@ -1,25 +1,38 @@
 import * as THREE from 'three';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
 import {artworkDefinitions,artworkAppearanceDefaults,isArtwork22} from './shared/artwork-library.js';
-import {applyArtworkAppearance,addArtworkTitlePlate} from './artwork-surface.js';
+import {applyArtworkAppearance,addArtworkTitlePlate,updateArtworkTitleVisibility} from './artwork-surface.js';
 import {editorPanelMarkup} from './art-editor-panel.js';
 import {FloatingGmEditorPanel} from './gm-floating-panel.js';
 
 const handleCoordinates=[[-1,1],[0,1],[1,1],[1,0],[1,-1],[0,-1],[-1,-1],[-1,0]];
+export const LABEL_LONG_PRESS_MS=600;
+// Solve 2D projected screen movement against the artwork's local XY axes.
+// This remains accurate under artwork rotation and non-uniform scale.
+export function labelLocalDeltaFromScreen(dx,dy,basis){
+ const det=basis.ax*basis.by-basis.ay*basis.bx;
+ if(!Number.isFinite(det)||Math.abs(det)<1e-5)return null;
+ return {x:(dx*basis.by-dy*basis.bx)/det,
+         y:(basis.ax*dy-basis.ay*dx)/det};
+}
 export class ArtworkEditor{
   constructor({scene,camera,canvas,arena,player,isGM,ownerKey=()=>null,send,control,toast}){
     Object.assign(this,{scene,camera,canvas,arena,player,isGM,ownerKey,send,control,toast});this.selected=null;this.mode=null;this.dirty=false;this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();this.box=new THREE.Box3();this.panel=document.getElementById('art-editor');this.handles=document.getElementById('art-handles');this.labelHandles=document.getElementById('art-label-handles');this.floatingPanel=new FloatingGmEditorPanel(this.panel);
     this.handles.innerHTML='<svg aria-hidden="true"><polygon/></svg>'+handleCoordinates.map(([x,y],i)=>`<button type="button" class="art-handle ${x*y===0?'midpoint':''}" data-handle="${i}" aria-label="${x*y===0?'非等比':'等比'} resize ${i+1}"></button>`).join('');this.polygon=this.handles.querySelector('polygon');
-    this.labelHandles.innerHTML='<svg aria-hidden="true"><polygon/></svg>'+handleCoordinates.map(([x,y],i)=>`<button type="button" class="label-handle ${x*y===0?'midpoint':''}" data-label-handle="${i}" aria-label="${x*y===0?'單邊':'等比'} 調整名稱底色框"></button>`).join('');this.labelPolygon=this.labelHandles.querySelector('polygon');
+    this.labelHandles.innerHTML='<svg aria-hidden="true"><polygon/></svg><div class="label-drag-target" data-label-drag-target title="長按約 0.6 秒，拖曳移動名稱框" aria-label="長按拖曳移動作品名稱條"></div>'+handleCoordinates.map(([x,y],i)=>`<button type="button" class="label-handle ${x*y===0?'midpoint':''}" data-label-handle="${i}" aria-label="${x*y===0?'單邊':'等比'} 調整名稱底色框"></button>`).join('');this.labelPolygon=this.labelHandles.querySelector('polygon');this.labelDragSurface=this.labelHandles.querySelector('[data-label-drag-target]');
     this.gizmo=new TransformControls(camera,canvas);this.gizmo.setSpace('local');this.gizmo.setSize(.8);scene.add(this.gizmo);this.gizmo.addEventListener('dragging-changed',e=>this.control(!e.value&&!this.mode));this.gizmo.addEventListener('objectChange',()=>{this.dirty=true;this.status('尚未儲存');this.updateFields();});
     let press=null;canvas.addEventListener('pointerdown',e=>{if(this.isGM()&&e.button===0)press={x:e.clientX,y:e.clientY};});canvas.addEventListener('pointerup',e=>{if(!press||!this.isGM())return;const distance=Math.hypot(press.x-e.clientX,press.y-e.clientY);press=null;if(distance>4||this.gizmo.axis||this.mode)return;this.raycast(e);const hits=this.ray.intersectObjects([...arena.artworks.values()].filter(o=>o.visible),true);for(const hit of hits){let root=hit.object;while(root&&!root.userData.platformId)root=root.parent;if(root){const clickedLabel=hit.object===root.userData.titlePlate||hit.object.parent===root.userData.titlePlate;this.select(root);if(clickedLabel)this.edit('label');break;}}});
     addEventListener('keydown',e=>{if(!this.isGM()||/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName))return;if(e.shiftKey&&['KeyT','KeyR','KeyG'].includes(e.code)){e.preventDefault();e.stopImmediatePropagation();if(!this.selected)return this.toast('請先點選作品');this.edit({KeyT:'scale',KeyR:'rotate',KeyG:'translate'}[e.code]);}if(e.code==='Escape'&&this.selected){e.stopImmediatePropagation();this.close();}},{capture:true});
     this.handles.addEventListener('pointerdown',e=>this.beginResize(e));this.handles.addEventListener('pointermove',e=>this.resize(e));this.handles.addEventListener('pointerup',()=>this.drag=null);this.handles.addEventListener('pointercancel',()=>this.drag=null);
+    this.labelHandles.addEventListener('pointerdown',e=>this.beginLabelMove(e));
+    this.labelHandles.addEventListener('pointermove',e=>this.dragLabelMove(e));
+    for(const type of ['pointerup','pointercancel','lostpointercapture'])
+     this.labelHandles.addEventListener(type,e=>this.endLabelMove(e));
     this.labelHandles.addEventListener('pointerdown',e=>this.beginLabelResize(e));
     this.labelHandles.addEventListener('pointermove',e=>this.resizeLabel(e));
     for(const type of ['pointerup','pointercancel','lostpointercapture'])
      this.labelHandles.addEventListener(type,()=>{this.labelDrag=null;});
-    this.panel.addEventListener('click',e=>{const action=e.target.dataset.action;if(action==='follow'){if(this.mode==='follow'){this.mode=null;this.control(true);}else if(this.selected&&this.player()){this.followOffset=this.selected.position.clone().sub(this.player().position);this.mode='follow';this.gizmo.detach();this.handles.hidden=true;this.control(true);}this.status(this.mode==='follow'?'正在跟隨 GM · 再次點擊停止':'已停止跟隨');}if(action==='save')this.save();if(action==='apply-own-labels')void this.applyOwnLabels();if(action==='label-resize')this.edit('label');if(action==='cancel')this.close();if(['scale','rotate','translate'].includes(action))this.edit(action);if(action==='export')this.export();});
+    this.panel.addEventListener('click',e=>{const action=e.target.dataset.action;if(action==='follow'){if(this.mode==='follow'){this.mode=null;this.control(true);}else if(this.selected&&this.player()){this.followOffset=this.selected.position.clone().sub(this.player().position);this.mode='follow';this.gizmo.detach();this.handles.hidden=true;this.control(true);}this.status(this.mode==='follow'?'正在跟隨 GM · 再次點擊停止':'已停止跟隨');}if(action==='save')this.save();if(action==='apply-own-labels')void this.applyOwnLabels();if(action==='label-resize')this.edit('label');if(action==='label-center')this.centerLabel();if(action==='cancel')this.close();if(['scale','rotate','translate'].includes(action))this.edit(action);if(action==='export')this.export();});
     this.panel.addEventListener('input',e=>{
      if(!this.selected)return;
      const target=e.target;
@@ -40,6 +53,10 @@ export class ArtworkEditor{
       const output=this.panel.querySelector('[data-label-font-output]');
       if(output)output.textContent=value+'px';
      }
+     if(key==='labelRevealDistance'){
+      const output=this.panel.querySelector('[data-label-distance-output]');
+      if(output)output.textContent=value+' m';
+     }
      this.dirty=true;this.status('名稱及外觀即時預覽 · 尚未儲存');
      if(this.mode==='label')this.updateLabelHandles();
     });
@@ -48,9 +65,9 @@ export class ArtworkEditor{
   raycast(e){const rect=this.canvas.getBoundingClientRect();this.pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);this.ray.setFromCamera(this.pointer,this.camera);}
   select(root){if(this.selected===root)return;if(this.dirty)return this.toast('請先儲存或取消目前編輯');this.close();this.selected=root;const platform=artworkDefinitions(this.arena.world).find(p=>p.id===root.userData.platformId),layout=this.arena.world?.artworkLayout?.[platform.id]||this.arena.defaultLayout[platform.id]||{position:platform.artPosition,rotation:[0,platform.artYaw,0],scale:[1,1,1]};this.expectedRevision=this.arena.world?.artworkLayout?.[platform.id]?.revision||0;this.original=structuredClone(layout);this.supportsPlatform=!(this.arena.world?.customArtworks||[]).some(a=>a.id===platform.id);this.platformRadius=layout.platformRadius??this.arena.displayPlatforms.discs.find(d=>d.display&&d.artwork===platform.id)?.radius??3;this.appearance={...artworkAppearanceDefaults(root.userData.record),...layout.appearance};this.title=String(layout.title??root.userData.record.title??'').slice(0,120);this.originalTitle=String(root.userData.record.title??'');root.userData.editTitleDraft=this.title;root.userData.editing=true;root.position.fromArray(layout.position);root.rotation.set(...layout.rotation);root.scale.fromArray(layout.scale);root.updateMatrixWorld(true);addArtworkTitlePlate(root,this.title,this.appearance.labelBackground,this.appearance);
     const inverse=root.matrixWorld.clone().invert();this.box.makeEmpty();root.traverse(o=>{if(!o.geometry)return;o.geometry.computeBoundingBox();this.box.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse,o.matrixWorld)));});
-    this.panel.hidden=false;this.panel.innerHTML=editorPanelMarkup(this.appearance,this.platformRadius,this.supportsPlatform,this.title);this.panel.querySelector('[data-art-name]').textContent=this.title;this.floatingPanel.open();this.updateFields();this.toast('已選取作品 · Shift+T 縮放／Shift+R 旋轉');
+    this.panel.hidden=false;this.panel.innerHTML=editorPanelMarkup(this.appearance,this.platformRadius,this.supportsPlatform,this.title);this.panel.querySelector('[data-art-name]').textContent=this.title;this.floatingPanel.open();updateArtworkTitleVisibility(root,this.camera.position,true);this.updateFields();this.toast('已選取作品 · Shift+T 縮放／Shift+R 旋轉');
   }
-  edit(mode){if(!this.selected||!this.isGM())return;this.mode=mode;this.control(false);this.handles.hidden=mode!=='scale';this.labelHandles.hidden=mode!=='label';if(mode==='scale'||mode==='label')this.gizmo.detach();else{this.gizmo.attach(this.selected);this.gizmo.setMode(mode);}this.status(mode==='label'?'名稱底色框：四角等比、四邊中點單邊拉伸；文字保持置中':mode==='scale'?'四角：等比縮放 · 邊中點：單軸拉伸':mode==='rotate'?'拖曳紅／綠／藍圓環以三軸旋轉':'拖曳紅／綠／藍箭頭移動');this.floatingPanel.collapseForScene();this.update();}
+  edit(mode){if(!this.selected||!this.isGM())return;this.endLabelMove();this.mode=mode;this.control(false);this.handles.hidden=mode!=='scale';this.labelHandles.hidden=mode!=='label';if(mode==='scale'||mode==='label')this.gizmo.detach();else{this.gizmo.attach(this.selected);this.gizmo.setMode(mode);}this.status(mode==='label'?'名稱底色框：四角等比、四邊中點單邊拉伸；文字保持置中':mode==='scale'?'四角：等比縮放 · 邊中點：單軸拉伸':mode==='rotate'?'拖曳紅／綠／藍圓環以三軸旋轉':'拖曳紅／綠／藍箭頭移動');this.floatingPanel.collapseForScene();this.update();}
   point(index){const [x,y]=handleCoordinates[index],center=this.box.getCenter(new THREE.Vector3());return new THREE.Vector3(x<0?this.box.min.x:x>0?this.box.max.x:center.x,y<0?this.box.min.y:y>0?this.box.max.y:center.y,this.box.max.z);}
   // The title sprite is camera-facing. Project its four billboard corners
   // rather than using artwork geometry: handle positions match the actual
@@ -90,6 +107,100 @@ export class ArtworkEditor{
    }
    this.labelPolygon.setAttribute('points',[0,2,4,6].map(i=>
     rect.points[i].x+','+rect.points[i].y).join(' '));
+   const centerX=(rect.points[0].x+rect.points[4].x)/2;
+   const centerY=(rect.points[0].y+rect.points[4].y)/2;
+   this.labelDragSurface.style.left=centerX+'px';
+   this.labelDragSurface.style.top=centerY+'px';
+   this.labelDragSurface.style.width=rect.width+'px';
+   this.labelDragSurface.style.height=rect.height+'px';
+  }
+  labelMoveBasis(){
+   const root=this.selected,plate=root?.userData.titlePlate;
+   if(!root||!plate)return null;
+   root.updateMatrixWorld(true);this.camera.updateMatrixWorld();
+   const rect=this.canvas.getBoundingClientRect();
+   const screen=point=>{
+    const p=point.project(this.camera);
+    return {x:rect.left+(p.x+1)*rect.width/2,
+            y:rect.top+(1-p.y)*rect.height/2};
+   };
+   const center=screen(plate.getWorldPosition(new THREE.Vector3()));
+   const x=screen(root.localToWorld(plate.position.clone().add(new THREE.Vector3(1,0,0))));
+   const y=screen(root.localToWorld(plate.position.clone().add(new THREE.Vector3(0,1,0))));
+   return {ax:x.x-center.x,ay:x.y-center.y,bx:y.x-center.x,by:y.y-center.y};
+  }
+  beginLabelMove(e){
+   if(this.mode!=='label'||!this.selected||
+      !e.target.closest('[data-label-drag-target]')||
+      e.target.closest('[data-label-handle]')||this.labelMove)return;
+   if(e.button!==0)return;
+   const basis=this.labelMoveBasis();
+   if(!basis)return;
+   e.preventDefault();e.stopPropagation();
+   const target=e.target;
+   this.labelMove={pointer:e.pointerId,x:e.clientX,y:e.clientY,
+    startX:this.appearance.labelOffsetX??0,
+    startY:this.appearance.labelOffsetY??0,
+    basis,active:false,moved:false,target,timer:null};
+   try{target.setPointerCapture(e.pointerId);}catch{}
+   const pending=this.labelMove;
+   pending.timer=setTimeout(()=>{
+    if(this.labelMove!==pending||this.mode!=='label')return;
+    pending.active=true;
+    this.labelDragSurface.classList.add('label-moving');
+    this.status('拖曳名稱條：上下／左右移動 · 尚未儲存');
+   },LABEL_LONG_PRESS_MS);
+  }
+  dragLabelMove(e){
+   const move=this.labelMove;
+   if(!move||move.pointer!==e.pointerId)return;
+   const dx=e.clientX-move.x,dy=e.clientY-move.y;
+   if(!move.active){
+    if(Math.hypot(dx,dy)>10)this.endLabelMove(e);
+    return;
+   }
+   e.preventDefault();e.stopPropagation();
+   const delta=labelLocalDeltaFromScreen(dx,dy,move.basis);
+   if(!delta)return;
+   const x=THREE.MathUtils.clamp(move.startX+delta.x,-10,10);
+   const y=THREE.MathUtils.clamp(move.startY+delta.y,-10,10);
+   this.appearance.labelOffsetX=x;
+   this.appearance.labelOffsetY=y;
+   const plate=this.selected?.userData.titlePlate;
+   if(plate){
+    plate.position.x=x;
+    plate.position.y=(this.selected.userData.titlePlateBaseY??-1.5)-
+      (this.appearance.labelHeight??.492)/2-.13+y;
+   }
+   move.moved=true;
+   this.dirty=true;
+   this.status('已移動作品名稱條 · 尚未儲存');
+   this.updateLabelHandles();
+  }
+  endLabelMove(e){
+   const move=this.labelMove;
+   if(!move||e&&move.pointer!==e.pointerId)return;
+   clearTimeout(move.timer);
+   this.labelMove=null;
+   this.labelDragSurface?.classList.remove('label-moving');
+   try{if(move.target.hasPointerCapture?.(move.pointer))
+    move.target.releasePointerCapture(move.pointer);}catch{}
+   if(move.moved&&this.selected){
+    // Rebase the cached material/geometry signature ONCE after the gesture,
+    // not on every touchmove frame.
+    applyArtworkAppearance(this.selected,this.appearance);
+    updateArtworkTitleVisibility(this.selected,this.camera.position,true);
+    this.updateLabelHandles();
+   }
+  }
+  centerLabel(){
+   if(!this.selected)return;
+   this.appearance.labelOffsetX=0;
+   // Keep vertical position as edited; reset only horizontal artwork centering.
+   applyArtworkAppearance(this.selected,this.appearance);
+   updateArtworkTitleVisibility(this.selected,this.camera.position,true);
+   this.dirty=true;this.status('名稱條已水平對齊作品中心 · 尚未儲存');
+   if(this.mode==='label')this.updateLabelHandles();
   }
   beginLabelResize(e){
    const el=e.target.closest('[data-label-handle]');
@@ -164,7 +275,7 @@ export class ArtworkEditor{
 
   beginResize(e){if(this.mode!=='scale'||!e.target.dataset.handle)return;e.preventDefault();const i=+e.target.dataset.handle,p=this.point(i),anchor=this.point((i+4)%8),root=this.selected;root.updateMatrixWorld(true);const q=root.getWorldQuaternion(new THREE.Quaternion()),normal=new THREE.Vector3(0,0,1).applyQuaternion(q);this.drag={i,p,anchor,scale:root.scale.clone(),matrix:root.matrixWorld.clone(),inverse:root.matrixWorld.clone().invert(),quaternion:q,anchorWorld:anchor.clone().applyMatrix4(root.matrixWorld),plane:new THREE.Plane().setFromNormalAndCoplanarPoint(normal,p.clone().applyMatrix4(root.matrixWorld)),pointer:e.pointerId};e.target.setPointerCapture(e.pointerId);}
   resize(e){const drag=this.drag;if(!drag||e.pointerId!==drag.pointer)return;this.raycast(e);const hit=this.ray.ray.intersectPlane(drag.plane,new THREE.Vector3());if(!hit)return;hit.applyMatrix4(drag.inverse);const [x,y]=handleCoordinates[drag.i],rx=x?(hit.x-drag.anchor.x)/(drag.p.x-drag.anchor.x):1,ry=y?(hit.y-drag.anchor.y)/(drag.p.y-drag.anchor.y):1,scale=drag.scale.clone();if(x&&y){const factor=Math.max(.05,(rx+ry)/2);scale.multiplyScalar(factor);}else if(x)scale.x*=Math.max(.05,rx);else scale.y*=Math.max(.05,ry);scale.clampScalar(.05,20);this.selected.scale.copy(scale);this.selected.position.copy(drag.anchorWorld).sub(drag.anchor.clone().multiply(scale).applyQuaternion(drag.quaternion));this.dirty=true;this.status('尚未儲存');this.updateFields();}
-  update(){if(this.selected&&this.mode==='follow'&&this.player()){this.selected.position.copy(this.player().position).add(this.followOffset);this.dirty=true;this.updateFields();return;}if(!this.selected)return;if(this.mode==='label'){this.updateLabelHandles();return;}if(this.mode!=='scale')return;this.selected.updateMatrixWorld(true);const points=handleCoordinates.map((_,i)=>this.point(i).applyMatrix4(this.selected.matrixWorld).project(this.camera));const visible=points.every(p=>p.z>-1&&p.z<1);this.handles.hidden=!visible;if(!visible)return;const rect=this.canvas.getBoundingClientRect();points.forEach((p,i)=>{const element=this.handles.querySelector(`[data-handle="${i}"]`);element.style.left=`${rect.left+(p.x+1)*rect.width/2}px`;element.style.top=`${rect.top+(1-p.y)*rect.height/2}px`;});this.polygon.setAttribute('points',[0,2,4,6].map(i=>`${rect.left+(points[i].x+1)*rect.width/2},${rect.top+(1-points[i].y)*rect.height/2}`).join(' '));}
+  update(){if(this.selected)updateArtworkTitleVisibility(this.selected,this.camera.position,true);if(this.selected&&this.mode==='follow'&&this.player()){this.selected.position.copy(this.player().position).add(this.followOffset);this.dirty=true;this.updateFields();return;}if(!this.selected)return;if(this.mode==='label'){this.updateLabelHandles();return;}if(this.mode!=='scale')return;this.selected.updateMatrixWorld(true);const points=handleCoordinates.map((_,i)=>this.point(i).applyMatrix4(this.selected.matrixWorld).project(this.camera));const visible=points.every(p=>p.z>-1&&p.z<1);this.handles.hidden=!visible;if(!visible)return;const rect=this.canvas.getBoundingClientRect();points.forEach((p,i)=>{const element=this.handles.querySelector(`[data-handle="${i}"]`);element.style.left=`${rect.left+(p.x+1)*rect.width/2}px`;element.style.top=`${rect.top+(1-p.y)*rect.height/2}px`;});this.polygon.setAttribute('points',[0,2,4,6].map(i=>`${rect.left+(points[i].x+1)*rect.width/2},${rect.top+(1-points[i].y)*rect.height/2}`).join(' '));}
   updateFields(){if(!this.selected)return;for(const input of this.panel.querySelectorAll('[data-axis]')){if(document.activeElement===input)continue;const [property,index]=input.dataset.axis.split('-'),value=this.selected[property][['x','y','z'][index]];input.value=(property==='rotation'?THREE.MathUtils.radToDeg(value):value).toFixed(3);}}
   status(text){const target=this.panel.querySelector('[data-status]');if(target)target.textContent=text;}
   async save(){
@@ -213,7 +324,7 @@ export class ArtworkEditor{
       this.toast('GM 作品儲存失敗：'+reason);
     }finally{this.saving=false;}
   }
-  close(){this.gizmo.detach();this.drag=null;if(this.selected){this.selected.position.fromArray(this.original.position);this.selected.rotation.set(...this.original.rotation);this.selected.scale.fromArray(this.original.scale);this.selected.userData.record.title=this.originalTitle;this.selected.userData.titleOverride=this.original.title;delete this.selected.userData.editTitleDraft;applyArtworkAppearance(this.selected,this.original.appearance);this.selected.userData.editing=false;delete this.selected.userData.previewPlatformRadius;this.arena.displayPlatforms.sync();}this.selected=null;this.mode=null;this.dirty=false;this.handles.hidden=this.labelHandles.hidden=this.panel.hidden=true;this.control(true);}
+  close(){this.endLabelMove();this.gizmo.detach();this.drag=null;if(this.selected){this.selected.position.fromArray(this.original.position);this.selected.rotation.set(...this.original.rotation);this.selected.scale.fromArray(this.original.scale);this.selected.userData.record.title=this.originalTitle;this.selected.userData.titleOverride=this.original.title;delete this.selected.userData.editTitleDraft;applyArtworkAppearance(this.selected,this.original.appearance);this.selected.userData.editing=false;delete this.selected.userData.previewPlatformRadius;this.arena.displayPlatforms.sync();}this.selected=null;this.mode=null;this.dirty=false;this.handles.hidden=this.labelHandles.hidden=this.panel.hidden=true;this.control(true);}
   export(){if(this.dirty)return this.toast('請先儲存修改');const layout={...this.arena.defaultLayout,...this.arena.world?.artworkLayout},blob=new Blob([JSON.stringify({version:1,artworkLayout:layout,floatingPlatforms:this.arena.world?.floatingPlatforms||[]},null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='temple-artwork-layout.json';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
   state(){return {selected:this.selected?.userData.platformId||null,mode:this.mode,dirty:this.dirty,handles:this.mode==='scale'?8:0};}
 }

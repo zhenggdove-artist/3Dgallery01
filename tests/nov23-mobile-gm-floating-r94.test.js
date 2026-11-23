@@ -105,5 +105,6 @@ test('floating editor markup and CSS include true scrollable controls and a clos
  assert.match(editor,/new FloatingGmEditorPanel\(this\.panel\)/);
  assert.match(editor,/this\.floatingPanel\.open\(\)/);
  assert.match(editor,/this\.floatingPanel\.collapseForScene\(\)/);
- assert.match(index,/20261123-mobile-gm-floating-editor-r94/);
+ assert.match(index,/20261123-title-drag-proximity-fade-r95/);
+ assert.match(index,/src\/gm-floating-panel\.js/);
 });
