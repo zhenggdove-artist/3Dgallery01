@@ -144,5 +144,5 @@ test('in-world label drag surface remains below 8 interactive corner/mid-edge ha
  assert.match(editor,/pending\.active=true/);
  assert.match(css,/#art-label-handles \.label-drag-target/);
  assert.match(css,/#art-label-handles \.label-handle/);
- assert.match(read('src/arena-view.js'),/updateArtworkTitleVisibility\(root,camera\.position\)/);
+ assert.match(read('src/arena-view.js'),/updateArtworkTitleVisibility\(root,viewerRoot\?\.position\)/);
 });
