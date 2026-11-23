@@ -241,7 +241,17 @@ export class TempleUI extends EventTarget{
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin;$('gm-menu').hidden=!this.self.profile?.admin;$('wing-shop-button').hidden=false;this.refreshHUD();if(this.panelName&&this.panelName!=='bag')this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
   setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','wing-shop'].includes(this.panelName)&&this.panelSignature!==JSON.stringify([world.profile.inventory,world.profile.equipment,world.profile.wallet,world.profile.fusion,world.profile.wingDesignCredits,world.profile.quickSlots])&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
-  refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);const held=itemById(profile.equipment?.weapon);
+  refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);
+ const shieldItem=itemById(profile.equipment?.shield),shieldDisplay=$('shield-readout');
+ if(shieldDisplay){
+  const hasShield=shieldItem?.slot==='shield';shieldDisplay.hidden=!hasShield;
+  if(hasShield){
+   const max=Math.max(0,Math.ceil(Number(profile.shield?.maxHp??shieldItem.capacity*10)||0));
+   const current=Math.min(max,Math.max(0,Math.ceil(Number(profile.shield?.hp??max)||0)));
+   $('shield-label').textContent=current+'/'+max;
+  }
+ }
+ const held=itemById(profile.equipment?.weapon);
  $('weapon').textContent=(held?weaponPresentation(held,profile.fusion?.[held.id]).title:'UNARMED').toUpperCase();}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();this.renderQuickBar(profile);
     const gift=$('wing-gift-button');
     if(gift)gift.hidden=!(Number(profile?.wingDesignCredits)||0);
@@ -353,6 +363,15 @@ export class TempleUI extends EventTarget{
    });
    document.body.append(overlay);
    this.collectorSaleOverlay=overlay;
+  }
+  purchaseNotice(itemName,quantity){
+    const notice=$('purchase-notice');if(!notice)return;
+    clearTimeout(this.purchaseNoticeTimer);
+    notice.textContent='已成功購買'+String(itemName||'物品')+String(quantity)+'個';
+    notice.hidden=false;notice.classList.remove('visible');
+    void notice.offsetWidth; // Restart the 500 ms fade on a later purchase.
+    notice.classList.add('visible');
+    this.purchaseNoticeTimer=setTimeout(()=>{notice.classList.remove('visible');notice.hidden=true;},500);
   }
   toast(message){clearTimeout(this.toastTimer);const toast=$('toast');toast.textContent=message;toast.classList.add('visible');this.toastTimer=setTimeout(()=>toast.classList.remove('visible'),2200);}
   fusionFeedback(success,message=''){
@@ -709,4 +728,4 @@ export class TempleUI extends EventTarget{
 }
 
 function option(item){return `<option value="${item.id}">${escape(item.name)}</option>`;}
-function itemCard(item,action){const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${pvpShotDamage(item,attackStats(item,0),weaponQuality(item))} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.slot==='consumable'?item.category+' · RECOVER '+Math.round(item.healFraction*100)+'% MAX HP':item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88">${previewMarkup(item)}<small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><h3>${escape(item.name)}</h3><small>${escape(stats)}</small><p class="equipment-description">${escape(explainEquipment(item))}</p>${item.slot==='weapon'?'<small class="weapon-enchantment-hint">Random Affixes: Each weapon rolls a unique 3–15% stat; fusion inherits affixes</small>':''}${action}</article>`;}
+function itemCard(item,action){const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${pvpShotDamage(item,attackStats(item,0),weaponQuality(item))} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.slot==='consumable'?item.category+' · RECOVER '+Math.round(item.healFraction*100)+'% MAX HP':item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88">${previewMarkup(item)}<small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><h3>${escape(item.name)}</h3><small>${escape(stats)}</small><p class="equipment-description">${escape(explainEquipment(item))}</p>${item.slot==='weapon'?'<small class="weapon-enchantment-hint">Fixed shop stats. Random 3–15% affixes are exclusive to ground loot.</small>':''}${action}</article>`;}
