@@ -193,7 +193,16 @@ export class TempleArena{
     disposeArtworkRoot(root);this.artworks.delete(id);this.customLoads.delete(id);this.localArtworkFlights.delete(id);
    }
    await Promise.all((records||[]).map(record=>{
-    if(this.artworks.has(record.id))return;
+    if(this.artworks.has(record.id)){
+     const root=this.artworks.get(record.id);
+     if(!root.userData.editing){
+      // The media stays mounted. Rename/recolour its nameplate in place on
+      // every confirmed room snapshot, including edits from other players.
+      root.userData.record=record;
+      applyArtworkAppearance(root,this.world?.artworkLayout?.[record.id]?.appearance);
+     }
+     return;
+    }
     if(!this.customLoads.has(record.id)){
      const task=loadCustomArtwork(this,record,base).then(root=>{
       if(!this.expectedCustomIds?.has(record.id)){disposeArtworkRoot(root);return;}
