@@ -80,6 +80,7 @@ test('all weapons have dimensional warning contracts derived from identical atta
   if(item.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
   if(item.id==='goldfish'&&stats.ultimate)stats.radius=1.05*quality.visual;
   scaleUltimateFootprint(stats,item);
+  if(item.id==='black-cat')stats.range=256; // Fused shoulder spiral is long-range, not shrunken AoE.
   if(item.id==='giraffe'&&stats.ultimate){
    stats.range=+(item.chargedRange*quality.range).toFixed(2);
    stats.radius=Math.max(stats.radius,5.9*quality.visual);
