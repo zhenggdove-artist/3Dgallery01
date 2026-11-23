@@ -95,6 +95,11 @@ try{
   const canvas=document.querySelector('#bag-portrait');
   const gl=canvas?.getContext('webgl2');
   if(!gl)return {error:'missing independent WebGL2 canvas'};
+  // WebGL's default drawing buffer is invalidated after the browser
+  // compositor runs. Read immediately after an explicit render, not in a
+  // later evaluate() turn where readPixels() can report a blank frame.
+  const view=templeTest.portraitViewport;
+  view.renderer.render(view.scene,view.camera);
   const pixels=new Uint8Array(canvas.width*canvas.height*4);
   gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
   let visible=0;
