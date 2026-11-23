@@ -9,6 +9,7 @@ import {patrolMonster} from '../src/shared/monster-patrol.js';
 import {DisplayPlatforms} from '../src/display-platforms.js';
 import {PLATFORMS} from '../src/shared/arena.js';
 import {WEAPONS,attackStats} from '../src/shared/catalog.js';
+import {artworkAppearanceDefaults} from '../src/shared/artwork-library.js';
 import {recipeFor} from '../src/weapon-particle-effects.js';
 
 const actor=(key,admin=false)=>({key,name:key,role:'fighter',admin,position:[75,0,0],color:'#44aa88'});
@@ -74,7 +75,7 @@ test('creator can edit uploaded artwork colour, while another player cannot',()=
  assert.match(applyAction(world,owner,{action:'update-art-bomb-appearance',id,appearance:{...appearance,brightness:8}},{now:2200}).error,/Invalid/);
  const saved=applyAction(world,owner,{action:'update-art-bomb-appearance',id,appearance,expectedRevision:1},{now:2300});
  assert.equal(saved.error,undefined);
- assert.deepEqual(world.artworkLayout[id].appearance,{...appearance,labelBackground:'#000000'});
+ assert.deepEqual(world.artworkLayout[id].appearance,{...artworkAppearanceDefaults({mime:'image/png'}),...appearance});
  assert.equal(worldView(world,'owner',2300).artworkLayout[id].appearance.saturation,2.3);
  assert.match(applyAction(world,owner,{action:'update-art-bomb-appearance',id,appearance,expectedRevision:1},{now:2400}).error,/Reload/);
 });
