@@ -128,7 +128,7 @@ export class CityWallPainter{
  }
  up(event){
   if(!this.active&&this.pointer===null)return;
-  if(event.pointerType==='mouse'&&event.button!==0)return;
+  if(event.pointerType==='mouse'&&event.type==='pointerup'&&event.button!==0)return;
   if(this.pointer!==event.pointerId)return;
   this.consume(event);
   try{if(this.canvas.hasPointerCapture(event.pointerId))this.canvas.releasePointerCapture(event.pointerId);}catch{}
