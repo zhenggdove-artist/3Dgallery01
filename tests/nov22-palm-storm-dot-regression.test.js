@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import {createInitialWorld,ensureProfile,applyAction,tickWorld} from '../src/shared/temple-rules.js';
 import {itemById,attackStats} from '../src/shared/catalog.js';
 import {PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS,visibleCollisionLifetimeMs} from '../src/shared/combat-balance.js';
-import {scaleUltimateFootprint,chargedArea,spellFootprint,insideChargedArea} from '../src/shared/charge-area.js';
+import {scaleUltimateFootprint,chargedArea,spellFootprint,insideChargedArea,PALM_ULTIMATE_RADIUS_MULTIPLIER} from '../src/shared/charge-area.js';
 import {weaponQuality,forwardCastRadius} from '../src/shared/weapon-abilities.js';
 import {PlantUltimateEffects} from '../src/plant-ultimate-effects.js';
 const NOW=4000000,actor={key:'coconut-caster',name:'Caster',color:'#ffffff',role:'fighter',seat:0,position:[65,0,0]};
@@ -19,7 +19,7 @@ function castPalm(tier=1){
  assert.equal(result.error,undefined);assert.equal(result.attackEvent.ultimate,true);
  return {world,palm,castAt,result};
 }
-test('five rarities share fourfold radius and identical VFX, warning and collision geometry',()=>{
+test('five rarities share rebalanced proportional radius and identical VFX, warning and collision geometry',()=>{
  assert.equal(PALM_STORM_DURATION_MS,6000);assert.equal(PALM_STORM_TICK_MS,2000);
  for(let tier=1;tier<=5;tier++){
   const palm=itemById('palm-'+tier),q=weaponQuality(palm),stats=attackStats(palm,1);
@@ -27,7 +27,7 @@ test('five rarities share fourfold radius and identical VFX, warning and collisi
   stats.radius=forwardCastRadius(palm,q,stats.radius,false);
   const former=stats.radius*.6*2.5;
   scaleUltimateFootprint(stats,palm,q);
-  assert.ok(Math.abs(stats.radius-former*4)<.002,palm.id);
+  assert.ok(Math.abs(stats.radius-former*(PALM_ULTIMATE_RADIUS_MULTIPLIER/2.5))<.002,palm.id);
   assert.equal(visibleCollisionLifetimeMs(palm,true),6000);
   const area=chargedArea(palm,[65,1.16,0],[0,0,1],stats,()=>0);
   const warning=spellFootprint(palm,[65,1.16,0],[0,0,1],stats,area,()=>0);
