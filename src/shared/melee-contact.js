@@ -4,11 +4,11 @@
 export const MELEE_TEN_PIXEL_MARGIN=2*7*Math.tan(Math.PI/6)*10/1080;
 const MELEE_FAMILIES=new Set(['whip','swatter','pan','planter','palm']);
 export function normalMeleeFootprint(item){
- if(!item||item.exotic&&item.id!=='accordion'||!MELEE_FAMILIES.has(item.family))return null;
+ if(!item||item.exotic&&(item.baseId||item.id)!=='accordion'||!MELEE_FAMILIES.has(item.family))return null;
  const tier=Math.max(1,Math.min(5,Math.floor(Number(item.tier)||1))),scale=1+(tier-1)*.17;
  // The accordion swings at the same close-contact reach as a tier-one pan:
  // no long normal-shot corridor, while its charged music tornado is unchanged.
- const extent=item.id==='accordion'?1.12+.48+.55:{
+ const extent=(item.baseId||item.id)==='accordion'?1.12+.48+.55:{
   whip:1.3+3.4+(tier-1)*1.5+.55,
   swatter:1.25+.375*scale+.55,
   pan:1.12+.48*scale+.55,
