@@ -186,6 +186,33 @@ function saberProductPortrait(){
  g.rotation.z=-.12;
  return g;
 }
+// Creature outfits are photographed with the full animated character, which
+// occupies much less of the initial square camera frame than an old, tightly
+// cropped outfit illustration. Trim only the transparent margins; do not
+// enlarge the actual equipped model or any other product category.
+export function cropCreatureOutfitPortrait(source){
+ const width=source.width,height=source.height;
+ const source2d=document.createElement('canvas');
+ source2d.width=width;source2d.height=height;
+ const ctx=source2d.getContext('2d',{willReadFrequently:true});
+ ctx.drawImage(source,0,0);
+ const pixels=ctx.getImageData(0,0,width,height).data;
+ let minX=width,minY=height,maxX=-1,maxY=-1;
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+  if(pixels[(y*width+x)*4+3]<32)continue;
+  minX=Math.min(minX,x);maxX=Math.max(maxX,x);
+  minY=Math.min(minY,y);maxY=Math.max(maxY,y);
+ }
+ if(maxX<minX||maxY<minY)return source2d;
+ const side=Math.max(maxX-minX+1,maxY-minY+1)/.86;
+ const centerX=(minX+maxX)*.5,centerY=(minY+maxY)*.5;
+ const result=document.createElement('canvas');
+ result.width=width;result.height=height;
+ const out=result.getContext('2d');
+ out.drawImage(source2d,centerX-side*.5,centerY-side*.5,side,side,0,0,width,height);
+ return result;
+}
+
 async function renderPreview(item){
  if(!renderer){
   renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true});
@@ -195,7 +222,9 @@ async function renderPreview(item){
   const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(3,5,4);scene.add(light);
   camera=new THREE.PerspectiveCamera(35,1,.01,1000);
  }
- const model=item.family==='saber'?saberProductPortrait():item.slot==='outfit'&&item.creature?creatureOutfitProductPortrait(item):shapeModel(item);
+ const creatureSuit=item.slot==='outfit'&&!!item.creature;
+ renderer.setSize(creatureSuit?384:192,creatureSuit?384:192);
+ const model=item.family==='saber'?saberProductPortrait():creatureSuit?creatureOutfitProductPortrait(item):shapeModel(item);
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
  const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*(item.slot==='outfit'&&item.creature?1.9:2.2);
@@ -204,7 +233,8 @@ async function renderPreview(item){
  try{
   await renderer.compileAsync(scene,camera);
   renderer.render(scene,camera);
-  const blob=await new Promise(resolve=>renderer.domElement.toBlob(resolve,'image/webp',.92));
+  const portrait=creatureSuit?cropCreatureOutfitPortrait(renderer.domElement):renderer.domElement;
+  const blob=await new Promise(resolve=>portrait.toBlob(resolve,'image/webp',.92));
   if(!blob)throw Error('WebGL preview image encoding failed');
   // Decode during loading, not when the inventory is first opened.
   const url=URL.createObjectURL(blob);
