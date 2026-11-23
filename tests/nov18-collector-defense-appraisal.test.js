@@ -111,7 +111,7 @@ test('Collector spawning atop a fighter requires exit and reentry before aggress
 
 test('Collector appraisals never expire automatically and only dismiss on pointerdown',()=>{
  const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
- const block=ui.slice(ui.indexOf('  showCollectorSale(sale,key){'),ui.indexOf('  toast(message)'));
+ const block=ui.slice(ui.indexOf('  showCollectorSale(sale,key){'),ui.indexOf('  purchaseNotice(itemName,quantity)'));
  assert.ok(block.length>100);
  assert.match(block,/addEventListener\('pointerdown'/);
  assert.match(block,/overlay\.remove\(\)/);

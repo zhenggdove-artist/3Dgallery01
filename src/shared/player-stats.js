@@ -30,7 +30,10 @@ export function refreshStats(world,profile,now=Date.now()){
   if(profile.hp>0)profile.hp=Math.min(stats.maxHp,Math.max(1,profile.hp+stats.maxHp-oldMax));
   const rawShield=itemById(profile.equipment.shield),shield=rawShield&&equippedItem(profile,rawShield);
   if(!shield)profile.shield=null;
-  else if(profile.shield?.item!==shield.id)profile.shield={item:shield.id,hp:shield.capacity*10,lastHit:0};
-  else if(now-profile.shield.lastHit>=shield.recharge*1000)profile.shield.hp=shield.capacity*10;
+  else if(profile.shield?.item!==shield.id)profile.shield={item:shield.id,hp:shield.capacity*10,maxHp:shield.capacity*10,lastHit:0};
+  else{
+   profile.shield.maxHp=shield.capacity*10;
+   if(now-profile.shield.lastHit>=shield.recharge*1000)profile.shield.hp=profile.shield.maxHp;
+  }
   return stats;
 }
