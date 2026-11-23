@@ -46,11 +46,14 @@ export function renderOriginalBag(ui,profile){
  ui.bagObserver?.disconnect();
  const tieredItem=(id,index)=>{
   const base=itemById(id);
-  if(!base?.exotic||base.slot!=='weapon')return base;
+  if(!base||base.slot!=='weapon')return base;
   const uid=profile.inventoryInstances?.[index]?.uid;
+  const purchasedGrade=profile.fusionByInstance?.[uid]?.shopTier??
+    profile.inventoryInstances?.[index]?.shopTier;
+  // Keep ungraded legacy melee/staff copies exactly as originally obtained.
+  if(!base.exotic&&!Number.isInteger(purchasedGrade))return base;
   // A legacy T3 copy must never inherit the tier of another equipped UID.
-  const tier=profile.fusionByInstance?.[uid]?.shopTier??
-   profile.inventoryInstances?.[index]?.shopTier??
+  const tier=purchasedGrade??
    (index>=0?base.tier:profile.fusion?.[id]?.shopTier??base.tier);
   return shopWeaponVariant(base,tier)||base;
  };
