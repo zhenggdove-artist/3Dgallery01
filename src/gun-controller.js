@@ -20,7 +20,7 @@ export class GunController {
   constructor({canvas,camera,controller,weapon,ui,attack}) {
     Object.assign(this,{canvas,camera,controller,weapon,ui,attack});this.mode=0;this.held=false;this.nextShot=0;this.recoilOffset=0;this.recoilAmount=0;this.lastKick=-Infinity;
     this.overlay=document.createElement('div');this.overlay.id='gun-overlay';this.overlay.hidden=true;
-    this.overlay.innerHTML='<div class="gun-reticle"></div><div class="scope-lines"></div><button type="button" class="sniper-fire-button" aria-label="Fire sniper rifle">A</button><span>A/Q · CAMERA / DESKTOP CLICK · FIRE</span>';document.body.append(this.overlay);
+    this.overlay.innerHTML='<div class="gun-reticle"></div><div class="scope-lines"></div><button type="button" class="sniper-fire-button" aria-label="Fire sniper rifle">A</button><span>A/Q · CAMERA / TAP · FIRE / FUSED HOLD A · RAINBOW SPIRAL</span>';document.body.append(this.overlay);
     this.fireButton=this.overlay.querySelector('.sniper-fire-button');
     this.fireButton.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();if(this.mode===2&&this.weapon()?.id==='black-cat'&&this.controller()?.enabled&&!this.controller()?.status?.freeze)this.ui.emit('gun-fire');});
     this.fireButton.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();});
@@ -40,17 +40,17 @@ export class GunController {
       // A/Q cycles CAMERA only. Direct canvas taps shoot while aiming;
       // neither the first nor subsequent A presses may trigger gunfire.
       if(button)return;
-      if(!this.mode||(weapon()?.id==='black-cat'&&this.mode!==2)||controller()?.status?.freeze||e.button>0)return;
+      if(!this.mode||controller()?.status?.freeze||e.button>0)return;
       // Browser pointer-lock and translucent DOM layers can retarget desktop
       // clicks to BODY rather than CANVAS. In scoped mode, every unblocked
       // mouse click is a shot, regardless of aperture-screen coordinates.
       const onCanvas=e.target===canvas;
       const excluded=e.target.closest?.('button,input,textarea,select,a,[contenteditable="true"],#panel,#dock,#entry,#chat-hud,#mobile-stick');
-      const scopedMouse=((this.mode===2&&e.pointerType==='mouse')||
-       (this.mode===1&&weapon()?.id==='goldfish'))&&!excluded;
-      if(!onCanvas&&!scopedMouse)return;
+      const aimSurface=((this.mode===2&&e.pointerType==='mouse')||
+       (this.mode===1&&['goldfish','black-cat'].includes(weapon()?.id)))&&!excluded;
+      if(!onCanvas&&!aimSurface)return;
       e.preventDefault();e.stopImmediatePropagation();
-      if(type==='pointerdown'){this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};if(!document.pointerLockElement)canvas.setPointerCapture(e.pointerId);if(this.mode===2&&e.pointerType==='touch')return; // Touch inside the scope only aims; dedicated FIRE is the sole trigger.
+      if(type==='pointerdown'){this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};if(!document.pointerLockElement){try{canvas.setPointerCapture(e.pointerId);}catch{}}if(this.mode===2&&e.pointerType==='touch')return; // Touch inside the scope only aims; dedicated FIRE is the sole trigger.
         if(weapon().id==='white-cat'||weapon().id==='goldfish'){this.held=true;this.nextShot=0;}else ui.emit('gun-fire');}
       else{this.lookPointer=null;this.held=false;}
     },true);
