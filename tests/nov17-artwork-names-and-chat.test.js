@@ -21,8 +21,8 @@ test('player and GM artwork titles persist in authoritative world',()=>{
 });
 test('in-world art title plates and timed chat speech are wired',()=>{
  const art=source('src/artwork-surface.js'),ui=source('src/ui.js'),main=source('src/main.js'),css=source('fidelity-ui.css');
- assert.ok(art.includes('addArtworkTitlePlate(root,record.title)'));
- assert.ok(art.includes("fillStyle='#000000'")&&art.includes("fillStyle='#ffffff'"));
+ assert.ok(art.includes('addArtworkTitlePlate(root,record.title,initialAppearance?.labelBackground)'));
+ assert.ok(art.includes("fillStyle=backdrop")&&art.includes("fillStyle='#ffffff'")&&art.includes("background='#000000'"));
  assert.ok(ui.includes("addEventListener('compositionend'")&&ui.includes("addEventListener('keydown'"));
  assert.ok(main.includes('speechBubbles')&&main.includes('performance.now()+3000'));
  assert.ok(css.includes('--chat-height:118px'));

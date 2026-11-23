@@ -46,7 +46,7 @@ export class PlatformDeleteEditor {
   const typing=e=>/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName)||e.target?.isContentEditable;
   addEventListener('keydown',e=>{
    if(!this.isGM()||typing(e))return;
-   if(e.shiftKey&&e.code==='KeyD'&&!e.repeat){
+   if(e.shiftKey&&['KeyO','KeyD'].includes(e.code)&&!e.repeat){
     e.preventDefault();e.stopImmediatePropagation();
     if(this.active)this.cancel();else this.begin('edit');return;
    }
@@ -155,7 +155,7 @@ export class PlatformDeleteEditor {
     <button type="button" data-platform-command="close">取消</button>`;
    this.update();
   }else{
-   this.overlay.innerHTML='<b>GM · 編輯展示物件</b><p>直接點選桃紅圓盤或灰色三角檯座。點選後顯示藍色拖曳框與三軸。Shift+D / ESC 離開。</p><button type="button" data-platform-command="close">關閉</button>';
+   this.overlay.innerHTML='<b>GM · 編輯展示物件</b><p>直接點選桃紅圓盤或灰色三角檯座。點選後顯示藍色拖曳框與三軸。Shift+O / ESC 離開。</p><button type="button" data-platform-command="close">關閉</button>';
   }
  }
  select(disc){

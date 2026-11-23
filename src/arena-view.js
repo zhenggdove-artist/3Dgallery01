@@ -104,7 +104,7 @@ export class TempleArena{
    // Read the player's actual PNG/video/GLB from the Temple Worker before PLACE.
    if(!this.buildPreview||this.buildPreview.userData.kind!=='art-bomb')return;
    const group=this.buildPreview,record={id:'pending-upload-'+crypto.randomUUID(),title:upload.title||'Uploaded artwork',mediaId:upload.mediaId,
-    type:upload.mediaType?.startsWith('image/')?'image':upload.mediaType?.startsWith('video/')?'video':'model',mime:upload.mediaType,position:[0,0,0]};
+    type:upload.mediaType?.startsWith('image/')?'image':upload.mediaType?.startsWith('video/')?'video':'model',mime:upload.mediaType,position:[0,0,0],appearance:{labelBackground:upload.labelBackground||'#000000'}};
    const root=await loadCustomArtwork(this,record,base);
    if(this.buildPreview!==group){disposeArtworkRoot(root);return;}
    group.userData.previewTexture?.dispose();delete group.userData.previewTexture;
@@ -193,7 +193,16 @@ export class TempleArena{
     disposeArtworkRoot(root);this.artworks.delete(id);this.customLoads.delete(id);this.localArtworkFlights.delete(id);
    }
    await Promise.all((records||[]).map(record=>{
-    if(this.artworks.has(record.id))return;
+    if(this.artworks.has(record.id)){
+     const root=this.artworks.get(record.id);
+     if(!root.userData.editing){
+      // The media stays mounted. Rename/recolour its nameplate in place on
+      // every confirmed room snapshot, including edits from other players.
+      root.userData.record=record;
+      applyArtworkAppearance(root,this.world?.artworkLayout?.[record.id]?.appearance);
+     }
+     return;
+    }
     if(!this.customLoads.has(record.id)){
      const task=loadCustomArtwork(this,record,base).then(root=>{
       if(!this.expectedCustomIds?.has(record.id)){disposeArtworkRoot(root);return;}

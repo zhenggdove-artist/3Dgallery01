@@ -1,8 +1,8 @@
 import {PLATFORMS,ARENA_RADIUS} from './arena.js';
-export const APPEARANCE_DEFAULTS={depth:.1,brightness:1,contrast:1,saturation:1,blackPoint:0,tint:'#ffffff'};
-export const PNG_APPEARANCE_DEFAULTS=Object.freeze({depth:0,brightness:.4,contrast:1,saturation:1.43,blackPoint:.1,tint:'#ffffff'});
+export const APPEARANCE_DEFAULTS={depth:.1,brightness:1,contrast:1,saturation:1,blackPoint:0,tint:'#ffffff',labelBackground:'#000000'};
+export const PNG_APPEARANCE_DEFAULTS=Object.freeze({depth:0,brightness:.4,contrast:1,saturation:1.43,blackPoint:.1,tint:'#ffffff',labelBackground:'#000000'});
 export const artworkAppearanceDefaults=record=>record?.format==='png'||record?.mime==='image/png'||record?.type==='image/png'||record?.mimeType==='image/png'?PNG_APPEARANCE_DEFAULTS:APPEARANCE_DEFAULTS;
-export function validateAppearance(value={},record=null){const out={...artworkAppearanceDefaults(record),...value};for(const [key,min,max] of [['depth',0,2],['brightness',0,3],['contrast',0,3],['saturation',0,3],['blackPoint',0,.95]])if(!Number.isFinite(out[key])||out[key]<min||out[key]>max)return null;if(!/^#[0-9a-f]{6}$/i.test(out.tint))return null;return out;}
+export function validateAppearance(value={},record=null){const out={...artworkAppearanceDefaults(record),...value};for(const [key,min,max] of [['depth',0,2],['brightness',0,3],['contrast',0,3],['saturation',0,3],['blackPoint',0,.95]])if(!Number.isFinite(out[key])||out[key]<min||out[key]>max)return null;if(!/^#[0-9a-f]{6}$/i.test(out.tint)||!/^#[0-9a-f]{6}$/i.test(out.labelBackground))return null;return out;}
 // Interactive pickup radius grows with a GM-scaled artwork's physical footprint.
 // Client and server share the same reach contract; the server adds only
 // a 1m synchronization allowance to the horizontal distance;

@@ -211,8 +211,16 @@ export class PlayerController{
     this.advanceWhipPull(dt);
     this.animation=!this.grounded?(this.velocityY<0&&this.fallStartY>=40&&!this.stats.impulse?'fall':'jump'):moving?'walk':'idle';this.updateCamera(dt);return this.state();
   }
-  updateCamera(dt){
-   if(this.cameraLocked)return;
+  // GM middle-mouse orbit works even when movement and regular camera drag
+  // are disabled by TransformControls / artwork or platform edit modes.
+  orbitEditCamera(deltaX,deltaY){
+   if(!Number.isFinite(deltaX)||!Number.isFinite(deltaY))return;
+   this.yaw-=deltaX/innerWidth*4;
+   this.pitch=THREE.MathUtils.clamp(this.pitch+deltaY/innerHeight*2,-1.15,1.4);
+   this.updateCamera(1,true);
+  }
+  updateCamera(dt,force=false){
+   if(this.cameraLocked&&!force)return;
    const focus=this.followTarget?.visible?this.followTarget.position:this.root.position;
    this.target.lerp(new THREE.Vector3(focus.x,focus.y+1.5,focus.z),Math.min(1,dt*4));
    // Pull back the third-person view for the lightning/prism pair only.

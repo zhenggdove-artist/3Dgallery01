@@ -184,6 +184,39 @@ const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>contro
  role:()=>self?.role,ui,send:sendAction,
  beforeStart:()=>{gun.end();ui.emit('attack-cancel');}});
 
+// Shared capture-phase MIDDLE-MOUSE orbit for player BUILD/PAINT and
+// GM disc / artwork editing. Left-button picking, painting, and gizmos are
+// untouched. Pointer capture continues the orbit beyond the canvas edge.
+let editMiddleOrbit=null;
+const canEditMiddleOrbit=()=>!!controller&&(
+ !!(buildPlacement||wallPainter.active||ui.panelName==='build')||
+ (!!self?.profile?.admin&&!!(platformDelete.active||artEditor.selected||
+  ['gm','editor'].includes(ui.panelName))));
+canvas.addEventListener('pointerdown',e=>{
+ if(e.button!==1||!canEditMiddleOrbit())return;
+ e.preventDefault();e.stopImmediatePropagation();
+ editMiddleOrbit={id:e.pointerId,x:e.clientX,y:e.clientY};
+ try{canvas.setPointerCapture(e.pointerId);}catch{}
+},{capture:true});
+canvas.addEventListener('pointermove',e=>{
+ if(editMiddleOrbit?.id!==e.pointerId)return;
+ e.preventDefault();e.stopImmediatePropagation();
+ const dx=e.clientX-editMiddleOrbit.x,dy=e.clientY-editMiddleOrbit.y;
+ editMiddleOrbit.x=e.clientX;editMiddleOrbit.y=e.clientY;
+ controller?.orbitEditCamera(dx,dy);
+},{capture:true});
+const endGmOrbit=e=>{
+ if(editMiddleOrbit?.id!==e.pointerId)return;
+ e.preventDefault();e.stopImmediatePropagation();
+ editMiddleOrbit=null;
+ try{if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);}catch{}
+};
+canvas.addEventListener('pointerup',endGmOrbit,{capture:true});
+canvas.addEventListener('pointercancel',endGmOrbit,{capture:true});
+canvas.addEventListener('lostpointercapture',e=>{if(editMiddleOrbit?.id===e.pointerId)editMiddleOrbit=null;},{capture:true});
+canvas.addEventListener('mousedown',e=>{if(e.button===1&&canEditMiddleOrbit())e.preventDefault();},{capture:true});
+canvas.addEventListener('auxclick',e=>{if(e.button===1&&canEditMiddleOrbit())e.preventDefault();},{capture:true});
+
 const portraitViewport=new EquipmentPortraitViewport();
 function refreshEquipmentPortrait(){
  const canvas=document.getElementById('bag-portrait');
@@ -413,11 +446,22 @@ ui.addEventListener('gm-artwork-select',async event=>{
  artEditor.select(root);
 });
 ui.addEventListener('art-bomb-resize',event=>sendAction('resize-art-bomb',event.detail));
-ui.addEventListener('art-bomb-appearance',event=>sendAction('update-art-bomb-appearance',event.detail));
+ui.addEventListener('art-bomb-appearance',async event=>{
+ const saved=await sendAction('update-art-bomb-appearance',event.detail);
+ if(!saved?.artworkLayout)return;
+ // The BUILD form stays open after a successful colour save; refresh its
+ // authoritative revision for additional edits without forcing a panel
+ // re-render or discarding the user's currently chosen colour.
+ for(const form of ui.content.querySelectorAll('[data-form="art-bomb-appearance"]')){
+  if(form.querySelector('[name="id"]')?.value!==event.detail.id)continue;
+  const revision=form.querySelector('[name="revision"]');
+  if(revision)revision.value=String(saved.artworkLayout.revision);
+ }
+});
 ui.addEventListener('art-bomb-upload',async event=>{
  if(self?.role!=='fighter')return ui.toast('JOIN AS A FIGHTER TO PLACE ARTWORK');
  if(artBombUploading)return;
- const {files,size,title}=event.detail;
+ const {files,size,title,labelBackground}=event.detail;
  if(!title?.trim())return ui.toast('請輸入作品名稱');
  if(!Number.isFinite(size)||size<1||size>3)return ui.toast('藝術品尺寸只能設定 1–3 倍');
  artBombUploading=true;
@@ -425,7 +469,7 @@ ui.addEventListener('art-bomb-upload',async event=>{
  if(button)button.disabled=true;
  try{
   ui.toast('上傳中：驗證檔案並確認 Cloudflare 已儲存…');
-  const upload={...await uploadArtwork(network,files,{maxBytes:8*1024*1024}),title:title.trim().slice(0,100)};
+  const upload={...await uploadArtwork(network,files,{maxBytes:8*1024*1024}),title:title.trim().slice(0,100),labelBackground};
   ui.closePanel();
   startBuildPlacement('art-bomb',null,{...upload,size,previewFile:files.find(f=>f.type.startsWith('image/'))||null});
   arena.setBuildPreview('art-bomb',controller.buildPosition(3.2),controller.root.rotation.y,true,size,files.find(f=>f.type.startsWith('image/'))||null);
@@ -434,7 +478,7 @@ ui.addEventListener('art-bomb-upload',async event=>{
  }catch(error){ui.toast(error.message);}
  finally{artBombUploading=false;if(button)button.disabled=false;}
 });
-ui.addEventListener('upload-artwork',async event=>{if(!self?.profile?.admin)return;const button=ui.content.querySelector('[data-upload-submit]');if(button)button.disabled=true;try{ui.toast('正在驗證藝術品…');const upload={...await uploadArtwork(network,event.detail.files,{maxBytes:32*1024*1024}),title:event.detail.title.trim().slice(0,100)},position=controller.buildPosition(4);position[1]+=2;const result=await sendAction('add-artwork',{artwork:{...upload,position,appearance:{}}});if(!result)throw Error('Artwork was not published. Retry after checking the connection.');await arena.loadCustomArtworks(world.customArtworks,network.base);ui.closePanel();artEditor.select(arena.artworks.get(result.artwork.id));ui.toast('藝術品已發布 · 可調整位置及表面');}catch(error){ui.toast(error.message);const status=ui.content.querySelector('[data-upload-status]');if(status)status.textContent=error.message;}finally{if(button)button.disabled=false;}});
+ui.addEventListener('upload-artwork',async event=>{if(!self?.profile?.admin)return;const button=ui.content.querySelector('[data-upload-submit]');if(button)button.disabled=true;try{ui.toast('正在驗證藝術品…');const upload={...await uploadArtwork(network,event.detail.files,{maxBytes:32*1024*1024}),title:event.detail.title.trim().slice(0,100)},position=controller.buildPosition(4);position[1]+=2;const result=await sendAction('add-artwork',{artwork:{...upload,position,appearance:{labelBackground:event.detail.labelBackground||'#000000'}}});if(!result)throw Error('Artwork was not published. Retry after checking the connection.');await arena.loadCustomArtworks(world.customArtworks,network.base);ui.closePanel();artEditor.select(arena.artworks.get(result.artwork.id));ui.toast('藝術品已發布 · 可調整位置及表面');}catch(error){ui.toast(error.message);const status=ui.content.querySelector('[data-upload-status]');if(status)status.textContent=error.message;}finally{if(button)button.disabled=false;}});
 ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(item&&controller)ui.toast('Use this material in BAG → FUSION');});
 ui.addEventListener('original-action',event=>sendAction(event.detail.action,event.detail));
 // Safari's AudioContext must be resumed during the trusted jump touch gesture.
@@ -758,7 +802,7 @@ async function sendAction(action,data={},options={}){if(!joined||!controller)ret
 function startBuildPlacement(kind,surface=null,artwork=null){if(self?.role!=='fighter')return ui.toast('SPECTATORS CANNOT BUILD');buildPlacement={kind,surface,artwork,rotation:controller?.root.rotation.y||0,position:controller?.buildPosition(kind==='art-bomb'?3.2:5)||[0,0,0],valid:false};ui.buildKind=kind;document.getElementById('build-kind').textContent=kind==='art-bomb'?'YOUR ARTWORK':kind.toUpperCase();document.getElementById('build-mode').hidden=false;document.activeElement?.blur();if(!writer.active&&!artEditor.mode)controller?.setEnabled(true);ui.toast('MOVE WITH YOUR ARTWORK · R ROTATE · E / PLACE');}
 function rotateBuildPlacement(){if(!buildPlacement)return;buildPlacement.rotation+=Math.PI/4;}
 async function confirmBuildPlacement(){if(!buildPlacement||!controller)return;if(!buildPlacement.valid)return ui.toast('CANNOT BUILD HERE');const result=buildPlacement.kind==='art-bomb'
- ?await sendAction('publish-art-bomb',{artwork:{title:buildPlacement.artwork?.title,mediaId:buildPlacement.artwork?.mediaId,position:[buildPlacement.position[0],buildPlacement.position[1]+1.5*(buildPlacement.artwork?.size||1),buildPlacement.position[2]],appearance:{}},size:buildPlacement.artwork?.size})
+ ?await sendAction('publish-art-bomb',{artwork:{title:buildPlacement.artwork?.title,mediaId:buildPlacement.artwork?.mediaId,position:[buildPlacement.position[0],buildPlacement.position[1]+1.5*(buildPlacement.artwork?.size||1),buildPlacement.position[2]],appearance:{labelBackground:buildPlacement.artwork?.labelBackground||'#000000'}},size:buildPlacement.artwork?.size})
  :await sendAction('build',{kind:buildPlacement.kind,surface:buildPlacement.surface,position:buildPlacement.position,rotation:buildPlacement.rotation});
  if(result)cancelBuildPlacement();}
 function cancelBuildPlacement(){buildPlacement=null;arena.clearBuildPreview();ui.clearBuildMode();}
