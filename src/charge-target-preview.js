@@ -90,6 +90,12 @@ export class ChargeTargetPreview {
    if(equipped.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
    if(equipped.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
    scaleUltimateFootprint(stats,equipped,quality);
+   if(equipped.id==='giraffe'&&stats.ultimate){
+    // Match the Durable Object's 56m boomerang path and swept collision radius.
+    // The generic charged-area shrink must not shorten this returning weapon.
+    stats.range=+(equipped.chargedRange*quality.range).toFixed(2);
+    stats.radius=Math.max(stats.radius,5.9*quality.visual);
+   }
    if(equipped.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
   const ground=(x,z,y)=>spellGroundHeight(arena?.world,x,z,y);
   const origin=Array.isArray(muzzle)&&muzzle.length===3&&muzzle.every(Number.isFinite)
