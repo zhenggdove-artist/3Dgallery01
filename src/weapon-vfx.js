@@ -92,6 +92,12 @@ export class WeaponVFX{
    entry.waterParticles.material.dispose();
    entry.waterParticles=null;
   }
+  if(entry.tideCores){
+   entry.tideCores.removeFromParent();
+   entry.tideCores.geometry.dispose();
+   entry.tideCores.material.dispose();
+   entry.tideCores=null;
+  }
   const {id,fx}=entry;fx.detachWeapon?.();fx.group.removeFromParent();fx.group.visible=false;
   const pool=this.pools.get(id)||[];if(pool.length<3){pool.push(fx);this.pools.set(id,pool);}else fx.dispose();if(this.charger===entry)this.charger=null;
  }
@@ -143,6 +149,25 @@ export class WeaponVFX{
    this.waterStreams.set(key,entry);
   }
   entry.waterKey=key;entry.host=root;entry.waterWeapon=item;
+  entry.waterOwner=data.owner||null;
+  entry.waterWidthFactor=/^tide-[1-5]$/.test(item.id)?3:1;
+  if(entry.waterParticles)entry.waterParticles.material.size=.19*entry.waterWidthFactor;
+  if(entry.waterWidthFactor===3&&!entry.tideCores){
+   // Three translucent guided tubes share one draw call and one geometry.
+   // 8 radial segments keep the curved Venom nozzle mobile-friendly.
+   const coreGeo=new THREE.CylinderGeometry(.36,.36,1,8,1,true);
+   const coreMat=new THREE.MeshBasicMaterial({color:'#62d8ff',transparent:true,
+    opacity:.35,depthWrite:false,blending:THREE.AdditiveBlending,
+    side:THREE.DoubleSide,toneMapped:false});
+   entry.tideCores=new THREE.InstancedMesh(coreGeo,coreMat,3);
+   entry.tideCores.name='Three targeted Tide Staff luminous water rays';
+   entry.tideCores.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+   entry.tideCores.frustumCulled=false;
+   entry.tideScratch={m:new THREE.Matrix4(),pos:new THREE.Vector3(),
+    dir:new THREE.Vector3(),q:new THREE.Quaternion(),scale:new THREE.Vector3(),
+    up:new THREE.Vector3(0,1,0)};
+   this.scene.add(entry.tideCores);
+  }
   entry.waterOrigin??=origin.clone();
   entry.waterDirection??=direction.clone();
   entry.waterOrigin.copy(origin); // overwritten by live weapon tip when present
@@ -151,33 +176,53 @@ export class WeaponVFX{
   entry.lastWaterPulseAt=performance.now();
   this.alignWaterStream(entry);
  }
- alignWaterStream(entry){
+ alignWaterStream(entry,world=null){
   if(!this.active.includes(entry))return;
   const source=entry.host?this.channelMuzzle(entry.host,entry.waterWeapon,entry.waterOrigin.clone()):entry.waterOrigin.clone();
   const ray=entry.host?.userData?.staffAimDirection;
   const dir=Array.isArray(ray)&&ray.length===3&&ray.every(Number.isFinite)?
    new THREE.Vector3(...ray).normalize():entry.waterDirection;
-  const target=source.clone().addScaledVector(dir,entry.waterRange);
-  // Original Venom Stream runtime follows two endpoints in local +X.
-  entry.fx.setEndpoints(source,target);
+  const straight=source.clone().addScaledVector(dir,entry.waterRange);
+  const lock=entry.waterOwner&&world?.tidalLocks?.[entry.waterOwner];
+  const ends=(lock?.targets||[]).slice(0,3).filter(t=>
+   Array.isArray(t.position)&&t.position.length===3&&t.position.every(Number.isFinite))
+   .map(t=>new THREE.Vector3(...t.position));
+  if(!ends.length)ends.push(straight);
+  // Retain one native blue Venom Stream, connected to the closest locked
+  // target. Two additional guided rays share ONE buffered 128-point cloud.
+  entry.fx.setEndpoints(source,ends[0]);
+  if(entry.tideCores){
+   const {m,pos,dir,q,scale,up}=entry.tideScratch;
+   entry.tideCores.count=Math.min(3,ends.length);
+   for(let i=0;i<entry.tideCores.count;i++){
+    dir.copy(ends[i]).sub(source);
+    const len=Math.max(.001,dir.length());
+    q.setFromUnitVectors(up,dir.divideScalar(len));
+    pos.copy(source).add(ends[i]).multiplyScalar(.5);
+    scale.set(1,len,1);m.compose(pos,q,scale);
+    entry.tideCores.setMatrixAt(i,m);
+   }
+   entry.tideCores.instanceMatrix.needsUpdate=true;
+  }
   const buffer=entry.waterParticles?.geometry?.attributes?.position;
-  if(buffer){
-   const a=buffer.array,dx=target.x-source.x,dy=target.y-source.y,dz=target.z-source.z;
+  if(!buffer)return;
+  const a=buffer.array,count=buffer.count,n=ends.length;
+  for(let i=0;i<count;i++){
+   const beam=i%n,end=ends[beam],ordinal=Math.floor(i/n);
+   const span=Math.ceil((count-beam)/n);
+   const progress=(ordinal/Math.max(1,span)+entry.age*(.48+.055*(i%7)))%1;
+   const theta=i*2.399963+entry.age*11;
+   const dx=end.x-source.x,dy=end.y-source.y,dz=end.z-source.z;
    const length=Math.max(.001,Math.hypot(dx,dz));
    const sx=dz/length,sz=-dx/length;
-   const count=buffer.count;
-   for(let i=0;i<count;i++){
-    const progress=(i/count+entry.age*(.48+.055*(i%7)))%1;
-    const theta=i*2.399963+entry.age*11;
-    const radius=(.08+.20*progress)*(1+.14*Math.sin(theta*.8));
-    const splash=progress>.88?(progress-.88)/.12:0;
-    const curve= Math.sin(theta)*radius + Math.cos(entry.age*8+i)*splash*.5;
-    a[i*3]=source.x+dx*progress+sx*curve;
-    a[i*3+1]=source.y+dy*progress+Math.cos(theta)*radius*.75 + splash*Math.sin(theta*3)*.38;
-    a[i*3+2]=source.z+dz*progress+sz*curve;
-   }
-   buffer.needsUpdate=true;
+   const radius=(.08+.20*progress)*(entry.waterWidthFactor||1);
+   const splash=progress>.88?(progress-.88)/.12:0;
+   const curve=Math.sin(theta)*radius+Math.cos(entry.age*8+i)*splash*.5;
+   a[i*3]=source.x+dx*progress+sx*curve;
+   a[i*3+1]=source.y+dy*progress+Math.cos(theta)*radius*.75+splash*Math.sin(theta*3)*.38;
+   a[i*3+2]=source.z+dz*progress+sz*curve;
   }
+  buffer.needsUpdate=true;
  }
  stopChannel(root){
   this.restoration.stop(root);
@@ -473,7 +518,7 @@ export class WeaponVFX{
      if(performance.now()-e.lastWaterPulseAt>Math.max(3100,Number(e.waterWeapon?.cooldown||650)*2+650)){
       this.release(e);continue;
      }
-     this.alignWaterStream(e);
+     this.alignWaterStream(e,world);
     }
     e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
     if(e.start&&!e.stopped)e.fx.group.position.lerpVectors(e.start,e.end,Math.min(1,e.age/e.travel));
@@ -490,6 +535,7 @@ export class WeaponVFX{
     const index=this.active.indexOf(e);if(index>=0)this.active.splice(index,1);
     if(e.waterKey)this.waterStreams.delete(e.waterKey);
     if(e.waterParticles){e.waterParticles.removeFromParent();e.waterParticles.geometry.dispose();e.waterParticles.material.dispose();}
+    if(e.tideCores){e.tideCores.removeFromParent();e.tideCores.geometry.dispose();e.tideCores.material.dispose();}
     if(this.charger===e)this.charger=null;
     try{e.fx.group.removeFromParent();e.fx.dispose();}catch{}
     this.reportAnimationFailure(e.id,error);
@@ -503,9 +549,9 @@ export class WeaponVFX{
   console.error('Weapon animation failed; quarantined this instance',id,error);
  }
  dispose(){
-  for(const e of this.waterStreams.values())if(e.waterParticles){
-   e.waterParticles.removeFromParent();e.waterParticles.geometry.dispose();e.waterParticles.material.dispose();
-  }
+  // Dispose the actual active native beam wrappers, liquid clouds and
+  // additional instanced channels as a unit, including aborted casts.
+  for(const e of [...this.waterStreams.values()])this.release(e);
   this.waterStreams.clear();this.plantUltimates.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
   for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}

@@ -105,7 +105,7 @@ test('all thirty goldfish tails become one blue instanced particle cloud, tracki
  const tail=group.userData.tailParticles;
  assert.ok(tail?.cloud?.isPoints);
  assert.equal(tail.cloud.geometry.getAttribute('position').count,30*16);
- assert.ok(group.userData.schoolParts.every(p=>p.mesh.material.opacity===.5));
+ assert.ok(group.userData.schoolParts.every(p=>p.mesh.material.opacity===.30));
  assert.equal(tail.cloud.material.opacity,.435);
  assert.ok(group.userData.schoolParts.every(p=>!p.tailPart),
   'solid orange tail geometry must not be instanced');

@@ -227,6 +227,16 @@ export class NumberedWeaponEffects {
   if(!options.color)delete options.color;
   if(spec.number===47)for(const old of [...this.active])if(old.spec.number===47)this.remove(old);
   const fx=this.acquire(spec,options);
+  if(spec.asset==='energy-sword-wave'){
+   // The official five crescents remain. Render only half of each vendor
+   // InstancedMesh's particles/debris; keep the MIT vendor source unchanged.
+   // Remember its ORIGINAL pool size so recycling never halves it again.
+   fx.group.traverse(node=>{
+    if(!node.isInstancedMesh)return;
+    node.userData.fullParticleCount??=node.count;
+    node.count=Math.max(1,Math.ceil(node.userData.fullParticleCount*.5));
+   });
+  }
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
   // The official charged-beam ray starts at the weapon muzzle, not
   // at an unrelated remote ground-circle centre.
@@ -571,7 +581,15 @@ export class NumberedWeaponEffects {
    if(!e.key&&e.age>3&&!e.stopping&&typeof e.fx.stop==='function'){
     e.stopping=true;e.fx.stop();
    }
-   e.fx.update(dt);
+   if(e.spec.asset==='energy-sword-wave'){
+    // The native fan evaluates five full CPU particle simulations per
+    // update. Coalesce frames to 30fps while keeping exact animation time.
+    e.saberFrameBudget=(e.saberFrameBudget||0)+dt;
+    if(e.saberFrameBudget>=1/30){
+     e.fx.update(e.saberFrameBudget);
+     e.saberFrameBudget=0;
+    }
+   }else e.fx.update(dt);
    if(e.spec.number===20&&e.attackId){
     const synced=world?.vortexes?.find(v=>v.id===e.attackId);
     if(synced?.position)e.fx.group.position.lerp(new THREE.Vector3(...synced.position),Math.min(1,dt*18));

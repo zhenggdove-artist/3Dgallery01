@@ -59,7 +59,7 @@ export function createInitialWorld(now=Date.now()){
     profiles:{},customWings:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
-    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
+    artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},tidalLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
     monster:{active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0},monsters:[],audioSettings:{},musicVersion:0,
     collector:initialCollector(now),lastCollectorSale:null,
     nextGroundDropAt:now+ECONOMY.groundSpawnMinMs,
@@ -230,6 +230,12 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
         multiplier:prismDamageMultiplier(now-lock.since),range:lock.range}
     ])),
     vortexes:(world.persistentAttacks||[]).filter(v=>v.kind==='vortex').map(v=>({id:v.id,position:clone(v.position||v.origin),owner:v.owner})),
+    tidalLocks:Object.fromEntries(Object.entries(world.tidalLocks||{}).map(([key,lock])=>[
+      key,{targets:(lock.targets||[]).map(t=>({targetKey:t.targetKey,kind:t.kind,position:clone(t.position)}))}
+    ])),
+    // Short-lived impact records survive even when the final fish consumes
+    // the entire flight during this very server tick.
+    goldfishImpactEvents:clone((world.goldfishImpactEvents||[]).filter(v=>now-v.time<950)),
     goldfishFlights:(world.persistentAttacks||[]).filter(v=>v.kind==='goldfish').map(v=>({
       id:v.id,position:clone(v.position||v.origin),direction:clone(v.direction),owner:v.owner,
        consumed:clone(v.fishConsumed||[])
@@ -767,7 +773,9 @@ function attack(world,profile,actor,body,context,now){
    profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;
    profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
    delete profile.prismChannelStats;
+   delete profile.tidalChannelStats;
    if(world.prismLocks)delete world.prismLocks[actor.key];
+   if(world.tidalLocks)delete world.tidalLocks[actor.key];
    world.persistentAttacks=(world.persistentAttacks||[]).filter(
     fx=>!(fx.owner===actor.key&&fx.channel));
    return {channeling:false,channelStopped:{owner:actor.key,time:now}};
@@ -848,11 +856,18 @@ function attack(world,profile,actor,body,context,now){
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
   const prismChannel=channel&&weapon.family==='beam'&&!weapon.exotic;
+  const tidalChannel=channel&&/^tide-[1-5]$/.test(weapon.id);
   const waveVortex=weapon.family==='wave'&&stats.ultimate;
   const area=stats.ultimate&&weapon.id!=='goldfish'&&!waveVortex?chargedArea(weapon,origin,direction,stats,groundForSpell,channel||(weapon.family==='ice'&&stats.ultimate)):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate,now):null;
   const fusionEchoes=[];
   const pvpDamage=pvpShotDamage(weapon,stats,quality);
+  if(tidalChannel){
+   // Three authenticated homing streams, each intentionally weaker than the
+   // single-target prism; regular water taps still use their original ray.
+   profile.tidalChannelStats={range:stats.range,
+    monsterDps:stats.damage*.30,pvpDps:pvpDamage*.35,direction:[...direction]};
+  }
   if(prismChannel){
    // Damage and direction are server-owned; each channel pulse renews
    // this source without restarting the current target's power ramp.
@@ -881,7 +896,7 @@ function attack(world,profile,actor,body,context,now){
     });
     if(world.persistentAttacks.length>32)world.persistentAttacks.splice(0,world.persistentAttacks.length-32);
   }
-  const persistentOnly=returningGiraffe||roamingFan||swimmingFish||waveVortex||prismChannel;
+  const persistentOnly=returningGiraffe||roamingFan||swimmingFish||waveVortex||prismChannel||tidalChannel;
   // Attack requests only launch server-owned trajectories. Health, statuses,
   // and damage-number events are produced by tickPersistentAttacks when the
   // travelling VFX volume actually touches a target (never on key release).
@@ -1226,7 +1241,9 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
     profile.channelWeapon=null;profile.channelStartedAt=0;
     profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
     delete profile.prismChannelStats;
+    delete profile.tidalChannelStats;
     if(world.prismLocks?.[profile.key])delete world.prismLocks[profile.key];
+    if(world.tidalLocks?.[profile.key])delete world.tidalLocks[profile.key];
     world.persistentAttacks=(world.persistentAttacks||[]).filter(fx=>
      !(fx.owner===profile.key&&fx.channel));
     changed=true;
@@ -1235,6 +1252,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   }
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
   changed=tickPrismChannels(world,actors,now,rng)||changed;
+  changed=tickTidalChannels(world,actors,now,rng)||changed;
   if(world.channelContactLocks)for(const [key,expiry] of Object.entries(world.channelContactLocks))
    if(expiry<now-2000)delete world.channelContactLocks[key];
   if(world.monster?.active)changed=tickStatus(world.monster,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng))||changed;
@@ -1494,6 +1512,108 @@ export function tickPrismChannels(world,actors,now=Date.now(),rng=Math.random){
   delete locks[key];changed=true;
  }
  return changed;
+}
+
+// Dedicated triple-target tide channels: server decides every target and
+// applies DPS on a bounded 250ms cadence. Never trust client-side VFX hits.
+export function tickTidalChannels(world,actors,now=Date.now(),rng=Math.random){
+ const locks=world.tidalLocks??={};
+ let changed=false;
+ const active=new Set();
+ const monsterTargets=[
+  ...(world.monster?.active&&world.monster.hp>0?[{kind:'monster',value:world.monster}]:[]),
+  ...(world.monsters||[]).filter(m=>m.active&&m.hp>0).map(value=>({kind:'monster',value}))
+ ];
+ for(const caster of actors){
+  const profile=world.profiles[caster.key],weapon=itemById(profile?.channelWeapon);
+  if(caster.role!=='fighter'||!profile||profile.hp<=0||profile.deadUntil>now||
+     !weapon||!/^tide-[1-5]$/.test(weapon.id)||
+     profile.equipment.weapon!==weapon.id||!isLiveStaffChannel(profile,now))continue;
+  active.add(caster.key);
+  const stats=profile.tidalChannelStats;
+  if(!stats)continue;
+  const range=Math.max(2,Number(stats.range)||12);
+  const candidates=[...monsterTargets,
+   ...actors.filter(a=>a.role==='fighter'&&a.key!==caster.key&&
+    world.profiles[a.key]?.hp>0&&world.profiles[a.key]?.deadUntil<=now&&
+    !insideSafeZone(a.position)&&!insideArtSanctuary(a.position))
+   .map(value=>({kind:'player',value}))]
+   .map(t=>{
+    const v=t.value,point=[v.position[0],v.position[1]+
+     (t.kind==='monster'?(v.bodyHeight||ENEMY_HEIGHT)*.54:1.13),v.position[2]];
+    const distance=Math.hypot(point[0]-caster.position[0],
+     point[1]-(caster.position[1]+1.16),point[2]-caster.position[2]);
+    return {...t,key:v.id||v.key,point,distance};
+   }).filter(t=>t.distance<=range).sort((a,b)=>a.distance-b.distance);
+  const prior=locks[caster.key]?.targets||[];
+  const selected=[];
+  // Preserve valid locks first so target order doesn't flicker when monsters move.
+  for(const old of prior){
+   const live=candidates.find(t=>t.kind===old.kind&&t.key===old.targetKey);
+   if(live&&!selected.includes(live))selected.push(live);
+  }
+  for(const candidate of candidates){
+   if(selected.length>=3)break;
+   if(!selected.some(t=>t.key===candidate.key&&t.kind===candidate.kind))
+    selected.push(candidate);
+  }
+  if(!selected.length){
+   if(locks[caster.key]){delete locks[caster.key];changed=true;}
+   continue;
+  }
+  const targets=selected.slice(0,3).map(t=>{
+   const previous=prior.find(p=>p.targetKey===t.key&&p.kind===t.kind);
+   const lastHitAt=previous?.lastHitAt??now;
+   return {targetKey:t.key,kind:t.kind,position:[...t.point],lastHitAt};
+  });
+  if(prior.length!==targets.length||targets.some((t,i)=>
+   t.targetKey!==prior[i]?.targetKey||t.position.some((v,j)=>Math.abs(v-(prior[i]?.position?.[j]??v))>.02)))changed=true;
+  locks[caster.key]={targets};
+  for(let i=0;i<targets.length;i++){
+   const target=selected[i],lock=targets[i];
+   const elapsed=now-lock.lastHitAt;
+   if(elapsed<PRISM_DAMAGE_TICK_MS)continue;
+   const sample=Math.min(elapsed,500);
+   lock.lastHitAt=now;
+   const dps=Math.max(0,Number(target.kind==='monster'?stats.monsterDps:stats.pvpDps)||0);
+   const amount=dps*sample/1000;
+   if(amount<=0)continue;
+   if(target.kind==='monster')
+    damageMonster(world,profile,amount,now,rng,'tidal-lock',target.value,target.point);
+   else
+    damagePlayer(world,profile,target.value,amount,now,'tide',caster.position,
+     'tidal-lock',target.point,false,false,true);
+   changed=true;
+  }
+ }
+ for(const key of Object.keys(locks))if(!active.has(key)){
+  delete locks[key];changed=true;
+ }
+ return changed;
+}
+
+// Health is applied once per contact bundle, but every actual fish must
+// display its own floating damage number. Split the single server event
+// after damage resolution; do not create additional damage or HP changes.
+function splitGoldfishDamageNumbers(world,originalEventCount,contacts,center){
+ if(contacts<2||!Array.isArray(world.damageEvents)||world.damageEvents.length<=originalEventCount)return;
+ const event=world.damageEvents[world.damageEvents.length-1];
+ if(!event||!(event.amount>0))return;
+ const total=Number(event.amount);
+ const share=Math.floor(total*100/contacts)/100;
+ const amounts=Array(contacts).fill(share);
+ // Exactly preserve authoritative total after decimal rounding.
+ amounts[contacts-1]=+(total-share*(contacts-1)).toFixed(2);
+ event.amount=amounts[0];
+ for(let i=1;i<contacts;i++){
+  world.damageSequence=(world.damageSequence||0)+1;
+  world.damageEvents.push({...event,id:world.damageSequence,
+   amount:amounts[i],position:[
+    center[0]+Math.sin(i*2.39996)*(.12+Math.sqrt(i)*.12),
+    center[1]+(.08*(i%6)),center[2]+Math.cos(i*2.39996)*(.12+Math.sqrt(i)*.12)
+   ]});
+ }
+ if(world.damageEvents.length>128)world.damageEvents.splice(0,world.damageEvents.length-128);
 }
 
 // Timed server-owned abilities: a returning giraffe can hit each target once
@@ -1944,6 +2064,12 @@ function tickPersistentAttacks(world,actors,now,rng){
        :rayCylinderDistance(a,direction,length,value.position,1.02+radius,2.35+radius);
       if(collision===null)continue;
       fx.fishConsumed.push(i);contacts++;
+      world.goldfishImpactEvents??=[];
+      world.goldfishImpactEvents.push({
+       attackId:fx.id,fishIndex:i,time:now,position:[...b]
+      });
+      if(world.goldfishImpactEvents.length>128)
+       world.goldfishImpactEvents.splice(0,world.goldfishImpactEvents.length-128);
      }
      if(!contacts)continue;
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
@@ -1959,8 +2085,9 @@ function tickPersistentAttacks(world,actors,now,rng){
      const baseFish=fx.damage*1.25*GOLDFISH_DAMAGE_PER_FISH;
      const direct=Math.min(remaining,contacts*Math.min(perFishCap,baseFish));
      if(direct<=0)continue;
+     const damageEventStart=world.damageEvents?.length||0;
      if(target.kind==='monster'){
-      // Soaked/exposed damage multipliers cannot bypass the 90-point cap.
+      // Soaked/exposed damage multipliers cannot bypass the new budget.
       const amplification=(1+(effectActive(value,'expose',now)?.power||0))*
        (1+(effectActive(value,'soaked',now)?.power||0));
       const raw=Math.min(direct,remaining/Math.max(.001,amplification));
@@ -1990,6 +2117,7 @@ function tickPersistentAttacks(world,actors,now,rng){
        if(profile?.hitReaction){profile.hitReaction.stunMs=fx.echo?100:300;profile.hitReaction.knockback=fx.echo?2.8:14;}
       }
      }
+     splitGoldfishDamageNumbers(world,damageEventStart,contacts,center);
      changed=true;
     }
     if(fx.fishConsumed.length>=GOLDFISH_SCHOOL_COUNT)fx.expiresAt=now;

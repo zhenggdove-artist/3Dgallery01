@@ -180,6 +180,12 @@ export class WeaponSignatureEffects {
   // consumed indices from the previous school.
   group.userData.consumedFish=new Set();
   group.userData.gotServerTrack=false;
+  group.userData.goldfishMotion={sampleAt:0,receivedAt:0,position:new THREE.Vector3(),velocity:new THREE.Vector3()};
+  if(group.userData.goldfishBubbleBursts){
+   group.userData.goldfishBubbleBursts.births.fill(-99);
+   group.userData.goldfishBubbleBursts.positions.fill(1e5);
+   group.userData.goldfishBubbleBursts.cloud.geometry.attributes.position.needsUpdate=true;
+  }
   group.name='Thirty individually consumable goldfish swimming forward';
   let tail=cached?.userData.tail;
   if(!cached){group.add(fish);
@@ -201,10 +207,33 @@ export class WeaponSignatureEffects {
   // The old Lambert + transparent/depthWrite:false materials mixed all 30
   // overlapping fish into an almost black slab from behind. Opaque, depth-
   // writing fish with unlit vertex gradients preserve every silhouette.
-  const glow=(color,vertexColors=false)=>new THREE.MeshBasicMaterial({
-   color,vertexColors,transparent:true,opacity:.5,depthWrite:false,
-   depthTest:true,side:THREE.FrontSide,toneMapped:false
-  });
+  // VHS horizontal scanlines / analogue ripples embedded in each fish mesh.
+  // One shared shader uniform for all instanced fish, no screen-space pass.
+  const vhsTime={value:0};
+  group.userData.fishVhsTime=vhsTime;
+  const glow=(color,vertexColors=false)=>{
+   const mat=new THREE.MeshBasicMaterial({
+    color,vertexColors,transparent:true,opacity:.30,depthWrite:false,
+    depthTest:true,side:THREE.FrontSide,toneMapped:false
+   });
+   mat.onBeforeCompile=shader=>{
+    shader.uniforms.uFishVhsTime=vhsTime;
+    shader.vertexShader=shader.vertexShader
+     .replace('void main() {','varying vec3 vFishLocal; uniform float uFishVhsTime; void main() {')
+     .replace('#include <begin_vertex>',`#include <begin_vertex>
+vFishLocal=position;
+transformed.x+=sin(position.y*21.0+uFishVhsTime*6.7)*0.018;`);
+    shader.fragmentShader=shader.fragmentShader
+     .replace('void main() {','varying vec3 vFishLocal; uniform float uFishVhsTime; void main() {')
+     .replace('#include <color_fragment>',`#include <color_fragment>
+float vhsLine=sin(vFishLocal.y*92.0+uFishVhsTime*1.2);
+float vhsWave=sin(vFishLocal.y*11.0-uFishVhsTime*5.8);
+diffuseColor.rgb*=0.70+0.22*smoothstep(-0.5,0.65,vhsLine)+0.08*vhsWave;
+diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
+   };
+   mat.customProgramCacheKey=()=>vertexColors?'goldfish-vhs-color-v2':'goldfish-vhs-solid-v2';
+   return mat;
+  };
   const amber=glow('#ffffff',true),pearl=glow('#fffae7',true),
    finMat=glow('#ffbc54'),rim=glow('#c85030'),
    highlight=glow('#fff9d1'),eye=glow('#271c21');
@@ -297,6 +326,24 @@ export class WeaponSignatureEffects {
   tailCloud.frustumCulled=false;
   school.add(tailCloud);
   group.userData.tailParticles={cloud:tailCloud,positions:tailPositions,perFish};
+  // GPU-pooled water bubble burst: 8 radial dots per fish, just one draw call.
+  const bubblePerFish=8,bubblePositions=new Float32Array(GOLDFISH_SCHOOL_COUNT*bubblePerFish*3);
+  bubblePositions.fill(1e5);
+  const bubbleGeo=new THREE.BufferGeometry();
+  bubbleGeo.setAttribute('position',new THREE.BufferAttribute(bubblePositions,3)
+   .setUsage(THREE.DynamicDrawUsage));
+  const bubbleCloud=new THREE.Points(bubbleGeo,new THREE.PointsMaterial({
+   color:'#b7f6ff',size:.12,transparent:true,opacity:.76,
+   depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending,
+   sizeAttenuation:true,toneMapped:false
+  }));
+  bubbleCloud.name='Per-fish bubble-pop impact particles';
+  bubbleCloud.frustumCulled=false;
+  school.add(bubbleCloud);
+  group.userData.goldfishBubbleBursts={
+   cloud:bubbleCloud,positions:bubblePositions,perFish:bubblePerFish,
+   births:new Float32Array(GOLDFISH_SCHOOL_COUNT).fill(-99)
+  };
   fish.visible=false;group.add(school);
   group.userData.fish=fish;group.userData.tail=tail;group.userData.school=school;group.userData.schoolParts=parts;
   // Reuse all transforms every frame: never allocate 30 matrices or vectors
@@ -315,26 +362,64 @@ export class WeaponSignatureEffects {
   fish.scale.setScalar(GOLDFISH_FISH_SCALE*quality);
   group.position.copy(origin);group.quaternion.copy(orientation);group.scale.setScalar(1);
   const flightEntry=this.add(group,duration,(age,world,dt=0)=> {
+   if(group.userData.fishVhsTime)group.userData.fishVhsTime.value=age;
    const progress=Math.min(1,age/duration);
    const travel=(event.range||32)*progress;
    const track=world?.goldfishFlights?.find(v=>v.id===event.persistentAttackId);
+   const impacts=(world?.goldfishImpactEvents||[]).filter(v=>
+    v.attackId===event.persistentAttackId);
+   if(impacts.length)group.userData.gotServerTrack=true;
+   for(const impact of impacts){
+    const index=impact.fishIndex;
+    if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT){
+     if(!group.userData.consumedFish.has(index))
+      group.userData.goldfishBubbleBursts.births[index]=age;
+     group.userData.consumedFish.add(index);
+    }
+   }
    if(track){
     group.userData.gotServerTrack=true;
     for(const index of track.consumed||[])
-     if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT)
+     if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT){
+      if(!group.userData.consumedFish.has(index))
+       group.userData.goldfishBubbleBursts.births[index]=age;
       group.userData.consumedFish.add(index);
+     }
    }else if(group.userData.gotServerTrack){
-    // Server flight finished (including all thirty impacts): do not keep
-    // simulating a local school whose authoritative collider is gone.
-    group.scale.setScalar(0);return;
+    // No stale ghost fish after the server removes the final flight; keep
+    // only the last half-second of per-fish bubble pops alive.
+    const births=group.userData.goldfishBubbleBursts.births;
+    if(!births.some(t=>age>=t&&age-t<.48)){
+     group.scale.setScalar(0);return;
+    }
+    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++)group.userData.consumedFish.add(i);
    }
-   const target=track?.position?vec(track.position):
-    origin.clone().addScaledVector(direction,travel);
+   const motion=group.userData.goldfishMotion;
+   let target;
+   if(track?.position){
+    const serverTime=Number(world?.serverTime)||Date.now();
+    // Derive velocity from snapshots and project only a bounded fraction
+    // of packet delay. Exponential visual correction avoids stepped motion.
+    if(serverTime>motion.sampleAt){
+     const measured=vec(track.position);
+     if(motion.sampleAt>0){
+      const seconds=(serverTime-motion.sampleAt)/1000;
+      if(seconds>.001){
+       const measuredVelocity=measured.clone().sub(motion.position).divideScalar(seconds);
+       measuredVelocity.clampLength(0,Math.max(3,(event.range||32)/duration*2));
+       motion.velocity.lerp(measuredVelocity,.45);
+      }
+     }
+     motion.position.copy(measured);
+     motion.sampleAt=serverTime;motion.receivedAt=performance.now();
+    }
+    const ahead=Math.max(0,Math.min(.10,(performance.now()-motion.receivedAt)/1000));
+    target=motion.position.clone().addScaledVector(motion.velocity,ahead);
+   }else target=origin.clone().addScaledVector(direction,travel);
    const desired=track?.direction?vec(track.direction).normalize():direction;
-   // Smooth snapshots but never reset the fish to its initial straight line.
    if(age<.05)group.position.copy(target);
-   else group.position.lerp(target,Math.min(1,Math.max(.08,dt*24)));
-   group.quaternion.slerp(qdir(desired),Math.min(1,Math.max(.08,dt*20)));
+   else group.position.lerp(target,1-Math.exp(-Math.max(0,dt)*13));
+   group.quaternion.slerp(qdir(desired),1-Math.exp(-Math.max(0,dt)*12));
    // The fish is authored facing local +Z; qdir already maps +Z to travel.
    // Any additional 90-degree yaw makes the nose point LEFT. Keep only swim sway.
    const yaw=Math.sin(age*8)*.045;
@@ -355,6 +440,24 @@ export class WeaponSignatureEffects {
     transforms[i].compose(offset,rotation,scale);
     tailTransforms[i].makeRotationY(Math.sin(age*19+i*2.399963)*.74);
     tailTransforms[i].premultiply(tail.matrix).premultiply(fish.matrix);
+   }
+   // Colliding fish burst into a short, expanding ring of water bubbles.
+   // Each fish has an independent birth timestamp in a single GPU cloud.
+   const bursts=group.userData.goldfishBubbleBursts;
+   if(bursts){
+    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
+     const elapsed=age-bursts.births[i],alive=elapsed>=0&&elapsed<.48;
+     const [x,y,z]=GOLDFISH_SCHOOL_OFFSETS[i];
+     for(let j=0;j<bursts.perFish;j++){
+      const k=(i*bursts.perFish+j)*3;
+      if(!alive){bursts.positions[k]=bursts.positions[k+1]=bursts.positions[k+2]=1e5;continue;}
+      const a=j*2.399963+i*.17,radius=.08+elapsed*1.5;
+      bursts.positions[k]=x+Math.cos(a)*radius;
+      bursts.positions[k+1]=y+Math.sin(a*1.7)*radius*.8+elapsed*.32;
+      bursts.positions[k+2]=z+Math.sin(a)*radius;
+     }
+    }
+    bursts.cloud.geometry.attributes.position.needsUpdate=true;
    }
    // Position the blue gradient cloud behind each fish and fan the sparks
    // outward with a phase-staggered tail wag, fading into empty water.
