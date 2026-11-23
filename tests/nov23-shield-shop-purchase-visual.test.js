@@ -33,12 +33,12 @@ test('server exposes shield capacity to the player without changing red HP',()=>
  assert.equal(publicState.shield.hp,publicState.shield.maxHp);
  assert.equal(publicState.hp,100);
 });
-test('only a genuinely absorbed shield hit triggers a whole-shell blue flash',()=>{
+test('only an actually absorbed shield hit triggers a whole-shell red flash',()=>{
  const rules=read('src/shared/temple-rules.js'),visual=read('src/reletter-presentation.js'),main=read('src/main.js');
  assert.match(rules,/shield\.hitId=id\(\)/);
  assert.match(rules,/shield:clone\(profile\.shield\|\|null\)/);
  assert.match(visual,/uniform float hit/);
- assert.match(visual,/mix\(tint,vec3\(\.12,\.57,1\.\),hit\)/);
+ assert.match(visual,/mix\(tint,vec3\(1\.,\.035,\.075\),hit\)/);
  assert.match(main,/applyShieldHit\(localRoot,profile\)/);
  assert.match(main,/applyShieldHit\(root,player\.profile\)/);
 });
@@ -50,6 +50,6 @@ test('shield and health readouts have separate rows; 500ms popup is server-confi
  assert.match(css,/#vitals #shield-readout\{display:flex/);
  assert.match(css,/#purchase-notice\.visible\{animation:purchase-confirm-fade 500ms/);
  assert.match(ui,/purchaseNotice\(itemName,quantity\)/);
- assert.match(ui,/已成功購買/);
+ assert.match(ui,/PURCHASE SUCCESSFUL/);
  assert.match(main,/if\(result\.purchased\)/);
 });

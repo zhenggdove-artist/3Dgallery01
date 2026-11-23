@@ -29,5 +29,5 @@ test('GM layout validates permission, revision and finite transforms and survive
 test('Original equipment affects stats and shields recharge',()=>{
  const w=createInitialWorld(),p=createProfile('p','Test');p.equipment.weapon=EQUIPMENT.find(i=>i.family==='petal').id;p.equipment.shield='shield-1';
  assert.ok(playerStats(w,p).speed>1);refreshStats(w,p,10000);assert.equal(p.shield.hp,20);
- p.shield.hp=0;p.shield.lastHit=10000;refreshStats(w,p,11000);assert.equal(p.shield.hp,0);refreshStats(w,p,30000);assert.equal(p.shield.hp,20);
+ p.shield.hp=0;p.shield.lastHit=10000;refreshStats(w,p,11000);assert.equal(p.shield.hp,0);refreshStats(w,p,30000);assert.equal(p.shield.hp,0);refreshStats(w,p,46000);assert.equal(p.shield.hp,20);
 });
