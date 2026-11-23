@@ -25,7 +25,17 @@ export class TempleUI extends EventTarget{
     super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.wingPaymentStatus=null;this.firebaseIdToken='';this.authMode='firebase';this.pendingLoginMode='firebase';this.joining=false;
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
     bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
-    this.bind();$('gm-help').onclick=()=>this.openPanel('help');$('gm-menu').onclick=()=>this.openPanel('gm');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag'&&cell.dataset.inventoryIndex!==undefined){
+    this.bind();this.content.addEventListener('change',event=>{
+     const select=event.target.closest('[data-shop-variant]');
+     if(!select||this.panelName!=='shop')return;
+     this.shopVariantChoice??={};
+     this.shopVariantChoice[select.dataset.shopVariant]=select.value;
+     const offset=this.content.scrollTop;
+     this.renderShop(this.world?.profile||this.self?.profile||{inventory:[],equipment:{},wallet:0});
+     this.content.scrollTop=offset;
+     const next=[...this.content.querySelectorAll('[data-shop-variant]')].find(el=>el.dataset.shopVariant===select.dataset.shopVariant);
+     next?.focus({preventScroll:true});
+    });$('gm-help').onclick=()=>this.openPanel('help');$('gm-menu').onclick=()=>this.openPanel('gm');this.content.addEventListener('dragstart',e=>{const cell=e.target.closest('[data-bag-item]');if(cell&&this.panelName==='bag'&&cell.dataset.inventoryIndex!==undefined){
      e.dataTransfer.setData('text/plain',cell.dataset.bagItem);
      e.dataTransfer.setData('application/x-temple-slot',cell.dataset.inventoryIndex);
      e.dataTransfer.effectAllowed=this.bagFusionMode?'copyMove':'move';
@@ -397,7 +407,37 @@ export class TempleUI extends EventTarget{
     const code=this.saveCode||this.self?.saveCode||'';this.content.innerHTML=`<h3>MEMORY CODE</h3><p>將目前的等級、裝備、背包與遊戲進度儲存至伺服器。重新進入遊戲時，在 Memorycode 欄位輸入代碼恢復。</p><label for="save-code-output">存檔代碼<input id="save-code-output" readonly autocomplete="off" spellcheck="false" class="panel-input" value="${escape(code)}" placeholder="尚未產生代碼"></label><button type="button" class="panel-button" data-save-code>產生／重新取得代碼</button><button type="button" class="panel-button" data-copy-save-code ${code?'':'disabled'}>複製存檔代碼</button><p>請妥善保管代碼。擁有代碼的人可能存取你的存檔。</p>`;}
   showSaveCode(code){this.saveCode=String(code||'');this.openPanel('save');this.content.querySelector('#save-code-output')?.select();}
   renderBag(profile){renderOriginalBag(this,profile);}
-  renderShop(profile){const tab=this.shopTab||'near',tabs={near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',shield:'Shields',head:'Headwear',outfit:'Outfits',wings:'Wings',owned:'Owned'};const items=(tab==='owned'?(profile.inventory||[]).map(itemById).filter(Boolean):SHOP_ITEMS).filter(i=>tab==='owned'||(tab==='mystery'&&i.mysteryWeapon)||(['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab)||i.slot===tab);this.content.innerHTML=`<div class="armory-balance"><span>Equipment · collections</span><b>${profile.admin?'∞':profile.wallet} coins</b></div><nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav><div class="shop-items">${items.map(item=>{const owned=profile.inventory.includes(item.id),equipped=profile.equipment[item.slot]===item.id;return itemCard(item,`<button data-${owned?'equip':'buy'}="${item.id}" ${equipped||!owned&&!profile.admin&&profile.wallet<item.price?'disabled':''}>${equipped?'EQUIPPED':owned?'EQUIP':`BUY · ${item.price.toLocaleString('en-US')}`}</button>`);}).join('')||'<p>Your collection starts here. Earn coins by exploring the arena.</p>'}</div>`;void hydrateItemPreviews(this.content);}
+  renderShop(profile){
+   const tab=this.shopTab||'near',tabs={near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',shield:'Shields',head:'Headwear',outfit:'Outfits',wings:'Wings',owned:'Owned'};
+   const items=(tab==='owned'?(profile.inventory||[]).map(itemById).filter(Boolean):SHOP_ITEMS).filter(i=>
+    tab==='owned'||(tab==='mystery'&&i.mysteryWeapon)||
+    (['near','mid','far'].includes(tab)&&i.slot==='weapon'&&!i.mysteryWeapon&&weaponRangeClass(i)===tab)||i.slot===tab);
+   // Only genuine five-rank weapon families are variants. Distinct shields,
+   // headgear and exotics must never be folded into unrelated merchandise.
+   const ranked=/^(tide|frost|ember|storm|prism|bloom|nova|saber|whip|swatter|pan|planter|palm)-[1-5]$/;
+   const groups=new Map();
+   for(const item of items){
+    const match=item.slot==='weapon'&&item.id.match(ranked);
+    const key=match?'quality:'+match[1]:item.id;
+    if(!groups.has(key))groups.set(key,[]);
+    if(!groups.get(key).some(existing=>existing.id===item.id))groups.get(key).push(item);
+   }
+   this.shopVariantChoice??={};
+   const cards=[...groups].map(([key,variants])=>{
+    variants.sort((a,b)=>(a.tier||1)-(b.tier||1));
+    const selected=variants.find(v=>v.id===this.shopVariantChoice[key])||variants[0];
+    const owned=profile.inventory.includes(selected.id),equipped=profile.equipment[selected.slot]===selected.id;
+    const selection=variants.length>1?`<label class="shop-quality-picker" style="display:grid;gap:5px;margin:9px 0;font-size:12px">
+      QUALITY · SELECT PRICE
+      <select data-shop-variant="${escape(key)}" aria-label="Choose quality and price for ${escape(selected.name)}" style="width:100%;max-width:100%;padding:9px;background:#181a27;color:#fff;border:1px solid #747a92;border-radius:5px">
+      ${variants.map(v=>{const rarity=RARITIES.find(r=>r.id===v.rarity)||RARITIES[0];return `<option value="${escape(v.id)}" ${v.id===selected.id?'selected':''}>${escape(rarity.name)} · T${v.tier} — ${Number(v.price).toLocaleString('en-US')} Coins${profile.inventory.includes(v.id)?' · OWNED':''}</option>`;}).join('')}
+      </select></label>`:'';
+    const action=`<button data-${owned?'equip':'buy'}="${escape(selected.id)}" ${equipped||!owned&&!profile.admin&&profile.wallet<selected.price?'disabled':''}>${equipped?'EQUIPPED':owned?'EQUIP':`BUY · ${Number(selected.price).toLocaleString('en-US')}`}</button>`;
+    return itemCard(selected,selection+action);
+   });
+   this.content.innerHTML=`<div class="armory-balance"><span>Equipment · collections</span><b>${profile.admin?'∞':profile.wallet} coins</b></div><nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav><div class="shop-items">${cards.join('')||'<p>Your collection starts here. Earn coins by exploring the arena.</p>'}</div>`;
+   void hydrateItemPreviews(this.content);
+  }
 
   // SUPPORT sells one authoring entitlement, not chance-based capsules.
   // The merchant/checkout status is provided by the authenticated Worker.
