@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
+import {ARENA_RADIUS} from './shared/arena.js';
 
 // GM platform editor: local blue 3D manipulation preview followed by an
 // authoritative save. Never mutate physics / shared world during a drag.
@@ -24,7 +25,7 @@ export class PlatformDeleteEditor {
    // within that range, including the platform's non-negative base altitude.
    const p=proxy.position;
    const radius=Math.hypot(p.x,p.z);
-   if(radius>249){p.x*=249/radius;p.z*=249/radius;}
+   if(radius>ARENA_RADIUS){p.x*=ARENA_RADIUS/radius;p.z*=ARENA_RADIUS/radius;}
    p.y=THREE.MathUtils.clamp(p.y,0,60);
    this.draft.position=p.toArray().map(n=>+n.toFixed(3));
    if(this.gizmoMode==='scale'){
