@@ -174,7 +174,7 @@ export class NumberedWeaponEffects {
     const m=node.material;
     if(!m?.isShaderMaterial||m.userData.templeFireOpacity)return;
     if(!m.fragmentShader.includes('gl_FragColor'))return;
-    m.fragmentShader=m.fragmentShader.replace(/}\s*$/, '  gl_FragColor.a *= 0.6;\\n}');
+    m.fragmentShader=m.fragmentShader.replace(/}\s*$/, '  gl_FragColor.a *= 0.6;\n}');
     m.transparent=true;m.depthWrite=false;m.needsUpdate=true;
     m.userData.templeFireOpacity=.6;
    });
