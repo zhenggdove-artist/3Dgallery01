@@ -39,7 +39,7 @@ export const WEAPON_VFX=Object.freeze({
  saber:['azure-sweep','azure-sweep'],whip:['azure-sweep','arc-ray'],swatter:['azure-sweep','spiral-gale'],pan:['shockwave','energy-burst'],planter:['thorn-crown','golden-chain-rain'],palm:['shockwave','lightning-fire-tornado'],
  'white-cat':['plasma-bolt','pulse-beam'],'black-cat':['pulse-beam','charged-beam'],'calico-cat':['plasma-bolt','energy-burst'],giraffe:['azure-sweep','arc-ray'],goldfish:['tidal-surge','tidal-surge'],clam:['shockwave','tidal-surge'],accordion:['shockwave','spiral-gale'],fan:['azure-sweep','spiral-gale'],telephone:['arc-ray','energy-burst'],jellybrella:['arcane-missile','magic-barrier'],'chiang-token':['arcane-missile','astral-convergence']
 });
-export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
+export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.baseId||item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
  constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.waterStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.plantUltimates=new PlantUltimateEffects(scene);}
  create(id){this.created++;const fx=factories[id]();fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
@@ -107,7 +107,7 @@ export class WeaponVFX{
   if(!root)return fallback;
   const blade=root.userData?.blade;
   if(blade){
-   const tip=item?.id==='clam'?new THREE.Vector3(0,.68,.28):new THREE.Vector3(0,Number(blade.userData.muzzleHeight)||1.18,0);
+   const tip=(item?.baseId||item?.id)==='clam'?new THREE.Vector3(0,.68,.28):new THREE.Vector3(0,Number(blade.userData.muzzleHeight)||1.18,0);
    blade.updateWorldMatrix(true,false);
    return blade.localToWorld(tip);
   }
@@ -314,7 +314,7 @@ export class WeaponVFX{
   // Repeated server pulses refresh ONE pooled ring, never spawn duplicates.
   if(data.channel&&!data.fusionEcho&&item.family==='petal'&&root)this.restoration.pulse(root);
   const id=effectFor(item,data.ultimate),direction=new THREE.Vector3(...(data.direction||[0,0,1])).normalize(),origin=new THREE.Vector3(...data.origin),range=Math.max(1,data.range||4),end=data.aimPoint?new THREE.Vector3(...data.aimPoint):data.impactPoint?new THREE.Vector3(...data.impactPoint):origin.clone().addScaledVector(direction,range);
-  if(item.id==='accordion'&&!data.ultimate&&!data.fusionEcho){
+  if((item.baseId||item.id)==='accordion'&&!data.ultimate&&!data.fusionEcho){
    const notes=createOddEffect(THREE,{
     ...data,charge:0,origin:origin.toArray(),direction:direction.toArray(),range:3.2
    },{...item,pattern:'score'});
@@ -340,7 +340,7 @@ export class WeaponVFX{
    this.plantUltimates.play({...data,area:impactArea},item);return;
   }
   // Every ordinary staff shot, including beam, is a pulsing elemental orb.
-  if(isChannelStaff(item)&&item.id!=='clam'&&!data.channel&&(!data.ultimate||['lightning','beam'].includes(item.family))){
+  if(isChannelStaff(item)&&(item.baseId||item.id)!=='clam'&&!data.channel&&(!data.ultimate||['lightning','beam'].includes(item.family))){
    this.staffOrb(data,item,origin,direction);return;
   }
   // Ice staff summons the original Shattering Frostburst at the exact
@@ -391,27 +391,27 @@ export class WeaponVFX{
   }
   this.particleSkills.play(data,item,origin,end);
   // Dedicated point-cloud ultimates: do not summon a shared physical object.
-  if(data.ultimate&&(item.id==='accordion'||item.family==='petal'||item.id==='giraffe'))return;
+  if(data.ultimate&&((item.baseId||item.id)==='accordion'||item.family==='petal'||(item.baseId||item.id)==='giraffe'))return;
   // Orient actual 00GameDevs flame/tidal presets along the weapon muzzle.
   // The companion GPU streams travel from the player toward the target.
-  const spray=item.family==='fire'||item.family==='water'||item.family==='wave'||item.id==='goldfish'||item.id==='clam'&&data.ultimate;
+  const spray=item.family==='fire'||item.family==='water'||item.family==='wave'||(item.baseId||item.id)==='goldfish'||(item.baseId||item.id)==='clam'&&data.ultimate;
   if(spray&&!['white-cat','black-cat','calico-cat'].includes(item.id)){
    const fireJet=item.family==='fire',effect=fireJet?'flame-surge':'tidal-surge';
-   for(let i=0;i<(item.id==='clam'&&data.ultimate?10:data.ultimate?2:1);i++){
+   for(let i=0;i<((item.baseId||item.id)==='clam'&&data.ultimate?10:data.ultimate?2:1);i++){
     const jet=this.acquire(effect,{color:fireJet?'#ff6d2d':'#70e5ff',size:(data.ultimate?3.8:2.6)*(data.qualityScale||1),speed:2.6,density:1,quantity:10});
-    jet.fx.group.position.copy(origin).addScaledVector(direction,.4+i*(item.id==='clam'?1.1:2.4));
-    if(item.id==='clam'&&data.ultimate){const side=new THREE.Vector3(direction.z,0,-direction.x).normalize();jet.fx.group.position.addScaledVector(side,((i%5)-2)*.92);}
+    jet.fx.group.position.copy(origin).addScaledVector(direction,.4+i*((item.baseId||item.id)==='clam'?1.1:2.4));
+    if((item.baseId||item.id)==='clam'&&data.ultimate){const side=new THREE.Vector3(direction.z,0,-direction.x).normalize();jet.fx.group.position.addScaledVector(side,((i%5)-2)*.92);}
     jet.fx.group.quaternion.setFromUnitVectors(fireJet?new THREE.Vector3(0,1,0):new THREE.Vector3(0,0,1),direction);
     jet.fx.update(jet.fx.lifecycle.start||0);
-    jet.stopAt=item.id==='clam'?2.25:data.channel?1.35:data.ultimate?1.4:.75;
+    jet.stopAt=(item.baseId||item.id)==='clam'?2.25:data.channel?1.35:data.ultimate?1.4:.75;
    }
    return;
   }
   // Calico uses only its three-dimensional rainbow shot cloud. Do not layer
   // the former plasma bolt or electrical burst on top of the shotgun pellets.
-  if(item.id==='calico-cat')return;
+  if((item.baseId||item.id)==='calico-cat')return;
   if(data.ultimate&&item.family==='saber')this.saberImpact.play(data,origin,direction);
-  if(item.id==='black-cat'){
+  if((item.baseId||item.id)==='black-cat'){
    if(this.snipers.length>=4){
     const old=this.snipers.shift();
     old.root.removeFromParent();
