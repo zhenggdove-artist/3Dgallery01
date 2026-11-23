@@ -649,18 +649,18 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
 #vitals #shield-readout[hidden]{display:none!important;}
 #vitals .shield-heart{display:block;width:23px;height:23px;flex:0 0 23px;filter:drop-shadow(0 0 3px #3eaeffba);}
 #vitals #player-level,#vitals #hp-label,#vitals #shield-label{
- font-family:Arial,'Noto Sans TC',sans-serif!important;font-size:clamp(13px,1.4vw,16px)!important;
- font-weight:900!important;line-height:1.25;color:#fff!important;white-space:nowrap;
- -webkit-text-stroke:.7px #182337;paint-order:stroke fill;
- text-shadow:1px 1px 0 #111a32,-1px 1px 0 #111a32,1px -1px 0 #111a32,-1px -1px 0 #111a32,0 2px 4px #000c;
+ font-family:Arial,'Noto Sans TC',sans-serif!important;font-size:clamp(12px,1.35vw,15px)!important;
+ font-weight:700!important;line-height:1.25;color:#f7f9fd!important;white-space:nowrap;
+ -webkit-text-stroke:.12px #182337;paint-order:stroke fill;
+ text-shadow:0 1px 2px #000b;
 }
-#vitals #player-level{left:0;top:-20px;font-size:15px!important;}
+#vitals #player-level{left:0;top:-20px;font-size:14px!important;}
 #vitals #shield-label{color:#abedff!important;}
 #vitals #wallet{top:67px;left:52px;}
 @media(max-width:720px),(pointer:coarse){
  #vitals{min-width:181px;max-width:min(210px,calc(100vw - 20px));padding-right:5px;}
  #vitals #vital-readouts{left:52px;top:7px;}
- #vitals #player-level,#vitals #hp-label,#vitals #shield-label{font-size:13px!important;}
+ #vitals #player-level,#vitals #hp-label,#vitals #shield-label{font-size:12px!important;}
  #vitals #wallet{font-size:19px!important;top:68px;}
 }
 @media(max-width:600px){#vitals{top:max(71px,env(safe-area-inset-top) + 62px);}}
