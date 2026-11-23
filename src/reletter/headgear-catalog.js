@@ -36,7 +36,7 @@ const describe=bonuses=>Object.entries(bonuses).map(([k,v])=>
 HEADGEAR.push(...creatureHeads.map(([design,name,color,tier,bonuses,proc])=>({
  id:'hat-'+design,name,design,color,slot:'head',family:'headgear',tier,
  price:[0,320,720,1350,2300,3600][tier],bonuses,proc,
- description:describe(bonuses)+(proc?' · On hit: '+proc+'.':'')
+ description:describe(bonuses)+(proc?' · Charged hits apply '+proc+'.':'')
 })));
 
 export const headgearById=id=>HEADGEAR.find(h=>h.id===id);
