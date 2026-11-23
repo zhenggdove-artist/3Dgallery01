@@ -35,8 +35,8 @@ const join=await call('/api/join',{name:guest,color:'#43b59a'});
 assert.equal(join.role,'fighter');
 const token=join.token;
 assert.ok(token);
-assert.equal(join.self.profile.equipment.weapon,'white-cat','new players must spawn equipped with the SMG');
-assert.ok(join.world.profile.inventory.includes('white-cat'),'the starter SMG must be owned');
+assert.equal(join.self.profile.equipment.weapon,'saber-2','new players must spawn equipped with the green lightsaber');
+assert.ok(join.world.profile.inventory.includes('saber-2'),'the starter green lightsaber must be owned');
 const deniedGmHistory=await call('/api/gm/presence',undefined,token,{expectedStatus:403});
 assert.match(deniedGmHistory.error,/GM only/i,'regular players may not view private GM login history');
 if(process.env.TEMPLE_TEST_ADMIN_KEY){
