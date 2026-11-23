@@ -88,7 +88,7 @@ export function renderOriginalBag(ui,profile){
   <div>Double tap to assign a selected shortcut (1/2/3). ${(profile.quickSlots||[]).map((id,j)=>id===i.id?'SLOT '+(j+1):'').filter(Boolean).join(' · ')}</div>`:'';
  ui.content.querySelector('#bag-detail').innerHTML=`<strong>${esc(f.title)}</strong> <span>${esc(i.category||i.rarity)}</span>
   <div>${esc(explainEquipment(i,record))}</div>${description}
-  ${comfort?'':`<div>Next Fusion: +${completed+1} · Success Chance: ${(odds*100).toFixed(5).replace(/0+$/,'').replace(/\\.$/,'')}% · Failure consumes the ingredient but does not increase fusion level or lower future odds</div>`}
+  ${comfort?'':`<div>Next Fusion: +${completed+1} · Success Chance: ${(odds*100).toFixed(5).replace(/0+$/,'').replace(/\.$/,'')}% · Failure consumes the ingredient but does not increase fusion level or lower future odds</div>`}
   ${f.traits.length&&!comfort?`<div class="weapon-traits">${f.traits.map(t=>`<span class="weapon-trait" title="${esc(t.details)}">${esc(t.name)} · ${esc(t.details)}</span>`).join('')}</div>`:''}
   ${f.bonuses.length&&!comfort?`<div class="weapon-bonuses">${f.bonuses.map(x=>`<span>${esc(x)}</span>`).join(' · ')}</div>`:''}
   <div>${comfort?'Double tap to assign':equipped(i,index>=0?index:null)?'Equipped · Double tap to remove':'Double tap to equip'}
