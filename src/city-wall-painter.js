@@ -77,8 +77,9 @@ export class CityWallPainter{
  }
  down(event){
   if(!this.active||this.pointer!==null)return;
-  this.consume(event);
+  // Reserve middle mouse for GM camera orbit, not paint input swallowing.
   if(event.button!==0&&event.pointerType==='mouse')return;
+  this.consume(event);
   const hit=this.pick(event);
   if(!hit){this.ui.toast('Aim at a nearby building wall');return;}
   this.pointer=event.pointerId;
@@ -110,9 +111,9 @@ export class CityWallPainter{
   return true;
  }
  move(event){
-  if(!this.active)return;
+  if(!this.active||event.pointerId!==this.pointer||!this.stroke)return;
+  if(event.pointerType==='mouse'&&(event.buttons&4))return;
   this.consume(event);
-  if(event.pointerId!==this.pointer||!this.stroke)return;
   const hit=this.pick(event);
   if(!hit||hit.lotId!==this.stroke.lotId||hit.wall!==this.stroke.wall){
    this.finish();
@@ -127,8 +128,9 @@ export class CityWallPainter{
  }
  up(event){
   if(!this.active&&this.pointer===null)return;
-  this.consume(event);
+  if(event.pointerType==='mouse'&&event.button!==0)return;
   if(this.pointer!==event.pointerId)return;
+  this.consume(event);
   try{if(this.canvas.hasPointerCapture(event.pointerId))this.canvas.releasePointerCapture(event.pointerId);}catch{}
   this.pointer=null;this.finish();
  }
