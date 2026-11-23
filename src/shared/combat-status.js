@@ -50,7 +50,16 @@ export function applyElementalHit(target,source,weapon,now,scale=1){
  const family=weapon.family;
  if(family==='lightning'||['electric','lightning','thunder'].includes(weapon.element))
    return put('paralysis',1500,0,5000);
- if(family==='ice'){delete e.slow;return put('freeze',3000,0,6000);}
+ if(family==='ice'){
+  if((locks.freeze||0)<=now){
+   delete e.slow;
+   return put('freeze',3000,0,6000);
+  }
+  // Freeze is a per-target 6s proc lock, NOT a 6s weapon cooldown.
+  // Every other charged frost contact can still slow movement by 30%.
+  e.slow={owner,power:.30*strength,until:now+Math.round(3000*strength),next:now+1000};
+  return 'slow';
+ }
  // Coconut palm ultimate binds legs for three seconds, independently
   // rate-limited to once per six seconds. The player can still aim and attack.
   if(family==='palm'&&weapon.id?.startsWith('palm-')&&weapon.ultimateHit)
