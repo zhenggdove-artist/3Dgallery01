@@ -874,3 +874,10 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
 
 /* Quick healing is an independent simultaneous touch, not browser zoom. */
 #comfort-hotbar,#comfort-hotbar .comfort-quick-slot{touch-action:none!important;overscroll-behavior:contain;-webkit-user-select:none;user-select:none}
+
+/* Authenticated identity and independent spectator free-camera controls. */
+#guest-form[hidden],#gm-spectator-test-exit[hidden],#spectator-fly-controls[hidden]{display:none!important}
+#gm-spectator-test-exit{position:fixed;top:max(12px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:95;pointer-events:auto;touch-action:manipulation;background:#f3e7f4;color:#422943;border:2px solid #7e4c93;border-radius:8px;font:700 12px Arial,sans-serif;padding:10px 16px;white-space:nowrap;max-width:95vw}
+#spectator-fly-controls{display:none;position:fixed;left:max(14px,env(safe-area-inset-left));bottom:max(143px,env(safe-area-inset-bottom) + 125px);z-index:35;pointer-events:auto;gap:8px;flex-direction:column}
+#spectator-fly-controls button{min-width:50px;min-height:44px;touch-action:none!important;user-select:none;-webkit-user-select:none;background:#f3d8e9;color:#432d55;border:1px solid #c8a5cf;border-radius:10px;font:bold 12px Arial,sans-serif}
+@media(pointer:coarse){body.spectator #spectator-fly-controls:not([hidden]){display:flex}}
