@@ -184,37 +184,38 @@ const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>contro
  role:()=>self?.role,ui,send:sendAction,
  beforeStart:()=>{gun.end();ui.emit('attack-cancel');}});
 
-// One shared, capture-phase GM MIDDLE-MOUSE orbit across all scene-editing
-// tools. The normal left-button picking/gizmos/painting continue unchanged.
-// Pointer capture keeps orbit responsive when dragging off the canvas.
-let gmMiddleOrbit=null;
-const canGmMiddleOrbit=()=>!!self?.profile?.admin&&!!controller&&
- !!(buildPlacement||wallPainter.active||platformDelete.active||artEditor.selected||
-  ['gm','editor','build'].includes(ui.panelName));
+// Shared capture-phase MIDDLE-MOUSE orbit for player BUILD/PAINT and
+// GM disc / artwork editing. Left-button picking, painting, and gizmos are
+// untouched. Pointer capture continues the orbit beyond the canvas edge.
+let editMiddleOrbit=null;
+const canEditMiddleOrbit=()=>!!controller&&(
+ !!(buildPlacement||wallPainter.active||ui.panelName==='build')||
+ (!!self?.profile?.admin&&!!(platformDelete.active||artEditor.selected||
+  ['gm','editor'].includes(ui.panelName))));
 canvas.addEventListener('pointerdown',e=>{
- if(e.button!==1||!canGmMiddleOrbit())return;
+ if(e.button!==1||!canEditMiddleOrbit())return;
  e.preventDefault();e.stopImmediatePropagation();
- gmMiddleOrbit={id:e.pointerId,x:e.clientX,y:e.clientY};
+ editMiddleOrbit={id:e.pointerId,x:e.clientX,y:e.clientY};
  try{canvas.setPointerCapture(e.pointerId);}catch{}
 },{capture:true});
 canvas.addEventListener('pointermove',e=>{
- if(gmMiddleOrbit?.id!==e.pointerId)return;
+ if(editMiddleOrbit?.id!==e.pointerId)return;
  e.preventDefault();e.stopImmediatePropagation();
- const dx=e.clientX-gmMiddleOrbit.x,dy=e.clientY-gmMiddleOrbit.y;
- gmMiddleOrbit.x=e.clientX;gmMiddleOrbit.y=e.clientY;
+ const dx=e.clientX-editMiddleOrbit.x,dy=e.clientY-editMiddleOrbit.y;
+ editMiddleOrbit.x=e.clientX;editMiddleOrbit.y=e.clientY;
  controller?.orbitEditCamera(dx,dy);
 },{capture:true});
 const endGmOrbit=e=>{
- if(gmMiddleOrbit?.id!==e.pointerId)return;
+ if(editMiddleOrbit?.id!==e.pointerId)return;
  e.preventDefault();e.stopImmediatePropagation();
- gmMiddleOrbit=null;
+ editMiddleOrbit=null;
  try{if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);}catch{}
 };
 canvas.addEventListener('pointerup',endGmOrbit,{capture:true});
 canvas.addEventListener('pointercancel',endGmOrbit,{capture:true});
-canvas.addEventListener('lostpointercapture',e=>{if(gmMiddleOrbit?.id===e.pointerId)gmMiddleOrbit=null;},{capture:true});
-canvas.addEventListener('mousedown',e=>{if(e.button===1&&canGmMiddleOrbit())e.preventDefault();},{capture:true});
-canvas.addEventListener('auxclick',e=>{if(e.button===1&&canGmMiddleOrbit())e.preventDefault();},{capture:true});
+canvas.addEventListener('lostpointercapture',e=>{if(editMiddleOrbit?.id===e.pointerId)editMiddleOrbit=null;},{capture:true});
+canvas.addEventListener('mousedown',e=>{if(e.button===1&&canEditMiddleOrbit())e.preventDefault();},{capture:true});
+canvas.addEventListener('auxclick',e=>{if(e.button===1&&canEditMiddleOrbit())e.preventDefault();},{capture:true});
 
 const portraitViewport=new EquipmentPortraitViewport();
 function refreshEquipmentPortrait(){
