@@ -12,9 +12,10 @@ test('server validates fully charged ultimates for melee, odd weapons and first-
  for(const id of ['pan-1','whip-1','telephone','goldfish','fan','accordion','jellybrella','white-cat','black-cat','calico-cat']){
   const world=createInitialWorld(NOW),profile=ensureProfile(world,actor.key,actor.name,actor.color,NOW);
   profile.inventory.push(id);profile.equipment.weapon=id;
+  if(id==='black-cat')profile.fusion[id]={effects:['ember-1']};
   const weapon=itemById(id),pressed=NOW+1000;
-  assert.equal(applyAction(world,actor,{action:'attack',phase:'charge',...(id==='black-cat'?{scoped:true}:{})},{now:pressed}).charging,true,id);
-  const result=applyAction(world,actor,{action:'attack',direction:[0,0,1],charge:1,...(id==='black-cat'?{scoped:true}:{})},
+  assert.equal(applyAction(world,actor,{action:'attack',phase:'charge',...(id==='black-cat'?{aimMode:'shoulder'}:{})},{now:pressed}).charging,true,id);
+  const result=applyAction(world,actor,{action:'attack',direction:[0,0,1],charge:1,...(id==='black-cat'?{aimMode:'shoulder'}:{})},
    {now:pressed+weapon.chargeMs+50});
   assert.equal(result.error,undefined,id+': '+result.error);
   assert.equal(result.attackEvent?.ultimate,true,id+' should cast an ultimate');
