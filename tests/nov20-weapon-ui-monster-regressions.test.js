@@ -42,11 +42,11 @@ test('goldfish 115ms water orbs, shoulder aim and exactly half Cat SMG normal ra
  assert.match(main,/if\(weapon\?\.id==='goldfish'\)\{/);
  assert.match(effect,/goldfishBubble\(event\)/);
 });
-test('ice freezes three seconds with five-second trigger lock and palm ultimate binds for three seconds every six',()=>{
+test('ice freezes three seconds with six-second trigger lock and palm ultimate binds for three seconds every six',()=>{
  const caster={key:'artist'},target={hp:100,maxHp:100,effects:{},effectLocks:{}};
  assert.equal(applyElementalHit(target,caster,equipmentById('frost-1'),10000),'freeze');
  assert.equal(target.effects.freeze.until,13000);
- assert.equal(target.effectLocks.freeze,15000);
+ assert.equal(target.effectLocks.freeze,16000);
  assert.equal(applyElementalHit(target,caster,equipmentById('frost-1'),12000),null);
  assert.equal(target.effects.freeze.until,13000);
  const palm={hp:100,maxHp:100,effects:{},effectLocks:{}},weapon=equipmentById('palm-3');
