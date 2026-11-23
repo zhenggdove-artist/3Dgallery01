@@ -853,7 +853,8 @@ export function applyMyArtworkLabelStyle(world,actor,body,now=Date.now()){
  }
  world.revision=(world.revision||0)+1;
  return {notice:'Nameplate style saved to '+updates.length+' of your artworks',
-  updatedCount:updates.length,appliedIds:updates.map(({record})=>record.id)};
+  updatedCount:updates.length,appliedIds:updates.map(({record})=>record.id),
+  revisions:Object.fromEntries(updates.map(({record,layout})=>[record.id,layout.revision]))};
 }
 
 export function setArtworkLayout(world,profile,body,now=Date.now()){
