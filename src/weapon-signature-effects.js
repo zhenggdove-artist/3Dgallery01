@@ -362,26 +362,49 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
   fish.scale.setScalar(GOLDFISH_FISH_SCALE*quality);
   group.position.copy(origin);group.quaternion.copy(orientation);group.scale.setScalar(1);
   const flightEntry=this.add(group,duration,(age,world,dt=0)=> {
+   if(group.userData.fishVhsTime)group.userData.fishVhsTime.value=age;
    const progress=Math.min(1,age/duration);
    const travel=(event.range||32)*progress;
    const track=world?.goldfishFlights?.find(v=>v.id===event.persistentAttackId);
    if(track){
     group.userData.gotServerTrack=true;
     for(const index of track.consumed||[])
-     if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT)
+     if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT){
+      if(!group.userData.consumedFish.has(index))
+       group.userData.goldfishBubbleBursts.births[index]=age;
       group.userData.consumedFish.add(index);
+     }
    }else if(group.userData.gotServerTrack){
     // Server flight finished (including all thirty impacts): do not keep
     // simulating a local school whose authoritative collider is gone.
     group.scale.setScalar(0);return;
    }
-   const target=track?.position?vec(track.position):
-    origin.clone().addScaledVector(direction,travel);
+   const motion=group.userData.goldfishMotion;
+   let target;
+   if(track?.position){
+    const serverTime=Number(world?.serverTime)||Date.now();
+    // Derive velocity from snapshots and project only a bounded fraction
+    // of packet delay. Exponential visual correction avoids stepped motion.
+    if(serverTime>motion.sampleAt){
+     const measured=vec(track.position);
+     if(motion.sampleAt>0){
+      const seconds=(serverTime-motion.sampleAt)/1000;
+      if(seconds>.001){
+       const measuredVelocity=measured.clone().sub(motion.position).divideScalar(seconds);
+       measuredVelocity.clampLength(0,Math.max(3,(event.range||32)/duration*2));
+       motion.velocity.lerp(measuredVelocity,.45);
+      }
+     }
+     motion.position.copy(measured);
+     motion.sampleAt=serverTime;motion.receivedAt=performance.now();
+    }
+    const ahead=Math.max(0,Math.min(.10,(performance.now()-motion.receivedAt)/1000));
+    target=motion.position.clone().addScaledVector(motion.velocity,ahead);
+   }else target=origin.clone().addScaledVector(direction,travel);
    const desired=track?.direction?vec(track.direction).normalize():direction;
-   // Smooth snapshots but never reset the fish to its initial straight line.
    if(age<.05)group.position.copy(target);
-   else group.position.lerp(target,Math.min(1,Math.max(.08,dt*24)));
-   group.quaternion.slerp(qdir(desired),Math.min(1,Math.max(.08,dt*20)));
+   else group.position.lerp(target,1-Math.exp(-Math.max(0,dt)*13));
+   group.quaternion.slerp(qdir(desired),1-Math.exp(-Math.max(0,dt)*12));
    // The fish is authored facing local +Z; qdir already maps +Z to travel.
    // Any additional 90-degree yaw makes the nose point LEFT. Keep only swim sway.
    const yaw=Math.sin(age*8)*.045;
@@ -402,6 +425,24 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
     transforms[i].compose(offset,rotation,scale);
     tailTransforms[i].makeRotationY(Math.sin(age*19+i*2.399963)*.74);
     tailTransforms[i].premultiply(tail.matrix).premultiply(fish.matrix);
+   }
+   // Colliding fish burst into a short, expanding ring of water bubbles.
+   // Each fish has an independent birth timestamp in a single GPU cloud.
+   const bursts=group.userData.goldfishBubbleBursts;
+   if(bursts){
+    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
+     const elapsed=age-bursts.births[i],alive=elapsed>=0&&elapsed<.48;
+     const [x,y,z]=GOLDFISH_SCHOOL_OFFSETS[i];
+     for(let j=0;j<bursts.perFish;j++){
+      const k=(i*bursts.perFish+j)*3;
+      if(!alive){bursts.positions[k]=bursts.positions[k+1]=bursts.positions[k+2]=1e5;continue;}
+      const a=j*2.399963+i*.17,radius=.08+elapsed*1.5;
+      bursts.positions[k]=x+Math.cos(a)*radius;
+      bursts.positions[k+1]=y+Math.sin(a*1.7)*radius*.8+elapsed*.32;
+      bursts.positions[k+2]=z+Math.sin(a)*radius;
+     }
+    }
+    bursts.cloud.geometry.attributes.position.needsUpdate=true;
    }
    // Position the blue gradient cloud behind each fish and fan the sparks
    // outward with a phase-staggered tail wag, fading into empty water.
