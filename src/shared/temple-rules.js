@@ -1006,6 +1006,7 @@ function attack(world,profile,actor,body,context,now){
   if((weapon.baseId||weapon.id)==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
    if((weapon.baseId||weapon.id)==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
    scaleUltimateFootprint(stats,weapon,quality);
+   if(blackCat)stats.range=SNIPER_RANGE; // Piercing rainbow spiral must travel the FULL arena, not the 60% AoE distance.
    // Keep the travelling school, server sweep collider and client VFX on
    // one identical 50%-shorter trajectory; do not shorten ordinary bubbles.
    if((weapon.baseId||weapon.id)==='goldfish'&&stats.ultimate)stats.range=+(stats.range*GOLDFISH_TRAVEL_SCALE).toFixed(3);
