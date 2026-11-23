@@ -1855,7 +1855,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     // No uncharged weapon may bypass the 8-hit baseline through a lucky
     // crit or a ten-ball shotgun burst. The pellets remain individually
     // damaging, with a full 5x+ per-pellet random damage window.
-    const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?150:96):
+    const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?42:96):
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
     const shotgunPellet=!fx.echo&&isPlayer&&weapon.pattern==='scatter'&&pellet!==null;
     const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage)*(frostProc?1.5:1);
