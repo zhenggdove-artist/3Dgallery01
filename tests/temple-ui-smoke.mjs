@@ -32,32 +32,6 @@ try{
  await page.locator('#guest-enter').click();
  await page.locator('#hud').waitFor({state:'visible'});
  await page.waitForFunction(()=>window.templeTest?.controller()&&JSON.parse(window.render_game_to_text()).connected);
- // Browser geometry regression: blue-heart shield stat never overlaps HP, wallet or LV.
- // Check full desktop, portrait phones and narrow/landscape viewports.
- for(const [width,height] of [[1280,800],[390,844],[320,568],[844,390]]){
-  await page.setViewportSize({width,height});
-  const layout=await page.evaluate(()=>{
-   const ui=templeTest.ui,profile=ui.world.profile;
-   ui.world={...ui.world,profile:{...profile,
-    equipment:{...profile.equipment,shield:'shield-1'},
-    shield:{item:'shield-1',hp:12,maxHp:20,lastHit:0}}};
-   ui.refreshHUD();
-   const get=s=>{const el=document.querySelector(s),r=el?.getBoundingClientRect();
-    return r?{left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}:null;};
-   return {hp:get('#hp-label'),shield:get('#shield-label'),blue:get('#shield-readout .shield-heart'),
-    level:get('#player-level'),wallet:get('#wallet'),shown:!document.querySelector('#shield-readout').hidden};
-  });
-  const overlaps=(a,b)=>a&&b&&Math.min(a.right,b.right)>Math.max(a.left,b.left)&&
-   Math.min(a.bottom,b.bottom)>Math.max(a.top,b.top);
-  assert.ok(layout.shown,'Shield heart absent at '+width+'x'+height);
-  assert.ok(['hp','shield','blue','level','wallet'].every(key=>layout[key]?.width>0),
-   'Missing vital readout at '+width+'x'+height+': '+JSON.stringify(layout));
-  for(const [a,b] of [['hp','shield'],['hp','blue'],['shield','wallet'],['blue','wallet'],['level','hp']])
-   assert.ok(!overlaps(layout[a],layout[b]),'Overlapping '+a+' and '+b+' at '+width+'x'+height+': '+JSON.stringify(layout));
-  await page.screenshot({path:output+'/shield-hud-'+width+'x'+height+'.png'});
- }
- await page.setViewportSize({width:1280,height:800});
-
  // SHOP must display the complete 3D equipment models in the FIRST frame,
  // not Promise URLs, broken images, or the deleted generic RELETTER glyphs.
  await page.evaluate(()=>templeTest.ui.openPanel('shop'));
@@ -114,6 +88,33 @@ try{
  assert.ok(await page.locator('#bag-items [data-bag-item="white-cat"]').count()>0,'The starter SMG must appear in mid-range weapons');
  await page.screenshot({path:output+'/weapons.png'});
  await page.locator('#panel-close').click();
+ // Browser geometry regression: blue-heart shield stat never overlaps HP, wallet or LV.
+ // Check full desktop, portrait phones and narrow/landscape viewports.
+ for(const [width,height] of [[1280,800],[390,844],[320,568],[844,390]]){
+  await page.setViewportSize({width,height});
+  const layout=await page.evaluate(()=>{
+   const ui=templeTest.ui,profile=ui.world.profile;
+   ui.world={...ui.world,profile:{...profile,
+    equipment:{...profile.equipment,shield:'shield-1'},
+    shield:{item:'shield-1',hp:12,maxHp:20,lastHit:0}}};
+   ui.refreshHUD();
+   const get=s=>{const el=document.querySelector(s),r=el?.getBoundingClientRect();
+    return r?{left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}:null;};
+   return {hp:get('#hp-label'),shield:get('#shield-label'),blue:get('#shield-readout .shield-heart'),
+    level:get('#player-level'),wallet:get('#wallet'),shown:!document.querySelector('#shield-readout').hidden};
+  });
+  const overlaps=(a,b)=>a&&b&&Math.min(a.right,b.right)>Math.max(a.left,b.left)&&
+   Math.min(a.bottom,b.bottom)>Math.max(a.top,b.top);
+  assert.ok(layout.shown,'Shield heart absent at '+width+'x'+height);
+  assert.ok(['hp','shield','blue','level','wallet'].every(key=>layout[key]?.width>0),
+   'Missing vital readout at '+width+'x'+height+': '+JSON.stringify(layout));
+  for(const [a,b] of [['hp','shield'],['hp','blue'],['shield','wallet'],['blue','wallet'],['level','hp']])
+   assert.ok(!overlaps(layout[a],layout[b]),'Overlapping '+a+' and '+b+' at '+width+'x'+height+': '+JSON.stringify(layout));
+  await page.screenshot({path:output+'/shield-hud-'+width+'x'+height+'.png'});
+ }
+ await page.setViewportSize({width:1280,height:800});
+
+
 
  // World pickups must contain the full 3D weapon mesh, never a billboard.
  const weaponMesh=await page.evaluate(()=>{
