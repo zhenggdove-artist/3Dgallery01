@@ -47,7 +47,8 @@ test('ice freezes three seconds with six-second trigger lock and palm ultimate b
  assert.equal(applyElementalHit(target,caster,equipmentById('frost-1'),10000),'freeze');
  assert.equal(target.effects.freeze.until,13000);
  assert.equal(target.effectLocks.freeze,16000);
- assert.equal(applyElementalHit(target,caster,equipmentById('frost-1'),12000),null);
+ assert.equal(applyElementalHit(target,caster,equipmentById('frost-1'),12000),'slow');
+ assert.equal(target.effects.slow.power,.3);
  assert.equal(target.effects.freeze.until,13000);
  const palm={hp:100,maxHp:100,effects:{},effectLocks:{}},weapon=equipmentById('palm-3');
  assert.equal(applyElementalHit(palm,caster,{...weapon,ultimateHit:true},20000),'root');
