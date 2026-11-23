@@ -9,6 +9,17 @@ export function monsterPosition(rng=Math.random,others=[]){
   const p=[Math.cos(angle)*distance,0,Math.sin(angle)*distance];
   if(!insideArtSanctuary(p)&&Math.hypot(p[0],p[2])<=ARENA_RADIUS-2&&others.every(m=>Math.hypot(p[0]-m.position[0],p[2]-m.position[2])>12))return p;
  }
+ // Deterministic recovery for repeated or constrained RNG: ten groups
+ // must not stack on the same site even when the random sampler fails.
+ for(let ring=0;ring<3;ring++){
+  const r=76+ring*4,slots=MONSTER_PACK_SIZE*3;
+  for(let offset=0;offset<slots;offset++){
+   const a=(others.length+offset)*Math.PI*2/slots;
+   const p=[Math.cos(a)*r,0,Math.sin(a)*r];
+   if(!insideArtSanctuary(p)&&Math.hypot(p[0],p[2])<=ARENA_RADIUS-2&&
+      others.every(m=>Math.hypot(p[0]-m.position[0],p[2]-m.position[2])>12))return p;
+  }
+ }
  const a=others.length*Math.PI*2/MONSTER_PACK_SIZE,r=76;
  return [Math.cos(a)*r,0,Math.sin(a)*r];
 }
