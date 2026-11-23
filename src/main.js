@@ -91,7 +91,13 @@ let healVisualSeq=0,lastHealVisualAt=0;
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
 let pendingAInteraction=null,chargeDelayTimer=null,beamStartTimer=null,nextChargeRetryAt=0;
-let sniperScopeAtPress=false; // Black Cat A-holds may charge only when already scoped.
+let sniperScopeAtPress=false; // Also permits fusion-enabled shoulder-only charged blasts.
+function hasBlackCatFusionUltimate(){
+ return (world?.profile?.fusion?.['black-cat']?.effects||[]).some(id=>{
+  const source=itemById(id);
+  return source?.slot==='weapon'&&source.id!=='black-cat'&&Number(source.chargeMs)>0;
+ });
+}
 // Begin charging after the 500ms tap threshold without relying on render FPS.
 // After a stun/rejected request, retry only while the A/Q button is still held.
 function clearChargeDelay(){
@@ -122,9 +128,12 @@ function startHeldCharge(){
  // ultimate must remain chargeable ONLY before entering shoulder mode.
  if(itemById(world?.profile?.equipment?.weapon)?.id==='goldfish'&&gun.mode!==0)return;
  // Never begin a Black Cat charge while outside the actual sniper scope.
- if(itemById(world?.profile?.equipment?.weapon)?.id==='black-cat'&&(!sniperScopeAtPress||gun.mode!==2))return;
+ if(itemById(world?.profile?.equipment?.weapon)?.id==='black-cat'&&
+    (!sniperScopeAtPress||(gun.mode!==2&&!(gun.mode===1&&hasBlackCatFusionUltimate()))))return;
  chargeStarted=performance.now();
- chargeRequest=sendAction('attack',{phase:'charge',...(sniperScopeAtPress?{scoped:true}:{})}).then(result=>{
+ chargeRequest=sendAction('attack',{phase:'charge',...(sniperScopeAtPress?{
+  scoped:gun.mode===2,aimMode:gun.mode===1?'shoulder':'scope'
+ }:{})}).then(result=>{
   if(!result?.charging&&attackHeld){
    chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;
   }
@@ -543,7 +552,8 @@ ui.addEventListener('attack-start',()=>{
  if(attackHeld||staffChannel)return;
  const weapon=itemById(world?.profile?.equipment?.weapon);
  // Record scope at key-down, so holding A before aiming can never charge/fire.
- sniperScopeAtPress=weapon?.id==='black-cat'&&gun.mode===2;
+ sniperScopeAtPress=weapon?.id==='black-cat'&&
+  (gun.mode===2||(gun.mode===1&&hasBlackCatFusionUltimate()));
  // A tap picks up nearby items; holding must still charge any weapon except unscoped Black Cat.
  // For first-person guns a tap cycles the camera, while a hold charges.
  pendingAInteraction=null;
@@ -601,6 +611,15 @@ ui.addEventListener('attack-release',async()=>{
   return;
  }
  if(weapon?.id==='black-cat'&&!wasScopedAtPress){gun.cycle();return;}
+ // A fused Black Cat can launch its rainbow spiral only after a complete
+ // shoulder-view charge. Short taps still change camera; incomplete holds
+ // cannot accidentally shoot a high-damage normal rifle round from A.
+ if(weapon?.id==='black-cat'&&gun.mode===1&&heldMs>=STAFF_TAP_MAX_MS){
+  if(pending)await pending;
+  if(charge>=1&&hasBlackCatFusionUltimate())await performAttack(1);
+  else void sendAction('attack',{phase:'channel-stop'});
+  return;
+ }
  if(weapon?.firstPerson&&heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
  if(heldMs>=STAFF_TAP_MAX_MS&&pending)await pending;
  if(isChannelStaff(weapon)){
@@ -847,7 +866,8 @@ function performAttack(charge=0,phase=null){
  if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
  const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
  // Centralized guard covers UI A/Q, canvas clicks, auto-charge and fusion.
- if(item.id==='black-cat'&&gun.mode!==2)return;
+ if(item.id==='black-cat'&&
+   (gun.mode===0||(gun.mode===1&&charge>=1&&!hasBlackCatFusionUltimate())))return;
  if(item.id==='goldfish'&&gun.mode!==1&&charge<1)return;
  // Unscoped goldfish ultimate follows the camera forward ray; an 11m
  // third-person muzzle intersection can otherwise aim behind the avatar.
@@ -857,7 +877,9 @@ function performAttack(charge=0,phase=null){
  const direction=goldfishUltimate?cameraAimDirection(camera).toArray():
   shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
-  ...(item.id==='black-cat'?{scoped:true}:{}),
+  ...(item.id==='black-cat'?{
+   scoped:gun.mode===2,aimMode:gun.mode===1?'shoulder':'scope'
+  }:{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
 }
 function performInteract(target=null){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=target||arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
