@@ -19,7 +19,7 @@ test('three locally drawn dollar stacks have exact prices, denominations and hea
  assert.deepEqual(COMFORT_ITEMS.map(v=>v.price),[1000,2000,5000]);
  assert.deepEqual(COMFORT_ITEMS.map(v=>v.healFraction),[.3,.5,1]);
  assert.deepEqual(COMFORT_ITEMS.map(v=>v.denomination),[20,50,100]);
- assert.ok(COMFORT_ITEMS.every(v=>v.slot==='consumable'&&v.category==='撫慰心靈的物品'&&v.description==='再給我來多一點吧！'));
+ assert.ok(COMFORT_ITEMS.every(v=>v.slot==='consumable'&&v.category==='Comfort for the Soul'&&v.description==='Give me more!'));
  assert.ok(COMFORT_ITEMS.every(v=>SHOP_ITEMS.includes(v)));
  const art=COMFORT_ITEMS.map(v=>decodeURIComponent(comfortCashImage(v).split(',')[1]));
  assert.ok(art.every(svg=>svg.includes('<svg')&&svg.includes('UNITED STATES OF AMERICA')));
@@ -105,9 +105,9 @@ test('desktop and touch quickbar, grouped money stacks and shop quantity emit th
  assert.match(ui,/\/\^Digit\[123\]\$\//); // digit shortcut dispatch
  assert.match(ui,/data-shop-quantity/);
  assert.match(ui,/action:'buy',itemId:button\.dataset\.buy,quantity/);
- assert.match(ui,/comfort:'撫慰心靈的物品'/);
+ assert.match(ui,/comfort:'Comfort for the Soul'/);
  assert.match(bag,/action:'assign-consumable'/);
- assert.match(bag,/class="comfort-bag-stack"/);
+ assert.match(bag,/groupInventoryStacks\(list,recordAt\)/);
  assert.match(main,/sendAction\('use-consumable',\{slot\}\)/);
  assert.match(css,/\.comfort-quick-slot\.depleted/);
 });

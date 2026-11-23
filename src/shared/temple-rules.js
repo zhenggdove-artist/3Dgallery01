@@ -732,7 +732,7 @@ function buy(world,profile,body){
  if(!spend(profile,total,world))return {error:'Not enough coins'};
  for(let i=0;i<quantity;i++)appendInventoryInstance(profile,item.id);
  profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';
- return {notice:`Purchased ${item.name} ×${quantity} · ${total} coins`,
+ return {notice:`PURCHASE SUCCESSFUL · ${item.name} ×${quantity} · ${total} coins`,
   purchased:{itemId:item.id,quantity,total}};
 }
 function assignConsumable(profile,body){

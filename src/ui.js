@@ -262,7 +262,7 @@ export class TempleUI extends EventTarget{
    this.quickBarSignature=signature;
    root.innerHTML=slots.map(({item,count},i)=>{
     const empty=!item,depleted=!!item&&count===0;
-    const label=item?`${item.name}，剩餘 ${count} 個`:`快捷欄 ${i+1}，尚未裝備`;
+    const label=item?`${item.name} · ${count} remaining`:`Quick slot ${i+1} · Empty`;
     return `<button type="button" class="comfort-quick-slot ${depleted?'depleted':''}" data-quick-use="${i}" ${empty||depleted?'disabled':''}
      aria-label="${escape(label)}" title="${escape(label)}">
      ${item?`<img src="${escape(comfortCashImage(item))}" alt="" draggable="false">`:''}
@@ -458,7 +458,7 @@ export class TempleUI extends EventTarget{
   renderShop(profile){
    const tab=this.shopTab||'near',tabs={
     near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',
-    comfort:'撫慰心靈的物品',shield:'Shields',head:'Headwear',
+    comfort:'Comfort for the Soul',shield:'Shields',head:'Headwear',
     outfit:'Outfits',wings:'Wings',owned:'Owned'};
    const saleIds=new Set(SHOP_ITEMS.map(i=>i.id));
    const source=tab==='owned'?(profile.inventory||[]).map(itemById).filter(i=>i&&saleIds.has(i.id)):SHOP_ITEMS;

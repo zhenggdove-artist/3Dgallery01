@@ -72,9 +72,9 @@ export function attackStats(item,charge=0){
 // Consumables are independent inventory instances; matching IDs can be
 // purchased in batches. Their assigned quickslots survive a zero stack.
 export const COMFORT_ITEMS=Object.freeze([
- {id:'comfort-dollar-20',name:'撫慰美金 · $20',slot:'consumable',category:'撫慰心靈的物品',denomination:20,healFraction:.30,price:1000,tier:2,rarity:'uncommon',color:'#5eaa70',description:'再給我來多一點吧！'},
- {id:'comfort-dollar-50',name:'撫慰美金 · $50',slot:'consumable',category:'撫慰心靈的物品',denomination:50,healFraction:.50,price:2000,tier:3,rarity:'rare',color:'#d777ad',description:'再給我來多一點吧！'},
- {id:'comfort-dollar-100',name:'撫慰美金 · $100',slot:'consumable',category:'撫慰心靈的物品',denomination:100,healFraction:1,price:5000,tier:5,rarity:'relic',color:'#64a7db',description:'再給我來多一點吧！'}
+ {id:'comfort-dollar-20',name:'Comfort Cash · $20',slot:'consumable',category:'Comfort for the Soul',denomination:20,healFraction:.30,price:1000,tier:2,rarity:'uncommon',color:'#5eaa70',description:'Give me more!'},
+ {id:'comfort-dollar-50',name:'Comfort Cash · $50',slot:'consumable',category:'Comfort for the Soul',denomination:50,healFraction:.50,price:2000,tier:3,rarity:'rare',color:'#d777ad',description:'Give me more!'},
+ {id:'comfort-dollar-100',name:'Comfort Cash · $100',slot:'consumable',category:'Comfort for the Soul',denomination:100,healFraction:1,price:5000,tier:5,rarity:'relic',color:'#64a7db',description:'Give me more!'}
 ].map(item=>Object.freeze({...item,sell:Math.floor(item.price*.25)})));
 export const ITEMS = Object.freeze([...RELETTER_ITEMS,...ARMOR,...COMFORT_ITEMS]);
 const INDEX = new Map(ITEMS.map(item=>[item.id,item]));
