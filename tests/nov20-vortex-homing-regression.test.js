@@ -139,7 +139,7 @@ test('goldfish seeks off-axis target from elevated swimming position and syncs v
  assert.ok(visual.position.y>2);
  const fish=visual.userData.fish;
  const mats=[];fish.traverse(node=>{if(node.material)mats.push(node.material);});
- assert.ok(mats.some(mat=>mat.opacity===.5),'thirty outlined goldfish now have half their previous opacity');
+ assert.ok(mats.some(mat=>mat.opacity===.30),'translucent VHS goldfish have increased transparency');
  assert.ok(mats.some(mat=>mat.vertexColors),'goldfish body receives a real dorsal-to-belly gradient');
  effects.dispose();
 });
