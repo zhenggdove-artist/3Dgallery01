@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createInitialWorld,applyAction,tickWorld,ensureProfile,worldView,canBuildAt,canPlaceArtworkAt} from '../src/shared/temple-rules.js';
 import {attackStats,WEAPONS} from '../src/shared/catalog.js';
 import {attackStats as originalStats} from '../src/reletter/equipment-catalog.js';
-import {PNG_APPEARANCE_DEFAULTS,APPEARANCE_DEFAULTS,validateAppearance,artworkAppearanceDefaults} from '../src/shared/artwork-library.js';
+import {PNG_APPEARANCE_DEFAULTS,APPEARANCE_DEFAULTS,validateAppearance,artworkAppearanceDefaults,LABEL_STYLE_DEFAULTS} from '../src/shared/artwork-library.js';
 import {MONSTER_PACK_SIZE,spawnMonsterPack,monsterPosition} from '../src/shared/monster-pack.js';
 import {ENEMY_HEIGHT,ENEMY_RADIUS} from '../src/shared/island-combat.js';
 import {grassPositions} from '../src/grass-field.js';
@@ -26,7 +26,7 @@ test('every elemental staff spell uses exactly one third of RELETTER effective r
  assert.equal(attackStats(melee,1).range,originalStats(melee,1).range);
 });
 test('PNG-specific authored artwork defaults are exact, with non-PNG unaffected',()=>{
- const expected={depth:0,brightness:.4,contrast:1,saturation:1.43,blackPoint:.1,tint:'#ffffff',labelBackground:'#000000'};
+ const expected={depth:0,brightness:.4,contrast:1,saturation:1.43,blackPoint:.1,tint:'#ffffff',...LABEL_STYLE_DEFAULTS};
  assert.deepEqual(PNG_APPEARANCE_DEFAULTS,expected);
  assert.deepEqual(validateAppearance({}, {type:'image/png'}),expected);
  assert.deepEqual(artworkAppearanceDefaults({format:'png'}),expected);
