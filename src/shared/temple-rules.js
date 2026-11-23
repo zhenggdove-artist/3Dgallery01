@@ -7,7 +7,7 @@ import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
-import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
+import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
@@ -761,20 +761,27 @@ function throwArtwork(world,profile,actor,body,context,now){
 }
 
 function buy(world,profile,body){
- const item=SHOP_ITEMS.find(entry=>entry.id===body.itemId);
- if(!item)return {error:'Item is not sold'};
+ const base=SHOP_ITEMS.find(entry=>entry.id===body.itemId);
+ if(!base)return {error:'Item is not sold'};
+ const exotic=base.slot==='weapon'&&base.exotic;
+ const qualityTier=body.qualityTier===undefined?base.tier:body.qualityTier;
+ const item=exotic?shopWeaponVariant(base,qualityTier):base;
+ if(!item||(!exotic&&body.qualityTier!==undefined))
+  return {error:'Invalid weapon quality'};
  const quantity=body.quantity===undefined?1:body.quantity;
- // One atomic order, no partial billing or partial inventory allocation.
+ // The server chooses both PRICE and COMBAT tier from its catalog; a client
+ // cannot forge a cheap high-quality weapon or use another player's stack.
  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)
   return {error:'Quantity must be an integer from 1 to 99'};
  if(profile.inventory.length+quantity>600)return {error:'Inventory full'};
  const total=item.price*quantity;
  if(!Number.isSafeInteger(total)||total<0)return {error:'Invalid purchase amount'};
  if(!spend(profile,total,world))return {error:'Not enough coins'};
- for(let i=0;i<quantity;i++)appendInventoryInstance(profile,item.id,'shop');
- profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';
+ for(let i=0;i<quantity;i++)
+  appendInventoryInstance(profile,base.id,'shop',exotic?item.shopTier:null);
+ profile.itemOrigins??={};profile.itemOrigins[base.id]='shop';
  return {notice:`PURCHASE SUCCESSFUL · ${item.name} ×${quantity} · ${total} coins`,
-  purchased:{itemId:item.id,quantity,total}};
+  purchased:{itemId:base.id,qualityTier:exotic?item.shopTier:null,quantity,total}};
 }
 function assignConsumable(profile,body){
  const index=body.slot;
