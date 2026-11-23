@@ -184,6 +184,38 @@ const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>contro
  role:()=>self?.role,ui,send:sendAction,
  beforeStart:()=>{gun.end();ui.emit('attack-cancel');}});
 
+// One shared, capture-phase GM MIDDLE-MOUSE orbit across all scene-editing
+// tools. The normal left-button picking/gizmos/painting continue unchanged.
+// Pointer capture keeps orbit responsive when dragging off the canvas.
+let gmMiddleOrbit=null;
+const canGmMiddleOrbit=()=>!!self?.profile?.admin&&!!controller&&
+ !!(buildPlacement||wallPainter.active||platformDelete.active||artEditor.selected||
+  ['gm','editor','build'].includes(ui.panelName));
+canvas.addEventListener('pointerdown',e=>{
+ if(e.button!==1||!canGmMiddleOrbit())return;
+ e.preventDefault();e.stopImmediatePropagation();
+ gmMiddleOrbit={id:e.pointerId,x:e.clientX,y:e.clientY};
+ try{canvas.setPointerCapture(e.pointerId);}catch{}
+},{capture:true});
+canvas.addEventListener('pointermove',e=>{
+ if(gmMiddleOrbit?.id!==e.pointerId)return;
+ e.preventDefault();e.stopImmediatePropagation();
+ const dx=e.clientX-gmMiddleOrbit.x,dy=e.clientY-gmMiddleOrbit.y;
+ gmMiddleOrbit.x=e.clientX;gmMiddleOrbit.y=e.clientY;
+ controller?.orbitEditCamera(dx,dy);
+},{capture:true});
+const endGmOrbit=e=>{
+ if(gmMiddleOrbit?.id!==e.pointerId)return;
+ e.preventDefault();e.stopImmediatePropagation();
+ gmMiddleOrbit=null;
+ try{if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);}catch{}
+};
+canvas.addEventListener('pointerup',endGmOrbit,{capture:true});
+canvas.addEventListener('pointercancel',endGmOrbit,{capture:true});
+canvas.addEventListener('lostpointercapture',e=>{if(gmMiddleOrbit?.id===e.pointerId)gmMiddleOrbit=null;},{capture:true});
+canvas.addEventListener('mousedown',e=>{if(e.button===1&&canGmMiddleOrbit())e.preventDefault();},{capture:true});
+canvas.addEventListener('auxclick',e=>{if(e.button===1&&canGmMiddleOrbit())e.preventDefault();},{capture:true});
+
 const portraitViewport=new EquipmentPortraitViewport();
 function refreshEquipmentPortrait(){
  const canvas=document.getElementById('bag-portrait');
