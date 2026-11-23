@@ -11,7 +11,7 @@ export function sniperFusionReference(sniper=itemById('black-cat')){
 }
 export function sniperMaterialStat(sniper,key){
  const raw=Math.max(0,Number(sniper?.[key])||0);
- if(sniper?.id!=='black-cat'||!['damage','chargeDamage'].includes(key))return raw;
+ if((sniper?.baseId||sniper?.id)!=='black-cat'||!['damage','chargeDamage'].includes(key))return raw;
  const reference=sniperFusionReference(sniper);
  return Math.min(raw,Math.max(0,Number(reference?.[key])||0));
 }
