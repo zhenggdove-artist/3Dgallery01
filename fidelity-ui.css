@@ -616,3 +616,9 @@ body #panel #bag-items.equipment-view:has(.comfort-bag-gear) .equipment-layout{
 #panel .comfort-supply .bag-cell{width:55px;height:55px}
 #panel .comfort-supply>span{font:700 11px Arial,sans-serif;color:#664a73}
 #panel #bag-detail .comfort-bag-description{color:#924a68;font-weight:700}
+
+#panel #bag-items .comfort-bag-stack{position:relative;display:block;height:56px;min-width:0}
+#panel #bag-items .comfort-bag-stack>.bag-cell{width:100%;height:56px}
+#panel #bag-items .comfort-bag-stack>b{position:absolute;right:1px;bottom:1px;
+ z-index:2;padding:0 3px;border-radius:3px;background:#23333f;color:#fff;
+ pointer-events:none;font:800 11px/15px Arial,sans-serif}
