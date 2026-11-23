@@ -16,9 +16,9 @@ test('ultimate footprint ratios: unchanged reach, with 1.5x wider whip blast rad
   assert.ok(normal.ultimate,weapon.id);
   const stats={...normal};
   scaleUltimateFootprint(stats,weapon);
-  const extra=weapon.id.startsWith('pan-')?.5:weapon.id.startsWith('swatter-')?.85:weapon.id.startsWith('whip-')?.2:weapon.id.startsWith('planter-')?.5:weapon.family==='saber'?.5:weapon.family==='ice'?1.5:weapon.family==='wave'||weapon.id==='goldfish'?3:1;
+  const extra=weapon.id.startsWith('pan-')?.5:weapon.id.startsWith('swatter-')?.85:weapon.id.startsWith('whip-')?.2:weapon.id.startsWith('planter-')?.5:weapon.family==='saber'?.25:weapon.family==='ice'?1.5:weapon.family==='wave'||weapon.id==='goldfish'?3:1;
   assert.ok(Math.abs(stats.range-normal.range*.6*extra)<.001,weapon.id+' reach');
-  if(weapon.id!=='telephone')assert.ok(Math.abs(stats.radius-normal.radius*.6*(weapon.id==='goldfish'||weapon.family==='saber'?1:extra)*(weapon.id.startsWith('whip-')?1.5:weapon.id.startsWith('palm-')?10:1))<.001,weapon.id+' radius');
+  if(weapon.id!=='telephone')assert.ok(Math.abs(stats.radius-normal.radius*.6*(weapon.id==='goldfish'||weapon.family==='saber'?1:extra)*(weapon.id.startsWith('whip-')?1.5:weapon.id.startsWith('palm-')?10:weapon.family==='ice'?1/3:1))<.001,weapon.id+' radius');
  }
  const normal=attackStats(itemById('pan-1'),0);
  const before=structuredClone(normal);
