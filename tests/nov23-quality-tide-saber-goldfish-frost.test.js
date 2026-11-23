@@ -16,7 +16,7 @@ test('shop groups only true tier variants; selected ID remains authoritative',()
  const src=read('src/ui.js');
  assert.match(src,/shopVariantChoice/);
  assert.match(src,/data-shop-variant/);
- assert.match(src,/variants\.find\(v=>v\.id===this\.shopVariantChoice\[key\]\)/);
+ assert.match(src,/v\.shopTier\?String\(v\.shopTier\):v\.id/);
  assert.match(src,/data-buy=\"\$\{escape\(selected\.id\)\}\"/);
  assert.match(src,/SHOP_ITEMS/);
 });
