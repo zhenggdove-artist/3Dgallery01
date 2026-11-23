@@ -257,7 +257,7 @@ export class WeaponVFX{
    const spell=this.acquire('ice-shatter',{
     color:'#a7e4ff',size:1,density:.65,quantity:9,speed:1
    });
-   spell.fx.group.position.fromArray(impactArea.visualCenter);
+   spell.fx.group.position.fromArray(impactArea.visualCenter||impactArea.center||origin.toArray());
    spell.fx.group.position.y+=.28;
    spell.fx.update(.02);
    spell.iceRadius=Math.max(.35,(Number(impactArea.radius)||2)/2.5);
