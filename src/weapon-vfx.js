@@ -395,7 +395,7 @@ export class WeaponVFX{
   // Orient actual 00GameDevs flame/tidal presets along the weapon muzzle.
   // The companion GPU streams travel from the player toward the target.
   const spray=item.family==='fire'||item.family==='water'||item.family==='wave'||(item.baseId||item.id)==='goldfish'||(item.baseId||item.id)==='clam'&&data.ultimate;
-  if(spray&&!['white-cat','black-cat','calico-cat'].includes(item.id)){
+  if(spray&&!['white-cat','black-cat','calico-cat'].includes(item.baseId||item.id)){
    const fireJet=item.family==='fire',effect=fireJet?'flame-surge':'tidal-surge';
    for(let i=0;i<((item.baseId||item.id)==='clam'&&data.ultimate?10:data.ultimate?2:1);i++){
     const jet=this.acquire(effect,{color:fireJet?'#ff6d2d':'#70e5ff',size:(data.ultimate?3.8:2.6)*(data.qualityScale||1),speed:2.6,density:1,quantity:10});
