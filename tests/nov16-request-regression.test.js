@@ -9,12 +9,12 @@ import {effectFor} from '../src/weapon-vfx.js';
 
 const gm={key:'gm',name:'GM',color:'#ffffff',role:'fighter',position:[2,0,2],admin:true};
 const guest={key:'guest',name:'Guest',color:'#ffffff',role:'fighter',position:[2,0,2],admin:false};
-test('new players begin with the cat SMG, not the former giant clam or saber',()=>{
+test('new players begin with the green uncommon Starlight saber',()=>{
  const w=createInitialWorld(1000),p=createProfile('guest','Guest','#ffffff',1000);
- assert.equal(STARTER_LOADOUT.weapon,'white-cat');
- assert.equal(p.equipment.weapon,'white-cat');
- assert.ok(p.inventory.includes('white-cat'));
- assert.equal(itemById('white-cat').name,'White Cat SMG');
+ assert.equal(STARTER_LOADOUT.weapon,'saber-2');
+ assert.equal(p.equipment.weapon,'saber-2');
+ assert.ok(p.inventory.includes('saber-2'));
+ assert.equal(itemById('saber-2').name,'Dawn Starlight');
 });
 test('GM deletes floating disks and selected original exhibit disks, but not artwork',()=>{
  const w=createInitialWorld(1000);
