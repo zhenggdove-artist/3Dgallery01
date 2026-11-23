@@ -1122,12 +1122,15 @@ function attack(world,profile,actor,body,context,now){
       // Borrowed sniper fusion deals only a small, per-target echo. It
        // cannot transfer the original one-shot power to another weapon.
        const balancedSniper=source.id==='black-cat'?fusionSniperEchoDamage(source):null;
-       const echoId=id(),echoDamage=balancedSniper?.damage??+(full.damage*.2).toFixed(3);
-      const echoPvP=balancedSniper?.pvpDamage??+(pvpShotDamage(source,full,sourceQuality)*.2).toFixed(3);
+       // Sniper-as-primary borrows at most 8% of each fused ultimate: both
+       // echoes together must remain less powerful than a direct charged hit.
+       const echoScale=weapon.id==='black-cat'?.08:.2;
+       const echoId=id(),echoDamage=balancedSniper?.damage??+Math.min(full.damage*echoScale,weapon.id==='black-cat'?32:Infinity).toFixed(3);
+      const echoPvP=balancedSniper?.pvpDamage??+Math.min(pvpShotDamage(source,full,sourceQuality)*echoScale,weapon.id==='black-cat'?3.5:Infinity).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],launchDirection:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,
-        damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*.2,
+        damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*echoScale,
         tier:sourceQuality.tier,flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
         outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[],
@@ -1137,7 +1140,7 @@ function attack(world,profile,actor,body,context,now){
         range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,qualityTier:sourceQuality.tier,
         qualityScale:sourceQuality.visual*.5,qualityDuration:sourceQuality.duration,
         pellets:secondaryPellets?.map(v=>v.direction)||null,
-        fusionEcho:true,echoPower:.2,time:now});
+        fusionEcho:true,echoPower:echoScale,time:now});
     }
     if(world.persistentAttacks.length>44)world.persistentAttacks.splice(0,world.persistentAttacks.length-44);
   }
