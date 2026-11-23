@@ -2,7 +2,7 @@ import {fuseEquipment} from '../reletter/server/fusion-rules.js';
 import {equipmentById} from '../reletter/equipment-catalog.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
 import {sniperMaterialStat} from './fusion-balance.js';
-import {itemById} from './catalog.js';
+import {itemById,shopWeaponVariant} from './catalog.js';
 import {weaponAffixTotals,normalizedWeaponAffixes} from './weapon-affixes.js';
 
 export function originalEquipmentGame(profile,world={},equippedOnly=false){
@@ -30,6 +30,8 @@ export function fuseOriginal(world,profile,body,rng){
 }
 export function equippedItem(profile,item,instanceRecord=null){
  const record=instanceRecord??profile.fusion?.[item.id],original=record?.original||{};
+ if(item.slot==='weapon'&&item.exotic)
+  item=shopWeaponVariant(item,record?.shopTier??item.tier)||item;
  const affixIds=[...new Set([...itemAffixes(item),...itemAffixes(original),...itemAffixes(record)])];
  const enchants=normalizedWeaponAffixes(record);
  const totals=weaponAffixTotals(enchants);
