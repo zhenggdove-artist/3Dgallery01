@@ -38,9 +38,24 @@ export class TempleUI extends EventTarget{
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');
     bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
     this.bind();
-    $('comfort-hotbar')?.addEventListener('click',event=>{
-     const button=event.target.closest('[data-quick-use]');
-     if(button&&!button.disabled&&!this.panelName)this.emit('quick-use',{slot:Number(button.dataset.quickUse)});
+    const hotbar=$('comfort-hotbar');
+    const quickUse=event=>{
+      const button=event.target.closest?.('[data-quick-use]');
+      if(!button||button.disabled||this.panelName||this.self?.role!=='fighter')return;
+      this.emit('quick-use',{slot:Number(button.dataset.quickUse)});
+    };
+    // Dispatch on pointer DOWN, independently of the held left-thumb joystick.
+    // iOS may suppress the later synthetic click during simultaneous touches.
+    hotbar?.addEventListener('pointerdown',event=>{
+      if(event.button!==0)return;
+      const button=event.target.closest?.('[data-quick-use]');
+      if(!button||button.disabled)return;
+      event.preventDefault();event.stopPropagation();
+      quickUse(event);
+    },{passive:false});
+    // Keyboard / accessibility activation has no preceding pointerdown.
+    hotbar?.addEventListener('click',event=>{
+      if(event.detail===0)quickUse(event);
     });
     this.content.addEventListener('input',event=>{
      const input=event.target.closest('[data-shop-quantity]');
