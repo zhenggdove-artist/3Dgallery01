@@ -69,6 +69,13 @@ try{
   );
  },null,{timeout:12000});
  await page.screenshot({path:output+'/shop-complete-3d-previews.png'});
+ // SHOP hides #hud, so purchase confirmation must remain visible on top.
+ await page.evaluate(()=>templeTest.ui.purchaseNotice('Comfort Cash · $20',3));
+ await page.locator('#purchase-notice').waitFor({state:'visible',timeout:2500});
+ assert.equal(await page.locator('#purchase-notice').textContent(),'已成功購買Comfort Cash · $203個');
+ await page.waitForTimeout(550);
+ assert.equal(await page.locator('#purchase-notice').isVisible(),false,'Purchase popup must disappear within 500 ms');
+
  await page.locator('#panel-close').click();
  // FISH has been retired from both the dock and shop.
  assert.equal(await page.locator('[data-action="fish"]').count(),0);
