@@ -692,3 +692,15 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
 @media(max-width:560px){
  #panel #bag-items .bag-cell>.bag-new-mark{font-size:8px!important;}
 }
+
+/* Independent title-backdrop transform controls: text always stays centered. */
+#art-label-handles{position:fixed;inset:0;z-index:36;pointer-events:none}
+#art-label-handles[hidden]{display:none!important}
+#art-label-handles svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+#art-label-handles polygon{fill:#75bbff12;stroke:#3696f6;stroke-width:2;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
+#art-label-handles .label-handle{position:absolute;width:18px;height:18px;background:#fff;border:2px solid #267bd2;border-radius:3px;transform:translate(-50%,-50%);pointer-events:auto;cursor:nwse-resize;touch-action:none;padding:0}
+#art-label-handles .label-handle.midpoint{border-radius:50%;cursor:ew-resize}
+#art-label-handles .label-handle[data-label-handle="1"],#art-label-handles .label-handle[data-label-handle="5"]{cursor:ns-resize}
+#art-editor [data-appearance="labelFontSize"]{width:100%;min-width:88px}
+#art-editor [data-label-font-output]{font:12px system-ui,sans-serif}
+#art-editor button[data-action="apply-own-labels"]{width:100%;font-size:12px;line-height:1.35}

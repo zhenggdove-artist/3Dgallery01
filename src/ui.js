@@ -167,6 +167,38 @@ export class TempleUI extends EventTarget{
     $('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.id==='wing-gift-button')this.openPanel('wing-painter');else if(button.dataset.action)this.emit(button.dataset.action);});
     $('build-confirm').onclick=()=>this.emit('build-confirm');$('build-rotate').onclick=()=>this.emit('build-rotate');$('build-cancel').onclick=()=>this.emit('build-cancel');
     this.content.addEventListener('click',event=>this.panelClick(event));this.content.addEventListener('submit',event=>this.panelSubmit(event));
+    // Native color inputs dispatch 'input' continuously while the picker
+    // moves. Preview the selected owner's artwork without a network save.
+    this.content.addEventListener('input',event=>{
+     const form=event.target.closest('[data-form="art-bomb-appearance"]');
+     if(!form||!event.target.name)return;
+     const values=new FormData(form);
+     this.emit('art-bomb-appearance-preview',{
+      id:String(values.get('id')),
+      appearance:{
+       labelBackground:String(values.get('labelBackground')||'#000000'),
+       labelColor:String(values.get('labelColor')||'#ffffff'),
+       labelFontSize:Number(values.get('labelFontSize')||44),
+       labelWidth:Number(values.get('labelWidth')||3.5),
+       labelHeight:Number(values.get('labelHeight')||.492)
+      }
+     });
+    });
+    this.content.addEventListener('click',event=>{
+     const button=event.target.closest('[data-apply-my-label-style]');
+     if(!button)return;
+     const form=button.closest('[data-form="art-bomb-appearance"]');
+     if(!form)return;
+     const data=new FormData(form);
+     this.emit('apply-my-label-style',{style:{
+      labelBackground:String(data.get('labelBackground')||'#000000'),
+      labelColor:String(data.get('labelColor')||'#ffffff'),
+      labelFontSize:Number(data.get('labelFontSize')||44),
+      labelWidth:Number(data.get('labelWidth')||3.5),
+      labelHeight:Number(data.get('labelHeight')||.492)
+     }});
+    });
+
     this.content.addEventListener('change',event=>{
        const input=event.target.closest('[data-gm-music-file]');
        if(!input||!this.self?.profile?.admin||!input.files?.[0])return;
@@ -723,7 +755,7 @@ export class TempleUI extends EventTarget{
      button.blur();
      this.emit('server-action',{action:'buy',itemId:button.dataset.buy,quantity});
     }if(button.dataset.equip)this.emit('server-action',{action:'equip',itemId:button.dataset.equip,...(button.hasAttribute('data-equip-index')?{inventoryIndex:Number(button.dataset.equipIndex)}:{})});if(button.dataset.sell)this.emit('server-action',{action:'sell',itemId:button.dataset.sell});if(button.dataset.build){this.buildKind=button.dataset.build;$('build-kind').textContent=this.buildKind.toUpperCase();$('build-mode').hidden=false;this.closePanel();this.emit('build-start',{kind:this.buildKind,file:this.content.querySelector('[data-build-skin]')?.files[0]});}if(button.dataset.role)this.emit('role-change',button.dataset.role);if(button.hasAttribute('data-follow'))this.emit('spectator-follow',button.dataset.follow);if(button.hasAttribute('data-destroy-near'))this.emit('destroy-near');if(button.dataset.removeStructure)this.emit('server-action',{action:'remove-structure',structureId:button.dataset.removeStructure});if(button.hasAttribute('data-save-code'))this.emit('save-code');if(button.hasAttribute('data-copy-save-code')){const value=this.saveCode||this.self?.saveCode;if(value){if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);else{this.content.querySelector('#save-code-output')?.select();document.execCommand('copy');}this.toast('已複製存檔代碼');}}if(button.hasAttribute('data-export-layout'))this.exportLayout();}catch(error){this.toast(error.message);}}
-  async panelSubmit(event){event.preventDefault();const form=new FormData(event.target),kind=event.target.dataset.form;if(kind==='art-bomb-upload'){const files=[...event.target.querySelector('[name=artwork]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('art-bomb-upload',{files,title,size:Number(form.get('size')),labelBackground:String(form.get('labelBackground')||'#000000')});return;}if(kind==='art-bomb-resize'){this.emit('art-bomb-resize',{id:String(form.get('id')),size:Number(form.get('size'))});return;}if(kind==='art-bomb-appearance'){const appearance={depth:+form.get('depth'),brightness:+form.get('brightness'),contrast:+form.get('contrast'),saturation:+form.get('saturation'),blackPoint:+form.get('blackPoint'),tint:String(form.get('tint')),labelBackground:String(form.get('labelBackground')||'#000000')};this.emit('art-bomb-appearance',{id:String(form.get('id')),expectedRevision:Number(form.get('revision')),appearance});return;}if(kind==='gm-platform'){this.emit('create-platform',{position:['x','y','z'].map(k=>Number(form.get(k))),radius:Number(form.get('radius'))});return;}if(kind==='upload-artwork'){const files=[...event.target.querySelector('input[type=file]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('upload-artwork',{files,title,labelBackground:String(form.get('labelBackground')||'#000000')});return;}if(kind==='fusion')this.emit('server-action',{action:'fuse',sourceId:form.get('source'),targetId:form.get('target'),requestId:crypto.randomUUID()});if(kind==='chat'){const text=String(form.get('text')||'').trim();if(text)this.emit('chat',text);event.target.reset();}if(kind==='plant'||kind==='plant-reply'){const text=String(form.get('text')||'').trim();let file=form.get('media');if(!file?.size)file=null;const drawing=event.target.querySelector('[data-drawing][data-used]');if(drawing)file=await new Promise(resolve=>drawing.toBlob(resolve,'image/webp',.8));if(text||file)this.emit('plant',{text,file,parentId:kind==='plant-reply'?this.selectedPlant?.id:null});}if(kind==='editor'){const settings={pixelRatio:+form.get('pixelRatio'),fog:+form.get('fog'),artFloat:+form.get('artFloat')};localStorage.setItem('temple-editor-settings',JSON.stringify(settings));this.emit('editor-settings',settings);this.toast('已儲存編輯結果');}}
+  async panelSubmit(event){event.preventDefault();const form=new FormData(event.target),kind=event.target.dataset.form;if(kind==='art-bomb-upload'){const files=[...event.target.querySelector('[name=artwork]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('art-bomb-upload',{files,title,size:Number(form.get('size')),labelBackground:String(form.get('labelBackground')||'#000000')});return;}if(kind==='art-bomb-resize'){this.emit('art-bomb-resize',{id:String(form.get('id')),size:Number(form.get('size'))});return;}if(kind==='art-bomb-appearance'){const appearance={depth:+form.get('depth'),brightness:+form.get('brightness'),contrast:+form.get('contrast'),saturation:+form.get('saturation'),blackPoint:+form.get('blackPoint'),tint:String(form.get('tint')),labelBackground:String(form.get('labelBackground')||'#000000'),labelColor:String(form.get('labelColor')||'#ffffff'),labelFontSize:Number(form.get('labelFontSize')||44),labelWidth:Number(form.get('labelWidth')||3.5),labelHeight:Number(form.get('labelHeight')||.492)};this.emit('art-bomb-appearance',{id:String(form.get('id')),expectedRevision:Number(form.get('revision')),appearance});return;}if(kind==='gm-platform'){this.emit('create-platform',{position:['x','y','z'].map(k=>Number(form.get(k))),radius:Number(form.get('radius'))});return;}if(kind==='upload-artwork'){const files=[...event.target.querySelector('input[type=file]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('upload-artwork',{files,title,labelBackground:String(form.get('labelBackground')||'#000000')});return;}if(kind==='fusion')this.emit('server-action',{action:'fuse',sourceId:form.get('source'),targetId:form.get('target'),requestId:crypto.randomUUID()});if(kind==='chat'){const text=String(form.get('text')||'').trim();if(text)this.emit('chat',text);event.target.reset();}if(kind==='plant'||kind==='plant-reply'){const text=String(form.get('text')||'').trim();let file=form.get('media');if(!file?.size)file=null;const drawing=event.target.querySelector('[data-drawing][data-used]');if(drawing)file=await new Promise(resolve=>drawing.toBlob(resolve,'image/webp',.8));if(text||file)this.emit('plant',{text,file,parentId:kind==='plant-reply'?this.selectedPlant?.id:null});}if(kind==='editor'){const settings={pixelRatio:+form.get('pixelRatio'),fog:+form.get('fog'),artFloat:+form.get('artFloat')};localStorage.setItem('temple-editor-settings',JSON.stringify(settings));this.emit('editor-settings',settings);this.toast('已儲存編輯結果');}}
   clearChat(){
     this.chat=[];const log=$('chat-messages');if(log)log.replaceChildren();
     this.selectedPlant=null;

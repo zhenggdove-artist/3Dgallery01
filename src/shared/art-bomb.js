@@ -60,7 +60,7 @@ export function updateArtBombAppearance(world,actor,body,now=Date.now()){
  const record=(world.customArtworks||[]).find(a=>a.id===body.id&&a.bomb);
  if(!record)return {error:'Unknown player artwork'};
  if(record.owner!==actor.key&&!actor.admin)return {error:'Only its creator or GM can edit this artwork'};
- const appearance=validateAppearance(body.appearance,record);
+ const appearance=validateAppearance({...world.artworkLayout?.[record.id]?.appearance,...body.appearance},record);
  if(!appearance)return {error:'Invalid brightness, contrast, saturation, black point, depth or tint'};
  const layout=world.artworkLayout?.[record.id];if(!layout)return {error:'Artwork layout missing'};
  if(Number.isFinite(body.expectedRevision)&&body.expectedRevision!==layout.revision)return {error:'Artwork changed. Reload and retry.'};

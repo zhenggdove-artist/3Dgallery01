@@ -102,7 +102,7 @@ test('GM edit and player upload/appearance expose title and color picker; untrus
  assert.match(ui,/name="labelBackground" value="#000000"/);
  assert.match(main,/appearance:\{labelBackground:event\.detail\.labelBackground/);
  assert.match(main,/appearance:\{labelBackground:buildPlacement\.artwork\?\.labelBackground/);
- assert.match(surface,/addArtworkTitlePlate\(root,title,appearance\.labelBackground\)/);
+ assert.match(surface,/addArtworkTitlePlate\(root,title,appearance\.labelBackground,appearance\)/);
  assert.match(surface,/root\.userData\.titleOverride/);
 });
 test('title plate recolors in place without touching the 3D artwork or retaining its old GPU texture',()=>{
