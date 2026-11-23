@@ -48,8 +48,10 @@ export function renderOriginalBag(ui,profile){
   const base=itemById(id);
   if(!base?.exotic||base.slot!=='weapon')return base;
   const uid=profile.inventoryInstances?.[index]?.uid;
+  // A legacy T3 copy must never inherit the tier of another equipped UID.
   const tier=profile.fusionByInstance?.[uid]?.shopTier??
-   profile.inventoryInstances?.[index]?.shopTier??profile.fusion?.[id]?.shopTier??base.tier;
+   profile.inventoryInstances?.[index]?.shopTier??
+   (index>=0?base.tier:profile.fusion?.[id]?.shopTier??base.tier);
   return shopWeaponVariant(base,tier)||base;
  };
  const tab=ui.bagCategory==='garden'?'all':ui.bagCategory||'all',
