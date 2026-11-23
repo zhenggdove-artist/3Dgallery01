@@ -10,7 +10,7 @@ const textFile=name=>readFileSync(new URL('../'+name,import.meta.url),'utf8');
 
 test('all ten authored specialty weapons have 4 purchasable tiers and keep legacy T3 IDs',()=>{
  for(const base of originalIds){
-  const items=ODD_WEAPONS.filter(item=>item.baseId===base);
+  const items=ODD_WEAPONS.filter(item=>(item.baseId||item.id)===base);
   assert.deepEqual(items.map(item=>item.tier),[1,2,3,4],base);
   assert.equal(items[2].id,base,'legacy inventory ID must not change');
   assert.deepEqual(items.map(item=>item.rarity),[undefined,undefined,undefined,undefined],
@@ -20,7 +20,7 @@ test('all ten authored specialty weapons have 4 purchasable tiers and keep legac
   assert.deepEqual(sale.map(item=>item.rarity),RARITIES.slice(0,4).map(tier=>tier.id));
   assert.ok(sale.every(item=>Number.isSafeInteger(item.price)&&item.price>0));
   for(let i=1;i<sale.length;i++)assert.ok(sale[i].price>sale[i-1].price,base+' prices increase');
-  assert.ok(sale.every(item=>item.slot==='weapon'&&item.baseId===base));
+  assert.ok(sale.every(item=>item.slot==='weapon'&&(item.baseId||item.id)===base));
   assert.ok(sale.every(item=>item.pattern===sale[2].pattern),'same native VFX family');
  }
  assert.equal(itemById('giraffe').price,19999);
