@@ -60,12 +60,12 @@ test('fire weapon uses filtered noise hiss rather than the low oscillator and ge
  assert.match(audio,/spray\.type='bandpass'/);
  assert.match(main,/event\.ultimate&&item\?\.family!=='fire'/);
 });
-test('native flame shaders preserve geometry while setting visible flame alpha to 60 percent',()=>{
+test('native flame shaders preserve geometry while setting flame transparency to 60 percent (alpha 0.4)',()=>{
  const s=source('src/numbered-weapon-effects.js');
  assert.match(s,/node\.userData\?\.animeFlameLayer/);
- assert.match(s,/gl_FragColor\.a \*= 0\.6/);
+ assert.match(s,/gl_FragColor\.a \*= 0\.4/);
  assert.match(s,/m\.transparent=true;m\.depthWrite=false/);
- assert.match(s,/m\.userData\.templeFireOpacity=\.6/);
+ assert.match(s,/m\.userData\.templeFireOpacity=\.4/);
 });
 test('conch water vortex channel retains one sustained native instance across damage pulses',()=>{
  const scene=new THREE.Scene();
