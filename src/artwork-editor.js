@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
-import {artworkDefinitions,artworkAppearanceDefaults} from './shared/artwork-library.js';
+import {artworkDefinitions,artworkAppearanceDefaults,isArtwork22} from './shared/artwork-library.js';
 import {applyArtworkAppearance} from './artwork-surface.js';
 import {editorPanelMarkup} from './art-editor-panel.js';
 
@@ -28,7 +28,49 @@ export class ArtworkEditor{
   update(){if(this.selected&&this.mode==='follow'&&this.player()){this.selected.position.copy(this.player().position).add(this.followOffset);this.dirty=true;this.updateFields();return;}if(!this.selected||this.mode!=='scale')return;this.selected.updateMatrixWorld(true);const points=handleCoordinates.map((_,i)=>this.point(i).applyMatrix4(this.selected.matrixWorld).project(this.camera));const visible=points.every(p=>p.z>-1&&p.z<1);this.handles.hidden=!visible;if(!visible)return;const rect=this.canvas.getBoundingClientRect();points.forEach((p,i)=>{const element=this.handles.querySelector(`[data-handle="${i}"]`);element.style.left=`${rect.left+(p.x+1)*rect.width/2}px`;element.style.top=`${rect.top+(1-p.y)*rect.height/2}px`;});this.polygon.setAttribute('points',[0,2,4,6].map(i=>`${rect.left+(points[i].x+1)*rect.width/2},${rect.top+(1-points[i].y)*rect.height/2}`).join(' '));}
   updateFields(){if(!this.selected)return;for(const input of this.panel.querySelectorAll('[data-axis]')){if(document.activeElement===input)continue;const [property,index]=input.dataset.axis.split('-'),value=this.selected[property][['x','y','z'][index]];input.value=(property==='rotation'?THREE.MathUtils.radToDeg(value):value).toFixed(3);}}
   status(text){const target=this.panel.querySelector('[data-status]');if(target)target.textContent=text;}
-  async save(){if(!this.selected||this.saving)return;this.saving=true;if(this.mode==='follow'){this.mode=null;this.control(true);}this.status('正在儲存到伺服器…');const root=this.selected,result=await this.send('set-artwork-layout',{platformId:root.userData.platformId,expectedRevision:this.expectedRevision,layout:{position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray(),appearance:this.appearance,...(this.supportsPlatform?{platformRadius:this.platformRadius}:{})}});this.saving=false;if(!result)return this.status('儲存失敗，尚未發布。請重試或取消。');this.expectedRevision=result.artworkLayout.revision;this.original=structuredClone(result.artworkLayout);delete root.userData.previewPlatformRadius;this.arena.displayPlatforms.sync();this.dirty=false;this.status('已儲存，所有玩家及下次進入皆生效');}
+  async save(){
+    if(!this.selected||this.saving)return;
+    this.saving=true;
+    if(this.mode==='follow'){this.mode=null;this.control(true);}
+    this.status('正在儲存到伺服器…');
+    const root=this.selected,platformId=root.userData.platformId;
+    const isStuck22=isArtwork22(root.userData.record)||
+      (this.arena.world?.customArtworks||[]).some(a=>a.id===platformId&&isArtwork22(a));
+    const sendLayout=()=>this.send('set-artwork-layout',{
+      platformId,expectedRevision:this.expectedRevision,
+      layout:{position:root.position.toArray(),
+        rotation:[root.rotation.x,root.rotation.y,root.rotation.z],
+        scale:root.scale.toArray(),appearance:this.appearance,
+        ...(this.supportsPlatform?{platformRadius:this.platformRadius}:{})}
+    },{throwOnError:true});
+    try{
+      let result;
+      try{result=await sendLayout();}
+      catch(error){
+        if(!isStuck22)throw error;
+        // Existing rooms may retain an orphan holder, an invalid transform,
+        // or a revision recorded before the client received the migration.
+        // This is a GM-only, single-artwork repair; all others remain intact.
+        const repaired=await this.send('repair-artwork',{
+          platformId,position:root.position.toArray()
+        },{throwOnError:true});
+        if(!repaired?.artworkLayout)throw error;
+        this.expectedRevision=repaired.artworkLayout.revision;
+        result=await sendLayout();
+      }
+      if(!result?.artworkLayout)throw new Error('伺服器沒有確認作品配置已儲存');
+      this.expectedRevision=result.artworkLayout.revision;
+      this.original=structuredClone(result.artworkLayout);
+      delete root.userData.previewPlatformRadius;
+      this.arena.displayPlatforms.sync();
+      this.dirty=false;
+      this.status('已儲存，所有玩家及下次進入皆生效');
+    }catch(error){
+      const reason=error?.message||'Unknown server error';
+      this.status('儲存失敗：'+reason);
+      this.toast('GM 作品儲存失敗：'+reason);
+    }finally{this.saving=false;}
+  }
   close(){this.gizmo.detach();this.drag=null;if(this.selected){this.selected.position.fromArray(this.original.position);this.selected.rotation.set(...this.original.rotation);this.selected.scale.fromArray(this.original.scale);applyArtworkAppearance(this.selected,this.original.appearance);this.selected.userData.editing=false;delete this.selected.userData.previewPlatformRadius;this.arena.displayPlatforms.sync();}this.selected=null;this.mode=null;this.dirty=false;this.handles.hidden=this.panel.hidden=true;this.control(true);}
   export(){if(this.dirty)return this.toast('請先儲存修改');const layout={...this.arena.defaultLayout,...this.arena.world?.artworkLayout},blob=new Blob([JSON.stringify({version:1,artworkLayout:layout,floatingPlatforms:this.arena.world?.floatingPlatforms||[]},null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='temple-artwork-layout.json';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
   state(){return {selected:this.selected?.userData.platformId||null,mode:this.mode,dirty:this.dirty,handles:this.mode==='scale'?8:0};}
