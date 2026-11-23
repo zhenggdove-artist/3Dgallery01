@@ -64,7 +64,7 @@ test('goldfish school never selects or hits its own caster',()=>{
  const victim=ensureProfile(world,enemy.key,enemy.name,enemy.color,NOW);
  p.inventory.push('goldfish');p.equipment.weapon='goldfish';
  // A player can have both an actor.id and a distinct canonical actor.key.
- p.hp=p.maxHp-34;p.shield=null;p.spawnProtectedUntil=0;
+ p.hp=p.maxHp-34;p.spawnProtectedUntil=0;
  victim.spawnProtectedUntil=0;
  const before=p.hp;
  const weapon=itemById('goldfish');
