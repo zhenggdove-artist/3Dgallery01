@@ -180,6 +180,12 @@ export class WeaponSignatureEffects {
   // consumed indices from the previous school.
   group.userData.consumedFish=new Set();
   group.userData.gotServerTrack=false;
+  group.userData.goldfishMotion={sampleAt:0,receivedAt:0,position:new THREE.Vector3(),velocity:new THREE.Vector3()};
+  if(group.userData.goldfishBubbleBursts){
+   group.userData.goldfishBubbleBursts.births.fill(-99);
+   group.userData.goldfishBubbleBursts.positions.fill(1e5);
+   group.userData.goldfishBubbleBursts.cloud.geometry.attributes.position.needsUpdate=true;
+  }
   group.name='Thirty individually consumable goldfish swimming forward';
   let tail=cached?.userData.tail;
   if(!cached){group.add(fish);
@@ -201,10 +207,33 @@ export class WeaponSignatureEffects {
   // The old Lambert + transparent/depthWrite:false materials mixed all 30
   // overlapping fish into an almost black slab from behind. Opaque, depth-
   // writing fish with unlit vertex gradients preserve every silhouette.
-  const glow=(color,vertexColors=false)=>new THREE.MeshBasicMaterial({
-   color,vertexColors,transparent:true,opacity:.5,depthWrite:false,
-   depthTest:true,side:THREE.FrontSide,toneMapped:false
-  });
+  // VHS horizontal scanlines / analogue ripples embedded in each fish mesh.
+  // One shared shader uniform for all instanced fish, no screen-space pass.
+  const vhsTime={value:0};
+  group.userData.fishVhsTime=vhsTime;
+  const glow=(color,vertexColors=false)=>{
+   const mat=new THREE.MeshBasicMaterial({
+    color,vertexColors,transparent:true,opacity:.30,depthWrite:false,
+    depthTest:true,side:THREE.FrontSide,toneMapped:false
+   });
+   mat.onBeforeCompile=shader=>{
+    shader.uniforms.uFishVhsTime=vhsTime;
+    shader.vertexShader=shader.vertexShader
+     .replace('void main() {','varying vec3 vFishLocal; uniform float uFishVhsTime; void main() {')
+     .replace('#include <begin_vertex>',`#include <begin_vertex>
+vFishLocal=position;
+transformed.x+=sin(position.y*21.0+uFishVhsTime*6.7)*0.018;`);
+    shader.fragmentShader=shader.fragmentShader
+     .replace('void main() {','varying vec3 vFishLocal; uniform float uFishVhsTime; void main() {')
+     .replace('#include <color_fragment>',`#include <color_fragment>
+float vhsLine=sin(vFishLocal.y*92.0+uFishVhsTime*1.2);
+float vhsWave=sin(vFishLocal.y*11.0-uFishVhsTime*5.8);
+diffuseColor.rgb*=0.70+0.22*smoothstep(-0.5,0.65,vhsLine)+0.08*vhsWave;
+diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
+   };
+   mat.customProgramCacheKey=()=>vertexColors?'goldfish-vhs-color-v2':'goldfish-vhs-solid-v2';
+   return mat;
+  };
   const amber=glow('#ffffff',true),pearl=glow('#fffae7',true),
    finMat=glow('#ffbc54'),rim=glow('#c85030'),
    highlight=glow('#fff9d1'),eye=glow('#271c21');
@@ -297,6 +326,24 @@ export class WeaponSignatureEffects {
   tailCloud.frustumCulled=false;
   school.add(tailCloud);
   group.userData.tailParticles={cloud:tailCloud,positions:tailPositions,perFish};
+  // GPU-pooled water bubble burst: 8 radial dots per fish, just one draw call.
+  const bubblePerFish=8,bubblePositions=new Float32Array(GOLDFISH_SCHOOL_COUNT*bubblePerFish*3);
+  bubblePositions.fill(1e5);
+  const bubbleGeo=new THREE.BufferGeometry();
+  bubbleGeo.setAttribute('position',new THREE.BufferAttribute(bubblePositions,3)
+   .setUsage(THREE.DynamicDrawUsage));
+  const bubbleCloud=new THREE.Points(bubbleGeo,new THREE.PointsMaterial({
+   color:'#b7f6ff',size:.12,transparent:true,opacity:.76,
+   depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending,
+   sizeAttenuation:true,toneMapped:false
+  }));
+  bubbleCloud.name='Per-fish bubble-pop impact particles';
+  bubbleCloud.frustumCulled=false;
+  school.add(bubbleCloud);
+  group.userData.goldfishBubbleBursts={
+   cloud:bubbleCloud,positions:bubblePositions,perFish:bubblePerFish,
+   births:new Float32Array(GOLDFISH_SCHOOL_COUNT).fill(-99)
+  };
   fish.visible=false;group.add(school);
   group.userData.fish=fish;group.userData.tail=tail;group.userData.school=school;group.userData.schoolParts=parts;
   // Reuse all transforms every frame: never allocate 30 matrices or vectors
