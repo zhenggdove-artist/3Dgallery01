@@ -25,7 +25,13 @@ function detachedLegacyRecord(profile,itemId,uid,direct){
 export function ensureWeaponAffixes(profile,rng=Math.random){
  if(!profile.inventoryInstances)ensureFusionIdentity(profile);
  for(const row of profile.inventoryInstances||[]){
-  if(itemById(row.itemId)?.slot!=='weapon'||row.origin!=='ground')continue;
+  if(itemById(row.itemId)?.slot!=='weapon')continue;
+  if(row.origin!=='ground'){
+   // Shop and grants have the same fixed stats, but still need an editable
+   // per-instance record so fusion and existing gameplay retain their contract.
+   profile.fusionByInstance[row.uid]??={weaponAffixes:[]};
+   continue;
+  }
   const old=profile.fusionByInstance?.[row.uid]||{};
   if(Array.isArray(old.weaponAffixes)&&old.weaponAffixes.length)continue;
   // Do not clone previously projected records: the original reference still
@@ -167,9 +173,9 @@ export function appendInventoryInstance(profile,itemId,origin='ground'){
  profile.inventory.push(itemId);
  const uid=newUid();
  profile.inventoryInstances.push({uid,itemId,origin});
- if(origin==='ground'&&itemById(itemId)?.slot==='weapon'){
+ if(itemById(itemId)?.slot==='weapon'){
   profile.fusionByInstance??={};
-  profile.fusionByInstance[uid]={weaponAffixes:rollWeaponAffixes(itemById(itemId))};
+  profile.fusionByInstance[uid]={weaponAffixes:origin==='ground'?rollWeaponAffixes(itemById(itemId)):[]};
  }
 }
 
