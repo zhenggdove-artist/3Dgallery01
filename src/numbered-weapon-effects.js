@@ -581,7 +581,15 @@ export class NumberedWeaponEffects {
    if(!e.key&&e.age>3&&!e.stopping&&typeof e.fx.stop==='function'){
     e.stopping=true;e.fx.stop();
    }
-   e.fx.update(dt);
+   if(e.spec.asset==='energy-sword-wave'){
+    // The native fan evaluates five full CPU particle simulations per
+    // update. Coalesce frames to 30fps while keeping exact animation time.
+    e.saberFrameBudget=(e.saberFrameBudget||0)+dt;
+    if(e.saberFrameBudget>=1/30){
+     e.fx.update(e.saberFrameBudget);
+     e.saberFrameBudget=0;
+    }
+   }else e.fx.update(dt);
    if(e.spec.number===20&&e.attackId){
     const synced=world?.vortexes?.find(v=>v.id===e.attackId);
     if(synced?.position)e.fx.group.position.lerp(new THREE.Vector3(...synced.position),Math.min(1,dt*18));
