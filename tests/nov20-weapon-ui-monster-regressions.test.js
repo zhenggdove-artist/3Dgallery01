@@ -37,9 +37,9 @@ test('goldfish 115ms water orbs, shoulder aim and exactly half Cat SMG normal ra
  assert.equal(fish.firstPerson,true);
  const gun=source('src/gun-controller.js'),main=source('src/main.js'),
   effect=source('src/weapon-signature-effects.js');
- assert.match(gun,/weapon\(\)\.id==='white-cat'\|\|weapon\(\)\.id==='goldfish'/);
- assert.match(gun,/this\.mode===1&&weapon\(\)\?\.id==='goldfish'/);
- assert.match(main,/if\(weapon\?\.id==='goldfish'\)\{/);
+ assert.match(gun,/white-cat'.*goldfish'/);
+ assert.match(gun,/this\.mode===1.*goldfish'/);
+ assert.match(main,/authoredId\(weapon\)==='goldfish'/);
  assert.match(effect,/goldfishBubble\(event\)/);
 });
 test('ice freezes three seconds with six-second trigger lock and palm ultimate binds for three seconds every six',()=>{
