@@ -6,12 +6,12 @@ import {editorPanelMarkup} from './art-editor-panel.js';
 
 const handleCoordinates=[[-1,1],[0,1],[1,1],[1,0],[1,-1],[0,-1],[-1,-1],[-1,0]];
 export class ArtworkEditor{
-  constructor({scene,camera,canvas,arena,player,isGM,send,control,toast}){
-    Object.assign(this,{scene,camera,canvas,arena,player,isGM,send,control,toast});this.selected=null;this.mode=null;this.dirty=false;this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();this.box=new THREE.Box3();this.panel=document.getElementById('art-editor');this.handles=document.getElementById('art-handles');this.labelHandles=document.getElementById('art-label-handles');
+  constructor({scene,camera,canvas,arena,player,isGM,ownerKey=()=>null,send,control,toast}){
+    Object.assign(this,{scene,camera,canvas,arena,player,isGM,ownerKey,send,control,toast});this.selected=null;this.mode=null;this.dirty=false;this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();this.box=new THREE.Box3();this.panel=document.getElementById('art-editor');this.handles=document.getElementById('art-handles');this.labelHandles=document.getElementById('art-label-handles');
     this.handles.innerHTML='<svg aria-hidden="true"><polygon/></svg>'+handleCoordinates.map(([x,y],i)=>`<button type="button" class="art-handle ${x*y===0?'midpoint':''}" data-handle="${i}" aria-label="${x*y===0?'非等比':'等比'} resize ${i+1}"></button>`).join('');this.polygon=this.handles.querySelector('polygon');
     this.labelHandles.innerHTML='<svg aria-hidden="true"><polygon/></svg>'+handleCoordinates.map(([x,y],i)=>`<button type="button" class="label-handle ${x*y===0?'midpoint':''}" data-label-handle="${i}" aria-label="${x*y===0?'單邊':'等比'} 調整名稱底色框"></button>`).join('');this.labelPolygon=this.labelHandles.querySelector('polygon');
     this.gizmo=new TransformControls(camera,canvas);this.gizmo.setSpace('local');this.gizmo.setSize(.8);scene.add(this.gizmo);this.gizmo.addEventListener('dragging-changed',e=>this.control(!e.value&&!this.mode));this.gizmo.addEventListener('objectChange',()=>{this.dirty=true;this.status('尚未儲存');this.updateFields();});
-    let press=null;canvas.addEventListener('pointerdown',e=>{if(this.isGM()&&e.button===0)press={x:e.clientX,y:e.clientY};});canvas.addEventListener('pointerup',e=>{if(!press||!this.isGM())return;const distance=Math.hypot(press.x-e.clientX,press.y-e.clientY);press=null;if(distance>4||this.gizmo.axis||this.mode)return;this.raycast(e);const hits=this.ray.intersectObjects([...arena.artworks.values()].filter(o=>o.visible),true);for(const hit of hits){let root=hit.object;while(root&&!root.userData.platformId)root=root.parent;if(root){this.select(root);if(hit.object===root.userData.titlePlate||hit.object.parent===root.userData.titlePlate)this.edit('label');break;}}});
+    let press=null;canvas.addEventListener('pointerdown',e=>{if(this.isGM()&&e.button===0)press={x:e.clientX,y:e.clientY};});canvas.addEventListener('pointerup',e=>{if(!press||!this.isGM())return;const distance=Math.hypot(press.x-e.clientX,press.y-e.clientY);press=null;if(distance>4||this.gizmo.axis||this.mode)return;this.raycast(e);const hits=this.ray.intersectObjects([...arena.artworks.values()].filter(o=>o.visible),true);for(const hit of hits){let root=hit.object;while(root&&!root.userData.platformId)root=root.parent;if(root){const clickedLabel=hit.object===root.userData.titlePlate||hit.object.parent===root.userData.titlePlate;this.select(root);if(clickedLabel)this.edit('label');break;}}});
     addEventListener('keydown',e=>{if(!this.isGM()||/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName))return;if(e.shiftKey&&['KeyT','KeyR','KeyG'].includes(e.code)){e.preventDefault();e.stopImmediatePropagation();if(!this.selected)return this.toast('請先點選作品');this.edit({KeyT:'scale',KeyR:'rotate',KeyG:'translate'}[e.code]);}if(e.code==='Escape'&&this.selected){e.stopImmediatePropagation();this.close();}},{capture:true});
     this.handles.addEventListener('pointerdown',e=>this.beginResize(e));this.handles.addEventListener('pointermove',e=>this.resize(e));this.handles.addEventListener('pointerup',()=>this.drag=null);this.handles.addEventListener('pointercancel',()=>this.drag=null);
     this.labelHandles.addEventListener('pointerdown',e=>this.beginLabelResize(e));
@@ -140,16 +140,24 @@ export class ArtworkEditor{
   }
   async applyOwnLabels(){
    if(!this.selected||this.saving)return;
-   // First commit the current preview, then replicate only style properties
-   // to records actually owned by this account (never another player's).
-   const saved=await this.save();if(!saved)return;
    const keys=['labelBackground','labelColor','labelFontSize','labelWidth','labelHeight'];
    const style=Object.fromEntries(keys.map(key=>[key,this.appearance[key]]));
+   // A style source may be an original exhibit OR another player's artwork.
+   // Bulk apply must NEVER save or mutate the source artwork incidentally.
    try{
     const result=await this.send('apply-my-artwork-label-style',{style},{throwOnError:true});
+    const record=(this.arena.world?.customArtworks||[]).find(
+     a=>a.id===this.selected.userData.platformId);
+    if(record&&record.owner===this.ownerKey()){
+     // This artwork was updated by the batch. Rebase the editor so that
+     // closing does not roll back the successfully committed name colours.
+     this.expectedRevision++;
+     this.original.appearance={...this.original.appearance,...style};
+    }
     this.status('已套用名稱樣式至自己上傳的 '+result.updatedCount+' 件作品');
    }catch(error){this.status('批次套用失敗：'+(error?.message||'未知錯誤'));}
   }
+
   beginResize(e){if(this.mode!=='scale'||!e.target.dataset.handle)return;e.preventDefault();const i=+e.target.dataset.handle,p=this.point(i),anchor=this.point((i+4)%8),root=this.selected;root.updateMatrixWorld(true);const q=root.getWorldQuaternion(new THREE.Quaternion()),normal=new THREE.Vector3(0,0,1).applyQuaternion(q);this.drag={i,p,anchor,scale:root.scale.clone(),matrix:root.matrixWorld.clone(),inverse:root.matrixWorld.clone().invert(),quaternion:q,anchorWorld:anchor.clone().applyMatrix4(root.matrixWorld),plane:new THREE.Plane().setFromNormalAndCoplanarPoint(normal,p.clone().applyMatrix4(root.matrixWorld)),pointer:e.pointerId};e.target.setPointerCapture(e.pointerId);}
   resize(e){const drag=this.drag;if(!drag||e.pointerId!==drag.pointer)return;this.raycast(e);const hit=this.ray.ray.intersectPlane(drag.plane,new THREE.Vector3());if(!hit)return;hit.applyMatrix4(drag.inverse);const [x,y]=handleCoordinates[drag.i],rx=x?(hit.x-drag.anchor.x)/(drag.p.x-drag.anchor.x):1,ry=y?(hit.y-drag.anchor.y)/(drag.p.y-drag.anchor.y):1,scale=drag.scale.clone();if(x&&y){const factor=Math.max(.05,(rx+ry)/2);scale.multiplyScalar(factor);}else if(x)scale.x*=Math.max(.05,rx);else scale.y*=Math.max(.05,ry);scale.clampScalar(.05,20);this.selected.scale.copy(scale);this.selected.position.copy(drag.anchorWorld).sub(drag.anchor.clone().multiply(scale).applyQuaternion(drag.quaternion));this.dirty=true;this.status('尚未儲存');this.updateFields();}
   update(){if(this.selected&&this.mode==='follow'&&this.player()){this.selected.position.copy(this.player().position).add(this.followOffset);this.dirty=true;this.updateFields();return;}if(!this.selected)return;if(this.mode==='label'){this.updateLabelHandles();return;}if(this.mode!=='scale')return;this.selected.updateMatrixWorld(true);const points=handleCoordinates.map((_,i)=>this.point(i).applyMatrix4(this.selected.matrixWorld).project(this.camera));const visible=points.every(p=>p.z>-1&&p.z<1);this.handles.hidden=!visible;if(!visible)return;const rect=this.canvas.getBoundingClientRect();points.forEach((p,i)=>{const element=this.handles.querySelector(`[data-handle="${i}"]`);element.style.left=`${rect.left+(p.x+1)*rect.width/2}px`;element.style.top=`${rect.top+(1-p.y)*rect.height/2}px`;});this.polygon.setAttribute('points',[0,2,4,6].map(i=>`${rect.left+(points[i].x+1)*rect.width/2},${rect.top+(1-points[i].y)*rect.height/2}`).join(' '));}
