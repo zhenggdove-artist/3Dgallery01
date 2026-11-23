@@ -99,7 +99,7 @@ test('descriptions and visual implementation correspond to updated mechanics',()
  assert.match(explainEquipment(itemById('hat-hockey')),/Maximum HP/);
  assert.match(explainEquipment(itemById('shield-1')),/absorbs/);
  const vfx=readFileSync(new URL('../src/weapon-vfx.js',import.meta.url),'utf8');
- assert.match(vfx,/item.id==='accordion'\|\|item.family==='petal'/);
+ assert.match(vfx,/\(item.baseId\|\|item.id\)==='accordion'\|\|item.family==='petal'/);
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.match(main,/healNow-lastHealVisualAt>=1000/);
  assert.doesNotMatch(main,/hp>previousHealHp/);
