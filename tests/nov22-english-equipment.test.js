@@ -45,5 +45,5 @@ test('BAG weapon labels and comfort consumable category remain English',()=>{
  assert.doesNotMatch(bag,/撫慰心靈的物品|再給我來多一點吧|撫慰美金/);
  assert.match(bag,/Success Chance:/);
  assert.match(bag,/Close Range/);
- assert.match(ui,/Random Affixes: Each weapon/);
+ assert.match(ui,/Fixed shop stats\. Random 3–15% affixes are exclusive to ground loot/);
 });
