@@ -4,7 +4,7 @@ import {ART_ACCEPT} from './artwork-upload.js';
 import {bindBagDrag} from './bag-drag.js';
 import {PLATFORMS} from './shared/arena.js';
 import {playerArtworkAppearanceMarkup} from './art-editor-panel.js';
-import {ECONOMY,RARITIES,SHOP_ITEMS,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats} from './shared/catalog.js';
+import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_EXOTIC_TIERS,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant} from './shared/catalog.js';
 import {SOUND_PROFILES} from './game-audio.js';
 import {pvpShotDamage} from './shared/combat-balance.js';
 import {weaponQuality} from './shared/weapon-abilities.js';
@@ -60,7 +60,10 @@ export class TempleUI extends EventTarget{
     this.content.addEventListener('input',event=>{
      const input=event.target.closest('[data-shop-quantity]');
      if(!input||this.panelName!=='shop')return;
-     const card=input.closest('.item'),item=itemById(card?.querySelector('[data-buy]')?.dataset.buy);
+     const card=input.closest('.item'),buyButton=card?.querySelector('[data-buy]'),
+       base=itemById(buyButton?.dataset.buy),
+       item=base&&buyButton?.dataset.shopTier?
+        shopWeaponVariant(base,Number(buyButton.dataset.shopTier)):base;
      if(!item)return;
      const raw=Number(input.value),quantity=Number.isSafeInteger(raw)?raw:0;
      this.shopQuantities[input.dataset.shopQuantity]=quantity;
@@ -546,16 +549,34 @@ export class TempleUI extends EventTarget{
    const groups=new Map();
    for(const item of items){
     const match=item.slot==='weapon'&&item.id.match(ranked);
-    const key=match?'quality:'+match[1]:item.id;
-    if(!groups.has(key))groups.set(key,[]);
-    if(!groups.get(key).some(v=>v.id===item.id))groups.get(key).push(item);
+    const exotic=item.slot==='weapon'&&item.exotic;
+    const key=match?'quality:'+match[1]:exotic?'quality:'+item.id:item.id;
+    if(!groups.has(key))groups.set(key,exotic?
+      SHOP_EXOTIC_TIERS.map(tier=>shopWeaponVariant(item,tier)):[]);
+    if(!exotic&&!groups.get(key).some(v=>v.id===item.id))
+      groups.get(key).push(item);
    }
+   // Exotic ranks share a canonical item ID but live in separate physical
+   // inventory instances. Count and equip the exact quality, never a sibling.
+   const ownedIndicesFor=variant=>(profile.inventory||[]).flatMap((id,index)=>{
+    if(id!==variant.id)return [];
+    if(!variant.shopTier)return [index];
+    const instance=profile.inventoryInstances?.[index];
+    const tier=profile.fusionByInstance?.[instance?.uid]?.shopTier??instance?.shopTier??itemById(id)?.tier;
+    return Number(tier)===variant.shopTier?[index]:[];
+   });
    this.shopVariantChoice??={};this.shopQuantities??={};
    const cards=[...groups].map(([key,variants])=>{
     variants.sort((a,b)=>(a.tier||1)-(b.tier||1));
-    const selected=variants.find(v=>v.id===this.shopVariantChoice[key])||variants[0];
-    const ownedCount=(profile.inventory||[]).filter(id=>id===selected.id).length;
-    const selectedEquipped=profile.equipment?.[selected.slot]===selected.id;
+    const selected=variants.find(v=>
+      (v.shopTier?String(v.shopTier):v.id)===this.shopVariantChoice[key])||
+      variants.find(v=>v.shopTier===3)||variants[0];
+    const ownedIndices=ownedIndicesFor(selected),ownedCount=ownedIndices.length;
+    const equippedTier=profile.fusion?.[selected.id]?.shopTier??
+      profile.fusionByInstance?.[profile.equippedInstanceIds?.[selected.slot]]?.shopTier??
+      itemById(selected.id)?.tier;
+    const selectedEquipped=profile.equipment?.[selected.slot]===selected.id&&
+      (!selected.shopTier||Number(equippedTier)===selected.shopTier);
     const quantity=this.shopQuantities[key]??1;
     const valid=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=99;
     const total=valid?selected.price*quantity:0;
@@ -564,8 +585,10 @@ export class TempleUI extends EventTarget{
     const selection=variants.length>1?`<label class="shop-quality-picker">QUALITY / PRICE
       <select data-shop-variant="${escape(key)}" aria-label="Choose quality for ${escape(selected.name)}">
       ${variants.map(v=>{const rarity=RARITIES.find(r=>r.id===v.rarity)||RARITIES[0];
-       const own=(profile.inventory||[]).filter(id=>id===v.id).length;
-       return `<option value="${escape(v.id)}" ${v.id===selected.id?'selected':''}>${escape(rarity.name)} · T${v.tier} — ${Number(v.price).toLocaleString('en-US')} Coins${own?' · ×'+own:''}</option>`;}).join('')}
+       const own=ownedIndicesFor(v).length;
+       const choice=v.shopTier?String(v.shopTier):v.id;
+       const selectedChoice=selected.shopTier?String(selected.shopTier):selected.id;
+       return `<option value="${escape(choice)}" ${choice===selectedChoice?'selected':''}>${escape(rarity.name)} · T${v.tier} — ${Number(v.price).toLocaleString('en-US')} Coins${own?' · ×'+own:''}</option>`;}).join('')}
       </select></label>`:'';
     const actions=`<div class="shop-purchase">
       <div class="shop-stock">OWNED ×${ownedCount}${selectedEquipped?' · EQUIPPED':''}</div>
@@ -574,8 +597,8 @@ export class TempleUI extends EventTarget{
          data-shop-quantity="${escape(key)}" value="${escape(quantity)}" aria-label="Purchase quantity for ${escape(selected.name)}">
       </label>
       <output data-buy-total>TOTAL · ${valid?total.toLocaleString('en-US'):'—'}</output>
-      <button type="button" data-buy="${escape(selected.id)}" ${!valid||!affordable||!room?'disabled':''}>BUY ×${valid?quantity:1} · ${total.toLocaleString('en-US')} COINS</button>
-      ${ownedCount&&selected.slot!=='consumable'?`<button type="button" data-equip="${escape(selected.id)}" ${selectedEquipped?'disabled':''}>${selectedEquipped?'EQUIPPED':'EQUIP OWNED'}</button>`:''}
+      <button type="button" data-buy="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''} ${!valid||!affordable||!room?'disabled':''}>BUY ×${valid?quantity:1} · ${total.toLocaleString('en-US')} COINS</button>
+      ${ownedCount&&selected.slot!=='consumable'?`<button type="button" data-equip="${escape(selected.id)}" ${selected.shopTier?`data-equip-index="${ownedIndices[0]}"`:''} ${selectedEquipped?'disabled':''}>${selectedEquipped?'EQUIPPED':'EQUIP OWNED'}</button>`:''}
     </div>`;
     return itemCard(selected,selection+actions);
    });
@@ -768,7 +791,8 @@ export class TempleUI extends EventTarget{
      const quantity=Number(button.closest('.item')?.querySelector('[data-shop-quantity]')?.value??1);
      if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)return this.toast('QUANTITY 1–99');
      button.blur();
-     this.emit('server-action',{action:'buy',itemId:button.dataset.buy,quantity});
+     this.emit('server-action',{action:'buy',itemId:button.dataset.buy,quantity,
+      ...(button.dataset.shopTier?{qualityTier:Number(button.dataset.shopTier)}:{})});
     }if(button.dataset.equip)this.emit('server-action',{action:'equip',itemId:button.dataset.equip,...(button.hasAttribute('data-equip-index')?{inventoryIndex:Number(button.dataset.equipIndex)}:{})});if(button.dataset.sell)this.emit('server-action',{action:'sell',itemId:button.dataset.sell});if(button.dataset.build){this.buildKind=button.dataset.build;$('build-kind').textContent=this.buildKind.toUpperCase();$('build-mode').hidden=false;this.closePanel();this.emit('build-start',{kind:this.buildKind,file:this.content.querySelector('[data-build-skin]')?.files[0]});}if(button.dataset.role)this.emit('role-change',button.dataset.role);if(button.hasAttribute('data-follow'))this.emit('spectator-follow',button.dataset.follow);if(button.hasAttribute('data-destroy-near'))this.emit('destroy-near');if(button.dataset.removeStructure)this.emit('server-action',{action:'remove-structure',structureId:button.dataset.removeStructure});if(button.hasAttribute('data-save-code'))this.emit('save-code');if(button.hasAttribute('data-copy-save-code')){const value=this.saveCode||this.self?.saveCode;if(value){if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);else{this.content.querySelector('#save-code-output')?.select();document.execCommand('copy');}this.toast('已複製存檔代碼');}}if(button.hasAttribute('data-export-layout'))this.exportLayout();}catch(error){this.toast(error.message);}}
   async panelSubmit(event){event.preventDefault();const form=new FormData(event.target),kind=event.target.dataset.form;if(kind==='art-bomb-upload'){const files=[...event.target.querySelector('[name=artwork]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('art-bomb-upload',{files,title,size:Number(form.get('size')),labelBackground:String(form.get('labelBackground')||'#000000')});return;}if(kind==='art-bomb-resize'){this.emit('art-bomb-resize',{id:String(form.get('id')),size:Number(form.get('size'))});return;}if(kind==='art-bomb-appearance'){const appearance={depth:+form.get('depth'),brightness:+form.get('brightness'),contrast:+form.get('contrast'),saturation:+form.get('saturation'),blackPoint:+form.get('blackPoint'),tint:String(form.get('tint')),labelBackground:String(form.get('labelBackground')||'#000000'),labelColor:String(form.get('labelColor')||'#ffffff'),labelFontSize:Number(form.get('labelFontSize')||44),labelWidth:Number(form.get('labelWidth')||3.5),labelHeight:Number(form.get('labelHeight')||.492)};this.emit('art-bomb-appearance',{id:String(form.get('id')),expectedRevision:Number(form.get('revision')),appearance});return;}if(kind==='gm-platform'){this.emit('create-platform',{position:['x','y','z'].map(k=>Number(form.get(k))),radius:Number(form.get('radius'))});return;}if(kind==='upload-artwork'){const files=[...event.target.querySelector('input[type=file]').files],title=String(form.get('title')||'').trim();if(files.length&&title)this.emit('upload-artwork',{files,title,labelBackground:String(form.get('labelBackground')||'#000000')});return;}if(kind==='fusion')this.emit('server-action',{action:'fuse',sourceId:form.get('source'),targetId:form.get('target'),requestId:crypto.randomUUID()});if(kind==='chat'){const text=String(form.get('text')||'').trim();if(text)this.emit('chat',text);event.target.reset();}if(kind==='plant'||kind==='plant-reply'){const text=String(form.get('text')||'').trim();let file=form.get('media');if(!file?.size)file=null;const drawing=event.target.querySelector('[data-drawing][data-used]');if(drawing)file=await new Promise(resolve=>drawing.toBlob(resolve,'image/webp',.8));if(text||file)this.emit('plant',{text,file,parentId:kind==='plant-reply'?this.selectedPlant?.id:null});}if(kind==='editor'){const settings={pixelRatio:+form.get('pixelRatio'),fog:+form.get('fog'),artFloat:+form.get('artFloat')};localStorage.setItem('temple-editor-settings',JSON.stringify(settings));this.emit('editor-settings',settings);this.toast('已儲存編輯結果');}}
   clearChat(){
