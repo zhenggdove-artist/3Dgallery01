@@ -53,8 +53,7 @@ export function attackStats(item,charge=0){
  if((item.baseId||item.id)==='accordion'&&!result.ultimate){
   // The BAG label, aim preview and server hitbox must expose the SAME reach.
   const contact=normalMeleeFootprint(item);
-  result.range=Math.min(result.range,contact.range);
-  result.radius=Math.min(result.radius,contact.radius);
+  if(contact){result.range=Math.min(result.range,contact.range);result.radius=Math.min(result.radius,contact.radius);}
  }
  if(SPELL_FAMILIES.includes(item.family)&&!item.exotic)result.range=+(result.range/3).toFixed(3);
  // Keep the narrower #59 preview equal to the real server hit tube.
