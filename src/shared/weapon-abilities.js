@@ -14,7 +14,7 @@ export function weaponQuality(item,fusion){
 export function channelVisualRadius(item,quality=weaponQuality(item),range=Number(item?.range)||10){
  if(item?.id==='clam')return +(1.45*quality.visual).toFixed(3);
  // Match thin visible streams: previous fire warning grew wider with range.
- const base={water:1.05,ice:.80,fire:1.05,lightning:.65,beam:.65,petal:.95,wave:1.0};
+ const base={water:3.15,ice:.80,fire:1.05,lightning:.65,beam:.65,petal:.95,wave:1.0};
  return +((base[item?.family]||1)*quality.visual).toFixed(3);
 }
 export function forwardCastRadius(item,quality=weaponQuality(item),statsRadius=1,channel=false){
