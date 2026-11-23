@@ -1,23 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {SHOP_ITEMS,SHOP_EXOTIC_TIERS,shopWeaponVariant,itemById} from '../src/shared/catalog.js';
+import {SHOP_ITEMS,SHOP_EXOTIC_TIERS,shopWeaponVariant,itemById,shopWeaponGroups} from '../src/shared/catalog.js';
 import {advanceGoldfishSchool} from '../src/shared/goldfish-school.js';
 import {createInitialWorld,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
 import {equippedItem} from '../src/shared/fusion-adapter.js';
 
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
-test('all sold weapons have four distinct priced qualities and valid numeric stats',()=>{
- for(const base of SHOP_ITEMS.filter(item=>item.slot==='weapon')){
-  const variants=SHOP_EXOTIC_TIERS.map(tier=>shopWeaponVariant(base,tier));
-  assert.deepEqual(variants.map(v=>v.shopTier),[1,2,3,4],base.id);
-  assert.ok(variants.every(v=>v.id===base.id),base.id);
-  assert.ok(variants.every((v,i)=>i===0||v.price>variants[i-1].price),base.id);
-  assert.ok(variants.every((v,i)=>i===0||v.damage>variants[i-1].damage),base.id);
-  assert.ok(variants.every(v=>Number.isFinite(v.damage)&&Number.isFinite(v.cooldown)),base.id);
-  assert.equal(variants[2].price,base.price,base.id);
-  if(!base.exotic)assert.ok(variants.every(v=>v.tier===base.tier),base.id);
+test('shop presents one weapon family with five colored qualities and rising prices',()=>{
+ assert.deepEqual(SHOP_EXOTIC_TIERS,[1,2,3,4,5]);
+ const groups=shopWeaponGroups(SHOP_ITEMS);
+ for(const group of groups.filter(g=>g.base.slot==='weapon')){
+  const variants=group.variants;
+  assert.equal(variants.length,5,group.key);
+  assert.deepEqual(variants.map(v=>v.shopTier),[1,2,3,4,5]);
+  assert.ok(variants.every((v,i)=>i===0||v.price>variants[i-1].price),group.key);
+  assert.ok(variants.every(v=>Number.isFinite(v.damage)&&Number.isFinite(v.cooldown)),group.key);
  }
+ assert.deepEqual(groups.find(g=>g.key==='weapon:tide').variants.map(v=>v.id),
+  ['tide-1','tide-2','tide-3','tide-4','tide-5']);
 });
 test('server persists each non-exotic shop grade and applies its combat stats',()=>{
  const now=4_200_000,actor={key:'shop-grade',name:'Shop Grade',role:'fighter',color:'#ffffff',position:[75,0,0]};
