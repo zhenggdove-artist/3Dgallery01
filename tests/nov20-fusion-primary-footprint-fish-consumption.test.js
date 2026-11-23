@@ -59,7 +59,7 @@ test('saber charged travel is halved in both authoritative VFX and hit geometry;
   assert.ok(normal.range<=whipReach+.001);
   assert.ok(normal.radius<=.16);
   const full=attackStats(blade,1),shrunken=scaleUltimateFootprint({...full},blade);
-  assert.ok(Math.abs(shrunken.range-full.range*.6*.5)<.002);
+  assert.ok(Math.abs(shrunken.range-full.range*.6*.25)<.002);
   assert.ok(Math.abs(shrunken.radius-full.radius*.6)<.002);
  }
 });
