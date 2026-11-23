@@ -924,11 +924,20 @@ function attack(world,profile,actor,body,context,now){
 
   if(profile.hitReaction&&now-profile.hitReaction.time<profile.hitReaction.stunMs)return {error:'Recovering from hit'};
   const weapon=equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon)),bonus=profile.fusion[weapon.id]?.bonus||0;
-  // The equipped PRIMARY Black Cat must be scoped, regardless of fusion stats
-  // or added weapon effects. Reject before charge state/cooldown/damage mutate.
-  if(weapon.id==='black-cat'&&body.scoped!==true){
+  // Shoulder shots have deliberately poor server-owned accuracy; an A-hold
+  // charged blast is legal there only with a fused chargeable weapon.
+  const shoulderSniper=weapon.id==='black-cat'&&body.aimMode==='shoulder';
+  const blackCatFused=(profile.fusion?.['black-cat']?.effects||[]).some(sourceId=>{
+    const source=itemById(sourceId);
+    return source?.slot==='weapon'&&source.id!=='black-cat'&&Number(source.chargeMs)>0;
+  });
+  if(weapon.id==='black-cat'&&body.scoped!==true&&!shoulderSniper){
     profile.chargeStartedAt=0;
-    return {error:'Black Cat sniper requires scope'};
+    return {error:'Black Cat sniper requires scope or shoulder aim'};
+  }
+  if(shoulderSniper&&body.phase==='charge'&&!blackCatFused){
+    profile.chargeStartedAt=0;
+    return {error:'Fuse a chargeable weapon to unlock the shoulder ultimate'};
   }
   if(body.phase==='channel-start'){
     if(!isChannelStaff(weapon)||weapon.family==='ice')return {error:'This staff casts its ultimate on release'};
@@ -948,9 +957,25 @@ function attack(world,profile,actor,body,context,now){
      !profile.channelStartedAt||now-(profile.lastChannelPulseAt||profile.channelStartedAt)>(weapon.family==='ice'?8500:6000)))
     return {error:'Staff channel is not active'};
   if(body.phase==='charge'){profile.chargeStartedAt=now;return {charging:true};}
-  if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};const direction=normalDirection(body.direction);if(!direction)return {error:'Invalid attack direction'};profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
+  if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};
+  let direction=normalDirection(body.direction);
+  if(!direction)return {error:'Invalid attack direction'};
   const charge=channel?1:Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
+  if(shoulderSniper&&charge>=1&&!blackCatFused){
+    profile.chargeStartedAt=0;
+    return {error:'Shoulder ultimate requires a fused chargeable weapon'};
+  }
+  profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
   if(!channel)profile.chargeStartedAt=0;
+  if(shoulderSniper){
+    // The server, NOT the browser, determines wide random drift. Each shot
+    // misses the camera centre by up to ~12° sideways / 9° vertically.
+    const random=typeof context?.rng==='function'?context.rng:Math.random;
+    const yaw=(random()-.5)*.42,pitch=(random()-.5)*.30;
+    const x=direction[0]*Math.cos(yaw)-direction[2]*Math.sin(yaw);
+    const z=direction[0]*Math.sin(yaw)+direction[2]*Math.cos(yaw);
+    direction=normalDirection([x,direction[1]+Math.tan(pitch),z]);
+  }
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
   const enchants=weaponAffixTotals(weapon);
   stats.damage=+(stats.damage*quality.damage*(1+enchants.damage/100)*
@@ -959,7 +984,10 @@ function attack(world,profile,actor,body,context,now){
   // collision must use exactly the same range; no 11m decorative overshoot.
   if(channel||(weapon.family==='ice'&&stats.ultimate))stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range))*channelReachMultiplier(weapon);
   stats.range=+(stats.range*quality.range).toFixed(2);
-  if(weapon.id==='black-cat')stats.range=SNIPER_RANGE; // Match the centre-camera ray at every rarity.
+  if(weapon.id==='black-cat'){
+    stats.range=SNIPER_RANGE; // Long-range ray for both shoulder and scope.
+    if(shoulderSniper&&stats.ultimate)stats.radius=Math.max(1.1,stats.radius);
+  }
   // The narrow server collision tube must agree with the visible spray and
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
   stats.radius=forwardCastRadius(weapon,quality,stats.radius,channel||(weapon.family==='ice'&&stats.ultimate));
@@ -1052,6 +1080,7 @@ function attack(world,profile,actor,body,context,now){
       origin:[...origin],direction:[...direction],range:stats.range,
       radius:stats.radius,area,damage:stats.damage+bonus*.1,pvpDamage,charge,critChance:weapon.critChance,
       qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,iceGround,
+      shoulderSpread:shoulderSniper,
       flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
       hits:[],pelletHits:{},areaResolved:false,
       createdAt:now,lastAt:now,expiresAt:now+Math.max(duration,visualLifetime)
@@ -1131,7 +1160,9 @@ function attack(world,profile,actor,body,context,now){
   const city=returningGiraffe||waveVortex?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
- return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+ return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,
+    aimMode:shoulderSniper?'shoulder':body.aimMode==='scope'?'scope':null,
+    piercing:shoulderSniper&&charge>=1,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
@@ -1819,7 +1850,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
     const shotgunPellet=!fx.echo&&isPlayer&&weapon.pattern==='scatter'&&pellet!==null;
     const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage)*(frostProc?1.5:1);
-    const lethalHeadshot=!fx.echo&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
+    const lethalHeadshot=!fx.echo&&!fx.shoulderSpread&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
      fx.origin,fx.direction,fx.range,enemy.position);
     const hitKind=lethalHeadshot?(modifiers.critical?'critical-headshot':'headshot'):modifiers.kind;
     let applied;
