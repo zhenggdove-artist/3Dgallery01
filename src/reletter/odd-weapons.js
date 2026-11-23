@@ -10,7 +10,7 @@ const ORIGINAL_ODD_WEAPONS=[
  ['fan','Rampaging Electric Fan','swatter','mid','#85d4bd',3,4,20,450,16,'gust',4,'Swing spinning fan blades to create gusts. Full charge releases four twisting wind streams that briefly slow enemies.'],
  ['telephone','Screaming Telephone','whip','mid','#bd7fce',4,4,24,550,20,'echo',3,'Swing a coiled telephone cable. Full charge emits three rings of sound that temporarily weaken enemies.'],
  ['jellybrella','Jellyfish Umbrella','planter','mid','#91d8ed',5,4,9,800,22,'jelly',5,'Swing a soft jellyfish umbrella. Full charge releases five luminous jellyfish clouds that slow enemies.']
-].map(([id,name,family,rangeClass,color,damage,range,chargedRange,cooldown,chargeDamage,pattern,burst,description])=>({id,name,slot:'weapon',family,rangeClass,color,damage,range,chargedRange,chargeRange:chargedRange-range,cooldown,chargeDamage,pattern,burst,description,radius:.3,price:45+Math.round(chargeDamage*2),tier:3,baseId:id,exotic:true,firstPerson:(id.includes('cat')&&id!=='calico-cat')||id==='goldfish',autoCharge:id==='clam',chargeMs:({'giraffe':1900,goldfish:1570,clam:1170,'white-cat':970,'black-cat':2850,'calico-cat':1450,accordion:1770,fan:1330,telephone:1660,jellybrella:1810})[id],element:['goldfish','clam','jellybrella'].includes(id)?'water':id==='fan'?'wind':id==='accordion'?'light':'earth'}));
+].map(([id,name,family,rangeClass,color,damage,range,chargedRange,cooldown,chargeDamage,pattern,burst,description])=>({id,name,slot:'weapon',family,rangeClass,color,damage,range,chargedRange,chargeRange:chargedRange-range,cooldown,chargeDamage,pattern,burst,description,radius:.3,price:45+Math.round(chargeDamage*2),tier:3,exotic:true,firstPerson:(id.includes('cat')&&id!=='calico-cat')||id==='goldfish',autoCharge:id==='clam',chargeMs:({'giraffe':1900,goldfish:1570,clam:1170,'white-cat':970,'black-cat':2850,'calico-cat':1450,accordion:1770,fan:1330,telephone:1660,jellybrella:1810})[id],element:['goldfish','clam','jellybrella'].includes(id)?'water':id==='fan'?'wind':id==='accordion'?'light':'earth'}));
 
 const ODD_QUALITY_NAMES=['Common','Uncommon','Rare','Epic'];
 const ODD_QUALITY_FACTORS=[.65,.82,1,1.2];
@@ -20,7 +20,7 @@ export const ODD_WEAPONS=ORIGINAL_ODD_WEAPONS.flatMap(base=>
  [1,2,3,4].map(tier=>{
   const multiplier=ODD_QUALITY_FACTORS[tier-1];
   const variant=tier===3?base:{
-   ...base,id:base.id+'-q'+tier,tier,
+   ...base,id:base.id+'-q'+tier,baseId:base.id,tier,
    damage:+(base.damage*multiplier).toFixed(3),
    chargeDamage:+(base.chargeDamage*multiplier).toFixed(3),
    name:ODD_QUALITY_NAMES[tier-1]+' '+base.name
