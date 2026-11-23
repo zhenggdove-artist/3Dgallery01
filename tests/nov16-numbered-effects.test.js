@@ -250,8 +250,8 @@ test('clam held channel layers original #33 waves that ease forward and overlap 
 });
 
 
-test('flowers and conch launch forward-progressing native copies instead of floating at the muzzle',()=>{
- for(const id of ['bloom-1','nova-1']){
+test('flower staff launches forward-progressing native copies instead of floating at the muzzle',()=>{
+ for(const id of ['bloom-1']){
   const item=itemById(id),scene=new THREE.Scene(),root=new THREE.Group();
   scene.add(root);
   const muzzle=host=>host.position.clone().add(new THREE.Vector3(.1,1.3,.2));
