@@ -81,7 +81,7 @@ test('all 30 fish have variable-size blue bubble rings which burst at stored imp
  }]};
  visual.update(.08,world);
  assert.equal(group.userData.consumedFish.has(4),true);
- assert.equal(bursts.births[4],.08);
+ assert.ok(Math.abs(bursts.births[4]-.08)<1e-5,'Float32 burst timestamps should preserve frame age');
  assert.ok(bursts.opacities[4*14]>.1);
  group.updateMatrixWorld(true);
  const first=group.localToWorld(new THREE.Vector3(...bursts.positions.slice(4*14*3,4*14*3+3)));
