@@ -47,12 +47,12 @@ test('image 22 filename unlock is per artwork, even if the legacy migration flag
  assert.equal(migrated.artworks['art-stuck22'].holder,'gm');
 });
 
-test('goldfish damage budgets and visual material transparency are both halved',()=>{
- assert.equal(GOLDFISH_DAMAGE_PER_FISH,.1);
- assert.equal(GOLDFISH_T1_TOTAL_MAX,45);
- assert.equal(goldfishDirectHitBudget(1,true),9);
+test('goldfish total damage is halved again and VHS fish transparency is increased',()=>{
+ assert.equal(GOLDFISH_DAMAGE_PER_FISH,.05);
+ assert.equal(GOLDFISH_T1_TOTAL_MAX,22.5);
+ assert.equal(goldfishDirectHitBudget(1,true),4.5);
  const visuals=readFileSync(new URL('../src/weapon-signature-effects.js',import.meta.url),'utf8');
- assert.match(visuals,/transparent:true,opacity:\.5,depthWrite:false/);
+ assert.match(visuals,/transparent:true,opacity:\.30,depthWrite:false/);
  assert.match(visuals,/transparent:true,opacity:\.435/);
 });
 
