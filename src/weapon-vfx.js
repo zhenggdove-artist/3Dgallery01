@@ -535,6 +535,7 @@ export class WeaponVFX{
     const index=this.active.indexOf(e);if(index>=0)this.active.splice(index,1);
     if(e.waterKey)this.waterStreams.delete(e.waterKey);
     if(e.waterParticles){e.waterParticles.removeFromParent();e.waterParticles.geometry.dispose();e.waterParticles.material.dispose();}
+    if(e.tideCores){e.tideCores.removeFromParent();e.tideCores.geometry.dispose();e.tideCores.material.dispose();}
     if(this.charger===e)this.charger=null;
     try{e.fx.group.removeFromParent();e.fx.dispose();}catch{}
     this.reportAnimationFailure(e.id,error);
@@ -548,9 +549,9 @@ export class WeaponVFX{
   console.error('Weapon animation failed; quarantined this instance',id,error);
  }
  dispose(){
-  for(const e of this.waterStreams.values())if(e.waterParticles){
-   e.waterParticles.removeFromParent();e.waterParticles.geometry.dispose();e.waterParticles.material.dispose();
-  }
+  // Dispose the actual active native beam wrappers, liquid clouds and
+  // additional instanced channels as a unit, including aborted casts.
+  for(const e of [...this.waterStreams.values()])this.release(e);
   this.waterStreams.clear();this.plantUltimates.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
   for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
