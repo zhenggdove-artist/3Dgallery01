@@ -14,4 +14,29 @@ const designs=[
 const procs={dinosaur:'bleed',poop:'poison',hero:'stun',shark:'bleed',crown:'expose',pumpkin:'burn',mushroom:'poison',jelly:'slow',ghost:'fear',squid:'weak',fox:'burn',tv:'stun',book:'fear',lantern:'burn',bee:'poison',antler:'root',dragon:'burn',plague:'poison',wizard:'slow',lotus:'weak'};
 const label={attack:'attack',speed:'movement speed',jump:'jump height',defense:'damage reduction',hp:'max HP'};
 export const HEADGEAR=designs.map(([design,name,color,key,value],i)=>({id:'hat-'+design,name,design,color,slot:'head',family:'headgear',tier:1+Math.floor(i/10),price:18+i*4,bonuses:{[key]:value},proc:procs[design]||null,description:`${key==='hp'?'+':'+ '+Math.round(value*100)+'% '}${key==='hp'?value+' ':''}${label[key]}${procs[design]?' · Hits apply '+procs[design]+'.':''}`}));
+
+ // Distinct animal / food sculptures. Every bonus uses the live server stat
+ // vocabulary (hp, defense, attack, speed and jump).
+const creatureHeads=[
+ ['elephant','Elephant Trunk Hood','#8aabb9',3,{hp:2.2,defense:.12},'root'],
+ ['rooster','Rooster Sunrise Crest','#e9a554',2,{attack:.10,speed:.08},'burn'],
+ ['anteater','Anteater Snout','#c5a47f',3,{attack:.12,defense:.06},'weak'],
+ ['guinea-pig','Guinea Pig Bonnet','#d6ab8e',1,{hp:1.2,speed:.11},null],
+ ['penguin','Penguin Hood','#364e63',2,{defense:.13,jump:.13},'slow'],
+ ['polar-bear','Polar Bear Hood','#e7f1ef',4,{hp:2.8,defense:.15},'slow'],
+ ['jellyfish','Jellyfish Bell','#92c9e9',3,{jump:.22,speed:.06},'slow'],
+ ['crab-claw','Crab Claw Crown','#d88469',3,{defense:.20,attack:.06},'root'],
+ ['lion','Lion Mane','#d7a15b',4,{attack:.17,hp:1.2},'fear'],
+ ['banana-bunch','Banana Bunch','#f4d967',2,{speed:.20,jump:.15},null],
+ ['eggplant','Eggplant Crown','#8d6abb',3,{defense:.10,jump:.08},'poison']
+];
+const describe=bonuses=>Object.entries(bonuses).map(([k,v])=>
+ k==='hp'?'+ '+Math.round(v*10)+' max HP':
+ '+ '+Math.round(v*100)+'% '+({attack:'attack',speed:'movement speed',jump:'jump height',defense:'damage reduction'}[k]||k)).join(' · ');
+HEADGEAR.push(...creatureHeads.map(([design,name,color,tier,bonuses,proc])=>({
+ id:'hat-'+design,name,design,color,slot:'head',family:'headgear',tier,
+ price:[0,320,720,1350,2300,3600][tier],bonuses,proc,
+ description:describe(bonuses)+(proc?' · On hit: '+proc+'.':'')
+})));
+
 export const headgearById=id=>HEADGEAR.find(h=>h.id===id);
