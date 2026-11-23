@@ -927,7 +927,7 @@ function update(dt,time,movementDt=dt){
      localRoot.userData.staffTargetPoint=null;
     }
   }
-  arena.update(dt,time,camera,roots);
+  arena.update(dt,time,camera,roots,localRoot);
   // The outbound/returning giraffe is the actual thrown weapon. Do not
   // keep a duplicate giraffe in its wielder's hand during the 2.3s flight.
   for(const actor of roots.values())if(actor.userData?.blade&&
