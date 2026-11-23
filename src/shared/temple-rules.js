@@ -1,7 +1,7 @@
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor} from './charge-area.js';
-import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition} from './goldfish-school.js';
+import {GOLDFISH_TRAVEL_SCALE,GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition} from './goldfish-school.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
@@ -934,6 +934,9 @@ function attack(world,profile,actor,body,context,now){
   if(weapon.id==='jellybrella'&&stats.ultimate)stats.radius=Math.max(10,stats.radius*2);
    if(weapon.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
    scaleUltimateFootprint(stats,weapon,quality);
+   // Keep the travelling school, server sweep collider and client VFX on
+   // one identical 50%-shorter trajectory; do not shorten ordinary bubbles.
+   if(weapon.id==='goldfish'&&stats.ultimate)stats.range=+(stats.range*GOLDFISH_TRAVEL_SCALE).toFixed(3);
    if(weapon.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
    if(weapon.id==='giraffe'&&stats.ultimate){
     // Preserve the explicitly doubled 56m boomerang reach: the generic
@@ -1019,7 +1022,7 @@ function attack(world,profile,actor,body,context,now){
       const native={...full,range:full.range*sourceQuality.range,
        radius:forwardCastRadius(source,sourceQuality,full.radius,echoChannel)};
       scaleUltimateFootprint(native,source,sourceQuality);
-      const secondary={...native,range:anchor.distance};
+      const secondary={...native,range:source.id==='goldfish'?anchor.distance*GOLDFISH_TRAVEL_SCALE:anchor.distance};
       const echoArea=source.id==='goldfish'||source.family==='wave'?null:
        chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel,true);
       if(echoArea?.mode==='area'){
@@ -2158,7 +2161,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       fx.fishConsumed.push(i);contacts++;
       world.goldfishImpactEvents??=[];
       world.goldfishImpactEvents.push({
-       attackId:fx.id,fishIndex:i,time:now,position:[...b]
+       attackId:fx.id,fishIndex:i,time:now,position:a.map((v,j)=>v+direction[j]*collision)
       });
       if(world.goldfishImpactEvents.length>128)
        world.goldfishImpactEvents.splice(0,world.goldfishImpactEvents.length-128);
