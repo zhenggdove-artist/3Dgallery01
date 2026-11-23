@@ -8,7 +8,7 @@ import arcRay from '../vendor/00gamedevs/source/arc-ray.js';
 import energyVortex from '../vendor/00gamedevs/source/energy-vortex.js';
 import frostWheel from '../vendor/00gamedevs/source/frost-wheel.js';
 import tidalSurge from '../vendor/00gamedevs/source/tidal-surge.js';
-import energySwordWave from '../vendor/00gamedevs/source/energy-sword-wave.js';
+import energySwordWave,{EnergySwordWaveVFX} from '../vendor/00gamedevs/source/energy-sword-wave.js';
 import {SABER_WAVE_COUNT,SABER_WAVE_FAN_ANGLE_DEG} from './shared/saber-wave.js';
 import revivalBloom from '../vendor/00gamedevs/source/revival-bloom.js';
 import dimensionalRend from '../vendor/00gamedevs/source/dimensional-rend.js';
@@ -38,9 +38,28 @@ export const REQUESTED_VFX=Object.freeze({
  'jellybrella:ultimate':{number:26,asset:'frost-wheel',original:true},
  'whip:ultimate':{number:48,asset:'black-hole',original:true}
 });
+// Performance root cause: the native five-wave fan simulates multiple CPU
+// particle pools per crescent, even after their GPU instance count is halved.
+// All five crescent meshes are still drawn with the ORIGINAL vendor shaders.
+// Suppress non-essential debris particle simulations entirely, reducing both
+// per-frame setMatrixAt loops and GPU draw calls without changing combat logic.
+const nativeSaberPrototype=EnergySwordWaveVFX.prototype;
+if(!nativeSaberPrototype.__templeLightweightFan){
+ nativeSaberPrototype._updateDeterministicParticles=function(){}; // no debris or smoke matrix uploads
+ nativeSaberPrototype.__templeLightweightFan=true;
+}
+function lightweightNativeSaber(options){
+ const fx=energySwordWave(options); // exact original signed vendor source
+ fx.group.traverse(node=>{
+  if(node.isInstancedMesh){node.count=0;node.visible=false;}
+  if(node.isLight)node.visible=false; // avoid five extra live point lights
+ });
+ fx.group.userData.saberPerfMode='native-crescents-only';
+ return fx;
+}
 const FACTORIES={
  'arc-ray':arcRay,'energy-vortex':energyVortex,'frost-wheel':frostWheel,
- 'tidal-surge':tidalSurge,'energy-sword-wave':energySwordWave,'revival-bloom':revivalBloom,
+ 'tidal-surge':tidalSurge,'energy-sword-wave':lightweightNativeSaber,'revival-bloom':revivalBloom,
  'dimensional-rend':dimensionalRend,'black-hole':blackHole,
  'darkchain-detonation':darkchain,'rolling-fireburst':rollingFireburst,
  'ice-lance-study':iceLance,'anime-flame-shield':animeFlame,'radiant-beam':radiantBeam,
@@ -223,20 +242,12 @@ export class NumberedWeaponEffects {
    size=Math.max(.25,Math.min(3.5,originalRadius/4.5));
   }
   const options={size,quality,detail:event.fusionEcho?.55:1,density:event.fusionEcho?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,color:channelColors[spec.asset]||undefined,
-    ...(spec.asset==='energy-sword-wave'?{theme:'void',quantity:SABER_WAVE_COUNT,spread:SABER_WAVE_FAN_ANGLE_DEG/60,speed:1}: {})};
+    ...(spec.asset==='energy-sword-wave'?{theme:'solar',quantity:SABER_WAVE_COUNT,spread:SABER_WAVE_FAN_ANGLE_DEG/60,speed:1}: {})};
   if(!options.color)delete options.color;
   if(spec.number===47)for(const old of [...this.active])if(old.spec.number===47)this.remove(old);
   const fx=this.acquire(spec,options);
-  if(spec.asset==='energy-sword-wave'){
-   // The official five crescents remain. Render only half of each vendor
-   // InstancedMesh's particles/debris; keep the MIT vendor source unchanged.
-   // Remember its ORIGINAL pool size so recycling never halves it again.
-   fx.group.traverse(node=>{
-    if(!node.isInstancedMesh)return;
-    node.userData.fullParticleCount??=node.count;
-    node.count=Math.max(1,Math.ceil(node.userData.fullParticleCount*.5));
-   });
-  }
+  // Sword fans use GPU-driven native yellow blades with ALL heavy CPU
+  // debris pools suppressed at factory construction, including warmup.
   const origin=vector(event.origin,new THREE.Vector3(0,1,0));
   // The official charged-beam ray starts at the weapon muzzle, not
   // at an unrelated remote ground-circle centre.
@@ -341,7 +352,7 @@ export class NumberedWeaponEffects {
   }
   fx.group.position.copy(origin);
   if(spec.asset==='energy-sword-wave'){
-   // The untouched 00GameDevs source emits five violet crescents on XZ,
+   // The unchanged 00GameDevs geometry emits five solar-yellow crescents on XZ,
    // facing +Z in a symmetrical 60-degree spread. Match actual server range.
    const forward=dir.clone().setY(0);
    if(forward.lengthSq()<.001)forward.set(0,0,1);
@@ -581,15 +592,7 @@ export class NumberedWeaponEffects {
    if(!e.key&&e.age>3&&!e.stopping&&typeof e.fx.stop==='function'){
     e.stopping=true;e.fx.stop();
    }
-   if(e.spec.asset==='energy-sword-wave'){
-    // The native fan evaluates five full CPU particle simulations per
-    // update. Coalesce frames to 30fps while keeping exact animation time.
-    e.saberFrameBudget=(e.saberFrameBudget||0)+dt;
-    if(e.saberFrameBudget>=1/30){
-     e.fx.update(e.saberFrameBudget);
-     e.saberFrameBudget=0;
-    }
-   }else e.fx.update(dt);
+   e.fx.update(dt); // native yellow blades now animate smoothly without CPU particle loops
    if(e.spec.number===20&&e.attackId){
     const synced=world?.vortexes?.find(v=>v.id===e.attackId);
     if(synced?.position)e.fx.group.position.lerp(new THREE.Vector3(...synced.position),Math.min(1,dt*18));

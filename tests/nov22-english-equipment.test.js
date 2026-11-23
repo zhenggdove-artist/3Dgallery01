@@ -6,9 +6,14 @@ import {weaponPresentation} from '../src/shared/weapon-presentation.js';
 import {explainEquipment} from '../src/shared/weapon-info.js';
 import {WEAPON_AFFIXES,weaponAffixLabel} from '../src/shared/weapon-affixes.js';
 
-test('all built-in gear names, descriptions and affixes display in English',()=>{
+test('equipment names, descriptions and affixes stay English; comfort consumables use requested Chinese',()=>{
  assert.ok(ITEMS.length>100);
  for(const item of ITEMS){
+  if(item.slot==='consumable'){
+   assert.equal(item.category,'撫慰心靈的物品');
+   assert.equal(item.description,'再給我來多一點吧！');
+   continue;
+  }
   assert.doesNotMatch(item.name,/[\u3400-\u9fff]/,'name '+item.id);
   assert.doesNotMatch(String(item.description||''),/[\u3400-\u9fff]/,'catalog description '+item.id);
   assert.doesNotMatch(explainEquipment(item),/[\u3400-\u9fff]/,'details '+item.id);
@@ -31,10 +36,10 @@ test('affix fusion title remains ordered and preserves duplicate prefixes',()=>{
  assert.match(details,/Brutal: Critical Chance \+10%/);
  assert.match(details,/Stalwart: Damage Reduction \+4.5%/);
 });
-test('BAG and SHOP equipment labels are English',()=>{
+test('BAG weapon labels remain English while comfort consumables have Chinese title',()=>{
  const bag=readFileSync(new URL('../src/bag-view.js',import.meta.url),'utf8');
  const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
- assert.doesNotMatch(bag,/[\u3400-\u9fff]/);
+ assert.match(bag,/撫慰心靈的物品/);
  assert.match(bag,/Success Chance:/);
  assert.match(bag,/Close Range/);
  assert.match(ui,/Random Affixes: Each weapon/);

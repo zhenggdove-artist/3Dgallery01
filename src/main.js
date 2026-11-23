@@ -439,6 +439,14 @@ ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(item
 ui.addEventListener('original-action',event=>sendAction(event.detail.action,event.detail));
 // Safari's AudioContext must be resumed during the trusted jump touch gesture.
 ui.addEventListener('jump',()=>{audio.unlock();controller?.jump();});
+const pendingQuickUses=new Set();
+ui.addEventListener('quick-use',event=>{
+ const slot=event.detail?.slot;
+ if(!Number.isInteger(slot)||slot<0||slot>2||pendingQuickUses.has(slot))return;
+ if(!joined||self?.role!=='fighter'||!controller?.enabled||ui.panelName)return;
+ pendingQuickUses.add(slot);
+ void sendAction('use-consumable',{slot}).finally(()=>pendingQuickUses.delete(slot));
+});
 // On-screen A/Q is the sole interaction/throw control on desktop and mobile.
 // For firearms A ONLY switches
 // camera: standard > shoulder > sniper scope > standard; canvas tap fires.

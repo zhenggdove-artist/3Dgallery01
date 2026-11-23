@@ -131,7 +131,7 @@ export function migrateWorld(raw,now=Date.now()){
 
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
-    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
+    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
     gmAllItemsGranted:!!admin,gmKnownCustomWingIds:[],collectorSoldArtworks:{},
     fusion:{},wingTrialDraws:0,wingPaidDraws:0,wingDesignCredits:0,createdAt:now,updatedAt:now,lastAttackAt:0};
 }
@@ -159,6 +159,12 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   if(!current.collectorSoldArtworks||typeof current.collectorSoldArtworks!=='object'||Array.isArray(current.collectorSoldArtworks))
    current.collectorSoldArtworks={};
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[STARTER_LOADOUT.weapon];
+  // Preserve chosen item even when its stack is empty: it will be shown
+  // with a red depleted overlay and automatically reactivate after restock.
+  const savedQuickSlots=Array.isArray(current.quickSlots)?current.quickSlots:[];
+  current.quickSlots=Array.from({length:3},(_,i)=>{
+   const item=itemById(savedQuickSlots[i]);return item?.slot==='consumable'?item.id:null;
+  });
   // One-time migration supplies every base item, including all premium wings.
   // Never replenish items removed later as fusion materials. Newly published
   // custom wings are separately granted once, even to established GM accounts.
@@ -218,7 +224,7 @@ export function publicProfile(profile){
 
 export function worldProfileView(world,actorKey,now){
  const profile=world.profiles[actorKey];
- return profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
+ return profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),quickSlots:clone(profile.quickSlots||[null,null,null]),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
 }
 
 export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true){
@@ -622,6 +628,8 @@ export function applyAction(world,actor,body,context={}){
     case 'pickup-artwork':result=pickupArtwork(world,actor,body,now);break;
     case 'throw-artwork':result=throwArtwork(world,profile,actor,body,context,now);break;
     case 'buy':result=buy(world,profile,body);break;
+    case 'assign-consumable':result=assignConsumable(profile,body);break;
+    case 'use-consumable':result=useConsumable(world,profile,actor,body,now);break;
     case 'sell':result=sell(world,profile,body);break;
     case 'equip':result=equip(profile,body);break;
     case 'unequip':if(!EQUIPPABLE_SLOTS.includes(body.slot))return {error:'Invalid slot'};profile.equipment[body.slot]=null;delete profile.equippedInstanceIds[body.slot];result={notice:'Unequipped'};break;
@@ -711,7 +719,56 @@ function throwArtwork(world,profile,actor,body,context,now){
 
 }
 
-function buy(world,profile,body){const item=SHOP_ITEMS.find(entry=>entry.id===body.itemId);if(!item)return {error:'Item is not sold'};if(profile.inventory.includes(item.id)&&item.slot!=='seed')return {error:'Already owned'};if(profile.inventory.length>=600)return {error:'Inventory full'};if(!spend(profile,item.price,world))return {error:'Not enough coins'};appendInventoryInstance(profile,item.id);profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';return {notice:`Purchased ${item.name}`};}
+function buy(world,profile,body){
+ const item=SHOP_ITEMS.find(entry=>entry.id===body.itemId);
+ if(!item)return {error:'Item is not sold'};
+ const quantity=body.quantity===undefined?1:body.quantity;
+ // One atomic order, no partial billing or partial inventory allocation.
+ if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)
+  return {error:'Quantity must be an integer from 1 to 99'};
+ if(profile.inventory.length+quantity>600)return {error:'Inventory full'};
+ const total=item.price*quantity;
+ if(!Number.isSafeInteger(total)||total<0)return {error:'Invalid purchase amount'};
+ if(!spend(profile,total,world))return {error:'Not enough coins'};
+ for(let i=0;i<quantity;i++)appendInventoryInstance(profile,item.id);
+ profile.itemOrigins??={};profile.itemOrigins[item.id]='shop';
+ return {notice:`Purchased ${item.name} ×${quantity} · ${total} coins`,
+  purchased:{itemId:item.id,quantity,total}};
+}
+function assignConsumable(profile,body){
+ const index=body.slot;
+ if(!Number.isInteger(index)||index<0||index>=3)return {error:'Invalid consumable slot'};
+ const itemId=body.itemId??null;
+ if(itemId!==null){
+  const item=itemById(itemId);
+  if(item?.slot!=='consumable')return {error:'Not a restorative consumable'};
+  if(!profile.inventory.includes(itemId))return {error:'You do not own this consumable'};
+ }
+ profile.quickSlots??=[null,null,null];
+ profile.quickSlots[index]=itemId;
+ return {notice:itemId?`Quick slot ${index+1}: ${itemById(itemId).name}`:`Quick slot ${index+1} cleared`};
+}
+function useConsumable(world,profile,actor,body,now){
+ const index=body.slot,itemId=profile.quickSlots?.[index];
+ if(!Number.isInteger(index)||index<0||index>=3)return {error:'Invalid consumable slot'};
+ const item=itemById(itemId);
+ if(item?.slot!=='consumable')return {error:'No restorative consumable assigned'};
+ const inventoryIndex=profile.inventory.indexOf(itemId);
+ if(inventoryIndex<0)return {error:'Out of stock · Restock this consumable at SHOP'};
+ if(profile.hp>=profile.maxHp)return {error:'Health is already full'};
+ const hpBefore=profile.hp;
+ // A healing percentage is measured against CURRENT maximum HP, not coins
+ // or the untrusted client-provided HP value.
+ const restored=Math.min(profile.maxHp-hpBefore,Math.ceil(profile.maxHp*item.healFraction));
+ if(restored<=0)return {error:'Health is already full'};
+ removeInventoryInstance(profile,inventoryIndex);
+ profile.hp=Math.min(profile.maxHp,hpBefore+restored);
+ recordTempleDamage(world,{amount:restored,kind:'heal',
+  position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],
+  owner:profile.key,target:profile.key},now);
+ return {notice:`Restored ${restored} HP · ${item.name}`,
+  healed:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
+}
 function sell(world,profile,body){const item=itemById(body.itemId),index=profile.inventory.indexOf(body.itemId);if(!item||index<0)return {error:'Item is not owned'};if(item.id===STARTER_LOADOUT.weapon||Object.values(profile.equipment).includes(item.id))return {error:'Unequip this item before selling'};removeInventoryInstance(profile,index);earn(profile,item.sell||Math.floor((item.price||0)*.25),world);return {notice:`Sold ${item.name} · +${item.sell||0} coins`};}
 function equip(profile,body){const item=itemById(body.itemId);if(!item||!profile.inventory.includes(item.id)||!EQUIPPABLE_SLOTS.includes(item.slot))return {error:'Item is not owned'};const index=Number.isInteger(body.inventoryIndex)?body.inventoryIndex:profile.inventory.indexOf(item.id);if(profile.inventory[index]!==item.id)return {error:'Inventory changed: choose the equipment again'};selectEquipmentInstance(profile,item.slot,index);return {notice:`Equipped ${item.name}`};}
 

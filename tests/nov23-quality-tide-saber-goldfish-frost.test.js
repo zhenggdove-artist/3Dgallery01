@@ -17,7 +17,7 @@ test('shop groups only true tier variants; selected ID remains authoritative',()
  assert.match(src,/shopVariantChoice/);
  assert.match(src,/data-shop-variant/);
  assert.match(src,/variants\.find\(v=>v\.id===this\.shopVariantChoice\[key\]\)/);
- assert.match(src,/data-\$\{owned\?'equip':'buy'\}/);
+ assert.match(src,/data-buy=\"\$\{escape\(selected\.id\)\}\"/);
  assert.match(src,/SHOP_ITEMS/);
 });
 test('only real tide staff has a triple-width ultimate channel',()=>{
@@ -65,13 +65,13 @@ test('frost ultimate circle is one-third the previous diameter, shifted two new 
  assert.ok(Math.abs(area.center[2]-(distanceWithoutFrostOffset+stats.radius*4))<.002);
  assert.ok(area.center[2]>stats.radius*4);
 });
-test('five-wave purple saber has half-size ray and a 30fps native CPU VFX budget',()=>{
+test('five-wave yellow saber keeps its half-size ray with all native CPU debris disabled',()=>{
  const saber=itemById('saber-3'),base=attackStats(saber,1);
  const scaled=scaleUltimateFootprint({...base},saber);
  assert.ok(Math.abs(scaled.range-base.range*.6*.25)<.002);
  const vfx=read('src/numbered-weapon-effects.js');
- assert.match(vfx,/fullParticleCount\*\.5/);
- assert.match(vfx,/saberFrameBudget>=1\/30/);
+ assert.match(vfx,/node\.isInstancedMesh/);
+ assert.match(vfx,/nativeSaberPrototype\._updateDeterministicParticles/);
  assert.match(vfx,/quantity:SABER_WAVE_COUNT/);
 });
 test('goldfish direct hit cap halves again; visuals remain instanced',()=>{

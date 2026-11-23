@@ -4,6 +4,7 @@ import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
 import {createHeadgear} from './reletter/headgear-model.js';
 import {createWings} from './reletter/garden-art.js';
 import {itemById} from './shared/catalog.js';
+import {comfortCashImage} from './comfort-cash-art.js';
 
 // Only the actual model (or the outfit's authored full-resolution artwork)
 // may appear in SHOP/BAG. There is no legacy glyph or temporary icon layer.
@@ -17,6 +18,11 @@ export const previewCount=()=>({ready:finished.size,pending:pending.size,failed:
 export function itemPreview(item){
  if(!item)return Promise.resolve(null);
  const key=keyOf(item);
+ if(item.slot==='consumable'){
+  const image=comfortCashImage(item);
+  finished.set(key,image);
+  return Promise.resolve(image);
+ }
  if(finished.has(key))return Promise.resolve(finished.get(key));
  if(failed.has(key))return Promise.resolve(null);
  if(pending.has(key))return pending.get(key);
@@ -57,7 +63,7 @@ export async function warmItemPreviews(items,onProgress=()=>{}){
 // Always creates the actual detailed preview. Entire sets are updated in one
 // DOM turn after the required assets resolve, never as a visible glyph cascade.
 export function previewMarkup(item){
- const url=itemPreviewUrl(item);
+ const url=item?.slot==='consumable'?comfortCashImage(item):itemPreviewUrl(item);
  return url?'<img data-preview="'+escape(item.id)+'" src="'+escape(url)+'" alt="" decoding="async" loading="eager">':
   '<span class="equipment-preview-pending" data-preview="'+escape(item.id)+'" aria-label="Loading full equipment model"></span>';
 }
