@@ -1,5 +1,5 @@
 // Three-step chat sizing: max -> two-line medium -> + only -> max.
-// Hold + for one second to minimize immediately. Long-press the panel to move.
+// Hold + for one second to minimize immediately. Hold a non-interactive part of the panel for 1.5s to move on touch or mouse.
 // A new position key discards old placements that stranded chat high on iOS.
 export function bindChatLayout(){
  const panel=document.getElementById('chat-hud');
@@ -8,6 +8,7 @@ export function bindChatLayout(){
  if(!panel||!handle||!toggle)return;
  const mobile=matchMedia('(pointer:coarse)').matches;
  const STORAGE_KEY='temple-chat-position-v3';
+ const DRAG_HOLD_MS=1500;
  const sizes=['max','medium','min'];
  let size='medium',active=null,timer=null,toggleTimer=null,ignoreClickUntil=0,manualPosition=false;
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
@@ -29,7 +30,7 @@ export function bindChatLayout(){
   const yMin=viewport?.offsetTop||0;
   const x=limit(left,4,width-panel.offsetWidth-4),y=limit(top,yMin+4,yMin+height-panel.offsetHeight-4);
   const r={left:x,top:y,right:x+panel.offsetWidth,bottom:y+panel.offsetHeight};
-  if(blocking().some(b=>collide(r,b)))return false;
+  // Explicit user drags may position CHAT anywhere within the viewport.
   panel.style.left=x+'px';panel.style.top=y+'px';panel.style.right='auto';
   panel.style.bottom='auto';panel.style.transform='none';
   return true;
@@ -94,7 +95,9 @@ export function bindChatLayout(){
    const p=e.touches[0],r=panel.getBoundingClientRect();
    active={id:p.identifier,x:p.clientX,y:p.clientY,left:r.left,top:r.top,mode:'pending'};
    clearTimeout(timer);
-   timer=setTimeout(()=>{if(active?.id===p.identifier)active.mode='move';},1000);
+   timer=setTimeout(()=>{if(active?.id===p.identifier){
+    active.mode='move';panel.classList.add('chat-dragging');
+   }},DRAG_HOLD_MS);
   },{passive:true});
   panel.addEventListener('touchmove',e=>{
    if(!active)return;
@@ -110,25 +113,39 @@ export function bindChatLayout(){
    if(!active)return;
    if(e.changedTouches&&![...e.changedTouches].some(t=>t.identifier===active.id))return;
    clearTimeout(timer);if(active.mode==='move')save();active=null;
+   panel.classList.remove('chat-dragging');
   };
   for(const type of ['touchend','touchcancel'])panel.addEventListener(type,finish);
  }else{
-  handle.addEventListener('pointerdown',e=>{
-   if(e.target.closest('button')||active)return;
-   e.preventDefault();const r=panel.getBoundingClientRect();
-   active={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,height:r.height,mode:'pending'};
-   handle.setPointerCapture(e.pointerId);
-   timer=setTimeout(()=>{if(active?.id===e.pointerId)active.mode='move';},1000);
+  // Mouse users may hold anywhere on the CHAT window, not only the resize bar.
+  // Ordinary buttons and the message input retain their native interactions.
+  panel.addEventListener('pointerdown',e=>{
+   if(e.button!==0||active||size==='min'||
+      e.target.closest('button,input,textarea,select,form'))return;
+   const r=panel.getBoundingClientRect();
+   active={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,
+    height:r.height,onHandle:handle.contains(e.target),mode:'pending'};
+   try{panel.setPointerCapture(e.pointerId);}catch{}
+   clearTimeout(timer);
+   timer=setTimeout(()=>{if(active?.id===e.pointerId&&active.mode==='pending'){
+    active.mode='move';panel.classList.add('chat-dragging');
+   }},DRAG_HOLD_MS);
   });
-  handle.addEventListener('pointermove',e=>{
+  panel.addEventListener('pointermove',e=>{
    if(!active||active.id!==e.pointerId)return;
    const dx=e.clientX-active.x,dy=e.clientY-active.y;
    if(active.mode==='move'){
+    e.preventDefault();
     if(relocate(active.left+dx,active.top+dy))manualPosition=true;
     return;
    }
-   if(Math.hypot(dx,dy)>8){clearTimeout(timer);active.mode='resize';}
-   if(active.mode==='resize'){
+   if(active.mode==='pending'&&Math.hypot(dx,dy)>8){
+    clearTimeout(timer);
+    // Preserve immediate vertical resizing from the small CHAT header.
+    if(!active.onHandle){active=null;return;}
+    active.mode='resize';
+   }
+   if(active?.mode==='resize'){
     setSize('max');panel.style.setProperty('--chat-height',
      limit(active.height-dy,112,Math.min(350,innerHeight*.5))+'px');
    }
@@ -136,8 +153,10 @@ export function bindChatLayout(){
   const finish=e=>{
    if(!active||e.pointerId!==active.id)return;
    clearTimeout(timer);if(active.mode==='move')save();active=null;
+   panel.classList.remove('chat-dragging');
+   try{if(panel.hasPointerCapture(e.pointerId))panel.releasePointerCapture(e.pointerId);}catch{}
   };
-  for(const type of ['pointerup','pointercancel','lostpointercapture'])handle.addEventListener(type,finish);
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])panel.addEventListener(type,finish);
  }
  addEventListener('resize',()=>{
   if(size==='max')panel.style.setProperty('--chat-height',maxHeight()+'px');
