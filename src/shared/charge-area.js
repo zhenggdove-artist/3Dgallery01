@@ -167,7 +167,7 @@ export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
  }
  // The returning giraffe sweeps the entire outbound ray (then retraces it):
  // show the same full-length corridor instead of a tiny remote AoE circle.
- if((item?.id==='giraffe'&&stats?.ultimate)||(isChannelStaff(item)&&!(item?.family==='ice'&&stats?.ultimate))||((item?.baseId||item?.id)==='accordion'&&stats?.ultimate)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||(item?.baseId||item?.id)==='goldfish'){
+ if(((item?.baseId||item?.id)==='giraffe'&&stats?.ultimate)||(isChannelStaff(item)&&!(item?.family==='ice'&&stats?.ultimate))||((item?.baseId||item?.id)==='accordion'&&stats?.ultimate)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||(item?.baseId||item?.id)==='goldfish'){
   const x=origin[0]+dx*range*.5,z=origin[2]+dz*range*.5;
   return {shape:'rectangle',position:[x,at(x,z),z],yaw,length:range,width,range};
  }
