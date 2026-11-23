@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import {makeHeldWeapon} from './reletter/held-weapons.js';
 import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
 import {createHeadgear} from './reletter/headgear-model.js';
+import {attachOutfit,disposeOutfit} from './reletter/outfit-model.js';
+import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
+import {orientPortraitModel} from './equipment-portrait.js';
 import {createWings} from './reletter/garden-art.js';
 import {itemById} from './shared/catalog.js';
 import {comfortCashImage} from './comfort-cash-art.js';
@@ -11,6 +14,9 @@ import {comfortCashImage} from './comfort-cash-art.js';
 // Shared promises prevent redundant GPU work across both panels.
 const finished=new Map(),pending=new Map(),failed=new Set();
 let renderer,scene,camera,queue=Promise.resolve();
+let previewCharacterSource=null;
+export function setOutfitPreviewCharacter(source){previewCharacterSource=source||null;}
+
 const keyOf=item=>item.id+':'+(item.updatedAt||0);
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const itemPreviewUrl=item=>item?finished.get(keyOf(item))||null:null;
@@ -137,21 +143,28 @@ function shapeModel(item){
 // Lightweight 3D SHOP portrait for procedurally created creature outfits.
 // Uses the exact same animal hood sculpture as the equipped costume.
 function creatureOutfitProductPortrait(item){
- const g=new THREE.Group(),color=new THREE.Color(item.color||'#94b8cb');
- const fabric=new THREE.MeshStandardMaterial({color,roughness:.76});
- const pale=new THREE.MeshStandardMaterial({color:'#f0e7d9',roughness:.8});
- const metal=new THREE.MeshStandardMaterial({color:'#363c48',roughness:.64});
- const add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);g.add(m);return m;};
- add(new THREE.CylinderGeometry(.45,.52,1.35,12),fabric,0,-.45,0);
- add(new THREE.SphereGeometry(.30,16,12),pale,0,-.35,.45).scale.set(1,1.25,.2);
- for(const side of [-1,1]){
-  const arm=add(new THREE.CapsuleGeometry(.16,.82,4,8),fabric,side*.62,-.35,0);arm.rotation.z=-side*.28;
-  add(new THREE.CapsuleGeometry(.18,.45,4,8),fabric,side*.27,-1.38,0);
-  add(new THREE.BoxGeometry(.32,.16,.45),metal,side*.27,-1.68,.09);
- }
- const hood=createHeadgear(THREE,{...item,design:item.creature});
- hood.scale.setScalar(.57);hood.position.set(0,.61,.06);g.add(hood);
- return g;
+ if(!previewCharacterSource)throw Error('Character GLB must load before outfit portraits');
+ // Same skinned body, fabric shader and attachment method as an equipped
+ // original outfit. Never show a primitive-body stand-in in SHOP or BAG.
+ const model=cloneSkeleton(previewCharacterSource);
+ model.scale.setScalar(100);
+ model.traverse(object=>{
+  if(object.isMesh){
+   if(object.geometry)object.geometry=object.geometry.clone();
+   const materials=Array.isArray(object.material)?object.material:[object.material];
+   const copies=materials.map(mat=>mat?.clone()).filter(Boolean);
+   if(copies.length)object.material=Array.isArray(object.material)?copies:copies[0];
+  }
+  if(object.isSkinnedMesh)object.skeleton.pose();
+ });
+ model.updateMatrixWorld(true);
+ const outfit=attachOutfit(THREE,model,item,{hood:true});
+ if(!outfit)throw Error('Creature outfit could not attach to skeleton: '+item.id);
+ model.userData.previewOutfitRecord=outfit;
+ orientPortraitModel(model,{precise:false});
+ model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-Math.PI/2));
+ model.updateMatrixWorld(true);
+ return model;
 }
 function saberProductPortrait(){
  const g=new THREE.Group();
@@ -185,8 +198,8 @@ async function renderPreview(item){
  const model=item.family==='saber'?saberProductPortrait():item.slot==='outfit'&&item.creature?creatureOutfitProductPortrait(item):shapeModel(item);
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
- const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*2.2;
- camera.position.copy(center).add((item.family==='saber'?new THREE.Vector3(0,.06,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
+ const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*(item.slot==='outfit'&&item.creature?1.9:2.2);
+ camera.position.copy(center).add((item.family==='saber'||item.slot==='outfit'&&item.creature?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
  camera.lookAt(center);
  try{
   await renderer.compileAsync(scene,camera);
@@ -198,12 +211,14 @@ async function renderPreview(item){
   try{await preloadImage(url);}catch(error){URL.revokeObjectURL(url);throw error;}
   return url;
  }finally{
+  if(model.userData.previewOutfitRecord){disposeOutfit(model.userData.previewOutfitRecord);delete model.userData.previewOutfitRecord;}
   model.removeFromParent();
   const geometries=new Set(),materials=new Set();
   model.traverse(o=>{
    if(o.geometry)geometries.add(o.geometry);
    for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);
   });
+  model.traverse(o=>{if(o.isSkinnedMesh)o.skeleton?.dispose?.();});
   geometries.forEach(g=>{if(!g.userData?.sharedPreview)g.dispose();});
   materials.forEach(m=>{if(!m.userData?.sharedPreview)m.dispose();});
   if(!model.userData.texture?.userData.sharedGarden)model.userData.texture?.dispose();
