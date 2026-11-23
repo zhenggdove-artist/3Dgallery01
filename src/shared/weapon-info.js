@@ -28,7 +28,7 @@ const specials={
  goldfish:'Goldfish Water Cannon — Normal: launch water jets. Ultimate: summon a three-dimensional school of goldfish that swim forward and damage enemies on contact.',
  clam:'Giant Clam — Normal: swing a snapping shell. Ultimate: fire spinning clams forward.',
  'white-cat':'White Cat SMG — Rapid-fire colorful bullets using the first-person reticle. Charge for a continuous rainbow barrage.',
- 'black-cat':'Black Cat Sniper Rifle — Scoped shots are precise; shoulder taps fire inaccurate shots. Only after fusing a charged weapon, hold A in shoulder view to fire a widely drifting, long-range piercing rainbow spiral cannon.',
+ 'black-cat':'Black Cat Sniper Rifle — The sniper scope delivers precise shots; shoulder taps fire inaccurate shots. Only after fusing a charged weapon, hold A in shoulder view to fire a widely drifting, long-range piercing rainbow spiral cannon.',
  'calico-cat':'Calico Cat Shotgun — Scatter independently colliding pellets. Ultimate: increase the spread and power.',
  fan:'Rampaging Electric Fan — Normal: swing to generate gusts. Ultimate: unleash moving tornadoes that slow enemies.',
  telephone:'Screaming Telephone — Normal: swing the coiled handset cord. Ultimate: emit weakening rings of sound.',
@@ -67,6 +67,7 @@ export function explainWeapon(item,fusion=null){
  if((item.baseId||item.id)==='jellybrella')charged.radius=Math.max(10,charged.radius*2);
  if((item.baseId||item.id)==='goldfish')charged.radius=GOLDFISH_SWIM_RADIUS*quality.visual;
  scaleUltimateFootprint(charged,effective,quality);
+ if((item.baseId||item.id)==='black-cat')charged.range=SNIPER_RANGE;
  if((item.baseId||item.id)==='goldfish')charged.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
  if((item.baseId||item.id)==='giraffe')charged.range=+(item.chargedRange*quality.range).toFixed(2);
  const cls=({near:'Close-Range',mid:'Mid-Range',far:'Long-Range'})[weaponClass(item)]||'Special';
