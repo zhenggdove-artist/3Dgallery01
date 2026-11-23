@@ -87,6 +87,10 @@ try{
    assert.equal(joins[0].body.color,'#b58bb5');
   }else{
    await page.locator('#entry-form').waitFor({state:'visible'});
+   assert.equal(await page.locator('#guest-form').isVisible(),false,
+    'Guest sign-in must disappear after verifying a new Google identity');
+   assert.equal(await page.locator('#guest-enter').isEnabled(),false,
+    'A stale guest form cannot downgrade a verified Google login');
    assert.equal(joins.length,0,'new profile must wait for explicit name and submit');
    await page.locator('#player-name').fill('NewGoogleCharacter');
    await page.locator('#entry-form').evaluate(form=>form.requestSubmit());

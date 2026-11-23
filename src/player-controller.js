@@ -107,7 +107,7 @@ export class PlayerController{
   }
   jump(){if(this.awaitingSpawn||this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;this.onJump?.();return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
   setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pinch=null;this.pointers.clear();}}
-  setRole(role){this.role=role;this.root.visible=role==='fighter';}
+  setRole(role){this.role=role;this.root.visible=role==='fighter';this.followTarget=null;this.spectatorLift=0;this.cameraLocked=false;this.authorityHoldUntil=0;this.stunUntil=0;}
   setFollowTarget(root=null){this.followTarget=root;}
   teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;this.vortexSpin=null;}
   beginPanBlast(hit){
@@ -243,16 +243,26 @@ export class PlayerController{
        this.speed=0;this.animation='walk';this.updateCamera(dt);return this.state();
       }
     }
-    if(this.status.freeze){this.speed=0;this.animation='idle';this.updateCamera(dt);return this.state();}
-    if(performance.now()<(this.stunUntil||0)){this.animation='idle';this.updateCamera(dt);return this.state();}
+    if(this.status.freeze&&this.role==='fighter'){this.speed=0;this.animation='idle';this.updateCamera(dt);return this.state();}
+    if(this.role==='fighter'&&performance.now()<(this.stunUntil||0)){this.animation='idle';this.updateCamera(dt);return this.state();}
     const has=(a,b)=>this.keys.has(a)||this.keys.has(b);
     let x=Number(has('KeyD','ArrowRight'))-Number(has('KeyA','ArrowLeft'))+this.move.x;
     let z=Number(has('KeyS','ArrowDown'))-Number(has('KeyW','ArrowUp'))+this.move.y;
-    if(this.status.confuse){const t=performance.now()*.0075;x=Math.cos(t*1.7+this.seat*1.31);z=Math.sin(t*1.3+this.seat*2.09);}
-    if(this.status.root){x=0;z=0;this.speed=0;}
+    if(this.status.confuse&&this.role==='fighter'){const t=performance.now()*.0075;x=Math.cos(t*1.7+this.seat*1.31);z=Math.sin(t*1.3+this.seat*2.09);}
+    if(this.status.root&&this.role==='fighter'){x=0;z=0;this.speed=0;}
     const moving=Math.hypot(x,z)>.1;
     this.direction.set(x*Math.cos(this.yaw)+z*Math.sin(this.yaw),0,-x*Math.sin(this.yaw)+z*Math.cos(this.yaw)).normalize();
-    if(this.role==='spectator'){if(moving)this.followTarget=null;this.root.position.addScaledVector(this.direction,10*dt);this.root.position.y=THREE.MathUtils.clamp(this.root.position.y+((this.keys.has('KeyE')?1:0)-(this.keys.has('KeyQ')?1:0))*10*dt,2,56);const r=Math.hypot(this.root.position.x,this.root.position.z);if(r>ARENA_RADIUS+20){this.root.position.x*=(ARENA_RADIUS+20)/r;this.root.position.z*=(ARENA_RADIUS+20)/r;}this.updateCamera(dt);return this.state();}
+    if(this.role==='spectator'){
+      const rise=Number(this.keys.has('KeyE')||this.keys.has('Space'));
+      const sink=Number(this.keys.has('KeyQ')||this.keys.has('ShiftLeft')||this.keys.has('ShiftRight'));
+      const lift=(this.spectatorLift||0)+rise-sink;
+      if(moving||Math.abs(lift)>.1)this.followTarget=null;
+      this.root.position.addScaledVector(this.direction,10*dt);
+      this.root.position.y=THREE.MathUtils.clamp(this.root.position.y+THREE.MathUtils.clamp(lift,-1,1)*10*dt,1.5,72);
+      const r=Math.hypot(this.root.position.x,this.root.position.z);
+      if(r>ARENA_RADIUS+20){this.root.position.x*=(ARENA_RADIUS+20)/r;this.root.position.z*=(ARENA_RADIUS+20)/r;}
+      this.updateCamera(dt);return this.state();
+    }
     // Destroyed rooftops can lose height while the player is standing still.
     // Recheck support every tick, not only after horizontal input: otherwise
     // clients repeatedly fall into the old house collider and spring upward
@@ -289,8 +299,18 @@ export class PlayerController{
    this.updateCamera(1,true);
   }
   updateCamera(dt,force=false){
-   if(this.cameraLocked&&!force)return;
-   const focus=this.followTarget?.visible?this.followTarget.position:this.root.position;
+    if(this.cameraLocked&&!force)return;
+    if(this.role==='spectator'&&!this.followTarget){
+      // One invisible free camera for public spectators and GM test.
+      this.camera.position.copy(this.root.position).add(new THREE.Vector3(0,1.5,0));
+      const direction=new THREE.Vector3(
+       -Math.sin(this.yaw)*Math.cos(this.pitch),-Math.sin(this.pitch),
+       -Math.cos(this.yaw)*Math.cos(this.pitch));
+      this.camera.lookAt(this.camera.position.clone().add(direction));
+      this.target.copy(this.root.position);
+      return;
+    }
+    const focus=this.followTarget?.visible?this.followTarget.position:this.root.position;
    this.target.lerp(new THREE.Vector3(focus.x,focus.y+1.5,focus.z),Math.min(1,dt*4));
    // Pull back the third-person view for the lightning/prism pair only.
    // Separate the player silhouette from the original vendor's long beam.
