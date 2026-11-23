@@ -7,7 +7,7 @@ import {projectileFlightMs,visibleCollisionLifetimeMs} from '../src/shared/comba
 import {saberWaveCrest,SABER_WAVE_COUNT,SABER_WAVE_FAN_ANGLE_DEG,SABER_WAVE_DURATION_MS} from '../src/shared/saber-wave.js';
 import {NumberedWeaponEffects,requestedEffect} from '../src/numbered-weapon-effects.js';
 
-test('native Energy Sword Wave replaces magma with exactly five violet blades',()=>{
+test('native Energy Sword Wave retains exactly five golden-yellow blades',()=>{
  const item=itemById('saber-1');
  assert.ok(item);
  const event={weapon:item.id,origin:[0,1.16,0],direction:[0,0,1],range:12,
@@ -19,7 +19,7 @@ test('native Energy Sword Wave replaces magma with exactly five violet blades',(
  const scene=new THREE.Scene(),effects=new NumberedWeaponEffects(scene);
  assert.equal(effects.play(event,item,null),true);
  const live=effects.active[0];
- assert.equal(live.fx.settings.theme,'void');
+ assert.equal(live.fx.settings.theme,'solar');
  assert.equal(live.fx.settings.quantity,5);
  assert.equal(live.fx.settings.spread,1);
  assert.equal(live.group.userData.vfxId,'energy-sword-wave');
