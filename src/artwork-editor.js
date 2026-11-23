@@ -25,7 +25,7 @@ export class ArtworkEditor{
     this.panel.addEventListener('change',e=>{if(!this.selected)return;if(e.target.hasAttribute('data-platform-radius')){const n=Number(e.target.value);if(!Number.isFinite(n)||n<1.5||n>14){this.status('圓盤半徑限 1.5–14');return;}this.platformRadius=n;this.selected.userData.previewPlatformRadius=n;this.arena.displayPlatforms.sync();this.dirty=true;this.status('圓盤尺寸尚未儲存');return;}if(e.target.dataset.appearance){this.appearance[e.target.dataset.appearance]=e.target.type==='color'?e.target.value:Number(e.target.value);applyArtworkAppearance(this.selected,this.appearance);this.dirty=true;this.status('尚未儲存');return;}if(!e.target.dataset.axis)return;const [prop,index]=e.target.dataset.axis.split('-'),n=Number(e.target.value);if(!Number.isFinite(n))return;this.selected[prop].setComponent?this.selected[prop].setComponent(+index,n):this.selected.rotation[['x','y','z'][index]]=THREE.MathUtils.degToRad(n);this.dirty=true;this.status('尚未儲存');});
   }
   raycast(e){const rect=this.canvas.getBoundingClientRect();this.pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);this.ray.setFromCamera(this.pointer,this.camera);}
-  select(root){if(this.selected===root)return;if(this.dirty)return this.toast('請先儲存或取消目前編輯');this.close();this.selected=root;const platform=artworkDefinitions(this.arena.world).find(p=>p.id===root.userData.platformId),layout=this.arena.world?.artworkLayout?.[platform.id]||this.arena.defaultLayout[platform.id]||{position:platform.artPosition,rotation:[0,platform.artYaw,0],scale:[1,1,1]};this.expectedRevision=this.arena.world?.artworkLayout?.[platform.id]?.revision||0;this.original=structuredClone(layout);this.supportsPlatform=!(this.arena.world?.customArtworks||[]).some(a=>a.id===platform.id);this.platformRadius=layout.platformRadius??this.arena.displayPlatforms.discs.find(d=>d.display&&d.artwork===platform.id)?.radius??3;this.appearance={...artworkAppearanceDefaults(root.userData.record),...layout.appearance};this.title=String(layout.title??root.userData.record.title??'').slice(0,120);this.originalTitle=String(root.userData.record.title??'');root.userData.editTitleDraft=this.title;root.userData.editing=true;root.position.fromArray(layout.position);root.rotation.set(...layout.rotation);root.scale.fromArray(layout.scale);root.updateMatrixWorld(true);
+  select(root){if(this.selected===root)return;if(this.dirty)return this.toast('請先儲存或取消目前編輯');this.close();this.selected=root;const platform=artworkDefinitions(this.arena.world).find(p=>p.id===root.userData.platformId),layout=this.arena.world?.artworkLayout?.[platform.id]||this.arena.defaultLayout[platform.id]||{position:platform.artPosition,rotation:[0,platform.artYaw,0],scale:[1,1,1]};this.expectedRevision=this.arena.world?.artworkLayout?.[platform.id]?.revision||0;this.original=structuredClone(layout);this.supportsPlatform=!(this.arena.world?.customArtworks||[]).some(a=>a.id===platform.id);this.platformRadius=layout.platformRadius??this.arena.displayPlatforms.discs.find(d=>d.display&&d.artwork===platform.id)?.radius??3;this.appearance={...artworkAppearanceDefaults(root.userData.record),...layout.appearance};this.title=String(layout.title??root.userData.record.title??'').slice(0,120);this.originalTitle=String(root.userData.record.title??'');root.userData.editTitleDraft=this.title;root.userData.editing=true;root.position.fromArray(layout.position);root.rotation.set(...layout.rotation);root.scale.fromArray(layout.scale);root.updateMatrixWorld(true);addArtworkTitlePlate(root,this.title,this.appearance.labelBackground);
     const inverse=root.matrixWorld.clone().invert();this.box.makeEmpty();root.traverse(o=>{if(!o.geometry)return;o.geometry.computeBoundingBox();this.box.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse,o.matrixWorld)));});
     this.panel.hidden=false;this.panel.innerHTML=editorPanelMarkup(this.appearance,this.platformRadius,this.supportsPlatform,this.title);this.panel.querySelector('[data-art-name]').textContent=this.title;this.updateFields();this.toast('已選取作品 · Shift+T 縮放／Shift+R 旋轉');
   }
@@ -38,7 +38,7 @@ export class ArtworkEditor{
   status(text){const target=this.panel.querySelector('[data-status]');if(target)target.textContent=text;}
   async save(){
     if(!this.selected||this.saving)return;
-    if(!this.supportsPlatform&&!this.title?.trim())return this.status('作品名稱不可留空');
+    if(!this.title?.trim())return this.status('作品名稱不可留空');
     this.saving=true;
     if(this.mode==='follow'){this.mode=null;this.control(true);}
     this.status('正在儲存到伺服器…');
@@ -50,7 +50,7 @@ export class ArtworkEditor{
       layout:{position:root.position.toArray(),
         rotation:[root.rotation.x,root.rotation.y,root.rotation.z],
         scale:root.scale.toArray(),appearance:this.appearance,
-        ...(this.supportsPlatform?{platformRadius:this.platformRadius}:{title:this.title.trim()})}
+        title:this.title.trim(),...(this.supportsPlatform?{platformRadius:this.platformRadius}:{})}
     },{throwOnError:true});
     try{
       let result;
@@ -70,7 +70,7 @@ export class ArtworkEditor{
       if(!result?.artworkLayout)throw new Error('伺服器沒有確認作品配置已儲存');
       this.expectedRevision=result.artworkLayout.revision;
       this.original=structuredClone(result.artworkLayout);
-      if(!this.supportsPlatform){this.originalTitle=this.title.trim();root.userData.record.title=this.originalTitle;root.userData.editTitleDraft=this.originalTitle;}
+      if(this.supportsPlatform){root.userData.titleOverride=this.title.trim();}else{this.originalTitle=this.title.trim();root.userData.record.title=this.originalTitle;}root.userData.editTitleDraft=this.title.trim();
       delete root.userData.previewPlatformRadius;
       this.arena.displayPlatforms.sync();
       this.dirty=false;
@@ -81,7 +81,7 @@ export class ArtworkEditor{
       this.toast('GM 作品儲存失敗：'+reason);
     }finally{this.saving=false;}
   }
-  close(){this.gizmo.detach();this.drag=null;if(this.selected){this.selected.position.fromArray(this.original.position);this.selected.rotation.set(...this.original.rotation);this.selected.scale.fromArray(this.original.scale);this.selected.userData.record.title=this.originalTitle;delete this.selected.userData.editTitleDraft;applyArtworkAppearance(this.selected,this.original.appearance);this.selected.userData.editing=false;delete this.selected.userData.previewPlatformRadius;this.arena.displayPlatforms.sync();}this.selected=null;this.mode=null;this.dirty=false;this.handles.hidden=this.panel.hidden=true;this.control(true);}
+  close(){this.gizmo.detach();this.drag=null;if(this.selected){this.selected.position.fromArray(this.original.position);this.selected.rotation.set(...this.original.rotation);this.selected.scale.fromArray(this.original.scale);this.selected.userData.record.title=this.originalTitle;this.selected.userData.titleOverride=this.original.title;delete this.selected.userData.editTitleDraft;applyArtworkAppearance(this.selected,this.original.appearance);this.selected.userData.editing=false;delete this.selected.userData.previewPlatformRadius;this.arena.displayPlatforms.sync();}this.selected=null;this.mode=null;this.dirty=false;this.handles.hidden=this.panel.hidden=true;this.control(true);}
   export(){if(this.dirty)return this.toast('請先儲存修改');const layout={...this.arena.defaultLayout,...this.arena.world?.artworkLayout},blob=new Blob([JSON.stringify({version:1,artworkLayout:layout,floatingPlatforms:this.arena.world?.floatingPlatforms||[]},null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='temple-artwork-layout.json';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
   state(){return {selected:this.selected?.userData.platformId||null,mode:this.mode,dirty:this.dirty,handles:this.mode==='scale'?8:0};}
 }
