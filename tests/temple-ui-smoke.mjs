@@ -43,6 +43,36 @@ try{
   );
  },null,{timeout:12000});
  await page.screenshot({path:output+'/shop-complete-3d-previews.png'});
+
+ // The new outfit portrait must come from the fully skinned character, not
+ // the removed box-doll placeholder. Confirm live suit and matching headgear
+ // can both attach to the same animated player rig.
+ const wearable=await page.evaluate(()=>{
+  const {arena,controller,ui}=window.templeTest,root=controller()?.root;
+  const original={...(ui.world?.profile?.equipment||{})};
+  arena.setPlayerEquipment(root,{...original,outfit:'outfit-creature-elephant',head:'hat-elephant'});
+  const outfit=root?.userData?.outfit,head=root?.userData?.headgear;
+  const result={surfaces:outfit?.surfaces?.length||0,
+   parts:outfit?.parts?.length||0,headChildren:head?.children?.length||0,
+   skinned:outfit?.surfaces?.some(p=>p.mesh.isSkinnedMesh)||false};
+  arena.setPlayerEquipment(root,original);
+  return result;
+ });
+ assert.ok(wearable.skinned&&wearable.surfaces>0&&wearable.parts>0&&wearable.headChildren>0,
+  'Creature head and body must both be wearable on the original SkinnedMesh rig: '+JSON.stringify(wearable));
+ await page.evaluate(()=>{
+  templeTest.ui.shopTab='outfit';templeTest.ui.renderPanel();
+ });
+ await page.waitForFunction(()=>{
+  const card=[...document.querySelectorAll('.shop-items article.item')]
+   .find(node=>node.textContent.includes('Elephant Parade Suit'));
+  const image=card?.querySelector('img');
+  return !!image?.complete&&image.naturalWidth>0;
+ },null,{timeout:12000});
+ await page.evaluate(()=>{
+  templeTest.ui.shopTab='near';templeTest.ui.renderPanel();
+ });
+
  // SHOP hides #hud, so purchase confirmation must remain visible on top.
  await page.evaluate(()=>templeTest.ui.purchaseNotice('Comfort Cash · $20',3));
  await page.locator('#purchase-notice').waitFor({state:'visible',timeout:2500});
