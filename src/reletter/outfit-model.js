@@ -1,3 +1,4 @@
+import {createHeadgear} from './headgear-model.js';
 // Clothing uses the original skinned surface, preserving animation and exposed face/hands.
 function fabric(T,item){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');x.fillStyle=item.color;x.fillRect(0,0,512,512);
  // The Collector's suit uses a restrained pinstripe rather than the ordinary
@@ -27,6 +28,67 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
  // Soft collar and front fastening define the garment rather than merely recolouring skin.
  for(const side of [-1,1]){const lapel=ball(chest,[side*.2,.1,.3],[.24,.09,.1],cream);lapel.rotation.z=side*.4;}
  for(let i=0;i<3;i++)ball(chest,[0,-.15-i*.22,.44],[.035,.035,.025],trim);
+ // Creature suits retain the animated skinned character; only small props
+ // and fabric accents are bone-attached. Hood is suppressed when a separate
+ // HEAD item is equipped, exactly like other outfits.
+ if(d==='creature'){
+  const kind=item.creature;
+  const paws=['elephant','guinea-pig','polar-bear','lion','penguin','anteater','crab-claw'];
+  for(const side of ['LeftFoot','RightFoot']){
+   const foot=anchor(side);
+   ball(foot,[0,-.06,.28],[paws.includes(kind)?.25:.2,.16,.34],kind==='penguin'?trim:main);
+   for(let n=-1;n<=1;n++)ball(foot,[n*.12,-.08,.54],[.055,.06,.11],kind==='polar-bear'?dark:cream);
+  }
+  if(['penguin','polar-bear','guinea-pig','elephant','anteater'].includes(kind))
+   ball(chest,[0,-.21,.45],[.4,.56,.12],cream);
+  if(kind==='elephant'){
+   for(const side of [-1,1])ball(chest,[side*.57,.17,-.08],[.25,.32,.20],main);
+   tube(hips,[[0,-.2,-.28],[0,-.45,-.65],[.14,-.72,-.64]],.05,main);
+  }
+  if(kind==='rooster'){
+   for(let i=-2;i<=2;i++){const feather=tube(hips,[[i*.10,.05,-.2],[i*.23,.6,-.65],[i*.30,.22,-1]],.12,i%2?trim:main);feather.rotation.y=i*.14;}
+   for(const side of [-1,1])ball(chest,[side*.26,.28,.4],[.17,.22,.09],trim);
+  }
+  if(kind==='anteater')tube(hips,[[0,-.1,-.25],[0,-.28,-.78],[.2,-.50,-1.15],[.36,-.64,-1.28]],.19,main);
+  if(kind==='guinea-pig')for(const side of [-1,1]){
+   ball(chest,[side*.3,-.2,.37],[.20,.25,.13],side<0?cream:main);
+  }
+  if(kind==='penguin')for(const side of [-1,1]){
+   const fin=ball(chest,[side*.65,-.3,.02],[.15,.58,.23],main);fin.rotation.z=side*.34;
+  }
+  if(kind==='polar-bear')for(const side of ['LeftForeArm','RightForeArm']){
+   const arm=anchor(side);ball(arm,[0,-.05,.12],[.27,.36,.24],main);
+   for(let i=-1;i<=1;i++)ball(arm,[i*.14,-.23,.3],[.08,.07,.13],dark);
+  }
+  if(kind==='jellyfish'){
+   for(let i=0;i<8;i++){const a=i*Math.PI/4;
+    tube(hips,[[Math.cos(a)*.42,-.1,Math.sin(a)*.3],[Math.cos(a+.3)*.49,-.55,Math.sin(a)*.4],[Math.cos(a+.7)*.42,-1.05,Math.sin(a+.7)*.3]],.045,i%2?cream:main);
+   }
+  }
+  if(kind==='crab-claw')for(const side of ['LeftForeArm','RightForeArm']){
+   const arm=anchor(side),sign=side==='LeftForeArm'?-1:1;
+   ball(arm,[0,-.1,.22],[.33,.28,.36],main);
+   for(const k of [-1,1]){const claw=cone(arm,[k*.17,-.34,.55],.13,.42,main);claw.rotation.x=Math.PI/2;claw.rotation.z=sign*k*.18;}
+  }
+  if(kind==='lion'){
+   tube(hips,[[0,-.15,-.3],[0,-.25,-.85],[.15,-.45,-1.2],[.28,-.52,-1.3]],.085,main);
+   ball(hips,[.28,-.52,-1.3],[.15,.22,.17],trim);
+   for(const side of [-1,1])ball(chest,[side*.47,.22,.24],[.2,.28,.15],trim);
+  }
+  if(kind==='banana-bunch')for(let i=0;i<5;i++){
+   const a=i*6.283/5,peel=ball(hips,[Math.cos(a)*.44,-.32,Math.sin(a)*.44],[.16,.62,.14],main);
+   peel.rotation.z=Math.cos(a)*.36;
+  }
+  if(kind==='eggplant'){
+   for(let i=0;i<6;i++){const a=i*6.283/6,leaf=cone(chest,[Math.cos(a)*.43,.44,Math.sin(a)*.43],.23,.44,trim);leaf.rotation.z=-Math.cos(a)*.6;}
+   tube(hips,[[0,-.1,-.28],[0,-.4,-.60]],.085,main);
+  }
+  if(hood){
+   const h=anchor('Head'),headpiece=createHeadgear(T,{...item,design:kind});
+   h.add(headpiece);headpiece.position.set(0,.20,.04);
+   record.materials.push(...(headpiece.userData.materials||[]));
+  }
+ }
  // Tailored Collector suit: the native skinned torso/arms/legs carry the
  // jacket fabric, while slim lapels, shirt and tie follow the actual Spine2
  // bone. These details never replace the animated character with boxes.
