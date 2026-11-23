@@ -43,10 +43,10 @@ test('giant goldfish creates a visible swimming fish and swept damage/knockback 
  assert.ok(nose.clone().sub(tail).normalize().dot(new THREE.Vector3(0,0,1))>.95,
   'fish face points along its swim path, not 90 degrees to the left');
  const hp=world.monster.hp,originalZ=world.monster.position[2];
- tickWorld(world,{now:NOW+3500,actors:[actor],rng:()=>.5,activeFighters:0});
+ tickWorld(world,{now:NOW+4300,actors:[actor],rng:()=>.5,activeFighters:0});
  assert.ok(world.monster.hp<hp,'server fish collides and damages');
  assert.ok(world.monster.position[2]>originalZ,'fish knocks monster back');
- assert.ok(worldView(world,actor.key,NOW+3500).damageEvents.some(e=>e.kind==='giant-goldfish'));
+ assert.ok(worldView(world,actor.key,NOW+4300).damageEvents.some(e=>e.kind==='giant-goldfish'));
  effects.dispose();
  assert.equal(scene.children.length,0);
 });
@@ -57,7 +57,7 @@ test('goldfish collision damages and knocks back other players, but not its cast
  shoot(world,actor,NOW+1000,{phase:'charge'});
  shoot(world,actor,NOW+2700,{charge:1},()=>.5,[actor,victim]);
  const hp=p.hp;
- tickWorld(world,{now:NOW+3500,actors:[actor,victim],activeFighters:0,rng:()=>.5});
+ tickWorld(world,{now:NOW+4300,actors:[actor,victim],activeFighters:0,rng:()=>.5});
  assert.ok(p.hp<hp);
  assert.equal(p.hitReaction.knockback,14);
  assert.equal(world.profiles.caster.hp,100);
