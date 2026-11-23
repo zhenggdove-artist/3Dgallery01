@@ -108,10 +108,13 @@ export class ArtworkEditor{
    let width=s.labelWidth??3.5,height=s.labelHeight??.492;
    const oldWidth=width,oldHeight=height;
    if(x&&y){
+    // Apply the SAME factor to both dimensions, including at the min/max
+    // limits. Independent clamping would break equal-proportion corners.
     const factor=THREE.MathUtils.clamp(
-     1+(x*dx/drag.rect.width-y*dy/drag.rect.height)/2,.1,5);
-    width=THREE.MathUtils.clamp(oldWidth*factor,.5,12);
-    height=THREE.MathUtils.clamp(oldHeight*factor,.18,4);
+     1+(x*dx/drag.rect.width-y*dy/drag.rect.height)/2,
+     Math.max(.5/oldWidth,.18/oldHeight),
+     Math.min(12/oldWidth,4/oldHeight));
+    width=oldWidth*factor;height=oldHeight*factor;
    }else if(x)width=THREE.MathUtils.clamp(
     oldWidth*(1+x*dx/drag.rect.width),.5,12);
    else height=THREE.MathUtils.clamp(
