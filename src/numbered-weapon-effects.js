@@ -107,9 +107,9 @@ export function ultimateWorldScale(number,event,options={}){
 export function requestedEffect(item,event){
  if(!item||!event)return null;
  // Preserve signature ultimates for other exotic weapons.
- if(item.exotic&&!['clam','jellybrella'].includes(item.id))return null;
- const key=event.channel?(item.id==='clam'?'clam':item.family)+':channel':
-  event.ultimate?(item.id==='clam'?'clam':item.id==='jellybrella'?'jellybrella':item.family)+':ultimate':
+ if(item.exotic&&!['clam','jellybrella'].includes(item.baseId||item.id))return null;
+ const key=event.channel?((item.baseId||item.id)==='clam'?'clam':item.family)+':channel':
+  event.ultimate?((item.baseId||item.id)==='clam'?'clam':(item.baseId||item.id)==='jellybrella'?'jellybrella':item.family)+':ultimate':
   item.family==='saber'&&Number(event.combo)===5?'saber:combo':'';
  return REQUESTED_VFX[key]||null;
 }
