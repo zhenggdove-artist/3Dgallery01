@@ -46,7 +46,7 @@ try{
  // SHOP hides #hud, so purchase confirmation must remain visible on top.
  await page.evaluate(()=>templeTest.ui.purchaseNotice('Comfort Cash · $20',3));
  await page.locator('#purchase-notice').waitFor({state:'visible',timeout:2500});
- assert.equal(await page.locator('#purchase-notice').textContent(),'已成功購買「Comfort Cash · $20」3個');
+ assert.equal(await page.locator('#purchase-notice').textContent(),'PURCHASE SUCCESSFUL · Comfort Cash · $20 ×3');
  await page.waitForTimeout(550);
  assert.equal(await page.locator('#purchase-notice').isVisible(),false,'Purchase popup must disappear within 500 ms');
 
