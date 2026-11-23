@@ -41,7 +41,8 @@ test('hold cannot cast before 100%, starts at completion, and stops when release
   const pulse=applyAction(world,caster,{action:'attack',phase:'channel',direction:[0,0,1]},{now:NOW+1000+ms+20});
   assert.equal(pulse.attackEvent?.ultimate,true,id);
   assert.equal(pulse.attackEvent?.channel,true,id);
-  assert.ok(world.persistentAttacks.length>0,id);
+  if(id==='tide-1')assert.ok(p.tidalChannelStats,'tide locks replace old forward projectiles');
+  else assert.ok(world.persistentAttacks.length>0,id);
   assert.equal(applyAction(world,caster,{action:'attack',phase:'channel-stop'},{now:NOW+1000+ms+100}).channeling,false);
   assert.match(applyAction(world,caster,{action:'attack',phase:'channel',direction:[0,0,1]},{now:NOW+1000+ms+200}).error,/channel/,id);
  }
