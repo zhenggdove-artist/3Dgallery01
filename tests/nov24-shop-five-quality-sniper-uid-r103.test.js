@@ -76,6 +76,23 @@ test('Black Cat charged full hit cannot exceed 42 HP; normal precision stays dis
  const server=readFileSync(new URL('../src/shared/temple-rules.js',import.meta.url),'utf8');
  assert.match(server,/fx\.charge<1&&!fx\.shoulderSpread/);
 });
+test('Black Cat as primary inherits no more than 3.5 PvP per fused ultimate echo',()=>{
+ const w=createInitialWorld(now+10_000),p=ensureProfile(w,user.key,user.name,user.color,now+10_000);
+ p.inventory.push('black-cat');p.equipment.weapon='black-cat';
+ p.fusion['black-cat']={layer:2,effects:['ember-3','frost-2']};
+ const charge=applyAction(w,user,{action:'attack',phase:'charge',scoped:true},
+  {now:now+11_000,rng:()=>.5});
+ assert.equal(charge.charging,true);
+ const fired=applyAction(w,user,{action:'attack',direction:[0,0,1],charge:1,scoped:true},
+  {now:now+15_000,rng:()=>.5});
+ assert.equal(fired.error,undefined);
+ assert.equal(fired.attackEvent.fusionEchoes.length,2);
+ for(const fx of w.persistentAttacks.filter(fx=>fx.echo)){
+  assert.ok(fx.pvpDamage<=3.5,fx.weapon+' echo PvP '+fx.pvpDamage);
+  assert.ok(fx.damage<=32,fx.weapon+' echo monster '+fx.damage);
+ }
+});
+
 test('fusing one folded target leaves every other physical UID untouched, even after JSON reload',()=>{
  const w=createInitialWorld(now+200),p=ensureProfile(w,user.key,user.name,user.color,now+200);
  p.inventory.push('ember-1','ember-1','ember-1');
