@@ -1,0 +1,55 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createInitialWorld,ensureProfile,applyAction,worldProfileView} from '../src/shared/temple-rules.js';
+import {itemById} from '../src/shared/catalog.js';
+import {fusionRecordAt,appendInventoryInstance,ensureWeaponAffixes} from '../src/shared/fusion-instances.js';
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const now=24_000_000,actor={key:'shield-shop-test',name:'Tester',color:'#ffffff',role:'fighter',position:[75,0,0]};
+test('four same-rarity shop weapons retain fixed base stats; ground pickups still roll',()=>{
+ const world=createInitialWorld(now),profile=ensureProfile(world,actor.key,actor.name,actor.color,now);
+ const itemId='tide-2';profile.wallet=500000;
+ const result=applyAction(world,actor,{action:'buy',itemId,quantity:4},{now:now+100});
+ assert.equal(result.error,undefined);
+ const purchased=profile.inventoryInstances.filter(v=>v.itemId===itemId);
+ assert.equal(purchased.length,4);
+ assert.ok(purchased.every(v=>v.origin==='shop'));
+ assert.ok(purchased.every(v=>!profile.fusionByInstance[v.uid]?.weaponAffixes?.length));
+ assert.equal(new Set(purchased.map(v=>v.uid)).size,4);
+ appendInventoryInstance(profile,itemId,'ground');
+ const groundIndex=profile.inventory.length-1;
+ assert.equal(profile.inventoryInstances[groundIndex].origin,'ground');
+ assert.equal(fusionRecordAt(profile,groundIndex).weaponAffixes.length,1);
+ ensureWeaponAffixes(profile,()=>.5);
+ assert.ok(purchased.every(v=>!profile.fusionByInstance[v.uid]?.weaponAffixes?.length));
+});
+test('server exposes shield capacity to the player without changing red HP',()=>{
+ const world=createInitialWorld(now),profile=ensureProfile(world,actor.key,actor.name,actor.color,now);
+ profile.equipment.shield='shield-1';profile.inventory.push('shield-1');
+ ensureProfile(world,actor.key,actor.name,actor.color,now+10);
+ const publicState=worldProfileView(world,actor.key,now+10);
+ assert.equal(publicState.shield.item,'shield-1');
+ assert.equal(publicState.shield.maxHp,itemById('shield-1').capacity*10);
+ assert.equal(publicState.shield.hp,publicState.shield.maxHp);
+ assert.equal(publicState.hp,100);
+});
+test('only a genuinely absorbed shield hit triggers a whole-shell blue flash',()=>{
+ const rules=read('src/shared/temple-rules.js'),visual=read('src/reletter-presentation.js'),main=read('src/main.js');
+ assert.match(rules,/shield\.hitId=id\(\)/);
+ assert.match(rules,/shield:clone\(profile\.shield\|\|null\)/);
+ assert.match(visual,/uniform float hit/);
+ assert.match(visual,/mix\(tint,vec3\(\.12,\.57,1\.\),hit\)/);
+ assert.match(main,/applyShieldHit\(localRoot,profile\)/);
+ assert.match(main,/applyShieldHit\(root,player\.profile\)/);
+});
+test('shield and health readouts have separate rows; 500ms popup is server-confirmed',()=>{
+ const html=read('index.html'),css=read('fidelity-ui.css'),ui=read('src/ui.js'),main=read('src/main.js');
+ assert.match(html,/id="shield-readout" hidden/);
+ assert.match(html,/id="shield-label"/);
+ assert.match(css,/#vitals #vital-readouts>label\{position:static/);
+ assert.match(css,/#vitals #shield-readout\{display:flex/);
+ assert.match(css,/#purchase-notice\.visible\{animation:purchase-confirm-fade 500ms/);
+ assert.match(ui,/purchaseNotice\(itemName,quantity\)/);
+ assert.match(ui,/已成功購買/);
+ assert.match(main,/if\(result\.purchased\)/);
+});
