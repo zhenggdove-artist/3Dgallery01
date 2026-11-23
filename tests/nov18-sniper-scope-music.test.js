@@ -36,13 +36,13 @@ test('server requires either precise scope or declared shoulder for Black Cat',(
 
 test('unfused Black Cat shoulder can shoot inaccurately but cannot start an ultimate',()=>{
  const {world}=setup(),at=NOW+4000;
- assert.match(act(world,at,{phase:'charge',aimMode:'shoulder'}).error,/fusion/i);
+ assert.match(act(world,at,{phase:'charge',aimMode:'shoulder'}).error,/fused/i);
  const shot=act(world,at,{direction:[0,0,1],aimMode:'shoulder'});
  assert.equal(shot.error,undefined);
  assert.equal(shot.attackEvent.ultimate,false);
  assert.equal(shot.attackEvent.rainbowSpiral,false);
  assert.notDeepEqual(shot.attackEvent.direction,[0,0,1],'shot spread is generated on the server');
- assert.match(act(world,at+4000,{direction:[0,0,1],charge:1,aimMode:'shoulder'}).error,/fusion/i);
+ assert.match(act(world,at+4000,{direction:[0,0,1],charge:1,aimMode:'shoulder'}).error,/fused/i);
 });
 
 test('precise sniper scope stays available but refuses ultimate charge',()=>{
@@ -51,8 +51,8 @@ test('precise sniper scope stays available but refuses ultimate charge',()=>{
  assert.equal(shot.error,undefined);
  assert.deepEqual(shot.attackEvent.direction,[0,0,1]);
  assert.equal(shot.attackEvent.ultimate,false);
- assert.match(act(world,at+4000,{phase:'charge',scoped:true}).error,/fusion/i);
- assert.match(act(world,at+4000,{direction:[0,0,1],charge:1,scoped:true}).error,/fusion/i);
+ assert.match(act(world,at+4000,{phase:'charge',scoped:true}).error,/fused/i);
+ assert.match(act(world,at+4000,{direction:[0,0,1],charge:1,scoped:true}).error,/fused/i);
 });
 
 test('fused Black Cat shoulder long charge spawns a piercing rainbow spiral and fusion echoes',()=>{
