@@ -24,7 +24,7 @@ function cast(primary,secondary=null){
 test('school has thirty uneven fish, narrow ends, dense center and projectile-sized originals',()=>{
  assert.equal(GOLDFISH_SCHOOL_COUNT,30);
  assert.equal(GOLDFISH_SCHOOL_OFFSETS.length,30);
- assert.equal(GOLDFISH_DAMAGE_PER_FISH,.2);
+ assert.equal(GOLDFISH_DAMAGE_PER_FISH,.1);
  assert.ok(GOLDFISH_FISH_SCALE<.3);
  const middle=GOLDFISH_SCHOOL_OFFSETS.filter(p=>Math.abs(p[2])<1.8).length;
  const tips=GOLDFISH_SCHOOL_OFFSETS.filter(p=>Math.abs(p[2])>2.7).length;
