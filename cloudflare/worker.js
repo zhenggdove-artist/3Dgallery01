@@ -284,7 +284,7 @@ export class TempleRoom extends DurableObject{
      // Public spectators do not transmit a player pose. Only WRITE is allowed
      // to use the fixed central plant position, never combat or BUILD actions.
      if(!state?.position&&!spectatorWrite)return json({error:'Connect and enter the Temple first'},409);
-     const world=this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:spectatorWrite?[0,0,0]:state.position},actors:this.actors();
+     const world=this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:spectatorWrite?[0,0,0]:state.position},actors=this.actors();
     delete body.verifiedArtMedia;if(body.action==='add-artwork'||body.action==='publish-art-bomb'){const media=this.sql.exec('SELECT id,type,owner FROM art_media WHERE id=?',String(body.artwork?.mediaId||'')).toArray()[0];if(!media||media.owner!==session.profile_key||body.action==='add-artwork'&&!actor.admin||body.action==='publish-art-bomb'&&session.role!=='fighter')return json({error:'Upload your own validated artwork with the required role first'},403);body.verifiedArtMedia={id:media.id,type:media.type};}
     if(body.media||body.surface){const mediaId=body.media?.id||body.surface,media=this.sql.exec('SELECT id,type,owner FROM plant_media WHERE id=?',mediaId).toArray()[0];if(!media||media.owner!==session.profile_key||body.surface&&!media.type.startsWith('image/'))return json({error:'Upload your own media first'},400);if(body.media)body.media={id:media.id,type:media.type};}
     const previousRespawnAt=world.profiles[session.profile_key]?.lastRespawnAt||0;
