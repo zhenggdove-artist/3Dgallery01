@@ -6,7 +6,7 @@ import {discGroundHeight} from './artwork-discs.js';
 import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
-import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance} from './artwork-library.js';
+import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
@@ -81,21 +81,31 @@ export function migrateWorld(raw,now=Date.now()){
     world.artworks[record.id]??={availableAt:0,holder:null,throwEvent:null};
     const art=world.artworks[record.id];
     if(art?.holder&&!world.profiles[art.holder]){art.holder=null;art.throwEvent=null;art.availableAt=0;}
-    if(record.title?.trim()==='22'){
-      // One-time unlock of the specifically reported stuck exhibit; do not
-      // reset legitimate pickups on every room migration/snapshot.
-      if(!world.artwork22UnlockMigrationApplied){
-        art.holder=null;art.throwEvent=null;art.availableAt=0;
-        world.artwork22UnlockMigrationApplied=true;world.revision=(world.revision||0)+1;
+    if(isArtwork22(record)){
+      // v1 used a single room-wide boolean keyed on display title '22'.
+      // A subsequent upload or an original filename '22.png' could bypass it.
+      // Restore each matching record exactly once, then keep normal pickup
+      // ownership intact until another GM explicitly changes its layout.
+      world.artwork22RecoveryV2??={};
+      if(!world.artwork22RecoveryV2[record.id]){
+        Object.assign(art,{holder:null,throwEvent:null,availableAt:0});
+        world.pendingArtworkFlights=(world.pendingArtworkFlights||[])
+          .filter(f=>f.event?.platformId!==record.id);
+        world.artwork22RecoveryV2[record.id]=true;
+        world.revision=(world.revision||0)+1;
       }
       if(!Number.isFinite(art.availableAt)||art.availableAt>now+3600000)art.availableAt=0;
-      const layout=world.artworkLayout[record.id];
-      const pos=layout?.position;
+      const layout=world.artworkLayout[record.id],pos=layout?.position;
       const invalid=!Array.isArray(pos)||pos.length!==3||!pos.every(Number.isFinite)||
         pos.some(v=>Math.abs(v+100)<1e-6)||
         Math.hypot(pos[0],pos[2])>ARENA_RADIUS+5||pos[1]<-2||pos[1]>60;
-      if(invalid&&Array.isArray(record.position)&&record.position.every(Number.isFinite))
-        world.artworkLayout[record.id]={...layout,position:[...record.position],revision:(layout?.revision||0)+1,updatedAt:now};
+      if(invalid&&Array.isArray(record.position)&&record.position.every(Number.isFinite)){
+        world.artworkLayout[record.id]={...layout,position:[...record.position],
+          rotation:layout?.rotation||[0,0,0],scale:layout?.scale||[1,1,1],
+          appearance:validateAppearance(layout?.appearance||{}),
+          revision:(layout?.revision||0)+1,updatedAt:now};
+        world.revision++;
+      }
     }
   }
   // Old RELETTER farming data must not survive the removal of the Garden game mode.
@@ -715,11 +725,11 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
   if(!profile.admin)return {error:'GM only'};
   const platform=artworkDefinitions(world).find(p=>p.id===body.platformId);if(!platform)return {error:'Unknown artwork'};
   const art=world.artworks[platform.id]??=( {availableAt:0,holder:null,throwEvent:null} );
-  const isLockedExhibit=(world.customArtworks||[]).some(a=>a.id===platform.id&&a.title?.trim()==='22');
+  const isLockedExhibit=(world.customArtworks||[]).some(a=>a.id===platform.id&&isArtwork22(a));
   // Preserve ordinary players' held or airborne artworks; only the reported
   // stuck exhibit can be force-released by a GM layout save.
   if((art.holder||art.availableAt>now)&&!isLockedExhibit)return {error:'Wait until the artwork returns'};
-  const current=world.artworkLayout?.[platform.id];if(body.expectedRevision!==(current?.revision||0))return {error:'Layout changed by another GM. Reload and retry.'};
+  const current=world.artworkLayout?.[platform.id];if(body.expectedRevision!==(current?.revision||0)&&!isLockedExhibit)return {error:'Layout changed by another GM. Reload and retry.'};
   const layout=body.layout,vec=value=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);
   if(!layout||!vec(layout.position)||!vec(layout.rotation)||!vec(layout.scale))return {error:'Invalid transform'};
   if(Math.hypot(layout.position[0],layout.position[2])>ARENA_RADIUS+5||layout.position[1]<-2||layout.position[1]>60||layout.scale.some(v=>v<.05||v>20)||layout.rotation.some(v=>Math.abs(v)>Math.PI*8))return {error:'Transform exceeds bounds'};
@@ -774,7 +784,7 @@ function attack(world,profile,actor,body,context,now){
     return {error:'Black Cat sniper requires scope'};
   }
   if(body.phase==='channel-start'){
-    if(!isChannelStaff(weapon))return {error:'Only staffs support continuous casting'};
+    if(!isChannelStaff(weapon)||weapon.family==='ice')return {error:'This staff casts its ultimate on release'};
     // A staff is silent during a hold. Continuous magic only becomes legal
     // once the ORIGINAL charge request has reached the weapon's full time.
     if(!profile.chargeStartedAt||now-profile.chargeStartedAt<(weapon.chargeMs||1500))
@@ -787,11 +797,11 @@ function attack(world,profile,actor,body,context,now){
   }
 
   const channel=body.phase==='channel';
-  if(channel&&(!isChannelStaff(weapon)||profile.channelWeapon!==weapon.id||
+  if(channel&&(!isChannelStaff(weapon)||weapon.family==='ice'||profile.channelWeapon!==weapon.id||
      !profile.channelStartedAt||now-(profile.lastChannelPulseAt||profile.channelStartedAt)>(weapon.family==='ice'?8500:6000)))
     return {error:'Staff channel is not active'};
   if(body.phase==='charge'){profile.chargeStartedAt=now;return {charging:true};}
-  if(now-profile.lastAttackAt<(channel&&weapon.family==='ice'?ICE_FREEZE_INTERVAL_MS:weapon.cooldown))return {error:'Weapon is recovering'};const direction=normalDirection(body.direction);if(!direction)return {error:'Invalid attack direction'};profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
+  if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};const direction=normalDirection(body.direction);if(!direction)return {error:'Invalid attack direction'};profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
   const charge=channel?1:Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
   if(!channel)profile.chargeStartedAt=0;
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
@@ -800,12 +810,12 @@ function attack(world,profile,actor,body,context,now){
    (stats.ultimate?1+enchants.charge/100:1)).toFixed(3);
   // A held staff actually projects forward. Its visual spray and authoritative
   // collision must use exactly the same range; no 11m decorative overshoot.
-  if(channel)stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range))*channelReachMultiplier(weapon);
+  if(channel||(weapon.family==='ice'&&stats.ultimate))stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range))*channelReachMultiplier(weapon);
   stats.range=+(stats.range*quality.range).toFixed(2);
   if(weapon.id==='black-cat')stats.range=SNIPER_RANGE; // Match the centre-camera ray at every rarity.
   // The narrow server collision tube must agree with the visible spray and
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
-  stats.radius=forwardCastRadius(weapon,quality,stats.radius,channel);
+  stats.radius=forwardCastRadius(weapon,quality,stats.radius,channel||(weapon.family==='ice'&&stats.ultimate));
    // Restrict ordinary whip contacts to the visible, narrow forward-moving lash.
    if(weapon.family==='whip'&&!weapon.exotic&&!stats.ultimate){stats.range=+(Math.min(stats.range,4.7+(Math.max(1,weapon.tier||1)-1)*1.5)/3).toFixed(3);stats.radius=.16;}
     if(weapon.family==='swatter'&&!weapon.exotic&&!stats.ultimate){stats.range=Math.min(stats.range,1.55+(Math.max(1,weapon.tier||1)-1)*.2);stats.radius=.18;}
@@ -839,7 +849,7 @@ function attack(world,profile,actor,body,context,now){
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
   const prismChannel=channel&&weapon.family==='beam'&&!weapon.exotic;
   const waveVortex=weapon.family==='wave'&&stats.ultimate;
-  const area=stats.ultimate&&weapon.id!=='goldfish'&&!waveVortex?chargedArea(weapon,origin,direction,stats,groundForSpell,channel):null;
+  const area=stats.ultimate&&weapon.id!=='goldfish'&&!waveVortex?chargedArea(weapon,origin,direction,stats,groundForSpell,channel||(weapon.family==='ice'&&stats.ultimate)):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate,now):null;
   const fusionEchoes=[];
   const pvpDamage=pvpShotDamage(weapon,stats,quality);
@@ -877,13 +887,14 @@ function attack(world,profile,actor,body,context,now){
   // travelling VFX volume actually touches a target (never on key release).
   if(!persistentOnly){
     const duration=projectileFlightMs(weapon,stats.ultimate,stats.range);
-    const visualLifetime=channel?duration:visibleCollisionLifetimeMs(weapon,stats.ultimate);
+    const iceGround=weapon.family==='ice'&&stats.ultimate&&area?.mode==='area';
+    const visualLifetime=iceGround?Math.max(2800,visibleCollisionLifetimeMs(weapon,true)):channel?duration:visibleCollisionLifetimeMs(weapon,stats.ultimate);
     world.persistentAttacks??=[];
     world.persistentAttacks.push({
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
       radius:stats.radius,area,damage:stats.damage+bonus*.1,pvpDamage,charge,critChance:weapon.critChance,
-      qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,
+      qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,iceGround,
       flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
       hits:[],pelletHits:{},areaResolved:false,
       createdAt:now,lastAt:now,expiresAt:now+Math.max(duration,visualLifetime)
@@ -1532,6 +1543,12 @@ function tickPersistentAttacks(world,actors,now,rng){
     const critical=isPlayer?Math.min(1.14,modifiers.multiplier):modifiers.multiplier;
     const proximity=clamp(1-along/Math.max(1,fx.range),0,1);
     const spread=pellet===null?1:(isPlayer?(.76+.48*proximity)*(.28+1.12*rng()):1.35*(1+1.7*proximity)*(.55+2.45*rng()));
+    // The first eligible frost strike freezes for 3s and hits 1.5x.
+    // Subsequent ice circles during the target's 6s freeze immunity
+    // still deal normal damage and apply a 30% locomotion slow.
+    const statusTarget=isPlayer?world.profiles[enemy.key]:enemy;
+    const frostProc=weapon.family==='ice'&&fx.charge>=1&&
+      !(statusTarget?.effectLocks?.freeze>now);
     const rawDamage=power*critical*spread/(pellet===null?1:fx.pellets.length);
     // No uncharged weapon may bypass the 8-hit baseline through a lucky
     // crit or a ten-ball shotgun burst. The pellets remain individually
@@ -1539,7 +1556,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?150:96):
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
     const shotgunPellet=!fx.echo&&isPlayer&&weapon.pattern==='scatter'&&pellet!==null;
-    const damage=shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage;
+    const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage)*(frostProc?1.5:1);
     const lethalHeadshot=!fx.echo&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
      fx.origin,fx.direction,fx.range,enemy.position);
     const hitKind=lethalHeadshot?(modifiers.critical?'critical-headshot':'headshot'):modifiers.kind;
@@ -1696,7 +1713,9 @@ function tickPersistentAttacks(world,actors,now,rng){
    // visible travel has completed; targets that have moved away evade damage.
    // Begin pan launch 200ms earlier than the former halfway detonation.
    // Damage and the authoritative flight impulse share that exact contact.
-   if(fx.area?.mode==='area'&&next>=(panBlast?Math.max(0,.5-PAN_BLAST_DETONATION_ADVANCE_MS/flight):1)&&
+   if(fx.area?.mode==='area'&&
+      (fx.iceGround?now>=fx.createdAt+280&&now<fx.expiresAt:
+       next>=(panBlast?Math.max(0,.5-PAN_BLAST_DETONATION_ADVANCE_MS/flight):1))&&
       (!panBlast||!fx.areaResolved)){
      // The pan's explosion physically strikes midway through its expansion,
      // not after the entire travelling animation. It resolves exactly once.
@@ -1716,6 +1735,7 @@ function tickPersistentAttacks(world,actors,now,rng){
      // rejects valid visible contact. Display digits on the torso instead.
      const groundContact=[pos[0],enemy.position[1]+(target.kind==='player'?1:1.25),pos[2]];
      if(!self&&!insideChargedArea(fx.area,groundContact,target.kind==='player'?1.02:ENEMY_RADIUS))continue;
+     if(fx.iceGround&&(fx.iceHits||[]).includes(key))continue;
      if(self){
       // Detonation always recoils back onto the caster, even when the
       // forward-placed explosion circle is beyond their current feet.
@@ -1729,6 +1749,7 @@ function tickPersistentAttacks(world,actors,now,rng){
        changed=true;
       }
      }else if(outcome(target,pos,groundContact,null,fx.area.travel)){
+      if(fx.iceGround)(fx.iceHits??=[]).push(key);
       changed=true;
       if(panBlast&&target.kind==='player'){
        const reaction=world.profiles[enemy.key]?.hitReaction;

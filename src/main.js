@@ -141,7 +141,7 @@ let staffChannel=null,staffChannelPromise=null,staffChannelBusy=false,staffChann
 function beginStaffChannel(){
  const item=itemById(world?.profile?.equipment?.weapon);
  const now=performance.now();
- if(!attackHeld||!chargeStarted||!isChannelStaff(item)||staffChannel||
+ if(!attackHeld||!chargeStarted||!isChannelStaff(item)||item?.family==='ice'||staffChannel||
     !controller?.enabled||self?.role!=='fighter'||ui.panelName||
     world?.profile?.effects?.paralysis?.until>Date.now()||now-(window._templeLastChannelAttempt||0)<=170)return;
  const elapsed=now-chargeStarted,chargeMs=Number(item?.chargeMs)||1500;
@@ -526,6 +526,12 @@ ui.addEventListener('attack-release',async()=>{
    if(liftRemaining>0)await new Promise(resolve=>setTimeout(resolve,liftRemaining));
    if(world?.profile?.equipment?.weapon===weapon.id)await performAttack(0);
    if(localRoot)localRoot.userData.staffCastingUntil=performance.now()+200;
+  }else if(weapon.family==='ice'&&charge>=1){
+   // A charged frost staff is a RELEASE cast. Never start a continuous
+   // channel or abort its ice circle when A is lifted.
+   if(world?.profile?.equipment?.weapon===weapon.id)
+    await performAttack(1);
+   if(localRoot)localRoot.userData.staffCastingUntil=performance.now()+200;
   }else if(localRoot)localRoot.userData.staffCastingUntil=0;
  }else{
   performAttack(heldMs<STAFF_TAP_MAX_MS?0:charge);
@@ -851,7 +857,7 @@ function update(dt,time,movementDt=dt){
   const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
   // First 500ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
   // the charging window; the very first sustained pulse is the ultimate.
-  if(attackHeld&&charge>=1&&isChannelStaff(heldItem)&&!staffChannel)
+  if(attackHeld&&charge>=1&&isChannelStaff(heldItem)&&heldItem?.family!=='ice'&&!staffChannel)
    beginStaffChannel();
   if(staffChannel){
    if(!attackHeld||!isChannelStaff(heldItem)||heldItem.id!==staffChannel.weapon||!controller.enabled){

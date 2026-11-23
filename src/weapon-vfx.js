@@ -84,7 +84,15 @@ export class WeaponVFX{
   fx.setOptions({size:1,speed:1,color:options.color||'#a5eaff',...options});
   const entry={id,fx,age:0,stopAt:Infinity,stopped:false};this.scene.add(fx.group);this.active.push(entry);this.replayed++;return entry;
  }
- release(entry){const i=this.active.indexOf(entry);if(i<0)return;this.active.splice(i,1);if(entry.waterKey)this.waterStreams.delete(entry.waterKey);const {id,fx}=entry;fx.detachWeapon?.();fx.group.removeFromParent();fx.group.visible=false;
+ release(entry){const i=this.active.indexOf(entry);if(i<0)return;this.active.splice(i,1);
+  if(entry.waterKey)this.waterStreams.delete(entry.waterKey);
+  if(entry.waterParticles){
+   entry.waterParticles.removeFromParent();
+   entry.waterParticles.geometry.dispose();
+   entry.waterParticles.material.dispose();
+   entry.waterParticles=null;
+  }
+  const {id,fx}=entry;fx.detachWeapon?.();fx.group.removeFromParent();fx.group.visible=false;
   const pool=this.pools.get(id)||[];if(pool.length<3){pool.push(fx);this.pools.set(id,pool);}else fx.dispose();if(this.charger===entry)this.charger=null;
  }
  // The local geometry origin of a real held staff (or clam). Unlike
@@ -112,6 +120,26 @@ export class WeaponVFX{
     size:Math.max(.35,Math.min(2,(Number(data.radius)||1.05)/1.5))
    });
    entry.waterChannel=true;
+   // The hand-authored venom preset previously produced no visible pixels
+   // on some GPUs despite returning a valid native effect. Retain the native
+   // shader, but provide a guaranteed bright blue liquid slug/splash volume.
+   const count=128,geometry=new THREE.BufferGeometry();
+   const positions=new Float32Array(count*3),colors=new Float32Array(count*3);
+   const shades=['#239cff','#68d9ff','#b5f7ff','#0872d9'];
+   for(let i=0;i<count;i++){
+    const color=new THREE.Color(shades[(i*3+Math.floor(i/8))%shades.length]);
+    colors[i*3]=color.r;colors[i*3+1]=color.g;colors[i*3+2]=color.b;
+   }
+   geometry.setAttribute('position',new THREE.BufferAttribute(positions,3).setUsage(THREE.DynamicDrawUsage));
+   geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
+   entry.waterParticles=new THREE.Points(geometry,new THREE.PointsMaterial({
+    size:.19,vertexColors:true,transparent:true,opacity:.88,depthWrite:false,
+    depthTest:true,blending:THREE.AdditiveBlending,toneMapped:false,
+    sizeAttenuation:true
+   }));
+   entry.waterParticles.frustumCulled=false;
+   entry.waterParticles.name='Visible blue Venom Stream liquid slugs and impact droplets';
+   this.scene.add(entry.waterParticles);
    this.waterStreams.set(key,entry);
   }
   entry.waterKey=key;entry.host=root;entry.waterWeapon=item;
@@ -130,7 +158,26 @@ export class WeaponVFX{
   const dir=Array.isArray(ray)&&ray.length===3&&ray.every(Number.isFinite)?
    new THREE.Vector3(...ray).normalize():entry.waterDirection;
   const target=source.clone().addScaledVector(dir,entry.waterRange);
+  // Original Venom Stream runtime follows two endpoints in local +X.
   entry.fx.setEndpoints(source,target);
+  const buffer=entry.waterParticles?.geometry?.attributes?.position;
+  if(buffer){
+   const a=buffer.array,dx=target.x-source.x,dy=target.y-source.y,dz=target.z-source.z;
+   const length=Math.max(.001,Math.hypot(dx,dz));
+   const sx=dz/length,sz=-dx/length;
+   const count=buffer.count;
+   for(let i=0;i<count;i++){
+    const progress=(i/count+entry.age*(.48+.055*(i%7)))%1;
+    const theta=i*2.399963+entry.age*11;
+    const radius=(.08+.20*progress)*(1+.14*Math.sin(theta*.8));
+    const splash=progress>.88?(progress-.88)/.12:0;
+    const curve= Math.sin(theta)*radius + Math.cos(entry.age*8+i)*splash*.5;
+    a[i*3]=source.x+dx*progress+sx*curve;
+    a[i*3+1]=source.y+dy*progress+Math.cos(theta)*radius*.75 + splash*Math.sin(theta*3)*.38;
+    a[i*3+2]=source.z+dz*progress+sz*curve;
+   }
+   buffer.needsUpdate=true;
+  }
  }
  stopChannel(root){
   this.restoration.stop(root);
@@ -441,6 +488,8 @@ export class WeaponVFX{
    }catch(error){
     // The failed native instance cannot go back to the reusable GPU pool.
     const index=this.active.indexOf(e);if(index>=0)this.active.splice(index,1);
+    if(e.waterKey)this.waterStreams.delete(e.waterKey);
+    if(e.waterParticles){e.waterParticles.removeFromParent();e.waterParticles.geometry.dispose();e.waterParticles.material.dispose();}
     if(this.charger===e)this.charger=null;
     try{e.fx.group.removeFromParent();e.fx.dispose();}catch{}
     this.reportAnimationFailure(e.id,error);
@@ -453,7 +502,11 @@ export class WeaponVFX{
   this.failedAnimations.add(id);
   console.error('Weapon animation failed; quarantined this instance',id,error);
  }
- dispose(){this.waterStreams.clear();this.plantUltimates.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
+ dispose(){
+  for(const e of this.waterStreams.values())if(e.waterParticles){
+   e.waterParticles.removeFromParent();e.waterParticles.geometry.dispose();e.waterParticles.material.dispose();
+  }
+  this.waterStreams.clear();this.plantUltimates.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
   for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }

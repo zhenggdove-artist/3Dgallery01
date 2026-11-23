@@ -37,34 +37,38 @@ test('native blue Venom Stream is pooled per held tide staff and replaces old sp
  assert.equal([...vfx.waterStreams.values()][0],entry,'new pulses must not create another stream');
  vfx.update(.1,null,null);
  assert.ok(entry.fx.group.visible,'emitter follows the actual weapon');
+ assert.equal(entry.waterParticles.geometry.attributes.position.count,128);
+ const positions=entry.waterParticles.geometry.attributes.position;
+ assert.ok(Number.isFinite(positions.getZ(17))&&positions.getZ(17)!==0,
+  'water ultimate always renders moving blue Venom slugs, even when native shader fails');
  vfx.stopChannel(root);
  assert.equal(vfx.waterStreams.size,0);
  vfx.dispose();
 });
 
-test('ice channel freezes only in forward magic circle and blocks repeated casts for six seconds',()=>{
+test('ice ultimate is release-only and damage recasts are not delayed by freeze immunity',()=>{
  const T=500000,world=createInitialWorld(T);
  const actor={key:'frost-caster',name:'Frost',color:'#ffffff',role:'fighter',position:[75,0,0]};
  const profile=ensureProfile(world,actor.key,actor.name,actor.color,T);
  profile.inventory.push('frost-1');profile.equipment.weapon='frost-1';
  const item=itemById('frost-1');
  assert.equal(ICE_FREEZE_INTERVAL_MS,6000);
- assert.equal(channelInterval(item),6000);
  assert.equal(applyAction(world,actor,{action:'attack',phase:'charge'},{now:T+1000}).charging,true);
- const start=T+1000+item.chargeMs+25;
- assert.equal(applyAction(world,actor,{action:'attack',phase:'channel-start'},{now:start}).channeling,true);
- const first=start+20;
- const cast=applyAction(world,actor,{action:'attack',phase:'channel',direction:[0,0,1]},
+ const first=T+1000+item.chargeMs+25;
+ assert.match(applyAction(world,actor,{action:'attack',phase:'channel-start'},{now:first}).error,/release/);
+ const cast=applyAction(world,actor,{action:'attack',direction:[0,0,1],charge:1},
   {now:first,actors:[actor],rng:()=>.5});
+ assert.equal(cast.attackEvent?.ultimate,true);
+ assert.equal(cast.attackEvent?.channel,false);
  assert.equal(cast.attackEvent?.area?.mode,'area');
  assert.ok(cast.attackEvent.area.visualCenter[2]>actor.position[2]+5);
  assert.ok(cast.attackEvent.area.radius>0);
- const blocked=applyAction(world,actor,{action:'attack',phase:'channel',direction:[0,0,1]},
-  {now:first+5999,actors:[actor],rng:()=>.5});
- assert.match(blocked.error,/recovering/);
- const ready=applyAction(world,actor,{action:'attack',phase:'channel',direction:[0,0,1]},
-  {now:first+6000,actors:[actor],rng:()=>.5});
- assert.equal(ready.attackEvent?.area?.mode,'area');
+ assert.equal(world.persistentAttacks.at(-1)?.iceGround,true);
+ const secondStart=first+item.cooldown+50;
+ assert.equal(applyAction(world,actor,{action:'attack',phase:'charge'},{now:secondStart}).charging,true);
+ const ready=applyAction(world,actor,{action:'attack',direction:[0,0,1],charge:1},
+  {now:secondStart+item.chargeMs+25,actors:[actor],rng:()=>.5});
+ assert.equal(ready.attackEvent?.ultimate,true,'6 seconds locks freeze, never the ice damage spell');
 });
 
 test('frost status is exactly 3000ms long, with 6000ms reapplication lock',()=>{
@@ -72,7 +76,8 @@ test('frost status is exactly 3000ms long, with 6000ms reapplication lock',()=>{
  const source={key:'frost'};
  assert.equal(applyElementalHit(target,source,itemById('frost-1'),100000),'freeze');
  assert.equal(target.effects.freeze.until,103000);
- assert.equal(applyElementalHit(target,source,itemById('frost-1'),105999),null);
+ assert.equal(applyElementalHit(target,source,itemById('frost-1'),105999),'slow');
+ assert.equal(target.effects.slow.power,.3);
  assert.equal(applyElementalHit(target,source,itemById('frost-1'),106000),'freeze');
  assert.equal(target.effects.freeze.until,109000);
 });
@@ -100,6 +105,8 @@ test('all thirty goldfish tails become one blue instanced particle cloud, tracki
  const tail=group.userData.tailParticles;
  assert.ok(tail?.cloud?.isPoints);
  assert.equal(tail.cloud.geometry.getAttribute('position').count,30*16);
+ assert.ok(group.userData.schoolParts.every(p=>p.mesh.material.opacity===.5));
+ assert.equal(tail.cloud.material.opacity,.435);
  assert.ok(group.userData.schoolParts.every(p=>!p.tailPart),
   'solid orange tail geometry must not be instanced');
  visual.update(.04,{goldfishFlights:[{id:'fishcast',position:[0,2,0],consumed:[0],direction:[0,0,1]}]});

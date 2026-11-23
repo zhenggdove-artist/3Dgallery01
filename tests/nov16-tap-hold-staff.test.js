@@ -31,7 +31,7 @@ test('ordinary single taps on every elemental staff cast a non-ultimate projecti
  }
 });
 test('hold cannot cast before 100%, starts at completion, and stops when released',()=>{
- for(const id of ['clam','tide-1','frost-1','ember-1']){
+ for(const id of ['clam','tide-1','ember-1']){
   const {world,p}=create(id),ms=itemById(id).chargeMs;
   assert.ok(applyAction(world,caster,{action:'attack',phase:'charge'},{now:NOW+1000}).charging);
   const tooSoon=applyAction(world,caster,{action:'attack',phase:'channel-start'},{now:NOW+1000+ms-1});

@@ -22,9 +22,10 @@ test('freeze prevents actions for three seconds, with six-second proc lock',()=>
  const victim=target();
  assert.equal(hit(victim,'ice','water'),'freeze');
  assert.equal(victim.effects.freeze.until,T+3000);
- assert.equal(hit(victim,'ice','water',T+1200),null);
+ assert.equal(hit(victim,'ice','water',T+1200),'slow');
+ assert.equal(victim.effects.slow.power,.3);
  assert.equal(victim.effects.freeze.until,T+3000);
- assert.equal(hit(victim,'ice','water',T+5000),null);
+ assert.equal(hit(victim,'ice','water',T+5000),'slow');
  assert.equal(hit(victim,'ice','water',T+6000),'freeze');
  const profile=createProfile('fighter','Fighter','#ffffff',T,false);
  profile.effects=victim.effects;
