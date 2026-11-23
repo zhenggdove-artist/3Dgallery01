@@ -24,6 +24,6 @@ test('compact pickup hint is smaller and 50% opaque when shown',()=>{
 
 test('release token is bumped to avoid stale Safari UI modules',()=>{
  const html=read('index.html');
- assert.match(html,/20261124-compact-artwork-prompt-r97/);
+ assert.match(html,/20261124-mobile-sniper-quality-r98/);
  assert.doesNotMatch(html,/20261124-giraffe-corridor-avatar-label-r96/);
 });

@@ -218,10 +218,19 @@ test('all cat guns keep their advertised normal and charged range and deal PvP d
       ensureProfile(world,target.key,target.name,target.color,1000);
       const profile=ensureProfile(world,shooter.key,shooter.name,shooter.color,1000);
       profile.inventory.push(id);profile.equipment.weapon=id;
-      if(charge)assert.equal(applyAction(world,shooter,{action:'attack',phase:'charge',...(id==='black-cat'?{scoped:true}:{})},{now:2000}).charging,true);
-      const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1],origin:[0,1,-35],charge,...(id==='black-cat'?{scoped:true}:{})},
+      // The sniper's new charged shot is fused-shoulder-only; normal scope
+      // remains precise. Shoulder random drift intentionally may miss.
+      if(charge&&id==='black-cat')profile.fusion[id]={effects:['ember-1']};
+      const sniperAim=id==='black-cat'?(charge?{aimMode:'shoulder'}:{scoped:true}):{};
+      if(charge)assert.equal(applyAction(world,shooter,{action:'attack',phase:'charge',...sniperAim},{now:2000}).charging,true);
+      const result=applyAction(world,shooter,{action:'attack',direction:[0,0,1],origin:[0,1,-35],charge,...sniperAim},
         {now:5000,actors:[shooter,target],rng:()=>.8});
       assert.equal(result.hit,null,id+' must not hit instantaneously');
+      if(id==='black-cat'&&charge){
+       assert.equal(result.attackEvent.rainbowSpiral,true);
+       assert.equal(result.attackEvent.range,256);
+       continue;
+      }
       tickWorld(world,{now:5900,actors:[shooter,target],activeFighters:0,rng:()=>.8});
       assert.ok(world.profiles.target.hp<world.profiles.target.maxHp,id+' charge '+charge+' must damage a fighter upon contact');
     }

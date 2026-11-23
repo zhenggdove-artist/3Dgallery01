@@ -35,7 +35,7 @@ test('giraffe charged collision is wider than the visible revolving rod and deal
  assert.equal(item.cooldown,310);
  const baseline=pvpShotDamage({...item,id:'legacy-giraffe'}, {ultimate:true,radius:12}, {tier:3});
  const triple=pvpShotDamage(item,{ultimate:true,radius:12},{tier:3});
- assert.equal(triple,+(baseline*3).toFixed(3));
+ assert.ok(Math.abs(triple-baseline*3)<=.003,'three-fold multiplier can differ by one rounding unit');
  const world=createInitialWorld(T),attacker=fighter('thrower',[45,0,0]),
   defender=fighter('defender',[45,0,25]);
  const user=ensureProfile(world,'thrower','thrower','#aaaaaa',T);
@@ -91,7 +91,7 @@ test('all non-saber melee swings recover rapidly and music note particles are vi
  const shader=source('src/reletter/odd-weapon-effects.js');
  assert.match(shader,/pattern>4\.5&&pattern<5\.5\?17\.:5\./);
  const main=source('src/main.js');
- assert.match(main,/if\(weapon\?\.id==='goldfish'\)\{/);
+ assert.match(main,/if\(authoredId\(weapon\)==='goldfish'\)\{/);
  assert.match(main,/if\(charge>=1\)await performAttack\(1\)/);
  const css=source('fidelity-ui.css');
  assert.match(css,/#hud #chat-hud\{bottom:max\(163px/);

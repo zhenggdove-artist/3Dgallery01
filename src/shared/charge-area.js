@@ -55,15 +55,15 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
   const planter=/^planter-[1-5]$/.test(item?.id||'');
   const palm=/^palm-[1-5]$/.test(item?.id||'');
   const saber=item?.family==='saber';
-  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:saber?.25:item?.family==='ice'?1.5:item?.family==='wave'||item?.id==='goldfish'?3:1);
+  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:saber?.25:item?.family==='ice'?1.5:item?.family==='wave'||(item?.baseId||item?.id)==='goldfish'?3:1);
   // Coconut Palm's radius is rescaled so purple matches its former green size.
   // The server AoE, warning and original tornado scale together at every tier.
   // Cast reach remains unchanged. Whip retains its 1.5x multiplier.
   // Goldfish retains its narrow physical collision width.
-  const radiusFactor=(item?.id==='goldfish'||saber?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:palm?PALM_ULTIMATE_RADIUS_MULTIPLIER:1);
+  const radiusFactor=((item?.baseId||item?.id)==='goldfish'||saber?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:palm?PALM_ULTIMATE_RADIUS_MULTIPLIER:1);
   stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);
   stats.radius=+(Math.max(.1,Number(stats.radius)||0)*radiusFactor*(item?.family==='ice'?1/3:1)).toFixed(3);
-  if(item?.id==='telephone'){
+  if((item?.baseId||item?.id)==='telephone'){
    // The screaming handset's ultimate warning AND hit area are exactly
    // the same diameter as the matching-quality frying-pan ultimate.
    const grade=quality||weaponQuality(item);
@@ -84,7 +84,7 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  // Staff/clam streams are fired from the weapon, not an unrelated distant
  // round explosion. Other spell families retain their target-centred circles.
  const areaUltimate=!!stats?.ultimate&&/^(pan|whip|swatter|palm)-[1-5]$/.test(item?.id||'');
- const mode=(item?.id==='clam'||item?.family==='saber'&&stats?.ultimate&&!fusionEcho)?'sector':item?.id==='accordion'&&stats?.ultimate?'corridor':channel&&isChannelStaff(item)&&item?.family!=='ice'?'corridor':
+ const mode=((item?.baseId||item?.id)==='clam'||item?.family==='saber'&&stats?.ultimate&&!fusionEcho)?'sector':(item?.baseId||item?.id)==='accordion'&&stats?.ultimate?'corridor':channel&&isChannelStaff(item)&&item?.family!=='ice'?'corridor':
   (areaUltimate||AREAS.has(item?.family)&&!item?.exotic||EXOTIC_AREAS.has(item?.pattern))?'area':'corridor';
  const defaultDistance=clamp(range*.65,mode==='area'?9:5,mode==='area'?48:60);
  const floorAtDistance=ground(origin[0]+dir[0]*defaultDistance,origin[2]+dir[2]*defaultDistance,origin[1]);
@@ -161,13 +161,13 @@ export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
  const [dx,dz]=flatDirection(direction);
  const yaw=Math.atan2(-dz,dx); // official effects face local +X
  const at=(x,z)=>Math.max(0,ground(x,z,origin[1]))+.16;
- if(item?.id==='clam'||item?.family==='saber'&&stats?.ultimate){
+ if((item?.baseId||item?.id)==='clam'||item?.family==='saber'&&stats?.ultimate){
   return {shape:'sector',position:[origin[0],at(origin[0],origin[2]),origin[2]],
    yaw,radius:range,angleDeg:item?.family==='saber'?SABER_WAVE_FAN_ANGLE_DEG:CLAM_SECTOR_ANGLE,range,width};
  }
  // The returning giraffe sweeps the entire outbound ray (then retraces it):
  // show the same full-length corridor instead of a tiny remote AoE circle.
- if((item?.id==='giraffe'&&stats?.ultimate)||(isChannelStaff(item)&&!(item?.family==='ice'&&stats?.ultimate))||(item?.id==='accordion'&&stats?.ultimate)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||item?.id==='goldfish'){
+ if(((item?.baseId||item?.id)==='giraffe'&&stats?.ultimate)||(isChannelStaff(item)&&!(item?.family==='ice'&&stats?.ultimate))||((item?.baseId||item?.id)==='accordion'&&stats?.ultimate)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||(item?.baseId||item?.id)==='goldfish'){
   const x=origin[0]+dx*range*.5,z=origin[2]+dz*range*.5;
   return {shape:'rectangle',position:[x,at(x,z),z],yaw,length:range,width,range};
  }

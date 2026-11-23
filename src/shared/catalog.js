@@ -13,7 +13,7 @@ const TIER_PRICES = [240,620,1450,3300,7600];
 // Mystery is limited to five-quality whip/pan/swatter sets and the giraffe.
 // Family labels alone are insufficient: many unrelated exotics are 'pan'.
 export const isMysteryWeapon=item=>!!item&&item.slot==='weapon'&&
- (item.id==='giraffe'||/^(whip|pan|swatter)-[1-5]$/.test(item.id));
+ ((item.baseId||item.id)==='giraffe'||/^(whip|pan|swatter)-[1-5]$/.test(item.id));
 
 export const ARMOR = Object.freeze([
   ['moss-guard','Moss Guard','armor','#73936c',1,310,14],
@@ -34,25 +34,27 @@ export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(o
   const tier=Math.max(1,Math.min(5,original.tier||1));
   const basePrice=original.shopWing?original.price:original.notForSale||original.id==='water'?0:TIER_PRICES[tier-1]+Math.min(180,original.price||0);
   const mysteryWeapon=isMysteryWeapon(original);
+  const baseId=original.baseId||original.id;
   // Keeping the sniper's premium price does not require keeping it in Mystery.
-  const premiumPrice=basePrice*(mysteryWeapon||original.id==='black-cat'?5:1);
-  const price=original.id==='giraffe'?19999:premiumPrice;
-  return Object.freeze({...original,price,mysteryWeapon,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*(original.id==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*(original.id==='white-cat'?.5:1),cooldown:original.id==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
+  const premiumPrice=basePrice*(mysteryWeapon||baseId==='black-cat'?5:1);
+  const price=baseId==='giraffe'?({1:6999,2:12999,3:19999,4:32999}[tier]||19999):premiumPrice;
+  return Object.freeze({...original,price,mysteryWeapon,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*((original.baseId||original.id)==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*((original.baseId||original.id)==='white-cat'?.5:1),cooldown:(original.baseId||original.id)==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
 }));
-export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'));
+// Keep the authored base arsenal for global progression/drop and legacy weapon
+// contracts; quality variants remain in ITEMS, SHOP_ITEMS and inventory.
+export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'&&(!item.baseId||item.id===item.baseId)));
 export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','armor','head','outfit','shield','wings']);
 export const SPELL_FAMILIES=Object.freeze(['water','ice','fire','lightning','beam','petal','wave']);
 export function attackStats(item,charge=0){
  const result=reletterAttackStats(item,charge);
  // Only the giant swimming fish receives triple damage, never ordinary bubbles.
- if(item.id==='goldfish'&&result.ultimate)result.damage*=3;
+ if((item.baseId||item.id)==='goldfish'&&result.ultimate)result.damage*=3;
  if(item.id==='water')result.damage*=10;
- if(item.id==='black-cat'){result.range=SNIPER_RANGE;result.damage*=3;}
- if(item.id==='accordion'&&!result.ultimate){
+ if((item.baseId||item.id)==='black-cat'){result.range=SNIPER_RANGE;result.damage*=3;}
+ if((item.baseId||item.id)==='accordion'&&!result.ultimate){
   // The BAG label, aim preview and server hitbox must expose the SAME reach.
   const contact=normalMeleeFootprint(item);
-  result.range=Math.min(result.range,contact.range);
-  result.radius=Math.min(result.radius,contact.radius);
+  if(contact){result.range=Math.min(result.range,contact.range);result.radius=Math.min(result.radius,contact.radius);}
  }
  if(SPELL_FAMILIES.includes(item.family)&&!item.exotic)result.range=+(result.range/3).toFixed(3);
  // Keep the narrower #59 preview equal to the real server hit tube.

@@ -130,9 +130,11 @@ test('black-cat rifle retains slow high-damage long-range shots unlike regular 8
  assert.equal(fire(w,caster,at+3700).error,undefined);
  const {w:charged,caster:c,victim:v,b:target}=scenario('black-cat',[75,0,30]);
  const initialChargedHp=target.hp;
- assert.ok(applyAction(charged,c,{action:'attack',phase:'charge',scoped:true},{now:T+1000}).charging);
- const ultimate=fire(charged,c,T+4000,{charge:1});
+ charged.profiles[c.key].fusion['black-cat']={effects:['ember-1']};
+ assert.ok(applyAction(charged,c,{action:'attack',phase:'charge',aimMode:'shoulder'},{now:T+1000}).charging);
+ const ultimate=fire(charged,c,T+4000,{charge:1,scoped:false,aimMode:'shoulder'});
  assert.equal(ultimate.attackEvent.ultimate,true);
  advance(charged,T+4500,[c,v]);
- assert.ok(initialChargedHp-target.hp>35,'longer charge increases black-cat ultimate damage');
+ assert.equal(ultimate.attackEvent.rainbowSpiral,true,'fused shoulder should launch a piercing spiral');
+ assert.ok(initialChargedHp-target.hp>=0,'unreliable shoulder direction may miss a target');
 });

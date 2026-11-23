@@ -396,9 +396,9 @@ export class WeaponParticleEffects{
   if(charged&&item.family==='saber')return;
   // Ordinary shots for all three cats are always rainbow and shotgun charged
   // produces a nearby, very wide waterfall instead of a distant beam.
-  const elementalJet=['fire','water','wave'].includes(item.family)||item.id==='goldfish';
+  const elementalJet=['fire','water','wave'].includes(item.family)||(item.baseId||item.id)==='goldfish';
   if(!charged&&!elementalJet&&!['white-cat','black-cat','calico-cat'].includes(item.id))return;
-  const chosen=item.id==='calico-cat'?'rainbow-scatter':item.id?.includes('cat')?'rainbow':item.id==='goldfish'?'tidal':item.id==='clam'&&charged?'tidal':recipe;
+  const chosen=(item.baseId||item.id)==='calico-cat'?'rainbow-scatter':item.id?.includes('cat')?'rainbow':(item.baseId||item.id)==='goldfish'?'tidal':(item.baseId||item.id)==='clam'&&charged?'tidal':recipe;
   const range=chosen==='rainbow-scatter'?Math.max(2,Number(data.range)||10):Math.max(1,Math.min(charged?100:160,Number(data.range)||source.distanceTo(end)));
   const amount=charged?['fissure','rainbow-scatter','boomerang','lotus-veil','thorn-tower'].includes(chosen)?5600:chosen==='music'?5200:chosen==='flies'||chosen==='food'?3900:3200:elementalJet?2400:chosen==='rainbow-scatter'?3200:1200;
   const duration=charged?chosen==='music'?3.3:chosen==='fissure'?3:chosen==='rainbow-scatter'?1.65:2.45:elementalJet?1.05:.65;

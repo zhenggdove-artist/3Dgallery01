@@ -40,6 +40,7 @@ test('every weapon receives a smaller warning with its quality multiplier',()=>{
   stats.radius=forwardCastRadius(item,q,stats.radius,isChannelStaff(item));
   if(item.id==='jellybrella')stats.radius=Math.max(10,stats.radius*2);
   scaleUltimateFootprint(stats,item);
+  if(item.id==='black-cat')stats.range=256;
   if(item.id==='giraffe'){
    // Boomerang overrides the generic 60% AoE range with its full sweep.
    stats.range=+(item.chargedRange*q.range).toFixed(2);

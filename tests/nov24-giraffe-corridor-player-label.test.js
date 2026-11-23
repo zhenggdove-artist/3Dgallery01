@@ -63,9 +63,9 @@ test('runtime passes the local player into label visibility and preserves giraff
  assert.match(main,/arena\.update\(dt,time,camera,roots,localRoot\)/);
  assert.match(arena,/updateArtworkTitleVisibility\(root,viewerRoot\?\.position\)/);
  assert.doesNotMatch(arena,/updateArtworkTitleVisibility\(root,camera\.position\)/);
- assert.match(warning,/equipped\.id==='giraffe'&&stats\.ultimate/);
+ assert.match(warning,/\(equipped\.baseId\|\|equipped\.id\)==='giraffe'&&stats\.ultimate/);
  assert.match(warning,/stats\.range=\+\(equipped\.chargedRange\*quality\.range\)/);
  assert.match(warning,/5\.9\*quality\.visual/);
- assert.match(rules,/weapon\.id==='giraffe'&&stats\.ultimate/);
+ assert.match(rules,/\(weapon\.baseId\|\|weapon\.id\)==='giraffe'&&stats\.ultimate/);
  assert.match(rules,/stats\.radius=Math\.max\(stats\.radius,5\.9\*quality\.visual\)/);
 });

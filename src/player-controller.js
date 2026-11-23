@@ -13,7 +13,7 @@ export class PlayerController{
   }
   bind(stick){
     addEventListener('keydown',e=>{if(!this.enabled||/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName))return;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();this.keys.add(e.code);if(e.code==='Space'&&!e.repeat)this.jump();});
-    addEventListener('keyup',e=>this.keys.delete(e.code));addEventListener('blur',()=>{this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();this.channelAiming=false;this.channelMouseLast=null;});
+    addEventListener('keyup',e=>this.keys.delete(e.code));addEventListener('blur',()=>{this.keys.clear();this.move.set(0,0);this.drag=null;this.pinch=null;this.pointers.clear();this.channelAiming=false;this.channelMouseLast=null;});
      // A-button pointer capture delivers mouse movement to the document,
      // NOT to the game canvas. Listen in CAPTURE phase even when LMB is held.
      // Only one camera handler runs; canvas drag is suppressed while channeling.
@@ -30,14 +30,57 @@ export class PlayerController{
       this.yaw-=dx/innerWidth*4;
       this.pitch=THREE.MathUtils.clamp(this.pitch+dy/innerHeight*2,-1.15,1.4);
      },true);
-    this.canvas.addEventListener('pointerdown',e=>{if(!this.enabled||this.status.freeze||e.button>0)return;this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});this.canvas.setPointerCapture(e.pointerId);this.drag={id:e.pointerId,x:e.clientX,y:e.clientY,yaw:this.yaw,pitch:this.pitch};if(this.pointers.size===2){const [a,b]=[...this.pointers.values()];this.pinch={span:Math.hypot(a.x-b.x,a.y-b.y),distance:this.distance};}});
-    this.canvas.addEventListener('pointermove',e=>{if(!this.enabled||this.status.freeze||!this.pointers.has(e.pointerId))return;this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(this.pointers.size===2){const [a,b]=[...this.pointers.values()];this.distance=THREE.MathUtils.clamp(this.pinch.distance*this.pinch.span/Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),3,50);return;}if(this.drag?.id!==e.pointerId)return;if(this.channelAiming&&e.pointerType==='mouse')return;this.yaw=this.drag.yaw-(e.clientX-this.drag.x)/innerWidth*4;this.pitch=THREE.MathUtils.clamp(this.drag.pitch+(e.clientY-this.drag.y)/innerHeight*2,-1.15,1.4);});
-    const release=e=>{this.pointers.delete(e.pointerId);this.drag=null;};this.canvas.addEventListener('pointerup',release);this.canvas.addEventListener('pointercancel',release);
+    // Pointer identity is authoritative. Safari may cancel/loss-capture a
+    // finger while the joystick or another HUD control remains held. A stale
+    // second pointer must NEVER turn the next one-finger orbit into a pinch.
+    const anchorDrag=(id,point)=>{this.drag={id,x:point.x,y:point.y,yaw:this.yaw,pitch:this.pitch};};
+    this.canvas.addEventListener('pointerdown',e=>{
+     if(!this.enabled||this.status.freeze||e.button>0||this.pointers.has(e.pointerId))return;
+     if(this.pointers.size>=2)return; // Ignore extra contacts, never stale-pinches.
+     this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
+     try{this.canvas.setPointerCapture(e.pointerId);}catch{}
+     if(this.pointers.size===1){this.pinch=null;anchorDrag(e.pointerId,this.pointers.get(e.pointerId));}
+     else{
+      const [a,b]=[...this.pointers.values()];
+      // Pinch is two actual simultaneous TOUCH contacts, not mouse+touch.
+      this.drag=null;
+      this.pinch=a.type==='touch'&&b.type==='touch'?
+       {span:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),distance:this.distance}:null;
+     }
+    });
+    this.canvas.addEventListener('pointermove',e=>{
+     if(!this.enabled||this.status.freeze||!this.pointers.has(e.pointerId))return;
+     const point={x:e.clientX,y:e.clientY,type:e.pointerType};
+     this.pointers.set(e.pointerId,point);
+     if(this.pointers.size===2){
+      if(this.pinch){
+       const [a,b]=[...this.pointers.values()];
+       const span=Math.max(1,Math.hypot(a.x-b.x,a.y-b.y));
+       this.distance=THREE.MathUtils.clamp(this.pinch.distance*this.pinch.span/span,3,50);
+      }
+      return;
+     }
+     if(this.pointers.size!==1)return;
+     if(this.drag?.id!==e.pointerId){anchorDrag(e.pointerId,point);return;}
+     if(this.channelAiming&&e.pointerType==='mouse')return;
+     this.yaw=this.drag.yaw-(e.clientX-this.drag.x)/innerWidth*4;
+     this.pitch=THREE.MathUtils.clamp(this.drag.pitch+(e.clientY-this.drag.y)/innerHeight*2,-1.15,1.4);
+    });
+    const release=e=>{
+     if(!this.pointers.delete(e.pointerId))return;
+     this.pinch=null;this.drag=null;
+     // Re-anchor the surviving finger at the CURRENT yaw/pitch, otherwise
+     // its first orbit frame jumps back to the pre-pinch camera direction.
+     if(this.pointers.size===1){const [id,point]=this.pointers.entries().next().value;anchorDrag(id,point);}
+    };
+    this.canvas.addEventListener('pointerup',release);
+    this.canvas.addEventListener('pointercancel',release);
+    this.canvas.addEventListener('lostpointercapture',release);
     this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
     if(stick){let pointer=null;const knob=stick.firstElementChild;const move=e=>{if(e.pointerId!==pointer)return;const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,radius=Math.max(20,(r.width-knob.offsetWidth)/2-4),f=radius/Math.max(radius,Math.hypot(x,y));this.move.set(x*f/radius,y*f/radius);knob.style.transform=`translate(${x*f}px,${y*f}px)`;};stick.onpointerdown=e=>{e.preventDefault();if(pointer!==null)return;pointer=e.pointerId;stick.setPointerCapture(pointer);move(e);};stick.onpointermove=move;stick.onpointerup=stick.onpointercancel=stick.onlostpointercapture=e=>{if(e.pointerId!==pointer)return;pointer=null;this.move.set(0,0);knob.style.transform='';};}
   }
   jump(){if(this.awaitingSpawn||this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;this.onJump?.();return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
-  setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pointers.clear();}}
+  setEnabled(value){this.enabled=value;if(!value){this.keys.clear();this.move.set(0,0);this.drag=null;this.pinch=null;this.pointers.clear();}}
   setRole(role){this.role=role;this.root.visible=role==='fighter';}
   setFollowTarget(root=null){this.followTarget=root;}
   teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;this.vortexSpin=null;}
