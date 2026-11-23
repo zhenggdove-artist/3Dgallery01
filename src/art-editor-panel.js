@@ -21,10 +21,10 @@ export function editorPanelMarkup(appearance,platformRadius,originalArtwork,titl
  return `<h3>GM · 藝術品配置</h3><p data-art-name></p>
   <p class="art-editor-help">Shift+T 縮放／Shift+R 旋轉／Shift+G 移動；Esc 取消</p>
   <div class="art-editor-toolbar"><button data-action="scale">尺寸</button><button data-action="rotate">旋轉</button><button data-action="translate">位置</button></div>
-  <div class="art-editor-fields">${originalArtwork?'':`<label class="art-editor-field"><span class="art-field-name">作品名稱</span><span class="art-editor-values"><input type="text" data-art-title maxlength="120" value="${String(title).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}" aria-label="作品名稱"></span></label>`}${axes}${radius}
+  <div class="art-editor-fields">${`<label class="art-editor-field"><span class="art-field-name">作品名稱</span><span class="art-editor-values"><input type="text" data-art-title maxlength="120" value="${String(title).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}" aria-label="作品名稱"></span></label>`}${axes}${radius}
    <h4>表面屬性</h4>${numbers}
    <label class="art-editor-field"><span class="art-field-name">色彩</span><span class="art-editor-values"><input data-appearance="tint" type="color" value="${appearance.tint}"></span></label>
-   ${originalArtwork?'':`<label class="art-editor-field"><span class="art-field-name">作品名稱底色</span><span class="art-editor-values"><input type="color" data-appearance="labelBackground" value="${appearance.labelBackground||'#000000'}" aria-label="作品名稱底色"></span></label>`}
+   ${`<label class="art-editor-field"><span class="art-field-name">作品名稱底色</span><span class="art-editor-values"><input type="color" data-appearance="labelBackground" value="${appearance.labelBackground||'#000000'}" aria-label="作品名稱底色"></span></label>`}
   </div>
   <p data-status>已選取 · 尚無修改</p>
   <div class="art-editor-actions"><button data-action="follow">跟隨 GM</button>
