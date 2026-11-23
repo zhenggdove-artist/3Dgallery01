@@ -115,7 +115,9 @@ export function attackStats(item,charge=0){
  // Only the giant swimming fish receives triple damage, never ordinary bubbles.
  if(item.id==='goldfish'&&result.ultimate)result.damage*=3;
  if(item.id==='water')result.damage*=10;
- if(item.id==='black-cat'){result.range=SNIPER_RANGE;result.damage*=3;}
+ if(item.id==='black-cat'){result.range=SNIPER_RANGE;
+   // Preserve precise ordinary shots; cut charged multi-target monster damage.
+   result.damage*=result.ultimate?.85:3;}
  if(item.id==='accordion'&&!result.ultimate){
   // The BAG label, aim preview and server hitbox must expose the SAME reach.
   const contact=normalMeleeFootprint(item);

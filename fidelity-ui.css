@@ -11,7 +11,7 @@ body,button,input,textarea,select,.item h3,#panel h2,#panel h3{font-family:Arial
 #dock [data-action=jump]>*{display:none!important}
 body.panel-open #hud{visibility:hidden}body.panel-open #panel{visibility:visible;inset:24px 24px 24px auto;max-height:calc(100dvh - 48px);width:min(640px,calc(100vw - 48px));margin:0}
 #panel-content{min-height:0;overflow:auto}#art-editor{max-height:calc(100dvh - 180px);overflow:auto}
-.gun-overlay.sniper-shoulder .gun-reticle,#gun-overlay.sniper-shoulder .gun-reticle{width:66px;height:66px;border-style:dashed}
+.gun-overlay.sniper-shoulder .gun-reticle,#gun-overlay.sniper-shoulder .gun-reticle{width:132px;height:132px;top:calc(50% - 30px);border-style:dashed}
 @media(max-width:600px){#identity{max-width:calc(100vw - 150px)}#identity>.reletter-wordmark{font-size:14px;letter-spacing:.2em!important}#vitals{top:48px}#gm-help{top:112px}body.panel-open #panel{inset:12px;width:calc(100vw - 24px);max-height:calc(100dvh - 24px)}}
 /* User-requested Windows 98 loading window replaces the raised title screen. */
 #loading{display:grid;place-items:center;background:#008080!important;color:#111!important}.loading-window{width:min(480px,calc(100vw - 36px));padding:3px;background:#c0c0c0;box-shadow:inset 1px 1px white,inset -1px -1px #000,3px 3px 0 #004c4c}.loading-body{display:grid;justify-items:center;gap:10px;padding:24px 16px;font:13px Tahoma,sans-serif}.loading-body .loading-track{width:100%;height:20px;border:2px inset #ddd;background:#ddd}.loading-body .loading-track i{background:repeating-linear-gradient(90deg,#000080 0 8px,#c0c0c0 8px 10px)}#loading-detail{overflow-wrap:anywhere;text-align:center}
