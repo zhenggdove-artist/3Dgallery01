@@ -290,7 +290,8 @@ ui.addEventListener('firebase-login',async()=>{
     // Firebase SDK is preloaded before clicking the button, keeping the popup
     // tied to the original user gesture on iOS Safari.
     const token=await signInWithGoogle();
-    await completeFirebaseLogin(token);
+     ui.confirmGoogleIdentity(token);
+     await completeFirebaseLogin(token);
   }catch(error){
     const message=error?.code==='auth/popup-closed-by-user'?'Google sign-in window was closed':
       error?.code==='auth/popup-blocked'?'Allow your browser to open the Google sign-in window':
@@ -300,7 +301,9 @@ ui.addEventListener('firebase-login',async()=>{
   }
 });
 ui.addEventListener('join',async event=>{
-  if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();
+   if(event.detail?.mode==='guest'&&ui.googleAuthenticated)
+     return ui.joinError('Google account already selected. Enter with Google instead.');
+   if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();
     void resumeWingCheckout(network,ui);
     void arena.loadCustomArtworks(data.world.customArtworks,network.base).catch(error=>console.warn('Deferred artwork loading',error));
     network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
@@ -711,10 +714,53 @@ ui.addEventListener('chat',async event=>{const text=String(event.detail||'').tri
  if(/^\/clean\s+(?:graffic|graffiti)$/i.test(text)){if(!self?.profile?.admin)return ui.toast('GM only');await sendAction('clean-graffiti');return;}
  if(/^\/reset\s+message$/i.test(text)){if(!self?.profile?.admin)return ui.toast('GM only');await sendAction('reset-messages');return;}
  try{const result=await network.chat(text);if(result?.notice)ui.toast(result.notice);}catch(error){ui.toast(error.message);}});
-ui.addEventListener('plant',event=>writer.submit(event.detail));
+ui.addEventListener('plant',async event=>{
+  if(self?.role!=='spectator'){writer.submit(event.detail);return;}
+  if(ui.spectatorPlantPending)return;
+  ui.spectatorPlantPending=true;
+  try{
+   const {file,...data}=event.detail||{};
+   if(file)data.media=await uploadMedia(network,file);
+   const result=await sendAction('plant',{...data,position:[0,0,0]},{throwOnError:true});
+   if(result?.plant){ui.closePanel();ui.toast('WRITE · MESSAGE PLANTED');}
+  }catch(error){ui.toast(error.message||'Spectator WRITE failed');}
+  finally{ui.spectatorPlantPending=false;}
+ });
 ui.addEventListener('save-code',async()=>{try{const data=await network.createSaveCode();self.saveCode=data.code;ui.self=self;ui.showSaveCode(data.code);ui.toast('存檔代碼已產生 · 請保存');}catch(error){ui.toast(error.message);}});
 ui.addEventListener('gm-presence-request',async()=>{if(!self?.profile?.admin)return;try{ui.setGmPresence(await network.gmPresence());}catch(error){ui.setGmPresenceError(error.message);}});
-ui.addEventListener('role-change',async event=>{try{const data=await network.changeRole(event.detail);network.spawnConfirmed=data.role===self?.role&&network.spawnConfirmed;cancelBuildPlacement();self={...self,...data.self,role:data.role,seat:data.seat};world=data.world;players=data.players;controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);if(data.role!=='fighter')wallPainter.stop();controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);ui.setSelf(self);syncPlayers();syncWorld();ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · TAB TO FOLLOW');}catch(error){ui.toast(error.message);}});
+function applyRoleTransition(data){
+   if(!data?.self||!data.world)throw Error('Role transition missing authoritative world');
+   network.spawnConfirmed=data.role==='fighter'&&self?.role==='fighter'&&network.spawnConfirmed;
+   cancelBuildPlacement();
+   self={...self,...data.self,role:data.role,seat:data.seat};
+   world=data.world;players=data.players;
+   controller.seat=data.seat;controller.setFollowTarget(null);controller.setRole(data.role);
+   controller.spectatorLift=0;
+   if(data.role!=='fighter')wallPainter.stop();
+   controller.teleport(PLAYER_SPAWNS[data.seat]||PLAYER_SPAWNS[0]);
+   ui.setSelf(self);syncPlayers();syncWorld();
+   ui.toast(data.role==='fighter'?'FIGHTER SEAT READY':'SPECTATOR MODE · FREE CAMERA · WRITE / CHAT');
+}
+ui.addEventListener('role-change',async event=>{
+ try{applyRoleTransition(await network.changeRole(event.detail));}
+ catch(error){ui.toast(error.message);}
+});
+ui.addEventListener('gm-spectator-test',async()=>{
+ if(!self?.profile?.admin||ui.gmSpectatorBusy)return;
+ if(writer.active||artEditor.mode||platformDelete.active)return ui.toast('請先結束 WRITE 或作品編輯模式');
+ if(self.role==='spectator'&&!self.gmSpectatorPreview)return ui.toast('目前已是正式觀眾模式');
+ ui.gmSpectatorBusy=true;
+ try{
+  const returning=!!self.gmSpectatorPreview;
+  const data=await network.changeRole({role:returning?'fighter':'spectator',gmPreview:true});
+  ui.closePanel();applyRoleTransition(data);
+  ui.toast(returning?'GM 戰鬥席已恢復':'GM 觀眾測試：使用正式觀眾權限與操作');
+ }catch(error){ui.toast(error.message);}
+ finally{ui.gmSpectatorBusy=false;}
+});
+ui.addEventListener('spectator-lift',event=>{
+ if(controller?.role==='spectator')controller.spectatorLift=Number(event.detail)||0;
+});
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
 ui.addEventListener('panel',event=>{if(event.detail.open)wallPainter.stop();chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active&&!wallPainter.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
 ui.addEventListener('editor-settings',event=>applyEditorSettings(event.detail));

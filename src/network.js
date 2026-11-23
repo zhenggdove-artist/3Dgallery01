@@ -13,6 +13,7 @@ export class TempleNetwork extends EventTarget{
   // gameplay continue to use the short random Temple session token.
   async join({name,color='#43b59a',firebaseIdToken='',mode='firebase'}) {
     this.ensureConfigured();
+    if(mode==='guest'&&firebaseIdToken)throw Error('Cannot use guest mode after Google authentication');
     const data=await this.request('/api/join',{
       method:'POST',body:{name,color,...(mode==='guest'?{mode:'guest'}:{})},auth:false,identityToken:firebaseIdToken,timeoutMs:20_000
     });
@@ -111,7 +112,7 @@ export class TempleNetwork extends EventTarget{
   async chatHistory(){return this.request('/api/chat');}
   async createSaveCode(){return this.request('/api/save-code',{method:'POST',body:{}});}
   async gmPresence(){return this.request('/api/gm/presence');}
-  async changeRole(role){return this.request('/api/role',{method:'POST',body:{role}});}
+  async changeRole(role){const body=typeof role==='string'?{role}:role;return this.request('/api/role',{method:'POST',body});}
   async world(){return this.request('/api/world');}
   async request(path,{method='GET',body,auth=true,identityToken='',timeoutMs=0}={}){
     const headers={'Content-Type':'application/json'};if(identityToken)headers.Authorization=`Bearer ${identityToken}`;else if(auth&&this.token)headers.Authorization=`Bearer ${this.token}`;
