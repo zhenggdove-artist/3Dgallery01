@@ -417,12 +417,12 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
    const impacts=(world?.goldfishImpactEvents||[]).filter(v=>
     v.attackId===event.persistentAttackId);
    if(impacts.length)group.userData.gotServerTrack=true;
-   const bursts=group.userData.goldfishBubbleBursts;
+   const impactBursts=group.userData.goldfishBubbleBursts;
    const capture=(index,position)=>{
     if(group.userData.consumedFish.has(index))return;
-    bursts.births[index]=age;
+    impactBursts.births[index]=age;
     if(Array.isArray(position)&&position.length===3)
-     bursts.centers.set(position,index*3);
+     impactBursts.centers.set(position,index*3);
     group.userData.consumedFish.add(index);
    };
    for(const impact of impacts){
