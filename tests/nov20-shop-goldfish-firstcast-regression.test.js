@@ -4,12 +4,12 @@ import {readFileSync} from 'node:fs';
 import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_T1_DAMAGE_PER_FISH,
  GOLDFISH_T1_TOTAL_MAX,goldfishDirectHitBudget} from '../src/shared/goldfish-school.js';
 const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
-test('T1 school of thirty independent fish can never directly exceed 45 damage per enemy',()=>{
+test('T1 school of thirty independent fish can never directly exceed 22.5 damage per enemy',()=>{
  assert.equal(GOLDFISH_SCHOOL_COUNT,30);
- assert.equal(GOLDFISH_T1_DAMAGE_PER_FISH,1.5);
- assert.equal(GOLDFISH_T1_TOTAL_MAX,45);
+ assert.equal(GOLDFISH_T1_DAMAGE_PER_FISH,.75);
+ assert.equal(GOLDFISH_T1_TOTAL_MAX,22.5);
  assert.ok(goldfishDirectHitBudget(1)<100);
- assert.equal(goldfishDirectHitBudget(1,true),9);
+ assert.equal(goldfishDirectHitBudget(1,true),4.5);
  const server=source('src/shared/temple-rules.js');
  assert.match(server,/const remaining=Math.max\(0,totalBudget-\(fx\.damageSpent\[key\]\|\|0\)\)/);
  assert.match(server,/const raw=Math.min\(direct,remaining\/Math.max\(\.001,amplification\)\)/);
