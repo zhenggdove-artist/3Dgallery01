@@ -753,9 +753,9 @@ function useConsumable(world,profile,actor,body,now){
  if(!Number.isInteger(index)||index<0||index>=3)return {error:'Invalid consumable slot'};
  const item=itemById(itemId);
  if(item?.slot!=='consumable')return {error:'No restorative consumable assigned'};
- if(profile.hp>=profile.maxHp)return {error:'Health is already full'};
  const inventoryIndex=profile.inventory.indexOf(itemId);
  if(inventoryIndex<0)return {error:'Out of stock · Restock this consumable at SHOP'};
+ if(profile.hp>=profile.maxHp)return {error:'Health is already full'};
  const hpBefore=profile.hp;
  // A healing percentage is measured against CURRENT maximum HP, not coins
  // or the untrusted client-provided HP value.
