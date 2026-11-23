@@ -38,10 +38,11 @@ export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(o
   // Keeping the sniper's premium price does not require keeping it in Mystery.
   const premiumPrice=basePrice*(mysteryWeapon||baseId==='black-cat'?5:1);
   const price=baseId==='giraffe'?({1:6999,2:12999,3:19999,4:32999}[tier]||19999):premiumPrice;
-  return Object.freeze({...original,price,mysteryWeapon,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*((original.baseId||original.id)==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*(original.id==='white-cat'?.5:1),cooldown:original.id==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
+  return Object.freeze({...original,price,mysteryWeapon,sell:Math.floor(price*.25),rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*((original.baseId||original.id)==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*((original.baseId||original.id)==='white-cat'?.5:1),cooldown:(original.baseId||original.id)==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
 }));
 // Keep the authored base arsenal for global progression/drop and legacy weapon
-// contracts; quality variants remain in ITEMS, SHOP_ITEMS and inventory.\nexport const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'&&(!item.baseId||item.id===item.baseId)));
+// contracts; quality variants remain in ITEMS, SHOP_ITEMS and inventory.
+export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'&&(!item.baseId||item.id===item.baseId)));
 export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','armor','head','outfit','shield','wings']);
 export const SPELL_FAMILIES=Object.freeze(['water','ice','fire','lightning','beam','petal','wave']);
 export function attackStats(item,charge=0){
