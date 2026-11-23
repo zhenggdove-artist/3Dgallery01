@@ -1601,10 +1601,10 @@ function splitGoldfishDamageNumbers(world,originalEventCount,contacts,center){
  const amounts=Array(contacts).fill(share);
  // Exactly preserve authoritative total after decimal rounding.
  amounts[contacts-1]=+(total-share*(contacts-1)).toFixed(2);
- event.amount=amounts[0];event.kind='goldfish';
+ event.amount=amounts[0];
  for(let i=1;i<contacts;i++){
   world.damageSequence=(world.damageSequence||0)+1;
-  world.damageEvents.push({...event,id:world.damageSequence,kind:'goldfish',
+  world.damageEvents.push({...event,id:world.damageSequence,
    amount:amounts[i],position:[
     center[0]+Math.sin(i*2.39996)*(.12+Math.sqrt(i)*.12),
     center[1]+(.08*(i%6)),center[2]+Math.cos(i*2.39996)*(.12+Math.sqrt(i)*.12)
