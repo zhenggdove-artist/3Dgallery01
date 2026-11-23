@@ -22,7 +22,7 @@ test('every specified colour/rank is exactly five times its former shop price',(
   assert.ok(SHOP_ITEMS.includes(item),item.id+' available to buy');
  }
  const actual=SHOP_ITEMS.filter(item=>item.mysteryWeapon).map(item=>item.id);
- assert.deepEqual(new Set(actual),new Set([...premiumIds,'giraffe']));
+ assert.deepEqual(new Set(actual),new Set([...premiumIds,'giraffe','giraffe-q1','giraffe-q2','giraffe-q4']));
  const giraffe=SHOP_ITEMS.find(item=>item.id==='giraffe');
  assert.ok(giraffe?.mysteryWeapon,'giraffe belongs only to the Mystery tab');
  assert.equal(giraffe.price,19999,'Giraffe Boomerang has a fixed Mystery price');
