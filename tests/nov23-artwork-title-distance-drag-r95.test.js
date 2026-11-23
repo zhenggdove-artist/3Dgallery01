@@ -141,7 +141,7 @@ test('in-world label drag surface remains below 8 interactive corner/mid-edge ha
  assert.match(editor,/data-label-drag-target/);
  assert.match(editor,/beginLabelMove\(e\)/);
  assert.match(editor,/dragLabelMove\(e\)/);
- assert.match(editor,/this\.labelMove\.active/); // may fail if actual code uses move.active
+ assert.match(editor,/pending\.active=true/);
  assert.match(css,/#art-label-handles \.label-drag-target/);
  assert.match(css,/#art-label-handles \.label-handle/);
  assert.match(read('src/arena-view.js'),/updateArtworkTitleVisibility\(root,camera\.position\)/);
