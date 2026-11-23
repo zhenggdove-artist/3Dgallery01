@@ -39,10 +39,10 @@ test('GM deletes floating disks and selected original exhibit disks, but not art
  const forged=applyAction(w,gm,{action:'delete-platform',platformId:'display:unknown'},{now:1009});
  assert.ok(forged.error);
 });
-test('fire and water continuous casts retain straight-ahead particle recipes and legacy mapping',()=>{
+test('fire keeps its particle recipe while the tide staff maps to native blue Venom Stream',()=>{
  const fire=itemById('ember-1'),water=itemById('tide-1'),clam=itemById('clam');
  assert.equal(effectFor(fire,false),'flame-surge');
- assert.equal(effectFor(water,false),'tidal-surge');
+ assert.equal(effectFor(water,false),'venom-stream');
  assert.equal(effectFor(clam,true),'tidal-surge');
  const scene=new THREE.Scene(),particles=new WeaponParticleEffects(scene);
  const source=new THREE.Vector3(0,1,0),end=new THREE.Vector3(0,1,12);
