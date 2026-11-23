@@ -233,6 +233,9 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
     tidalLocks:Object.fromEntries(Object.entries(world.tidalLocks||{}).map(([key,lock])=>[
       key,{targets:(lock.targets||[]).map(t=>({targetKey:t.targetKey,kind:t.kind,position:clone(t.position)}))}
     ])),
+    // Short-lived impact records survive even when the final fish consumes
+    // the entire flight during this very server tick.
+    goldfishImpactEvents:clone((world.goldfishImpactEvents||[]).filter(v=>now-v.time<950)),
     goldfishFlights:(world.persistentAttacks||[]).filter(v=>v.kind==='goldfish').map(v=>({
       id:v.id,position:clone(v.position||v.origin),direction:clone(v.direction),owner:v.owner,
        consumed:clone(v.fishConsumed||[])
@@ -2061,6 +2064,12 @@ function tickPersistentAttacks(world,actors,now,rng){
        :rayCylinderDistance(a,direction,length,value.position,1.02+radius,2.35+radius);
       if(collision===null)continue;
       fx.fishConsumed.push(i);contacts++;
+      world.goldfishImpactEvents??=[];
+      world.goldfishImpactEvents.push({
+       attackId:fx.id,fishIndex:i,time:now,position:[...b]
+      });
+      if(world.goldfishImpactEvents.length>128)
+       world.goldfishImpactEvents.splice(0,world.goldfishImpactEvents.length-128);
      }
      if(!contacts)continue;
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
