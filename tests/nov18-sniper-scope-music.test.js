@@ -54,15 +54,41 @@ test('scoped Black Cat still fires, and scoped full charges preserve intentional
  assert.equal(profile.chargeStartedAt,0);
 });
 
-test('client guards scoped Black Cat at A start, A release and all direct fire paths',()=>{
+test('shoulder Black Cat normal shots need no scope, but unfused ultimates stay locked',()=>{
+ const {world,profile}=setup(false),at=NOW+4000;
+ const fired=act(world,at,{direction:[0,0,1],aimMode:'shoulder',charge:0});
+ assert.equal(fired.error,undefined);
+ assert.equal(fired.attackEvent.ultimate,false);
+ assert.equal(fired.attackEvent.aimMode,'shoulder');
+ assert.equal(world.persistentAttacks.at(-1).shoulderSpread,true);
+ assert.equal(act(world,at+5000,{phase:'charge',aimMode:'shoulder'}).error,
+  'Fuse a chargeable weapon to unlock the shoulder ultimate');
+ assert.equal(profile.chargeStartedAt,0);
+});
+
+test('only a fused and fully charged shoulder sniper launches the penetrating spiral',()=>{
+ const {world,profile}=setup(true),at=NOW+4000;
+ assert.equal(act(world,at,{phase:'charge',aimMode:'shoulder'}).charging,true);
+ const first=act(world,at+itemById('black-cat').chargeMs+10,{
+  direction:[0,0,1],aimMode:'shoulder',charge:1
+ });
+ assert.equal(first.error,undefined);
+ assert.equal(first.attackEvent.ultimate,true);
+ assert.equal(first.attackEvent.piercing,true);
+ assert.equal(first.attackEvent.aimMode,'shoulder');
+ assert.ok(first.attackEvent.fusionEchoes.length>0);
+ assert.equal(world.persistentAttacks.find(v=>v.weapon==='black-cat')?.shoulderSpread,true);
+});
+
+test('client uses scope or fused shoulder state and the camera surface can fire',()=>{
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const gun=readFileSync(new URL('../src/gun-controller.js',import.meta.url),'utf8');
  const audio=readFileSync(new URL('../src/game-audio.js',import.meta.url),'utf8');
- assert.match(main,/sniperScopeAtPress=weapon\?\.id==='black-cat'&&gun\.mode===2/);
+ assert.match(main,/function hasBlackCatFusionUltimate\(/);
  assert.match(main,/weapon\?\.id==='black-cat'&&!wasScopedAtPress/);
- assert.match(main,/item\.id==='black-cat'&&gun\.mode!==2/);
- assert.match(main,/item\.id==='black-cat'\?\{scoped:true\}/);
- assert.match(gun,/weapon\(\)\?\.id==='black-cat'&&this\.mode!==2/);
+ assert.match(main,/gun\.mode===1&&charge>=1&&!hasBlackCatFusionUltimate\(\)/);
+ assert.match(main,/aimMode:gun\.mode===1\?'shoulder':'scope'/);
+ assert.match(gun,/\['goldfish','black-cat'\]/);
  assert.match(audio,/sound\/GGTEMPLEMUSIC\.mp3/);
  assert.match(audio,/sound\/backgroundmusic\.MP3/);
 });
