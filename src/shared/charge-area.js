@@ -51,14 +51,14 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
   const planter=/^planter-[1-5]$/.test(item?.id||'');
   const palm=/^palm-[1-5]$/.test(item?.id||'');
   const saber=item?.family==='saber';
-  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:saber?.5:item?.family==='ice'?1.5:item?.family==='wave'||item?.id==='goldfish'?3:1);
+  const rangeFactor=ULTIMATE_FOOTPRINT_SCALE*(pan?.5:swatter?.85:whip?.2:planter?.5:saber?.25:item?.family==='ice'?1.5:item?.family==='wave'||item?.id==='goldfish'?3:1);
   // Coconut Palm's radius is four times the former 2.5x size (now 10x).
   // The server AoE, warning and original tornado scale together at every tier.
   // Cast reach remains unchanged. Whip retains its 1.5x multiplier.
   // Goldfish retains its narrow physical collision width.
   const radiusFactor=(item?.id==='goldfish'||saber?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:palm?PALM_ULTIMATE_RADIUS_MULTIPLIER:1);
   stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);
-  stats.radius=+(Math.max(.1,Number(stats.radius)||0)*radiusFactor).toFixed(3);
+  stats.radius=+(Math.max(.1,Number(stats.radius)||0)*radiusFactor*(item?.family==='ice'?1/3:1)).toFixed(3);
   if(item?.id==='telephone'){
    // The screaming handset's ultimate warning AND hit area are exactly
    // the same diameter as the matching-quality frying-pan ultimate.
@@ -90,9 +90,12 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  // Shift pan and whip centres forward by one CURRENT blast radius. This
  // single coordinate drives the warning, authoritative hitbox and VFX.
  const blastOffset=stats?.ultimate&&/^(?:pan|whip|swatter)-[1-5]$/.test(item?.id||'')?radius:0;
- const centerDistance=travel+blastOffset;
- const x=origin[0]+(blastOffset?dx:dir[0])*centerDistance,
-  z=origin[2]+(blastOffset?dz:dir[2])*centerDistance;
+ // Move Frost's reduced circle ahead by TWO of its NEW diameters.
+ // The same center drives both the warning and the authoritative hitbox.
+ const frostOffset=stats?.ultimate&&item?.family==='ice'?radius*4:0;
+ const centerDistance=travel+blastOffset+frostOffset;
+ const x=origin[0]+(blastOffset||frostOffset?dx:dir[0])*centerDistance,
+  z=origin[2]+(blastOffset||frostOffset?dz:dir[2])*centerDistance;
  const floor=Math.max(0,ground(x,z,origin[1]));
  const nearFloor=Math.max(0,ground(origin[0],origin[2],origin[1]));
  return {
