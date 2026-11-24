@@ -75,7 +75,7 @@ export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(o
   const mysteryWeapon=isMysteryWeapon(original);
   // Keeping the sniper's premium price does not require keeping it in Mystery.
   const premiumPrice=basePrice*(mysteryWeapon||original.id==='black-cat'?5:1);
-  const price=original.id==='giraffe'?19999:premiumPrice;
+  const price=original.templePrice??(original.id==='giraffe'?19999:premiumPrice);
   return Object.freeze({...original,price,mysteryWeapon,sell:Math.floor(price*.25),rarity:original.slot==='weapon'?SHOP_WEAPON_GRADES[tier-1].rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*(original.id==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*(original.id==='white-cat'?.5:1),cooldown:original.id==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
 }));
 export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'));
@@ -169,6 +169,17 @@ export function registerCustomWings(wings=[]){
 export const itemById = id => INDEX.get(id) || null;
 
 export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>item.slot!=='material'&&!item.notForSale&&!isRetiredHeadgear(item)&&item.price>0));
+// Canonical price keys distinguish every weapon quality, including exotics.
+export const shopPriceKey=item=>item.id+(item.slot==='weapon'?':'+(item.shopTier??item.tier??3):'');
+export function shopPrice(item,overrides={}){
+ const amount=overrides?.[shopPriceKey(item)];
+ return Number.isSafeInteger(amount)&&amount>=1&&amount<=100000000?amount:item.price;
+}
+export function shopPurchaseVariant(itemId,qualityTier){
+ const base=SHOP_ITEMS.find(item=>item.id===itemId);
+ if(!base||base.slot!=='weapon'&&qualityTier!==undefined)return null;
+ return base.slot==='weapon'?shopWeaponVariant(base,qualityTier??(base.exotic?3:base.tier)):base;
+}
 export const ECONOMY = Object.freeze({
   platformCoinValue:40,
   platformCoinRespawnMs:90_000,

@@ -40,3 +40,15 @@ HEADGEAR.push(...creatureHeads.map(([design,name,color,tier,bonuses,proc])=>({
 })));
 
 export const headgearById=id=>HEADGEAR.find(h=>h.id===id);
+
+const r106Heads=[
+ ['hydra-dragon','Three-Headed Fire Dragon','#a5483e',5,9200,{attack:.17,jump:.12},'burn'],
+ ['ram-skull','Ram Skull Mask','#ded6bd',4,4300,{defense:.18,hp:1.4},'fear'],
+ ['trump-mask','Trump Mask','#e6ad83',3,1850,{hp:1.8,attack:.08},null],
+ ['huang-mask','Jensen Huang Mask','#d2a486',3,1850,{defense:.10,speed:.12},null],
+ ['musk-mask','Elon Musk Mask','#e2bdab',3,1850,{jump:.18,attack:.09},null]
+];
+HEADGEAR.push(...r106Heads.map(([design,name,color,tier,templePrice,bonuses,proc])=>({
+ id:'hat-'+design,name,design,color,slot:'head',family:'headgear',tier,price:templePrice,templePrice,bonuses,proc,r106Wearable:true,
+ description:describe(bonuses)+(proc?' · Charged hits apply '+proc+'.':'')
+})));

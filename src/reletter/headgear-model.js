@@ -2,7 +2,28 @@
 export function createHeadgear(T,item){const root=new T.Group();root.name=item.name;root.userData.headgear=item.id;const mats=[],mat=(color,metal=.1)=>{const m=new T.MeshStandardMaterial({color,roughness:.4,metalness:metal});mats.push(m);return m;},main=mat(item.color),white=mat('#f5eee2'),dark=mat('#24303d'),gold=mat('#e8bd65',.65),pink=mat('#e6aab6'),green=mat('#78ab73'),glass=new T.MeshStandardMaterial({color:'#c0edff',transparent:true,opacity:.2,roughness:.1,metalness:.2});mats.push(glass);
 const mesh=(geo,p,scale=[1,1,1],m=main)=>{const o=new T.Mesh(geo,m);o.position.set(...p);o.scale.set(...scale);root.add(o);return o;},ball=(p,s,m=main)=>mesh(new T.SphereGeometry(1,20,14),p,s,m),box=(p,s,m=main)=>mesh(new T.BoxGeometry(1,1,1),p,s,m),cone=(p,r,h,m=main)=>mesh(new T.ConeGeometry(r,h,20),p,[1,1,1],m),tube=(pts,r=.06,m=main)=>mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>new T.Vector3(...p))),24,r,7,false),[0,0,0],[1,1,1],m),ring=(p,r=.6,t=.045,m=main)=>mesh(new T.TorusGeometry(r,t,8,36),p,[1,1,1],m),eyes=(y=.15,z=.62)=>{for(const x of [-.24,.24]){ball([x,y,z],[.14,.17,.07],white);ball([x,y,z+.055],[.07,.11,.04],dark);}},cap=()=>mesh(new T.SphereGeometry(.69,24,16,0,Math.PI*2,0,Math.PI*.58),[0,.15,0]),wing=(side,y=.4)=>{for(let i=0;i<6;i++){const f=ball([side*(.55+i*.12),y+i*.1,-.05],[.13,.42-i*.04,.08],white);f.rotation.z=-side*(.4+i*.14);}},horn=(side,y=.5)=>tube([[side*.45,y,0],[side*.8,y+.35,0],[side*.8,y+.8,0],[side*.5,y+1,0]],.085,gold),mask=()=>ball([0,.05,.52],[.57,.68,.13]);
 const d=item.design;
-if(['elephant','rooster','anteater','guinea-pig','penguin','polar-bear','lion','eggplant'].includes(d)){
+if(d==='hydra-dragon'){
+ cap();const necks=[];const fire=mat('#ff9137');fire.emissive=new T.Color('#ff4420');fire.emissiveIntensity=.7;
+ for(let n=0;n<3;n++){
+  const base=new T.Group();base.position.set((n-1)*.38,.65,0);base.rotation.z=(1-n)*.37;root.add(base);let parent=base;const joints=[];
+  for(let j=0;j<5;j++){const joint=new T.Group();joint.position.y=j?.31:0;parent.add(joint);joints.push(joint);const segment=ball([0,.15,0],[.13-j*.009,.22,.13-j*.009]);joint.add(segment);const spine=cone([0,.11,-.13],.055,.18,gold);spine.rotation.x=-Math.PI/2;joint.add(spine);parent=joint;}
+  const skull=ball([0,.30,.10],[.23,.22,.27]);parent.add(skull);const snout=ball([0,.20,.34],[.16,.11,.24]);parent.add(snout);
+  for(const side of [-1,1]){const eye=ball([side*.14,.34,.29],[.052,.058,.04],gold);parent.add(eye);const pupil=ball([side*.14,.34,.326],[.02,.04,.015],dark);parent.add(pupil);const horn=cone([side*.13,.57,-.02],.055,.26,white);horn.rotation.z=-side*.24;parent.add(horn);const tooth=cone([side*.09,.12,.43],.026,.10,white);tooth.rotation.z=Math.PI;parent.add(tooth);}
+  const flame=cone([0,.16,.60],.09,.27,fire);flame.rotation.x=Math.PI/2;parent.add(flame);necks.push({joints,flame});
+ }root.userData.hydraNecks=necks;
+}else if(d==='ram-skull'){
+ ball([0,.20,.55],[.51,.60,.20],white);box([0,-.34,.63],[.36,.28,.16],white);
+ for(const side of [-1,1]){ball([side*.22,.23,.72],[.19,.22,.075],dark);tube([[side*.37,.58,.12],[side*.72,.82,.07],[side*.89,.53,.13],[side*.78,.13,.3],[side*.51,.02,.42]],.13,gold);for(let i=0;i<4;i++)box([side*(.045+i*.042),-.30,.73],[.025,.10,.025],dark);}
+ cone([0,-.08,.76],.10,.16,dark).rotation.z=Math.PI;
+}else if(['trump-mask','huang-mask','musk-mask'].includes(d)){
+ const hair=mat(d==='trump-mask'?'#e6c46c':d==='huang-mask'?'#a7a6a0':'#62493d');
+ ball([0,.10,.49],[.55,.69,.24]);for(const side of [-1,1]){ball([side*.53,.11,.48],[.09,.18,.08]);ball([side*.21,.25,.70],[.12,.065,.04],white);ball([side*.20,.25,.738],[.045,.05,.02],dark);box([side*.21,.38,.70],[.22,.035,.04],hair);}
+ ball([0,.04,.75],[.11,.17,.14]);tube([[-.18,-.20,.70],[0,-.23,.76],[.18,-.20,.70]],.025,dark);
+ if(d==='trump-mask'){const sweep=ball([-.08,.69,.51],[.60,.24,.29],hair);sweep.rotation.z=.24;for(let i=0;i<5;i++)tube([[-.47,.68+i*.04,.57],[-.05,.86+i*.015,.70],[.40,.65+i*.02,.63]],.035,hair);ball([0,-.34,.61],[.31,.19,.14]);}
+ else if(d==='huang-mask'){ball([0,.69,.48],[.53,.19,.25],hair);for(const side of [-1,1]){const frame=ring([side*.23,.25,.76],.15,.025,dark);frame.scale.y=.72;box([side*.40,.25,.63],[.04,.035,.29],dark);}box([0,.27,.77],[.18,.035,.035],dark);}
+ else{ball([0,.69,.47],[.50,.23,.28],hair);for(let i=0;i<4;i++)tube([[-.39+i*.12,.64,.62],[-.27+i*.12,.82,.69],[.13+i*.09,.72,.59]],.035,hair);ball([0,-.28,.64],[.27,.23,.14]);}
+}
+else if(['elephant','rooster','anteater','guinea-pig','penguin','polar-bear','lion','eggplant'].includes(d)){
  cap();
  if(d==='elephant'){
   for(const side of [-1,1]){ball([side*.69,.36,.08],[.44,.58,.13]);ball([side*.72,.35,.22],[.28,.39,.055],pink);}
@@ -68,3 +89,14 @@ else if(d==='cloud'){for(let i=0;i<7;i++)ball([Math.sin(i*2.4)*.5,.65+i%2*.15,Ma
 root.userData.materials=mats;return root;}
 export function disposeHeadgear(root){const geo=new Set(),mat=new Set(root.userData.materials||[]);root.traverse(o=>{if(o.geometry)geo.add(o.geometry);if(o.material)mat.add(o.material);});root.removeFromParent();geo.forEach(g=>g.dispose());mat.forEach(m=>m.dispose());}
 export function attachHeadgear(T,model,item){let head=null,top=null;model.traverse(o=>{if(o.isBone&&/Head$/i.test(o.name))head=o;if(o.isBone&&/HeadTop/i.test(o.name))top=o;});if(!head)return null;model.updateMatrixWorld(true);const scale=head.getWorldScale(new T.Vector3()),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,root=createHeadgear(T,item);head.add(root);root.position.set(0,height*.48/scale.y,height*.12/scale.z);root.scale.set(height/scale.x,height/scale.y,height/scale.z);root.userData.anchor=head.name;return root;}
+
+// Reuse articulated neck groups; no geometry allocation on animation frames.
+export function animateHeadgear(root,time,moving=false){
+ for(const [n,neck] of (root?.userData?.hydraNecks||[]).entries()){
+  for(const [j,joint] of neck.joints.entries()){
+   joint.rotation.z=Math.sin(time*(moving?5:2.1)-j*.63+n*1.7)*(.10+j*.028)*(moving?1.7:1);
+   joint.rotation.x=Math.sin(time*2.8-j*.7+n)*.11;
+  }
+  neck.flame.scale.setScalar(.74+.25*Math.sin(time*12+n*2));
+ }
+}

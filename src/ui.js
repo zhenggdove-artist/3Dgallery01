@@ -4,7 +4,7 @@ import {ART_ACCEPT} from './artwork-upload.js';
 import {bindBagDrag} from './bag-drag.js';
 import {PLATFORMS} from './shared/arena.js';
 import {playerArtworkAppearanceMarkup} from './art-editor-panel.js';
-import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_WEAPON_GRADES,shopWeaponGroups,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant,inventoryCapacity,shopOutfitCollection} from './shared/catalog.js';
+import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_WEAPON_GRADES,shopWeaponGroups,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant,inventoryCapacity,shopOutfitCollection,shopPrice} from './shared/catalog.js';
 import {SOUND_PROFILES} from './game-audio.js';
 import {pvpShotDamage} from './shared/combat-balance.js';
 import {weaponQuality} from './shared/weapon-abilities.js';
@@ -78,12 +78,12 @@ export class TempleUI extends EventTarget{
      if(!item)return;
      const raw=Number(input.value),quantity=Number.isSafeInteger(raw)?raw:0;
      this.shopQuantities[input.dataset.shopQuantity]=quantity;
-     const valid=quantity>=1&&quantity<=99,profile=this.world?.profile;
-     const affordable=profile?.admin||Number(profile?.wallet)>=item.price*quantity;
+     const valid=quantity>=1&&quantity<=99,profile=this.world?.profile,price=shopPrice(item,this.world?.shopPrices);
+     const affordable=profile?.admin||Number(profile?.wallet)>=price*quantity;
      const room=(profile?.inventory?.length||0)+quantity<=inventoryCapacity(profile);
      const button=card.querySelector('[data-buy]'),label=card.querySelector('[data-buy-total]');
-     if(button){button.disabled=!valid||!affordable||!room;button.textContent=!room&&valid?'BAG FULL':!affordable&&valid?'NOT ENOUGH COINS':'BUY '+(valid?'×'+quantity:'')+' · '+(valid?(profile?.admin?'FREE (GM)':(item.price*quantity).toLocaleString('en-US')+' COINS'):'—');}
-     if(label)label.textContent=!valid?'QUANTITY 1–99':!room?'BAG FULL · '+inventoryCapacity(profile)+' MAX':profile?.admin?'TOTAL · 0 COINS (GM)':'TOTAL · '+(item.price*quantity).toLocaleString('en-US');
+     if(button){button.disabled=!valid||!affordable||!room;button.textContent=!room&&valid?'BAG FULL':!affordable&&valid?'NOT ENOUGH COINS':'BUY '+(valid?'×'+quantity:'')+' · '+(valid?((price*quantity).toLocaleString('en-US')+' COINS'):'—');}
+     if(label)label.textContent=!valid?'QUANTITY 1–99':!room?'BAG FULL · '+inventoryCapacity(profile)+' MAX':'TOTAL · '+(price*quantity).toLocaleString('en-US')+' COINS';
     });
     this.content.addEventListener('change',event=>{
      const select=event.target.closest('[data-shop-variant]');
@@ -350,7 +350,7 @@ export class TempleUI extends EventTarget{
    enter(data){document.activeElement?.blur();this.self=data.self;this.authMode=data.authMode||'firebase';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;$('gm-menu').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;$('gm-menu').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();if(this.panelName&&this.panelName!=='bag')this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
-  setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','wing-shop'].includes(this.panelName)&&this.panelSignature!==inventoryPanelSignature(world.profile)&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
+  setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(this.panelName==='shop'&&this.shopPriceSignature!==JSON.stringify(world.shopPrices||{})))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
   refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);
  const shieldItem=itemById(profile.equipment?.shield),shieldDisplay=$('shield-readout');
  if(shieldDisplay){
@@ -548,7 +548,7 @@ export class TempleUI extends EventTarget{
     const weaponControls=ITEMS.filter(item=>item.slot==='weapon').map(item=>slider('weapon-'+item.id,item.name||item.id)).join('');
     this.content.innerHTML=`<section class="gm-admin">
       <h3>GM 功能</h3><div class="gm-tools">
-        <button type="button" data-gm-action="editor">作品與圓盤編輯</button>
+        <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-open-shop-prices>商品售價編輯</button>
          <button type="button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button>
         <button type="button" data-gm-action="help" aria-label="GM instructions and shortcuts">！ GM 說明與快捷鍵</button>
         <button type="button" data-gm-action="wing-painter">畫翅膀／上架翅膀</button>
@@ -587,10 +587,12 @@ export class TempleUI extends EventTarget{
   showSaveCode(code){this.saveCode=String(code||'');this.openPanel('save');this.content.querySelector('#save-code-output')?.select();}
   renderBag(profile){renderOriginalBag(this,profile);}
   renderShop(profile){
+    this.shopPriceSignature=JSON.stringify(this.world?.shopPrices||{});
+    const editing=!!(profile.admin&&this.shopPriceEditing),prices=this.world?.shopPrices||{};
     const tab=this.shopTab||'near',tabs={
      near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',
      comfort:'Comfort for the Soul',shield:'Shields',head:'Headwear',
-     outfit:'Outfits',wings:'Wings',owned:'Owned'};
+     outfit:'Outfits',armor:'Armor',wings:'Wings',owned:'Owned'};
     // One card per family: the shop has five qualities, not five separate
     // native weapon IDs each with a second set of grades.
     const groups=shopWeaponGroups(SHOP_ITEMS);
@@ -610,7 +612,9 @@ export class TempleUI extends EventTarget{
      return base.slot===tab||(tab==='comfort'&&base.slot==='consumable');
     });
     this.shopVariantChoice??={};this.shopQuantities??={};
-    const cards=visible.map(group=>{
+    const scroll=this.content.querySelector('.shop-grid')?.scrollTop||0;
+    const chosen=visible.find(g=>g.key===this.shopSelectedKey);
+    const cards=(chosen?[chosen]:[]).map(group=>{
      const {key,variants}=group;
      const selected=variants.find(v=>String(v.shopTier??v.id)===this.shopVariantChoice[key])||
        (tab==='owned'?variants.find(v=>ownedIndicesFor(v).length>0):null)||
@@ -624,7 +628,7 @@ export class TempleUI extends EventTarget{
        (!selected.shopTier||Number(equippedTier)===selected.shopTier);
      const quantity=this.shopQuantities[key]??1;
      const valid=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=99;
-     const total=valid?selected.price*quantity:0;
+     const price=shopPrice(selected,prices),total=valid?price*quantity:0;
      const affordable=profile.admin||Number(profile.wallet)>=total;
      const room=(profile.inventory?.length||0)+quantity<=inventoryCapacity(profile);
      const outfitCollection=shopOutfitCollection(selected);
@@ -635,25 +639,33 @@ export class TempleUI extends EventTarget{
        ${variants.map(v=>{
         const grade=v.shopTier?SHOP_WEAPON_GRADES[v.shopTier-1]:null;
         const value=String(v.shopTier??v.id),current=String(selected.shopTier??selected.id);
-        const own=ownedIndicesFor(v).length;
-        return `<option value="${escape(value)}" ${value===current?'selected':''}>${escape(grade?.label||v.name)} · ${escape((grade?.rarity||v.rarity||'common').toUpperCase())} — ${Number(v.price).toLocaleString('en-US')} Coins${own?' · ×'+own:''}</option>`;
+        return `<option value="${escape(value)}" ${value===current?'selected':''}>${escape(grade?.label||v.name)} · ${escape((grade?.rarity||v.rarity||'common').toUpperCase())} — ${shopPrice(v,prices).toLocaleString('en-US')} Coins</option>`;
        }).join('')}
        </select></label>`:'';
-     const actions=`<div class="shop-purchase">
+     const actions=`<div class="shop-purchase"><div class="shop-unit-price">UNIT PRICE · ${price.toLocaleString('en-US')} COINS</div>
        <div class="shop-stock">OWNED ×${ownedCount}${selectedEquipped?' · EQUIPPED':''}</div>
        <label class="shop-quantity-label">QUANTITY
          <input type="number" min="1" max="99" step="1" inputmode="numeric"
           data-shop-quantity="${escape(key)}" value="${escape(quantity)}" aria-label="Purchase quantity for ${escape(familyName)}">
        </label>
-       <output data-buy-total>${!valid?'QUANTITY 1–99':!room?'BAG FULL · '+inventoryCapacity(profile)+' MAX':profile.admin?'TOTAL · 0 COINS (GM)':'TOTAL · '+total.toLocaleString('en-US')}</output>
-       <button type="button" data-buy="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''} ${!valid||!affordable||!room?'disabled':''}>${!room&&valid?'BAG FULL':!affordable&&valid?'NOT ENOUGH COINS':`BUY ×${valid?quantity:1} · ${profile.admin?'FREE (GM)':total.toLocaleString('en-US')+' COINS'}`}</button>
+       <output data-buy-total>${!valid?'QUANTITY 1–99':!room?'BAG FULL · '+inventoryCapacity(profile)+' MAX':'TOTAL · '+total.toLocaleString('en-US')+' COINS'}</output>
+       <button type="button" data-buy="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''} ${!valid||!affordable||!room?'disabled':''}>${!room&&valid?'BAG FULL':!affordable&&valid?'NOT ENOUGH COINS':`BUY ×${valid?quantity:1} · ${total.toLocaleString('en-US')} COINS`}</button>
        ${ownedCount&&selected.slot!=='consumable'?`<button type="button" data-equip="${escape(selected.id)}" ${selected.shopTier?`data-equip-index="${ownedIndices[0]}"`:''} ${selectedEquipped?'disabled':''}>${selectedEquipped?'EQUIPPED':'EQUIP OWNED'}</button>`:''}
      </div>`;
-     return itemCard({...selected,name:familyName},selection+actions);
+     const edit=editing?`<section class="shop-price-editor"><label>UNIT PRICE (COINS)<input type="number" inputmode="numeric" min="1" max="100000000" step="1" data-gm-price-input value="${price}"></label><div class="shop-price-actions"><button type="button" data-gm-price-save="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''}>SAVE PRICE</button><button type="button" data-gm-price-reset="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''}>RESET DEFAULT</button></div><small>Applies to this exact quality / style for every player.</small></section>`:'';
+     return itemCard({...selected,name:selected.name},selection+edit+actions);
     });
     this.content.innerHTML=`<div class="armory-balance"><span>Equipment · ${(profile.inventory?.length||0).toLocaleString('en-US')}/${inventoryCapacity(profile).toLocaleString('en-US')} BAG</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
      <nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>
-     <div class="shop-items">${cards.join('')||'<p>There are no items in this category.</p>'}</div>`;
+     ${profile.admin?`<button type="button" class="panel-button" data-toggle-shop-prices aria-pressed="${editing}">PRICE EDITOR: ${editing?'ON':'OFF'}</button>`:''}
+     <div class="shop-grid" role="group" aria-label="Shop items">${visible.map(g=>{
+      const item=g.variants.find(v=>String(v.shopTier??v.id)===this.shopVariantChoice[g.key])||g.variants.find(v=>v.shopTier===3)||g.base;
+      const label=shopOutfitCollection(item)||g.base.name;
+      const color=RARITIES.find(v=>v.id===item.rarity)?.color||'#eadcf4';
+      return `<button type="button" class="bag-cell shop-cell ${g===chosen?'selected':''}" data-shop-select="${escape(g.key)}" data-rarity="${escape(item.rarity)}" style="--rarity:${color}" aria-pressed="${g===chosen}" title="${escape(label)}">${previewMarkup(item)}<span class="shop-cell-name">${escape(label)}</span></button>`;
+     }).join('')||'<p>There are no items in this category.</p>'}</div>
+     <div class="shop-detail">${cards.join('')||'<p>Select an item to inspect its stats, quality and price.</p>'}</div>`;
+    this.content.querySelector('.shop-grid').scrollTop=scroll;
     void hydrateItemPreviews(this.content);
   }
 
@@ -791,8 +803,13 @@ export class TempleUI extends EventTarget{
   renderSocial(profile){this.content.innerHTML=`<h3>WRITE / PLANT</h3>${this.self?.role==='spectator'?'<p>觀眾直接在中央 WRITE 樹留下留言；不需角色飛升儀式。</p>':''}<form data-form="plant"><textarea class="panel-input" name="text" maxlength="500" rows="4" placeholder="Leave a message in the garden"></textarea>${drawingForm}<button class="panel-button">PLANT MESSAGE</button></form>`;attachDrawing(this.content);}
   renderPlantList(){const plants=[...(this.world?.plants||[])].reverse().slice(0,100);this.content.innerHTML=`<h3>留言之樹 · ${this.world?.plants?.length||0} 則記錄</h3><p>點擊任一留言可閱讀內容及回覆。</p>${plants.map(p=>`<button class="panel-button plant-list-entry" data-open-plant="${escape(p.id)}"><b>${escape(p.author)}</b> · ${escape(p.text||'媒體留言').slice(0,140)}</button>`).join('')||'<p>尚無留言。請使用 WRITE 種下第一則記錄。</p>'}`;}
   renderPlant(){const plant=this.selectedPlant;if(!plant)return this.closePanel();const parent=plant.parentId&&(this.world?.plants||[]).find(entry=>entry.id===plant.parentId);this.content.innerHTML=`<article class="plant-message"><small>${new Date(plant.createdAt).toLocaleString()}</small><h3>${escape(plant.author)}</h3><p>${escape(plant.text)}</p>${mediaMarkup(plant.media,window.TEMPLE_CONFIG.backendUrl)}${parent?`<small>Reply to ${escape(parent.author)}：${escape(parent.text).slice(0,80)}</small>`:''}</article><h3>REPLY BRANCH</h3><form data-form="plant-reply"><textarea class="panel-input" name="text" maxlength="500" rows="4" placeholder="Grow a reply branch from this plant"></textarea><button class="panel-button">PLANT REPLY</button></form>`;}
-  renderEditor(){const saved=JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');this.content.innerHTML=`<p><b>Shift + Y</b> 開啟編輯設定，<b>Shift + O</b> 編輯圓盤位置與尺寸；編輯時按住滑鼠中鍵拖曳可旋轉視角。</p><form data-form="editor"><label>解析度倍率上限<input class="panel-input" name="pixelRatio" type="number" min="0.6" max="2" step="0.05" value="${saved.pixelRatio||1.35}"></label><label>霧氣濃度<input class="panel-input" name="fog" type="number" min="0" max="0.04" step="0.0001" value="${saved.fog??.0008}"></label><label>作品漂浮幅度<input class="panel-input" name="artFloat" type="number" min="0" max="0.6" step="0.01" value="${saved.artFloat??.17}"></label><button class="panel-button">儲存編輯結果</button></form><button class="panel-button" data-export-layout>下載 temple-layout.json</button><p>${PLATFORMS.length} 件預設作品，配置由伺服器保存。</p>`;}
-  async panelClick(event){const button=event.target.closest('button');if(!button||button.disabled)return;if(button.dataset.gmPlatformTool&&this.self?.profile?.admin){
+  renderEditor(){const saved=JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');this.content.innerHTML=`<button type="button" class="panel-button" data-open-shop-prices>商品售價編輯 / SHOP PRICES</button><p><b>Shift + Y</b> 開啟編輯設定，<b>Shift + O</b> 編輯圓盤位置與尺寸；編輯時按住滑鼠中鍵拖曳可旋轉視角。</p><form data-form="editor"><label>解析度倍率上限<input class="panel-input" name="pixelRatio" type="number" min="0.6" max="2" step="0.05" value="${saved.pixelRatio||1.35}"></label><label>霧氣濃度<input class="panel-input" name="fog" type="number" min="0" max="0.04" step="0.0001" value="${saved.fog??.0008}"></label><label>作品漂浮幅度<input class="panel-input" name="artFloat" type="number" min="0" max="0.6" step="0.01" value="${saved.artFloat??.17}"></label><button class="panel-button">儲存編輯結果</button></form><button class="panel-button" data-export-layout>下載 temple-layout.json</button><p>${PLATFORMS.length} 件預設作品，配置由伺服器保存。</p>`;}
+  async panelClick(event){const button=event.target.closest('button');if(!button||button.disabled)return;
+    if(button.hasAttribute('data-open-shop-prices')){if(!this.self?.profile?.admin)return;this.shopPriceEditing=true;this.openPanel('shop');return;}
+    if(button.hasAttribute('data-toggle-shop-prices')){if(!this.world?.profile?.admin)return;this.shopPriceEditing=!this.shopPriceEditing;this.renderShop(this.world.profile);return;}
+    if(button.dataset.shopSelect){this.shopSelectedKey=button.dataset.shopSelect;this.renderShop(this.world.profile);return;}
+    if(button.dataset.gmPriceSave||button.dataset.gmPriceReset){if(!this.world?.profile?.admin)return;const reset=!!button.dataset.gmPriceReset,field=button.closest('.shop-price-editor')?.querySelector('[data-gm-price-input]'),price=reset?null:Number(field?.value);if(!reset&&(!field?.value.trim()||!Number.isSafeInteger(price)||price<1||price>100000000))return this.toast('PRICE 1–100,000,000');button.blur();this.emit('server-action',{action:'gm-shop-price',itemId:button.dataset.gmPriceSave||button.dataset.gmPriceReset,price,...(button.dataset.shopTier?{qualityTier:Number(button.dataset.shopTier)}:{})});return;}
+    if(button.dataset.gmPlatformTool&&this.self?.profile?.admin){
        this.emit('gm-platform-tool',{mode:button.dataset.gmPlatformTool,
         kind:button.dataset.gmPlatformKind||'disc'});return;
      }
@@ -836,7 +853,7 @@ export class TempleUI extends EventTarget{
      this.emit('server-action',{action:'gm-wing-remove',wingId});return;
     }
     if(button.hasAttribute('data-draw-wing')){if(this.beginWingDraw())this.emit('server-action',{action:this.self?.profile?.admin?'gm-wing-draw':'wing-draw'});return;}
-    if(button.dataset.bagTab){this.bagTab=button.dataset.bagTab;this.renderPanel();return;}if(button.dataset.shopTab){this.shopTab=button.dataset.shopTab;this.renderPanel();return;}try{if(button.dataset.buy){
+    if(button.dataset.bagTab){this.bagTab=button.dataset.bagTab;this.renderPanel();return;}if(button.dataset.shopTab){this.shopTab=button.dataset.shopTab;this.shopSelectedKey=null;this.renderPanel();return;}try{if(button.dataset.buy){
      const quantity=Number(button.closest('.item')?.querySelector('[data-shop-quantity]')?.value??1);
      if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)return this.toast('QUANTITY 1–99');
      button.blur();

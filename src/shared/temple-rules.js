@@ -7,7 +7,7 @@ import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
-import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
+import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,shopPrice,shopPriceKey,shopPurchaseVariant,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
@@ -56,7 +56,7 @@ const initialStructures=now=>[
 export function createInitialWorld(now=Date.now()){
   return {
     version:WORLD_VERSION,revision:1,createdAt:now,
-    profiles:{},customWings:[],
+    profiles:{},customWings:[],shopPrices:{},
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},tidalLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
@@ -234,6 +234,13 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    }
    current.gmCreatureGearGrantedV2=additions.every(item=>current.inventory.includes(item.id));
   }
+  if(current.admin&&!current.gmR106WearablesGranted){
+   for(const item of ITEMS.filter(i=>i.r106Wearable)){
+    if(current.inventory.length>=inventoryCapacity(current))break;
+    if(!current.inventory.includes(item.id))appendInventoryInstance(current,item.id,'grant');
+   }
+   current.gmR106WearablesGranted=ITEMS.filter(i=>i.r106Wearable).every(i=>current.inventory.includes(i.id));
+  }
   ensureWeaponAffixes(current); // Server-owned one-time roll, persisted on join.
   refreshStats(world,current,now);
   if(current.deadUntil>0&&current.deadUntil<=now&&current.hp<=0)
@@ -276,7 +283,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
        consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    profile:worldProfileView(world,actorKey,now),
+    shopPrices:clone(world.shopPrices||{}),profile:worldProfileView(world,actorKey,now),
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -371,6 +378,19 @@ export function applyAction(world,actor,body,context={}){
    wingDrawAdmin=['gm-wing-draw','gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate'].includes(body.action)?world.profiles?.[actor.key]?.admin===true:null,
    profile=ensureProfile(world,actor.key,actor.name,actor.color,now,
     ['gm-wing-draw','gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate'].includes(body.action)?wingDrawAdmin:actor.admin);
+  if(body.action==='gm-shop-price'){
+   // Role is obtained from the authenticated server session, not the request payload.
+   if(!profile.admin||actor.admin!==true)return {error:'GM only'};
+   const item=shopPurchaseVariant(body.itemId,body.qualityTier);
+   if(!item)return {error:'Invalid shop item or quality'};
+   const price=body.price;
+   if(price!==null&&(!Number.isSafeInteger(price)||price<1||price>100000000))return {error:'Price must be 1–100,000,000 coins'};
+   world.shopPrices??={};
+   const key=shopPriceKey(item);
+   if(price===null)delete world.shopPrices[key];else world.shopPrices[key]=price;
+   world.revision=(world.revision||0)+1;
+   return {notice:'PRICE UPDATED · '+item.name+' · '+shopPrice(item,world.shopPrices)+' coins',shopPriceKey:key};
+  }
   // Public gacha has been permanently retired; old clients cannot draw.
   if(['wing-draw','gm-wing-draw'].includes(body.action))return {error:'Wing gacha has been removed'};
   if(body.action==='redeem-wing-design'){
@@ -786,7 +806,7 @@ function buy(world,profile,body){
  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)
   return {error:'Quantity must be an integer from 1 to 99'};
  if(profile.inventory.length+quantity>inventoryCapacity(profile))return {error:`Inventory full (${inventoryCapacity(profile)} items maximum)`};
- const total=item.price*quantity;
+ const total=shopPrice(item,world.shopPrices)*quantity;
  if(!Number.isSafeInteger(total)||total<0)return {error:'Invalid purchase amount'};
  if(!spend(profile,total,world))return {error:'Not enough coins'};
  for(let i=0;i<quantity;i++)
@@ -794,7 +814,7 @@ function buy(world,profile,body){
  profile.itemOrigins??={};profile.itemOrigins[base.id]='shop';
  const charged=profile.admin?0:total;
  return {notice:`PURCHASE SUCCESSFUL · ${item.name} ×${quantity} · ${charged} coins`,
-  purchased:{itemId:base.id,qualityTier:weaponChoice?item.shopTier:null,quantity,total:charged}};
+  purchased:{itemId:base.id,qualityTier:weaponChoice?item.shopTier:null,quantity,total:charged,listTotal:total}};
 }
 function assignConsumable(profile,body){
  const index=body.slot;

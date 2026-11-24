@@ -881,3 +881,19 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
 #spectator-fly-controls{display:none;position:fixed;left:max(14px,env(safe-area-inset-left));bottom:max(143px,env(safe-area-inset-bottom) + 125px);z-index:35;pointer-events:auto;gap:8px;flex-direction:column}
 #spectator-fly-controls button{min-width:50px;min-height:44px;touch-action:none!important;user-select:none;-webkit-user-select:none;background:#f3d8e9;color:#432d55;border:1px solid #c8a5cf;border-radius:10px;font:bold 12px Arial,sans-serif}
 @media(pointer:coarse){body.spectator #spectator-fly-controls:not([hidden]){display:flex}}
+
+/* r106: compact BAG-style shop grid and touch-first price controls. */
+.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:5px;max-height:38dvh;overflow:auto;overscroll-behavior:contain;padding:5px;align-content:start}
+.shop-grid .shop-cell{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;min-height:76px;aspect-ratio:1/1.08;padding:3px;border:1px solid var(--rarity);touch-action:manipulation}
+.shop-grid .shop-cell img{width:100%;height:70%;object-fit:contain;min-height:0;pointer-events:none}
+.shop-grid .shop-cell.selected{outline:2px solid #fff;outline-offset:-3px;background:#354449}
+.shop-cell-name{font-size:10px;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none}
+.shop-detail{padding:6px 0;min-height:48px}
+.shop-detail>.item{display:block;width:100%;box-sizing:border-box}
+.shop-detail>.item>img{max-width:100px;max-height:100px;object-fit:contain;float:left;margin:0 10px 4px 0}
+.shop-detail .shop-purchase,.shop-detail .shop-quality-picker,.shop-price-editor{clear:both}
+.shop-price-editor{border:1px solid #9eaa92;padding:9px;margin:8px 0;display:grid;gap:7px}
+.shop-price-editor input,.shop-price-editor button,.bag-sort-control select{min-height:40px;font-size:16px;max-width:100%;box-sizing:border-box}
+.shop-price-editor input{display:block;width:100%}.shop-price-actions{display:flex;gap:7px;flex-wrap:wrap}.shop-price-actions button{flex:1}
+.shop-unit-price{font-weight:bold;margin-bottom:5px}.bag-sort-control{display:inline-flex;align-items:center;gap:6px;margin:4px}
+@media(max-width:600px){.shop-grid{grid-template-columns:repeat(auto-fill,minmax(56px,1fr));max-height:31dvh}.shop-grid .shop-cell{min-height:63px}.shop-cell-name{font-size:9px}.shop-detail>.item>img{max-width:75px;max-height:75px}}

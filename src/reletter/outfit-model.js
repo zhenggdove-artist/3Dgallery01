@@ -3,6 +3,9 @@ import {createHeadgear} from './headgear-model.js';
 function fabric(T,item){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');x.fillStyle=item.color;x.fillRect(0,0,512,512);
  // The Collector's suit uses a restrained pinstripe rather than the ordinary
  // playful outfit print. This texture is applied to the original skinned body.
+ if(item.design==='leather'){
+  x.strokeStyle='#544a51';x.lineWidth=2;for(let i=0;i<512;i+=32){x.beginPath();x.moveTo(i,0);x.lineTo(i+12,512);x.stroke();}const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;return texture;
+ }
  if(item.design==='suit'){
   x.fillStyle='#c6c9dc';x.globalAlpha=.10;
   for(let px=15;px<512;px+=27)x.fillRect(px,0,1,512);
@@ -164,12 +167,55 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
     blade.rotation.z=-Math.cos(a)*.48;
    }
   }
-  if(hood){
+  if(hood&&!item.r106Wearable){
    // The original headgear sculptor also provides the matching outfit hood.
    // A separate HEAD-slot item suppresses this hood, never the whole suit.
    const h=anchor('Head'),headpiece=createHeadgear(T,{...item,design:kind});
    h.add(headpiece);headpiece.position.set(0,.20,.04);
    record.materials.push(...(headpiece.userData.materials||[]));
+  }
+ }
+ // New wearable sculptures follow the same body bones and skinned cloth.
+ if(d==='leather'){
+  const silver=mat('#bfc4ca',.8),black=mat('#19171c',.18);
+  main.roughness=.34;
+  tube(chest,[[0,.34,.46],[.04,.05,.49],[.04,-.55,.45]],.035,silver);
+  for(const sign of [-1,1]){
+   const lapel=box(chest,[sign*.23,.12,.47],[.14,.39,.045],black);lapel.rotation.z=sign*.5;
+   const zip=box(chest,[sign*.24,-.29,.46],[.22,.025,.04],silver);zip.rotation.z=sign*.3;
+   const arm=anchor(sign<0?'LeftForeArm':'RightForeArm');ball(arm,[0,-.21,.05],[.20,.08,.19],black);
+   const foot=anchor(sign<0?'LeftFoot':'RightFoot');ball(foot,[0,-.04,.22],[.25,.18,.36],black);
+  }
+  box(hips,[0,.06,.34],[.72,.14,.10],black);box(hips,[0,.06,.41],[.17,.13,.06],silver);
+ }
+ if(item.r106Wearable&&d==='creature'){
+  const kind=item.creature;
+  if(kind==='spider'){
+   ball(hips,[0,.05,-.70],[.68,.52,.75],dark);ball(chest,[0,-.05,-.32],[.47,.45,.42],main);
+   for(const side of [-1,1])for(let i=0;i<4;i++){
+    const z=(i-1.5)*.27,leg=tube(hips,[[side*.25,.15,z],[side*.84,.50,z-.15],[side*1.19,.12,z-.30],[side*1.36,-.84,z+.1]],.065,i%2?dark:main);leg.name='Spider leg '+side+' '+i;
+   }
+   if(hood){const h=anchor('Head');ball(h,[0,.37,.22],[.66,.48,.47],dark);for(let i=0;i<8;i++)ball(h,[(i%4-1.5)*.20,.42+Math.floor(i/4)*.16,.65],[.065,.065,.045],trim);}
+  }else if(kind==='caterpillar'){
+   for(let i=0;i<7;i++){const part=ball(hips,[0,-.08-i*.055,-.37-i*.29],[.52-i*.035,.44-i*.025,.30],i%2?cream:main);part.rotation.x=.12;for(const side of [-1,1])ball(hips,[side*(.39-i*.02),-.39,-.37-i*.29],[.10,.15,.11],main);}
+   if(hood){const h=anchor('Head');ball(h,[0,.40,.13],[.63,.53,.54],main);for(const side of [-1,1]){tube(h,[[side*.21,.74,0],[side*.37,1.06,.05],[side*.43,1.13,.15]],.055,main);ball(h,[side*.43,1.13,.15],[.10,.10,.10],trim);ball(h,[side*.21,.40,.62],[.10,.11,.04],dark);}}
+  }else if(kind==='tree-disguise'){
+   const bark=mat('#67482f'),leaf=mat('#416d37'),leaf2=mat('#71974a');
+   add(chest,new T.CylinderGeometry(.58,.82,2.45,11),[0,-.52,0],[1,1,.80],bark);
+   for(let i=0;i<8;i++){const a=i*Math.PI/4;tube(chest,[[Math.cos(a)*.59,-1.60,Math.sin(a)*.49],[Math.cos(a)*.65,-.45,Math.sin(a)*.5],[Math.cos(a)*.48,.60,Math.sin(a)*.40]],.045,main);}
+   const crown=anchor('Head');for(let i=0;i<7;i++)ball(crown,[Math.sin(i*2.4)*.62,.95+(i%3)*.26,Math.cos(i*2.4)*.45],[.64,.52,.60],i%2?leaf:leaf2);
+   for(const side of [-1,1])tube(chest,[[side*.35,.12,0],[side*.86,.66,0],[side*1.14,.84,-.12]],.13,bark);
+  }else if(kind==='rock-disguise'){
+   const stone=mat('#858589'),shadow=mat('#60666b');
+   add(hips,new T.DodecahedronGeometry(1,0),[0,.12,0],[1.14,1.27,.97],stone);
+   for(let i=0;i<5;i++){const a=i*2.4;add(hips,new T.IcosahedronGeometry(1,0),[Math.sin(a)*.58,-.31,Math.cos(a)*.48],[.53,.58,.43],i%2?shadow:main);}
+   if(hood){const h=anchor('Head');add(h,new T.DodecahedronGeometry(1,0),[0,.23,0],[.74,.69,.67],stone);}
+  }else if(kind==='doghouse-disguise'){
+   const roof=mat('#a74538'),wood=mat('#c48e58'),door=mat('#30241e');
+   box(chest,[0,-.52,0],[1.36,1.66,1.16],wood);box(chest,[0,-.70,.60],[.67,.98,.055],door);
+   for(const sign of [-1,1]){const panel=box(chest,[sign*.39,.57,0],[.94,.13,1.40],roof);panel.rotation.z=-sign*.67;}
+   for(let i=0;i<5;i++)box(chest,[0,-1.26+i*.28,.589],[1.31,.025,.015],main);
+   box(chest,[0,-.01,.64],[.50,.12,.035],cream);
   }
  }
  // Tailored Collector suit: the native skinned torso/arms/legs carry the

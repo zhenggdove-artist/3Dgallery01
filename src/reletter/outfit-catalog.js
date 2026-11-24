@@ -36,3 +36,19 @@ OUTFITS.push(...creatureOutfits.map(([creature,name,color,tier,bonuses])=>({
   k==='hp'?'+ '+Math.round(v*10)+' max HP':
   '+ '+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed',jump:'jump height',attack:'attack'}[k]||k)).join(' · ')
 })));
+
+const r106Outfits=[
+ ['leather','Leather Jacket Set','#242128',3,2200,{defense:.12,speed:.10}],
+ ['formal-suit','Formal Suit','#28313e',3,2400,{hp:1.5,attack:.10}],
+ ['spider','Eight-Legged Spider Suit','#302b3d',4,4900,{speed:.16,jump:.18}],
+ ['caterpillar','Caterpillar Suit','#83ad45',3,2650,{hp:1.6,defense:.10}],
+ ['tree-disguise','Tree Disguise','#715139',4,4600,{hp:2.2,defense:.15}],
+ ['rock-disguise','Rock Disguise','#7d8286',4,4800,{hp:2.4,defense:.18,speed:-.08}],
+ ['doghouse-disguise','Doghouse Disguise','#a96d49',4,4100,{hp:2.0,defense:.14}]
+];
+OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])=>({
+ id:'outfit-'+creature,name,slot:'outfit',family:'outfit',
+ design:creature==='formal-suit'?'suit':creature==='leather'?'leather':'creature',creature,pattern:0,tier,color,
+ price:templePrice,templePrice,bonuses,r106Wearable:true,
+ description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed',jump:'jump height',attack:'attack'}[k]||k)).join(' · ')
+})));

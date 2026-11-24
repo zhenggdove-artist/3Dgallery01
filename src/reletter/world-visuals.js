@@ -7,6 +7,7 @@ import {fishDataURL} from './fish-art.js';
 import {createFishModel,createWorldFishModel,animateFishModel,disposeFishModel} from './fish-model.js';
 import {rightHand} from './held-weapons.js';
 import {itemIcon} from './item-art.js';
+import {itemPreview} from '../item-preview.js';
 import {createHeadgear} from './headgear-model.js';
 export function originalWorldVisuals(scene,onCatch=()=>{}){
 let globalTime=0,charModel=null,charRoot=new THREE.Group(),selectedCharacter='',reelHeld=false;
@@ -145,7 +146,7 @@ function createItemDrop(item,affixed=false){const g=new THREE.Group(),rarity=ite
  const model=createHeadgear(THREE,item),bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3());
  const scale=1.55/Math.max(.15,size.x,size.y,size.z);model.scale.setScalar(scale);
  model.position.copy(bounds.getCenter(new THREE.Vector3()).multiplyScalar(-scale));g.add(model);return g;
-}const glow=lootGlow(rarity.color);glow.scale.set(3.5,3.5,1);g.add(glow);let texture=lootTextures.get(item.id);if(!texture){texture=new THREE.TextureLoader().load(itemIcon(item));texture.colorSpace=THREE.SRGBColorSpace;texture.userData.sharedGarden=true;lootTextures.set(item.id,texture);}const icon=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,toneMapped:false}));icon.scale.set(1.65,1.65,1);g.add(icon);return g;}
+}const glow=lootGlow(rarity.color);glow.scale.set(3.5,3.5,1);g.add(glow);let texture=lootTextures.get(item.id);if(!texture){texture=item.creature?new THREE.Texture():new THREE.TextureLoader().load(itemIcon(item));if(item.creature){const target=texture;void itemPreview(item).then(url=>{if(!url)return;const image=new Image();image.onload=()=>{target.image=image;target.needsUpdate=true;};image.src=url;});}texture.colorSpace=THREE.SRGBColorSpace;texture.userData.sharedGarden=true;lootTextures.set(item.id,texture);}const icon=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,toneMapped:false}));icon.scale.set(1.65,1.65,1);g.add(icon);return g;}
 
 return {makeCropModel,waterFeature,swimmingFish,createItemDrop,disposeAdventure,
  beforeAnimation:restoreFishingPoses,

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createInitialWorld,createProfile,ensureProfile,tickWorld,migrateWorld} from '../src/shared/temple-rules.js';
 import {COLLECTOR_INTERVAL_MS,COLLECTOR_SHOT_DAMAGE,COLLECTOR_REPEAT_LINES} from '../src/shared/collector.js';
-import {ITEMS,registerCustomWings} from '../src/shared/catalog.js';
+import {ITEMS,isRetiredHeadgear,registerCustomWings} from '../src/shared/catalog.js';
 import {SWALLOWTAIL_WINGS} from '../src/reletter/wing-catalog.js';
 import {normalizePaintedWing} from '../src/shared/custom-wings.js';
 import {simplifyFreehandOutline} from '../src/gm-wing-painter.js';
@@ -72,7 +72,7 @@ test('Collector migrated legacy last sale is protected against one more sale',()
 test('GM receives all catalogue items, exactly 14 curated wings, and GM custom wings only once',()=>{
  const w=createInitialWorld(T);
  const gm=ensureProfile(w,'gm','GM','#aabbcc',T,true);
- assert.ok(ITEMS.every(item=>gm.inventory.includes(item.id)),'every base item must be granted');
+ assert.ok(ITEMS.filter(i=>!isRetiredHeadgear(i)).every(item=>gm.inventory.includes(item.id)),'every base item must be granted');
  assert.equal(SWALLOWTAIL_WINGS.length,14);
  assert.ok(SWALLOWTAIL_WINGS.every(item=>gm.inventory.includes(item.id)));
  assert.equal(new Set(gm.inventory).size,gm.inventory.length,'one of each at initialization');
@@ -80,7 +80,7 @@ test('GM receives all catalogue items, exactly 14 curated wings, and GM custom w
  existing.admin=true;existing.gmInventoryGranted=true;existing.inventory=['white-cat'];
  w.profiles.legacyGM=existing;
  ensureProfile(w,'legacyGM','legacy','#aabbcc',T+1,true);
- assert.ok(ITEMS.every(item=>existing.inventory.includes(item.id)),'legacy GM must migrate');
+ assert.ok(ITEMS.filter(i=>!isRetiredHeadgear(i)).every(item=>existing.inventory.includes(item.id)),'legacy GM must migrate');
  const excluded='ember-1';
  existing.inventory.splice(existing.inventory.indexOf(excluded),1);
  ensureProfile(w,'legacyGM','legacy','#aabbcc',T+2,true);
