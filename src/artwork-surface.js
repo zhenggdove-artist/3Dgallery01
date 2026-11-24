@@ -14,12 +14,32 @@ export function applyArtworkAppearance(root,value){const appearance={...artworkA
 }
 // Proximity fade operates on existing SpriteMaterial opacity; unlike texture
 // regeneration it is safe to evaluate on every render frame.
-export function titleOpacityByDistance(distance,revealDistance=LABEL_STYLE_DEFAULTS.labelRevealDistance){
- if(!Number.isFinite(distance))return 0;
+export function titleOpacityByDistance(distance,revealDistance=LABEL_STYLE_DEFAULTS.labelRevealDistance,nearFadeDistance=LABEL_STYLE_DEFAULTS.labelNearFadeDistance,minOpacity=LABEL_STYLE_DEFAULTS.labelNearMinOpacity,nearDistance=distance){
+ if(!Number.isFinite(distance)||!Number.isFinite(nearDistance))return 0;
  const far=THREE.MathUtils.clamp(Number(revealDistance)||LABEL_STYLE_DEFAULTS.labelRevealDistance,3,80);
  const fadeSpan=Math.min(3,far*.45);
  const t=THREE.MathUtils.clamp((far-distance)/fadeSpan,0,1);
- return t*t*(3-2*t);
+ const farAlpha=t*t*(3-2*t);
+ const near=THREE.MathUtils.clamp(Number.isFinite(nearFadeDistance)?nearFadeDistance:LABEL_STYLE_DEFAULTS.labelNearFadeDistance,0,20);
+ if(near===0)return farAlpha;
+ const floor=THREE.MathUtils.clamp(Number.isFinite(minOpacity)?minOpacity:LABEL_STYLE_DEFAULTS.labelNearMinOpacity,0,1);
+ const n=THREE.MathUtils.clamp(nearDistance/near,0,1);
+ return farAlpha*(floor+(1-floor)*n*n*(3-2*n));
+}
+const titleArtWorld=new THREE.Vector3(),titlePlateWorld=new THREE.Vector3(),titlePlateScale=new THREE.Vector3(),titleTextScale=new THREE.Vector3();
+// Use the billboard's camera-independent enclosing radius and vertical extent.
+// Compare against the standing avatar's body rather than just its feet.
+export function titleDistanceToAvatar(plate,viewerPosition){
+ if(!viewerPosition?.isVector3)return Infinity;
+ plate.getWorldPosition(titlePlateWorld);plate.getWorldScale(titlePlateScale);
+ const text=plate.userData.textSprite;
+ if(text)text.getWorldScale(titleTextScale);else titleTextScale.set(0,0,0);
+ const halfWidth=Math.max(Math.abs(titlePlateScale.x),Math.abs(titleTextScale.x))*.5;
+ const halfHeight=Math.max(Math.abs(titlePlateScale.y),Math.abs(titleTextScale.y))*.5;
+ const dx=titlePlateWorld.x-viewerPosition.x,dz=titlePlateWorld.z-viewerPosition.z;
+ const horizontal=Math.max(0,Math.hypot(dx,dz)-halfWidth);
+ const vertical=Math.max(0,titlePlateWorld.y-halfHeight-(viewerPosition.y+1.6),viewerPosition.y-(titlePlateWorld.y+halfHeight));
+ return Math.hypot(horizontal,vertical);
 }
 export function updateArtworkTitleVisibility(root,viewerPosition,force=false){
  const plate=root?.userData?.titlePlate;
@@ -27,9 +47,10 @@ export function updateArtworkTitleVisibility(root,viewerPosition,force=false){
  // No local player yet: keep the name hidden rather than falling back to
  // camera distance (which changes when the user zooms in or out).
  const distance=viewerPosition?.isVector3?
-  root.getWorldPosition(new THREE.Vector3()).distanceTo(viewerPosition):Infinity;
+  root.getWorldPosition(titleArtWorld).distanceTo(viewerPosition):Infinity;
+ const appearance=root.userData.appearance;
  const alpha=force||root.userData.editing?1:
-  titleOpacityByDistance(distance,root.userData.appearance?.labelRevealDistance);
+  titleOpacityByDistance(distance,appearance?.labelRevealDistance,appearance?.labelNearFadeDistance,appearance?.labelNearMinOpacity,titleDistanceToAvatar(plate,viewerPosition));
  if(plate.material.opacity!==alpha)plate.material.opacity=alpha;
  const text=plate.userData.textSprite;
  if(text?.material&&text.material.opacity!==alpha)text.material.opacity=alpha;
