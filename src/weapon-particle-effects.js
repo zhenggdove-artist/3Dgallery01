@@ -351,7 +351,7 @@ export class WeaponParticleEffects{
   const chargedCount=recipe=>['fissure','rainbow-scatter','rainbow-spiral','boomerang','lotus-veil','thorn-tower'].includes(recipe)?5600:
     recipe==='music'?5200:['flies','food'].includes(recipe)?3900:3200;
   for(const recipe of new Set([...Object.values(PARTICLE_RECIPES),'prism','tidal','rainbow','rainbow-spiral'])){
-   for(const count of [1200,1600,2400,chargedCount(recipe)]){
+   for(const count of [1200,1600,2400,chargedCount(recipe),...(recipe==='rainbow-scatter'?[3200]:[])]){
     const entry=this.make(recipe,{id:'warm-'+recipe,family:recipe},{amount:count,range:16});
     stage.add(entry.root);entries.push(entry);
    }

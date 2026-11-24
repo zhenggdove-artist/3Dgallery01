@@ -130,10 +130,14 @@ export class NumberedWeaponEffects {
   this.active=[];this.prewarmed=new Map();
   }
  acquire(spec,options){
-  const pool=this.prewarmed.get(spec.asset),cached=pool?.pop();
+  const pool=this.prewarmed.get(spec.asset);
   options=budgetedNativeOptions(spec,options);
+  // Prefer a previously uploaded buffer layout for the same main/fusion detail.
+  const index=pool?.findIndex(fx=>fx.group.userData.templeNativeDetail===options.detail&&fx.group.userData.templeNativeDensity===options.density)??-1;
+  const cached=index>=0?pool.splice(index,1)[0]:pool?.pop();
   const fx=cached||this.create(spec,options);
   if(cached){fx.reset?.();fx.setOptions?.(options);this.scene.add(fx.group);}
+  fx.group.userData.templeNativeDetail=options.detail;fx.group.userData.templeNativeDensity=options.density;
   fx.group.visible=true;
   return fx;
  }
@@ -200,7 +204,10 @@ export class NumberedWeaponEffects {
       for(let i=0;i<copies;i++){
         let fx=null;
         try{
-          fx=this.create(spec,{size:1,detail:1,density:.5,...(spec.asset==='energy-sword-wave'?{theme:'solar',quantity:SABER_WAVE_COUNT,spread:SABER_WAVE_FAN_ANGLE_DEG/60,speed:1}:{})});
+          const fusionCopy=i===copies-1&&copies>1;
+          const options=budgetedNativeOptions(spec,{size:spec.number===73||spec.asset==='energy-sword-wave'?1:spec.number===48?2:1.2,quality:1,detail:fusionCopy?.55:1,density:fusionCopy?.3:.5,speed:spec.number===70?2:spec.number===33?.78:1,...(channelColors[spec.asset]?{color:channelColors[spec.asset]}:{}),...(spec.asset==='energy-sword-wave'?{theme:'solar',quantity:SABER_WAVE_COUNT,spread:SABER_WAVE_FAN_ANGLE_DEG/60,speed:1}:{})});
+          fx=this.create(spec,options);
+          fx.group.userData.templeNativeDetail=options.detail;fx.group.userData.templeNativeDensity=options.density;
           const stage=new THREE.Scene();stage.add(fx.group);fx.group.visible=true;
           fx.update(spec.number===47?.68:.016);
           await renderer.compileAsync(stage,view);

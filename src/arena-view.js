@@ -348,7 +348,7 @@ export class TempleArena{
      fly.mesh.scale.setScalar(1.6*(1-t)**1.25);
      if(t>=1){fly.mesh.removeFromParent();this.dropCoinFlights.splice(i,1);}
     }
-    for(const p of artworkDefinitions(this.world)){const root=this.artworks.get(p.id),state=this.world?.artworks?.[p.id];if(!root||!state||root.userData.editing)continue;const layout=this.world?.artworkLayout?.[p.id]||this.defaultLayout[p.id]||{position:p.artPosition,rotation:[0,p.artYaw,0],scale:[1,1,1]};root.userData.titleOverride=layout.title;applyArtworkAppearance(root,layout.appearance);if(root.userData.video){const near=camera.position.distanceToSquared(root.position)<900;if(near&&!root.userData.videoPlaying){root.userData.videoPlaying=true;root.userData.video.play().catch(()=>{root.userData.videoPlaying=false;});}else if(!near&&root.userData.videoPlaying){root.userData.video.pause();root.userData.videoPlaying=false;}}const now=Date.now(),visual=artworkRenderFlight(state,this.localArtworkFlights.get(p.id),now);if(!visual.local)this.localArtworkFlights.delete(p.id);if(visual.waiting){root.visible=false;continue;}const holder=state.holder&&playerRoots.get(state.holder);if(holder&&!visual.local){root.visible=true;root.position.copy(holder.position).add(new THREE.Vector3(0,1.6,0));root.rotation.set(0,holder.rotation.y+Math.PI,Math.sin(time*2)*.05);root.scale.fromArray(layout.scale).multiplyScalar(.48);continue;}root.scale.fromArray(layout.scale);const flight=visual.event;if(flight&&root.userData.flightId!==flight.id){root.userData.flightId=flight.id;root.userData.flightLanding=artworkLanding(flight,(x,z,y)=>this.groundHeight(x,z,y));}if(flight&&now-flight.time<root.userData.flightLanding.time*1000){const age=Math.max(0,(now-flight.time)/1000);root.visible=true;root.position.fromArray(artworkPosition(flight,age));root.rotation.set(...layout.rotation);continue;}const available=Date.now()>=(state.availableAt||0);root.visible=available;if(available){root.position.fromArray(layout.position);root.position.y+=Math.sin(time*.72+p.index)*(this.artFloat??.17);root.rotation.set(...layout.rotation);}}
+    for(const p of this.artworkRenderDefinitions()){const root=this.artworks.get(p.id),state=this.world?.artworks?.[p.id];if(!root||!state||root.userData.editing)continue;const layout=this.world?.artworkLayout?.[p.id]||this.defaultLayout[p.id]||{position:p.artPosition,rotation:[0,p.artYaw,0],scale:[1,1,1]};root.userData.titleOverride=layout.title;const d=root.userData,prior=d.frameAppearanceInputs;if(!prior||prior.world!==this.artworkRenderRevision||prior.appearance!==layout.appearance||prior.preview!==d.previewAppearance||prior.title!==layout.title||prior.record!==d.record||prior.recordTitle!==d.record?.title||prior.draft!==d.editTitleDraft||prior.applied!==d.appearanceSignature||prior.plate!==d.titlePlateSignature){applyArtworkAppearance(root,layout.appearance);d.frameAppearanceInputs={world:this.artworkRenderRevision,appearance:layout.appearance,preview:d.previewAppearance,title:layout.title,record:d.record,recordTitle:d.record?.title,draft:d.editTitleDraft,applied:d.appearanceSignature,plate:d.titlePlateSignature};}if(root.userData.video){const near=camera.position.distanceToSquared(root.position)<900;if(near&&!root.userData.videoPlaying){root.userData.videoPlaying=true;root.userData.video.play().catch(()=>{root.userData.videoPlaying=false;});}else if(!near&&root.userData.videoPlaying){root.userData.video.pause();root.userData.videoPlaying=false;}}const now=Date.now(),visual=artworkRenderFlight(state,this.localArtworkFlights.get(p.id),now);if(!visual.local)this.localArtworkFlights.delete(p.id);if(visual.waiting){root.visible=false;continue;}const holder=state.holder&&playerRoots.get(state.holder);if(holder&&!visual.local){root.visible=true;root.position.copy(holder.position).add(new THREE.Vector3(0,1.6,0));root.rotation.set(0,holder.rotation.y+Math.PI,Math.sin(time*2)*.05);root.scale.fromArray(layout.scale).multiplyScalar(.48);continue;}root.scale.fromArray(layout.scale);const flight=visual.event;if(flight&&root.userData.flightId!==flight.id){root.userData.flightId=flight.id;root.userData.flightLanding=artworkLanding(flight,(x,z,y)=>this.groundHeight(x,z,y));}if(flight&&now-flight.time<root.userData.flightLanding.time*1000){const age=Math.max(0,(now-flight.time)/1000);root.visible=true;root.position.fromArray(artworkPosition(flight,age));root.rotation.set(...layout.rotation);continue;}const available=Date.now()>=(state.availableAt||0);root.visible=available;if(available){root.position.fromArray(layout.position);root.position.y+=Math.sin(time*.72+p.index)*(this.artFloat??.17);root.rotation.set(...layout.rotation);}}
     // Use the physical local avatar as the distance origin, NOT the zoomable
     // camera. Held / airborne artworks still use their current world position.
     // No textures are regenerated and no shared player styling is changed.
@@ -400,28 +400,37 @@ export class TempleArena{
      this.presentation.update(dt,time,camera,this.world);this.adventure.update(dt,time,playerRoots,camera);if(time-this.lastLightUpdate>.35){this.lastLightUpdate=time;this.updateArtLights(camera);}
   }
   updateArtLights(camera){const visible=[...this.artworks.values()].filter(o=>o.visible).sort((a,b)=>a.position.distanceToSquared(camera.position)-b.position.distanceToSquared(camera.position));this.lightPool.forEach((light,i)=>{const art=visible[i];light.intensity=art?(i?18:24):0;if(art){light.position.copy(art.position).add(new THREE.Vector3(0,2,2.5));light.color.set(i%2?'#d6dfff':'#ffe1b8');}});}
+  artworkRenderDefinitions(){
+   if(this.artworkRenderWorld!==this.world||!this.artworkRenderList){
+    this.artworkRenderWorld=this.world;this.artworkRenderRevision=(this.artworkRenderRevision||0)+1;
+    this.artworkRenderList=artworkDefinitions(this.world);
+   }
+   return this.artworkRenderList;
+  }
   nearest(position){
     if(!this.world)return null;
-    const artworks=[],candidates=[];
-    for(const p of artworkDefinitions(this.world)){
+    let artwork=null,candidate=null;
+    const consider=(type,id,distance)=>{if(distance<4.4&&(!candidate||distance<candidate.distance))candidate={type,id,distance};};
+    const now=Date.now();
+    for(const p of this.artworkRenderDefinitions()){
       const art=this.world.artworks?.[p.id],coin=this.world.coins?.[p.id];
       const layout=this.world.artworkLayout?.[p.id];
       const artPosition=layout?.position||p.artPosition;
       const reach=artworkPickupReach(layout);
       // A large displayed work must remain reachable at its visible edge,
       // and decorative structures cannot mask an available artwork.
-      if(art&&!art.holder&&Date.now()>=(art.availableAt||0)&&
+      if(art&&!art.holder&&now>=(art.availableAt||0)&&
          Math.abs((position[1]||0)-artPosition[1])<=reach.vertical){
         const distance=distance2d(position,artPosition);
-        if(distance<=reach.horizontal)artworks.push({type:'artwork',id:p.id,distance});
+        if(distance<=reach.horizontal&&(!artwork||distance<artwork.distance))artwork={type:'artwork',id:p.id,distance};
       }
-      if(coin?.available)candidates.push({type:'coin',id:p.id,distance:distance2d(position,p.coinPosition)});
+      if(coin?.available)consider('coin',p.id,distance2d(position,p.coinPosition));
     }
-    for(const drop of this.world.groundDrops||[])candidates.push({type:'drop',id:drop.id,distance:distance2d(position,drop.position)});
-    for(const structure of this.world.structures||[])candidates.push({type:'structure',id:structure.id,distance:distance2d(position,structure.position)});
-    for(const plant of this.world.plants||[])candidates.push({type:'plant',id:plant.id,distance:distance2d(position,plant.position)});
-    return artworks.sort((a,b)=>a.distance-b.distance)[0]||
-      candidates.filter(c=>c.distance<4.4).sort((a,b)=>a.distance-b.distance)[0]||null;
+    if(artwork)return artwork;
+    for(const drop of this.world.groundDrops||[])consider('drop',drop.id,distance2d(position,drop.position));
+    for(const structure of this.world.structures||[])consider('structure',structure.id,distance2d(position,structure.position));
+    for(const plant of this.world.plants||[])consider('plant',plant.id,distance2d(position,plant.position));
+    return candidate;
   }
   groundHeight(x,z,y=0){
     const platforms=this.displayPlatforms?.ground(x,z,y)||0;
