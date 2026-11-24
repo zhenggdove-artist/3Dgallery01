@@ -96,6 +96,6 @@ export class Minimap{
   }
   // The avatar must never be hidden beneath a monster or an overlapping player.
   const selfMarker=this.nodes.get('self');
-  if(selfMarker)this.layer.append(selfMarker);
+  if(selfMarker&&this.layer.lastElementChild!==selfMarker)this.layer.append(selfMarker);
  }
 }

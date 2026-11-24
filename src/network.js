@@ -117,7 +117,15 @@ export class TempleNetwork extends EventTarget{
   async createSaveCode(){return this.request('/api/save-code',{method:'POST',body:{}});}
   async gmPresence(){return this.request('/api/gm/presence');}
   async changeRole(role){const body=typeof role==='string'?{role}:role;return this.request('/api/role',{method:'POST',body});}
-  async world(){return this.request('/api/world');}
+  world(){
+   // Recovery can be requested by several actions while one HTTP snapshot
+   // is already in flight. Share only the read, scoped to the current session.
+   const key=this.base+'|'+this.token;
+   if(this.worldRead?.key===key)return this.worldRead.promise;
+   const read={key,promise:null};
+   read.promise=this.request('/api/world').finally(()=>{if(this.worldRead===read)this.worldRead=null;});
+   this.worldRead=read;return read.promise;
+  }
   async request(path,{method='GET',body,auth=true,identityToken='',timeoutMs=0}={}){
     const headers={'Content-Type':'application/json'};if(identityToken)headers.Authorization=`Bearer ${identityToken}`;else if(auth&&this.token)headers.Authorization=`Bearer ${this.token}`;
     const controller=timeoutMs>0?new AbortController():null;
@@ -135,7 +143,7 @@ export class TempleNetwork extends EventTarget{
   }
   dispatch(type,data){this.dispatchEvent(new CustomEvent(type,{detail:data}));}
   close(){
-    this.closedByUser=true;clearTimeout(this.reconnectTimer);clearTimeout(this.combatSyncTimer);this.combatSyncTimer=0;this.pendingCombatRevision=0;if(this.socket?.readyState<2)this.socket.close(1000,'Leaving Temple');this.socket=null;
+    this.closedByUser=true;this.worldRead=null;clearTimeout(this.reconnectTimer);clearTimeout(this.combatSyncTimer);this.combatSyncTimer=0;this.pendingCombatRevision=0;if(this.socket?.readyState<2)this.socket.close(1000,'Leaving Temple');this.socket=null;
     if(!this.token||!this.base)return;const url=`${this.base}/api/disconnect?token=${encodeURIComponent(this.token)}`;
     if(navigator.sendBeacon){navigator.sendBeacon(url,new Blob(['{}'],{type:'text/plain;charset=UTF-8'}));return;}
     fetch(url,{method:'POST',body:'{}',keepalive:true}).catch(()=>{});

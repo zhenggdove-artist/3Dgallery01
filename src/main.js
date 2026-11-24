@@ -65,7 +65,16 @@ arena.artFloat=settings.artFloat??.17;
 let lastAppliedRespawnAt=0;
 let vitalModels=null;
 let artBombUploading=false;let assetsReady=false,joined=false,self=null,world=null,players=[],controller=null,localRoot=null,wasDead=false,last=performance.now(),externalUntil=0,toastErrorAt=0,lastAutoCoinAt=0,frameSamples=[],fps=0,fpsFrames=0,fpsAt=performance.now(),buildPlacement=null,spectatorFollowIndex=-1;
-const roots=new Map(),remoteTargets=new Map(),effects=[];
+const roots=new Map(),remoteTargets=new Map(),effects=[],pendingAutoPickups=new Set();
+let heldArtworkSource=null,heldArtworkOwner=null,heldArtworkCached=false;
+function hasHeldArtwork(artworks,owner){
+ if(heldArtworkSource!==artworks||heldArtworkOwner!==owner){heldArtworkSource=artworks;heldArtworkOwner=owner;heldArtworkCached=Object.values(artworks||{}).some(art=>art.holder===owner);}
+ return heldArtworkCached;
+}
+function autoPickup(action,id,field){
+ const key=action+':'+id;if(pendingAutoPickups.has(key))return;
+ pendingAutoPickups.add(key);void sendAction(action,{[field]:id}).finally(()=>pendingAutoPickups.delete(key));
+}
 const speechLayer=document.getElementById('chat-speech-layer'),speechBubbles=new Map(),speechPoint=new THREE.Vector3();
 function showPlayerSpeech(message){
  const key=String(message?.profileKey||''),root=roots.get(key);if(!key||!root||!message?.text)return;
@@ -971,7 +980,7 @@ function update(dt,time,movementDt=dt){
     const substeps=Math.max(1,Math.ceil(simulationDt/(1/40)));
     let state;
     for(let step=0;step<substeps;step++)state=controller.update(simulationDt/substeps);
-    if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>world?.coins?.[c.id]?.available&&Math.hypot(p.x-c.coinPosition[0],p.z-c.coinPosition[2])<2.8&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=world?.groundDrops?.find(d=>p.distanceTo(new THREE.Vector3(...d.position))<2.2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&Date.now()<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)sendAction('pickup-coin',{platformId:coin.id});else sendAction('pickup-drop',{dropId:drop.id});}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
+    if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=hasHeldArtwork(world?.artworks,self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>!pendingAutoPickups.has('pickup-coin:'+c.id)&&world?.coins?.[c.id]?.available&&(p.x-c.coinPosition[0])**2+(p.z-c.coinPosition[2])**2<2.8**2&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=coin?null:world?.groundDrops?.find(d=>!pendingAutoPickups.has('pickup-drop:'+d.id)&&(p.x-d.position[0])**2+(p.y-d.position[1])**2+(p.z-d.position[2])**2<2.2**2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&nowMs<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)autoPickup('pickup-coin',coin.id,'platformId');else autoPickup('pickup-drop',drop.id,'dropId');}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
   platformDelete.update();
   collectorView.update(time,camera);
   statusVisuals.update(dt);
@@ -1023,7 +1032,7 @@ function update(dt,time,movementDt=dt){
    if(localRoot&&Math.hypot(localRoot.position.x-skill.aim[0],localRoot.position.z-skill.aim[2])<48){audio.play('stomp',.8);audio.play('ground-crack',.95);}
   }
   updateKnockdowns();arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}updatePlayerSpeech();artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
-  const heldItem=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
+  const heldItem=castingItem||itemById('clam');
   if(attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&
      performance.now()-attackHoldStarted>=STAFF_TAP_MAX_MS)startHeldCharge();
   const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
@@ -1056,25 +1065,25 @@ function update(dt,time,movementDt=dt){
    Promise.resolve(pending).then(async()=>{await performAttack(1);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeStarted=performance.now();chargeRequest=sendAction('attack',{phase:'charge'});}}).finally(()=>autoChargeBusy=false);
   }
   arena.presentation.charging(localRoot,charge);
-  const chargedWeapon=itemById(world?.profile?.equipment?.weapon);
+  const chargedWeapon=castingItem;
   if(charge>.08&&!staffChannel&&chargedWeapon&&controller){
    const muzzle=isChannelStaff(chargedWeapon)||chargedWeapon.family==='saber'?arena.presentation.vfx.channelMuzzle(localRoot,chargedWeapon):null;
    const direction=chargedWeapon.id==='goldfish'&&gun.mode===0?cameraAimDirection(camera).toArray():
      chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1,muzzle);
    chargePreview.update(localRoot,chargedWeapon,charge,direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null,muzzle?.toArray(),dt);
   }else chargePreview.hide();
-  const attackButton=document.getElementById('attack-button');attackButton.classList.toggle('charging',charge>0||!!staffChannel||artworkThrow.started!==null);attackButton.style.setProperty('--charge',`${(artworkThrow.started!==null?artworkThrow.progress:charge)*100}%`);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}
+  const attackButton=document.getElementById('attack-button'),charging=charge>0||!!staffChannel||artworkThrow.started!==null,chargeStyle=`${(artworkThrow.started!==null?artworkThrow.progress:charge)*100}%`;if(attackButton.classList.contains('charging')!==charging)attackButton.classList.toggle('charging',charging);if(attackButton.style.getPropertyValue('--charge')!==chargeStyle)attackButton.style.setProperty('--charge',chargeStyle);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}
 }
 
 let lastFrameFaultAt=0,lastRenderFaultAt=0,contextLost=false,lastHealthSampleAt=0;
-const runtimeHealthKey='temple-render-health-v029';
+const runtimeHealthKey='temple-render-health-v032';
 const gpuFrames=new GPUFrameQueue(renderer.getContext(),coarse,2);
-let previousRuntimeHealth=null;try{previousRuntimeHealth=JSON.parse(localStorage.getItem(runtimeHealthKey)||localStorage.getItem('temple-render-health-v024')||localStorage.getItem('temple-render-health-v023')||'null');}catch{}
+let previousRuntimeHealth=null;try{previousRuntimeHealth=JSON.parse(localStorage.getItem(runtimeHealthKey)||localStorage.getItem('temple-render-health-v029')||localStorage.getItem('temple-render-health-v024')||localStorage.getItem('temple-render-health-v023')||'null');}catch{}
 const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextRestores:0,renderFaults:0,lastError:null,previousRuntimeHealth};
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V029',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V032',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);
