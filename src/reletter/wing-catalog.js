@@ -31,7 +31,7 @@ export const VEHICLE_WINGS=Object.freeze([
  ['wings-42','Pedal-Powered Wooden Helicopter','pedal-helicopter',3,'#ac7950',3000],
  ['wings-43','Mini Zeppelin','zeppelin',4,'#d4c3a0',6000],
  ['wings-44','Bamboo Copter','bamboo-copter',3,'#b9a36b',3000]
-].map(([id,name,motif,tier,color,price])=>Object.freeze({id,name,motif,tier,color,price,
+].map(([id,name,motif,tier,color,price])=>({id,name,motif,tier,color,price,
  slot:'wings',family:'wings',design:'flight-vehicle',shopWing:true,shopRelease:117,
  impulse:5.5+tier*1.55,gravity:Math.max(.22,.93-tier*.115),flapMs:300,
  description:motif==='pedal-helicopter'?'Pedal the wooden rotorcraft into the sky.':motif==='zeppelin'?'Float in a miniature airship.':'A spinning bamboo rotor lifts you into the air.'
