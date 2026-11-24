@@ -913,3 +913,33 @@ body.panel-open #panel:has(.shop-layout){inset:8px auto auto 8px!important;width
 #panel .shop-detail>.item>img{width:56px!important;height:56px!important;object-fit:contain;float:left;margin:0 5px 3px 0}
 #panel .shop-detail select,#panel .shop-detail input,#panel .shop-detail button{min-width:0!important;max-width:100%;width:100%;box-sizing:border-box;white-space:normal}
 @media(max-width:600px){#panel .shop-layout{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:4px}#panel .shop-detail{font-size:10px;max-height:58dvh}#panel .shop-detail select,#panel .shop-detail input{font-size:12px}#panel .shop-detail>.item>img{width:38px!important;height:38px!important}#panel .shop-cell-name{font-size:7px}}
+
+/* r109: full-height shop. On portrait phones the five-column grid gets the
+   whole width; selecting an item opens a right-hand drawer, not a squeezed grid. */
+body.panel-open #panel:has(.shop-layout){position:fixed!important;inset:max(5px,env(safe-area-inset-top)) max(5px,env(safe-area-inset-right)) max(5px,env(safe-area-inset-bottom)) max(5px,env(safe-area-inset-left))!important;width:auto!important;height:auto!important;max-height:none!important;max-width:none!important;display:flex!important;flex-direction:column!important;min-height:0!important;padding:8px!important;box-sizing:border-box!important;overflow:hidden!important}
+body.panel-open #panel:has(.shop-layout) header{flex:0 0 auto;height:auto!important;min-height:38px;padding:4px 8px!important}
+body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;flex:1 1 0!important;flex-direction:column!important;min-height:0!important;height:auto!important;max-height:none!important;overflow:hidden!important;padding:3px!important;gap:5px}
+#panel .shop-layout{position:relative;flex:1 1 0;min-height:0;height:100%;overflow:hidden;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);align-items:stretch;gap:8px}
+#panel .shop-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;grid-auto-rows:clamp(72px,12vw,128px)!important;min-height:0!important;max-height:none!important;height:100%;align-content:start;gap:5px;padding:4px;overflow-y:auto;overflow-x:hidden}
+#panel .shop-grid .shop-cell img,#panel .shop-grid .shop-cell .equipment-preview-pending{height:calc(100% - 15px)!important;max-height:calc(100% - 15px)!important}
+#panel .shop-cell-name{font:10px/14px Arial,sans-serif}
+#panel .shop-detail{height:100%;max-height:none!important;min-height:0;overflow:auto;padding:5px;box-sizing:border-box;background:#f5f2f9;border-radius:8px}
+#panel .shop-detail>.item>img{width:clamp(80px,12vw,150px)!important;height:clamp(80px,12vw,150px)!important;float:none;display:block;margin:0 auto}
+#panel .shop-detail .shop-purchase{display:grid;gap:8px}
+#panel .shop-detail select,#panel .shop-detail input,#panel .shop-detail button{font-size:14px!important;min-height:42px!important}
+#panel .shop-close-detail{display:none}
+@media(max-width:600px) and (orientation:portrait){
+ #panel .shop-layout{display:block!important}
+ #panel .shop-grid{grid-auto-rows:clamp(64px,19vw,110px)!important;height:100%;gap:4px}
+ #panel .shop-detail{display:none;position:absolute;right:0;top:0;bottom:0;width:min(82%,330px);z-index:5;box-shadow:-8px 0 24px #36264466;border:1px solid #c5b6d2;padding:8px;background:#f5f2f9}
+ #panel .shop-layout.has-selection .shop-detail{display:block}
+ #panel .shop-close-detail{display:block;margin:0 0 6px auto;min-height:42px;width:auto!important;padding:4px 12px}
+ #panel .shop-detail>.item>img{width:112px!important;height:112px!important}
+ #panel .shop-cell-name{font:9px/13px Arial,sans-serif}
+}
+#panel .bag-sale-tools{display:grid;grid-template-columns:1fr 1fr auto;gap:4px;flex:0 0 auto;align-items:end;min-width:0}
+#panel .bag-sale-tools label{display:grid;font:10px Arial,sans-serif;min-width:0;gap:2px}
+#panel .bag-sale-tools select,#panel .bag-sale-tools button{width:100%;min-width:0;min-height:35px;font-size:11px;box-sizing:border-box}
+#panel .bag-sale-tools button{background:#f1d5db;color:#76394a;font-weight:700;white-space:normal}
+#panel #bag-detail{max-height:150px!important}
+#panel #bag-detail [data-sell]{min-height:36px;padding:5px 10px}
