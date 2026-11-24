@@ -132,7 +132,7 @@ export function migrateWorld(raw,now=Date.now()){
 
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
-    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,starterWeaponId:STARTER_LOADOUT.weapon,inventory:admin?ITEMS.filter(item=>!isRetiredHeadgear(item)).map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
+    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,starterWeaponId:STARTER_LOADOUT.weapon,inventory:admin?ITEMS.filter(item=>item.slot!=='armor'&&!isRetiredHeadgear(item)).map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
     gmAllItemsGranted:!!admin,gmKnownCustomWingIds:[],collectorSoldArtworks:{},
     fusion:{},wingTrialDraws:0,wingPaidDraws:0,wingDesignCredits:0,createdAt:now,updatedAt:now,lastAttackAt:0};
 }
@@ -182,7 +182,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
     const owned=new Set(current.inventory);
     for(const item of ITEMS){
      if(current.inventory.length>=inventoryCapacity(current))break;
-     if(!isRetiredHeadgear(item)&&!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}
+     if(item.slot!=='armor'&&!isRetiredHeadgear(item)&&!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}
     }
     current.gmAllItemsGranted=true;
    }
@@ -212,7 +212,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    // Remove all old wing IDs from BAG and clear obsolete equipped slots.
    if(current.equipment.wings&&!itemById(current.equipment.wings))
     current.equipment.wings=null;
-   delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
+   delete current.equipment.armor;if(current.equippedInstanceIds)delete current.equippedInstanceIds.armor;delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
   // Remove retired fan echoes from both legacy and UID-owned fusion records;
   // keep historical bonuses and all other physical equipment identities.
   for(const record of [...Object.values(current.fusion||{}),...Object.values(current.fusionByInstance||{})]){
@@ -704,6 +704,7 @@ export function applyAction(world,actor,body,context={}){
     case 'assign-consumable':result=assignConsumable(profile,body);break;
     case 'use-consumable':result=useConsumable(world,profile,actor,body,now);break;
     case 'sell':result=sell(world,profile,body);break;
+    case 'sell-bulk':result=sellBulk(world,profile,body);break;
     case 'equip':result=equip(profile,body);break;
     case 'unequip':if(!EQUIPPABLE_SLOTS.includes(body.slot))return {error:'Invalid slot'};profile.equipment[body.slot]=null;delete profile.equippedInstanceIds[body.slot];result={notice:'Unequipped'};break;
     case 'fuse':result=fuse(world,profile,body,rng);break;
@@ -850,7 +851,39 @@ function useConsumable(world,profile,actor,body,now){
  return {notice:`Restored ${restored} HP · ${item.name}`,
   healed:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
 }
-function sell(world,profile,body){const item=itemById(body.itemId),index=profile.inventory.indexOf(body.itemId);if(!item||index<0)return {error:'Item is not owned'};if(item.id===(profile.starterWeaponId||STARTER_LOADOUT.weapon)||Object.values(profile.equipment).includes(item.id))return {error:'Unequip this item before selling'};const resale=shopResalePrice(item,profile.inventoryInstances?.[index],world.shopPrices);removeInventoryInstance(profile,index);earn(profile,resale,world);return {notice:`Sold ${item.name} · +${resale} coins`};}
+// Sell physical instances, not the first item with a matching canonical ID.
+function sellableInstance(profile,index){
+ const item=itemById(profile.inventory[index]),row=profile.inventoryInstances[index];
+ if(!item||!row||item.slot==='armor')return false;
+ if(Object.values(profile.equippedInstanceIds||{}).includes(row.uid))return false;
+ if(!profile.equippedInstanceIds?.[item.slot]&&profile.equipment?.[item.slot]===item.id)return false;
+ const starter=profile.starterWeaponId||STARTER_LOADOUT.weapon;
+ if(item.id===starter&&profile.inventory.indexOf(starter)===index)return false;
+ return true;
+}
+function sell(world,profile,body){
+ ensureFusionIdentity(profile);
+ const index=body.uid?profile.inventoryInstances.findIndex(row=>row.uid===body.uid&&row.itemId===body.itemId):profile.inventory.findIndex((id,i)=>id===body.itemId&&sellableInstance(profile,i));
+ if(index<0||!sellableInstance(profile,index))return {error:'Item cannot be sold (equipped, starter or inventory changed)'};
+ const item=itemById(profile.inventory[index]),resale=shopResalePrice(item,profile.inventoryInstances[index],world.shopPrices);
+ removeInventoryInstance(profile,index);earn(profile,resale,world);return {notice:`Sold ${item.name} · +${resale} coins`};
+}
+function sellBulk(world,profile,body){
+ ensureFusionIdentity(profile);
+ if(!['weapon','outfit','head','shield','wings','consumable'].includes(body.slot)||!['common','uncommon','rare','relic','epic'].includes(body.rarity)||!Array.isArray(body.uids)||!body.uids.length||body.uids.length>inventoryCapacity(profile))return {error:'Invalid sale selection'};
+ const ids=new Set(body.uids),indices=[];let total=0;
+ for(let i=0;i<profile.inventory.length;i++){
+  const row=profile.inventoryInstances[i],base=itemById(profile.inventory[i]);
+  if(!ids.has(row?.uid)||base?.slot!==body.slot||!sellableInstance(profile,i))continue;
+  const grade=profile.fusionByInstance?.[row.uid]?.shopTier??row.shopTier??base.tier;
+  const item=base.slot==='weapon'?shopWeaponVariant(base,grade)||base:base;
+  if(item.rarity!==body.rarity)continue;
+  indices.push(i);total+=shopResalePrice(base,row,world.shopPrices);
+ }
+ if(indices.length!==ids.size||!Number.isSafeInteger(total))return {error:'Inventory changed; review the sale again'};
+ for(const i of indices.reverse())removeInventoryInstance(profile,i);
+ earn(profile,total,world);return {notice:`Sold ${indices.length} items · +${total} coins`};
+}
 function equip(profile,body){const item=itemById(body.itemId);if(!item||!profile.inventory.includes(item.id)||!EQUIPPABLE_SLOTS.includes(item.slot))return {error:'Item is not owned'};const index=Number.isInteger(body.inventoryIndex)?body.inventoryIndex:profile.inventory.indexOf(item.id);if(profile.inventory[index]!==item.id)return {error:'Inventory changed: choose the equipment again'};selectEquipmentInstance(profile,item.slot,index);return {notice:`Equipped ${item.name}`};}
 
 function validPlatformTransform(position,radius,height){
@@ -1233,7 +1266,7 @@ function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosit
   const target=world.profiles[targetActor.key];if(!target||target.hp<=0||target.deadUntil>now)return null;
    if((target.spawnProtectedUntil||0)>now)return {target:targetActor.key,damage:0,defeated:false,immune:true};
   const stats=refreshStats(world,target,now);if(target.admin&&target.gmInvincible!==false){target.hp=target.maxHp;return {target:targetActor.key,damage:0,defeated:false,immune:true};}
-  const armor=itemById(target.equipment.armor),reduction=Math.min(.65,(armor?.defense||0)/100);
+  const reduction=0;
   // The frying pan's self-damage is exactly 15 HP, not armour/shield
   // adjusted; it remains a genuine self-inflicted hazard even for the GM.
   let damage=fixedDamage?Math.max(0,+Number(amount).toFixed(1)):
