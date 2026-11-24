@@ -1,12 +1,12 @@
 // Deterministic city geometry shared by the browser and authoritative Worker.
 // The extension doubles the original sand district's surface area (not its
-// radius) and triples building count per square unit: 72 -> 432 lots.
+// radius) and triples building count per square unit: 72 -> 504 lots.
 export const CITY_INNER_RADIUS=92;
 export const CITY_PREVIOUS_OUTER_RADIUS=184;
 export const CITY_OUTER_RADIUS=Math.sqrt(
   CITY_INNER_RADIUS**2+2*(CITY_PREVIOUS_OUTER_RADIUS**2-CITY_INNER_RADIUS**2)
 );
-export const CITY_BUILDING_COUNT=432;
+export const CITY_BUILDING_COUNT=504;
 export const CITY_SHOP_STYLES=Object.freeze([
  ['noodle','阿明古早味麵店','AH MING NOODLES','#c84730'],
  ['repair','老吳機車修配','WU MOTOR REPAIR','#d69a32'],
@@ -45,10 +45,10 @@ export function cityRandom(seed=912744){
  let s=seed>>>0;
  return ()=>((s=(Math.imul(s,1664525)+1013904223)>>>0)/4294967296);
 }
-const ringCounts=[48,54,58,62,66,70,74];
+const ringCounts=[55,63,68,72,77,81,88];
 const ringRadii=[102,122,143,164,186,207,229];
 // Always build the full list first; limit is for deterministic test sampling,
-// not device-dependent city collision. Mobile and desktop share ALL 432 lots.
+// not device-dependent city collision. Mobile and desktop share ALL 504 lots.
 export function cityLots(seed=912744,limit=CITY_BUILDING_COUNT){
  const rand=cityRandom(seed),lots=[];
  for(let band=0;band<ringCounts.length;band++){
@@ -101,7 +101,7 @@ function repackIntoOrganicBlocks(lots,seed){
   const gapAfter=new Array(count).fill(null),groups=[],streetEnds=[];
   for(let first=0;first<count;){
    const roll=rand();
-   const size=Math.min(count-first,roll<.13?1:2+Math.floor(rand()*5));
+   const size=Math.min(count-first,roll<.12?1:roll<.31?2+Math.floor(rand()*3):roll<.70?5+Math.floor(rand()*4):9+Math.floor(rand()*6));
    const group={first,last:first+size-1};
    groups.push(group);
    for(let i=first;i<first+size;i++){
@@ -115,7 +115,7 @@ function repackIntoOrganicBlocks(lots,seed){
   const buildings=ring.reduce((sum,lot)=>sum+lot.width,0);
   const internalGaps=gapAfter.reduce((sum,gap)=>sum+(gap??0),0);
   const streetSpace=Math.max(0,circumference-buildings-internalGaps);
-  const weights=streetEnds.map((_,index)=>.45+rand()*1.5+(index%4===0?.85:0));
+  const weights=streetEnds.map((_,index)=>.32+rand()**2*2.6+(index%4===0?1.3:0));
   const totalWeight=weights.reduce((sum,value)=>sum+value,0);
   streetEnds.forEach((index,i)=>{gapAfter[index]=streetSpace*weights[i]/totalWeight;});
   let cursor=rand()*circumference;
@@ -135,7 +135,17 @@ function repackIntoOrganicBlocks(lots,seed){
     lot.angle=angle%(2*Math.PI);
     lot.x=Math.cos(angle)*r;
     lot.z=Math.sin(angle)*r;
-    lot.yaw=yaw+(rand()-.5)*.018;
+    lot.yaw=yaw-(angle-middle)*.82+(rand()-.5)*.018;
+    // Dense cores grow vertically in irregular stacked residential volumes.
+    // Keep a minority of tall blocks so mobile vertex costs remain bounded.
+    const peak=Math.floor((group.first+group.last)/2);
+    if(group.last-group.first>=4&&i===peak&&(groups.indexOf(group)+band)%2===0){
+     const floorH=lot.height/lot.floors;
+     lot.floors=10+((lot.index*7+band)%5);lot.height=lot.floors*floorH;
+    }else if(group.last-group.first>=5&&Math.abs(i-peak)===1&&(lot.index+band)%3===0){
+     const floorH=lot.height/lot.floors;
+     lot.floors=5+lot.index%4;lot.height=lot.floors*floorH;
+    }
    }
   }
   start+=count;
@@ -143,7 +153,7 @@ function repackIntoOrganicBlocks(lots,seed){
 }
 export const CITY_LOTS=cityLots();
 // Collision and roof support are queried multiple times in every movement
-// tick on both the browser and the authoritative Worker. Scanning all 432
+// tick on both the browser and the authoritative Worker. Scanning all 504
 // houses on every step creates regular main-thread stalls. Index immutable
 // footprints once in deterministic world-space cells (exact same geometry).
 const CITY_COLLISION_CELL=16;
@@ -166,7 +176,7 @@ export function cityCollisionCandidates(x,z,margin=0){
  if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(margin)||margin>48)return CITY_LOTS;
  if(margin<=2)return CITY_COLLISION_CELLS.get(cityCellKey(
   Math.floor(x/CITY_COLLISION_CELL),Math.floor(z/CITY_COLLISION_CELL)))||[];
- // Large swinging weapons query nearby indexed cells, not all 432 homes
+ // Large swinging weapons query nearby indexed cells, not all 504 homes
  // for every swept collision sample. Deduplicate blocks shared by cells.
  const found=new Set(),radius=Math.max(0,margin);
  for(let cx=Math.floor((x-radius)/CITY_COLLISION_CELL);cx<=Math.floor((x+radius)/CITY_COLLISION_CELL);cx++)
@@ -211,7 +221,7 @@ export function cityRoofHeightAtHp(lot,hp=CITY_MAX_HP,maxHp=CITY_MAX_HP){
 // Give each 10%-HP threshold one of four pre-existing building corners.
 // The same deterministic cut applies to all walls and painted decals. It
 // only moves existing vertices: zero additional meshes, particles, polygons
-// or GPU materials, including across all 432 houses.
+// or GPU materials, including across all 504 houses.
 const cityCornerRotations=new WeakMap();
 const NO_CITY_CORNER_CUT=Object.freeze([0,0,0]);
 export function cityAngularCornerCut(lot,x,y,z,tier,isRoof=false){

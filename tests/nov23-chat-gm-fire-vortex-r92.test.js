@@ -10,9 +10,9 @@ import {GameAudio} from '../src/game-audio.js';
 import {NumberedWeaponEffects} from '../src/numbered-weapon-effects.js';
 const source=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
 
-test('CHAT long press works on all non-interactive portions of the mouse or touch panel after 1500 ms',()=>{
+test('CHAT long press works on all non-interactive portions of the mouse or touch panel after 1000 ms',()=>{
  const s=source('src/chat-layout.js');
- assert.match(s,/DRAG_HOLD_MS=1500/);
+ assert.match(s,/DRAG_HOLD_MS=1000/);
  assert.match(s,/panel\.addEventListener\('pointerdown'/);
  assert.match(s,/panel\.addEventListener\('touchstart'/);
  assert.match(s,/e\.target\.closest\('button,input,textarea,select,form'\)/);

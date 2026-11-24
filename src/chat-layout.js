@@ -1,5 +1,5 @@
 // Three-step chat sizing: max -> two-line medium -> + only -> max.
-// Hold + for one second to minimize immediately. Hold a non-interactive part of the panel for 1.5s to move on touch or mouse.
+// Hold + for one second to minimize immediately. Hold a non-interactive part of the panel for 1s to move on touch or mouse.
 // A new position key discards old placements that stranded chat high on iOS.
 export function bindChatLayout(){
  const panel=document.getElementById('chat-hud');
@@ -10,7 +10,7 @@ export function bindChatLayout(){
  // Suppress browser long-press selection menus only on non-interactive chat surfaces.
  panel.addEventListener('contextmenu',e=>{if(!e.target.closest('button,input,textarea,select,form'))e.preventDefault();});
  const STORAGE_KEY='temple-chat-position-v3';
- const DRAG_HOLD_MS=1500;
+ const DRAG_HOLD_MS=1000;
  const sizes=['max','medium','min'];
  let size='medium',active=null,timer=null,toggleTimer=null,ignoreClickUntil=0,manualPosition=false;
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
@@ -34,7 +34,7 @@ export function bindChatLayout(){
   const r={left:x,top:y,right:x+panel.offsetWidth,bottom:y+panel.offsetHeight};
   // Explicit user drags may position CHAT anywhere within the viewport.
   panel.style.left=x+'px';panel.style.top=y+'px';panel.style.right='auto';
-  panel.style.bottom='auto';panel.style.transform='none';
+  panel.style.setProperty('bottom','auto','important');panel.style.transform='none';
   return true;
  }
  const save=()=>{if(!manualPosition)return;try{const r=panel.getBoundingClientRect();
@@ -109,7 +109,7 @@ export function bindChatLayout(){
  toggle.addEventListener('pointermove',e=>{
   if(!miniDrag||miniDrag.id!==e.pointerId)return;
   const dx=e.clientX-miniDrag.x,dy=e.clientY-miniDrag.y;
-  if(miniDrag.mode==='pending'&&Math.hypot(dx,dy)>10){
+  if(miniDrag.mode==='pending'&&Math.hypot(dx,dy)>16){
    clearTimeout(miniTimer);miniDrag.mode='cancel';
   }
   if(miniDrag.mode==='move'){

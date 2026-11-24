@@ -164,6 +164,27 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
     const labelTex=new T.CanvasTexture(canvas);labelTex.colorSpace=T.SRGBColorSpace;const labelMat=mat('#ffffff');labelMat.map=labelTex;record.extraTextures??=[];record.extraTextures.push(labelTex);b([x,.49,.333],[.31,.17,.006],labelMat);
     for(let i=0;i<3;i++)mark([x-.16+i*.12,.20+(i%2)*.04,.324],[.04,.02,.01],rust);
    }
+  }else if(kind==='water-tower-disguise'){
+   const steel=mat('#b0bdbe',.72),rim=mat('#65777a',.65),stain=mat('#8a6150',.2);
+   c([0,.13,0],.51,.53,.26,rim);c([0,1.08,0],.51,.51,1.59,steel,24);
+   for(let i=0;i<9;i++)c([0,.34+i*.18,0],.529,.529,.044,rim,24);
+   c([0,1.93,0],.18,.51,.19,steel,24);c([0,2.055,0],.18,.18,.08,rim);
+   for(const side of [-1,1]){b([side*.35,.07,0],[.12,.14,.60],rim);b([side*.17,.88,.536],[.043,1.56,.055],rim);}
+   for(let i=0;i<9;i++)b([0,.20+i*.16,.55],[.36,.035,.055],rim);
+   for(let i=0;i<8;i++)mark([-.34+i*.085,.45+(i%4)*.16,.518],[.035,.17,.014],stain);
+   tube(g,[[.43,.14,.22],[.62,.24,.22],[.62,1.57,.22],[.49,1.71,.22]],.045,rim);
+   slit(.91,.53,.26);
+  }else if(kind==='utility-pole-disguise'){
+   const concrete=mat('#a39f91'),darkConcrete=mat('#716f66'),ceramic=mat('#755042',.18),wire=mat('#39383a',.3);
+   c([0,1.48,0],.115,.21,2.96,concrete,12);c([0,.08,0],.24,.25,.16,darkConcrete,12);
+   for(let i=0;i<5;i++)b([0,.27+i*.13,.187],[.18,.06,.025],i%2?black:mat('#d7ae36'));
+   for(const y of [2.43,2.75]){b([0,y,0],[1.18,.10,.14],darkConcrete);
+    for(const x of [-.49,0,.49]){c([x,y+.13,0],.085,.085,.13,ceramic,10);for(let k=0;k<3;k++)c([x,y+.09+k*.05,0],.114,.114,.025,ceramic,10);}
+    tube(g,[[-.49,y+.21,-.33],[-.49,y+.10,0],[-.49,y+.21,.33]],.018,wire);}
+   b([.24,1.98,0],[.32,.48,.34],silver);c([.24,2.26,0],.16,.16,.12,rimSafe());
+   function rimSafe(){return darkConcrete;}
+   tube(g,[[.18,.27,-.05],[.23,1.32,-.05],[.17,2.43,-.05]],.025,wire);
+   slit(.9,.184,.14);
   }else if(kind==='wooden-horse-disguise'){
    const red=mat('#8b3d32'),gold=mat('#c2a36b'),saddle=mat('#344d73');
    // A tall carved wooden horse with a long body, four legs and rocker rails.
