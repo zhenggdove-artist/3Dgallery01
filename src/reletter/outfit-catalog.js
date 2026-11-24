@@ -56,15 +56,18 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
  // Full-body prop disguises use the actual avatar height as their scale reference.
  const disguises=[
   ['chimney-disguise','Towering Chimney Disguise','#924c38',4,4900,3,{defense:.15,hp:2.0,speed:-.06}],
-  ['cardboard-disguise','Battered Cardboard Box','#a17b48',2,950,1.02,{speed:.08,defense:.05}],
+  ['cardboard-disguise','Battered Cardboard Box','#a17b48',2,950,2,{speed:.08,defense:.05}],
   ['garbage-bag-disguise','Torn Black Garbage Bag','#292b2d',2,1050,1.04,{speed:.10,hp:.7}],
   ['trash-can-disguise','Rusty Metal Trash Can','#686b68',3,2650,1.08,{defense:.15,hp:1.2}],
   ['postbox-disguise','Chunghwa Post Mailboxes','#236748',3,2950,1.08,{defense:.12,hp:1.5}],
   ['wooden-horse-disguise','Giant Wooden Horse','#a97a49',4,4900,2,{hp:2.2,defense:.12}],
   ['water-tower-disguise','Giant Water Tower','#849698',4,4900,2,{hp:2.4,defense:.13,speed:-.04}],
   ['utility-pole-disguise','Towering Utility Pole','#999388',4,4900,3,{hp:1.8,defense:.09,jump:.12}],
-  ['tin-pipe-disguise','Giant Flexible Tin Pipe','#aab6ba',3,2950,2,{defense:.12,hp:1.3}],
-  ['luroufan-sign-disguise','Taiwan Braised Pork Rice Bowl','#d9a537',3,2950,2,{hp:1.5,defense:.10}],
+  ['tin-pipe-disguise','Giant Flexible Tin Pipe','#aab6ba',3,2950,3,{defense:.12,hp:1.3}],
+  ['luroufan-sign-disguise','Taiwan Braised Pork Rice Lightbox','#d9a537',3,2950,2,{hp:1.5,defense:.10}],
+  ['luroufan-bowl-disguise','Giant Braised Pork Rice Bowl','#d9a537',3,2950,2,{hp:1.5,defense:.10}],
+  ['notok-sign-disguise','NOTOK Convenience Store Sign','#d32b35',3,2950,2,{hp:1.5,defense:.10}],
+  ['987-sign-disguise','987 Convenience Store Sign','#d32b35',3,2950,2,{hp:1.5,defense:.10}],
   ['bubble-tea-disguise','Giant Bubble Milk Tea','#c99b68',3,2950,2,{hp:1.5,speed:.08}],
   ['fried-chicken-disguise','Giant Taiwanese Fried Chicken Cutlet','#bd792e',3,2950,2,{hp:1.2,attack:.10}]
  ];
@@ -72,6 +75,7 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   id:'outfit-'+creature,name,color,tier,price:templePrice,templePrice,slot:'outfit',family:'outfit',
   design:'disguise',creature,disguiseHeight,pattern:0,bonuses,r113Wearable:true,
   ...(['tin-pipe-disguise','luroufan-sign-disguise','bubble-tea-disguise','fried-chicken-disguise'].includes(creature)?{shopRelease:117}:{}),
-  ...(!['wooden-horse-disguise','utility-pole-disguise'].includes(creature)?{exposedHead:true}:{}),
+  ...(!['wooden-horse-disguise'].includes(creature)?{exposedHead:true}:{}),
+  ...(['luroufan-sign-disguise','luroufan-bowl-disguise','notok-sign-disguise','987-sign-disguise'].includes(creature)?{shopRelease:118}:{}),
   description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed'}[k]||k)).join(' · ')
  })));

@@ -167,13 +167,11 @@ function creatureOutfitProductPortrait(item){
   if(object.isSkinnedMesh)object.skeleton.pose();
  });
  model.updateMatrixWorld(true);
+ orientPortraitModel(model,{precise:false});
  const outfit=attachOutfit(THREE,model,item,{hood:true});
  if(!outfit)throw Error('Creature outfit could not attach to skeleton: '+item.id);
  model.userData.previewOutfitRecord=outfit;
- orientPortraitModel(model,{precise:false});
- model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-Math.PI/2));
- // The wooden horse product image was rolled sideways; correct only the portrait.
- if(item.creature==='wooden-horse-disguise')model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),-Math.PI/2));
+ // No size-driven or screen-roll rotation after attaching large accessories.
  model.updateMatrixWorld(true);
  return model;
 }
@@ -247,8 +245,8 @@ async function renderPreview(item){
  const model=item.family==='saber'?saberProductPortrait():creatureSuit?creatureOutfitProductPortrait(item):shapeModel(item);
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
- const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*(item.design==='disguise'?2.15:item.slot==='outfit'?1.75:portraitMask?1.8:2.2);
- camera.position.copy(center).add((item.design==='disguise'?new THREE.Vector3(.55,.15,1):item.family==='saber'||item.slot==='outfit'||['trump-mask','huang-mask','musk-mask','xi-mask','putin-mask','kim-mask'].includes(item.design)?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
+ const size=box.getSize(new THREE.Vector3()),distance=creatureSuit?Math.max(size.x,size.y,.00001)*.5/Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*1.24+size.z*.5:Math.max(size.x,size.y,size.z,.1)*(portraitMask?1.8:2.2);
+ camera.position.copy(center).add((item.design==='disguise'?new THREE.Vector3(0,.02,1):item.family==='saber'||item.slot==='outfit'||['trump-mask','huang-mask','musk-mask','xi-mask','putin-mask','kim-mask'].includes(item.design)?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
  camera.near=Math.max(.001,distance*.01);camera.far=Math.max(100,distance*8);camera.updateProjectionMatrix();
  camera.lookAt(center);
  try{

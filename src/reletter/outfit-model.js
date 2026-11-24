@@ -85,7 +85,46 @@ export function disguiseFrame(T,model,bones,headHeight){
  const high=at(top).sub(hp).dot(up)+unit*.18;
  return {base:hp.clone().addScaledVector(up,low),up,rotation,height:Math.max(unit*2,high-low),head:hd,unit};
 }
-export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;model.updateMatrixWorld(true);const bones=new Map();model.traverse(o=>{if(o.isBone)bones.set(o.name.replace(/^mixamorig/,''),o);});const head=bones.get('Head');if(!head)return null;const top=bones.get('HeadTop_End'),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,forward=head.getWorldQuaternion(new T.Quaternion()),texture=fabric(T,item),record={id:item.id,parts:[],surfaces:[],texture};
+// Coordinates are baked into each mesh's attribute in the canonical prop frame.
+ // This makes the aperture independent of the avatar, portrait camera and
+ // cloned mesh world transforms, and works for instanced decorative meshes.
+ export function cutDisguiseOpening(T,root,x,y,rx,ry,frontZ){
+  root.updateMatrixWorld(true);
+  const inverse=root.matrixWorld.clone().invert(),p=new T.Vector3(),used=new Set();
+  root.traverse(o=>{
+   if(!o.isMesh)return;
+   const position=o.geometry.attributes.position,values=new Float32Array(position.count*3);
+   const transform=new T.Matrix4().multiplyMatrices(inverse,o.matrixWorld);
+   for(let i=0;i<position.count;i++){
+    p.fromBufferAttribute(position,i);
+    if(!o.isInstancedMesh)p.applyMatrix4(transform);
+    p.toArray(values,i*3);
+   }
+   o.geometry.setAttribute('disguisePosition',new T.BufferAttribute(values,3));
+   for(const material of Array.isArray(o.material)?o.material:[o.material]){
+    if(used.has(material))continue;used.add(material);
+    const prior=material.onBeforeCompile,priorKey=material.customProgramCacheKey();
+    material.onBeforeCompile=function(shader){
+     prior.call(this,shader);
+     shader.uniforms.disguiseOpening={value:new T.Vector4(x,y,Math.max(.001,rx),Math.max(.001,ry))};
+     shader.uniforms.disguiseFront={value:frontZ-Math.max(rx,ry)*1.1};
+     shader.vertexShader='attribute vec3 disguisePosition; varying vec3 vDisguisePosition;\n'+shader.vertexShader;
+     shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+       vDisguisePosition=disguisePosition;
+       #ifdef USE_INSTANCING
+       vDisguisePosition=(instanceMatrix*vec4(disguisePosition,1.0)).xyz;
+       #endif`);
+     shader.fragmentShader='uniform vec4 disguiseOpening; uniform float disguiseFront; varying vec3 vDisguisePosition;\n'+shader.fragmentShader;
+     shader.fragmentShader=shader.fragmentShader.replace('#include <clipping_planes_fragment>',`#include <clipping_planes_fragment>
+       vec2 openingDelta=(vDisguisePosition.xy-disguiseOpening.xy)/disguiseOpening.zw;
+       if(vDisguisePosition.z>disguiseFront && dot(openingDelta,openingDelta)<1.0) discard;`);
+    };
+    material.customProgramCacheKey=()=>priorKey+'-disguise-aperture-v030';
+    material.needsUpdate=true;
+   }
+  });
+ }
+ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;model.updateMatrixWorld(true);const bones=new Map();model.traverse(o=>{if(o.isBone)bones.set(o.name.replace(/^mixamorig/,''),o);});const head=bones.get('Head');if(!head)return null;const top=bones.get('HeadTop_End'),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,forward=head.getWorldQuaternion(new T.Quaternion()),texture=fabric(T,item),record={id:item.id,parts:[],surfaces:[],texture};
  const meshes=[];model.traverse(o=>{if(o.isSkinnedMesh&&o.geometry.attributes.skinIndex)meshes.push(o);});
  for(const mesh of meshes){const originalGeometry=mesh.geometry,originalMaterial=mesh.material,geometry=originalGeometry.clone(),si=geometry.attributes.skinIndex,sw=geometry.attributes.skinWeight,mask=new Float32Array(si.count);for(let i=0;i<si.count;i++)for(let k=0;k<4;k++){const idx=si.array[i*si.itemSize+k],name=mesh.skeleton.bones[idx]?.name||'';if(/Hips|Spine|Arm|Leg|Foot|Toe/.test(name))mask[i]+=sw.array[i*sw.itemSize+k];}geometry.setAttribute('outfitMask',new T.BufferAttribute(mask,1));const mats=(Array.isArray(originalMaterial)?originalMaterial:[originalMaterial]).map(source=>{const m=source.clone(),before=source.onBeforeCompile,key=source.customProgramCacheKey();m.onBeforeCompile=function(shader){before.call(m,shader);shader.uniforms.outfitFabric={value:texture};shader.vertexShader='attribute float outfitMask;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvOutfitMask=outfitMask;vOutfitUV=uv*3.;');shader.fragmentShader='uniform sampler2D outfitFabric;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
  ${item.exposedHead?'if(vOutfitMask>.48) discard;':''}\n vec3 cloth=texture2D(outfitFabric,vOutfitUV).rgb;float shade=clamp(dot(diffuseColor.rgb,vec3(.2126,.7152,.0722)),.4,1.);diffuseColor.rgb=mix(diffuseColor.rgb,cloth*(.82+.18*shade),smoothstep(.35,.8,vOutfitMask));`);};m.customProgramCacheKey=()=>key+'-outfit-'+item.id;m.needsUpdate=true;return m;});mesh.geometry=geometry;mesh.material=Array.isArray(originalMaterial)?mats:mats[0];record.surfaces.push({mesh,originalGeometry,originalMaterial,geometry,mats});}
@@ -188,20 +227,39 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
   }else if(kind==='tin-pipe-disguise'){
    const metal=mat('#aebabe',.72),rim=mat('#727d80',.72),inner=mat('#323c3f',.32);
    metal.roughness=.43;rim.roughness=.42;
-   // Open, torso-sized flexible pipe with rolled metal seams, flanges and bolts.
+   // Tall flexible pipe: keep the lower head opening stable and bend the upper sections.
    const joints=[],radius=.43;
    for(let i=0;i<14;i++){
-    const q=new T.Group();q.position.set(0,.075+i*.13,0);g.add(q);joints.push(q);
+    const q=new T.Group(),bend=Math.max(0,(i-5)/8);q.position.set(.48*bend*bend,.075+i*.13,0);q.rotation.z=-.43*bend;q.userData.pipeBend=bend;g.add(q);joints.push(q);
     const shell=add(q,new T.CylinderGeometry(radius,radius,.158,28,1,true),[0,0,0],[1,1,1],metal);shell.material.side=T.DoubleSide;
     const ring=add(q,new T.TorusGeometry(radius,.028,8,28),[0,.065,0],[1,1,1],rim);ring.rotation.x=Math.PI/2;
    }
    for(const y of [.055,1.89]){
-    const flange=add(g,new T.TorusGeometry(radius,.07,10,32),[0,y,0],[1,1,1],rim);flange.rotation.x=Math.PI/2;
-    for(let i=0;i<8;i++){const a=i*Math.PI/4;c([Math.cos(a)*.47,y-.018,Math.sin(a)*.47],.034,.034,.05,silver,6);}
+    const x=y>1?.48:0;const flange=add(g,new T.TorusGeometry(radius,.07,10,32),[x,y,0],[1,1,1],rim);flange.rotation.x=Math.PI/2;
+    for(let i=0;i<8;i++){const a=i*Math.PI/4;c([x+Math.cos(a)*.47,y-.018,Math.sin(a)*.47],.034,.034,.05,silver,6);}
    }
-   add(g,new T.CylinderGeometry(.40,.40,.20,28,1,true),[0,1.80,0],[1,1,1],inner).material.side=T.DoubleSide;
+   add(g,new T.CylinderGeometry(.40,.40,.20,28,1,true),[.48,1.80,0],[1,1,1],inner).material.side=T.DoubleSide;
    record.flexPipe=joints;
-  }else if(kind==='luroufan-sign-disguise'){
+  }else if(['luroufan-sign-disguise','notok-sign-disguise','987-sign-disguise'].includes(kind)){
+   const food=kind==='luroufan-sign-disguise',brand=kind==='notok-sign-disguise'?'NOTOK':'987';
+   const casing=mat('#77736c',.45),edge=mat(food?'#d1a400':'#ac222d',.2);
+   const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=384;const ctx=canvas.getContext('2d');
+   ctx.fillStyle=food?'#f5cf19':'#fff9f0';ctx.fillRect(0,0,1024,384);
+   if(food){
+    ctx.fillStyle='#ce2522';ctx.fillRect(0,0,1024,22);ctx.fillRect(0,362,1024,22);
+    ctx.textAlign='center';ctx.font='bold 164px sans-serif';ctx.strokeStyle='#fff7d3';ctx.lineWidth=9;ctx.strokeText('魯肉飯',410,174);ctx.fillText('魯肉飯',410,174);
+    ctx.fillStyle='#243963';ctx.fillRect(18,209,668,42);ctx.fillStyle='#ffffff';ctx.font='bold 28px sans-serif';ctx.fillText('古早味・便當・每日供應',352,239);
+    ctx.fillStyle='#211f20';ctx.font='bold 34px sans-serif';ctx.fillText('雞腿飯 80　排骨飯 70　魯肉飯 45',470,314);
+    ctx.font='bold 30px sans-serif';ctx.fillText('便當',849,80);ctx.fillText('雞腿飯',849,131);ctx.fillText('排骨飯',849,182);ctx.fillText('控肉飯',849,233);ctx.fillText('55　70　80',849,314);
+   }else{
+    ctx.fillStyle='#c92131';ctx.fillRect(0,0,1024,52);ctx.fillRect(0,324,1024,60);ctx.textAlign='center';ctx.font=brand==='987'?'bold 230px sans-serif':'bold 184px sans-serif';ctx.fillText(brand,512,244);ctx.font='bold 30px sans-serif';ctx.fillText('CONVENIENCE STORE',512,299);
+   }
+   const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);
+   const face=mat('#ffffff');face.map=tex;face.emissive.set('#ffffff');face.emissiveMap=tex;face.emissiveIntensity=.8;record.blinkLight=face;
+   b([0,.56,0],[2.85,1.12,.22],casing);
+   for(const side of [-1,1]){b([0,.56,side*.125],[2.76,1.04,.028],face);b([0,.035,side*.14],[2.85,.06,.035],edge);b([0,1.085,side*.14],[2.85,.06,.035],edge);}
+   for(const x of [-1.42,1.42])b([x,.56,0],[.06,1.12,.27],edge);
+  }else if(kind==='luroufan-bowl-disguise'){
    const porcelain=mat('#f6ebd8'),blue=mat('#31578c'),rice=mat('#fff4dd'),pork=mat('#804222'),fat=mat('#b97743'),sauce=mat('#5a301d');
    pork.roughness=.32;fat.roughness=.38;sauce.roughness=.25;
    const profile=[[.18,0],[.26,.04],[.37,.10],[.52,.25],[.65,.52],[.72,.82],[.70,.89],[.66,.87],[.60,.57],[.48,.30],[.25,.10]].map(v=>new T.Vector2(...v));
@@ -217,12 +275,13 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
   }else if(kind==='bubble-tea-disguise'){
    const tea=mat('#c99762'),ice=mat('#e8d5b4'),pearl=mat('#37221c'),straw=mat('#d94d70'),cup=mat('#f7efe2'),label=mat('#fff3dc');
    tea.roughness=.36;pearl.roughness=.22;ice.roughness=.24;cup.transparent=true;cup.opacity=.26;cup.depthWrite=false;cup.roughness=.19;
-   c([0,.79,0],.56,.37,1.45,tea,40);
+   tea.transparent=true;tea.opacity=.58;tea.depthWrite=false;
+   const milk=c([0,.79,0],.56,.37,1.45,tea,40);milk.renderOrder=1;
    const shell=add(g,new T.CylinderGeometry(.59,.39,1.50,40,1,true),[0,.79,0],[1,1,1],cup);shell.material.side=T.DoubleSide;shell.renderOrder=2;
    for(const [r,y] of [[.40,.055],[.59,1.53]]){const ring=add(g,new T.TorusGeometry(r,.027,8,40),[0,y,0],[1,1,1],cup);ring.rotation.x=Math.PI/2;ring.renderOrder=3;}
-   // Raised tapioca spheres remain visible through the lightly transparent cup.
+   // Tapioca is fully inside the liquid and cup wall; translucent milk reveals the clustered pearls.
    const dummy=new T.Object3D(),geo=new T.SphereGeometry(1,10,8),pearls=new T.InstancedMesh(geo,pearl,68);
-   for(let i=0;i<68;i++){const a=i*2.39996,y=.15+(i%8)*.076,r=.386+y*.12;dummy.position.set(Math.cos(a)*r,y,Math.sin(a)*r);dummy.rotation.set(0,-a,0);dummy.scale.setScalar(.050+(i%5)*.006);dummy.updateMatrix();pearls.setMatrixAt(i,dummy.matrix);}g.add(pearls);
+   for(let i=0;i<68;i++){const a=i*2.39996,y=.11+(i%4)*.116,r=(.25+y*.10)*Math.sqrt(((i*29)%68+.5)/68);dummy.position.set(Math.cos(a)*r,y,Math.sin(a)*r);dummy.rotation.set(0,-a,0);dummy.scale.setScalar(.050+(i%5)*.006);dummy.updateMatrix();pearls.setMatrixAt(i,dummy.matrix);}g.add(pearls);
    for(let i=0;i<8;i++){const a=i*2.39996,iceCube=b([Math.cos(a)*.39,1.39,Math.sin(a)*.39],[.14,.13,.14],ice);iceCube.rotation.set(i*.3,i*.8,i*.4);}
    const strawMesh=c([.44,1.66,-.15],.065,.065,.45,straw,16);strawMesh.rotation.z=-.22;
    const lid=add(g,new T.TorusGeometry(.56,.048,10,40),[0,1.55,0],[1,1,1],cup);lid.rotation.x=Math.PI/2;
@@ -259,12 +318,24 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
   }
   g.updateMatrixWorld(true);
   const bounds=new T.Box3().setFromObject(g,true),extent=bounds.getSize(new T.Vector3());
-  const factor=frame.height*item.disguiseHeight/Math.max(.001,extent.y);
+  const giant=['chimney-disguise','cardboard-disguise','water-tower-disguise','utility-pole-disguise','tin-pipe-disguise','luroufan-sign-disguise','luroufan-bowl-disguise','bubble-tea-disguise','fried-chicken-disguise','notok-sign-disguise','987-sign-disguise'].includes(kind);
+  const widest=kind==='luroufan-bowl-disguise';
+  const factor=frame.height*item.disguiseHeight/Math.max(.001,widest?Math.max(extent.x,extent.y,extent.z):extent.y);
   g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);
   g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*factor);
-  // Center exposed-head costumes on the avatar's anatomical axis. Fit the
-  // top below the head bone; retain a generous shell width even for tall props.
-  if(item.exposedHead){
+  if(item.exposedHead&&giant){
+   const front=new T.Vector3(0,0,1).applyQuaternion(frame.rotation);
+   const headCenter=frame.head.clone().addScaledVector(frame.up,frame.unit*.42);
+   const headY=headCenter.clone().sub(frame.base).dot(frame.up)/factor+bounds.min.y;
+   const preferred=kind==='luroufan-bowl-disguise'? .46:kind==='bubble-tea-disguise'? .68:kind==='tin-pipe-disguise'? .55:kind==='cardboard-disguise'? .52:kind.endsWith('sign-disguise')? .56:headY;
+   const y=T.MathUtils.clamp(preferred,bounds.min.y+extent.y*.17,bounds.max.y-extent.y*.17);
+   // One uniform scale for the entire prop, including the opening. The head
+   // projects from the front wall instead of being moved above a squashed prop.
+   const frontZ=kind==='bubble-tea-disguise'?.39+.20*(y/1.50):kind==='luroufan-bowl-disguise'?.59:kind==='tin-pipe-disguise'?.43:kind==='water-tower-disguise'?.53:kind==='utility-pole-disguise'?.19:bounds.max.z;
+   g.position.copy(headCenter).addScaledVector(frame.up,-y*factor).addScaledVector(front,-frontZ*factor+frame.unit*.10);
+   cutDisguiseOpening(T,g,0,y,frame.unit*.82/factor,frame.unit*.95/factor,frontZ);
+  }else if(item.exposedHead){
+   // Legacy small disguises keep their established torso fit.
    const neckSpan=Math.max(frame.unit*.6,frame.head.clone().sub(frame.base).dot(frame.up)-frame.unit*.25);
    const fy=neckSpan/Math.max(.001,extent.y),side=Math.max(fy,frame.height*.58/Math.max(.15,Math.min(extent.x,extent.z)));
    g.scale.set(side,fy,side);g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*fy);
@@ -457,4 +528,4 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
  return record;}
 export function disposeOutfit(record){if(!record)return;for(const r of record.surfaces){r.mesh.geometry=r.originalGeometry;r.mesh.material=r.originalMaterial;r.geometry.dispose();r.mats.forEach(m=>m.dispose());}const geometries=new Set();for(const root of record.parts){root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});root.removeFromParent();}geometries.forEach(g=>g.dispose());record.materials.forEach(m=>m.dispose());record.extraTextures?.forEach(t=>t.dispose());record.texture.dispose();}
 
-export function animateOutfit(record,time){if(!record)return;if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=i/15;q.position.x=Math.sin(time*3.2-i*.42)*v*.17;q.position.z=Math.cos(time*2.7-i*.35)*v*.09;q.rotation.z=Math.cos(time*3.2-i*.42)*v*.13;}if(record.blinkLight)record.blinkLight.emissiveIntensity=.45+.85*(Math.sin(time*5.4)>.20?1:0);}
+export function animateOutfit(record,time){if(!record)return;if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=q.userData.pipeBend||0;q.position.x=.48*v*v+Math.sin(time*3.2-i*.42)*v*.035;q.position.z=Math.cos(time*2.7-i*.35)*v*.025;q.rotation.z=-.43*v+Math.cos(time*3.2-i*.42)*v*.05;}if(record.blinkLight){const t=(time%5.6+5.6)%5.6;record.blinkLight.emissiveIntensity=t<.12||t>.31&&t<.43||t>2.8&&t<3.05?.04:t<.65?.35:1.35;}}

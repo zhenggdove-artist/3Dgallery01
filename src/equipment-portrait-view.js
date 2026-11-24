@@ -37,8 +37,8 @@ export class EquipmentPortraitViewport{
  build(root){
   const data=root?.userData,source=data?.model;
   if(!source)throw new Error('EQUIP has no character model');
-  if(this.source!==source||!this.model){
-   if(this.model){this.model.traverse(o=>{if(o.isSkinnedMesh)o.skeleton?.dispose?.();});this.model.removeFromParent();}
+  if(this.source!==source||this.sourceOutfit!==data.outfit||!this.model){
+   if(this.model){this.model.traverse(o=>{if(o.isSkinnedMesh)o.skeleton?.dispose?.();if(o.isInstancedMesh)o.dispose();});this.model.removeFromParent();}
    const model=clone(source),removed=[];
    model.visible=true;model.position.set(0,0,0);
    this.anchors=new Map();this.attachments=new Map();
@@ -57,9 +57,8 @@ export class EquipmentPortraitViewport{
    model.updateMatrixWorld(true);
    model.traverse(o=>{if(o.isSkinnedMesh)o.computeBoundingBox();});
    orientPortraitModel(model,{precise:false});
-   model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-Math.PI/2));
    this.bodyBounds=new THREE.Box3().setFromObject(model);
-   this.model=new THREE.Group();this.model.add(model);this.scene.add(this.model);this.source=source;
+   this.model=new THREE.Group();this.model.add(model);this.scene.add(this.model);this.source=source;this.sourceOutfit=data.outfit;
   }
   this.updateAttachment('head',data.headgear,data.headgear?[data.headgear]:[]);
   this.updateAttachment('outfit',data.outfit,data.outfit?.parts||[]);

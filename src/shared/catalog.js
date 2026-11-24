@@ -170,7 +170,7 @@ export function registerCustomWings(wings=[]){
 export const itemById = id => INDEX.get(id) || null;
 
 export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>!['material','armor'].includes(item.slot)&&!item.notForSale&&!isRetiredHeadgear(item)&&item.price>0));
-export const SHOP_CATALOG_REVISION='r117';
+export const SHOP_CATALOG_REVISION='r118';
 export const SHOP_CATALOG_IDS=Object.freeze(SHOP_ITEMS.map(item=>item.id).sort());
 // Canonical price keys distinguish every weapon quality, including exotics.
 export const shopPriceKey=item=>item.id+(item.slot==='weapon'?':'+(item.shopTier??item.tier??3):'');

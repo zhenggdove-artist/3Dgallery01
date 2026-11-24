@@ -16,10 +16,10 @@ export function orientPortraitModel(model,{precise=true}={}){
   const at=b=>b.getWorldPosition(new THREE.Vector3());
   const up=at(head).sub(at(hip));
   const horizontal=at(left).sub(at(right));
-  if(up.lengthSq()>1e-6&&horizontal.lengthSq()>1e-6){
+  if(up.lengthSq()>1e-18&&horizontal.lengthSq()>1e-18){
    up.normalize();
    horizontal.addScaledVector(up,-horizontal.dot(up));
-   if(horizontal.lengthSq()>1e-6){
+   if(horizontal.lengthSq()>1e-18){
     horizontal.normalize();
     const front=horizontal.clone().cross(up).normalize();
     const rightAxis=up.clone().cross(front).normalize();
@@ -35,13 +35,9 @@ export function orientPortraitModel(model,{precise=true}={}){
  }
  // Fallback for models without Mixamo bone names: an upright silhouette
  // is mandatory, even if the imported scene lies horizontally.
- const bounds=new THREE.Box3().setFromObject(model,precise);
- const size=bounds.getSize(new THREE.Vector3());
- const axis=size.x>=size.y&&size.x>=size.z?new THREE.Vector3(1,0,0):
-  size.z>size.y?new THREE.Vector3(0,0,1):new THREE.Vector3(0,1,0);
- model.quaternion.premultiply(new THREE.Quaternion().setFromUnitVectors(axis,new THREE.Vector3(0,1,0)));
- model.updateMatrixWorld(true);
- return 'bounds';
+ // A large accessory is never a valid anatomical orientation reference.
+ // If the skeleton cannot be resolved, retain the authored model orientation.
+ return 'authored';
 }
 
 // RELETTER's render-target portrait approach: one on-demand snapshot, no extra canvas loop.
@@ -75,8 +71,8 @@ export function equipmentPortrait(renderer,root){
   const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
   // Screen UP must be fixed to world +Y, never inferred from animated bones.
   const camera=new THREE.PerspectiveCamera(30,256/384,.001,1000);
-  const height=Math.max(.5,size.y),width=Math.max(.3,size.x);
-  const distance=Math.max(height,width/(256/384))*.5/Math.tan(Math.PI/12)*1.33;
+  const height=Math.max(.00001,size.y),width=Math.max(.00001,size.x);
+  const distance=Math.max(height,width/(256/384))*.5/Math.tan(Math.PI/12)*1.33+size.z*.5;
   camera.up.set(0,1,0);
   camera.position.copy(center).add(new THREE.Vector3(0,height*.015,distance));
   camera.lookAt(center);
