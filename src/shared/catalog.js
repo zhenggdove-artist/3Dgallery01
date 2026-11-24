@@ -1,5 +1,5 @@
 import {EQUIPMENT,DEFAULT_WEAPON,attackStats as reletterAttackStats} from '../reletter/equipment-catalog.js';
-import {SNIPER_RANGE} from './combat-balance.js';
+import {SNIPER_RANGE,JELLYBRELLA_ULTIMATE_DAMAGE_SCALE} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 export const RARITIES = Object.freeze([
   {id:'common',name:'Common',color:'#d7d2c6',weight:50},
@@ -62,7 +62,7 @@ export const ARMOR = Object.freeze([
 export const MATERIALS = Object.freeze([]);
 
 // Original RELETTER identity, range, cadence and effects; only Temple economy/HP scale differ.
-export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(original=>original.id!=='chiang-token'&&!['seed','harvest'].includes(original.slot)).map(original=>{
+export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(original=>!['chiang-token','fan'].includes(original.id)&&!['seed','harvest'].includes(original.slot)).map(original=>{
   const tier=Math.max(1,Math.min(5,original.tier||1));
   const basePrice=original.shopWing?original.price:original.notForSale||original.id==='water'?0:TIER_PRICES[tier-1]+Math.min(180,original.price||0);
   const mysteryWeapon=isMysteryWeapon(original);
@@ -75,6 +75,8 @@ export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weap
  // Exotic weapons must keep their stable canonical IDs: fusion records, held
  // 3D models and skill dispatch all refer to IDs like "telephone" directly.
  // The purchased quality belongs to the unique inventory instance, not its ID.
+// GM testing needs more physical instances than the ordinary BAG limit.
+export const inventoryCapacity=profile=>profile?.admin===true?3000:600;
 export const SHOP_EXOTIC_TIERS=Object.freeze([1,2,3,4,5]);
 const EXOTIC_QUALITY=Object.freeze([
   {price:.48,power:.64,reach:.84,tempo:1.18},
@@ -114,6 +116,7 @@ export function attackStats(item,charge=0){
  const result=reletterAttackStats(item,charge);
  // Only the giant swimming fish receives triple damage, never ordinary bubbles.
  if(item.id==='goldfish'&&result.ultimate)result.damage*=3;
+ if(item.id==='jellybrella'&&result.ultimate)result.damage*=JELLYBRELLA_ULTIMATE_DAMAGE_SCALE;
  if(item.id==='water')result.damage*=10;
  if(item.id==='black-cat'){result.range=SNIPER_RANGE;
    // Preserve precise ordinary shots; cut charged multi-target monster damage.

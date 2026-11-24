@@ -4,7 +4,7 @@ import {ART_ACCEPT} from './artwork-upload.js';
 import {bindBagDrag} from './bag-drag.js';
 import {PLATFORMS} from './shared/arena.js';
 import {playerArtworkAppearanceMarkup} from './art-editor-panel.js';
-import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_WEAPON_GRADES,shopWeaponGroups,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant} from './shared/catalog.js';
+import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_WEAPON_GRADES,shopWeaponGroups,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant,inventoryCapacity} from './shared/catalog.js';
 import {SOUND_PROFILES} from './game-audio.js';
 import {pvpShotDamage} from './shared/combat-balance.js';
 import {weaponQuality} from './shared/weapon-abilities.js';
@@ -80,10 +80,10 @@ export class TempleUI extends EventTarget{
      this.shopQuantities[input.dataset.shopQuantity]=quantity;
      const valid=quantity>=1&&quantity<=99,profile=this.world?.profile;
      const affordable=profile?.admin||Number(profile?.wallet)>=item.price*quantity;
-     const room=(profile?.inventory?.length||0)+quantity<=600;
+     const room=(profile?.inventory?.length||0)+quantity<=inventoryCapacity(profile);
      const button=card.querySelector('[data-buy]'),label=card.querySelector('[data-buy-total]');
-     if(button){button.disabled=!valid||!affordable||!room;button.textContent='BUY '+(valid?'×'+quantity:'')+' · '+(valid?(item.price*quantity).toLocaleString('en-US'):'—')+' COINS';}
-     if(label)label.textContent=valid?'TOTAL · '+(item.price*quantity).toLocaleString('en-US'):'QUANTITY 1–99';
+     if(button){button.disabled=!valid||!affordable||!room;button.textContent=!room&&valid?'BAG FULL':!affordable&&valid?'NOT ENOUGH COINS':'BUY '+(valid?'×'+quantity:'')+' · '+(valid?(profile?.admin?'FREE (GM)':(item.price*quantity).toLocaleString('en-US')+' COINS'):'—');}
+     if(label)label.textContent=!valid?'QUANTITY 1–99':!room?'BAG FULL · '+inventoryCapacity(profile)+' MAX':profile?.admin?'TOTAL · 0 COINS (GM)':'TOTAL · '+(item.price*quantity).toLocaleString('en-US');
     });
     this.content.addEventListener('change',event=>{
      const select=event.target.closest('[data-shop-variant]');
@@ -626,7 +626,7 @@ export class TempleUI extends EventTarget{
      const valid=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=99;
      const total=valid?selected.price*quantity:0;
      const affordable=profile.admin||Number(profile.wallet)>=total;
-     const room=(profile.inventory?.length||0)+quantity<=600;
+     const room=(profile.inventory?.length||0)+quantity<=inventoryCapacity(profile);
      const familyName=selected.slot==='weapon'&&!selected.exotic?
        selected.name.replace(/^(?:Seed|Dawn|Radiant|Celestial|Eternal)\\s+/,''):group.base.name;
      const selection=variants.length>1?`<label class="shop-quality-picker">WEAPON QUALITY / PRICE
@@ -643,13 +643,13 @@ export class TempleUI extends EventTarget{
          <input type="number" min="1" max="99" step="1" inputmode="numeric"
           data-shop-quantity="${escape(key)}" value="${escape(quantity)}" aria-label="Purchase quantity for ${escape(familyName)}">
        </label>
-       <output data-buy-total>TOTAL · ${valid?total.toLocaleString('en-US'):'—'}</output>
-       <button type="button" data-buy="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''} ${!valid||!affordable||!room?'disabled':''}>BUY ×${valid?quantity:1} · ${total.toLocaleString('en-US')} COINS</button>
+       <output data-buy-total>${!valid?'QUANTITY 1–99':!room?'BAG FULL · '+inventoryCapacity(profile)+' MAX':profile.admin?'TOTAL · 0 COINS (GM)':'TOTAL · '+total.toLocaleString('en-US')}</output>
+       <button type="button" data-buy="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''} ${!valid||!affordable||!room?'disabled':''}>${!room&&valid?'BAG FULL':!affordable&&valid?'NOT ENOUGH COINS':`BUY ×${valid?quantity:1} · ${profile.admin?'FREE (GM)':total.toLocaleString('en-US')+' COINS'}`}</button>
        ${ownedCount&&selected.slot!=='consumable'?`<button type="button" data-equip="${escape(selected.id)}" ${selected.shopTier?`data-equip-index="${ownedIndices[0]}"`:''} ${selectedEquipped?'disabled':''}>${selectedEquipped?'EQUIPPED':'EQUIP OWNED'}</button>`:''}
      </div>`;
      return itemCard({...selected,name:familyName},selection+actions);
     });
-    this.content.innerHTML=`<div class="armory-balance"><span>Equipment · quantity purchases</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
+    this.content.innerHTML=`<div class="armory-balance"><span>Equipment · ${(profile.inventory?.length||0).toLocaleString('en-US')}/${inventoryCapacity(profile).toLocaleString('en-US')} BAG</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
      <nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>
      <div class="shop-items">${cards.join('')||'<p>There are no items in this category.</p>'}</div>`;
     void hydrateItemPreviews(this.content);

@@ -12,7 +12,7 @@ const act=(world,who,now,payload,actors=[who])=>
 
 test('every exotic weapon has five stable-ID qualities with increasing prices and power',()=>{
  assert.deepEqual(SHOP_EXOTIC_TIERS,[1,2,3,4,5]);
- for(const id of ['telephone','jellybrella','goldfish','black-cat','white-cat','giraffe','accordion','fan','clam']){
+ for(const id of ['telephone','jellybrella','goldfish','black-cat','white-cat','giraffe','accordion','clam']){
   const base=itemById(id),variants=SHOP_EXOTIC_TIERS.map(tier=>shopWeaponVariant(base,tier));
   assert.ok(variants.every(v=>v.id===base.id));
   assert.deepEqual(variants.map(v=>v.tier),[1,2,3,4,5]);

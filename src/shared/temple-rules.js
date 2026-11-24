@@ -7,7 +7,7 @@ import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
-import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
+import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
@@ -126,6 +126,7 @@ export function migrateWorld(raw,now=Date.now()){
   world.groundDrops=world.groundDrops.filter(drop=>
    drop.kind!=='material'&&(!drop.itemId||
     (itemById(drop.itemId)&&!['material','wings'].includes(itemById(drop.itemId).slot))));
+  world.persistentAttacks=world.persistentAttacks.filter(fx=>fx.weapon!=='fan'&&fx.kind!=='fan');
   return cleanLegacyScene(world);
 }
 
@@ -163,7 +164,10 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.wingDesignCredits=Number.isSafeInteger(current.wingDesignCredits)?Math.max(0,Math.min(1000,current.wingDesignCredits)):0;
   if(!current.collectorSoldArtworks||typeof current.collectorSoldArtworks!=='object'||Array.isArray(current.collectorSoldArtworks))
    current.collectorSoldArtworks={};
-  current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById).slice(0,600):[current.starterWeaponId];
+  current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById):[current.starterWeaponId];
+  // Do not truncate legitimate GM purchases when reconnecting. Ordinary accounts retain their existing cap.
+  if(!current.admin)current.inventory=current.inventory.slice(0,inventoryCapacity(current));
+  if(current.starterWeaponId==='fan')current.starterWeaponId=STARTER_LOADOUT.weapon;
   // Preserve chosen item even when its stack is empty: it will be shown
   // with a red depleted overlay and automatically reactivate after restock.
   const savedQuickSlots=Array.isArray(current.quickSlots)?current.quickSlots:[];
@@ -177,7 +181,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    if(!current.gmAllItemsGranted){
     const owned=new Set(current.inventory);
     for(const item of ITEMS){
-     if(current.inventory.length>=600)break;
+     if(current.inventory.length>=inventoryCapacity(current))break;
      if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}
     }
     current.gmAllItemsGranted=true;
@@ -188,7 +192,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    for(const wing of world.customWings||[]){
     if(wing.personalWing||wing.ownerKey&&wing.ownerKey!==key)continue;
     if(known.has(wing.id))continue;
-    if(!owned.has(wing.id)&&current.inventory.length<600){
+    if(!owned.has(wing.id)&&current.inventory.length<inventoryCapacity(current)){
      appendInventoryInstance(current,wing.id,'grant');owned.add(wing.id);
     }
     known.add(wing.id);
@@ -209,6 +213,17 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    if(current.equipment.wings&&!itemById(current.equipment.wings))
     current.equipment.wings=null;
    delete current.equipment.rod;delete current.equipment.tool;current.fusion??={};delete current.fish;delete current.lastFishAt;
+  // Remove retired fan echoes from both legacy and UID-owned fusion records;
+  // keep historical bonuses and all other physical equipment identities.
+  for(const record of [...Object.values(current.fusion||{}),...Object.values(current.fusionByInstance||{})]){
+   if(Array.isArray(record?.effects)&&record.effects.includes('fan'))record.effects=record.effects.filter(id=>id!=='fan');
+   if(Array.isArray(record?.original?.fusionEffects)&&record.original.fusionEffects.includes('fan'))record.original.fusionEffects=record.original.fusionEffects.filter(id=>id!=='fan');
+  }
+  if(current.equipment.weapon&&!current.inventory.includes(current.equipment.weapon)){
+   const replacement=current.inventory.find(id=>itemById(id)?.slot==='weapon');
+   current.equipment.weapon=replacement||STARTER_LOADOUT.weapon;
+   if(!replacement)current.inventory.unshift(STARTER_LOADOUT.weapon);
+  }
   ensureFusionIdentity(current);
   // The old one-time GM grant excluded later catalog releases. Add only the
   // new wearable family for existing GM profiles, without replenishing sold
@@ -219,7 +234,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
       'crab-claw','lion','banana-bunch','eggplant'].includes(item.design)||
      item.id.startsWith('outfit-creature-'));
    for(const item of additions){
-    if(current.inventory.length>=600)break;
+    if(current.inventory.length>=inventoryCapacity(current))break;
     if(!current.inventory.includes(item.id))appendInventoryInstance(current,item.id,'grant');
    }
    current.gmCreatureGearGrantedV2=additions.every(item=>current.inventory.includes(item.id));
@@ -275,7 +290,7 @@ function requireAlive(profile,now){return profile.hp>0&&profile.deadUntil<=now?n
 function near(actor,position,radius){return distance2d(actor.position,position)<=radius&&Math.abs((actor.position?.[1]||0)-position[1])<=8;}
 function spend(profile,amount,world){if(profile.admin)return true;if(profile.wallet<amount)return false;profile.wallet-=amount;world.activity.coinBurned+=amount;return true;}
 function earn(profile,amount,world){if(!profile.admin)profile.wallet+=amount;world.activity.coinMinted+=amount;}
-function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>=600)return false;appendInventoryInstance(profile,itemId,'ground');return true;}
+function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>=inventoryCapacity(profile))return false;appendInventoryInstance(profile,itemId,'ground');return true;}
 
 // A channel interrupted by a lost stop packet MUST NOT impose 5%-speed
 // validation forever. Movement and attack ticks use the same expiry window.
@@ -367,7 +382,7 @@ export function applyAction(world,actor,body,context={}){
    if(typeof actor.key!=='string'||!actor.key.startsWith('firebase:'))return {error:'Google sign-in required'};
    if(actor.role==='spectator')return {error:'Enter the arena to equip your wing'};
    if(!Number.isInteger(profile.wingDesignCredits)||profile.wingDesignCredits<1)return {error:'No paid wing design credit remains'};
-   if(profile.inventory.length>=600)return {error:'Inventory full'};
+   if(profile.inventory.length>=inventoryCapacity(profile))return {error:'Inventory full'};
    world.customWings??=[];
    if(world.customWings.length>=1000)return {error:'Wing archive is full'};
    let wing;
@@ -395,7 +410,7 @@ export function applyAction(world,actor,body,context={}){
    world.customWings??=[];
    if(world.customWings.filter(wing=>wing.retired!==true).length>=MAX_PAINTED_WINGS)return {error:'Wing gallery is full'};
    if(world.customWings.length>=160)return {error:'Wing archive is full (160 records)'};
-   if(profile.inventory.length>=600)return {error:'Inventory full'};
+   if(profile.inventory.length>=inventoryCapacity(profile))return {error:'Inventory full'};
    let wing;try{wing=normalizePaintedWing(body.wing,'gm-wing-'+crypto.randomUUID());}
    catch(error){return {error:error.message};}
    if(world.customWings.some(entry=>entry.retired!==true&&entry.name.toLowerCase()===wing.name.toLowerCase()))
@@ -775,15 +790,16 @@ function buy(world,profile,body){
  // cannot forge a cheap high-quality weapon or use another player's stack.
  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)
   return {error:'Quantity must be an integer from 1 to 99'};
- if(profile.inventory.length+quantity>600)return {error:'Inventory full'};
+ if(profile.inventory.length+quantity>inventoryCapacity(profile))return {error:`Inventory full (${inventoryCapacity(profile)} items maximum)`};
  const total=item.price*quantity;
  if(!Number.isSafeInteger(total)||total<0)return {error:'Invalid purchase amount'};
  if(!spend(profile,total,world))return {error:'Not enough coins'};
  for(let i=0;i<quantity;i++)
   appendInventoryInstance(profile,base.id,'shop',weaponChoice?item.shopTier:null);
  profile.itemOrigins??={};profile.itemOrigins[base.id]='shop';
- return {notice:`PURCHASE SUCCESSFUL · ${item.name} ×${quantity} · ${total} coins`,
-  purchased:{itemId:base.id,qualityTier:weaponChoice?item.shopTier:null,quantity,total}};
+ const charged=profile.admin?0:total;
+ return {notice:`PURCHASE SUCCESSFUL · ${item.name} ×${quantity} · ${charged} coins`,
+  purchased:{itemId:base.id,qualityTier:weaponChoice?item.shopTier:null,quantity,total:charged}};
 }
 function assignConsumable(profile,body){
  const index=body.slot;
