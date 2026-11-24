@@ -75,6 +75,103 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
  function anchor(name){const bone=bones.get(name)||head,g=new T.Group(),scale=bone.getWorldScale(new T.Vector3());g.name=item.id;g.userData.outfit=item.id;bone.add(g);g.quaternion.copy(bone.getWorldQuaternion(new T.Quaternion()).invert().multiply(forward));g.scale.set(height/scale.x,height/scale.y,height/scale.z);record.parts.push(g);return g;}
  const add=(g,geo,p,scale,m=main)=>{const o=new T.Mesh(geo,m);o.position.set(...p);o.scale.set(...scale);g.add(o);return o;},ball=(g,p,s,m=main)=>add(g,new T.SphereGeometry(1,16,12),p,s,m),box=(g,p,s,m=main)=>add(g,new T.BoxGeometry(1,1,1),p,s,m),cone=(g,p,r,h,m=main)=>add(g,new T.ConeGeometry(r,h,12),p,[1,1,1],m),tube=(g,pts,r,m=main)=>add(g,new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>new T.Vector3(...p))),18,r,6,false),[0,0,0],[1,1,1],m);
  const chest=anchor('Spine2'),hips=anchor('Hips'),d=item.design,t=item.tier;
+ if(d==='disguise'){
+  // Rigid prop follows the hip, not the camera, with its base at the feet.
+  // Normalize the geometry using the rig's actual head-to-foot height.
+  const footBones=['LeftFoot','RightFoot'].map(n=>bones.get(n)).filter(Boolean);
+  const hipBone=bones.get('Hips')||head,hipPos=hipBone.getWorldPosition(new T.Vector3());
+  const headPos=(top||head).getWorldPosition(new T.Vector3());
+  const footY=footBones.length?Math.min(...footBones.map(b=>b.getWorldPosition(new T.Vector3()).y)):hipPos.y-height*2.2;
+  const H=Math.max(height*2,headPos.y-footY+height*.18);
+  const g=new T.Group();hips.add(g);g.position.set(0,(footY-hipPos.y)/height,0);g.scale.setScalar(H/height);
+  g.name='disguise:'+item.creature;g.userData.disguiseHeight=item.disguiseHeight;
+  const black=mat('#211f20'),rust=mat('#86523a'),silver=mat('#a6a6a0',.65),wood=mat('#b28b58'),woodDark=mat('#715037'),tape=mat('#b9aa87'),soot=mat('#39302e');
+  const kind=item.creature;
+  const b=(p,s,m=main)=>box(g,p,s,m);
+  const o=(p,s,m=main)=>ball(g,p,s,m);
+  const c=(p,r1,r2,h,m=main,n=20)=>add(g,new T.CylinderGeometry(r1,r2,h,n),p,[1,1,1],m);
+  const slit=(y,z,w=.25)=>{b([0,y,z],[w,.073,.022],black);b([0,y+.045,z],[w+.04,.018,.04],soot);};
+  const mark=(p,s,m)=>{const q=b(p,s,m);q.rotation.z=.16*Math.sin(p[0]*43+p[1]*31);return q;};
+  if(kind==='chimney-disguise'){
+   const mortar=mat('#938078'),bricks=['#98513d','#ad6349','#7e4737','#b16d53','#864836'].map(v=>mat(v));
+   b([0,1.50,0],[.64,2.88,.60],mortar);
+   // Instanced brick courses keep the tall disguise inexpensive to render.
+   const brickGeo=new T.BoxGeometry(1,1,1),dummy=new T.Object3D(),groups=bricks.map(()=>[]);
+   for(let row=0;row<24;row++)for(let side=0;side<4;side++)for(let col=0;col<3;col++){
+    const x=(col-1)*.205,y=.10+row*.116;
+    const edge=side%2?.315:.305;
+    dummy.position.set(side%2?Math.sign(1.5-side)*edge:x,y,side%2?x:(side===0?edge:-edge));
+    dummy.rotation.set(0,side%2?Math.PI/2:0,0);dummy.scale.set(.197,.106,.034);dummy.updateMatrix();
+    groups[(row*7+side*3+col*11)%bricks.length].push(dummy.matrix.clone());
+   }
+   groups.forEach((list,i)=>{const inst=new T.InstancedMesh(brickGeo,bricks[i],list.length);list.forEach((m,n)=>inst.setMatrixAt(n,m));g.add(inst);});
+   b([0,.055,0],[.77,.11,.72],soot);b([0,2.91,0],[.77,.13,.73],soot);
+   b([0,2.975,0],[.47,.05,.45],black);
+   slit(.82,.342,.29);
+  }else if(kind==='cardboard-disguise'){
+   const card=mat('#a77d49'),edge=mat('#6d4c2b');
+   b([0,.53,0],[.78,.96,.65],card);
+   for(const side of [-1,1]){const flap=b([side*.20,.995,0],[.40,.045,.70],main);flap.rotation.z=side*.09;
+    mark([side*.28,.39,.336],[.13,.25,.012],edge);mark([side*.29,.77,.341],[.17,.057,.016],tape);}
+   b([0,.99,0],[.065,.025,.69],tape);b([0,.80,.337],[.065,.29,.012],tape);
+   for(let i=0;i<5;i++)mark([-.24+i*.10,.16+(i%2)*.035,.336],[.058,.12,.012],edge);
+   slit(.86,.35,.28);
+  }else if(kind==='garbage-bag-disguise'){
+   const plastic=mat('#26282a',.08),shine=mat('#44474a',.12),tie=mat('#8e3937');
+   plastic.roughness=.36;shine.roughness=.43;
+   const bag=o([0,.47,0],[.49,.47,.40],plastic);
+   const attr=bag.geometry.attributes.position;
+   for(let i=0;i<attr.count;i++){const x=attr.getX(i),y=attr.getY(i),z=attr.getZ(i),v=1+.08*Math.sin(x*18+y*9+z*13)+.05*Math.sin(y*31-z*19);attr.setXYZ(i,x*v,y*v,z*v);}
+   attr.needsUpdate=true;bag.geometry.computeVertexNormals();
+   for(let i=0;i<7;i++){const a=i*6.283/7;tube(g,[[Math.cos(a)*.14,.86,Math.sin(a)*.12],[Math.cos(a+.3)*.42,.55,Math.sin(a+.3)*.33],[Math.cos(a)*.35,.15,Math.sin(a)*.28]],.012,shine);}
+   c([0,.965,0],.075,.13,.15,plastic,9);b([0,.91,.01],[.18,.035,.17],tie);o([.10,.945,.04],[.09,.035,.045],tie);
+   mark([.26,.29,.305],[.12,.15,.022],black);mark([-.23,.58,.34],[.15,.048,.015],tape);
+   slit(.76,.32,.26);
+  }else if(kind==='trash-can-disguise'){
+   const metal=mat('#777c7a',.55);
+   c([0,.49,0],.39,.33,.94,metal);
+   c([0,.055,0],.36,.36,.08,rust);c([0,.985,0],.43,.40,.11,metal);
+   for(let i=0;i<18;i++){const a=i*6.283/18;const rib=b([Math.cos(a)*.365,.48,Math.sin(a)*.365],[.035,.84,.043],i%5===0?rust:silver);rib.rotation.y=-a;}
+   for(let i=0;i<7;i++){const a=i*2.4;const patch=o([Math.sin(a)*.372,.14+(i%3)*.23,Math.cos(a)*.372],[.056,.085,.020],rust);patch.rotation.y=a;}
+   tube(g,[[-.13,1.035,0],[-.13,1.075,0],[.13,1.075,0],[.13,1.035,0]],.021,black);
+   for(const side of [-1,1])tube(g,[[side*.38,.70,-.09],[side*.49,.70,-.09],[side*.49,.57,.09],[side*.38,.57,.09]],.025,silver);
+   slit(.77,.397,.25);
+  }else if(kind==='postbox-disguise'){
+   const red=mat('#b52a35'),green=mat('#186d42'),ivory=mat('#f4eedb');
+   for(const side of [-1,1]){
+    const x=side*.245,m=side<0?green:red;
+    b([x,.50,0],[.48,.90,.62],m);o([x,.94,0],[.24,.14,.31],m);
+    b([x,.12,0],[.43,.18,.57],m);b([x,.75,.324],[.35,.09,.065],silver);b([x,.75,.363],[.30,.042,.012],black);
+    b([x,.49,.321],[.32,.18,.012],ivory);
+    // Small text panel is real canvas typography, not a separate shop icon.
+    const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#eee8d7';ctx.fillRect(0,0,256,128);ctx.fillStyle=side<0?'#185e38':'#97242d';ctx.textAlign='center';ctx.font='bold 28px sans-serif';ctx.fillText(side<0?'普通郵件':'限時郵件',128,45);ctx.font='bold 20px sans-serif';ctx.fillText(side<0?'ORDINARY MAIL':'PROMPT DELIVERY',128,76);ctx.font='18px sans-serif';ctx.fillText('中華郵政',128,105);
+    const labelTex=new T.CanvasTexture(canvas);labelTex.colorSpace=T.SRGBColorSpace;const labelMat=mat('#ffffff');labelMat.map=labelTex;record.extraTextures??=[];record.extraTextures.push(labelTex);b([x,.49,.333],[.31,.17,.006],labelMat);
+    for(let i=0;i<3;i++)mark([x-.16+i*.12,.20+(i%2)*.04,.324],[.04,.02,.01],rust);
+   }
+  }else if(kind==='wooden-horse-disguise'){
+   const red=mat('#8b3d32'),gold=mat('#c2a36b'),saddle=mat('#344d73');
+   // A tall carved wooden horse with a long body, four legs and rocker rails.
+   o([0,1.00,-.13],[.55,.44,.88],wood);o([0,1.33,.46],[.32,.59,.36],wood);
+   const skull=o([0,1.69,.65],[.32,.31,.46],wood);skull.rotation.x=-.14;
+   o([0,1.58,.96],[.24,.18,.22],woodDark);
+   for(const side of [-1,1]){
+    const ear=cone(g,[side*.18,1.88,.58],.095,.24,wood);ear.rotation.z=-side*.20;
+    o([side*.285,1.73,.73],[.045,.069,.069],black);
+    for(const z of [-.66,.45]){const leg=b([side*.37,.53,z],[.20,.80,.23],wood);leg.rotation.x=z<0?.16:-.16;b([side*.37,.17,z],[.25,.14,.30],woodDark);}
+    tube(g,[[side*.42,.28,-1.08],[side*.42,.12,-.73],[side*.42,.08,0],[side*.42,.12,.73],[side*.42,.28,1.08]],.075,red);
+    tube(g,[[side*.30,1.44,.57],[side*.33,1.62,.90],[side*.24,1.70,1.00]],.026,red);
+    for(let i=0;i<4;i++)mark([side*.46,.88,-.58+i*.25],[.018,.16,.11],woodDark);
+   }
+   b([0,1.37,-.18],[.76,.10,.61],saddle);b([0,1.43,-.18],[.68,.08,.56],red);
+   for(let i=0;i<6;i++)o([0,1.42+i*.067,.29],[.19,.12,.13],red);
+   tube(g,[[0,1.22,-.91],[0,1.44,-1.13],[0,1.15,-1.26],[0,.83,-1.25]],.12,red);
+   b([0,.14,.67],[.94,.12,.16],gold);b([0,.14,-.67],[.94,.12,.16],gold);
+   slit(1.02,.73,.22);
+  }
+  // Existing avatar and collision dimensions remain untouched by cosmetic props.
+  return record;
+ }
  // Soft collar and front fastening define the garment rather than merely recolouring skin.
  for(const side of [-1,1]){const lapel=ball(chest,[side*.2,.1,.3],[.24,.09,.1],cream);lapel.rotation.z=side*.4;}
  for(let i=0;i<3;i++)ball(chest,[0,-.15-i*.22,.44],[.035,.035,.025],trim);
@@ -257,4 +354,4 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
  if(d==='witch'){for(const side of [-1,1]){const cape=ball(chest,[side*.25,-.65,-.36],[.45,.85,.1],main);cape.rotation.z=side*.13;}ball(chest,[0,.12,.39],[.09,.12,.05],trim);if(hood){const h=anchor('Head');ball(h,[0,.65,0],[.85,.07,.73],dark);cone(h,[0,1,0],.5,.85,main);ball(h,[0,.75,.45],[.09,.09,.025],trim);}}
  if(d==='astronaut'){box(chest,[0,-.23,-.42],[.66,.7,.28],cream);for(const side of [-1,1])ball(chest,[side*.3,-.22,-.61],[.13,.4,.13],trim);box(chest,[0,-.15,.43],[.35,.3,.08],cream);for(let i=0;i<3;i++)ball(chest,[-.1+i*.1,-.12,.49],[.025,.025,.02],dark);if(hood){const h=anchor('Head'),glass=mat('#adc7cf');glass.transparent=true;glass.opacity=.15;glass.depthWrite=false;ball(h,[0,.32,.1],[.79,.83,.75],glass);const seal=add(h,new T.TorusGeometry(.61,.06,8,36),[0,-.2,.04],[1,1,1],cream);seal.rotation.x=Math.PI/2;}}
  return record;}
-export function disposeOutfit(record){if(!record)return;for(const r of record.surfaces){r.mesh.geometry=r.originalGeometry;r.mesh.material=r.originalMaterial;r.geometry.dispose();r.mats.forEach(m=>m.dispose());}const geometries=new Set();for(const root of record.parts){root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});root.removeFromParent();}geometries.forEach(g=>g.dispose());record.materials.forEach(m=>m.dispose());record.texture.dispose();}
+export function disposeOutfit(record){if(!record)return;for(const r of record.surfaces){r.mesh.geometry=r.originalGeometry;r.mesh.material=r.originalMaterial;r.geometry.dispose();r.mats.forEach(m=>m.dispose());}const geometries=new Set();for(const root of record.parts){root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});root.removeFromParent();}geometries.forEach(g=>g.dispose());record.materials.forEach(m=>m.dispose());record.extraTextures?.forEach(t=>t.dispose());record.texture.dispose();}

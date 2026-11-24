@@ -46,9 +46,12 @@ const r106Heads=[
  ['ram-skull','Ram Skull Mask','#ded6bd',4,4300,{defense:.18,hp:1.4},'fear'],
  ['trump-mask','Trump Mask','#e6ad83',3,1850,{hp:1.8,attack:.08},null],
  ['huang-mask','Jensen Huang Mask','#d2a486',3,1850,{defense:.10,speed:.12},null],
- ['musk-mask','Elon Musk Mask','#e2bdab',3,1850,{jump:.18,attack:.09},null]
+ ['musk-mask','Elon Musk Mask','#e2bdab',3,1850,{jump:.18,attack:.09},null],
+ ['xi-mask','Xi Jinping Mask','#cfa58a',3,1850,{hp:1.8,defense:.08},null],
+ ['putin-mask','Vladimir Putin Mask','#ddbaa6',3,1850,{attack:.10,defense:.08},null],
+ ['kim-mask','Kim Jong-un Mask','#dbaf96',3,1850,{hp:2.0,attack:.07},null]
 ];
 HEADGEAR.push(...r106Heads.map(([design,name,color,tier,templePrice,bonuses,proc])=>({
- id:'hat-'+design,name,design,color,slot:'head',family:'headgear',tier,price:templePrice,templePrice,bonuses,proc,r106Wearable:true,
+ id:'hat-'+design,name,design,color,slot:'head',family:'headgear',tier,price:templePrice,templePrice,bonuses,proc,r106Wearable:!['xi-mask','putin-mask','kim-mask'].includes(design),r113Wearable:['xi-mask','putin-mask','kim-mask'].includes(design),
  description:describe(bonuses)+(proc?' · Charged hits apply '+proc+'.':'')
 })));

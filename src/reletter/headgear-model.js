@@ -15,7 +15,95 @@ if(d==='hydra-dragon'){
  ball([0,.20,.55],[.51,.60,.20],white);box([0,-.34,.63],[.36,.28,.16],white);
  for(const side of [-1,1]){ball([side*.22,.23,.72],[.19,.22,.075],dark);tube([[side*.37,.58,.12],[side*.72,.82,.07],[side*.89,.53,.13],[side*.78,.13,.3],[side*.51,.02,.42]],.13,gold);for(let i=0;i<4;i++)box([side*(.045+i*.042),-.30,.73],[.025,.10,.025],dark);}
  cone([0,-.08,.76],.10,.16,dark).rotation.z=Math.PI;
-}else if(d==='huang-mask'||d==='musk-mask'){
+ }else if(['huang-mask','xi-mask','putin-mask','kim-mask'].includes(d)){
+ // Anatomically distinct continuous masks with landmark-projected facial details.
+ const huang=d==='huang-mask',xi=d==='xi-mask',putin=d==='putin-mask',kim=d==='kim-mask';
+ const cfg=huang?{
+  rows:[[-.66,.025,.41],[-.57,.20,.53],[-.45,.31,.57],[-.30,.40,.60],[-.10,.46,.62],[.10,.48,.61],[.29,.45,.58],[.46,.43,.55],[.61,.37,.51],[.73,.24,.43],[.80,.02,.32]],
+  skin:'#c69c83',warm:'#b77b65',shadow:'#8c6555',hair:'#a8a9a7',light:'#e1e0dc',brow:'#57524d',lip:'#a37267',eyeX:.205,eyeY:.235,eyeW:.115,eyeH:.036,nose:.064,bridge:.075,tip:.095,cheek:.080,mouthW:.183,mouthY:-.205,jaw:.039
+ }:xi?{
+  rows:[[-.65,.03,.37],[-.55,.27,.52],[-.40,.42,.57],[-.20,.51,.61],[.04,.52,.62],[.23,.48,.60],[.43,.46,.55],[.61,.40,.51],[.74,.27,.41],[.80,.02,.30]],
+  skin:'#d0a486',warm:'#bc8a70',shadow:'#946a56',hair:'#262322',light:'#55514d',brow:'#3d3029',lip:'#a97468',eyeX:.212,eyeY:.23,eyeW:.118,eyeH:.025,nose:.10,bridge:.075,tip:.10,cheek:.07,mouthW:.195,mouthY:-.23,jaw:.09
+ }:putin?{
+  rows:[[-.67,.02,.40],[-.56,.22,.54],[-.41,.33,.62],[-.23,.39,.63],[-.01,.45,.61],[.19,.44,.57],[.39,.43,.55],[.57,.42,.50],[.72,.32,.42],[.82,.02,.29]],
+  skin:'#d8b4a0',warm:'#c49585',shadow:'#a17f72',hair:'#b6a68d',light:'#ddd0b9',brow:'#a18573',lip:'#ad8178',eyeX:.183,eyeY:.235,eyeW:.109,eyeH:.032,nose:.076,bridge:.12,tip:.115,cheek:.05,mouthW:.16,mouthY:-.24,jaw:.072
+ }:{
+  rows:[[-.72,.03,.39],[-.64,.27,.49],[-.50,.42,.57],[-.31,.53,.64],[-.08,.56,.63],[.14,.53,.60],[.32,.48,.57],[.53,.43,.54],[.69,.35,.47],[.79,.02,.33]],
+  skin:'#d6ac95',warm:'#c58e79',shadow:'#a57b68',hair:'#252223',light:'#4d4845',brow:'#43342f',lip:'#ad746d',eyeX:.206,eyeY:.23,eyeW:.113,eyeH:.028,nose:.093,bridge:.065,tip:.097,cheek:.10,mouthW:.178,mouthY:-.20,jaw:.112
+ };
+ const skin=mat(cfg.skin,0),shadow=mat(cfg.shadow,0),lip=mat(cfg.lip,0),hair=mat(cfg.hair,0),strand=mat(cfg.light,0),brow=mat(cfg.brow,0),crease=mat('#75554c',0),sclera=mat('#e4dbd1',0),iris=mat(putin?'#71898c':'#403026',0),pupil=mat('#262222',0),frame=mat('#222326',.3);
+ const {rows,eyeX,eyeY,eyeW,eyeH,mouthW,mouthY}=cfg;
+ const sample=y=>{let i=0;while(i<rows.length-2&&y>rows[i+1][0])i++;const a=rows[i],b=rows[i+1],t=Math.max(0,Math.min(1,(y-a[0])/(b[0]-a[0])));return [a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];};
+ const g=(x,y,cx,cy,sx,sy)=>Math.exp(-(((x-cx)/sx)**2+((y-cy)/sy)**2));
+ const depth=(x,y)=>{const [w,z]=sample(y),a=Math.sqrt(Math.max(0,1-(x/Math.max(.02,w))**2)),X=Math.abs(x);
+  return .18+(z-.18)*a+cfg.cheek*g(X,y,.31,.02,.15,.17)-.055*g(X,y,eyeX,eyeY,.12,.08)+.035*g(X,y,eyeX,eyeY+.095,.16,.065)+cfg.bridge*g(x,y,0,.095,.082,.23)+cfg.tip*g(x,y,0,-.055,.105,.085)+.027*g(X,y,cfg.nose,-.07,.045,.06)+.045*g(x,y,0,mouthY,.22,.11)+cfg.jaw*g(x,y,0,-.46,.25,.15);
+ };
+ const pos=[],indices=[],colors=[],N=112,M=112,base=new T.Color(cfg.skin),warm=new T.Color(cfg.warm),cool=new T.Color(cfg.shadow);
+ for(let j=0;j<=M;j++){const y=rows[0][0]+(rows.at(-1)[0]-rows[0][0])*j/M,[w]=sample(y);
+  for(let k=0;k<=N;k++){const x=w*Math.sin(-Math.PI/2+Math.PI*k/N);pos.push(x,y,depth(x,y));
+   const c=base.clone().lerp(warm,.35*g(Math.abs(x),y,.29,.02,.18,.19)+.17*g(x,y,0,-.06,.14,.10)).lerp(cool,.20*g(Math.abs(x),y,eyeX,eyeY-.02,.14,.085));colors.push(c.r,c.g,c.b);
+   if(j&&k){const i=j*(N+1)+k;indices.push(i-N-2,i-N-1,i,i-N-2,i,i-1);}
+  }
+ }
+ const geom=new T.BufferGeometry();geom.setAttribute('position',new T.Float32BufferAttribute(pos,3));geom.setAttribute('color',new T.Float32BufferAttribute(colors,3));geom.setIndex(indices);geom.computeVertexNormals();
+ const faceMat=new T.MeshStandardMaterial({vertexColors:true,roughness:.78,side:T.DoubleSide});mats.push(faceMat);mesh(geom,[0,0,0],[1,1,1],faceMat);
+ // Side skull behind the front surface gives the wearable mask real thickness.
+ ball([0,.04,.05],[kim?.49:xi?.46:.40,.64,.24],skin);
+ const line=(points,r,m,offset=.014)=>tube(points.map(([x,y])=>[x,y,depth(x,y)+offset]),r,m);
+ for(const side of [-1,1]){
+  const x=side*eyeX,z=depth(x,eyeY),inner=x-side*eyeW,outer=x+side*eyeW;
+  ball([side*(kim?.53:xi?.49:.445),.045,.235],[.079,.145,.089],skin);
+  ball([x,eyeY,z+.018],[eyeW,eyeH,.027],sclera);
+  ball([x,eyeY,z+.041],[.033,.031,.016],iris);
+  ball([x,eyeY,z+.055],[.016,.018,.008],pupil);
+  ball([x-.008,eyeY+.010,z+.062],[.006,.006,.004],white);
+  line([[inner,eyeY],[x-side*.05,eyeY+eyeH*.75],[x+side*.05,eyeY+eyeH*.84],[outer,eyeY+(huang?.008:-.009)]],.010,crease,.033);
+  line([[inner,eyeY],[x,eyeY-eyeH*.85],[outer,eyeY]],.006,shadow,.026);
+  line([[inner,eyeY+.044],[x,eyeY+.057],[outer,eyeY+.030]],huang?.006:.007,shadow,.016);
+  line([[x-side*.13,eyeY+.094],[x-side*.045,eyeY+.112],[x+side*.046,eyeY+.104],[x+side*.13,eyeY+.075]],huang?.011:putin?.009:.018,brow,.019);
+  line([[side*.105,-.014],[side*.16,-.085],[side*.24,mouthY+.025],[side*.26,mouthY-.09]],huang?.008:.006,shadow,.012);
+  line([[x-side*.084,eyeY-.065],[x,eyeY-.083],[x+side*.12,eyeY-.05]],.005,shadow,.013);
+  const nx=side*cfg.nose,ny=-.085;
+  ball([nx,ny,depth(nx,ny)+.013],[.034,.022,.020],skin);
+  ball([nx,ny-.013,depth(nx,ny-.013)+.025],[.022,.010,.008],crease);
+  if(huang||putin)for(let k=0;k<3;k++)line([[outer,eyeY-.027*k],[outer+side*.04,eyeY-.015-.026*k],[outer+side*.075,eyeY-.04-.029*k]],.0035,shadow,.012);
+ }
+ const mouth=Array.from({length:19},(_,i)=>{const t=i/9-1;return [mouthW*t,mouthY+(huang?.014:xi?.024:putin?-.006:.012)*t*t];});
+ line(mouth,.010,crease,.029);
+ line(mouth.map(([x,y])=>[x,y+.015*(1-(x/mouthW)**2)+.007*Math.exp(-(((Math.abs(x)-mouthW*.28)/.04)**2))]),huang?.013:.016,lip,.031);
+ line(mouth.map(([x,y])=>[x,y-.024*(1-(x/mouthW)**2)]),huang?.019:.021,lip,.030);
+ if(huang){line([[-.105,mouthY-.004],[0,mouthY-.010],[.105,mouthY-.004]],.004,sclera,.045);}
+ if(huang||putin)for(let k=0;k<3;k++){const y=.42+k*.055;line([[-.26,y],[-.13,y+.012],[.08,y+.007],[.25,y-.008]],.004,shadow,.012);}
+ if(kim)line([[-.26,-.49],[-.12,-.535],[.12,-.535],[.26,-.49]],.007,shadow,.012);
+ if(huang){
+  // Broad side part, silver swept hair, close cropped temples.
+  const cap=ball([-.035,.715,.20],[.455,.235,.295],hair);cap.rotation.z=-.11;
+  for(const side of [-1,1]){
+   ball([side*.40,.51,.215],[.09,.21,.17],hair);
+   for(let k=0;k<14;k++){const t=k/13;tube([[side*(.42-.045*t),.40+.10*t,.33],[side*(.36-.04*t),.62+.12*t,.42],[side*(.20-.06*t),.80+.07*t,.35]],.009,k%3===0?strand:hair);}
+  }
+  for(let k=0;k<26;k++){const t=k/25,x=-.40+.76*t;tube([[x,.62+.07*t,.44],[x-.075,.80+.08*Math.sin(t*Math.PI),.53],[x-.11,.88-.035*t,.33]],.012,k%4===0?strand:hair);}
+ }else if(putin){
+  ball([0,.70,.055],[.37,.15,.21],hair);
+  for(const side of [-1,1]){ball([side*.38,.48,.14],[.062,.22,.12],hair);for(let k=0;k<9;k++)tube([[side*(.38-k*.012),.42+.025*k,.25],[side*(.34-k*.012),.68,.28],[side*.12,.77,.19]],.006,k%3?hair:strand);}
+ }else{
+  const cap=ball([xi?-.035:0,kim?.77:.71,.17],[kim?.48:.465,kim?.25:.21,.30],hair);cap.rotation.z=xi?-.08:0;
+  for(const side of [-1,1]){ball([side*.405,kim?.60:.48,.14],[.08,kim?.12:.22,.15],hair);}
+  for(let k=0;k<25;k++){const x=-.41+.82*k/24;const y=kim?.68:.59;tube([[x,y,.44],[x-(xi?.08:.02),y+.20,.48],[x-(xi?.12:.03),y+.24,.23]],.012,k%5===0?strand:hair);}
+ }
+ if(huang||kim){
+  const fw=huang?.150:.158,fh=huang?.074:.085,cy=eyeY+.005;
+  for(const side of [-1,1]){
+   const cx=side*eyeX,shape=new T.Shape();
+   shape.moveTo(-fw+.025,-fh);shape.lineTo(fw-.025,-fh);shape.quadraticCurveTo(fw,-fh,fw,-fh+.025);shape.lineTo(fw,fh-.02);shape.quadraticCurveTo(fw,fh,fw-.025,fh);shape.lineTo(-fw+.025,fh);shape.quadraticCurveTo(-fw,fh,-fw,fh-.02);shape.lineTo(-fw,-fh+.025);shape.quadraticCurveTo(-fw,-fh,-fw+.025,-fh);
+   const z=depth(cx,cy)+.12,pts=shape.getPoints(24).map(v=>[cx+v.x,cy+v.y,z-Math.abs(v.x)*.11]);pts.push(pts[0]);tube(pts,huang?.012:.018,frame);
+   tube([[cx+side*fw,cy+.02,z-.01],[side*.45,cy+.024,.46],[side*.46,cy,.23]],.014,frame);
+  }
+  const z=depth(eyeX,cy)+.12;tube([[-.055,cy+.028,z],[0,cy+.043,z+.008],[.055,cy+.028,z]],.011,frame);
+ }
+ tube([[-.43,.06,.23],[-.48,.06,-.04],[0,.06,-.34],[.48,.06,-.04],[.43,.06,.23]],.024,frame);
+ root.userData.portraitSculpt=huang?'huang-r113':d+'-r113';
+}else if(d==='musk-mask'){
 // Separate landmark-based portraits. Features are projected onto each face,
  // rather than sharing a generic depth plane where eyelids/lips disappear.
  const huang=d==='huang-mask';
@@ -292,7 +380,7 @@ else if(d==='banana'||d==='banana-bunch'){for(let i=0;i<4;i++){const a=i*1.57;tu
 else if(d==='cloud'){for(let i=0;i<7;i++)ball([Math.sin(i*2.4)*.5,.65+i%2*.15,Math.cos(i*2.4)*.35],[.38,.3,.32],white);for(let i=0;i<5;i++)ball([-.5+i*.25,.16,0],[.04,.13,.04],glass);}
 root.userData.materials=mats;return root;}
 export function disposeHeadgear(root){const geo=new Set(),mat=new Set(root.userData.materials||[]);root.traverse(o=>{if(o.geometry)geo.add(o.geometry);if(o.material)mat.add(o.material);});root.removeFromParent();geo.forEach(g=>g.dispose());mat.forEach(m=>m.dispose());}
-export function attachHeadgear(T,model,item){let head=null,top=null;model.traverse(o=>{if(o.isBone&&/Head$/i.test(o.name))head=o;if(o.isBone&&/HeadTop/i.test(o.name))top=o;});if(!head)return null;model.updateMatrixWorld(true);const scale=head.getWorldScale(new T.Vector3()),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,root=createHeadgear(T,item);head.add(root);const portraitMask=['trump-mask','huang-mask','musk-mask'].includes(item.design),safe=v=>Math.max(.00001,Math.abs(v));root.position.set(0,height*(portraitMask?.35:.48)/safe(scale.y),height*(portraitMask?.25:.12)/safe(scale.z));root.scale.set(height/safe(scale.x),height/safe(scale.y),height/safe(scale.z));root.userData.anchor=head.name;return root;}
+export function attachHeadgear(T,model,item){let head=null,top=null;model.traverse(o=>{if(o.isBone&&/Head$/i.test(o.name))head=o;if(o.isBone&&/HeadTop/i.test(o.name))top=o;});if(!head)return null;model.updateMatrixWorld(true);const scale=head.getWorldScale(new T.Vector3()),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,root=createHeadgear(T,item);head.add(root);const portraitMask=['trump-mask','huang-mask','musk-mask','xi-mask','putin-mask','kim-mask'].includes(item.design),safe=v=>Math.max(.00001,Math.abs(v));root.position.set(0,height*(portraitMask?.35:.48)/safe(scale.y),height*(portraitMask?.25:.12)/safe(scale.z));root.scale.set(height/safe(scale.x),height/safe(scale.y),height/safe(scale.z));root.userData.anchor=head.name;return root;}
 
 // Reuse articulated neck groups; no geometry allocation on animation frames.
 export function animateHeadgear(root,time,moving=false){

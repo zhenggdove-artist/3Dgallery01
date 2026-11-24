@@ -43,7 +43,8 @@ export function bindChatLayout(){
  // would otherwise intersect the chat. On resizing, first restore CSS's
  // lower anchor instead of inheriting a previous, unnecessarily high offset.
  function fitSafely(){
-  if(!manualPosition)clearInline();
+  if(manualPosition){const r=panel.getBoundingClientRect();relocate(r.left,r.top);return;}
+  clearInline();
   let rect=panel.getBoundingClientRect();
   const obstacles=blocking(),viewTop=(window.visualViewport?.offsetTop||0)+6;
   if(!obstacles.some(b=>collide(rect,b)))return;
@@ -71,9 +72,9 @@ export function bindChatLayout(){
   panel.style.setProperty('--chat-height',(size==='medium'?mediumHeight:maxHeight())+'px');
   toggle.textContent=size==='max'?'−':'＋';
   toggle.setAttribute('aria-expanded',String(size!=='min'));
-  toggle.setAttribute('aria-label',size==='min'?'Expand chat to full size':
+  toggle.setAttribute('aria-label',size==='min'?'Expand chat; hold to move':
    size==='medium'?'Minimize chat (hold for 1 second)':'Show two chat lines (hold to minimize)');
-  toggle.title=size==='min'?'Open full chat':size==='max'?'Show two lines':'Minimize chat';
+  toggle.title=size==='min'?'Open full chat; hold to move':size==='max'?'Show two lines':'Minimize chat';
   if(hold)ignoreClickUntil=performance.now()+800;
   requestAnimationFrame(fitSafely);
  }
@@ -91,6 +92,40 @@ export function bindChatLayout(){
   const index=sizes.indexOf(size);
   setSize(sizes[(index+1)%sizes.length]);
  });
+ // The collapsed + is itself the drag surface. A tap expands; a held
+ // pointer is captured and can move the button on either mouse or touch.
+ let miniDrag=null,miniTimer=null;
+ toggle.addEventListener('pointerdown',e=>{
+  if(size!=='min'||e.button!==0||miniDrag)return;
+  e.stopPropagation();
+  const r=panel.getBoundingClientRect();
+  miniDrag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,mode:'pending'};
+  try{toggle.setPointerCapture(e.pointerId);}catch{}
+  miniTimer=setTimeout(()=>{
+   if(!miniDrag||miniDrag.id!==e.pointerId||miniDrag.mode!=='pending')return;
+   miniDrag.mode='move';panel.classList.add('chat-dragging');
+  },DRAG_HOLD_MS);
+ });
+ toggle.addEventListener('pointermove',e=>{
+  if(!miniDrag||miniDrag.id!==e.pointerId)return;
+  const dx=e.clientX-miniDrag.x,dy=e.clientY-miniDrag.y;
+  if(miniDrag.mode==='pending'&&Math.hypot(dx,dy)>10){
+   clearTimeout(miniTimer);miniDrag.mode='cancel';
+  }
+  if(miniDrag.mode==='move'){
+   e.preventDefault();e.stopPropagation();
+   if(relocate(miniDrag.left+dx,miniDrag.top+dy))manualPosition=true;
+  }
+ });
+ const finishMini=e=>{
+  if(!miniDrag||miniDrag.id!==e.pointerId)return;
+  const mode=miniDrag.mode;clearTimeout(miniTimer);miniDrag=null;
+  if(mode!=='pending')ignoreClickUntil=performance.now()+650;
+  if(mode==='move')save();
+  panel.classList.remove('chat-dragging');
+  try{if(toggle.hasPointerCapture(e.pointerId))toggle.releasePointerCapture(e.pointerId);}catch{}
+ };
+ for(const type of ['pointerup','pointercancel','lostpointercapture'])toggle.addEventListener(type,finishMini);
  if(mobile){
   panel.addEventListener('touchstart',e=>{
    if(e.touches.length!==1||e.target.closest('button,input,textarea,select,form')||size==='min')return;
