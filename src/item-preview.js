@@ -220,12 +220,12 @@ async function renderPreview(item){
   camera=new THREE.PerspectiveCamera(35,1,.01,1000);
  }
  const creatureSuit=item.slot==='outfit';
- const portraitMask=['trump-mask','huang-mask','musk-mask'].includes(item.design);const resolution=portraitMask?768:creatureSuit?768:192;renderer.setSize(resolution,resolution);
+ const portraitMask=['trump-mask','huang-mask','musk-mask','xi-mask','putin-mask','kim-mask'].includes(item.design);const resolution=portraitMask?768:creatureSuit?768:192;renderer.setSize(resolution,resolution);
  const model=item.family==='saber'?saberProductPortrait():creatureSuit?creatureOutfitProductPortrait(item):shapeModel(item);
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
- const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*(item.slot==='outfit'?1.75:portraitMask?1.8:2.2);
- camera.position.copy(center).add((item.family==='saber'||item.slot==='outfit'||['trump-mask','huang-mask','musk-mask'].includes(item.design)?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
+ const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*(item.design==='disguise'?2.15:item.slot==='outfit'?1.75:portraitMask?1.8:2.2);
+ camera.position.copy(center).add((item.design==='disguise'?new THREE.Vector3(.55,.15,1):item.family==='saber'||item.slot==='outfit'||['trump-mask','huang-mask','musk-mask','xi-mask','putin-mask','kim-mask'].includes(item.design)?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
  camera.near=Math.max(.001,distance*.01);camera.far=Math.max(100,distance*8);camera.updateProjectionMatrix();
  camera.lookAt(center);
  try{

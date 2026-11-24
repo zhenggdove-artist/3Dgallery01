@@ -1004,3 +1004,7 @@ body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;f
 #purchase-notice[data-state=success]{background:#e8f5e8;border-color:#52865c;color:#24492d}
 #purchase-notice[data-state=error]{background:#f9e6e7;border-color:#ba6375;color:#783044}
 @media(prefers-reduced-motion:reduce){#purchase-notice.leaving{animation:none;opacity:1}}
+
+/* r113: the collapsed chat control remains a touch and mouse drag surface. */
+#chat-hud.chat-minimized #chat-toggle{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
+#chat-hud.chat-dragging #chat-toggle{cursor:grabbing;outline:2px solid #d8b6e8;outline-offset:2px}
