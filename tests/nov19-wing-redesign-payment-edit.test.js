@@ -76,7 +76,8 @@ test('authentic native rays, floating +1 and separate secure payment remain wire
  assert.match(main,/staffChannel\?\.ready/);
  assert.match(ui,/data-wing-edit/);
  assert.match(ui,/data-wing-checkout/);
- assert.match(ui,/Support GGTEMPLE and unlock one wing canvas/);
+ assert.match(ui,/Support GGTEMPLE and unlock your own wing canvases/);
+ assert.match(ui,/Each canvas costs NT\$30/);
  const shop=ui.slice(ui.indexOf('  renderShop(profile){'),ui.indexOf('  renderWingShop(profile){'));
  assert.doesNotMatch(shop,/wing-shop-link/);
 });
