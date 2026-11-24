@@ -117,7 +117,7 @@ export function shopWeaponVariant(item,tier=3){
    ...(Number.isFinite(item.cooldown)?{cooldown:Math.max(70,Math.round(item.cooldown*scale.tempo))}:{})};
 }
 
-export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','armor','head','outfit','shield','wings']);
+export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','head','outfit','shield','wings']);
 export const SPELL_FAMILIES=Object.freeze(['water','ice','fire','lightning','beam','petal','wave']);
 export function attackStats(item,charge=0){
  const result=reletterAttackStats(item,charge);
@@ -168,7 +168,7 @@ export function registerCustomWings(wings=[]){
 }
 export const itemById = id => INDEX.get(id) || null;
 
-export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>item.slot!=='material'&&!item.notForSale&&!isRetiredHeadgear(item)&&item.price>0));
+export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>!['material','armor'].includes(item.slot)&&!item.notForSale&&!isRetiredHeadgear(item)&&item.price>0));
 // Canonical price keys distinguish every weapon quality, including exotics.
 export const shopPriceKey=item=>item.id+(item.slot==='weapon'?':'+(item.shopTier??item.tier??3):'');
 export function shopPrice(item,overrides={}){
@@ -206,7 +206,7 @@ export const ECONOMY = Object.freeze({
   buildCosts:Object.freeze({cube:80,bar:110,cylinder:110,wall:80,column:110,platform:170,tree:95,house:240})
 });
 
-export const STARTER_LOADOUT = Object.freeze({weapon:'saber-2',armor:null,head:null,outfit:null,shield:null,wings:null}); // Green uncommon Dawn Starlight saber.
+export const STARTER_LOADOUT = Object.freeze({weapon:'saber-2',head:null,outfit:null,shield:null,wings:null}); // Green uncommon Dawn Starlight saber.
 
 export function weightedChoice(entries,rng=Math.random){
   const total=entries.reduce((sum,entry)=>sum+(entry.weight||1),0);let cursor=rng()*total;
