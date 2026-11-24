@@ -52,6 +52,6 @@ const r106Heads=[
  ['kim-mask','Kim Jong-un Mask','#dbaf96',3,1850,{hp:2.0,attack:.07},null]
 ];
 HEADGEAR.push(...r106Heads.map(([design,name,color,tier,templePrice,bonuses,proc])=>({
- id:'hat-'+design,name,design,color,slot:'head',family:'headgear',tier,price:templePrice,templePrice,bonuses,proc,r106Wearable:true,
+ id:'hat-'+design,name,design,color,slot:'head',family:'headgear',tier,price:templePrice,templePrice,bonuses,proc,r106Wearable:!['xi-mask','putin-mask','kim-mask'].includes(design),r113Wearable:['xi-mask','putin-mask','kim-mask'].includes(design),
  description:describe(bonuses)+(proc?' · Charged hits apply '+proc+'.':'')
 })));

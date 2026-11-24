@@ -64,6 +64,6 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
  ];
  OUTFITS.push(...disguises.map(([creature,name,color,tier,templePrice,disguiseHeight,bonuses])=>({
   id:'outfit-'+creature,name,color,tier,price:templePrice,templePrice,slot:'outfit',family:'outfit',
-  design:'disguise',creature,disguiseHeight,pattern:0,bonuses,r106Wearable:true,
+  design:'disguise',creature,disguiseHeight,pattern:0,bonuses,r113Wearable:true,
   description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed'}[k]||k)).join(' · ')
  })));

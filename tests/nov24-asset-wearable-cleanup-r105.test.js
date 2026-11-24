@@ -31,13 +31,14 @@ test('six duplicate head designs are retired from sale while saved gear and fusi
 });
 test('ten outfit collections each expose five individual styles and eleven creature outfits stay separate',()=>{
  const groups=shopWeaponGroups(SHOP_ITEMS).filter(g=>g.base.slot==='outfit');
- assert.equal(groups.length,28);
+ assert.equal(groups.filter(g=>!g.base.r113Wearable).length,28);
+ assert.equal(groups.filter(g=>g.base.r113Wearable).length,6);
  for(const g of groups.filter(g=>shopOutfitCollection(g.base))){
   assert.deepEqual(g.variants.map(v=>v.tier),[1,2,3,4,5]);
   assert.equal(new Set(g.variants.map(v=>v.id)).size,5);
   assert.ok(g.variants.every(v=>v.price===itemById(v.id).price&&!v.shopTier));
  }
- assert.equal(groups.filter(g=>g.base.creature&&!g.base.r106Wearable&&g.variants.length===1).length,11);
+ assert.equal(groups.filter(g=>g.base.creature&&!g.base.r106Wearable&&!g.base.r113Wearable&&g.variants.length===1).length,11);
  const w=createInitialWorld(now),actor={key:'outfit',name:'Outfit',color:'#ffffff',role:'fighter',position:[75,0,0]};
  const p=ensureProfile(w,actor.key,actor.name,actor.color,now,false);p.wallet=50000;
  const item=itemById('outfit-pajamas-5');
