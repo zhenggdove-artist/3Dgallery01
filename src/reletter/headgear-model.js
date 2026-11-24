@@ -271,7 +271,7 @@ if(d==='hydra-dragon'){
  ];
  // Interpolate the independent facial landmark profiles for a smooth mask.
  const sample=(t)=>{const i=Math.min(rows.length-2,Math.floor(t)),f=t-i,a=rows[Math.max(0,i-1)],b=rows[i],c=rows[i+1],d=rows[Math.min(rows.length-1,i+2)];return b.map((v,k)=>.5*((2*v)+(-a[k]+c[k])*f+(2*a[k]-5*v+4*c[k]-d[k])*f*f+(-a[k]+3*v-3*c[k]+d[k])*f*f*f));};
- const positions=[],indices=[],colors=[],uv=[],steps=112,vertical=(rows.length-1)*10;
+ const positions=[],indices=[],colors=[],uv=[],steps=112,vertical=112;
  const baseTone=new T.Color(trump?'#dfa078':huang?'#c9a28b':'#dfb5a5');
  const warmTone=new T.Color(trump?'#cb8560':huang?'#b88d78':'#c99a90'),eyeTone=new T.Color(trump?'#e6c7b1':huang?'#ae877a':'#c2a199');
  for(let j=0;j<=vertical;j++){
