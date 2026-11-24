@@ -943,3 +943,7 @@ body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;f
 #panel .bag-sale-tools button{background:#f1d5db;color:#76394a;font-weight:700;white-space:normal}
 #panel #bag-detail{max-height:150px!important}
 #panel #bag-detail [data-sell]{min-height:36px;padding:5px 10px}
+
+/* r110 authoritative BAG usage and transaction feedback */
+#panel .bag-capacity{display:flex;align-items:center;justify-content:space-between;gap:5px;flex:0 0 auto;padding:6px 8px;border:1px solid #c5b6d2;border-radius:6px;background:#eee5f5;font:700 12px/1.2 Arial,sans-serif;color:#493653}
+#panel .bag-inventory-status:not([hidden]){display:block;flex:0 0 auto;font:700 11px/1.25 Arial,sans-serif;overflow-wrap:anywhere;color:#773b59;padding:3px 5px}
