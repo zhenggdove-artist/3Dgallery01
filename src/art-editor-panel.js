@@ -39,7 +39,11 @@ export function editorPanelMarkup(appearance,platformRadius,originalArtwork,titl
    <label class="art-editor-field"><span class="art-field-name">名稱底色高度</span><span class="art-editor-values"><input type="number" min=".18" max="4" step=".02" data-appearance="labelHeight" value="${appearance.labelHeight||.492}"></span></label>
    <label class="art-editor-field"><span class="art-field-name">名稱漸顯距離（公尺）</span>
     <span class="art-editor-values"><input type="range" min="3" max="80" step="1" data-appearance="labelRevealDistance" value="${appearance.labelRevealDistance??12}" aria-label="距離作品多少公尺開始漸顯名稱"><output data-label-distance-output>${appearance.labelRevealDistance??12} m</output></span></label>
-   <p class="art-editor-help">從設定距離開始漸顯，接近作品約 3 公尺後完全顯示。GM 編輯時名稱條保持可見。</p>
+   <label class="art-editor-field"><span class="art-field-name">名稱近距離淡出（公尺）</span>
+    <span class="art-editor-values"><input type="range" min="0" max="20" step=".25" data-appearance="labelNearFadeDistance" value="${appearance.labelNearFadeDistance??3}" aria-label="靠近名稱條多少公尺開始淡出"><output data-label-near-output>${appearance.labelNearFadeDistance??3} m</output></span></label>
+   <label class="art-editor-field"><span class="art-field-name">貼近時最低不透明度</span>
+    <span class="art-editor-values"><input type="range" min="0" max="1" step=".05" data-appearance="labelNearMinOpacity" value="${appearance.labelNearMinOpacity??0}" aria-label="貼近名稱時最低不透明度"><output data-label-opacity-output>${Math.round((appearance.labelNearMinOpacity??0)*100)}%</output></span></label>
+   <p class="art-editor-help">遠距離依原設定漸顯；接近名稱條時文字與底色一同淡出。淡出距離 0 m 表示停用；最低不透明度 0% 表示完全透明。GM 編輯時保持可見，關閉編輯後生效。</p>
   </div>
   <p data-status>已選取 · 尚無修改</p>
   <div class="art-editor-actions"><button data-action="follow">跟隨 GM</button>
