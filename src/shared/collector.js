@@ -54,6 +54,10 @@ function collectorPosition(world,rng){
 
 // The Durable Object decides proximity, ownership and payment. A client
 // never supplies an artwork ID, sale price, or minted currency.
+function hasCollectedArtwork(profile,artworkId){
+ return !!(profile&&profile.admin!==true&&artworkId&&profile.collectorSoldArtworks?.[artworkId]);
+}
+
 export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoot=null){
  world.collector??=initialCollector(now);
  const collector=world.collector;
@@ -75,7 +79,7 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoo
       Math.abs(actor.position[1]-collector.position[1])>3.2)continue;
    const entry=Object.entries(world.artworks||{}).find(([,art])=>art.holder===actor.key);
    const artworkId=entry?.[0];
-   const previouslySold=!!(artworkId&&profile.collectorSoldArtworks?.[artworkId]);
+   const previouslySold=hasCollectedArtwork(profile,artworkId);
    const encounter=previouslySold?'duplicate:'+artworkId:'empty';
    insideKeys[actor.key]=encounter;
    if(entry&&!previouslySold){
@@ -86,7 +90,7 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoo
     world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
     world.activity.coinMinted+=price;
     // Per-account/per-artwork durable receipt: sold artwork may respawn,
-    // but this same player can never sell its platform ID again.
+    // but ordinary players cannot sell its platform ID again. GMs may repeat sales.
     profile.collectorSoldArtworks??={};
     profile.collectorSoldArtworks[artworkId]=now;
     art.holder=null;art.throwEvent=null;
@@ -143,7 +147,7 @@ export function tickCollector(world,actors,now=Date.now(),rng=Math.random,onShoo
   ).map(actor=>{
    const profile=world.profiles?.[actor.key];
    const held=Object.keys(world.artworks||{}).find(id=>world.artworks[id]?.holder===actor.key);
-   return [actor.key,held&&profile?.collectorSoldArtworks?.[held]?'duplicate:'+held:'empty'];
+   return [actor.key,hasCollectedArtwork(profile,held)?'duplicate:'+held:'empty'];
   }));
   return true;
  }

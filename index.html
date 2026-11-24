@@ -10,17 +10,17 @@
   <title>Temple</title>
   <link rel="icon" href="data:,">
   <link rel="preload" href="./src/reletter/FONTS/Golden%20Girdle.otf" as="font" type="font/otf" crossorigin>
-  <link rel="stylesheet" href="./styles.css?v=20261124-support-artwork-fade-r120">
+  <link rel="stylesheet" href="./styles.css?v=20261124-gm-collector-repeat-r121">
   <link rel="stylesheet" href="./src/reletter/fonts.css">
   <link rel="stylesheet" href="./reletter-theme.css">
-  <link rel="stylesheet" href="./gun.css?v=20261124-support-artwork-fade-r120">
+  <link rel="stylesheet" href="./gun.css?v=20261124-gm-collector-repeat-r121">
   <link rel="stylesheet" href="./sketch-hud.css">
-  <link rel="stylesheet" href="./fidelity-ui.css?v=20261124-support-artwork-fade-r120">
-  <link rel="stylesheet" href="./wing-atelier.css?v=20261124-support-artwork-fade-r120">
-  <link rel="stylesheet" href="./wall-paint.css?v=20261124-support-artwork-fade-r120">
+  <link rel="stylesheet" href="./fidelity-ui.css?v=20261124-gm-collector-repeat-r121">
+  <link rel="stylesheet" href="./wing-atelier.css?v=20261124-gm-collector-repeat-r121">
+  <link rel="stylesheet" href="./wall-paint.css?v=20261124-gm-collector-repeat-r121">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
-  <script src="./temple-config.js?v=20261124-support-artwork-fade-r120"></script>
+  <script src="./temple-config.js?v=20261124-gm-collector-repeat-r121"></script>
   <script>
   // One release token for the entire first-party ES-module graph.
   // GitHub Pages and mobile Safari can otherwise mix cached modules from
@@ -29,7 +29,7 @@
     // Stable for one deployment: 15-second URL rotation previously defeated Safari cache
     // and forced every 4G reload to download the whole large module graph.
     // Bump this token when changing the boot graph or deployed JS modules.
-    const release = '20261124-support-artwork-fade-r120';
+    const release = '20261124-gm-collector-repeat-r121';
     const imports = {
       "three": "./vendor/three/build/three.module.js",
       "three/addons/": "./vendor/three/examples/jsm/"
@@ -43,7 +43,7 @@
   // Import/link failures happen before main.js can enter its boot try/catch.
   (() => {
     let moduleFailure = "";
-    window.templeStartupDiagnostics = {release: "20261124-support-artwork-fade-r120", failures: []};
+    window.templeStartupDiagnostics = {release: "20261124-gm-collector-repeat-r121", failures: []};
     function displayFailure(message) {
       if (!message || document.body?.classList.contains("ready")) return;
       // Do not replace the original module/import error with a later timeout.
