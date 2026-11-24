@@ -89,5 +89,5 @@ test('uploaded GGTEMPLE MP3 is selected only after a successful HEAD probe',()=>
  assert.match(audio,/GGTEMPLEMUSIC\.mp3/);
  assert.match(audio,/method:'HEAD'/);
  assert.match(audio,/if\(!response\.ok\|\|this\.uploadedMusicUrl\)return false/);
- assert.match(audio,/backgroundmusic\.MP3/);
+ assert.doesNotMatch(audio,/backgroundmusic\.MP3/);
 });

@@ -115,7 +115,7 @@ test('pre-entry gesture primes a silent buffer without creating audio from netwo
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.match(sound,/source\.buffer=ctx\.createBuffer\(1,1,ctx\.sampleRate\)/);
  assert.match(sound,/gain\.gain\.value=0;source\.connect\(gain\)/);
- assert.match(sound,/this\.unlock\(false\);if\(!this\.music\)/);
+ assert.match(sound,/this\.unlock\(false\);this\.musicRequested=true;if\(!this\.trackSources\.length\)return;\s*if\(!this\.music\)/);
  assert.match(main,/audio\.unlock\(false\);audio\.startMusic\(\)/);
 });
 
