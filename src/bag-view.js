@@ -1,4 +1,4 @@
-import {itemById,EQUIPPABLE_SLOTS,RARITIES,shopWeaponVariant,shopResalePrice} from './shared/catalog.js';
+import {itemById,EQUIPPABLE_SLOTS,RARITIES,shopWeaponVariant,shopResalePrice,inventoryCapacity} from './shared/catalog.js';
 import {previewMarkup,hydrateItemPreviews} from './item-preview.js';
 import {weaponClass,explainEquipment} from './shared/weapon-info.js';
 import {weaponPresentation} from './shared/weapon-presentation.js';
@@ -100,6 +100,8 @@ export function renderOriginalBag(ui,profile){
  const saleSlot=ui.bagSaleSlot||({weapons:'weapon',near:'weapon',mid:'weapon',far:'weapon',outfit:'outfit',head:'head',shields:'shield',wings:'wings',comfort:'consumable'}[tab]||'weapon'),saleRarity=ui.bagSaleRarity||'common';
  const saleMatches=sellable.filter(({item})=>item.slot===saleSlot&&item.rarity===saleRarity),saleTotal=saleMatches.reduce((sum,{item,index})=>sum+shopResalePrice(item,profile.inventoryInstances[index],ui.world?.shopPrices),0);
  const bulkMarkup=`<div class="bag-sale-tools"><label>Category<select id="bag-sale-slot">${sellSlots.map(([id,name])=>`<option value="${id}" ${id===saleSlot?'selected':''}>${name}</option>`).join('')}</select></label><label>Quality<select id="bag-sale-rarity">${['common','uncommon','rare','relic','epic'].map((id,i)=>`<option value="${id}" ${id===saleRarity?'selected':''}>${['White','Green','Blue','Gold','Purple'][i]}</option>`).join('')}</select></label><button type="button" id="bag-sell-bulk" ${saleMatches.length?'':'disabled'}>SELL ${saleMatches.length} · +${saleTotal.toLocaleString('en-US')}</button></div>`;
+ const used=profile.inventory?.length||0,capacity=inventoryCapacity(profile);
+ const bagStatus=`<div class="bag-capacity"><strong>BAG · ${used.toLocaleString('en-US')} / ${capacity.toLocaleString('en-US')}</strong><span>${Math.max(0,capacity-used).toLocaleString('en-US')} FREE</span></div><div class="bag-inventory-status" data-inventory-error role="status" aria-live="polite" ${ui.inventoryActionError||ui.inventoryActionNotice?'':'hidden'}>${esc(ui.inventoryActionError||ui.inventoryActionNotice||'')}</div>`;
  const keepPortrait=tab==='equipment'&&ui.content.querySelector('.equipment-view');
  if(keepPortrait){
   // Keep the actual canvas connected during equipment changes. Detaching
@@ -114,7 +116,7 @@ export function renderOriginalBag(ui,profile){
   if(nextCash&&currentCash)currentCash.replaceWith(nextCash);
   else if(nextCash)keepPortrait.append(nextCash);
  }else{
-  ui.content.innerHTML=`<div class="original-bag"><nav id="bag-tabs">${tabs.map(([id,label])=>`<button data-category="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</nav><label class="bag-sort-control">SORT <select id="bag-sort"><option value="recent" ${!ui.bagSort||ui.bagSort==='recent'?'selected':''}>Newest first</option><option value="quality" ${ui.bagSort==='quality'?'selected':''}>Quality · high to low</option><option value="manual" ${ui.bagSort==='manual'?'selected':''}>Manual order</option></select></label><button id="fusion-toggle" aria-pressed="${!!ui.bagFusionMode}">FUSION: ${ui.bagFusionMode?'ON':'OFF'}</button>${bulkMarkup}<div id="bag-items" class="${tab==='equipment'?'equipment-view':''}">${body}</div><div id="bag-detail">Tap to inspect · Double tap to equip / remove</div><p id="bag-feedback">${ui.bagFusionMode?'Long press and drag to fuse same-category gear; drag near top/bottom to scroll. Turn FUSION OFF to swap inventory slots.':''}</p></div>`;
+  ui.content.innerHTML=`<div class="original-bag">${bagStatus}<nav id="bag-tabs">${tabs.map(([id,label])=>`<button data-category="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</nav><label class="bag-sort-control">SORT <select id="bag-sort"><option value="recent" ${!ui.bagSort||ui.bagSort==='recent'?'selected':''}>Newest first</option><option value="quality" ${ui.bagSort==='quality'?'selected':''}>Quality · high to low</option><option value="manual" ${ui.bagSort==='manual'?'selected':''}>Manual order</option></select></label><button id="fusion-toggle" aria-pressed="${!!ui.bagFusionMode}">FUSION: ${ui.bagFusionMode?'ON':'OFF'}</button>${bulkMarkup}<div id="bag-items" class="${tab==='equipment'?'equipment-view':''}">${body}</div><div id="bag-detail">Tap to inspect · Double tap to equip / remove</div><p id="bag-feedback">${ui.bagFusionMode?'Long press and drag to fuse same-category gear; drag near top/bottom to scroll. Turn FUSION OFF to swap inventory slots.':''}</p></div>`;
   if(tab==='equipment'){
    const fresh=ui.content.querySelector('#bag-portrait');
    if(ui.bagPortraitCanvas)fresh.replaceWith(ui.bagPortraitCanvas);
@@ -130,9 +132,10 @@ export function renderOriginalBag(ui,profile){
  }
  ui.bagLastCategory=tab;
  const oldSale=ui.content.querySelector('.bag-sale-tools');if(keepPortrait&&oldSale)oldSale.outerHTML=bulkMarkup;
+ if(keepPortrait){const old=ui.content.querySelector('.bag-capacity'),status=ui.content.querySelector('.bag-inventory-status');if(status)status.remove();if(old)old.outerHTML=bagStatus;}
  ui.content.querySelector('#bag-sale-slot').onchange=e=>{ui.bagSaleSlot=e.target.value;renderOriginalBag(ui,ui.world.profile);};
  ui.content.querySelector('#bag-sale-rarity').onchange=e=>{ui.bagSaleRarity=e.target.value;renderOriginalBag(ui,ui.world.profile);};
- ui.content.querySelector('#bag-sell-bulk').onclick=()=>{if(!saleMatches.length||!window.confirm(`Sell ${saleMatches.length} ${saleRarity} ${saleSlot} items for ${saleTotal} coins? Equipped items and one starter copy are protected.`))return;ui.emit('server-action',{action:'sell-bulk',slot:saleSlot,rarity:saleRarity,uids:saleMatches.map(({index})=>profile.inventoryInstances[index].uid)});};
+ ui.content.querySelector('#bag-sell-bulk').onclick=()=>{if(ui.shopPurchasePending||!saleMatches.length||!window.confirm(`Sell ${saleMatches.length} ${saleRarity} ${saleSlot} items for ${saleTotal} coins? Equipped items and one starter copy are protected.`))return;ui.emit('server-action',{action:'sell-bulk',slot:saleSlot,rarity:saleRarity,uids:saleMatches.map(({index})=>profile.inventoryInstances[index].uid)});};
  ui.content.querySelector('#bag-tabs').onclick=e=>{const b=e.target.closest('[data-category]');if(b){ui.bagCategory=b.dataset.category;ui.bagSaleSlot=undefined;renderOriginalBag(ui,ui.world.profile);}};
  ui.content.querySelector('#bag-sort').onchange=e=>{ui.bagSort=e.target.value;renderOriginalBag(ui,ui.world.profile);};
  ui.content.querySelector('#fusion-toggle').onclick=e=>{ui.bagFusionMode=!ui.bagFusionMode;e.currentTarget.textContent='FUSION: '+(ui.bagFusionMode?'ON':'OFF');e.currentTarget.setAttribute('aria-pressed',String(ui.bagFusionMode));const feedback=ui.content.querySelector('#bag-feedback');if(feedback)feedback.textContent=ui.bagFusionMode?'Long-press and drag same-slot gear to fuse · Drag near an edge to scroll':'FUSION OFF · Drag items to rearrange slots · Drag near an edge to scroll';};
