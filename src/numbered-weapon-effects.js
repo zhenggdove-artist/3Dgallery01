@@ -143,7 +143,7 @@ export class NumberedWeaponEffects {
   let pool=this.prewarmed.get(spec.asset);
   if(!pool){pool=[];this.prewarmed.set(spec.asset,pool);}
   // Keep the real 00GameDevs module and GPU resources alive between casts.
-  if(pool.length<(spec.number===47?1:4))pool.push(fx);else fx.dispose();
+  if(pool.length<(spec.asset==='tidal-surge'?6:spec.number===47?1:4))pool.push(fx);else fx.dispose();
  }
  create(spec,options) {
   const factory=FACTORIES[spec.asset];
@@ -190,7 +190,7 @@ export class NumberedWeaponEffects {
     // native instances on their first cast. Create these before entering play.
     // Reserve simultaneous native pan/whip bursts and their GPU buffers up
     // front; no geometric or particle simplification occurs at cast time.
-    const copiesByNumber={33:4,20:2,43:2,70:2,68:3,48:3};
+    const copiesByNumber={33:6,20:2,43:2,70:2,68:3,48:3};
     let warmed=0;
     const target=new THREE.WebGLRenderTarget(32,32,{depthBuffer:true});
     const view=camera.clone();view.position.set(10,8,16);view.lookAt(0,1,0);
@@ -200,7 +200,7 @@ export class NumberedWeaponEffects {
       for(let i=0;i<copies;i++){
         let fx=null;
         try{
-          fx=this.create(spec,{size:1,detail:1,density:.5});
+          fx=this.create(spec,{size:1,detail:1,density:.5,...(spec.asset==='energy-sword-wave'?{theme:'solar',quantity:SABER_WAVE_COUNT,spread:SABER_WAVE_FAN_ANGLE_DEG/60,speed:1}:{})});
           const stage=new THREE.Scene();stage.add(fx.group);fx.group.visible=true;
           fx.update(spec.number===47?.68:.016);
           await renderer.compileAsync(stage,view);

@@ -14,7 +14,7 @@ import {comfortCashImage} from './comfort-cash-art.js';
 // Shared promises prevent redundant GPU work across both panels.
 const finished=new Map(),pending=new Map(),failed=new Set();
 let renderer,scene,camera,queue=Promise.resolve();
-let previewCharacterSource=null;
+let previewCharacterSource=null,previewIdleEnabled=false,previewIdleTimer=null;
 export function setOutfitPreviewCharacter(source){previewCharacterSource=source||null;}
 
 const keyOf=item=>item.id+':'+(item.updatedAt||0);
@@ -42,7 +42,7 @@ export function itemPreview(item){
    failed.add(key);
    console.warn('Full equipment preview unavailable',item.id,error);
    return null;
-  }finally{pending.delete(key);}
+  }finally{pending.delete(key);if(!pending.size&&previewIdleEnabled){clearTimeout(previewIdleTimer);previewIdleTimer=setTimeout(()=>{if(!pending.size)releasePreviewRenderer();},1500);}}
  });
  pending.set(key,job);
  queue=job.then(()=>undefined,()=>undefined);
@@ -60,6 +60,10 @@ export async function warmItemPreviews(items,onProgress=()=>{}){
   onProgress(i+1,unique.length);
   if(i%6===5)await new Promise(resolve=>requestAnimationFrame(resolve));
  }
+ // Product images are encoded blobs; they do not depend on the preview GL context.
+ // Release its framebuffer, program cache and GPU allocations before gameplay.
+ await queue;
+ releasePreviewRenderer();previewIdleEnabled=true;
  return previewCount();
 }
 // Always creates the actual detailed preview. Entire sets are updated in one
@@ -212,6 +216,11 @@ export function cropCreatureOutfitPortrait(source){
  return result;
 }
 
+function releasePreviewRenderer(){
+ if(!renderer)return;
+ renderer.dispose();renderer.forceContextLoss();
+ renderer=null;scene=null;camera=null;
+}
 async function renderPreview(item){
  if(!renderer){
   renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true});
