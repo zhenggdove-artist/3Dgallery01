@@ -16,12 +16,41 @@ if(d==='hydra-dragon'){
  for(const side of [-1,1]){ball([side*.22,.23,.72],[.19,.22,.075],dark);tube([[side*.37,.58,.12],[side*.72,.82,.07],[side*.89,.53,.13],[side*.78,.13,.3],[side*.51,.02,.42]],.13,gold);for(let i=0;i<4;i++)box([side*(.045+i*.042),-.30,.73],[.025,.10,.025],dark);}
  cone([0,-.08,.76],.10,.16,dark).rotation.z=Math.PI;
 }else if(['trump-mask','huang-mask','musk-mask'].includes(d)){
- const hair=mat(d==='trump-mask'?'#e6c46c':d==='huang-mask'?'#a7a6a0':'#62493d');
- ball([0,.10,.49],[.55,.69,.24]);for(const side of [-1,1]){ball([side*.53,.11,.48],[.09,.18,.08]);ball([side*.21,.25,.70],[.12,.065,.04],white);ball([side*.20,.25,.738],[.045,.05,.02],dark);box([side*.21,.38,.70],[.22,.035,.04],hair);}
- ball([0,.04,.75],[.11,.17,.14]);tube([[-.18,-.20,.70],[0,-.23,.76],[.18,-.20,.70]],.025,dark);
- if(d==='trump-mask'){const sweep=ball([-.08,.69,.51],[.60,.24,.29],hair);sweep.rotation.z=.24;for(let i=0;i<5;i++)tube([[-.47,.68+i*.04,.57],[-.05,.86+i*.015,.70],[.40,.65+i*.02,.63]],.035,hair);ball([0,-.34,.61],[.31,.19,.14]);}
- else if(d==='huang-mask'){ball([0,.69,.48],[.53,.19,.25],hair);for(const side of [-1,1]){const frame=ring([side*.23,.25,.76],.15,.025,dark);frame.scale.y=.72;box([side*.40,.25,.63],[.04,.035,.29],dark);}box([0,.27,.77],[.18,.035,.035],dark);}
- else{ball([0,.69,.47],[.50,.23,.28],hair);for(let i=0;i<4;i++)tube([[-.39+i*.12,.64,.62],[-.27+i*.12,.82,.69],[.13+i*.09,.72,.59]],.035,hair);ball([0,-.28,.64],[.27,.23,.14]);}
+ const trump=d==='trump-mask',huang=d==='huang-mask';
+ const skin=mat(trump?'#e5a171':huang?'#cba18b':'#e6bdab',0),hair=mat(trump?'#e6c46c':huang?'#b4b3ad':'#604639',0),crease=mat(trump?'#b97859':'#a77c68',0),lip=mat(trump?'#be7868':'#ab756e',0),iris=mat(huang?'#33251f':trump?'#78949f':'#72877e',0);
+ ball([0,.10,.49],[trump?.57:huang?.49:.55,trump?.69:huang?.66:.70,.25],skin);
+ ball([0,-.31,.54],[trump?.43:huang?.35:.43,.30,.22],skin);
+ for(const side of [-1,1]){
+  ball([side*.50,.08,.48],[.10,.17,.10],skin);
+  ball([side*.30,.02,.68],[.22,.22,.10],skin);
+  ball([side*.20,.25,.72],[.14,huang?.045:.060,.042],white);
+  ball([side*.20,.25,.756],[.045,.046,.022],iris);
+  ball([side*.20,.25,.773],[.019,.022,.010],dark);
+  tube([[side*.07,.35,.72],[side*.20,.38,.74],[side*.34,.34,.69]],trump?.028:.020,hair);
+  tube([[side*.08,.19,.74],[side*.21,.17,.74],[side*.34,.20,.69]],.014,crease);
+  tube([[side*.12,.01,.81],[side*.23,-.09,.75],[side*.27,-.19,.70]],.015,crease);
+ }
+ ball([0,.11,.76],[huang?.085:.10,.18,.13],skin);
+ ball([0,-.035,.83],[trump?.135:.105,.085,.095],skin);
+ tube([[-.18,-.20,.73],[0,trump?-.25:-.19,.80],[.18,-.20,.73]],.026,lip);
+ tube([[-.16,-.21,.74],[0,trump?-.25:-.19,.82],[.16,-.21,.74]],.010,dark);
+ if(trump){
+  const sweep=ball([-.08,.70,.51],[.60,.24,.29],hair);sweep.rotation.z=.24;
+  for(let i=0;i<9;i++)tube([[-.48,.62+i*.025,.60],[-.10,.86+i*.012,.73],[.40,.66+i*.015,.67]],.027,hair);
+  ball([0,-.39,.66],[.33,.17,.13],skin);
+ }else if(huang){
+  ball([0,.69,.48],[.50,.17,.25],hair);
+  for(const side of [-1,1]){
+   for(let i=0;i<5;i++)tube([[side*.45,.33+i*.055,.47],[side*.36,.60+i*.02,.58],[side*.13,.76,.55]],.021,hair);
+   const frame=ring([side*.22,.25,.80],.16,.023,dark);frame.scale.set(1.12,.72,1);
+   box([side*.42,.25,.65],[.04,.035,.30],dark);
+  }
+  box([0,.27,.80],[.15,.035,.035],dark);
+ }else{
+  ball([0,.68,.46],[.49,.22,.26],hair);
+  for(let i=0;i<7;i++)tube([[-.40+i*.10,.60,.63],[-.29+i*.10,.81,.70],[.04+i*.08,.71,.60]],.025,hair);
+  ball([0,-.37,.64],[.30,.19,.13],skin);
+ }
 }
 else if(['elephant','rooster','anteater','guinea-pig','penguin','polar-bear','lion','eggplant'].includes(d)){
  cap();
