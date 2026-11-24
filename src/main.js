@@ -1064,14 +1064,14 @@ function update(dt,time,movementDt=dt){
 }
 
 let lastFrameFaultAt=0,lastRenderFaultAt=0,contextLost=false,lastHealthSampleAt=0;
-const runtimeHealthKey='temple-render-health-v024';
+const runtimeHealthKey='temple-render-health-v025';
 const gpuFrames=new GPUFrameQueue(renderer.getContext(),coarse,2);
-let previousRuntimeHealth=null;try{previousRuntimeHealth=JSON.parse(localStorage.getItem(runtimeHealthKey)||localStorage.getItem('temple-render-health-v023')||'null');}catch{}
+let previousRuntimeHealth=null;try{previousRuntimeHealth=JSON.parse(localStorage.getItem(runtimeHealthKey)||localStorage.getItem('temple-render-health-v024')||localStorage.getItem('temple-render-health-v023')||'null');}catch{}
 const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextRestores:0,renderFaults:0,lastError:null,previousRuntimeHealth};
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V024',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V025',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);
