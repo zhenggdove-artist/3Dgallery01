@@ -113,9 +113,15 @@ export class FloatingGmEditorPanel{
   if(!this.mobile||e.button!==0||this.pointer)return;
   const grip=e.target.closest('[data-gm-panel-resize]');
   const title=e.target.closest('[data-gm-panel-drag]');
-  if(!title&&!grip)return;
+  // BUILD can be resized from any outer edge, using the same controller
+  // and viewport constraints as the GM floating panel.
+  const rect=this.panel.getBoundingClientRect(),edge=7;
+  const edgeX=this.force?(e.clientX-rect.left<=edge?-1:rect.right-e.clientX<=edge?1:0):0;
+  const edgeY=this.force?(e.clientY-rect.top<=edge?-1:rect.bottom-e.clientY<=edge?1:0):0;
+  if(!title&&!grip&&!edgeX&&!edgeY)return;
+  if(!grip&&e.target.closest('button,input,select,textarea'))return;
   e.preventDefault();e.stopPropagation();
-  this.pointer={id:e.pointerId,type:grip?'resize':'drag',x:e.clientX,y:e.clientY,
+  this.pointer={id:e.pointerId,type:grip||edgeX||edgeY?'resize':'drag',edgeX:grip?1:edgeX,edgeY:grip?1:edgeY,x:e.clientX,y:e.clientY,
    layout:{...this.layout}};
   try{this.panel.setPointerCapture(e.pointerId);}catch{}
  }
@@ -125,7 +131,12 @@ export class FloatingGmEditorPanel{
   const dx=e.clientX-p.x,dy=e.clientY-p.y;
   const candidate={...p.layout};
   if(p.type==='drag'){candidate.x+=dx;candidate.y+=dy;}
-  else{candidate.width+=dx;candidate.height+=dy;}
+  else{
+   if(p.edgeX>0)candidate.width+=dx;
+   if(p.edgeX<0){candidate.width=Math.max(MIN_WIDTH,p.layout.width-dx);candidate.x=p.layout.x+p.layout.width-candidate.width;}
+   if(p.edgeY>0)candidate.height+=dy;
+   if(p.edgeY<0){candidate.height=Math.max(MIN_HEIGHT,p.layout.height-dy);candidate.y=p.layout.y+p.layout.height-candidate.height;}
+  }
   this.layout=clampFloatingPanelLayout(candidate,this.viewport(),this.collapsed);
   this.reflow();
  }
