@@ -53,12 +53,12 @@ test('fire keeps its particle recipe while the tide staff maps to native blue Ve
  assert.equal(particles.active[1].recipe,'tidal');
  particles.dispose();assert.equal(scene.children.length,0);
 });
-test('SAVE is removed while BUILD and WRITE remain and clouds are varied translucent banks',()=>{
+test('SAVE is removed while BUILD and WRITE remain and the nebula sky is animated',()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.match(html,/data-panel="build"[\s\S]*data-panel="social"/);
  assert.doesNotMatch(html,/data-action="save-code"/);
  const sky=readFileSync(new URL('../src/night-sky.js',import.meta.url),'utf8');
- for(const variant of ['broad','broken','wispy'])assert.ok(sky.includes(variant));
- assert.ok(sky.includes('length:12'));
- assert.ok(sky.includes('time*cloud.wind'));
+ for(const feature of ['nebulaParticleGeometry','SKY_PARTICLE_COUNTS','roll(d,-t)','radius+swell','uTime.value=time'])assert.ok(sky.includes(feature),feature);
+ assert.match(sky,/depthTest:true/);
+ assert.doesNotMatch(sky,/cloudBank\(/);
 });

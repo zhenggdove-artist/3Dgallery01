@@ -1057,3 +1057,7 @@ body.panel-open #panel.build-floating{
 #art-editor.player-art-editor [data-axis],#art-editor.player-art-editor label:has([data-appearance="labelWidth"]),#art-editor.player-art-editor label:has([data-appearance="labelHeight"]),#art-editor.player-art-editor [data-action="follow"],#art-editor.player-art-editor [data-action="export"]{display:none!important}
 #art-handles .art-drag-target{position:absolute;pointer-events:auto;touch-action:none;cursor:grab;user-select:none;-webkit-touch-callout:none;z-index:0;background:rgba(54,150,246,.035)}
 #art-handles .art-handle{z-index:2}
+
+#panel:not(.build-floating)>.build-resize{display:none!important}
+body.panel-open:has(#panel.build-floating) #hud{visibility:visible} 
+body.panel-open:has(#panel.build-floating) #panel{visibility:visible}
