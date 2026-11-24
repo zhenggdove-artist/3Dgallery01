@@ -220,6 +220,13 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    if(Array.isArray(record?.original?.fusionEffects)&&record.original.fusionEffects.includes('fan'))record.original.fusionEffects=record.original.fusionEffects.filter(id=>id!=='fan');
   }
   ensureFusionIdentity(current);
+  // Retire armor without losing historical instance data or occupying BAG slots.
+  for(let i=current.inventory.length-1;i>=0;i--){
+   if(itemById(current.inventory[i])?.slot!=='armor')continue;
+   const row=current.inventoryInstances[i];current.retiredArmorInventory??=[];
+   current.retiredArmorInventory.push({itemId:current.inventory[i],instance:clone(row),fusion:clone(current.fusionByInstance?.[row?.uid]||null)});
+   removeInventoryInstance(current,i);
+  }
   // The old one-time GM grant excluded later catalog releases. Add only the
   // new wearable family for existing GM profiles, without replenishing sold
   // items or discarding prior equipment / instance identities.
