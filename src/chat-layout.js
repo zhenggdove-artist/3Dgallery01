@@ -1,5 +1,5 @@
 // Three-step chat sizing: max -> two-line medium -> + only -> max.
-// Hold + for one second to minimize immediately. Hold a non-interactive part of the panel for 1s to move on touch or mouse.
+// Tap + to change size; drag 5px or hold 180ms to move it. The expanded panel keeps its 1s hold.
 // A new position key discards old placements that stranded chat high on iOS.
 export function bindChatLayout(){
  const panel=document.getElementById('chat-hud');
@@ -11,6 +11,7 @@ export function bindChatLayout(){
  panel.addEventListener('contextmenu',e=>{if(!e.target.closest('button,input,textarea,select,form'))e.preventDefault();});
  const STORAGE_KEY='temple-chat-position-v3';
  const DRAG_HOLD_MS=1000;
+ const MINI_DRAG_HOLD_MS=180,MINI_DRAG_SLOP=5;
  const sizes=['max','medium','min'];
  let size='medium',active=null,timer=null,toggleTimer=null,ignoreClickUntil=0,manualPosition=false;
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
@@ -73,14 +74,14 @@ export function bindChatLayout(){
   toggle.textContent=size==='max'?'−':'＋';
   toggle.setAttribute('aria-expanded',String(size!=='min'));
   toggle.setAttribute('aria-label',size==='min'?'Expand chat; hold to move':
-   size==='medium'?'Minimize chat (hold for 1 second)':'Show two chat lines (hold to minimize)');
-  toggle.title=size==='min'?'Open full chat; hold to move':size==='max'?'Show two lines':'Minimize chat';
+   size==='medium'?'Minimize chat; drag to move':'Show two chat lines (hold to minimize)');
+  toggle.title=size==='min'?'Open full chat; drag to move':size==='max'?'Show two lines':'Minimize chat; drag to move';
   if(hold)ignoreClickUntil=performance.now()+800;
   requestAnimationFrame(fitSafely);
  }
  setSize('medium');
  toggle.addEventListener('pointerdown',e=>{
-  if(!mobile||e.pointerType==='mouse'||size==='min')return;
+  if(!mobile||e.pointerType==='mouse'||size!=='max')return;
   clearTimeout(toggleTimer);
   toggleTimer=setTimeout(()=>setSize('min',{hold:true}),1000);
  });
@@ -92,11 +93,12 @@ export function bindChatLayout(){
   const index=sizes.indexOf(size);
   setSize(sizes[(index+1)%sizes.length]);
  });
- // The collapsed + is itself the drag surface. A tap expands; a held
- // pointer is captured and can move the button on either mouse or touch.
+ // Both + states can be dragged. Motion immediately activates dragging;
+ // a stationary 180ms hold also arms it. A quick tap still changes size.
  let miniDrag=null,miniTimer=null;
  toggle.addEventListener('pointerdown',e=>{
-  if(size!=='min'||e.button!==0||miniDrag)return;
+  if(size==='max'||e.button!==0||miniDrag)return;
+  ignoreClickUntil=0;
   e.stopPropagation();
   const r=panel.getBoundingClientRect();
   miniDrag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,mode:'pending'};
@@ -104,13 +106,13 @@ export function bindChatLayout(){
   miniTimer=setTimeout(()=>{
    if(!miniDrag||miniDrag.id!==e.pointerId||miniDrag.mode!=='pending')return;
    miniDrag.mode='move';panel.classList.add('chat-dragging');
-  },DRAG_HOLD_MS);
+  },MINI_DRAG_HOLD_MS);
  });
  toggle.addEventListener('pointermove',e=>{
   if(!miniDrag||miniDrag.id!==e.pointerId)return;
   const dx=e.clientX-miniDrag.x,dy=e.clientY-miniDrag.y;
-  if(miniDrag.mode==='pending'&&Math.hypot(dx,dy)>16){
-   clearTimeout(miniTimer);miniDrag.mode='cancel';
+  if(miniDrag.mode==='pending'&&Math.hypot(dx,dy)>=MINI_DRAG_SLOP){
+   clearTimeout(miniTimer);miniDrag.mode='move';panel.classList.add('chat-dragging');
   }
   if(miniDrag.mode==='move'){
    e.preventDefault();e.stopPropagation();
@@ -120,7 +122,7 @@ export function bindChatLayout(){
  const finishMini=e=>{
   if(!miniDrag||miniDrag.id!==e.pointerId)return;
   const mode=miniDrag.mode;clearTimeout(miniTimer);miniDrag=null;
-  if(mode!=='pending')ignoreClickUntil=performance.now()+650;
+  if(mode!=='pending')ignoreClickUntil=performance.now()+350;
   if(mode==='move')save();
   panel.classList.remove('chat-dragging');
   try{if(toggle.hasPointerCapture(e.pointerId))toggle.releasePointerCapture(e.pointerId);}catch{}

@@ -1024,3 +1024,7 @@ body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;f
 #panel .shop-buy-controls select,#panel .shop-buy-controls input{min-height:34px!important;font-size:12px!important}
 #panel .shop-detail>.item>img{margin:8px auto!important}
 @media(max-height:480px){#panel .shop-buy-controls{gap:2px;padding:2px 0 4px}#panel .shop-buy-controls .shop-purchase{gap:2px;padding:2px}#panel .shop-detail>.item>h3{font-size:12px;margin:0 0 2px}}
+
+/* Both CHAT + states must capture a drag before the browser starts scrolling. */
+#hud #chat-hud.chat-medium #chat-toggle,#hud #chat-hud.chat-minimized #chat-toggle{touch-action:none!important;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
+#hud #chat-hud.chat-dragging #chat-toggle{cursor:grabbing}

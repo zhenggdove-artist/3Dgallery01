@@ -129,79 +129,125 @@ export class GrassField{
   this.outerCanopy=new THREE.Mesh(new THREE.RingGeometry(CITY_INNER_RADIUS-.25,CITY_OUTER_RADIUS+1,192),this.canopy.material);
   this.outerCanopy.name='Full city green grass canopy with no exposed earth';
   this.outerCanopy.rotation.x=-Math.PI/2;this.outerCanopy.position.y=.007;scene.add(this.outerCanopy);
-  // Real 3D off-map field: depth-tested sculptural forms and particles.
-  // No bloom framebuffer, CPU particle updates, or repeated per-object draw calls.
-  const horizonMaterial=new THREE.ShaderMaterial({side:THREE.DoubleSide,depthWrite:true,toneMapped:false,
-   uniforms:{uTime:{value:0}},vertexShader:`varying vec2 vWorld;void main(){vWorld=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-   fragmentShader:`precision mediump float;varying vec2 vWorld;uniform float uTime;
-    void main(){float r=length(vWorld);float cloud=.5+.5*sin(vWorld.x*.018+sin(vWorld.y*.025)*1.7+uTime*.08);
-    vec3 col=mix(vec3(.54,.10,.34),vec3(.95,.30,.61),cloud*.45+.45);
-    col=mix(col,vec3(1.,.60,.79),smoothstep(270.,780.,r)*.65);
-    gl_FragColor=vec4(col,1.);}`});
-  this.horizon=new THREE.Mesh(new THREE.RingGeometry(CITY_OUTER_RADIUS+.65,1500,128),horizonMaterial);
-  this.horizon.name='Pink atmospheric foundation outside city';this.horizon.rotation.x=-Math.PI/2;
-  this.horizon.position.y=-.075;scene.add(this.horizon);
-  this.horizonVolume=new THREE.Group();this.horizonVolume.name='Floating psychedelic 3D sculpture field';
-  scene.add(this.horizonVolume);
-  const uniforms={uTime:{value:0}};
-  const geometryShader=new THREE.ShaderMaterial({uniforms,depthWrite:true,side:THREE.DoubleSide,toneMapped:false,
-   vertexShader:`uniform float uTime;varying vec3 vNormal,vEye,vPos;varying float vSeed;
-    void main(){vec3 p=position,n=normal;vec3 anchor=instanceMatrix[3].xyz;
-    float seed=fract(sin(dot(anchor.xz,vec2(.031,.072)))*416.17);
-    float t=uTime*(.12+seed*.13)+seed*6.28,c=cos(t),s=sin(t);
-    mat2 rot=mat2(c,s,-s,c);p.xz=rot*p.xz;n.xz=rot*n.xz;
-    float pulse=1.+.12*sin(t*2.+p.y*2.);p*=pulse;
-    vec4 local=instanceMatrix*vec4(p,1.);
-    local.y+=sin(t*1.7)*5.;vec4 eye=modelViewMatrix*local;
-    vNormal=normalize(normalMatrix*mat3(instanceMatrix)*n);vEye=-eye.xyz;vPos=local.xyz;vSeed=seed;
-    gl_Position=projectionMatrix*eye;}`,
-   fragmentShader:`precision mediump float;uniform float uTime;varying vec3 vNormal,vEye,vPos;varying float vSeed;
-    void main(){vec3 n=normalize(vNormal),v=normalize(vEye);float facing=abs(dot(n,v));
-    float rim=pow(1.-facing,2.2),lit=.25+.75*max(0.,dot(n,normalize(vec3(-.4,.8,.65))));
-    float flow=.5+.5*sin(vPos.y*.23+vPos.x*.09+vPos.z*.07+uTime*.55+vSeed*9.);
-    vec3 base=mix(vec3(.85,.10,.57),vec3(.47,.13,.88),flow);
-    vec3 col=base*lit+vec3(1.,.53,.13)*pow(flow,4.)*.9+vec3(1.,.67,.92)*rim*.85;
-    float haze=smoothstep(180.,850.,length(vEye));col=mix(col,vec3(.99,.42,.69),haze*.68);
-    gl_FragColor=vec4(col,1.);}`});
-  let rngState=0x46c083a1;const rnd=()=>((rngState=(Math.imul(rngState,1664525)+1013904223)>>>0)/4294967296);
-  const dummy=new THREE.Object3D(),geos=[
-   new THREE.TorusKnotGeometry(1,.22,mobile?48:72,8,2,3),
-   new THREE.TorusGeometry(1,.24,8,mobile?24:36),
-   new THREE.IcosahedronGeometry(1,1)
-  ];
-  for(let kind=0;kind<geos.length;kind++){
-   const count=(mobile?[30,42,38]:[54,66,58])[kind],mesh=new THREE.InstancedMesh(geos[kind],geometryShader,count);
-   mesh.name=['Twisted luminous knots','Orbital sculptural rings','Floating faceted crystals'][kind];
-   for(let i=0;i<count;i++){const group=i%12,angle=group*Math.PI/6+(rnd()-.5)*.42;
-    const r=CITY_OUTER_RADIUS+35+rnd()*340,scale=kind===0?10+rnd()*22:kind===1?7+rnd()*18:3+rnd()*12;
-    dummy.position.set(Math.cos(angle)*r,8+rnd()*88,Math.sin(angle)*r);
-    dummy.rotation.set(rnd()*Math.PI,rnd()*Math.PI*2,rnd()*Math.PI);
-    dummy.scale.set(scale,scale*(.75+rnd()*.65),scale);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
-   }
-   mesh.instanceMatrix.needsUpdate=true;mesh.frustumCulled=false;this.horizonVolume.add(mesh);
-  }
-  const particleCount=mobile?700:1500,particles=new Float32Array(particleCount*3),seeds=new Float32Array(particleCount);
-  for(let i=0;i<particleCount;i++){const a=rnd()*Math.PI*2,r=CITY_OUTER_RADIUS+20+rnd()*500;
-   particles.set([Math.cos(a)*r,3+rnd()*135,Math.sin(a)*r],i*3);seeds[i]=rnd();}
-  const particleGeo=new THREE.BufferGeometry();particleGeo.setAttribute('position',new THREE.BufferAttribute(particles,3));particleGeo.setAttribute('aSeed',new THREE.BufferAttribute(seeds,1));
-  const particleMat=new THREE.ShaderMaterial({uniforms,transparent:true,depthTest:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,
-   vertexShader:`attribute float aSeed;uniform float uTime;varying float vAlpha,vSeed;
-    void main(){vec3 p=position;float t=uTime*.3+aSeed*6.28;
-    p.x+=cos(t)*12.;p.z+=sin(t)*12.;p.y+=sin(t*1.6)*8.;vec4 eye=modelViewMatrix*vec4(p,1.);
-    gl_PointSize=clamp((1.+aSeed*2.)*250./max(30.,-eye.z),1.,5.);vAlpha=.35+.55*pow(.5+.5*sin(t*2.),2.);vSeed=aSeed;
-    gl_Position=projectionMatrix*eye;}`,
-   fragmentShader:`precision mediump float;varying float vAlpha,vSeed;void main(){float d=length(gl_PointCoord-.5);
-    float a=(1.-smoothstep(.06,.5,d))*vAlpha;gl_FragColor=vec4(mix(vec3(1.,.62,.18),vec3(1.,.77,1.),vSeed),a);}`});
-  const sparkles=new THREE.Points(particleGeo,particleMat);sparkles.frustumCulled=false;this.horizonVolume.add(sparkles);
-  this.horizonUniforms=uniforms;
+  this.ocean=createElectricOcean(scene,{mobile});
+  this.horizon=this.ocean.surface;
+
  }
  update(time,roots){
-  const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;this.horizon.material.uniforms.uTime.value=time;this.horizonUniforms.uTime.value=time;
+  const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;this.ocean.update(time);
   let i=0;for(const root of roots.values()){
    if(i>=6)break;if(!root?.visible)continue;
    uniform.uPlayers.value[i].copy(root.position);i++;
   }
   uniform.uPlayerCount.value=i;
  }
- dispose(){const mats=new Set();this.horizonVolume.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)mats.add(o.material);});mats.forEach(m=>m.dispose());this.horizonVolume.removeFromParent();this.horizon.removeFromParent();this.horizon.geometry.dispose();this.horizon.material.dispose();this.mesh.removeFromParent();this.mesh.geometry.dispose();this.outerMesh.removeFromParent();this.outerMesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.outerCanopy.removeFromParent();this.outerCanopy.geometry.dispose();this.canopy.material.dispose();}
+ dispose(){this.ocean.dispose();this.mesh.removeFromParent();this.mesh.geometry.dispose();this.outerMesh.removeFromParent();this.outerMesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.outerCanopy.removeFromParent();this.outerCanopy.geometry.dispose();this.canopy.material.dispose();}
+}
+/* ELECTRIC OCEAN r117: a physically displaced annular surface, not a flat
+   patterned plane. All animation is on the GPU. The shoreline is fixed,
+   and progressively denser tessellation near land preserves wave silhouettes. */
+export const ELECTRIC_OCEAN_INNER=CITY_OUTER_RADIUS+1;
+export const ELECTRIC_OCEAN_OUTER=1120;
+export function electricOceanGeometry(mobile=false){
+ const radial=mobile?72:112,angular=mobile?192:288;
+ const positions=new Float32Array((radial+1)*(angular+1)*3),indices=[];
+ for(let i=0;i<=radial;i++){
+  const t=i/radial,r=ELECTRIC_OCEAN_INNER+(ELECTRIC_OCEAN_OUTER-ELECTRIC_OCEAN_INNER)*(.27*t+.73*t*t);
+  for(let j=0;j<=angular;j++){const a=j/angular*Math.PI*2,k=(i*(angular+1)+j)*3;
+   positions[k]=r*Math.cos(a);positions[k+1]=0;positions[k+2]=r*Math.sin(a);
+   if(i&&j){const v=i*(angular+1)+j,prev=v-angular-1;indices.push(prev-1,v-1,prev,prev,v-1,v);}
+  }
+ }
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(positions,3));g.setIndex(indices);g.computeBoundingSphere();g.boundingSphere.radius+=65;return g;
+}
+// Two crossing swells, radial shockwaves and a third rotating interference
+// component. One common function keeps the spray attached to the moving sea.
+const oceanWaveGLSL=`
+uniform float uTime;
+uniform float uShore;
+float waveHeight(vec2 p){
+ float r=length(p),d=max(0.,r-uShore),a=atan(p.y,p.x),t=uTime;
+ float shore=smoothstep(0.,17.,d);
+ float swell=sin(d*.105-1.8*t+3.1*sin(a*5.+t*.23));
+ float crosswave=sin(dot(p,vec2(.067,.093))+1.45*t+1.5*sin(p.x*.024-t*.2));
+ float vortex=sin(d*.055+7.*a+t*.78+2.2*sin(a*3.-t*.31));
+ float ripple=sin(dot(p,vec2(-.14,.085))-t*2.15);
+ float ridge=pow(.5+.5*swell,2.5);
+ float gain=mix(1.,1.8,smoothstep(25.,410.,d));
+ // Positive elevation prevents the old meadow plane hiding troughs.
+ return .024+shore*gain*(3.+9.*ridge+3.8*(.5+.5*crosswave)+5.8*(.5+.5*vortex)+1.2*(.5+.5*ripple));
+}
+`;
+export function createElectricOcean(scene,{mobile=false}={}){
+ const uniforms={uTime:{value:0},uShore:{value:ELECTRIC_OCEAN_INNER}};
+ const root=new THREE.Group();root.name='Electric Ocean - real 3D animated swells';scene.add(root);
+ const material=new THREE.ShaderMaterial({uniforms,side:THREE.DoubleSide,depthWrite:true,toneMapped:false,
+  vertexShader:`precision highp float;
+  ${oceanWaveGLSL}
+  varying vec3 vWorld,vNormal;
+  varying float vHeight;
+  void main(){
+   vec2 q=position.xz;float h=waveHeight(q),e=1.3;
+   vec3 n=normalize(vec3(waveHeight(q-vec2(e,0.))-waveHeight(q+vec2(e,0.)),2.*e,waveHeight(q-vec2(0.,e))-waveHeight(q+vec2(0.,e))));
+   vec4 p=modelMatrix*vec4(q.x,h,q.y,1.);
+   vWorld=p.xyz;vNormal=n;vHeight=h;
+   gl_Position=projectionMatrix*viewMatrix*p;
+  }`,
+  fragmentShader:`precision highp float;
+  uniform float uTime,uShore;varying vec3 vWorld,vNormal;varying float vHeight;
+  void main(){
+   vec2 p=vWorld.xz;float r=length(p),d=r-uShore,a=atan(p.y,p.x),t=uTime;
+   vec3 n=normalize(vNormal),eye=normalize(cameraPosition-vWorld);
+   float face=abs(dot(n,eye)),fres=pow(1.-face,2.1);
+   float diffuse=.25+.75*max(0.,dot(n,normalize(vec3(-.55,.85,.45))));
+   float fold=sin(d*.105-1.8*t+3.1*sin(a*5.+t*.23));
+   float phase=d*.105-1.8*t+3.1*sin(a*5.+t*.23);
+   float interference=sin(dot(p,vec2(.067,.093))+1.45*t+1.5*sin(p.x*.024-t*.2));
+   float curl=sin(d*.055+7.*a+t*.78+2.2*sin(a*3.-t*.31));
+   float crest=smoothstep(.50,.96,fold)*smoothstep(.15,.8,n.y);
+   float valley=(.5+.5*interference)*(.5+.5*curl);
+   vec3 deep=vec3(.31,.018,.24),pink=vec3(.84,.055,.42),purple=vec3(.43,.045,.76);
+   vec3 col=mix(deep,pink,clamp(diffuse*.76+valley*.25,0.,1.));
+   col=mix(col,purple,smoothstep(.3,.95,valley)*.52);
+   col=mix(col,vec3(.91,.20,.53),fres*.38+crest*.28);
+   // Thick luminous wave faces, branching electric channels and a narrow
+   // white-hot core; use the same moving phase as the actual vertex swell.
+   float field=sin(phase*2.+1.15*sin(interference*4.+curl*2.));
+   float channel=(1.-smoothstep(.06,.39,abs(field)))*smoothstep(.18,.85,fold);
+   float corona=exp(-abs(field)*3.8)*smoothstep(-.1,.9,fold);
+   float breakUp=.35+.65*smoothstep(-.4,.75,sin(p.x*.23+p.y*.19-t*2.+curl*3.));
+   col+=vec3(.31,.038,.39)*corona*.55;
+   col=mix(col,vec3(1.,.36,.64),crest*.58);
+   col=mix(col,vec3(1.,.73,.49),channel*breakUp*.84);
+   float glint=pow(max(0.,dot(reflect(-normalize(vec3(-.5,.8,.55)),n),eye)),22.);
+   col+=vec3(.34,.20,.33)*glint;
+   // Keep far waves visibly contrasting, even after the existing VHS gain.
+   float haze=smoothstep(440.,1040.,length(cameraPosition-vWorld))*.26;
+   col=mix(col,vec3(.65,.13,.40),haze);
+   gl_FragColor=vec4(clamp(col,0.,1.),1.);
+  }`});
+ const surface=new THREE.Mesh(electricOceanGeometry(mobile),material);surface.name='Electric Ocean displaced pink surface';surface.frustumCulled=false;root.add(surface);
+ // Electric spray occupies real positions just above the current wave.
+ let state=0x5c1143a;const rnd=()=>((state=(Math.imul(state,1664525)+1013904223)>>>0)/4294967296);
+ const count=mobile?900:1800,points=new Float32Array(count*3),seeds=new Float32Array(count);
+ for(let i=0;i<count;i++){const a=rnd()*Math.PI*2,r=ELECTRIC_OCEAN_INNER+9+Math.pow(rnd(),1.65)*650;points.set([r*Math.cos(a),0,r*Math.sin(a)],i*3);seeds[i]=rnd();}
+ const pg=new THREE.BufferGeometry();pg.setAttribute('position',new THREE.BufferAttribute(points,3));pg.setAttribute('aSeed',new THREE.BufferAttribute(seeds,1));
+ const pm=new THREE.ShaderMaterial({uniforms,transparent:true,depthTest:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,
+  vertexShader:`precision highp float;
+  ${oceanWaveGLSL}
+  attribute float aSeed;varying float vAlpha,vSeed;
+  void main(){
+   float t=uTime*(.55+.5*aSeed)+aSeed*37.;
+   vec2 q=position.xz+vec2(cos(t),sin(t))*6.;
+   float life=fract(t*.31+aSeed),lift=sin(life*3.14159)*(1.+7.*aSeed);
+   vec3 p=vec3(q.x,waveHeight(q)+.35+lift,q.y);
+   vec4 eye=modelViewMatrix*vec4(p,1.);
+   gl_PointSize=clamp((2.+aSeed*3.)*115./max(12.,-eye.z),1.2,6.);
+   vAlpha=sin(life*3.14159)*(.4+.6*aSeed);vSeed=aSeed;
+   gl_Position=projectionMatrix*eye;
+  }`,
+  fragmentShader:`precision highp float;varying float vAlpha,vSeed;
+   void main(){float r=length(gl_PointCoord-.5);float alpha=(1.-smoothstep(.07,.5,r))*vAlpha;gl_FragColor=vec4(mix(vec3(1.,.53,.14),vec3(1.,.65,.98),vSeed),alpha);}`});
+ const spray=new THREE.Points(pg,pm);spray.name='Electric Ocean wave-bound luminous spray';spray.frustumCulled=false;root.add(spray);
+ return {root,surface,spray,update(time){uniforms.uTime.value=time;},dispose(){root.removeFromParent();surface.geometry.dispose();material.dispose();pg.dispose();pm.dispose();}};
 }

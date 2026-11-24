@@ -25,3 +25,23 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+
+  electric-ocean-chat-gpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run start > /tmp/electric-ocean-static.log 2>&1 &
+      - run: node tests/electric-ocean-chat-browser.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electric-ocean-shoreline
+          path: output/electric-ocean
+          if-no-files-found: ignore
