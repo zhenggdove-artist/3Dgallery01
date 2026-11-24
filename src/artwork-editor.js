@@ -57,7 +57,13 @@ export class ArtworkEditor{
       const output=this.panel.querySelector('[data-label-distance-output]');
       if(output)output.textContent=value+' m';
      }
-     this.dirty=true;this.status('名稱及外觀即時預覽 · 尚未儲存');
+     if(key==='labelNearFadeDistance'){
+       const output=this.panel.querySelector('[data-label-near-output]');if(output)output.textContent=value+' m';
+      }
+      if(key==='labelNearMinOpacity'){
+       const output=this.panel.querySelector('[data-label-opacity-output]');if(output)output.textContent=Math.round(value*100)+'%';
+      }
+      this.dirty=true;this.status(key==='labelNearFadeDistance'||key==='labelNearMinOpacity'?'近距離淡出已調整 · 儲存並關閉後生效':'名稱及外觀即時預覽 · 尚未儲存');
      if(this.mode==='label')this.updateLabelHandles();
     });
     this.panel.addEventListener('change',e=>{if(!this.selected)return;if(e.target.hasAttribute('data-platform-radius')){const n=Number(e.target.value);if(!Number.isFinite(n)||n<1.5||n>14){this.status('圓盤半徑限 1.5–14');return;}this.platformRadius=n;this.selected.userData.previewPlatformRadius=n;this.arena.displayPlatforms.sync();this.dirty=true;this.status('圓盤尺寸尚未儲存');return;}if(e.target.dataset.appearance)return;if(!e.target.dataset.axis)return;const [prop,index]=e.target.dataset.axis.split('-'),n=Number(e.target.value);if(!Number.isFinite(n))return;this.selected[prop].setComponent?this.selected[prop].setComponent(+index,n):this.selected.rotation[['x','y','z'][index]]=THREE.MathUtils.degToRad(n);this.dirty=true;this.status('尚未儲存');});
