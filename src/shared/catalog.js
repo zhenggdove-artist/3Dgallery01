@@ -156,8 +156,8 @@ export const COMFORT_ITEMS=Object.freeze([
  {id:'comfort-dollar-50',name:'Comfort Cash · $50',slot:'consumable',category:'Comfort for the Soul',denomination:50,healFraction:.50,price:2000,tier:3,rarity:'rare',color:'#d777ad',description:'Give me more!'},
  {id:'comfort-dollar-100',name:'Comfort Cash · $100',slot:'consumable',category:'Comfort for the Soul',denomination:100,healFraction:1,price:5000,tier:5,rarity:'relic',color:'#64a7db',description:'Give me more!'}
 ].map(item=>Object.freeze({...item,sell:Math.floor(item.price*.25)})));
-export const ITEMS = Object.freeze([...RELETTER_ITEMS,...ARMOR,...COMFORT_ITEMS]);
-const INDEX = new Map(ITEMS.map(item=>[item.id,item]));
+export const ITEMS = Object.freeze([...RELETTER_ITEMS,...COMFORT_ITEMS]);
+const INDEX = new Map([...ITEMS,...ARMOR].map(item=>[item.id,item]));
 const CUSTOM_IDS=new Set();
 // Rehydrate custom GM wings from authoritative room data before equipment lookup.
 export function registerCustomWings(wings=[]){
