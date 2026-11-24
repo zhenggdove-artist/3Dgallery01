@@ -50,3 +50,12 @@ test('EQUIP body and all canonical equipment share one front frame, with no bind
  assert.equal(a.quaternion.angleTo(new T.Quaternion()),0);assert.equal(b.quaternion.angleTo(new T.Quaternion()),0);assert.ok(view.focus.size.x>=5);
  assert.equal(view.model.children[0].quaternion.angleTo(new T.Quaternion()),0);
 });
+
+test('idle clip is sampled on detached clone and does not restore an active tilted pose',()=>{
+ const player=new T.Group(),model=new T.Group(),head=new T.Bone();head.name='Head';head.position.set(0,1.6,0);head.rotation.z=.9;model.add(head);model.add(new T.Mesh(new T.BoxGeometry(.5,1.8,.4),new T.MeshBasicMaterial()));player.add(model);
+ const clip=new T.AnimationClip('idle',1,[new T.NumberKeyframeTrack('Head.rotation[z]',[0,1],[0,0])]);
+ player.userData={model,actions:{idle:{getClip:()=>clip}},portraitBase:{position:model.position.clone(),quaternion:model.quaternion.clone(),scale:model.scale.clone()}};
+ const view=new EquipmentPortraitViewport();view.scene=new T.Scene();view.build(player);
+ assert.ok(Math.abs(view.anchors.get('Head').rotation.z)<1e-6);
+ assert.ok(Math.abs(head.rotation.z-.9)<1e-6);
+});

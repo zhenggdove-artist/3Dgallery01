@@ -100,7 +100,10 @@ export class EquipmentPortraitViewport{
   if(idle){
    const base=data.portraitBase;
    if(base){model.position.copy(base.position);model.quaternion.copy(base.quaternion);model.scale.copy(base.scale);}
-   const mixer=new THREE.AnimationMixer(model);mixer.clipAction(idle).play();mixer.setTime(.15);mixer.uncacheRoot(model);
+   // Do not uncacheRoot/stopAllAction: Three restores the pre-sampled bone
+   // values when releasing bindings. This temporary mixer is unreachable
+   // after build(), so GC releases it without resetting the idle pose.
+   const mixer=new THREE.AnimationMixer(model);mixer.clipAction(idle).play();mixer.setTime(.15);
   }
   model.updateMatrixWorld(true);
   model.traverse(o=>{if(o.isSkinnedMesh){o.skeleton.update();o.computeBoundingBox();}});
