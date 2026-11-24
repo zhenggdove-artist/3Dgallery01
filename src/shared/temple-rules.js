@@ -260,7 +260,7 @@ export function publicProfile(profile){
 
 export function worldProfileView(world,actorKey,now){
  const profile=world.profiles[actorKey];
- return profile?{...publicProfile(profile),stats:playerStats(world,profile,now),inventory:clone(profile.inventory),quickSlots:clone(profile.quickSlots||[null,null,null]),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
+ return profile?{...publicProfile(profile),stats:playerStats(world,profile,now),starterWeaponId:profile.starterWeaponId,inventory:clone(profile.inventory),quickSlots:clone(profile.quickSlots||[null,null,null]),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
 }
 
 export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true){
@@ -655,7 +655,7 @@ export function applyAction(world,actor,body,context={}){
   // Inventory bookkeeping does not involve combat or world-space actions.
   // Allow purchasing, inspecting and equipping while a room is full and the
   // account is spectating. Combat/building still requires an active fighter.
-  const inventoryAction=['buy','equip','unequip','sell','inspect-item','assign-consumable','swap-inventory'].includes(body.action);
+  const inventoryAction=['buy','equip','unequip','sell','sell-bulk','inspect-item','assign-consumable','swap-inventory'].includes(body.action);
    // Viewers can write and reply at the central tree, but cannot fight/build.
    const spectatorWrite=actor.role==='spectator'&&body.action==='plant';
    const denied=inventoryAction||spectatorWrite?null:requireFighter(actor);if(denied)return denied;
