@@ -1,4 +1,6 @@
 import {applyWorldPatch} from './shared/world-patch.js';
+import {CITY_LAYOUT_SIGNATURE} from './shared/city-layout.js';
+import {SHOP_CATALOG_REVISION} from './shared/catalog.js';
 
 export class TempleNetwork extends EventTarget{
   constructor(config=window.TEMPLE_CONFIG){
@@ -13,6 +15,8 @@ export class TempleNetwork extends EventTarget{
   // gameplay continue to use the short random Temple session token.
   async join({name,color='#43b59a',firebaseIdToken='',mode='firebase'}) {
     this.ensureConfigured();
+    const health=await this.request('/health',{auth:false,timeoutMs:6000});
+    if(health?.service==='Temple'&&(health.features?.wearableCatalog!==SHOP_CATALOG_REVISION||health.cityLayoutSignature!==CITY_LAYOUT_SIGNATURE))throw Error('Temple server is updating. Client/server city and shop versions must match.');
     if(mode==='guest'&&firebaseIdToken)throw Error('Cannot use guest mode after Google authentication');
     const data=await this.request('/api/join',{
       method:'POST',body:{name,color,...(mode==='guest'?{mode:'guest'}:{})},auth:false,identityToken:firebaseIdToken,timeoutMs:20_000
@@ -120,7 +124,7 @@ export class TempleNetwork extends EventTarget{
     const timer=controller?setTimeout(()=>controller.abort(),timeoutMs):null;
     let response;
     try{response=await fetch(this.base+path,{
-      method,headers,body:body===undefined?undefined:JSON.stringify(body),
+      method,headers,body:body===undefined?undefined:JSON.stringify(body),...(path==='/health'?{cache:'no-store'}:{}),
       ...(controller?{signal:controller.signal}:{})
     });}
     catch(error){

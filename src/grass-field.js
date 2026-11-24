@@ -129,36 +129,79 @@ export class GrassField{
   this.outerCanopy=new THREE.Mesh(new THREE.RingGeometry(CITY_INNER_RADIUS-.25,CITY_OUTER_RADIUS+1,192),this.canopy.material);
   this.outerCanopy.name='Full city green grass canopy with no exposed earth';
   this.outerCanopy.rotation.x=-Math.PI/2;this.outerCanopy.position.y=.007;scene.add(this.outerCanopy);
-  // One opaque annular shader replaces the dark off-map floor. No CPU particle
-  // simulation, framebuffers, bloom passes, textures or per-particle draw calls.
+  // Real 3D off-map field: depth-tested sculptural forms and particles.
+  // No bloom framebuffer, CPU particle updates, or repeated per-object draw calls.
   const horizonMaterial=new THREE.ShaderMaterial({side:THREE.DoubleSide,depthWrite:true,toneMapped:false,
    uniforms:{uTime:{value:0}},vertexShader:`varying vec2 vWorld;void main(){vWorld=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-   fragmentShader:`precision mediump float;
-    varying vec2 vWorld;uniform float uTime;
-    float hash(vec2 p){return fract(sin(dot(mod(p,97.),vec2(127.1,311.7)))*4375.45);}
-    void main(){
-     vec2 q=vWorld*.031;float r=length(q),a=atan(q.y,q.x),t=uTime*.28;
-     float fold=abs(sin(a*7.+r*.7-t)),ribbon=sin(r*2.3+fold*5.+t*2.);
-     float web=sin(q.x*2.1+sin(q.y*.72+t)*2.7)*cos(q.y*1.7+sin(q.x*.8-t)*2.);
-     float line=1.-smoothstep(.045,.24,abs(ribbon));float grid=1.-smoothstep(.04,.22,abs(web));
-     vec2 p=q*4.,cell=floor(p),f=fract(p)-.5;float h=hash(cell);
-     f-=.22*vec2(sin(t+h*6.28),cos(t*.8+h*5.));
-     float sparkle=(1.-smoothstep(.025,.15,length(f)))*(.35+.65*h);
-     vec3 col=mix(vec3(.79,.13,.47),vec3(1.,.36,.68),.5+.5*sin(r*.7-t+web));
-     col=mix(col,vec3(.63,.19,.85),grid*.44);col=mix(col,vec3(1.,.77,.47),line*.70);
-     col=mix(col,vec3(1.,.92,.86),sparkle*.8);gl_FragColor=vec4(col,1.);
-    }`});
+   fragmentShader:`precision mediump float;varying vec2 vWorld;uniform float uTime;
+    void main(){float r=length(vWorld);float cloud=.5+.5*sin(vWorld.x*.018+sin(vWorld.y*.025)*1.7+uTime*.08);
+    vec3 col=mix(vec3(.54,.10,.34),vec3(.95,.30,.61),cloud*.45+.45);
+    col=mix(col,vec3(1.,.60,.79),smoothstep(270.,780.,r)*.65);
+    gl_FragColor=vec4(col,1.);}`});
   this.horizon=new THREE.Mesh(new THREE.RingGeometry(CITY_OUTER_RADIUS+.65,1500,128),horizonMaterial);
-  this.horizon.name='Pink psychedelic off-map geometric particle field';
-  this.horizon.rotation.x=-Math.PI/2;this.horizon.position.y=-.075;scene.add(this.horizon);
+  this.horizon.name='Pink atmospheric foundation outside city';this.horizon.rotation.x=-Math.PI/2;
+  this.horizon.position.y=-.075;scene.add(this.horizon);
+  this.horizonVolume=new THREE.Group();this.horizonVolume.name='Floating psychedelic 3D sculpture field';
+  scene.add(this.horizonVolume);
+  const uniforms={uTime:{value:0}};
+  const geometryShader=new THREE.ShaderMaterial({uniforms,depthWrite:true,side:THREE.DoubleSide,toneMapped:false,
+   vertexShader:`uniform float uTime;varying vec3 vNormal,vEye,vPos;varying float vSeed;
+    void main(){vec3 p=position,n=normal;vec3 anchor=instanceMatrix[3].xyz;
+    float seed=fract(sin(dot(anchor.xz,vec2(.031,.072)))*416.17);
+    float t=uTime*(.12+seed*.13)+seed*6.28,c=cos(t),s=sin(t);
+    mat2 rot=mat2(c,s,-s,c);p.xz=rot*p.xz;n.xz=rot*n.xz;
+    float pulse=1.+.12*sin(t*2.+p.y*2.);p*=pulse;
+    vec4 local=instanceMatrix*vec4(p,1.);
+    local.y+=sin(t*1.7)*5.;vec4 eye=modelViewMatrix*local;
+    vNormal=normalize(normalMatrix*mat3(instanceMatrix)*n);vEye=-eye.xyz;vPos=local.xyz;vSeed=seed;
+    gl_Position=projectionMatrix*eye;}`,
+   fragmentShader:`precision mediump float;uniform float uTime;varying vec3 vNormal,vEye,vPos;varying float vSeed;
+    void main(){vec3 n=normalize(vNormal),v=normalize(vEye);float facing=abs(dot(n,v));
+    float rim=pow(1.-facing,2.2),lit=.25+.75*max(0.,dot(n,normalize(vec3(-.4,.8,.65))));
+    float flow=.5+.5*sin(vPos.y*.23+vPos.x*.09+vPos.z*.07+uTime*.55+vSeed*9.);
+    vec3 base=mix(vec3(.85,.10,.57),vec3(.47,.13,.88),flow);
+    vec3 col=base*lit+vec3(1.,.53,.13)*pow(flow,4.)*.9+vec3(1.,.67,.92)*rim*.85;
+    float haze=smoothstep(180.,850.,length(vEye));col=mix(col,vec3(.99,.42,.69),haze*.68);
+    gl_FragColor=vec4(col,1.);}`});
+  let rngState=0x46c083a1;const rnd=()=>((rngState=(Math.imul(rngState,1664525)+1013904223)>>>0)/4294967296);
+  const dummy=new THREE.Object3D(),geos=[
+   new THREE.TorusKnotGeometry(1,.22,mobile?48:72,8,2,3),
+   new THREE.TorusGeometry(1,.24,8,mobile?24:36),
+   new THREE.IcosahedronGeometry(1,1)
+  ];
+  for(let kind=0;kind<geos.length;kind++){
+   const count=(mobile?[30,42,38]:[54,66,58])[kind],mesh=new THREE.InstancedMesh(geos[kind],geometryShader,count);
+   mesh.name=['Twisted luminous knots','Orbital sculptural rings','Floating faceted crystals'][kind];
+   for(let i=0;i<count;i++){const group=i%12,angle=group*Math.PI/6+(rnd()-.5)*.42;
+    const r=CITY_OUTER_RADIUS+35+rnd()*340,scale=kind===0?10+rnd()*22:kind===1?7+rnd()*18:3+rnd()*12;
+    dummy.position.set(Math.cos(angle)*r,8+rnd()*88,Math.sin(angle)*r);
+    dummy.rotation.set(rnd()*Math.PI,rnd()*Math.PI*2,rnd()*Math.PI);
+    dummy.scale.set(scale,scale*(.75+rnd()*.65),scale);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
+   }
+   mesh.instanceMatrix.needsUpdate=true;mesh.frustumCulled=false;this.horizonVolume.add(mesh);
+  }
+  const particleCount=mobile?700:1500,particles=new Float32Array(particleCount*3),seeds=new Float32Array(particleCount);
+  for(let i=0;i<particleCount;i++){const a=rnd()*Math.PI*2,r=CITY_OUTER_RADIUS+20+rnd()*500;
+   particles.set([Math.cos(a)*r,3+rnd()*135,Math.sin(a)*r],i*3);seeds[i]=rnd();}
+  const particleGeo=new THREE.BufferGeometry();particleGeo.setAttribute('position',new THREE.BufferAttribute(particles,3));particleGeo.setAttribute('aSeed',new THREE.BufferAttribute(seeds,1));
+  const particleMat=new THREE.ShaderMaterial({uniforms,transparent:true,depthTest:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,
+   vertexShader:`attribute float aSeed;uniform float uTime;varying float vAlpha,vSeed;
+    void main(){vec3 p=position;float t=uTime*.3+aSeed*6.28;
+    p.x+=cos(t)*12.;p.z+=sin(t)*12.;p.y+=sin(t*1.6)*8.;vec4 eye=modelViewMatrix*vec4(p,1.);
+    gl_PointSize=clamp((1.+aSeed*2.)*250./max(30.,-eye.z),1.,5.);vAlpha=.35+.55*pow(.5+.5*sin(t*2.),2.);vSeed=aSeed;
+    gl_Position=projectionMatrix*eye;}`,
+   fragmentShader:`precision mediump float;varying float vAlpha,vSeed;void main(){float d=length(gl_PointCoord-.5);
+    float a=(1.-smoothstep(.06,.5,d))*vAlpha;gl_FragColor=vec4(mix(vec3(1.,.62,.18),vec3(1.,.77,1.),vSeed),a);}`});
+  const sparkles=new THREE.Points(particleGeo,particleMat);sparkles.frustumCulled=false;this.horizonVolume.add(sparkles);
+  this.horizonUniforms=uniforms;
  }
  update(time,roots){
-  const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;this.horizon.material.uniforms.uTime.value=time%600;
+  const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;this.horizon.material.uniforms.uTime.value=time;this.horizonUniforms.uTime.value=time;
   let i=0;for(const root of roots.values()){
    if(i>=6)break;if(!root?.visible)continue;
    uniform.uPlayers.value[i].copy(root.position);i++;
   }
   uniform.uPlayerCount.value=i;
  }
- dispose(){this.horizon.removeFromParent();this.horizon.geometry.dispose();this.horizon.material.dispose();this.mesh.removeFromParent();this.mesh.geometry.dispose();this.outerMesh.removeFromParent();this.outerMesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.outerCanopy.removeFromParent();this.outerCanopy.geometry.dispose();this.canopy.material.dispose();}
+ dispose(){const mats=new Set();this.horizonVolume.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)mats.add(o.material);});mats.forEach(m=>m.dispose());this.horizonVolume.removeFromParent();this.horizon.removeFromParent();this.horizon.geometry.dispose();this.horizon.material.dispose();this.mesh.removeFromParent();this.mesh.geometry.dispose();this.outerMesh.removeFromParent();this.outerMesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.outerCanopy.removeFromParent();this.outerCanopy.geometry.dispose();this.canopy.material.dispose();}
 }

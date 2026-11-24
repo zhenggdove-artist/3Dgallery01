@@ -152,6 +152,15 @@ function repackIntoOrganicBlocks(lots,seed){
  }
 }
 export const CITY_LOTS=cityLots();
+// Fingerprint the actual collision layout, not just a manually bumped version.
+export const CITY_LAYOUT_SIGNATURE=(()=>{
+ let hash=2166136261;
+ // Quantize sub-millimetre noise from browser/Worker libm differences.
+ const q=n=>Math.round(n*10000);
+ const data=JSON.stringify(CITY_LOTS.map(l=>[l.id,q(l.x),q(l.z),q(l.yaw),q(l.width),q(l.depth),q(l.height),l.floors]));
+ for(let i=0;i<data.length;i++)hash=Math.imul(hash^data.charCodeAt(i),16777619);
+ return (hash>>>0).toString(16).padStart(8,'0');
+})();
 // Collision and roof support are queried multiple times in every movement
 // tick on both the browser and the authoritative Worker. Scanning all 504
 // houses on every step creates regular main-thread stalls. Index immutable

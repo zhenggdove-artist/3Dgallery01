@@ -8,6 +8,8 @@ import {applyAction,createInitialWorld,ensureProfile,migrateWorld,publicProfile,
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
 import {availableRoleSeat} from '../src/shared/spectator-seats.js';
 import {playerStats} from '../src/shared/player-stats.js';
+import {SHOP_CATALOG_REVISION,SHOP_CATALOG_IDS} from '../src/shared/catalog.js';
+import {CITY_LAYOUT_SIGNATURE,CITY_BUILDING_COUNT} from '../src/shared/city-layout.js';
 import {changedWorldFields,createWorldPatch} from '../src/shared/world-patch.js';
 
 const MUSIC_CHUNK_BYTES=512*1024,MAX_GM_MUSIC_BYTES=7_500_000;
@@ -18,7 +20,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,features:{artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,wearableCatalog:'r115',supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
