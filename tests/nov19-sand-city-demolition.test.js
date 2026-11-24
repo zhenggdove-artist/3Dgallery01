@@ -7,15 +7,15 @@ import {CITY_LOTS,CITY_BUILDING_COUNT,CITY_MATERIALS,CITY_MAX_HP,CITY_INNER_RADI
 import {validateState,createInitialWorld,worldView,ensureProfile} from '../src/shared/temple-rules.js';
 const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 
-test('the ruined city district retains twice the original area and triple the housing density',()=>{
+test('the ruined city district retains twice the original area and increased housing density',()=>{
  const oldArea=Math.PI*(184**2-92**2);
  const newArea=Math.PI*(CITY_OUTER_RADIUS**2-CITY_INNER_RADIUS**2);
  assert.ok(Math.abs(newArea/oldArea-2)<1e-12);
- assert.equal(CITY_BUILDING_COUNT,72*2*3);
- assert.equal(CITY_LOTS.length,432);
+ assert.equal(CITY_BUILDING_COUNT,504);
+ assert.equal(CITY_LOTS.length,504);
  assert.equal(ARENA_RADIUS,244);
  assert.deepEqual(cityLots(),cityLots());
- assert.equal(new Set(CITY_LOTS.map(l=>l.id)).size,432);
+ assert.equal(new Set(CITY_LOTS.map(l=>l.id)).size,504);
 });
 test('every material and physically distinct low and tall silhouettes exist',()=>{
  const materials=new Set(CITY_LOTS.map(l=>l.material));

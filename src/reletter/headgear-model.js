@@ -1,5 +1,34 @@
 // Landmark-warped facial albedo from the three supplied reference photographs.
-const PORTRAIT_REFERENCE=Object.freeze({"huang-mask":"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","kim-mask":"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABcQERQRDhcUEhQaGBcbIjklIh8fIkYyNSk5UkhXVVFIUE5bZoNvW2F8Yk5QcptzfIeLkpSSWG2grJ+OqoOPko3/2wBDARgaGiIeIkMlJUONXlBejY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY3/wAARCABwAFgDASIAAhEBAxEB/8QAGgAAAgMBAQAAAAAAAAAAAAAAAwQAAQIFBv/EAC0QAAEEAQMCBQMEAwAAAAAAAAEAAgMRIQQSMSJBBRNRYXEjMoEGFFKhYnLh/8QAFwEBAQEBAAAAAAAAAAAAAAAAAQIAA//EABsRAQEBAQEBAQEAAAAAAAAAAAABEQIxIWFx/9oADAMBAAIRAxEAPwDjxStaCHMBCy42cLUZa01S24F+Nte6iL69ZghklPT2Kd0+hldIAW9+U14ZEBF7rpsaAVNqpGdLo2xMN5W36UE4qkdvC0toJy6RpaT37Lh6yExniqXpykNXA2W8BbTjzJftwFkkHuAnNZoi2y0UueGG67qvU2YJ01zaiojaKIURjGvEIxDq3AUM3tHZSJ28jK6H6g0wZJFKKtwo49Fy9PZcBSnjreV9T67uh+xOA5S2jbTBhNhu5F9aNseOLW7WGx1wFdFIU91ILjaOWWEJzaRTCmoiD43WOQuA9uyR3oF6SYdBXB1oAcb5VcjopI7caUUhidPMyNv3PcAPyotepGk+PU+MQCVkTTd7if6/6k9PoGMO45KaOs/dhpIA29qWsluFy4lkxX9WOkdItQv1NfTjjPy5KTSSRHDSUu/XaxrAWMZk1Rsn+lcFdWPUSV9Ru13oDaL5+OFzopJXP2yt6gLscH8pzyz5e5Oti5NS8DoZuPpay2Wci3w0P9glJppGPDI22459ktH4jqpGOJYKbigclZsdJzt3Ir5SWo0LJjfBWodQZuxBTI4yp1WA+E+HsZrmyHJY0kfPCiYh1DdM90hbfTSi5dS2pst8JxtDDhOxEUEtQwRWBR+bRGuXVd+mnMbI3sgHT5wiMJRwQBZVYgFkQjZVZR6HkIBeZJDt4HKNuAhIu1mBewPZjBQvJLj1Z+VsPLZNrhzkH1RScLFgNYwVQQ5PZU8m+VguRWAkG80eKUWw23l3aqUQvcamIMhDRtrnFZVsGEHfueXHkkkozThafoooNLRcSKQxlZkkEbSSaVJVLFJnyn7bGfZC2akN8veSQPuPKwJtROPosDR/m7aT8KidY0lnkzWM3usJwmYWSuoynIGPdH3GkjHrXNcGTxujd/I8FNtO4WEBl5Q3FFchOU0oxzdwDwCPi1EJzlEbWwEPoo7X4SuVoOpJOiTCogONn8Jdsg7lHje090pVJfYIYkfwQmg5vsVAW+gSdCY0EZC2Ojjhbc9lYAS75QigRz0Jz0J0l8LFkoLe7KixRUQVgKbVLCu0hhwrhU15aURSgllicq/PKzTVNrUBHTEoduce6JTVMLFQar2q7VWsy1FVqLM//9k=","putin-mask":"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABcQERQRDhcUEhQaGBcbIjklIh8fIkYyNSk5UkhXVVFIUE5bZoNvW2F8Yk5QcptzfIeLkpSSWG2grJ+OqoOPko3/2wBDARgaGiIeIkMlJUONXlBejY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY3/wAARCABwAFgDASIAAhEBAxEB/8QAGgAAAgMBAQAAAAAAAAAAAAAAAwQAAgUBBv/EAC0QAAICAQMDAgYBBQEAAAAAAAECABEDEiExBEFRYXEFEyIyQoGRUqGxweHw/8QAGQEBAQEBAQEAAAAAAAAAAAAAAAECBAMF/8QAGxEBAQEBAQEBAQAAAAAAAAAAAAERAgMhEjH/2gAMAwEAAhEDEQA/ANi4p1PU6EpeSahuoyjFhJJAJ4uZLZNeQt92+1TDUHGTQO5MLjJeorhx5MpsKfeauHBoUXzMvRVQSNzCBdtp0rXrIOIEKwOQFd6hiN5BjLDeVMJ/NokjnwZj/FenVGHUJsMjUV8Gb2bpW02ouKtgXIGx9Qv0kfuenn3+ax3zsecAkhMuJsGQ43Ugg+ZJ9OfZrivytrrS2bOydgah8fTqgGNQKA3PmUQfOylyKF3GA1Ez5Fd8FTSq0BUurxYNvOh6PJmNemG9XpOXvBB/1+xJr34Ne00gwqWBgBk8An2FzvzDXiNMH1bwHUi1sCyO0gf/AMZxnuwe8amMn4tgV8AypZKAH3B/7JHM+O0KGvrUpZHmSdnl65zjm9ONug4W0Y7AuzDbtAYRsqeDDlgu52E4q6pE38SwF+kXydVpGwA8RXL8QyLenv6SYutVUvbVQ95cDjx6G/8AMxk6/I25of7jS9SSNjKv9P6Sb3M4Ae8RbqytfVUA3xIg7UPeDGtRG/MqN+Ijh+IOxF8e0eDK4sVZhA8pLYyf6TJKsacg+hkmpXnYB0mtsAdxv29R5hMy2ktZ0rfNTvJ34mXozXZl+1C7XsAIrnfKrhWxBr7nmbhVfEEyLvt/eWDHIdCRX6PaO9F9eM2DYNGXfpy3ke8Z6TDoY+Ce8lIzesJGfQosARUOiMAyM7HwNpsZ+l1ZHI4JuVTANiRZHntLC6TULiYFAyqdirDgzQ6LIS5B4PEIuNCKIseKhlxItEDSYAetJw41cCzemSE6hRkx1VnUK95JFgZNGzwBB/NbVtOs1LfmDBveCChieRIdNd4O995R3IFLuZGsXV1Zyqg7ckdo7hAK7HeZWPM3SlgykhjZNRheuAAogCVk5lWiTufQRZSrbq2063xDGq6mNntUW+YWynKi6Ufc+8EOhq9ZDl+nvfaAVyRxLgg8wuDA60q6vmSDx7GjuDJJpIDl3HtK/aoE6Ws1B5HVQSTvKy7qHc7zodFN6tzE2bI5+il9TOfKflsjGFPOoZb5imbHT2oNHxIMef8AHKK9ZNfUYwVcK/e5cMHw4kK0259Y0NKrRqqmauXOAToBvxI79Q3NCoD2kDdTtOqwYTOXPlTZlJ9QY1gyrk95FOIdzJKX3MkiUm2XsJUAE2dzDDGo/GdquAB+5VCrvRlWY8V/EPXneQgeICRbL2ucD575P8R2h4nRpH4yhQPmHN/xDISfujACVvIUU95BTQCOIMoV3G0YCAcGW0+0ASZgRpaSXKA8iSTB/9k="});
+const PORTRAIT_REFERENCE=Object.freeze({"huang-mask":"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","kim-mask":"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABcQERQRDhcUEhQaGBcbIjklIh8fIkYyNSk5UkhXVVFIUE5bZoNvW2F8Yk5QcptzfIeLkpSSWG2grJ+OqoOPko3/2wBDARgaGiIeIkMlJUONXlBejY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY3/wAARCABwAFgDASIAAhEBAxEB/8QAGgAAAgMBAQAAAAAAAAAAAAAAAwQAAQIFBv/EAC0QAAEEAQMCBQMEAwAAAAAAAAEAAgMRIQQSMSJBBRNRYXEjMoEGFFKhYnLh/8QAFwEBAQEBAAAAAAAAAAAAAAAAAQIAA//EABsRAQEBAQEBAQEAAAAAAAAAAAABEQIxIWFx/9oADAMBAAIRAxEAPwDjxStaCHMBCy42cLUZa01S24F+Nte6iL69ZghklPT2Kd0+hldIAW9+U14ZEBF7rpsaAVNqpGdLo2xMN5W36UE4qkdvC0toJy6RpaT37Lh6yExniqXpykNXA2W8BbTjzJftwFkkHuAnNZoi2y0UueGG67qvU2YJ01zaiojaKIURjGvEIxDq3AUM3tHZSJ28jK6H6g0wZJFKKtwo49Fy9PZcBSnjreV9T67uh+xOA5S2jbTBhNhu5F9aNseOLW7WGx1wFdFIU91ILjaOWWEJzaRTCmoiD43WOQuA9uyR3oF6SYdBXB1oAcb5VcjopI7caUUhidPMyNv3PcAPyotepGk+PU+MQCVkTTd7if6/6k9PoGMO45KaOs/dhpIA29qWsluFy4lkxX9WOkdItQv1NfTjjPy5KTSSRHDSUu/XaxrAWMZk1Rsn+lcFdWPUSV9Ru13oDaL5+OFzopJXP2yt6gLscH8pzyz5e5Oti5NS8DoZuPpay2Wci3w0P9glJppGPDI22459ktH4jqpGOJYKbigclZsdJzt3Ir5SWo0LJjfBWodQZuxBTI4yp1WA+E+HsZrmyHJY0kfPCiYh1DdM90hbfTSi5dS2pst8JxtDDhOxEUEtQwRWBR+bRGuXVd+mnMbI3sgHT5wiMJRwQBZVYgFkQjZVZR6HkIBeZJDt4HKNuAhIu1mBewPZjBQvJLj1Z+VsPLZNrhzkH1RScLFgNYwVQQ5PZU8m+VguRWAkG80eKUWw23l3aqUQvcamIMhDRtrnFZVsGEHfueXHkkkozThafoooNLRcSKQxlZkkEbSSaVJVLFJnyn7bGfZC2akN8veSQPuPKwJtROPosDR/m7aT8KidY0lnkzWM3usJwmYWSuoynIGPdH3GkjHrXNcGTxujd/I8FNtO4WEBl5Q3FFchOU0oxzdwDwCPi1EJzlEbWwEPoo7X4SuVoOpJOiTCogONn8Jdsg7lHje090pVJfYIYkfwQmg5vsVAW+gSdCY0EZC2Ojjhbc9lYAS75QigRz0Jz0J0l8LFkoLe7KixRUQVgKbVLCu0hhwrhU15aURSgllicq/PKzTVNrUBHTEoduce6JTVMLFQar2q7VWsy1FVqLM//9k=","putin-mask":"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABcQERQRDhcUEhQaGBcbIjklIh8fIkYyNSk5UkhXVVFIUE5bZoNvW2F8Yk5QcptzfIeLkpSSWG2grJ+OqoOPko3/2wBDARgaGiIeIkMlJUONXlBejY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY3/wAARCABwAFgDASIAAhEBAxEB/8QAGgAAAgMBAQAAAAAAAAAAAAAAAwQAAgUBBv/EAC0QAAICAQMDAgYBBQEAAAAAAAECABEDEiExBEFRYXEFEyIyQoGRUqGxweHw/8QAGQEBAQEBAQEAAAAAAAAAAAAAAAECBAMF/8QAGxEBAQEBAQEBAQAAAAAAAAAAAAERAgMhEjH/2gAMAwEAAhEDEQA/ANi4p1PU6EpeSahuoyjFhJJAJ4uZLZNeQt92+1TDUHGTQO5MLjJeorhx5MpsKfeauHBoUXzMvRVQSNzCBdtp0rXrIOIEKwOQFd6hiN5BjLDeVMJ/NokjnwZj/FenVGHUJsMjUV8Gb2bpW02ouKtgXIGx9Qv0kfuenn3+ax3zsecAkhMuJsGQ43Ugg+ZJ9OfZrivytrrS2bOydgah8fTqgGNQKA3PmUQfOylyKF3GA1Ez5Fd8FTSq0BUurxYNvOh6PJmNemG9XpOXvBB/1+xJr34Ne00gwqWBgBk8An2FzvzDXiNMH1bwHUi1sCyO0gf/AMZxnuwe8amMn4tgV8AypZKAH3B/7JHM+O0KGvrUpZHmSdnl65zjm9ONug4W0Y7AuzDbtAYRsqeDDlgu52E4q6pE38SwF+kXydVpGwA8RXL8QyLenv6SYutVUvbVQ95cDjx6G/8AMxk6/I25of7jS9SSNjKv9P6Sb3M4Ae8RbqytfVUA3xIg7UPeDGtRG/MqN+Ijh+IOxF8e0eDK4sVZhA8pLYyf6TJKsacg+hkmpXnYB0mtsAdxv29R5hMy2ktZ0rfNTvJ34mXozXZl+1C7XsAIrnfKrhWxBr7nmbhVfEEyLvt/eWDHIdCRX6PaO9F9eM2DYNGXfpy3ke8Z6TDoY+Ce8lIzesJGfQosARUOiMAyM7HwNpsZ+l1ZHI4JuVTANiRZHntLC6TULiYFAyqdirDgzQ6LIS5B4PEIuNCKIseKhlxItEDSYAetJw41cCzemSE6hRkx1VnUK95JFgZNGzwBB/NbVtOs1LfmDBveCChieRIdNd4O995R3IFLuZGsXV1Zyqg7ckdo7hAK7HeZWPM3SlgykhjZNRheuAAogCVk5lWiTufQRZSrbq2063xDGq6mNntUW+YWynKi6Ufc+8EOhq9ZDl+nvfaAVyRxLgg8wuDA60q6vmSDx7GjuDJJpIDl3HtK/aoE6Ws1B5HVQSTvKy7qHc7zodFN6tzE2bI5+il9TOfKflsjGFPOoZb5imbHT2oNHxIMef8AHKK9ZNfUYwVcK/e5cMHw4kK0259Y0NKrRqqmauXOAToBvxI79Q3NCoD2kDdTtOqwYTOXPlTZlJ9QY1gyrk95FOIdzJKX3MkiUm2XsJUAE2dzDDGo/GdquAB+5VCrvRlWY8V/EPXneQgeICRbL2ucD575P8R2h4nRpH4yhQPmHN/xDISfujACVvIUU95BTQCOIMoV3G0YCAcGW0+0ASZgRpaSXKA8iSTB/9k=","xi-mask":"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA4KCw0LCQ4NDA0QDw4RFiQXFhQUFiwgIRokNC43NjMuMjI6QVNGOj1OPjIySGJJTlZYXV5dOEVmbWVabFNbXVn/2wBDAQ8QEBYTFioXFypZOzI7WVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVn/wAARCABwAGADASIAAhEBAxEB/8QAGgAAAgMBAQAAAAAAAAAAAAAABAUCAwYAAf/EADQQAAIBAwMDAgUBBgcAAAAAAAECAwAEERIhMQVBUSJhBhMUMnGBI0JSYpHRJDNDocHh8f/EABkBAAMBAQEAAAAAAAAAAAAAAAECAwAEBf/EAB0RAAICAwEBAQAAAAAAAAAAAAABAhEDEiFBMRP/2gAMAwEAAhEDEQA/AFVwsbqzgknHI2BpLcHOIwNXii5JJmGGygHCtuf+qM6H0wzTGaUEjtUW9UXS2Ysg6NdXG4Uqp5pgnwsNILO2qtYkSxgKuBU2wPuGKg8ki6xoyR+GlVThifzQcvQrhH9CalrbAqe1TVVxW3kN+cTIQ/Dcr41+lecVNvh1lIZHOoeK1uBUdqG7MscTNQdLmVsyDPk0yjsvlpnSSxpquncYqbKCNu9DZm1Qhkgt3TQchud2qKWiw4aDRt3fip9StyjsVyurv2FJWMkZ2kK6fI2zVoOyM1QPFqeUBYSFY5JY7mtf02MpagbAneszYwNLKgzgHsa1SL8mIL4FJkkPjiEqCdwuTXNnODkGgXllPr1lQOFoduqyKdLrnFSLDX5ZPevNJA53oGO+1sO360SZMkaTvWsNF2gk4zXCLS29ByTkA6W9Q59qEfqUsR3GTWs1DpcnYKcV3+1LoL+aXdWx+aMScNzzQFKOpJrgJHIrOs5DaeSOV81qpYxLGVPesp1K3eKbQSf5Se361bGyc1YX0iHTOrEfaO9O5/UFAPt+aBtkH1rqucIuD4omUSuQItmH2+B+ak3ZRKgyK3jRR8wgt4qi6hiOcoDntigpbO9lBEl3Hbr3MeWJ/WlsnSbQtk3907e7GmikZ2E3AWFgYzlTt+KZWiZjDBic75NKounqsekzPIvYtsQPfzTvpsQ+QvOBStDpi68kCSeCx/rU7dYC2ZNLNwcnGKj1GAPcAEnAOdqXP0uGZ2NxcvvsBjGB/ejFIDfDSLbwlQRp3/hoeS2ZJNSHIpPa9JhjP+Gv7hX7f+UzFvdiMA3MbHgnTgkVpJeAVhqHCeo0JfQpKNwNxgE1akbpjOSPGc10y6lXIOMjJrRYGuA1sAl3KWz6iMH2o1m0qQDVVycYUKAqnCnyK6PD/dnFL6N5YNPNL/p5z3Ir2GOeU5lAHimZRFQaQPNB9Qv47WFiMZAo0Gya2hIxnej4ItCKMY2pf0uCcwi8uWw0gyqfwjtTZZFwKahWA3NurSajsB3oZrRGOpGU54PNM5dMp0EDB96QdQt36Q6zQyF4nbDIf3fx7UKCmX/SSBhnBX22oyFAoGBjHbtVNr1ASqpJGSKIMySf3oB6eyZUZzzUVbOOdzVbP2JytRj+4AEkUECgC1v4r21j04LooMhHmrROIzpB35zSDot7G918pU06kI/WmbxlpQNXNNONMXG7Qc93hNjvS10+rufWSY159zUZsoCCdWOcVZDIkaKoO7b0qK8LbrqF9boFiiEiDYb9qoPW2XAkRo2PINMNaumMAZ81U8Nu/wB7RhvzT1Ytgs/WLidQtnHqccsRsKnGbu5jBuwMeBRAFpb+kyqjHkVzXdsEwJUOeMGjXDdQuGq0m05IQnb2o+OfA2570DK6SMy51dxVkERyNXFTaGTD/qCRtRNu+QTsDQSqA+BRMRwAKwGjGo4WcTW6HK74FaOKQSRiTuwzjxWeht2cfNVyq52plCslsuWkDK3HsatkjZyYpUxgEV1ORnzQo6d9U+oSMqLxpr1JwGIPB2z4plaFFhCoNxUVxnU/gnl6ZcRMcTPIh/Uiq2tFxq+pT21Kc0+m1Djk0vmimJzpBqimGNegP0qsB826LE9o03q+DpKSkFoyFHdzkmiLaKZGyYRk/vUzRWx6vFZzC6FklnFbMGUYHfFS1Y3HFFThAjFqWGUH0rxUwIORts+asVsLnNDQhn23xRVxEYLaCVmASZioPuK1PweFOSTdGLN40Gw4I2q62uvmrqlkOocCh5IHmQBV3FeJYyxtqJwBzXbVnlpj1Ea5txLjS/BH/NW2k0kBAcnHmrugQNedMvZUJZ4ZBt/LivWjGNxsa5Zx1Z145bIZQ3KMAWxir2nC4GlTng1nHEiH9m23g1xvJseoHA7UqKmh+pj7g/gCoSXSAeKQrdOeA/8ASrEMkpyQQPesYLmkM/oTZe5qlLfB2O1XRjSMY5q6KNncKFJY8ADc0OsDdFlrCZJEhT7mOBTr4ns4h8K3CY/yEDIfBHeiOk9N+kHzJd5WGw/hpf8AHl59N8PmEHD3LhB7gbmurFCus5M03L4f/9k=","trump-mask":"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"});
+// Xi, Huang and Trump use the reference images supplied for r115. Other
+// existing portraits retain their authored textures. Musk: public-domain
+// USAF photograph by Justin Pacheco, Wikimedia Commons, April 2022.
+const MUSK_REFERENCE='https://upload.wikimedia.org/wikipedia/commons/3/30/Elon_Musk_close-up_%28cropped%29.jpg';
+const PORTRAIT_UV=Object.freeze({
+ 'xi-mask':{cx:.53,sx:1.02,rows:[[-.65,.06],[-.46,.14],[-.23,.27],[-.055,.46],[.23,.62],[.43,.76],[.80,.98]]},
+ 'huang-mask':{cx:.5,sx:1.12,rows:[[-.66,.025],[-.45,.11],[-.205,.26],[-.055,.43],[.235,.60],[.46,.82],[.80,.98]]},
+ 'trump-mask':{cx:.59,sx:.93,rows:[[-.60,.015],[-.43,.08],[-.23,.21],[-.035,.37],[.25,.60],[.46,.79],[.76,.98]]},
+ 'musk-mask':{cx:.50,sx:.84,rows:[[-.64,.15],[-.46,.19],[-.224,.315],[-.065,.43],[.275,.541],[.5,.68],[.83,.83]]}
+});
+function portraitUV(design,x,y,w,v){
+ const cfg=PORTRAIT_UV[design];if(!cfg)return [(x/Math.max(.001,w)+1)*.5,v];
+ let i=0;while(i<cfg.rows.length-2&&y>cfg.rows[i+1][0])i++;
+ const a=cfg.rows[i],b=cfg.rows[i+1],t=Math.max(0,Math.min(1,(y-a[0])/(b[0]-a[0])));
+ return [Math.max(.015,Math.min(.985,cfg.cx+cfg.sx*x)),a[1]+(b[1]-a[1])*t];
+}
+function applyPortraitMap(T,root,material,design,parts){
+ const reference=PORTRAIT_REFERENCE[design],remote=design==='musk-mask';
+ if((!reference&&!remote)||typeof Image==='undefined')return;
+ const tex=new T.Texture();tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=4;tex.minFilter=T.LinearFilter;
+ const img=new Image();if(remote)img.crossOrigin='anonymous';
+ root.portraitTexture=tex;
+ root.portraitReady=new Promise(resolve=>{
+  let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(timer);resolve();};
+  const timer=setTimeout(finish,remote?2400:1000);
+  img.onload=()=>{if(!root.portraitDisposed){tex.image=img;tex.needsUpdate=true;material.map=tex;material.vertexColors=false;material.color.set('#ffffff');material.needsUpdate=true;parts.forEach(o=>o.visible=false);}finish();};
+  img.onerror=finish;img.src=remote?MUSK_REFERENCE:'data:image/jpeg;base64,'+reference;
+ });
+}
 // Original stylized wearable sculptures, centered around the skull in local head space.
 export function createHeadgear(T,item){const root=new T.Group();root.name=item.name;root.userData.headgear=item.id;const mats=[],mat=(color,metal=.1)=>{const m=new T.MeshStandardMaterial({color,roughness:.4,metalness:metal});mats.push(m);return m;},main=mat(item.color),white=mat('#f5eee2'),dark=mat('#24303d'),gold=mat('#e8bd65',.65),pink=mat('#e6aab6'),green=mat('#78ab73'),glass=new T.MeshStandardMaterial({color:'#c0edff',transparent:true,opacity:.2,roughness:.1,metalness:.2});mats.push(glass);
 const mesh=(geo,p,scale=[1,1,1],m=main)=>{const o=new T.Mesh(geo,m);o.position.set(...p);o.scale.set(...scale);root.add(o);return o;},ball=(p,s,m=main)=>mesh(new T.SphereGeometry(1,20,14),p,s,m),box=(p,s,m=main)=>mesh(new T.BoxGeometry(1,1,1),p,s,m),cone=(p,r,h,m=main)=>mesh(new T.ConeGeometry(r,h,20),p,[1,1,1],m),tube=(pts,r=.06,m=main)=>mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>new T.Vector3(...p))),24,r,7,false),[0,0,0],[1,1,1],m),ring=(p,r=.6,t=.045,m=main)=>mesh(new T.TorusGeometry(r,t,8,36),p,[1,1,1],m),eyes=(y=.15,z=.62)=>{for(const x of [-.24,.24]){ball([x,y,z],[.14,.17,.07],white);ball([x,y,z+.055],[.07,.11,.04],dark);}},cap=()=>mesh(new T.SphereGeometry(.69,24,16,0,Math.PI*2,0,Math.PI*.58),[0,.15,0]),wing=(side,y=.4)=>{for(let i=0;i<6;i++){const f=ball([side*(.55+i*.12),y+i*.1,-.05],[.13,.42-i*.04,.08],white);f.rotation.z=-side*(.4+i*.14);}},horn=(side,y=.5)=>tube([[side*.45,y,0],[side*.8,y+.35,0],[side*.8,y+.8,0],[side*.5,y+1,0]],.085,gold),mask=()=>ball([0,.05,.52],[.57,.68,.13]);
@@ -42,7 +71,7 @@ if(d==='hydra-dragon'){
  };
  const pos=[],indices=[],colors=[],uv=[],N=112,M=112,base=new T.Color(cfg.skin),warm=new T.Color(cfg.warm),cool=new T.Color(cfg.shadow);
  for(let j=0;j<=M;j++){const y=rows[0][0]+(rows.at(-1)[0]-rows[0][0])*j/M,[w]=sample(y);
-  for(let k=0;k<=N;k++){const x=w*Math.sin(-Math.PI/2+Math.PI*k/N);pos.push(x,y,depth(x,y));uv.push((x/Math.max(.001,w)+1)*.5,j/M);
+  for(let k=0;k<=N;k++){const x=w*Math.sin(-Math.PI/2+Math.PI*k/N);pos.push(x,y,depth(x,y));uv.push(...portraitUV(d,x,y,w,j/M));
    const c=base.clone().lerp(warm,.35*g(Math.abs(x),y,.29,.02,.18,.19)+.17*g(x,y,0,-.06,.14,.10)).lerp(cool,.20*g(Math.abs(x),y,eyeX,eyeY-.02,.14,.085));colors.push(c.r,c.g,c.b);
    if(j&&k){const i=j*(N+1)+k;indices.push(i-N-2,i-N-1,i,i-N-2,i,i-1);}
   }
@@ -116,18 +145,8 @@ if(d==='hydra-dragon'){
   const z=depth(eyeX,cy)+.12;tube([[-.055,cy+.028,z],[0,cy+.043,z+.008],[.055,cy+.028,z]],.011,frame);
  }
  tube([[-.43,.06,.23],[-.48,.06,-.04],[0,.06,-.34],[.48,.06,-.04],[.43,.06,.23]],.024,frame);
- if(referenceReady){
-  const tex=new T.Texture();tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=4;tex.minFilter=T.LinearFilter;
-  const img=new Image();
-  // Do not retain textures or promises in userData (SkeletonUtils clones it).
-  root.portraitReady=new Promise(resolve=>{
-   img.onload=()=>{if(!root.portraitDisposed){tex.image=img;tex.needsUpdate=true;faceMat.map=tex;faceMat.vertexColors=false;faceMat.color.set('#ffffff');faceMat.needsUpdate=true;
-     facialParts.forEach(part=>part.visible=false); }resolve();};
-   img.onerror=()=>resolve();img.src='data:image/jpeg;base64,'+reference;
-  });
-  root.portraitTexture=tex;
- }
- root.userData.portraitSculpt=huang?'huang-r114':d+'-r114';
+ if(referenceReady)applyPortraitMap(T,root,faceMat,d,facialParts);
+ root.userData.portraitSculpt=d+'-r115';
 }else if(d==='musk-mask'){
 // Separate landmark-based portraits. Features are projected onto each face,
  // rather than sharing a generic depth plane where eyelids/lips disappear.
@@ -160,15 +179,16 @@ if(d==='hydra-dragon'){
    +(huang?.040:.105)*g(x,y,0,-.46,.22,.12)
    -(huang?0:.017)*g(x,y,0,-.48,.027,.043);
  };
- const vertices=[],indices=[],colors=[],N=112,M=112,base=new T.Color(huang?'#c7a08a':'#e4b9a7'),warm=new T.Color(huang?'#af7f68':'#c58e81'),cool=new T.Color(huang?'#967663':'#bd9b93');
+ const vertices=[],indices=[],colors=[],uv=[],N=112,M=112,base=new T.Color(huang?'#c7a08a':'#e4b9a7'),warm=new T.Color(huang?'#af7f68':'#c58e81'),cool=new T.Color(huang?'#967663':'#bd9b93');
  for(let j=0;j<=M;j++){const y=rows[0][0]+(rows.at(-1)[0]-rows[0][0])*j/M;const [w]=sample(y);
   for(let k=0;k<=N;k++){const x=w*Math.sin(-Math.PI/2+Math.PI*k/N),z=depth(x,y);
-   vertices.push(x,y,z);const tone=base.clone().lerp(warm,.38*g(Math.abs(x),y,.31,.0,.17,.2)+.18*g(x,y,0,-.065,.13,.10)).lerp(cool,.30*g(Math.abs(x),y,eyeX,eyeY,.13,.11));colors.push(tone.r,tone.g,tone.b);
+   vertices.push(x,y,z);uv.push(...portraitUV(d,x,y,w,j/M));const tone=base.clone().lerp(warm,.38*g(Math.abs(x),y,.31,.0,.17,.2)+.18*g(x,y,0,-.065,.13,.10)).lerp(cool,.30*g(Math.abs(x),y,eyeX,eyeY,.13,.11));colors.push(tone.r,tone.g,tone.b);
    if(j&&k){const i=j*(N+1)+k;indices.push(i-N-2,i-N-1,i,i-N-2,i,i-1);}
   }
  }
- const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.setIndex(indices);geo.computeVertexNormals();
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
  const faceMat=new T.MeshStandardMaterial({vertexColors:true,roughness:.84,metalness:0,side:T.DoubleSide});mats.push(faceMat);mesh(geo,[0,0,0],[1,1,1],faceMat);
+ const facialStart=root.children.length;
  const onFace=(points,offset=.012)=>points.map(([x,y])=>[x,y,depth(x,y)+offset]);
  const line=(points,r,m,offset=.012)=>tube(onFace(points,offset),r,m);
  const oval=(cx,cy,w,h,count=36)=>Array.from({length:count+1},(_,i)=>[cx+w*Math.cos(i/count*Math.PI*2),cy+h*Math.sin(i/count*Math.PI*2)]);
@@ -209,6 +229,7 @@ if(d==='hydra-dragon'){
   line([[-.10,-.372],[0,-.387],[.10,-.372]],.005,shadow,.012);
   line([[0,-.455],[.012,-.49],[0,-.515]],.004,shadow,.012);
  }
+ const facialParts=root.children.slice(facialStart);
  // Hair: Huang's silver swept-back short hair and dark rectangular glasses;
  // Musk's recessed temples, broad bare forehead, short asymmetric side part.
  if(huang){
@@ -230,7 +251,8 @@ if(d==='hydra-dragon'){
   }
  }
  const strap=mat('#39333a',0);tube([[-.43,.10,.24],[-.54,.10,-.05],[0,.10,-.40],[.54,.10,-.05],[.43,.10,.24]],.030,strap);
- root.userData.portraitSculpt=huang?'huang-r112':'musk-r112';
+ applyPortraitMap(T,root,faceMat,d,facialParts);
+ root.userData.portraitSculpt=d+'-r115';
 }else if(d==='trump-mask'){
  // Continuous sculpted facial surface. Individual silhouettes and landmark
  // proportions replace the shared oval face and separate spherical cheeks.
@@ -249,7 +271,7 @@ if(d==='hydra-dragon'){
  ];
  // Interpolate the independent facial landmark profiles for a smooth mask.
  const sample=(t)=>{const i=Math.min(rows.length-2,Math.floor(t)),f=t-i,a=rows[Math.max(0,i-1)],b=rows[i],c=rows[i+1],d=rows[Math.min(rows.length-1,i+2)];return b.map((v,k)=>.5*((2*v)+(-a[k]+c[k])*f+(2*a[k]-5*v+4*c[k]-d[k])*f*f+(-a[k]+3*v-3*c[k]+d[k])*f*f*f));};
- const positions=[],indices=[],colors=[],steps=112,vertical=(rows.length-1)*10;
+ const positions=[],indices=[],colors=[],uv=[],steps=112,vertical=112;
  const baseTone=new T.Color(trump?'#dfa078':huang?'#c9a28b':'#dfb5a5');
  const warmTone=new T.Color(trump?'#cb8560':huang?'#b88d78':'#c99a90'),eyeTone=new T.Color(trump?'#e6c7b1':huang?'#ae877a':'#c2a199');
  for(let j=0;j<=vertical;j++){
@@ -263,15 +285,16 @@ if(d==='hydra-dragon'){
    const noseTip=(trump?.105:huang?.065:.09)*g(0,-.035,.12,.095);
    const muzzle=(trump?.035:huang?.02:.055)*g(0,-.19,.23,.12);
    const chin=(trump?.06:huang?.035:.07)*g(0,-.43,.25,.13);
-   positions.push(x,y,.22+(z-.22)*Math.cos(angle)+cheek-eyeSocket+noseBridge+noseTip+muzzle+chin);
+   positions.push(x,y,.22+(z-.22)*Math.cos(angle)+cheek-eyeSocket+noseBridge+noseTip+muzzle+chin);uv.push(...portraitUV(d,x,y,w,j/vertical));
    const tone=baseTone.clone().lerp(warmTone,Math.min(.65,.5*g(Math.sign(x)*.33,-.04,.17,.21)+.22*g(0,-.04,.14,.13))).lerp(eyeTone,.52*g(Math.sign(x)*.20,.24,.18,.105));
    const grain=.006*Math.sin(x*520+y*113)*Math.cos(y*421-x*73);tone.multiplyScalar(1+grain);
    colors.push(tone.r,tone.g,tone.b);
    if(j&&k){const i=j*(steps+1)+k;indices.push(i-steps-2,i-steps-1,i,i-steps-2,i,i-1);}
   }
  }
- const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.setIndex(indices);geo.computeVertexNormals();
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
  const faceMat=new T.MeshStandardMaterial({color:0xffffff,vertexColors:true,roughness:.83,metalness:0,side:T.DoubleSide});mats.push(faceMat);mesh(geo,[0,0,0],[1,1,1],faceMat);
+ const facialStart=root.children.length;
  const eyeY=huang?.25:trump?.25:.29,eyeZ=huang?.625:trump?.63:.635,eyeW=huang?.115:trump?.115:.122,eyeH=huang?.029:trump?.032:.047;
  for(const side of [-1,1]){
   const x=side*(huang?.205:trump?.205:.185);
@@ -318,6 +341,7 @@ if(d==='hydra-dragon'){
   ball([0,-.44,.64],[.16,.066,.044],skin);
   tube([[-.20,mouthY+.006,.66],[-.06,mouthY-.006,.77],[.11,mouthY+.013,.76],[.21,mouthY+.034,.67]],.007,dark);
  }
+ const facialParts=root.children.slice(facialStart);
  if(trump){
   const sweep=ball([-.06,.68,.39],[.55,.21,.27],hair);sweep.rotation.z=.25;
   const highlight=mat('#f2d898',0),lowlight=mat('#bc9858',0);for(let i=0;i<25;i++)tube([[-.46,.49+i*.013,.45],[-.14,.77+i*.004,.65],[.40,.63+i*.004,.53]],.014,i%5===0?lowlight:i%3===0?highlight:hair);
@@ -338,6 +362,7 @@ if(d==='hydra-dragon'){
  }
  // Thin rear straps make the piece visibly a wearable mask, not a second head.
  const strap=mat('#39333a',0);tube([[-.45,.12,.24],[-.54,.11,-.05],[0,.11,-.40],[.54,.11,-.05],[.45,.12,.24]],.032,strap);
+ applyPortraitMap(T,root,faceMat,d,facialParts);root.userData.portraitSculpt=d+'-r115';
 
 }
 else if(['elephant','rooster','anteater','guinea-pig','penguin','polar-bear','lion','eggplant'].includes(d)){

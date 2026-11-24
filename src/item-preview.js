@@ -159,6 +159,8 @@ function creatureOutfitProductPortrait(item){
  model.userData.previewOutfitRecord=outfit;
  orientPortraitModel(model,{precise:false});
  model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-Math.PI/2));
+ // The wooden horse product image was rolled sideways; correct only the portrait.
+ if(item.creature==='wooden-horse-disguise')model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),-Math.PI/2));
  model.updateMatrixWorld(true);
  return model;
 }

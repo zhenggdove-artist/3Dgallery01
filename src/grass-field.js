@@ -129,14 +129,36 @@ export class GrassField{
   this.outerCanopy=new THREE.Mesh(new THREE.RingGeometry(CITY_INNER_RADIUS-.25,CITY_OUTER_RADIUS+1,192),this.canopy.material);
   this.outerCanopy.name='Full city green grass canopy with no exposed earth';
   this.outerCanopy.rotation.x=-Math.PI/2;this.outerCanopy.position.y=.007;scene.add(this.outerCanopy);
+  // One opaque annular shader replaces the dark off-map floor. No CPU particle
+  // simulation, framebuffers, bloom passes, textures or per-particle draw calls.
+  const horizonMaterial=new THREE.ShaderMaterial({side:THREE.DoubleSide,depthWrite:true,toneMapped:false,
+   uniforms:{uTime:{value:0}},vertexShader:`varying vec2 vWorld;void main(){vWorld=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+   fragmentShader:`precision mediump float;
+    varying vec2 vWorld;uniform float uTime;
+    float hash(vec2 p){return fract(sin(dot(mod(p,97.),vec2(127.1,311.7)))*4375.45);}
+    void main(){
+     vec2 q=vWorld*.031;float r=length(q),a=atan(q.y,q.x),t=uTime*.28;
+     float fold=abs(sin(a*7.+r*.7-t)),ribbon=sin(r*2.3+fold*5.+t*2.);
+     float web=sin(q.x*2.1+sin(q.y*.72+t)*2.7)*cos(q.y*1.7+sin(q.x*.8-t)*2.);
+     float line=1.-smoothstep(.045,.24,abs(ribbon));float grid=1.-smoothstep(.04,.22,abs(web));
+     vec2 p=q*4.,cell=floor(p),f=fract(p)-.5;float h=hash(cell);
+     f-=.22*vec2(sin(t+h*6.28),cos(t*.8+h*5.));
+     float sparkle=(1.-smoothstep(.025,.15,length(f)))*(.35+.65*h);
+     vec3 col=mix(vec3(.79,.13,.47),vec3(1.,.36,.68),.5+.5*sin(r*.7-t+web));
+     col=mix(col,vec3(.63,.19,.85),grid*.44);col=mix(col,vec3(1.,.77,.47),line*.70);
+     col=mix(col,vec3(1.,.92,.86),sparkle*.8);gl_FragColor=vec4(col,1.);
+    }`});
+  this.horizon=new THREE.Mesh(new THREE.RingGeometry(CITY_OUTER_RADIUS+.65,1500,128),horizonMaterial);
+  this.horizon.name='Pink psychedelic off-map geometric particle field';
+  this.horizon.rotation.x=-Math.PI/2;this.horizon.position.y=-.075;scene.add(this.horizon);
  }
  update(time,roots){
-  const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;
+  const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;this.horizon.material.uniforms.uTime.value=time%600;
   let i=0;for(const root of roots.values()){
    if(i>=6)break;if(!root?.visible)continue;
    uniform.uPlayers.value[i].copy(root.position);i++;
   }
   uniform.uPlayerCount.value=i;
  }
- dispose(){this.mesh.removeFromParent();this.mesh.geometry.dispose();this.outerMesh.removeFromParent();this.outerMesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.outerCanopy.removeFromParent();this.outerCanopy.geometry.dispose();this.canopy.material.dispose();}
+ dispose(){this.horizon.removeFromParent();this.horizon.geometry.dispose();this.horizon.material.dispose();this.mesh.removeFromParent();this.mesh.geometry.dispose();this.outerMesh.removeFromParent();this.outerMesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.outerCanopy.removeFromParent();this.outerCanopy.geometry.dispose();this.canopy.material.dispose();}
 }

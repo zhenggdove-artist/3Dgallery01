@@ -18,7 +18,7 @@ test('buy is pending immediately and confirmation precedes world reconciliation'
  assert(ui.includes('},3500);'));assert(ui.includes("if(state==='pending')return;"));
 });
 test('Huang and Musk have separate dense sculpted meshes; Trump remains on original path',()=>{
- for(const [id,sculpt] of [['hat-huang-mask','huang-r114'],['hat-musk-mask','musk-r112'],['hat-trump-mask',undefined]]){
+ for(const [id,sculpt] of [['hat-huang-mask','huang-mask-r115'],['hat-musk-mask','musk-mask-r115'],['hat-trump-mask','trump-mask-r115']]){
   const root=createHeadgear(T,itemById(id));assert.equal(root.userData.portraitSculpt,sculpt);
   let max=0;root.traverse(o=>{if(o.isMesh)max=Math.max(max,o.geometry.getAttribute('position').count);});
   assert(max>(sculpt?10000:9000),id);disposeHeadgear(root);

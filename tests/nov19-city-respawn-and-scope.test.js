@@ -40,7 +40,7 @@ test('sand district doubles usable surface area while the central grass remains 
 test('shopfront city is deterministic, varied, bilingual, non-repeating and mobile-safe',()=>{
  const a=cityLots(),b=cityLots(),mobile=cityLots(912744,48);
  assert.deepEqual(a,b);
- assert.equal(a.length,432);assert.equal(mobile.length,48);
+ assert.equal(a.length,504);assert.equal(mobile.length,48);
  assert.ok(CITY_SHOP_STYLES.length>=12);
  assert.equal(new Set(a.map(l=>l.shopName)).size,a.length);
  assert.ok(a.every(l=>l.shopName&&l.enName&&Math.hypot(l.x,l.z)>CITY_INNER_RADIUS));

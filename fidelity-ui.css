@@ -1008,3 +1008,8 @@ body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;f
 /* r113: the collapsed chat control remains a touch and mouse drag surface. */
 #chat-hud.chat-minimized #chat-toggle{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
 #chat-hud.chat-dragging #chat-toggle{cursor:grabbing;outline:2px solid #d8b6e8;outline-offset:2px}
+
+/* r115: collapsed CHAT is a real touch target, not a tiny icon. */
+#hud #chat-hud.chat-minimized{width:42px!important;height:42px!important;max-width:42px!important;max-height:42px!important}
+#hud #chat-hud.chat-minimized #chat-resize,#hud #chat-hud.chat-minimized #chat-toggle{width:42px!important;height:42px!important;min-height:42px!important;touch-action:none!important}
+#hud #chat-hud.chat-minimized #chat-toggle{font-size:20px;line-height:1;cursor:grab}

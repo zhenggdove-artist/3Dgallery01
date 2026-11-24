@@ -12,15 +12,15 @@ const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const lot=CITY_LOTS.find(x=>x.floors===4);
 const textures=()=>({flame:new THREE.Texture(),smoke:new THREE.Texture()});
 
-test('single two-draw-call fire field drives all 432 buildings, without per-house Points',()=>{
+test('single two-draw-call fire field drives all city buildings, without per-house Points',()=>{
  const root=new THREE.Group(),tex=textures();
  const fire=new CityFireField(root,CITY_LOTS,tex,false);
  assert.equal(root.children.length,2);
  assert.equal(fire.layers.length,2);
  assert.equal(fire.layers[0].points.isPoints,true);
  assert.equal(fire.layers[1].points.isPoints,true);
- assert.equal(fire.layers[0].geometry.attributes.position.count,432*18);
- assert.equal(fire.layers[1].geometry.attributes.position.count,432*26);
+ assert.equal(fire.layers[0].geometry.attributes.position.count,CITY_LOTS.length*18);
+ assert.equal(fire.layers[1].geometry.attributes.position.count,CITY_LOTS.length*26);
  assert.equal(fire.layers[0].material.depthWrite,false);
  assert.ok(fire.layers[1].material.vertexShader.includes('aBurn'));
  fire.dispose();tex.flame.dispose();tex.smoke.dispose();
