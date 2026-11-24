@@ -1,4 +1,5 @@
 import {renderPaintedWing} from './reletter/painted-wing-art.js';
+import {normalizePaintedWing} from './shared/custom-wings.js';
 
 // GM-only atelier. Each paint operation is stored in normalized image space.
 // Undo snapshots are bounded, so mobile Safari does not retain huge bitmaps.
@@ -30,15 +31,18 @@ export function simplifyFreehandOutline(points,maxPoints=96){
  }
  return [...keep].sort((a,b)=>a-b).map(i=>[...points[i]]);
 }
-export function mountWingPainter(ui){
- const isGm=ui.self?.profile?.admin===true;
-  if(!isGm&&!(ui.world?.profile?.wingDesignCredits>0)){ui.content.textContent='沒有可用的自製翅膀權限';return;}
- const design=ui.wingDraft||{
+export function mountWingPainter(ui,{personal=false,preview=false}={}){
+ const admin=ui.self?.profile?.admin===true;
+ if(preview&&!admin)return;
+ const isGm=admin&&!personal&&!preview;
+ const draftKey=preview?'wingPreviewDraft':isGm?'wingDraft':'wingPersonalDraft';
+  if(!preview&&!isGm&&!(ui.world?.profile?.wingDesignCredits>0)){ui.content.textContent='沒有可用的自製翅膀權限';return;}
+ const design=ui[draftKey]||{
   name:'',tier:4,color:'#dfd1bc',ability:'glide',shape:'freehand',drawRatePct:1,
   outline:[],strokes:[],scaleX:1,scaleY:1,
   impulse:11,gravity:.53,flapMs:300
  };
- ui.wingDraft=design;let tool=design.outline?.length>=3?'brush':'outline',material='ink',pen='#1b1b22',
+ ui[draftKey]=design;let tool=design.outline?.length>=3?'brush':'outline',material='ink',pen='#1b1b22',
   size=12,opacity=1,mirrorX=false,mirrorY=false,zoom=1,
   pan=[0,0],active=null,pointerId=null,history=[],redo=[],pointers=new Map();
  ui.content.innerHTML=`<section class="wing-painter" aria-label="wing painting editor">
@@ -91,9 +95,9 @@ export function mountWingPainter(ui){
   if(active?.tool==='outline'&&active.points.length){
    ctx.save();ctx.lineWidth=4;ctx.strokeStyle='#16b7ff';ctx.fillStyle='#ffffff';ctx.setLineDash([9,5]);
    ctx.beginPath();
-   active.points.forEach(([x,y],i)=>{if(!i)ctx.moveTo(x*canvas.width,y*canvas.height);else ctx.lineTo(x*canvas.width,y*canvas.height);});
+   active.points.forEach(([x,y],i)=>{const px=(.5+(x-.5)*(design.scaleX||1))*canvas.width,py=(.5+(y-.5)*(design.scaleY||1))*canvas.height;if(!i)ctx.moveTo(px,py);else ctx.lineTo(px,py);});
    ctx.stroke();ctx.setLineDash([]);
-   for(const [x,y] of active.points){ctx.beginPath();ctx.arc(x*canvas.width,y*canvas.height,2.5,0,Math.PI*2);ctx.fill();}
+   for(const [x,y] of active.points){ctx.beginPath();ctx.arc((.5+(x-.5)*(design.scaleX||1))*canvas.width,(.5+(y-.5)*(design.scaleY||1))*canvas.height,2.5,0,Math.PI*2);ctx.fill();}
    ctx.restore();
   }
   canvas.style.transform=`translate(${pan[0]}px,${pan[1]}px) scale(${zoom})`;
@@ -101,7 +105,7 @@ export function mountWingPainter(ui){
  }
  const imagePoint=event=>{
   const rect=canvas.getBoundingClientRect();
-  return [clamp((event.clientX-rect.left)/rect.width,0,1),clamp((event.clientY-rect.top)/rect.height,0,1)];
+  return [clamp(.5+((event.clientX-rect.left)/rect.width-.5)/(design.scaleX||1),0,1),clamp(.5+((event.clientY-rect.top)/rect.height-.5)/(design.scaleY||1),0,1)];
  };
  const setZoom=value=>{zoom=clamp(value,.35,5);draw();};
  draw();
@@ -139,6 +143,7 @@ export function mountWingPainter(ui){
    if(input.strokes.length>90)return report('筆畫超出 90 筆，請使用 Undo 減少筆畫');
    if(JSON.stringify({action:isGm?(design.id?'gm-wing-update':'gm-wing-publish'):'redeem-wing-design',wing:input}).length>280000)
     return report('繪圖資料超過上架容量，請減少筆畫');
+   if(preview){try{normalizePaintedWing(input,'preview-wing');report('GM TEST：繪圖驗證通過；正式玩家將存入 BAG、自動裝備並消耗一次權限。測試不會上架、扣除或新增任何資料。');}catch(error){report('GM TEST：'+error.message);}return;}
    publishing=true;b.disabled=true;
    report('正在儲存翅膀至伺服器…');
    // A one-way server-action left this text on screen forever on errors.
@@ -155,7 +160,7 @@ export function mountWingPainter(ui){
      if(!publishing)return;
      publishing=false;b.disabled=false;
      report((isGm?(design.id?'已更新並上架：':'已上架並自動裝備：'):'已存入背包並裝備：')+(result?.wingName||input.name));
-     ui.wingDraft=null;
+     ui[draftKey]=null;
     },
     reject:error=>{
      clearTimeout(timeout);
@@ -172,7 +177,8 @@ export function mountWingPainter(ui){
   if(el.hasAttribute('data-wing-pen'))pen=el.value;
   if(el.hasAttribute('data-wing-mirror-x'))mirrorX=el.checked;
   if(el.hasAttribute('data-wing-mirror-y'))mirrorY=el.checked;
-  if(el.dataset.wingMaterial)material=el.value;
+  if(el.hasAttribute('data-wing-material'))material=el.value;
+  if(el.dataset.wingField==='name')design.name=el.value;
   if(el.dataset.wingScale){snapshot();const axis=el.dataset.wingScale;design[axis]=+el.value;
    if(root.querySelector('[data-wing-ratio]').checked){
     const other=axis==='scaleX'?'scaleY':'scaleX';design[other]=design[axis];
@@ -190,12 +196,12 @@ export function mountWingPainter(ui){
   else {const stroke={tool,color:pen,size,opacity,material,mirrorX,mirrorY,points:[point]};active=stroke;design.strokes.push(stroke);}
   draw();
  };
- canvas.addEventListener('pointerdown',e=>{e.preventDefault();pointers.set(e.pointerId,[e.clientX,e.clientY]);if(pointers.size===1)start(e);});
+ let pinching=false,pinchDistance=0;
+ canvas.addEventListener('pointerdown',e=>{e.preventDefault();pointers.set(e.pointerId,[e.clientX,e.clientY]);canvas.setPointerCapture(e.pointerId);if(pointers.size===1&&!pinching)start(e);else if(pointers.size===2){if(active&&active.tool&&history.length)restore(history.pop());active=null;pointerId=null;pinching=true;const pair=[...pointers.values()];pinchDistance=Math.hypot(pair[0][0]-pair[1][0],pair[0][1]-pair[1][1]);draw();}});
  canvas.addEventListener('pointermove',e=>{
   if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,[e.clientX,e.clientY]);
   if(pointers.size===2){const pair=[...pointers.values()],distance=Math.hypot(pair[0][0]-pair[1][0],pair[0][1]-pair[1][1]);
-   if(!ui._pinchDistance)ui._pinchDistance=distance;
-   else{setZoom(zoom*distance/ui._pinchDistance);ui._pinchDistance=distance;}return;}
+   if(pinchDistance>0&&distance>0)setZoom(zoom*distance/pinchDistance);pinchDistance=distance;return;}
   if(e.pointerId!==pointerId||!active)return;
   if(tool==='pan'){pan=[active.pan[0]+e.clientX-active.start[0],active.pan[1]+e.clientY-active.start[1]];}
   else{
@@ -205,7 +211,7 @@ export function mountWingPainter(ui){
   draw();
  });
  const stop=e=>{
-  pointers.delete(e.pointerId);if(pointers.size<2)ui._pinchDistance=0;
+  pointers.delete(e.pointerId);if(pointers.size<2)pinchDistance=0;if(!pointers.size)pinching=false;
   if(e.pointerId!==pointerId)return;
   if(tool==='outline'){
    if(active?.points.length>=3){
@@ -218,6 +224,6 @@ export function mountWingPainter(ui){
   }
   active=null;pointerId=null;draw();
  };
- canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
+ canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);canvas.addEventListener('lostpointercapture',stop);
  canvas.addEventListener('wheel',e=>{e.preventDefault();setZoom(zoom*(e.deltaY>0?.9:1.1));},{passive:false});
 }
