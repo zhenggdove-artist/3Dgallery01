@@ -161,8 +161,8 @@ export class TempleUI extends EventTarget{
     this.entry.addEventListener('click',event=>{
       const button=event.target.closest('[data-google-login]');
       if(!button||button.disabled)return;
-      // Re-clicking must open Google account selection, even after the
-      // previous selection returned a usable Firebase token.
+      // Retry the verified identity after a failed game connection.
+      // Only the initial click opens Google's account chooser.
       // Keep native user activation intact for iOS Safari's Google popup.
       // Guard rapid duplicate taps with a flag rather than disabling the
       // clicked element while the browser is opening its auth window.

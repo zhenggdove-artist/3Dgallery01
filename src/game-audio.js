@@ -186,6 +186,7 @@ export class GameAudio{
   this.uploadedMusicUrl=url;
   this.trackSources=[url];
   this.musicIndex=0;
+  if(this.musicRequested&&!this.music){this.startMusic();return;}
   if(this.music){
    this.music.pause();this.music.src=url;this.music.load();
    this.music.volume=this.musicVolume();

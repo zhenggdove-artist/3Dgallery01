@@ -1031,3 +1031,5 @@ body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;f
 /* Both CHAT + states must capture a drag before the browser starts scrolling. */
 #hud #chat-hud.chat-medium #chat-toggle,#hud #chat-hud.chat-minimized #chat-toggle{touch-action:none!important;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
 #hud #chat-hud.chat-dragging #chat-toggle{cursor:grabbing}
+
+#entry [data-google-login][hidden],#entry #guest-form[hidden]{display:none!important}

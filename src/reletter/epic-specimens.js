@@ -89,7 +89,7 @@ export function addEpicDust(T,root){
  geo.setAttribute('position',new T.BufferAttribute(positions,3));
  geo.setAttribute('color',new T.BufferAttribute(colors,3));
  geo.setAttribute('dustSeed',new T.BufferAttribute(seeds,1));
- const material=new T.PointsMaterial({size:.035/10,transparent:true,opacity:.75,sizeAttenuation:true,vertexColors:true,depthWrite:false});
+ const material=new T.PointsMaterial({size:.0035,transparent:true,opacity:.75,sizeAttenuation:true,vertexColors:true,depthWrite:false});
  // Twenty times the particles, but their trajectories run in the vertex shader.
  // Each frame updates one uniform rather than reallocating or uploading buffers.
  material.onBeforeCompile=shader=>{
