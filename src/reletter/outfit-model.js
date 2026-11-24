@@ -67,6 +67,24 @@ function fabric(T,item){const c=document.createElement('canvas');c.width=c.heigh
  for(let y=32;y<512;y+=96)for(let xx=32;xx<512;xx+=96){x.save();x.translate(xx+(y%192?20:0),y);x.fillStyle=(xx+y)%192?'#eee4d8':'#756b85';x.globalAlpha=.7;if(p===1||p===4){x.beginPath();for(let k=0;k<10;k++){const a=k*Math.PI/5-Math.PI/2,r=k%2?6:15;x.lineTo(Math.cos(a)*r,Math.sin(a)*r);}x.closePath();x.fill();}else if(p===3){for(const [a,b,r]of [[0,0,12],[-9,-11,6],[9,-11,6]]){x.beginPath();x.arc(a,b,r,0,Math.PI*2);x.fill();}}else{x.beginPath();x.ellipse(0,0,11,7,-.4,0,Math.PI*2);x.fill();}x.restore();}
  // Fine woven threads remain subtle, with no additional draw calls.
  x.globalAlpha=.08;x.fillStyle='#ffffff';for(let i=0;i<512;i+=4){x.fillRect(i,0,1,512);x.fillRect(0,i,512,1);}const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.anisotropy=2;return texture;}
+// Compute an anatomical frame in the model's own local coordinates. Its
+// vertical axis follows head-to-feet, while shoulders determine facing.
+export function disguiseFrame(T,model,bones,headHeight){
+ const at=b=>model.worldToLocal(b.getWorldPosition(new T.Vector3()));
+ const head=bones.get('Head'),hip=bones.get('Hips')||head,top=bones.get('HeadTop_End')||head;
+ const hp=at(hip),hd=at(head),up=hd.clone().sub(hp);
+ if(up.lengthSq()<1e-12)up.set(0,1,0);else up.normalize();
+ const left=bones.get('LeftShoulder')||bones.get('LeftArm'),right=bones.get('RightShoulder')||bones.get('RightArm');
+ const across=left&&right?at(left).sub(at(right)):new T.Vector3(1,0,0);
+ across.addScaledVector(up,-across.dot(up));
+ if(across.lengthSq()<1e-12){across.set(Math.abs(up.x)<.9?1:0,0,Math.abs(up.x)<.9?0:1);across.addScaledVector(up,-across.dot(up));}
+ across.normalize();const forward=across.clone().cross(up).normalize(),rotation=new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(across,up,forward));
+ const feet=['LeftFoot','RightFoot','LeftToeBase','RightToeBase'].map(n=>bones.get(n)).filter(Boolean).map(at);
+ const worldScale=model.getWorldScale(new T.Vector3()),unit=headHeight/Math.max(.00001,Math.abs(worldScale.y));
+ const low=feet.length?Math.min(...feet.map(p=>p.clone().sub(hp).dot(up)))-unit*.10:-unit*2.2;
+ const high=at(top).sub(hp).dot(up)+unit*.18;
+ return {base:hp.clone().addScaledVector(up,low),up,rotation,height:Math.max(unit*2,high-low)};
+}
 export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;model.updateMatrixWorld(true);const bones=new Map();model.traverse(o=>{if(o.isBone)bones.set(o.name.replace(/^mixamorig/,''),o);});const head=bones.get('Head');if(!head)return null;const top=bones.get('HeadTop_End'),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,forward=head.getWorldQuaternion(new T.Quaternion()),texture=fabric(T,item),record={id:item.id,parts:[],surfaces:[],texture};
  const meshes=[];model.traverse(o=>{if(o.isSkinnedMesh&&o.geometry.attributes.skinIndex)meshes.push(o);});
  for(const mesh of meshes){const originalGeometry=mesh.geometry,originalMaterial=mesh.material,geometry=originalGeometry.clone(),si=geometry.attributes.skinIndex,sw=geometry.attributes.skinWeight,mask=new Float32Array(si.count);for(let i=0;i<si.count;i++)for(let k=0;k<4;k++){const idx=si.array[i*si.itemSize+k],name=mesh.skeleton.bones[idx]?.name||'';if(/Hips|Spine|Arm|Leg|Foot|Toe/.test(name))mask[i]+=sw.array[i*sw.itemSize+k];}geometry.setAttribute('outfitMask',new T.BufferAttribute(mask,1));const mats=(Array.isArray(originalMaterial)?originalMaterial:[originalMaterial]).map(source=>{const m=source.clone(),before=source.onBeforeCompile,key=source.customProgramCacheKey();m.onBeforeCompile=function(shader){before.call(m,shader);shader.uniforms.outfitFabric={value:texture};shader.vertexShader='attribute float outfitMask;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvOutfitMask=outfitMask;vOutfitUV=uv*3.;');shader.fragmentShader='uniform sampler2D outfitFabric;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
@@ -76,14 +94,11 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
  const add=(g,geo,p,scale,m=main)=>{const o=new T.Mesh(geo,m);o.position.set(...p);o.scale.set(...scale);g.add(o);return o;},ball=(g,p,s,m=main)=>add(g,new T.SphereGeometry(1,16,12),p,s,m),box=(g,p,s,m=main)=>add(g,new T.BoxGeometry(1,1,1),p,s,m),cone=(g,p,r,h,m=main)=>add(g,new T.ConeGeometry(r,h,12),p,[1,1,1],m),tube=(g,pts,r,m=main)=>add(g,new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>new T.Vector3(...p))),18,r,6,false),[0,0,0],[1,1,1],m);
  const chest=anchor('Spine2'),hips=anchor('Hips'),d=item.design,t=item.tier;
  if(d==='disguise'){
-  // Rigid prop follows the hip, not the camera, with its base at the feet.
-  // Normalize the geometry using the rig's actual head-to-foot height.
-  const footBones=['LeftFoot','RightFoot'].map(n=>bones.get(n)).filter(Boolean);
-  const hipBone=bones.get('Hips')||head,hipPos=hipBone.getWorldPosition(new T.Vector3());
-  const headPos=(top||head).getWorldPosition(new T.Vector3());
-  const footY=footBones.length?Math.min(...footBones.map(b=>b.getWorldPosition(new T.Vector3()).y)):hipPos.y-height*2.2;
-  const H=Math.max(height*2,headPos.y-footY+height*.18);
-  const g=new T.Group();hips.add(g);g.position.set(0,(footY-hipPos.y)/height,0);g.scale.setScalar(H/height);
+  // Props are rigid avatar-local objects, not children of animated hips or
+  // of the head's imported Mixamo quaternion (which can be upside down).
+  const g=new T.Group(),frame=disguiseFrame(T,model,bones,height);
+  // Build and measure in an unparented, canonical Y-up coordinate system.
+  record.parts.push(g);
   g.name='disguise:'+item.creature;g.userData.disguiseHeight=item.disguiseHeight;
   const black=mat('#211f20'),rust=mat('#86523a'),silver=mat('#a6a6a0',.65),wood=mat('#b28b58'),woodDark=mat('#715037'),tape=mat('#b9aa87'),soot=mat('#39302e');
   const kind=item.creature;
@@ -169,6 +184,12 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
    b([0,.14,.67],[.94,.12,.16],gold);b([0,.14,-.67],[.94,.12,.16],gold);
    slit(1.02,.73,.22);
   }
+  g.updateMatrixWorld(true);
+  const bounds=new T.Box3().setFromObject(g,true),extent=bounds.getSize(new T.Vector3());
+  const factor=frame.height*item.disguiseHeight/Math.max(.001,extent.y);
+  g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);
+  g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*factor);
+  model.add(g);g.updateMatrixWorld(true);
   // Existing avatar and collision dimensions remain untouched by cosmetic props.
   return record;
  }
