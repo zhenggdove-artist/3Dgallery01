@@ -356,6 +356,7 @@ export class TempleArena{
      fly.mesh.scale.setScalar(1.6*(1-t)**1.25);
      if(t>=1){fly.mesh.removeFromParent();this.dropCoinFlights.splice(i,1);}
     }
+    for(const id of this.world?.removedArtworkIds||[]){const gone=this.artworks.get(id);if(gone)gone.visible=false;}
     for(const p of this.artworkRenderDefinitions()){const root=this.artworks.get(p.id),state=this.world?.artworks?.[p.id];if(!root||!state||root.userData.editing)continue;const layout=this.world?.artworkLayout?.[p.id]||this.defaultLayout[p.id]||{position:p.artPosition,rotation:[0,p.artYaw,0],scale:[1,1,1]};root.userData.titleOverride=layout.title;root.userData.authorOverride=layout.author;const d=root.userData,prior=d.frameAppearanceInputs;if(!prior||prior.appearance!==layout.appearance||prior.preview!==d.previewAppearance||prior.title!==layout.title||prior.author!==layout.author||prior.record!==d.record||prior.recordTitle!==d.record?.title||prior.draft!==d.editTitleDraft||prior.applied!==d.appearanceSignature||prior.plate!==d.titlePlateSignature){applyArtworkAppearance(root,layout.appearance);d.frameAppearanceInputs={appearance:layout.appearance,preview:d.previewAppearance,title:layout.title,author:layout.author,record:d.record,recordTitle:d.record?.title,draft:d.editTitleDraft,applied:d.appearanceSignature,plate:d.titlePlateSignature};}const now=wallNow,visual=artworkRenderFlight(state,this.localArtworkFlights.get(p.id),now);if(!visual.local)this.localArtworkFlights.delete(p.id);if(visual.waiting){root.visible=false;continue;}const holder=state.holder&&playerRoots.get(state.holder);if(holder&&!visual.local){root.visible=true;root.position.copy(holder.position);root.position.y+=1.6;root.rotation.set(0,holder.rotation.y+Math.PI,Math.sin(time*2)*.05);root.scale.fromArray(layout.scale).multiplyScalar(.48);continue;}root.scale.fromArray(layout.scale);const flight=visual.event;if(flight&&root.userData.flightId!==flight.id){root.userData.flightId=flight.id;root.userData.flightLanding=artworkLanding(flight,(x,z,y)=>this.groundHeight(x,z,y));}if(flight&&now-flight.time<root.userData.flightLanding.time*1000){const age=Math.max(0,(now-flight.time)/1000);root.visible=true;root.position.fromArray(artworkPosition(flight,age));root.rotation.set(...layout.rotation);continue;}const available=Date.now()>=(state.availableAt||0);root.visible=available;if(available){root.position.fromArray(layout.position);root.position.y+=Math.sin(time*.72+p.index)*(this.artFloat??.17);root.rotation.set(...layout.rotation);}}
     // Use the physical local avatar as the distance origin, NOT the zoomable
     // camera. Held / airborne artworks still use their current world position.
@@ -421,8 +422,9 @@ export class TempleArena{
   artworkRenderDefinitions(){
    // Only custom artwork definitions and layout affect this render cache.
    // HP, combat, coin and other world revisions do not invalidate it.
-   const custom=this.world?.customArtworks,layout=this.world?.artworkLayout;
-   if(this.artworkRenderCustom!==custom||!this.artworkRenderList){
+   const custom=this.world?.customArtworks,layout=this.world?.artworkLayout,removed=this.world?.removedArtworkIds;
+   if(this.artworkRenderCustom!==custom||this.artworkRenderRemoved!==removed||!this.artworkRenderList){
+    this.artworkRenderRemoved=removed;
     this.artworkRenderCustom=custom;this.artworkRenderList=artworkDefinitions(this.world);
     this.artworkRenderRevision=(this.artworkRenderRevision||0)+1;
    }

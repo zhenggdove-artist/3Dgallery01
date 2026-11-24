@@ -56,7 +56,7 @@ const initialStructures=now=>[
 export function createInitialWorld(now=Date.now()){
   return {
     version:WORLD_VERSION,revision:1,createdAt:now,
-    profiles:{},customWings:[],shopPrices:{},
+    profiles:{},customWings:[],shopPrices:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},tidalLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
@@ -71,9 +71,9 @@ export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
   world.profiles??={};world.customWings??=[];registerCustomWings(world.customWings);
-  world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.customPedestals??=[];world.platformOverrides??={};world.removedPlatformIds??=[];world.persistentAttacks??=[];world.prismLocks??={};world.pendingArtworkFlights??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
+  world.environment??={skyBaseColor:'#101b36'};world.removedArtworkIds??=[];world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.customPedestals??=[];world.platformOverrides??={};world.removedPlatformIds??=[];world.persistentAttacks??=[];world.prismLocks??={};world.pendingArtworkFlights??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
-  for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
+  for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};if(world.removedArtworkIds.includes(p.id)){delete world.artworks[p.id];delete world.artworkLayout[p.id];continue;}world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
   // Older uploaded artworks can have a surviving catalog record but no
   // interactive world state. The renderer loads them, yet pickup and GM save
   // both fail. Repair that state without disturbing existing ownership.
@@ -273,7 +273,7 @@ export function worldProfileView(world,actorKey,now){
 export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true){
   return {version:world.version,revision:world.revision,serverTime:now,
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{available:now>=(world.coins[p.id]?.availableAt||0),availableAt:world.coins[p.id]?.availableAt||0}])),
-    artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),customPedestals:clone(world.customPedestals||[]),platformOverrides:clone(world.platformOverrides||{}),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),wallPaint:clone(world.wallPaint||{}),wallPaintRevision:world.wallPaintRevision||0,plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
+    environment:clone(world.environment||{skyBaseColor:'#101b36'}),removedArtworkIds:clone(world.removedArtworkIds||[]),artworks:clone(world.artworks),artworkLayout:clone(world.artworkLayout||{}),customArtworks:clone(world.customArtworks||[]),customWings:includeCustomWings?clone(world.customWings||[]):undefined,floatingPlatforms:clone(world.floatingPlatforms||[]),customPedestals:clone(world.customPedestals||[]),platformOverrides:clone(world.platformOverrides||{}),removedPlatformIds:clone(world.removedPlatformIds||[]),groundDrops:clone(world.groundDrops),structures:clone(world.structures),cityDamage:clone(world.cityDamage||{}),wallPaint:clone(world.wallPaint||{}),wallPaintRevision:world.wallPaintRevision||0,plants:clone(world.plants),monster:clone(world.monster),monsters:clone(world.monsters||[]),audioSettings:clone(world.audioSettings||{}),musicVersion:world.musicVersion||0,
     prismLocks:Object.fromEntries(Object.entries(world.prismLocks||{}).map(([key,lock])=>[
       key,{targetKey:lock.targetKey,kind:lock.kind,position:clone(lock.position),since:lock.since,
         multiplier:prismDamageMultiplier(now-lock.since),range:lock.range}
@@ -555,6 +555,8 @@ export function applyAction(world,actor,body,context={}){
   }
   if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
   if(body.action==='recover-misplaced-artwork')return recoverMisplacedArtworkPosition(world,profile.admin,body.platformId,now);
+  if(body.action==='gm-sky-color')return setSkyBaseColor(world,profile.admin&&actor.admin===true,body.color);
+  if(body.action==='gm-remove-artworks')return removeSelectedArtworks(world,profile.admin&&actor.admin===true,body.ids);
   if(body.action==='reset-player-artworks')return resetPlayerArtworks(world,profile.admin,now);
    if(body.action==='gm-audio-setting'){
     if(!profile.admin)return {error:'GM only'};
@@ -2483,3 +2485,28 @@ function hashString(value){let hash=2166136261;for(const char of String(value)){
 
 export const CATALOG_VIEW=Object.freeze(ITEMS.map(item=>Object.freeze({...item})));
 export const SHOP_VIEW=Object.freeze(SHOP_ITEMS.map(item=>Object.freeze({...item})));
+
+export function setSkyBaseColor(world,isGM,color){
+ if(!isGM)return {error:'GM only'};
+ if(typeof color!=='string'||!/^#[0-9a-f]{6}$/i.test(color))return {error:'Invalid sky color'};
+ world.environment={...world.environment,skyBaseColor:color.toLowerCase()};
+ world.revision=(world.revision||0)+1;
+ return {notice:'Sky color saved for all players',environment:clone(world.environment)};
+}
+export function removeSelectedArtworks(world,isGM,ids){
+ if(!isGM)return {error:'GM only'};
+ if(!Array.isArray(ids)||!ids.length||ids.length>128||ids.some(id=>typeof id!=='string'))return {error:'Select artwork to delete'};
+ const selected=new Set(ids),records=world.customArtworks||[],originals=new Set(PLATFORMS.map(p=>p.id)),available=new Set(artworkDefinitions(world).map(p=>p.id));
+ if([...selected].some(id=>!available.has(id)))return {error:'Artwork list changed. Reload and retry.'};
+ // Original packaged media stays in the repository; tombstones suppress only
+ // its display/interaction, not its platform or coin. Uploaded media may be
+ // deleted only when no other retained artwork references it.
+ world.removedArtworkIds=[...new Set([...(world.removedArtworkIds||[]),...[...selected].filter(id=>originals.has(id))])];
+ world.customArtworks=records.filter(a=>!selected.has(a.id));
+ const retained=new Set(world.customArtworks.map(a=>a.mediaId));
+ const media=[...new Set(records.filter(a=>selected.has(a.id)).map(a=>a.mediaId).filter(id=>id&&!retained.has(id)))];
+ for(const id of selected){delete world.artworks?.[id];delete world.artworkLayout?.[id];delete world.artworkLayoutHistory?.[id];}
+ world.pendingArtworkFlights=(world.pendingArtworkFlights||[]).filter(f=>!selected.has(f.event?.platformId));
+ world.revision=(world.revision||0)+1;
+ return {notice:selected.size+' artwork(s) removed',removedArtworks:selected.size,removedArtworkIds:[...selected],removedArtworkMediaIds:media};
+}

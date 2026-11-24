@@ -783,6 +783,20 @@ ui.addEventListener('spectator-lift',event=>{
 });
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
 ui.addEventListener('panel',event=>{if(event.detail.open)wallPainter.stop();chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active&&!wallPainter.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
+let skyColorPreview=null;
+const savedSkyColor=()=>world?.environment?.skyBaseColor||'#101b36';
+const applySkyColor=color=>scene.userData.moonlitSky?.setBaseColor(color);
+ui.addEventListener('sky-color-preview',event=>{if(!self?.profile?.admin)return;skyColorPreview=event.detail.color;applySkyColor(skyColorPreview);});
+ui.addEventListener('sky-color-save',async event=>{
+ if(!self?.profile?.admin)return;
+ try{const result=await sendAction('gm-sky-color',{color:event.detail.color},{throwOnError:true});if(!result?.environment)throw Error('Server did not confirm sky color');skyColorPreview=null;applySkyColor(result.environment.skyBaseColor);ui.toast('星空底色已儲存');}catch(error){ui.toast(error.message);}
+});
+ui.addEventListener('panel',event=>{if(ui.panelName!=='sky-color'&&skyColorPreview!==null){skyColorPreview=null;applySkyColor(savedSkyColor());}});
+ui.addEventListener('gm-remove-artworks',async event=>{
+ if(!self?.profile?.admin)return;
+ if(artEditor.selected&&event.detail.ids.includes(artEditor.selected.userData.platformId))artEditor.close();
+ try{const result=await sendAction('gm-remove-artworks',{ids:event.detail.ids},{throwOnError:true});if(result?.removedArtworks&&ui.panelName==='editor')ui.renderPanel();}catch(error){ui.toast(error.message);}
+});
 ui.addEventListener('editor-settings',event=>applyEditorSettings(event.detail));
 ui.addEventListener('gm-audio-setting',event=>{if(!self?.profile?.admin)return;audio.setVolumes({[event.detail.key]:event.detail.value});void sendAction('gm-audio-setting',event.detail);});
  ui.addEventListener('gm-fusion-chance',event=>{if(!self?.profile?.admin)return;void sendAction('gm-fusion-chance',event.detail);});
@@ -864,6 +878,8 @@ function updateKnockdowns(){
 let lastSyncedWorld=null;
 function syncWorld(){if(!world)return;
  const previous=lastSyncedWorld;lastSyncedWorld=world;
+ if(skyColorPreview===null&&(!previous||world.environment!==previous.environment))applySkyColor(savedSkyColor());
+ if(artEditor.selected&&!world.artworks?.[artEditor.selected.userData.platformId])artEditor.close();
  if(!previous||world.audioSettings!==previous.audioSettings)audio.setVolumes(world.audioSettings||{});
  if(world.musicVersion&&world.musicVersion!==previous?.musicVersion)audio.setUploadedMusic(network.base,world.musicVersion);
  if(!previous||world.customArtworks!==previous.customArtworks)
@@ -1084,7 +1100,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V035',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V036',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

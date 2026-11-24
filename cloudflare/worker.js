@@ -308,7 +308,7 @@ export class TempleRoom extends DurableObject{
       {world:worldView(world,session.profile_key,Date.now(),['gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate','redeem-wing-design'].includes(body.action))})};
     this.ctx.storage.transactionSync(()=>{
       this.save(world);
-      if(body.action==='reset-player-artworks'&&Array.isArray(result.removedArtworkMediaIds)){
+      if(['reset-player-artworks','gm-remove-artworks'].includes(body.action)&&Array.isArray(result.removedArtworkMediaIds)){
         for(const mediaId of result.removedArtworkMediaIds){
           this.sql.exec('DELETE FROM art_media_chunks WHERE id=?',mediaId);
           this.sql.exec('DELETE FROM art_media WHERE id=?',mediaId);

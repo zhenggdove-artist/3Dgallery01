@@ -1061,3 +1061,33 @@ body.panel-open #panel.build-floating{
 #panel:not(.build-floating)>.build-resize{display:none!important}
 body.panel-open:has(#panel.build-floating) #hud{visibility:visible} 
 body.panel-open:has(#panel.build-floating) #panel{visibility:visible}
+
+/* V036: persistent tabs for the three BUILD functions and compact shared floating tools. */
+#panel.build-floating:not(.sky-color-floating):not(.gallery-guide-floating){min-height:0!important}
+#panel.build-floating #panel-content{position:relative;padding:0 2px 14px;overflow:auto}
+#panel .build-tabs{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:3px;position:sticky;top:0;background:#f5f2f9;z-index:3;padding:3px 0}
+#panel .build-tabs button{font:700 10px Arial;padding:6px 2px;min-height:28px;margin:0}
+#panel .build-tabs button[aria-pressed=true]{background:#725380;color:white}
+#panel [data-build-page][hidden]{display:none!important}
+#panel [data-build-page] label{display:grid;gap:3px;font-size:11px;margin:5px 0}
+#panel [data-build-page] input{font-size:11px;min-width:0;max-width:100%}
+#panel [data-build-page] .panel-button,#panel .structure-entry button{font-size:11px;min-height:30px;padding:4px 6px;margin:3px 0}
+#panel .build-inline{display:flex!important;align-items:center;justify-content:space-between}
+#panel .build-structure-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+#panel .build-structure-grid button{display:grid;gap:2px;font-size:11px;min-height:32px;padding:4px;margin:0}
+#panel .build-structure-grid small{font-size:10px}
+#panel .gm-artwork-check{display:flex;align-items:center;gap:5px;min-width:0;font-size:12px}
+#panel .gm-artwork-check input{width:16px;height:16px;flex:none}
+body.panel-open #panel.sky-color-floating{width:min(270px,calc(100vw - 16px))!important;height:205px!important}
+#panel .sky-color-tools{display:grid;gap:4px;font-size:11px}
+#panel .sky-color-tools input[type=color]{width:100%;height:24px;padding:1px;margin:0}
+#panel .sky-color-tools label{display:grid;grid-template-columns:40px 1fr;align-items:center;gap:5px;margin:0;font-size:11px}
+#panel .sky-color-tools input[type=range]{width:100%;margin:0;min-height:17px}
+#panel .sky-swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+#panel .sky-swatches button{min-height:18px;height:18px;margin:0;padding:0}
+#panel .sky-color-actions{display:flex;gap:4px}
+#panel .sky-color-actions button{flex:1;font-size:11px;padding:4px;min-height:25px;margin:0}
+#gallery-guide{display:grid;place-items:center;position:absolute;top:0;right:calc(100% + 5px);width:30px;height:30px;padding:0;background:#f5ecfa;color:#573c67;border:1px solid #b6a0c6;border-radius:6px;pointer-events:auto}
+body.panel-open #panel.gallery-guide-floating{width:min(320px,calc(100vw - 16px))!important;height:auto!important;max-height:calc(100dvh - 16px)!important}
+#panel .gallery-guide-copy{font-size:13px;line-height:1.65;margin:5px 3px 8px;overflow-wrap:anywhere}
+#panel.gallery-guide-floating .build-resize,#panel.sky-color-floating .build-resize{display:none}

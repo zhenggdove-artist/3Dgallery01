@@ -43,7 +43,7 @@ export function isArtwork22(record){
  return names.some(v=>typeof v==='string'&&
   /(?:^|[\\/])22(?:\.(?:png|jpe?g|webp|gif|avif))?$/i.test(v.trim()));
 }
-export function artworkDefinitions(world){return [...PLATFORMS,...(world?.customArtworks||[]).map((a,index)=>({id:a.id,index:PLATFORMS.length+index,artPosition:a.position,position:[a.position[0],0,a.position[2]],artYaw:0,size:[4,4,4]}))];}
+export function artworkDefinitions(world){return [...PLATFORMS.filter(p=>!(world?.removedArtworkIds||[]).includes(p.id)),...(world?.customArtworks||[]).map((a,index)=>({id:a.id,index:PLATFORMS.length+index,artPosition:a.position,position:[a.position[0],0,a.position[2]],artYaw:0,size:[4,4,4]}))];}
 export function addArtwork(world,profile,actor,body,now){
  if(!profile.admin)return {error:'GM only'};const record=body.artwork,media=body.verifiedArtMedia;
  if(!record||!media||!['image/png','image/jpeg','image/webp','video/mp4','video/webm','model/gltf-binary'].includes(media.type))return {error:'Validated artwork upload required'};

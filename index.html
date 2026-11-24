@@ -10,17 +10,17 @@
   <title>Temple</title>
   <link rel="icon" href="data:,">
   <link rel="preload" href="./src/reletter/FONTS/Golden%20Girdle.otf" as="font" type="font/otf" crossorigin>
-  <link rel="stylesheet" href="./styles.css?v=20261125-v035-r118">
+  <link rel="stylesheet" href="./styles.css?v=20261125-v036-r118">
   <link rel="stylesheet" href="./src/reletter/fonts.css">
   <link rel="stylesheet" href="./reletter-theme.css">
-  <link rel="stylesheet" href="./gun.css?v=20261125-v035-r118">
+  <link rel="stylesheet" href="./gun.css?v=20261125-v036-r118">
   <link rel="stylesheet" href="./sketch-hud.css">
-  <link rel="stylesheet" href="./fidelity-ui.css?v=20261125-v035-r118">
-  <link rel="stylesheet" href="./wing-atelier.css?v=20261125-v035-r118">
-  <link rel="stylesheet" href="./wall-paint.css?v=20261125-v035-r118">
+  <link rel="stylesheet" href="./fidelity-ui.css?v=20261125-v036-r118">
+  <link rel="stylesheet" href="./wing-atelier.css?v=20261125-v036-r118">
+  <link rel="stylesheet" href="./wall-paint.css?v=20261125-v036-r118">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
-  <script src="./temple-config.js?v=20261125-v035-r118"></script>
+  <script src="./temple-config.js?v=20261125-v036-r118"></script>
   <script>
   // One release token for the entire first-party ES-module graph.
   // GitHub Pages and mobile Safari can otherwise mix cached modules from
@@ -29,7 +29,7 @@
     // Stable for one deployment: 15-second URL rotation previously defeated Safari cache
     // and forced every 4G reload to download the whole large module graph.
     // Bump this token when changing the boot graph or deployed JS modules.
-    const release = '20261125-v035-r118';
+    const release = '20261125-v036-r118';
     const imports = {
       "three": "./vendor/three/build/three.module.js",
       "three/addons/": "./vendor/three/examples/jsm/"
@@ -43,7 +43,7 @@
   // Import/link failures happen before main.js can enter its boot try/catch.
   (() => {
     let moduleFailure = "";
-    window.templeStartupDiagnostics = {release: "20261125-v035-r118", failures: []};
+    window.templeStartupDiagnostics = {release: "20261125-v036-r118", failures: []};
     function displayFailure(message) {
       if (!message || document.body?.classList.contains("ready")) return;
       // Do not replace the original module/import error with a later timeout.
@@ -128,7 +128,7 @@
       </form>
       </div>
     </section>
-    <span id="entry-version" aria-label="Game version V035" style="position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));font:12px/1 monospace;color:#fff;pointer-events:none;z-index:2">V035</span>
+    <span id="entry-version" aria-label="Game version V036" style="position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));font:12px/1 monospace;color:#fff;pointer-events:none;z-index:2">V036</span>
   </main>
 
   <section id="hud" hidden>
@@ -143,7 +143,7 @@
     <div id="vitals" class="hud-block"><span id="player-level">LV. 1</span><div id="vital-readouts"><label for="hp"><progress id="hp" max="100" value="100"></progress><b id="hp-label">100/100</b></label><div id="shield-readout" hidden role="status" aria-live="off"><svg class="shield-heart" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="shield-heart-color" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d7fcff"/><stop offset=".48" stop-color="#4fc3ff"/><stop offset="1" stop-color="#0751d1"/></linearGradient></defs><path d="M16 29C11 25 2.5 18.7 2.5 11.2c0-5.1 3.2-8.1 7.4-8.1 2.9 0 4.8 1.7 6.1 3.9 1.3-2.2 3.2-3.9 6.1-3.9 4.2 0 7.4 3 7.4 8.1C29.5 18.7 21 25 16 29Z" fill="url(#shield-heart-color)" stroke="#e6faff" stroke-width="1.6"/></svg><b id="shield-label">0/0</b></div></div><span id="wallet">0 COINS</span><span id="weapon">White Cat SMG</span><span id="online">0 / 6</span><section id="player-roster" aria-label="Online players and health"></section></div>
     <div id="monster-hud" class="hud-block" hidden><small id="monster-name">MONSTER</small><progress id="monster-hp" max="100" value="100"></progress></div>
     <div id="crosshair"></div><div id="prompt"></div><div id="toast"></div><div id="kill-notice" role="status" hidden></div>
-    <div id="map-cluster"><button id="function-toggle" aria-label="Open functions" aria-expanded="false">☰</button><svg id="minimap" viewBox="-250 -250 500 500" role="img" aria-label="Minimap"><circle r="244" fill="#ede3e6" fill-opacity=".7" stroke="#947285"/><g id="map-static"></g><g id="map-dynamic"></g></svg></div>
+    <div id="map-cluster"><button id="gallery-guide" type="button" aria-label="操作說明" title="操作說明"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 18h6m-5 3h4M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 2h-6s0-1-1-2Z"/></svg></button><button id="function-toggle" aria-label="Open functions" aria-expanded="false">☰</button><svg id="minimap" viewBox="-250 -250 500 500" role="img" aria-label="Minimap"><circle r="244" fill="#ede3e6" fill-opacity=".7" stroke="#947285"/><g id="map-static"></g><g id="map-dynamic"></g></svg></div>
     <section id="chat-hud" aria-label="Chat"><header id="chat-resize"><button id="chat-toggle" type="button" aria-label="Expand chat" aria-expanded="false">＋</button><span>CHAT · ↕</span></header><div id="chat-messages" role="log" aria-live="polite"></div><form id="chat-form"><label for="chat-input">CHAT</label><input id="chat-input" type="text" maxlength="500" enterkeyhint="send" autocomplete="off" aria-label="Chat message"><button type="submit" aria-label="Send chat">↵</button></form></section>
     <div id="build-mode" hidden><small>BUILD PREVIEW</small><strong id="build-kind">STRUCTURE</strong><button id="build-rotate">R · ROTATE</button><button id="build-confirm">E · PLACE</button><button id="build-cancel">ESC · CANCEL</button></div>
     <nav id="dock" aria-label="Game functions">

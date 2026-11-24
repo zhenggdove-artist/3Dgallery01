@@ -74,7 +74,8 @@ export function nebulaParticleGeometry(count){
 export function createMoonlitSky(scene,renderer=null,{mobile=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches}={}){
  const root=new THREE.Group();root.name='Cosmic nebula turbulent particle ocean';scene.add(root);
  const texture=noiseTexture();
- const uniforms={uTime:{value:0},uNoise:{value:texture},uPixelRatio:{value:renderer?.getPixelRatio()||1}};
+ const baseColor=new THREE.Color('#101b36');
+ const uniforms={uBaseColor:{value:baseColor},uTime:{value:0},uNoise:{value:texture},uPixelRatio:{value:renderer?.getPixelRatio()||1}};
  // Opaque background draws first without touching depth. Existing terrain,
  // buildings, ocean and transparent VFX retain their normal occlusion.
  const dome=new THREE.Mesh(new THREE.SphereGeometry(880,40,24),new THREE.ShaderMaterial({
@@ -85,7 +86,7 @@ export function createMoonlitSky(scene,renderer=null,{mobile=typeof matchMedia==
     gl_Position.z=gl_Position.w*.99999;}
   `,
   fragmentShader:`
-   precision highp float;varying vec3 vDir;uniform float uTime;uniform sampler2D uNoise;
+   precision highp float;varying vec3 vDir;uniform float uTime;uniform sampler2D uNoise;uniform vec3 uBaseColor;
    ${fieldGLSL}
    float dust(vec3 d,float scale,vec2 offset){
     vec3 w=abs(d);w*=w;w*=w;w/=max(.001,w.x+w.y+w.z);
@@ -102,7 +103,7 @@ export function createMoonlitSky(scene,renderer=null,{mobile=typeof matchMedia==
     float billow=smoothstep(.27,.78,n*.73+detail*.27);
     float clouds=pow(lane,1.8)*(.18+.82*billow);
     float crest=pow(lane,6.)*smoothstep(.43,.76,n);
-    vec3 col=vec3(.003,.007,.025)+vec3(.008,.018,.055)*(.4+.6*n);
+    vec3 col=uBaseColor*(.65+.55*n);
     vec3 gas=nebulaColor(p);
     col+=gas*clouds*.40;
     col+=mix(gas,vec3(.53,.66,.88),.32)*crest*.19;
@@ -175,7 +176,7 @@ export function createMoonlitSky(scene,renderer=null,{mobile=typeof matchMedia==
  }));
  particles.name='Dense advected nebula stars and rolling particle swells';
  particles.renderOrder=-150;particles.frustumCulled=false;root.add(particles);
- return {root,dome,particles,update(camera,time){
+ return {root,dome,particles,setBaseColor(value){if(typeof value==='string'&&/^#[0-9a-f]{6}$/i.test(value)){baseColor.set(value);scene.background?.set?.(value);}},update(camera,time){
   if(camera)root.position.copy(camera.position);
   uniforms.uTime.value=time;
   if(renderer)uniforms.uPixelRatio.value=renderer.getPixelRatio();
