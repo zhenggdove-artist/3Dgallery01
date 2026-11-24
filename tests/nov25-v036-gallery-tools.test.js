@@ -13,3 +13,9 @@ test('GM can delete selected original and uploaded works only; shared media and 
  const result=removeSelectedArtworks(w,true,[id,'a','c']);assert.deepEqual(result.removedArtworkMediaIds,['unique']);assert.equal(w.customArtworks[0].id,'b');assert.ok(w.coins[id]);assert.equal(w.artworks[id],undefined);migrateWorld(w);assert.equal(w.artworks[id],undefined);assert.ok(!artworkDefinitions(w).some(p=>p.id===id));assert.ok(worldView(w,null).removedArtworkIds.includes(id));
 });
 test('all BUILD tools remain mounted and accessible via persistent tabs',()=>{const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');for(const tab of ['upload','structures','manage']){assert.ok(ui.includes('data-build-tab="'+tab+'"'));assert.ok(ui.includes('data-build-page="'+tab+'"'));}assert.match(ui,/this\.applyBuildTab\(\)/);});
+
+test('new sky editor is separately GM-gated without changing existing SUPPORT access',()=>{
+ const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
+ assert.match(ui,/if\(name==='sky-color'&&!this\.self\.profile\?\.admin\)return/);
+ assert.match(ui,/gmSpectatorPreview&&\[[^\]]*'sky-color'/);
+});
