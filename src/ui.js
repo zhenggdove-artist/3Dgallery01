@@ -474,14 +474,23 @@ export class TempleUI extends EventTarget{
    document.body.append(overlay);
    this.collectorSaleOverlay=overlay;
   }
-  purchaseNotice(itemName,quantity){
+  setShopPurchasePending(pending){
+    this.shopPurchasePending=pending;
+    for(const button of this.content.querySelectorAll('[data-buy]')){
+      if(pending){if(!button.hasAttribute('data-idle-label')){button.dataset.idleLabel=button.textContent;button.dataset.idleDisabled=String(button.disabled);}button.disabled=true;button.textContent='PURCHASING…';}
+      else if(button.hasAttribute('data-idle-label')){button.textContent=button.dataset.idleLabel;button.disabled=button.dataset.idleDisabled==='true';delete button.dataset.idleLabel;delete button.dataset.idleDisabled;}
+    }
+  }
+  showPurchaseStatus(state,message){
     const notice=$('purchase-notice');if(!notice)return;
-    clearTimeout(this.purchaseNoticeTimer);
-    notice.textContent='PURCHASE SUCCESSFUL · '+String(itemName||'ITEM')+' ×'+String(quantity||1);
-    notice.hidden=false;notice.classList.remove('visible');
-    void notice.offsetWidth; // Restart the 500 ms fade on a later purchase.
-    notice.classList.add('visible');
-    this.purchaseNoticeTimer=setTimeout(()=>{notice.classList.remove('visible');notice.hidden=true;},500);
+    clearTimeout(this.purchaseNoticeTimer);clearTimeout(this.purchaseHideTimer);
+    notice.dataset.state=state;notice.textContent=message;notice.hidden=false;
+    notice.classList.remove('leaving');notice.classList.add('visible');
+    if(state==='pending')return;
+    this.purchaseNoticeTimer=setTimeout(()=>{notice.classList.add('leaving');this.purchaseHideTimer=setTimeout(()=>{notice.classList.remove('visible','leaving');notice.hidden=true;},250);},3500);
+  }
+  purchaseNotice(itemName,quantity){
+    this.showPurchaseStatus('success','PURCHASE SUCCESSFUL · '+String(itemName||'ITEM')+' ×'+String(quantity||1));
   }
   toast(message){clearTimeout(this.toastTimer);const toast=$('toast');toast.textContent=message;toast.classList.add('visible');this.toastTimer=setTimeout(()=>toast.classList.remove('visible'),2200);}
   fusionFeedback(success,message=''){
@@ -502,7 +511,7 @@ export class TempleUI extends EventTarget{
     if(name==='wing-shop'){$('panel-close').focus({preventScroll:true});this.emit('wing-payment-status-request');}
     if(name==='gm')this.requestGmPresence();}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;document.body.classList.remove('panel-open','panel-wing-painter','panel-wing-shop');this.wingGalleryObserver?.disconnect();this.panelName='';this.emit('panel',{open:false});}
-  renderPanel(){this.panelSignature=inventoryPanelSignature(this.world?.profile);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','shop-prices':'GM · SHOP PRICES','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
+  renderPanel(){this.panelSignature=inventoryPanelSignature(this.world?.profile);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG',shop:'TEMPLE SHOP','shop-prices':'GM · SHOP PRICES','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
     if(this.panelName==='gm'){this.renderGm();return;}
      if(this.panelName==='wing-painter'){mountWingPainter(this);return;}
     if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + O：圓盤／三角檯座編輯（點選變藍，可修改座標與尺寸、DELETE 刪除、ESC 離開）<br>滑鼠中鍵拖曳：編輯模式下自由旋轉視角<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p><h3>GM 指令</h3><p><code>/reset building</code>：復原全部破損房屋（保留塗鴉）<br><code>/clean graffic</code>：永久清除牆面塗鴉<br><code>/reset message</code>：永久清空中央留言與聊天室<br><code>/reset</code>：清空玩家上傳作品<br><code>/recovery</code>：還原藝術品</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(['shop','shop-prices'].includes(this.panelName))this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='wing-manage')this.renderWingManage(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<section class="gm-wing-workspace"><h3>GM 觀眾模式測試</h3><p>使用正式觀眾權限及無模型自由鏡頭；測試期間保留 GM 戰鬥席。</p><button type="button" class="panel-button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button><hr><h3>GM 翅膀編輯工作區</h3><p>繪製、上架、設定中獎率及下架管理。</p><div class="gm-tools"><button type="button" data-gm-action="wing-painter">畫翅膀／上架</button><button type="button" data-gm-action="wing-manage">已上架翅膀／機率／下架</button></div></section><hr><h3>編輯展示圓盤與檯座</h3>
@@ -661,6 +670,7 @@ export class TempleUI extends EventTarget{
      }).join('')||'<p>There are no items in this category.</p>'}</div>
      <div class="shop-detail">${chosen?'<button type="button" class="shop-close-detail" data-close-shop-detail>BACK TO ITEMS</button>':''}${cards.join('')||'<p>Select an item to inspect its stats, quality and price.</p>'}</div></div>`;
     this.content.querySelector('.shop-grid').scrollTop=scroll;
+    if(this.shopPurchasePending)this.setShopPurchasePending(true);
     void hydrateItemPreviews(this.content);
   }
 

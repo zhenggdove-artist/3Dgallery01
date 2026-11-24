@@ -15,7 +15,110 @@ if(d==='hydra-dragon'){
  ball([0,.20,.55],[.51,.60,.20],white);box([0,-.34,.63],[.36,.28,.16],white);
  for(const side of [-1,1]){ball([side*.22,.23,.72],[.19,.22,.075],dark);tube([[side*.37,.58,.12],[side*.72,.82,.07],[side*.89,.53,.13],[side*.78,.13,.3],[side*.51,.02,.42]],.13,gold);for(let i=0;i<4;i++)box([side*(.045+i*.042),-.30,.73],[.025,.10,.025],dark);}
  cone([0,-.08,.76],.10,.16,dark).rotation.z=Math.PI;
-}else if(['trump-mask','huang-mask','musk-mask'].includes(d)){
+}else if(d==='huang-mask'||d==='musk-mask'){
+// Separate landmark-based portraits. Features are projected onto each face,
+ // rather than sharing a generic depth plane where eyelids/lips disappear.
+ const huang=d==='huang-mask';
+ const skin=mat(huang?'#c7a08a':'#e4b9a7',0),shadow=mat(huang?'#97705d':'#b18778',0),
+  lip=mat(huang?'#996c64':'#aa7774',0),crease=mat(huang?'#77564d':'#80564e',0),
+  hair=mat(huang?'#9a9b99':'#513b30',0),strand=mat(huang?'#d9d9d5':'#84634c',0),
+  brow=mat(huang?'#54504a':'#594238',0),pupil=mat('#292826',0),
+  iris=mat(huang?'#49372b':'#69858c',0),frame=mat('#1d2024',.16);
+ // [vertical landmark, half-width, front depth], deliberately different
+ // skull profiles: narrow angular Huang versus broad forehead and square Musk.
+ const rows=huang?[
+  [-.64,.025,.43],[-.55,.19,.55],[-.43,.29,.59],[-.28,.39,.61],[-.10,.45,.63],
+  [.08,.48,.62],[.27,.45,.58],[.44,.42,.54],[.59,.38,.49],[.73,.25,.40],[.80,.015,.30]
+ ]:[
+  [-.64,.025,.48],[-.55,.28,.60],[-.43,.43,.65],[-.25,.47,.65],[-.05,.49,.63],
+  [.14,.50,.61],[.32,.49,.59],[.50,.49,.55],[.66,.43,.48],[.77,.28,.40],[.83,.015,.30]
+ ];
+ const sample=y=>{let j=0;while(j<rows.length-2&&y>rows[j+1][0])j++;const a=rows[j],b=rows[j+1],t=Math.max(0,Math.min(1,(y-a[0])/(b[0]-a[0]))),smooth=t*t*(3-2*t);return [a[1]+(b[1]-a[1])*smooth,a[2]+(b[2]-a[2])*smooth];};
+ const g=(x,y,cx,cy,sx,sy)=>Math.exp(-(((x-cx)/sx)**2+((y-cy)/sy)**2));
+ const eyeY=huang?.245:.275,eyeX=huang?.207:.188;
+ const depth=(x,y)=>{const [w,z]=sample(y);const a=Math.sqrt(Math.max(0,1-(x/Math.max(.02,w))**2));const X=Math.abs(x);
+  return .22+(z-.22)*a
+   +(huang?.085:.045)*g(X,y,.30,.025,.13,.16)
+   -(huang?.05:.075)*g(X,y,eyeX,eyeY,.13,.083)
+   +(huang?.038:.080)*g(X,y,eyeX,eyeY+.10,.17,.062)
+   +(huang?.115:.085)*g(x,y,0,.095,.072,.23)
+   +(huang?.100:.092)*g(x,y,0,-.065,.105,.085)
+   +(huang?.045:.070)*g(x,y,0,-.22,.20,.11)
+   +(huang?.040:.105)*g(x,y,0,-.46,.22,.12)
+   -(huang?0:.017)*g(x,y,0,-.48,.027,.043);
+ };
+ const vertices=[],indices=[],colors=[],N=112,M=112,base=new T.Color(huang?'#c7a08a':'#e4b9a7'),warm=new T.Color(huang?'#af7f68':'#c58e81'),cool=new T.Color(huang?'#967663':'#bd9b93');
+ for(let j=0;j<=M;j++){const y=rows[0][0]+(rows.at(-1)[0]-rows[0][0])*j/M;const [w]=sample(y);
+  for(let k=0;k<=N;k++){const x=w*Math.sin(-Math.PI/2+Math.PI*k/N),z=depth(x,y);
+   vertices.push(x,y,z);const tone=base.clone().lerp(warm,.38*g(Math.abs(x),y,.31,.0,.17,.2)+.18*g(x,y,0,-.065,.13,.10)).lerp(cool,.30*g(Math.abs(x),y,eyeX,eyeY,.13,.11));colors.push(tone.r,tone.g,tone.b);
+   if(j&&k){const i=j*(N+1)+k;indices.push(i-N-2,i-N-1,i,i-N-2,i,i-1);}
+  }
+ }
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.setIndex(indices);geo.computeVertexNormals();
+ const faceMat=new T.MeshStandardMaterial({vertexColors:true,roughness:.84,metalness:0,side:T.DoubleSide});mats.push(faceMat);mesh(geo,[0,0,0],[1,1,1],faceMat);
+ const onFace=(points,offset=.012)=>points.map(([x,y])=>[x,y,depth(x,y)+offset]);
+ const line=(points,r,m,offset=.012)=>tube(onFace(points,offset),r,m);
+ const oval=(cx,cy,w,h,count=36)=>Array.from({length:count+1},(_,i)=>[cx+w*Math.cos(i/count*Math.PI*2),cy+h*Math.sin(i/count*Math.PI*2)]);
+ for(const side of [-1,1]){
+  const x=side*eyeX,z=depth(x,eyeY),ew=huang?.122:.108,eh=huang?.025:.035;
+  ball([side*(huang?.45:.49),.035,.27],[.075,.15,.085],skin);
+  ball([x,eyeY,z+.021],[ew,eh,.027],white);
+  ball([x,eyeY,z+.049],[huang?.030:.035,huang?.029:.034,.012],iris);
+  ball([x,eyeY,z+.060],[.016,.018,.007],pupil);
+  ball([x-.008,eyeY+.009,z+.066],[.005,.005,.004],white);
+  line([[x-ew,eyeY],[x-ew*.45,eyeY+eh],[x+ew*.45,eyeY+eh],[x+ew,eyeY+side*.006]],.011,crease,.043);
+  line([[x-ew,eyeY],[x,eyeY-eh],[x+ew,eyeY+side*.006]],.007,shadow,.031);
+  const by=eyeY+(huang?.090:.094);
+  line([[x-ew,by-.012],[x-ew*.35,by+.015],[x+ew*.25,by+.013],[x+ew,by-.018]],huang?.013:.021,brow,.025);
+  for(let k=0;k<12;k++){const xx=x-ew+.018*k;line([[xx,by-.008],[xx+.012*side,by+.014]],.003,brow,.035);}
+  if(huang){
+   line([[side*.10,.01],[side*.19,-.08],[side*.26,-.19],[side*.29,-.29]],.008,shadow,.018);
+   line([[side*.115,eyeY-.065],[side*.23,eyeY-.085],[side*.32,eyeY-.055]],.006,shadow,.014);
+   for(let k=0;k<3;k++)line([[side*.32,eyeY-.03-k*.025],[side*.37,eyeY-.04-k*.03],[side*.40,eyeY-.07-k*.027]],.004,shadow,.013);
+  }else{
+   line([[side*.11,eyeY-.06],[side*.20,eyeY-.073],[side*.28,eyeY-.06]],.006,shadow,.014);
+   line([[side*.11,-.09],[side*.18,-.14],[side*.23,-.24]],.006,shadow,.014);
+  }
+  const nx=side*(huang?.067:.073),ny=-.087;
+  ball([nx,ny,depth(nx,ny)+.018],[.033,.018,.018],skin);
+  ball([nx,ny-.012,depth(nx,ny-.012)+.031],[.023,.009,.009],crease);
+ }
+ const my=huang?-.205:-.224,mw=huang?.218:.172;
+ const smile=side=>my+(huang?.043:.023)*side*side+(huang?0:.012*side);
+ const mouth=Array.from({length:17},(_,i)=>{const t=i/8-1;return [mw*t,smile(t)];});
+ line(mouth,.010,crease,.037);
+ line(mouth.map(([x,y])=>[x,y+.018*(1-(x/mw)**2)]),huang?.013:.018,lip,.035);
+ line(mouth.map(([x,y])=>[x,y-.023*(1-(x/mw)**2)]),huang?.018:.022,lip,.034);
+ if(huang){
+  line(mouth.slice(2,-2).map(([x,y])=>[x,y+.002]),.011,white,.047);
+  for(let k=1;k<4;k++){const y=.39+k*.052;line([[-.25,y],[-.11,y+.016],[.11,y+.016],[.25,y]],.004,shadow,.012);}
+ }else{
+  line([[-.10,-.372],[0,-.387],[.10,-.372]],.005,shadow,.012);
+  line([[0,-.455],[.012,-.49],[0,-.515]],.004,shadow,.012);
+ }
+ // Hair: Huang's silver swept-back short hair and dark rectangular glasses;
+ // Musk's recessed temples, broad bare forehead, short asymmetric side part.
+ if(huang){
+  const cap=ball([0,.66,.30],[.41,.17,.28],hair);cap.rotation.z=-.055;
+  for(const side of [-1,1]){
+   ball([side*.39,.48,.26],[.088,.19,.16],hair);
+   for(let k=0;k<19;k++){const t=k/18;tube([[side*(.40-.08*t),.43+.12*t,.37],[side*(.28-.10*t),.68+.07*t,.52],[side*.055,.78-.015*t,.41]],.010,k%3===0?strand:hair);}
+   const cx=side*.207,cy=eyeY+.012,fw=.163,fh=.086;
+   const shape=new T.Shape();shape.moveTo(-fw+.02,-fh);shape.lineTo(fw-.02,-fh);shape.quadraticCurveTo(fw,-fh,fw,-fh+.025);shape.lineTo(fw,fh-.015);shape.quadraticCurveTo(fw,fh,fw-.02,fh);shape.lineTo(-fw+.02,fh);shape.quadraticCurveTo(-fw,fh,-fw,fh-.02);shape.lineTo(-fw,-fh+.02);shape.quadraticCurveTo(-fw,-fh,-fw+.02,-fh);
+   const pts=shape.getPoints(24).map(v=>[cx+v.x,cy+v.y,.755-Math.abs(v.x)*.08]);pts.push(pts[0]);tube(pts,.017,frame);
+   tube([[side*.37,cy,.74],[side*.46,cy+.025,.53],[side*.48,cy,.27]],.018,frame);
+  }
+  tube([[-.045,eyeY+.035,.75],[0,eyeY+.051,.77],[.045,eyeY+.035,.75]],.014,frame);
+ }else{
+  const cap=ball([-.015,.73,.27],[.43,.15,.29],hair);cap.rotation.z=-.12;
+  for(const side of [-1,1])ball([side*.435,.53,.23],[.07,.17,.15],hair);
+  for(let k=0;k<30;k++){const t=k/29,x=-.40+t*.79;const y=.61+.075*Math.exp(-((x/.30)**2))+.04*t;
+   tube([[x,y,.44],[x-.07,.79+.025*Math.sin(t*Math.PI),.55],[x-.13,.77,.38]],.012,k%5===0?strand:hair);
+  }
+ }
+ const strap=mat('#39333a',0);tube([[-.43,.10,.24],[-.54,.10,-.05],[0,.10,-.40],[.54,.10,-.05],[.43,.10,.24]],.030,strap);
+ root.userData.portraitSculpt=huang?'huang-r112':'musk-r112';
+}else if(d==='trump-mask'){
  // Continuous sculpted facial surface. Individual silhouettes and landmark
  // proportions replace the shared oval face and separate spherical cheeks.
  const trump=d==='trump-mask',huang=d==='huang-mask';

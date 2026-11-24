@@ -42,14 +42,14 @@ test('only an actually absorbed shield hit triggers a whole-shell red flash',()=
  assert.match(main,/applyShieldHit\(localRoot,profile\)/);
  assert.match(main,/applyShieldHit\(root,player\.profile\)/);
 });
-test('shield and health readouts have separate rows; 500ms popup is server-confirmed',()=>{
+test('shield and health readouts have separate rows; purchase popup remains visible for 3500ms after server confirmation',()=>{
  const html=read('index.html'),css=read('fidelity-ui.css'),ui=read('src/ui.js'),main=read('src/main.js');
  assert.match(html,/id="shield-readout" hidden/);
  assert.match(html,/id="shield-label"/);
  assert.match(css,/#vitals #vital-readouts>label\{position:static/);
  assert.match(css,/#vitals #shield-readout\{display:flex/);
- assert.match(css,/#purchase-notice\.visible\{animation:purchase-confirm-fade 500ms/);
+ assert.match(css,/#purchase-notice\.leaving\{animation:purchase-confirm-fade 250ms/); assert.match(ui,/\},3500\);/);
  assert.match(ui,/purchaseNotice\(itemName,quantity\)/);
  assert.match(ui,/PURCHASE SUCCESSFUL/);
- assert.match(main,/if\(result\.purchased\)/);
+ assert.match(main,/if\(result\.purchased\)/); assert.ok(main.indexOf('ui.purchaseNotice(purchased')<main.indexOf('if(result.world)acceptWorldView(result.world)',main.indexOf('async function sendAction')));
 });

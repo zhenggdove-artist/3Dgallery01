@@ -670,7 +670,7 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
  text-align:center;overflow-wrap:anywhere;font:800 clamp(13px,3vw,18px)/1.4 Arial,'Noto Sans TC',sans-serif;
  box-shadow:0 8px 28px #0005;opacity:0;}
 #purchase-notice[hidden]{display:none!important;}
-#purchase-notice.visible{animation:purchase-confirm-fade 500ms ease-out forwards;}
+#purchase-notice.visible{opacity:1;}
 @keyframes purchase-confirm-fade{0%,22%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-9px)}}
 
 
@@ -952,3 +952,55 @@ body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;f
 #panel .shop-tabs{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;overflow:visible;width:100%;max-width:100%;flex:none}
 #panel .shop-tabs .shop-tab-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px;min-width:0}
 #panel .shop-tabs .shop-tab-row button{min-width:0;width:100%;min-height:34px;padding:3px 2px;white-space:normal;overflow-wrap:anywhere;line-height:1.12;font-size:clamp(9px,2.1vw,12px)}
+
+/* r112: prioritize the actual inventory grid; toolbar rows have fixed compact height. */
+#panel:has(.original-bag) #bag-tabs{display:grid!important;grid-template-columns:minmax(0,1fr);gap:3px;overflow:visible!important;min-height:0!important;flex:none}
+#panel #bag-tabs .bag-tab-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:3px;min-width:0}
+#panel:has(.original-bag) #bag-tabs .bag-tab-row button{width:100%;min-width:0;min-height:28px!important;padding:2px 1px!important;white-space:normal!important;font:700 10px/1.1 Arial,sans-serif;overflow-wrap:anywhere}
+#panel .bag-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:center;gap:4px;flex:none;min-width:0}
+#panel .bag-toolbar .bag-sort-control{display:flex;gap:3px;margin:0;font:700 10px Arial,sans-serif;min-width:0}
+#panel .bag-toolbar #bag-sort{flex:1;min-width:0;min-height:30px;font:11px Arial,sans-serif;padding:2px}
+#panel #fusion-toggle{width:100%;min-height:32px;font:800 12px Arial,sans-serif;letter-spacing:.03em;background:#49365b;color:#fff;border:2px solid #a681cb;padding:3px 5px;box-shadow:0 1px 3px #39294444}
+#panel #fusion-toggle[aria-pressed=true]{background:#f6d773;color:#35254a;border-color:#b28b20;box-shadow:0 0 0 2px #e2b63d88}
+#panel #bag-sale-toggle{min-height:30px;font:700 10px Arial,sans-serif;padding:3px 7px;background:#f1d5db;color:#76394a}
+#panel .bag-sale-tools[hidden]{display:none!important}
+#panel .bag-sale-tools select,#panel .bag-sale-tools button{min-height:30px;font-size:10px}
+#panel #bag-feedback:empty{display:none}
+#panel #bag-feedback{font:10px/1.2 Arial,sans-serif;max-height:24px;overflow:auto}
+#panel .bag-capacity{padding:3px 5px;font-size:11px}
+#panel .bag-inventory-status:not([hidden]){padding:2px 4px;font-size:10px;max-height:26px;overflow:auto}
+@media(max-width:839px), (max-height:649px){
+ body.panel-open #panel:has(.original-bag){position:fixed!important;inset:max(5px,env(safe-area-inset-top)) max(5px,env(safe-area-inset-right)) max(5px,env(safe-area-inset-bottom)) max(5px,env(safe-area-inset-left))!important;width:auto!important;height:auto!important;max-height:none!important;max-width:none!important;min-height:0!important;display:flex!important;flex-direction:column!important;padding:5px!important;gap:3px!important;box-sizing:border-box;overflow:hidden}
+ body.panel-open #panel:has(.original-bag) header{flex:none;height:auto!important;min-height:32px;padding:2px 5px!important}
+ body.panel-open #panel:has(.original-bag) #panel-kicker{display:none}
+ body.panel-open #panel:has(.original-bag) h2{font-size:19px!important;margin:0}
+ body.panel-open #panel:has(.original-bag) #panel-content{display:flex!important;flex:1 1 0!important;height:auto!important;min-height:0!important;overflow:hidden!important;padding:2px!important}
+ #panel .original-bag{flex:1 1 0;height:100%;min-height:0;gap:3px}
+ #panel:has(.original-bag) #bag-items:not(.equipment-view){flex:1 1 0;min-height:0!important;grid-template-columns:repeat(6,minmax(0,1fr));grid-auto-rows:clamp(36px,13vw,58px);gap:3px;padding:2px}
+ #panel:has(.original-bag) #bag-items:not(.equipment-view) .bag-cell{height:100%;min-height:0;max-height:none;padding:2px}
+ #panel:has(.original-bag) #bag-items:not(.equipment-view) .bag-cell img{height:100%;max-height:100%;width:100%;object-fit:contain}
+ #panel:has(.original-bag) #bag-detail{flex:0 0 auto;min-height:18px!important;max-height:min(22dvh,112px)!important;padding:3px;font-size:10px;line-height:1.25}
+ #panel #bag-detail [data-sell],#panel #bag-detail [data-equip],#panel #bag-detail [data-unequip]{min-height:28px;padding:2px 6px}
+}
+@media(max-width:380px){#panel:has(.original-bag) #bag-tabs .bag-tab-row button{font-size:9px}}
+/* A small, independently scrolling purchase drawer, leaving the grid visible. */
+#panel .shop-layout{grid-template-columns:minmax(0,1fr) minmax(0,.36fr)}
+#panel .shop-detail{padding:3px}
+#panel .shop-detail>.item{padding:4px!important;min-height:0;gap:3px}
+#panel .shop-detail>.item>img{width:clamp(40px,6vw,75px)!important;height:clamp(40px,6vw,75px)!important;float:left;margin:0 5px 3px 0}
+#panel .shop-detail .item h3{font-size:12px;line-height:1.15;margin:0}
+#panel .shop-detail .equipment-description{font-size:10px;line-height:1.25;margin:3px 0}
+#panel .shop-detail .shop-quality-picker,#panel .shop-detail .shop-purchase{gap:3px;margin:3px 0;padding:3px}
+#panel .shop-detail select,#panel .shop-detail input,#panel .shop-detail button{min-height:30px!important;font-size:12px!important}
+#panel .shop-detail .shop-close-detail{display:block;width:auto!important;min-height:21px!important;font-size:10px!important;padding:1px 6px!important;margin:0 0 3px auto;line-height:1.15}
+@media(max-width:600px) and (orientation:portrait){
+ #panel .shop-detail{top:auto;bottom:0;right:0;width:min(82%,330px);height:50%;max-height:50%!important;padding:4px}
+ #panel .shop-detail>.item>img{width:56px!important;height:56px!important}
+}
+#purchase-notice{z-index:100;top:max(12px,env(safe-area-inset-top));opacity:1}
+#purchase-notice.visible{animation:none;opacity:1}
+#purchase-notice.leaving{animation:purchase-confirm-fade 250ms ease-out forwards}
+#purchase-notice[data-state=pending]{background:#f5f2f9;border-color:#a99eb5;color:#493653}
+#purchase-notice[data-state=success]{background:#e8f5e8;border-color:#52865c;color:#24492d}
+#purchase-notice[data-state=error]{background:#f9e6e7;border-color:#ba6375;color:#783044}
+@media(prefers-reduced-motion:reduce){#purchase-notice.leaving{animation:none;opacity:1}}

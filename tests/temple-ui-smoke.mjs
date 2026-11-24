@@ -36,8 +36,8 @@ try{
  // not Promise URLs, broken images, or the deleted generic RELETTER glyphs.
  await page.evaluate(()=>templeTest.ui.openPanel('shop'));
  await page.waitForFunction(()=>{
-  const cards=[...document.querySelectorAll('.shop-items article.item')];
-  const images=[...document.querySelectorAll('.shop-items article.item img')];
+  const cards=[...document.querySelectorAll('.shop-grid .shop-cell')];
+  const images=[...document.querySelectorAll('.shop-grid .shop-cell img')];
   return cards.length>0&&images.length===cards.length&&images.every(
    img=>img.complete&&img.naturalWidth>0&&/^(blob:|https?:)/.test(img.currentSrc)
   );
@@ -64,7 +64,7 @@ try{
   templeTest.ui.shopTab='outfit';templeTest.ui.renderPanel();
  });
  await page.waitForFunction(()=>{
-  const card=[...document.querySelectorAll('.shop-items article.item')]
+  const card=[...document.querySelectorAll('.shop-grid .shop-cell')]
    .find(node=>node.textContent.includes('Elephant Parade Suit'));
   const image=card?.querySelector('img');
   return !!image?.complete&&image.naturalWidth>0;
@@ -77,8 +77,9 @@ try{
  await page.evaluate(()=>templeTest.ui.purchaseNotice('Comfort Cash · $20',3));
  await page.locator('#purchase-notice').waitFor({state:'visible',timeout:2500});
  assert.equal(await page.locator('#purchase-notice').textContent(),'PURCHASE SUCCESSFUL · Comfort Cash · $20 ×3');
- await page.waitForTimeout(550);
- assert.equal(await page.locator('#purchase-notice').isVisible(),false,'Purchase popup must disappear within 500 ms');
+ await page.waitForTimeout(1000);
+ assert.equal(await page.locator('#purchase-notice').isVisible(),true,'Purchase popup must persist after one second');
+ await page.locator('#purchase-notice').waitFor({state:'hidden',timeout:4000});
 
  await page.locator('#panel-close').click();
  // FISH has been retired from both the dock and shop.
