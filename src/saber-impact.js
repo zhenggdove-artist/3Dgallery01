@@ -133,7 +133,7 @@ export class SaberImpact{
  remove(fx){
   const index=this.active.indexOf(fx);if(index>=0)this.active.splice(index,1);
   fx.root.removeFromParent();
-  fx.root.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});
+  fx.root.traverse(o=>{if(o.isInstancedMesh)o.dispose();o.geometry?.dispose();o.material?.dispose();});
  }
  dispose(){for(const e of [...this.active])this.remove(e);}
 }

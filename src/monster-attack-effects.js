@@ -88,7 +88,7 @@ export class MonsterAttackEffects {
   e.root.visible=false;e.root.removeFromParent();e.native?.stop?.();
   let list=this.pool.get(e.motion);if(!list){list=[];this.pool.set(e.motion,list);}
   if(list.length<6){list.push(e);return;}
-  e.native?.dispose?.();e.root.traverse(o=>{if(o.isMesh&&o!==e.marker&&o!==e.fringe&&o!==e.wave&&o.geometry!==warningCircle&&o.geometry!==warningRect)o.geometry?.dispose();o.material?.dispose?.();});
+  e.native?.dispose?.();e.root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.isMesh&&o!==e.marker&&o!==e.fringe&&o!==e.wave&&o.geometry!==warningCircle&&o.geometry!==warningRect)o.geometry?.dispose();o.material?.dispose?.();});
  }
  async warm(renderer,camera){
   // First use is GPU-warmed behind the loading screen, not in the combat frame.

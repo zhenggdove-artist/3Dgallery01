@@ -688,7 +688,9 @@ export class OuterCity{
    part.velocity.set(0,0,0);
    part.moving=false;part.settled=true;
   }
-  this.root.add(effect.root);this.chunks.set(lot.index,effect);
+  this.root.add(effect.root);effect.root.updateMatrixWorld(true);
+  effect.worldBounds=new THREE.Box3().setFromObject(effect.root);effect.lastVisibleAt=performance.now();
+  this.chunks.set(lot.index,effect);
  }
  disposePreparedChunks(effect){
   effect.root.traverse(o=>{o.geometry?.dispose();if(o.material)
@@ -924,7 +926,8 @@ export class OuterCity{
  }
  blocked(x,z,y=0){return cityBlocked(x,z,y,this.damage);}
  update(time,dt=1/60,camera=null){
-  const tmp=new THREE.Object3D();
+  const tmp=this.frameTransform??=new THREE.Object3D();
+  this.updateRubbleResidency(camera);
   for(let i=0;i<this.bagRecords.length;i++){
    const p=this.bagRecords[i];tmp.position.set(p.x,.18+Math.abs(Math.sin(time+p.phase))*.1,p.z);
    tmp.scale.set(.6,.7,.6);tmp.rotation.set(p.phase,time*.15,0);tmp.updateMatrix();this.bags.setMatrixAt(i,tmp.matrix);
@@ -1001,13 +1004,35 @@ export class OuterCity{
     if(batch){piece.mesh.updateMatrix();batch.setMatrixAt(batch.count++,tmp.matrix.multiplyMatrices(effect.root.matrixWorld,piece.mesh.matrix));batch.visible=true;}
    }
   }
-  for(const batch of this.scrapBatches)if(batch.count){batch.instanceMatrix.addUpdateRange(0,batch.count*16);batch.instanceMatrix.needsUpdate=true;}
+  for(const batch of this.scrapBatches)if(batch.count){batch.instanceMatrix.clearUpdateRanges();batch.instanceMatrix.addUpdateRange(0,batch.count*16);batch.instanceMatrix.needsUpdate=true;}
   // One costly VFX geometry job per frame, including simultaneous AOE hits.
   // Structural tiers, collision, hit tint and smoke still react immediately.
   if(!this.processEjections())this.stepChunkPreparation();
   this.pruneDeformationBasis();
   // Ruined buildings are already grounded; the fragment pools handle all
   // falling motion without iterating through every destroyed house each frame.
+ }
+ updateRubbleResidency(camera){
+  if(!camera||!this.chunks.size)return;
+  camera.updateMatrixWorld(true);
+  const matrix=this.rubbleViewMatrix??=new THREE.Matrix4();
+  const frustum=this.rubbleFrustum??=new THREE.Frustum();
+  frustum.setFromProjectionMatrix(matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+  const now=performance.now();
+  for(const effect of this.chunks.values()){
+   if(!effect.staticRubble||!effect.worldBounds)continue;
+   const visible=frustum.intersectsBox(effect.worldBounds);
+   effect.root.visible=visible;
+   if(visible){effect.lastVisibleAt=now;effect.gpuReleased=false;continue;}
+   // Full original geometry remains in CPU memory; release only GPU buffers
+   // of distant, off-camera static rubble. Three reuploads the identical
+   // geometry automatically upon its next render. Never remove a ruin.
+   if(!effect.gpuReleased&&now-effect.lastVisibleAt>30000&&effect.worldBounds.distanceToPoint(camera.position)>75){
+    const geometries=new Set(),materials=new Set();
+    effect.root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);});
+    geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());effect.gpuReleased=true;
+   }
+  }
  }
  dispose(){
   this.basisDisposed=true;this.basisIdleQueue.length=0;this.fixtureWarmQueue.length=0;

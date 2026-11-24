@@ -5,7 +5,7 @@ import {cityGroundHeight,cityBlocked} from './shared/city-layout.js';
 import {DisplayPlatforms} from './display-platforms.js';
 import {artworkPosition,artworkLanding,artworkRenderFlight} from './shared/artwork-flight.js';
 import {artworkDefinitions,artworkPickupReach} from './shared/artwork-library.js';
-import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork,updateArtworkTitleVisibility} from './artwork-surface.js';
+import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork,updateArtworkTitleVisibility,releaseArtworkAnimation} from './artwork-surface.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
@@ -56,11 +56,14 @@ export class TempleArena{
   createCoinInstances(){let mesh;this.coinAsset.scene.traverse(node=>{if(!mesh&&node.isMesh)mesh=node;});if(!mesh)throw Error('Original RELETTER coin mesh missing');this.coinAsset.scene.updateMatrixWorld(true);const geometry=mesh.geometry.clone().applyMatrix4(mesh.matrixWorld),material=mesh.material.clone();material.side=THREE.DoubleSide;material.metalness=.8;material.roughness=.2;material.emissive.set('#FFD700');material.emissiveIntensity=.3;this.coinMesh=new THREE.InstancedMesh(geometry,material,PLATFORMS.length);this.coinMesh.name='Original RELETTER platform coins';this.coinMesh.frustumCulled=false;this.scene.add(this.coinMesh);}
   async loadArtworks(records,onProgress){
     const selected=records.slice(0,PLATFORMS.length);if(selected.length!==13)throw Error(`Expected 13 artworks, found ${selected.length}`);let complete=0;
-    await Promise.all(selected.map(async(record,index)=>{const platform=PLATFORMS[index],root=new THREE.Group();root.name=`Artwork ${record.title}`;root.userData={platformId:platform.id,record,base:platform.artPosition};
+    const loadOne=async(record,index)=>{const platform=PLATFORMS[index],root=new THREE.Group();root.name=`Artwork ${record.title}`;root.userData={platformId:platform.id,record,base:platform.artPosition};
       if(record.type==='model'){const gltf=await this.loader.loadAsync('./models/model_0004.temple.glb'),model=gltf.scene;fitObject(model,Math.min(5.2,Math.max(3.2,record.size?.h*.7||4)));root.add(model);root.userData.model=true;}
       else{const displaySource=artworkDelivery[record.src]||record.src,texture=await new THREE.TextureLoader().loadAsync(displaySource);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(4,this.renderer.capabilities.getMaxAnisotropy());const aspect=record.naturalAspect||texture.image.width/texture.image.height,height=Math.min(4.8,Math.max(2.2,(record.size?.h||3)*.68)),width=height*aspect,geometry=new THREE.PlaneGeometry(width,height),material=new THREE.MeshStandardMaterial({map:texture,transparent:!!record.transparent,alphaTest:record.transparent?.035:0,side:THREE.DoubleSide,roughness:.72,metalness:0,emissive:'#ffffff',emissiveMap:texture,emissiveIntensity:.16});const art=new THREE.Mesh(geometry,material);art.name=record.title;root.add(art);root.userData.displaySize=[width,height];addArtworkDepth(root,texture,width,height);}
       root.position.fromArray(platform.artPosition);root.rotation.y=platform.artYaw;this.scene.add(root);this.artworks.set(platform.id,root);complete++;onProgress(complete/selected.length);
-    }));
+    };
+    // Avoid simultaneous decode of all large artwork images on mobile WebKit.
+    if(touch){for(let i=0;i<selected.length;i+=2)await Promise.all(selected.slice(i,i+2).map((record,j)=>loadOne(record,i+j)));}
+    else await Promise.all(selected.map(loadOne));
   }
   createPlayer(color='#43b59a',admin=false,name='Pilgrim'){
     const root=new THREE.Group(),model=cloneSkeleton(this.characterAsset.scene);model.scale.setScalar(100);model.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(model);model.position.y=-bounds.min.y;tintCharacter(model,color,admin);root.add(model);
@@ -204,10 +207,14 @@ export class TempleArena{
      return;
     }
     if(!this.customLoads.has(record.id)){
-     const task=loadCustomArtwork(this,record,base).then(root=>{
+     const load=()=>this.expectedCustomIds?.has(record.id)?loadCustomArtwork(this,record,base):null;
+     const pending=touch?(this.customLoadQueue||Promise.resolve()).then(load):Promise.resolve().then(load);
+     if(touch)this.customLoadQueue=pending.catch(()=>{});
+     const task=pending.then(root=>{
+      if(!root)return;
       if(!this.expectedCustomIds?.has(record.id)){disposeArtworkRoot(root);return;}
       this.scene.add(root);this.artworks.set(record.id,root);
-     }).catch(error=>{this.customLoads.delete(record.id);throw error;});
+     }).finally(()=>{if(this.customLoads.get(record.id)===task)this.customLoads.delete(record.id);});
      this.customLoads.set(record.id,task);
     }
     return this.customLoads.get(record.id);
@@ -446,9 +453,13 @@ function setDropMatrix(mesh,drop,index,shape,time){tempPosition.set(...drop.posi
 function previewMeshes(kind,material){const mesh=(geometry,x=0,y=0,z=0)=>{const value=new THREE.Mesh(geometry,material.clone());value.position.set(x,y,z);return value;};if(kind==='art-bomb')return [mesh(new THREE.BoxGeometry(3,3,.16),0,1.5,0)];if(kind==='tree')return [mesh(new THREE.CylinderGeometry(.28,.42,3.2,7),0,1.6,0),mesh(new THREE.IcosahedronGeometry(1.4,1),0,3.7,0)];if(kind==='house')return [mesh(new THREE.BoxGeometry(4.8,3.4,3.8),0,1.7,0),mesh(new THREE.ConeGeometry(3.45,1.7,4),0,4.25,0)];const dimensions=originalBuildSizes[kind]||[2,2,2];return [mesh(kind==='cylinder'?new THREE.CylinderGeometry(dimensions[0]/2,dimensions[0]/2,dimensions[1],24):new THREE.BoxGeometry(...dimensions),0,dimensions[1]/2,0)];}
 function disposeArtworkRoot(root){
  if(!root)return;
- root.userData.video?.pause();
+ const video=root.userData.video;
+ if(video){video.pause();video.removeAttribute('src');video.load();}
+ releaseArtworkAnimation(root);
  const geometries=new Set(),materials=new Set(),textures=new Set();
  root.traverse(obj=>{
+  if(obj.isInstancedMesh)obj.dispose();
+  if(obj.isSkinnedMesh)obj.skeleton?.dispose?.();
   if(obj.geometry)geometries.add(obj.geometry);
   for(const mat of Array.isArray(obj.material)?obj.material:obj.material?[obj.material]:[]){
    materials.add(mat);

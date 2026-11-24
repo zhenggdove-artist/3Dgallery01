@@ -375,7 +375,7 @@ export class WeaponParticleEffects{
   const key=[recipe,count].join(':');
   const stored=this.pools.get(key);
   if(stored?.length){
-   const e=stored.pop();this.pooledCount--;e.age=0;e.duration=duration;e.channeling=false;e.charging=false;e.homingTarget=null;
+   const e=stored.pop();this.pooledCount--;e.age=0;e.duration=duration;e.channeling=false;e.charging=false;e.homingTarget=null;e.host=null;e.weapon=null;e.channelKey=null;e.aimDirection=null;
    e.root.visible=true;e.root.position.set(0,0,0);e.root.quaternion.identity();e.root.scale.setScalar(1);
    e.material.uniforms.uAge.value=0;e.material.uniforms.uDuration.value=duration;
    e.material.uniforms.uCharge.value=charge;e.material.uniforms.uReach.value=range;e.material.uniforms.uLooping.value=0;
@@ -506,10 +506,15 @@ export class WeaponParticleEffects{
  }
  remove(entry){
   const i=this.active.indexOf(entry);if(i>=0)this.active.splice(i,1);
+  if(i<0)return; // stale channel handle must never recycle the same emitter twice
   entry.root.removeFromParent();entry.root.visible=false;if(this.charger===entry)this.charger=null;
+  entry.channeling=false;entry.charging=false;entry.host=null;entry.weapon=null;entry.channelKey=null;entry.homingTarget=null;entry.aimDirection=null;entry.idleSince=performance.now();
   let list=this.pools.get(entry.poolKey);if(!list){list=[];this.pools.set(entry.poolKey,list);}
   if(list.length<3&&this.pooledCount<96){list.push(entry);this.pooledCount++;}
   else{entry.geometry.dispose();entry.material.dispose();}
+ }
+ trimIdlePools(now){
+  for(const list of this.pools.values())for(let i=list.length-1;i>=1;i--){const e=list[i];if(now-(e.idleSince??now)>30000){list.splice(i,1);this.pooledCount--;e.geometry.dispose();e.material.dispose();}}
  }
  dispose(){
   for(const entry of [...this.active])this.remove(entry);

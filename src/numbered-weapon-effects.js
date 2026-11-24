@@ -147,6 +147,7 @@ export class NumberedWeaponEffects {
   let pool=this.prewarmed.get(spec.asset);
   if(!pool){pool=[];this.prewarmed.set(spec.asset,pool);}
   // Keep the real 00GameDevs module and GPU resources alive between casts.
+  fx.group.userData.templeIdleSince=performance.now();
   if(pool.length<(spec.asset==='tidal-surge'?6:spec.number===47?1:4))pool.push(fx);else fx.dispose();
  }
  create(spec,options) {
@@ -155,6 +156,11 @@ export class NumberedWeaponEffects {
   const fx=factory(budgetedNativeOptions(spec,options));
   if(!fx?.group?.isObject3D||typeof fx.update!=='function'||typeof fx.dispose!=='function')
    throw Error('Invalid original 00GameDevs VFX #'+spec.number);
+  // The native disposer owns materials/geometries; InstancedMesh also owns
+  // separate instance buffers in Three.js that must receive its dispose event.
+  const disposeNative=fx.dispose.bind(fx);
+  let disposed=false;
+  fx.dispose=()=>{if(disposed)return;disposed=true;fx.group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});disposeNative();};
   fx.group.name=!spec.number?'00GameDevs original VFX '+spec.asset:spec.asset==='charged-beam'?'00GameDevs original VFX charged-beam':'00GameDevs original VFX #'+String(spec.number).padStart(2,'0')+' '+spec.asset;
   fx.group.userData.vfxSource='00GameDevs';
   fx.group.userData.vfxId=spec.asset;
@@ -688,6 +694,12 @@ export class NumberedWeaponEffects {
    e.cycles.length=0;return;
   }
   this.recycle(e.spec,e.fx);
+ }
+ trimIdlePools(now){
+  // Never evict an active skill. Retain the startup overlap reserve (including
+  // the original six crests), and reclaim only extra inactive native copies.
+  const reserve={ 'tidal-surge':6,'energy-vortex':2,'revival-bloom':2,'ice-lance-study':2,'rolling-fireburst':3,'black-hole':3 };
+  for(const [asset,list] of this.prewarmed){const keep=reserve[asset]||1;for(let i=list.length-1;i>=keep;i--){const fx=list[i];if(now-(fx.group.userData.templeIdleSince??now)>30000){list.splice(i,1);fx.dispose();}}}
  }
  dispose(){for(const e of [...this.active])this.remove(e);for(const list of this.prewarmed.values())for(const fx of list){fx.group.removeFromParent();fx.dispose();}this.prewarmed.clear();}
 }

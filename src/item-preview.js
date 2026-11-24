@@ -14,7 +14,7 @@ import {comfortCashImage} from './comfort-cash-art.js';
 // Shared promises prevent redundant GPU work across both panels.
 const finished=new Map(),pending=new Map(),failed=new Set();
 let renderer,scene,camera,queue=Promise.resolve();
-let previewCharacterSource=null,previewIdleEnabled=false,previewIdleTimer=null;
+let previewCharacterSource=null,previewIdleEnabled=false,previewIdleTimer=null,warmingPreviews=false;
 export function setOutfitPreviewCharacter(source){previewCharacterSource=source||null;}
 
 const keyOf=item=>item.id+':'+(item.updatedAt||0);
@@ -55,11 +55,12 @@ async function preloadImage(url){
 }
 export async function warmItemPreviews(items,onProgress=()=>{}){
  const unique=[...new Map((items||[]).filter(Boolean).map(i=>[keyOf(i),i])).values()];
- for(let i=0;i<unique.length;i++){
+ warmingPreviews=true;
+ try{for(let i=0;i<unique.length;i++){
   await itemPreview(unique[i]);
   onProgress(i+1,unique.length);
-  if(i%6===5)await new Promise(resolve=>requestAnimationFrame(resolve));
- }
+  if(i%3===2)await new Promise(resolve=>requestAnimationFrame(resolve));
+ }}finally{warmingPreviews=false;}
  // Product images are encoded blobs; they do not depend on the preview GL context.
  // Release its framebuffer, program cache and GPU allocations before gameplay.
  await queue;
@@ -70,7 +71,7 @@ export async function warmItemPreviews(items,onProgress=()=>{}){
 // DOM turn after the required assets resolve, never as a visible glyph cascade.
 export function previewMarkup(item){
  const url=item?.slot==='consumable'?comfortCashImage(item):itemPreviewUrl(item);
- return url?'<img data-preview="'+escape(item.id)+'" src="'+escape(url)+'" alt="" decoding="async" loading="eager">':
+ return url?'<img data-preview="'+escape(item.id)+'" src="'+escape(url)+'" alt="" decoding="async" loading="lazy">':
   '<span class="equipment-preview-pending" data-preview="'+escape(item.id)+'" aria-label="Loading full equipment model"></span>';
 }
 export async function hydrateItemPreviews(root){
@@ -84,7 +85,7 @@ export async function hydrateItemPreviews(root){
   const item=itemById(node.dataset.preview),url=itemPreviewUrl(item);
   if(!url){node.textContent='Preview unavailable';node.classList.add('equipment-preview-error');continue;}
   const img=document.createElement('img');
-  img.dataset.preview=item.id;img.src=url;img.alt='';img.decoding='async';img.loading='eager';
+  img.dataset.preview=item.id;img.src=url;img.alt='';img.decoding='async';img.loading='lazy';
   node.replaceWith(img);
  }
 }
@@ -213,12 +214,14 @@ export function cropCreatureOutfitPortrait(source){
  const out=result.getContext('2d');
  out.imageSmoothingEnabled=true;out.imageSmoothingQuality='high';
  out.drawImage(source2d,centerX-side*.5,centerY-side*.5,side,side,0,0,width,height);
+ source2d.width=source2d.height=0; // release temporary Safari canvas backing store
  return result;
 }
 
 function releasePreviewRenderer(){
  if(!renderer)return;
- renderer.dispose();renderer.forceContextLoss();
+ const surface=renderer.domElement;
+ renderer.dispose();renderer.forceContextLoss();surface.width=surface.height=0;
  renderer=null;scene=null;camera=null;
 }
 async function renderPreview(item){
@@ -244,11 +247,15 @@ async function renderPreview(item){
   await renderer.compileAsync(scene,camera);
   renderer.render(scene,camera);
   const portrait=creatureSuit?cropCreatureOutfitPortrait(renderer.domElement):renderer.domElement;
-  const blob=await new Promise(resolve=>portrait.toBlob(resolve,creatureSuit||portraitMask?'image/png':'image/webp',.96));
+  let blob;
+  try{blob=await new Promise(resolve=>portrait.toBlob(resolve,creatureSuit||portraitMask?'image/png':'image/webp',.96));}
+  finally{if(portrait!==renderer.domElement)portrait.width=portrait.height=0;}
   if(!blob)throw Error('WebGL preview image encoding failed');
   // Decode during loading, not when the inventory is first opened.
   const url=URL.createObjectURL(blob);
-  try{await preloadImage(url);}catch(error){URL.revokeObjectURL(url);throw error;}
+  // Keep the same full-resolution encoded image; decoding an entire catalog
+  // at boot leaves hundreds of MB of unused decoded bitmaps on mobile Safari.
+  if(!warmingPreviews)try{await preloadImage(url);}catch(error){URL.revokeObjectURL(url);throw error;}
   return url;
  }finally{
   if(model.userData.previewOutfitRecord){disposeOutfit(model.userData.previewOutfitRecord);delete model.userData.previewOutfitRecord;}
@@ -259,7 +266,7 @@ async function renderPreview(item){
    if(o.geometry)geometries.add(o.geometry);
    for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);
   });
-  model.traverse(o=>{if(o.isSkinnedMesh)o.skeleton?.dispose?.();});
+  model.traverse(o=>{if(o.isSkinnedMesh)o.skeleton?.dispose?.();if(o.isInstancedMesh)o.dispose();});
   geometries.forEach(g=>{if(!g.userData?.sharedPreview)g.dispose();});
   materials.forEach(m=>{if(!m.userData?.sharedPreview)m.dispose();});
   if(!model.userData.texture?.userData.sharedGarden)model.userData.texture?.dispose();

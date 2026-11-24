@@ -94,12 +94,13 @@ export class WeaponVFX{
   }
   if(entry.tideCores){
    entry.tideCores.removeFromParent();
+   entry.tideCores.dispose();
    entry.tideCores.geometry.dispose();
    entry.tideCores.material.dispose();
    entry.tideCores=null;
   }
   const {id,fx}=entry;fx.detachWeapon?.();fx.group.removeFromParent();fx.group.visible=false;
-  const pool=this.pools.get(id)||[];if(pool.length<3){pool.push(fx);this.pools.set(id,pool);}else fx.dispose();if(this.charger===entry)this.charger=null;
+  const pool=this.pools.get(id)||[];if(pool.length<3){fx.group.userData.templeIdleSince=performance.now();pool.push(fx);this.pools.set(id,pool);}else fx.dispose();if(this.charger===entry)this.charger=null;
  }
  // The local geometry origin of a real held staff (or clam). Unlike
  // a fixed server event origin, this socket follows walking and hand poses.
@@ -229,7 +230,7 @@ export class WeaponVFX{
   for(const entry of [...this.waterStreams.values()])
    if(entry.host===root)this.release(entry);
   this.numberedEffects.stop(root);
-  for(const [key,entry] of [...this.channelStreams])if(entry.host===root){
+  for(const [key,entry] of [...this.channelStreams])if(entry.channelKey===key&&entry.host===root){
    this.particleSkills.remove(entry);this.channelStreams.delete(key);
   }
  }
@@ -291,7 +292,7 @@ export class WeaponVFX{
   const index=this.staffOrbs.indexOf(entry);if(index>=0)this.staffOrbs.splice(index,1);
   entry.group.removeFromParent();entry.group.visible=false;
   const pool=this.orbPools.get(entry.family)||[];
-  if(pool.length<12){pool.push(entry);this.orbPools.set(entry.family,pool);}
+  if(pool.length<12){entry.idleSince=performance.now();pool.push(entry);this.orbPools.set(entry.family,pool);}
   else entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
  }
  async warmStaffOrbs(renderer,camera){
@@ -371,8 +372,8 @@ export class WeaponVFX{
    // the first network attack position, is the live emission source.
    const source=data.channel?this.channelMuzzle(root,item,origin.clone()):origin;
    const forwardEnd=source.clone().addScaledVector(direction,range);
-   const key=root?root.uuid+':'+item.id:null,existing=key?this.channelStreams.get(key):null;
-   if(data.channel&&existing&&this.particleSkills.active.includes(existing)){
+   const key=root?root.uuid+':'+item.id+':'+(data.fusionEcho?'fusion'+(data.fusionSlot||0):'main'):null,existing=key?this.channelStreams.get(key):null;
+   if(data.channel&&existing&&existing.channelKey===key&&this.particleSkills.active.includes(existing)){
     // Damage pulse renews the hitbox only, never restart the visual clock.
     existing.direction.copy(direction);
     existing.range=range;
@@ -461,8 +462,10 @@ export class WeaponVFX{
  update(dt,camera=null,world=null){
   this.restoration.update(dt,camera);
   for(const [key,entry] of [...this.channelStreams]){
-   if(!this.particleSkills.active.includes(entry)||!entry.host?.parent){
+   if(entry.channelKey!==key||!this.particleSkills.active.includes(entry)){
     this.channelStreams.delete(key);continue;
+   }
+   if(!entry.host?.parent){this.particleSkills.remove(entry);this.channelStreams.delete(key);continue;
    }
    const now=performance.now();
    if(now-entry.lastPulseAt>Math.max(3100,entry.weapon.cooldown*2+650)){
@@ -515,7 +518,7 @@ export class WeaponVFX{
   for(const e of [...this.active]){
    try{
     if(e.waterChannel){
-     if(performance.now()-e.lastWaterPulseAt>Math.max(3100,Number(e.waterWeapon?.cooldown||650)*2+650)){
+     if((e.host&&!e.host.parent)||performance.now()-e.lastWaterPulseAt>Math.max(3100,Number(e.waterWeapon?.cooldown||650)*2+650)){
       this.release(e);continue;
      }
      this.alignWaterStream(e,world);
@@ -535,12 +538,18 @@ export class WeaponVFX{
     const index=this.active.indexOf(e);if(index>=0)this.active.splice(index,1);
     if(e.waterKey)this.waterStreams.delete(e.waterKey);
     if(e.waterParticles){e.waterParticles.removeFromParent();e.waterParticles.geometry.dispose();e.waterParticles.material.dispose();}
-    if(e.tideCores){e.tideCores.removeFromParent();e.tideCores.geometry.dispose();e.tideCores.material.dispose();}
+    if(e.tideCores){e.tideCores.removeFromParent();e.tideCores.dispose();e.tideCores.geometry.dispose();e.tideCores.material.dispose();}
     if(this.charger===e)this.charger=null;
     try{e.fx.group.removeFromParent();e.fx.dispose();}catch{}
     this.reportAnimationFailure(e.id,error);
    }
   }
+ }
+ trimIdlePools(now=performance.now()){
+  // Retain baseline warmed effects; retire only surplus inactive copies.
+  for(const list of this.pools.values())for(let i=list.length-1;i>=2;i--){const fx=list[i];if(now-(fx.group.userData.templeIdleSince??now)>30000){list.splice(i,1);fx.dispose();}}
+  for(const list of this.orbPools.values())for(let i=list.length-1;i>=2;i--){const entry=list[i];if(now-(entry.idleSince??now)>30000){list.splice(i,1);entry.group.traverse(o=>{if(o.isInstancedMesh)o.dispose();o.geometry?.dispose();o.material?.dispose();});}}
+  this.numberedEffects.trimIdlePools(now);this.particleSkills.trimIdlePools(now);
  }
  reportAnimationFailure(id,error){
   this.failedAnimations??=new Set();
