@@ -41,13 +41,15 @@ test('artwork labels respond to avatar-to-art distance, including editing withou
  root.add(plate);
  root.userData.titlePlate=plate;
  root.userData.appearance={labelRevealDistance:8};
- const avatar=new THREE.Vector3(12,0,3);
+ const avatar=new THREE.Vector3(12,0,5);
  const cameraZoomedOut=new THREE.Vector3(12,45,100);
  assert.equal(updateArtworkTitleVisibility(root,avatar),1);
  assert.equal(plate.material.opacity,1);
  // Camera is deliberately far away; it is not the source for the label test.
  assert.ok(cameraZoomedOut.distanceTo(root.position)>80);
  assert.equal(updateArtworkTitleVisibility(root,avatar),1);
+ assert.equal(updateArtworkTitleVisibility(root,new THREE.Vector3(12,0,0)),0);
+ assert.ok(updateArtworkTitleVisibility(root,new THREE.Vector3(12,0,2))>0&&plate.material.opacity<1);
  assert.equal(updateArtworkTitleVisibility(root,new THREE.Vector3(12,0,100)),0);
  assert.equal(plate.material.opacity,0);
  assert.equal(updateArtworkTitleVisibility(root,undefined),0);

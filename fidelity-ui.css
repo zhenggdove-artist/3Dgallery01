@@ -852,25 +852,28 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
 #art-label-handles .label-handle{
  z-index:1;
 }
-#art-editor [data-appearance="labelRevealDistance"]{
+#art-editor [data-appearance="labelRevealDistance"],
+#art-editor [data-appearance="labelNearFadeDistance"],
+#art-editor [data-appearance="labelNearMinOpacity"]{
  width:100%;
  min-width:80px;
 }
-#art-editor [data-label-distance-output]{
+#art-editor [data-label-distance-output],
+#art-editor [data-label-near-output],
+#art-editor [data-label-opacity-output]{
  font:12px system-ui,sans-serif;
  display:block;
  text-align:right;
 }
 
-/* Nearby artwork pickup only: compact and 50% translucent on desktop and mobile. */
-#prompt.artwork-pickup-hint{
- padding:5px 8px;
- font-size:11px;
- line-height:1.2;
- transform:translateX(-50%) scale(.82);
+/* Both hints are 30% smaller than their previous rendered size. */
+#prompt.artwork-pickup-hint,#prompt.artwork-throw-hint{
+ transform:translate(-50%,clamp(28px,7vh,60px)) scale(.7) scale(var(--previous-prompt-scale,1));
  transform-origin:center bottom;
+ pointer-events:none;
 }
-#prompt.artwork-pickup-hint.visible{opacity:.5}
+#prompt.artwork-pickup-hint{--previous-prompt-scale:.82;padding:5px 8px;font-size:11px;line-height:1.2}
+#prompt.artwork-pickup-hint.visible,#prompt.artwork-throw-hint.visible{opacity:.5}
 
 /* Quick healing is an independent simultaneous touch, not browser zoom. */
 #comfort-hotbar,#comfort-hotbar .comfort-quick-slot{touch-action:none!important;overscroll-behavior:contain;-webkit-user-select:none;user-select:none}

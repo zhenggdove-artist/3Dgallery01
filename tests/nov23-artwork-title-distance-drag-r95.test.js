@@ -40,6 +40,11 @@ test('proximity fade uses smoothstep near a GM-specified start distance',()=>{
  assert.ok(Math.abs(titleOpacityByDistance(10.5,12)-.5)<1e-7);
  assert.equal(titleOpacityByDistance(9,12),1);
  assert.equal(titleOpacityByDistance(6,12),1);
+ assert.equal(titleOpacityByDistance(3,12),1);
+ assert.equal(titleOpacityByDistance(1.5,12),.5);
+ assert.equal(titleOpacityByDistance(0,12),0);
+ assert.equal(titleOpacityByDistance(0,12,0),1);
+ assert.equal(titleOpacityByDistance(0,12,3,.25),.25);
  assert.equal(titleOpacityByDistance(25,24),0);
  assert.equal(titleOpacityByDistance(21,24),1);
  assert.ok(titleOpacityByDistance(22.5,24)>0&&titleOpacityByDistance(22.5,24)<1);
@@ -53,6 +58,13 @@ test('both text and nameplate background fade together; GM editing forces visibi
  alpha=updateArtworkTitleVisibility(root,new THREE.Vector3(0,0,10.5));
  assert.ok(Math.abs(alpha-.5)<1e-7);
  assert.equal(root.userData.titlePlate.userData.textSprite.material.opacity,alpha);
+ const plate=root.userData.titlePlate;
+ const near=plate.getWorldPosition(new THREE.Vector3());
+ assert.equal(updateArtworkTitleVisibility(root,near),0);
+ assert.equal(plate.material.opacity,0);
+ assert.equal(plate.userData.textSprite.material.opacity,0);
+ root.userData.appearance.labelNearMinOpacity=.2;
+ assert.equal(updateArtworkTitleVisibility(root,near),.2);
  root.userData.editing=true;
  assert.equal(updateArtworkTitleVisibility(root,new THREE.Vector3(0,0,40)),1);
  assert.equal(root.userData.titlePlate.material.opacity,1);
@@ -62,6 +74,12 @@ test('GM slider persists and server rejects unreasonable distances',()=>{
  const html=editorPanelMarkup(artworkAppearanceDefaults(),3,false,'Title');
  assert.match(html,/data-appearance="labelRevealDistance"/);
  assert.match(html,/data-label-distance-output/);
+ assert.match(html,/data-appearance="labelNearFadeDistance"/);
+ assert.match(html,/data-appearance="labelNearMinOpacity"/);
+ assert.equal(validateAppearance({}).labelNearFadeDistance,3);
+ assert.equal(validateAppearance({}).labelNearMinOpacity,0);
+ for(const value of [-1,21,NaN])assert.equal(validateAppearance({labelNearFadeDistance:value}),null);
+ for(const value of [-.01,1.01,NaN])assert.equal(validateAppearance({labelNearMinOpacity:value}),null);
  assert.match(html,/data-action="label-center"/);
  assert.equal(validateAppearance({labelRevealDistance:3}).labelRevealDistance,3);
  assert.equal(validateAppearance({labelRevealDistance:80}).labelRevealDistance,80);
@@ -73,9 +91,11 @@ test('GM slider persists and server rejects unreasonable distances',()=>{
  };
  const response=setArtworkLayout(world,{admin:true},{
   platformId:id,expectedRevision:layout.revision||0,
-  layout:{...layout,appearance:{labelRevealDistance:24},title:'Test'}},6000);
+  layout:{...layout,appearance:{labelRevealDistance:24,labelNearFadeDistance:5.5,labelNearMinOpacity:.15},title:'Test'}},6000);
  assert.equal(response.error,undefined,response.error);
  assert.equal(world.artworkLayout[id].appearance.labelRevealDistance,24);
+ assert.equal(world.artworkLayout[id].appearance.labelNearFadeDistance,5.5);
+ assert.equal(world.artworkLayout[id].appearance.labelNearMinOpacity,.15);
  assert.equal(world.artworkLayout[id].appearance.labelBackground,'#000000');
 });
 
