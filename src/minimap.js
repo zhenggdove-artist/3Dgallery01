@@ -47,6 +47,7 @@ export class Minimap{
    this.svg.setAttribute('viewBox',
     (origin.x-VIEW_SPAN/2)+' '+(origin.z-VIEW_SPAN/2)+' '+VIEW_SPAN+' '+VIEW_SPAN);
   }
+  for(const id of this.playerColors.keys())if(!roots.has(id))this.playerColors.delete(id);
   const points=[];
   for(const [id,root] of roots){
    if(id===selfKey||!root?.visible)continue;

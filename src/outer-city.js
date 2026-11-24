@@ -1029,7 +1029,7 @@ export class OuterCity{
    // geometry automatically upon its next render. Never remove a ruin.
    if(!effect.gpuReleased&&now-effect.lastVisibleAt>30000&&effect.worldBounds.distanceToPoint(camera.position)>75){
     const geometries=new Set(),materials=new Set();
-    effect.root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);});
+    effect.root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);});
     geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());effect.gpuReleased=true;
    }
   }

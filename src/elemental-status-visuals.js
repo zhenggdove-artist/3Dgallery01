@@ -17,6 +17,10 @@ const tailUp=new THREE.Quaternion().setFromUnitVectors(
  new THREE.Vector3(1,0,0),new THREE.Vector3(0,-1,0));
 const MAX_FIREBALLS_PER_TARGET=8;
 const BURN_SPAWN_INTERVAL=.115;
+const fireballPool=[];
+const MAX_IDLE_FIREBALLS=16;
+function destroyFireball(fx){fx.group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});fx.dispose();}
+function releaseFireball(fx){fx.group.removeFromParent();fx.group.visible=false;if(fireballPool.length<MAX_IDLE_FIREBALLS){fireballPool.push(fx);}else destroyFireball(fx);}
 
 function luminousFlames(root){
  const group=new THREE.Group();
@@ -42,9 +46,10 @@ function luminousFlames(root){
 }
 function addFireball(root,flames){
  const n=flames.serial++;
- const fx=createFireball({
+ const fx=fireballPool.pop()||createFireball({
   size:.17,speed:1.1,density:.125,detail:.6,color:'#ff823e'
  });
+ fx.reset();fx.group.visible=true;
  fx.group.name='Official 00GameDevs #01 small flame '+n;
  fx.group.userData.vfxSource='00GameDevs';
  fx.group.userData.vfxNumber=1;
@@ -78,7 +83,7 @@ function advanceFlames(root,flames,dt){
   pulse.fx.group.position.y=pulse.startY+pulse.age*.14;
   pulse.fx.update(dt);
   if(pulse.fx.finished||pulse.age>.90){
-   pulse.fx.dispose();flames.pulses.splice(i,1);
+   releaseFireball(pulse.fx);flames.pulses.splice(i,1);
   }
  }
  if(flames.nextSpawn<=0&&flames.pulses.length<MAX_FIREBALLS_PER_TARGET){
@@ -88,7 +93,7 @@ function advanceFlames(root,flames,dt){
 }
 function disposeFlames(flames){
  if(!flames)return;
- for(const pulse of flames.pulses)pulse.fx.dispose();
+ for(const pulse of flames.pulses)releaseFireball(pulse.fx);
  flames.pulses.length=0;
  flames.group.removeFromParent();
 }
@@ -182,5 +187,5 @@ export class ElementalStatusVisuals{
   this.detachTint(entry);this.stopFlames(entry);
   this.entries.delete(root);
  }
- dispose(){for(const root of [...this.entries.keys()])this.clear(root);}
+ dispose(){for(const root of [...this.entries.keys()])this.clear(root);for(const fx of fireballPool.splice(0))destroyFireball(fx);}
 }

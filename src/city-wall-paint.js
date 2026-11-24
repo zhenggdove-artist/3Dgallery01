@@ -115,7 +115,7 @@ export class CityWallPaint{
  }
  disposeSlot(slot){
   slot.mesh.removeFromParent();slot.mesh.geometry.dispose();
-  slot.mesh.material.dispose();slot.texture.dispose();
+  slot.mesh.material.dispose();slot.texture.dispose();slot.canvas.width=slot.canvas.height=0;
  }
  deform(slot,tier=10,shakeX=0,shakeZ=0){
   const lot=slot.lot,attr=slot.mesh.geometry.attributes.position,arr=attr.array;
