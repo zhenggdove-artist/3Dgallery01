@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SHOP_ITEMS,ITEMS,EQUIPPABLE_SLOTS,shopWeaponGroups,shopPurchaseVariant,shopPrice,itemById} from '../src/shared/catalog.js';
+import {SHOP_ITEMS,ITEMS,EQUIPPABLE_SLOTS,inventoryCapacity,shopWeaponGroups,shopPurchaseVariant,shopPrice,itemById} from '../src/shared/catalog.js';
 import {createInitialWorld,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
 const actor={key:'shop-regression',name:'Shop Test',color:'#abcdef',role:'fighter',admin:false,position:[0,0,0]};
 const create=()=>{const world=createInitialWorld(1000);const profile=ensureProfile(world,actor.key,actor.name,actor.color,1000,false);profile.wallet=100000000;return {world,profile};};
@@ -56,4 +56,21 @@ test('single sale selects the specific duplicate instead of equipped first copy'
  assert.equal(profile.equipment.head,'hat-trump-mask');
  assert(profile.inventoryInstances.some(r=>r.uid===rows[0].uid));
  assert(!profile.inventoryInstances.some(r=>r.uid===rows[1].uid));
+});
+
+test('all players have 3000 slots; login preserves over-cap saves and stable IDs',()=>{
+ const {world,profile}=create();
+ assert.equal(inventoryCapacity(profile),3000);
+ assert.equal(inventoryCapacity({admin:true}),3000);
+ profile.inventory=Array(3001).fill('hat-trump-mask');
+ ensureProfile(world,actor.key,actor.name,actor.color,1001,false);
+ assert(profile.inventory.length>=3001);
+ const denied=act(world,{action:'buy',itemId:'hat-musk-mask',quantity:1});
+ assert.match(denied.error,/3000/);
+ const rows=profile.inventoryInstances.filter(r=>r.itemId==='hat-trump-mask').slice(0,1000);
+ const sale=act(world,{action:'sell-bulk',slot:'head',rarity:itemById('hat-trump-mask').rarity,uids:rows.map(r=>r.uid)});
+ assert(!sale.error,sale.error);
+ assert.equal(sale.sold.count,1000);
+ assert.equal(sale.sold.remaining,profile.inventory.length);
+ assert(!act(world,{action:'buy',itemId:'hat-musk-mask',quantity:1}).error);
 });

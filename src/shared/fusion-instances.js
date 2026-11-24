@@ -225,6 +225,32 @@ export function removeInventoryInstance(profile,index,replacementUid=null){
  return record;
 }
 
+ // A bulk sale validates all UIDs first, then removes them in one ledger pass.
+ // Do not repeat the O(n) identity migration for every copy in a 3000-slot bag.
+export function removeInventoryInstances(profile,indices){
+ ensureFusionIdentity(profile);
+ const selected=new Set(indices),removed=[],remaining=[],affected=new Set();
+ for(let i=0;i<profile.inventoryInstances.length;i++){
+  const row=profile.inventoryInstances[i];
+  if(selected.has(i)){removed.push(row);affected.add(row.itemId);delete profile.fusionByInstance[row.uid];}
+  else remaining.push(row);
+ }
+ profile.inventoryInstances=remaining;profile.inventory=remaining.map(row=>row.itemId);
+ const gone=new Set(removed.map(row=>row.uid));
+ for(const [slot,uid] of Object.entries(profile.equippedInstanceIds)){
+  if(gone.has(uid)){profile.equipment[slot]=null;delete profile.equippedInstanceIds[slot];}
+ }
+ const byItem=new Map();
+ for(const row of remaining){if(!byItem.has(row.itemId))byItem.set(row.itemId,[]);byItem.get(row.itemId).push(row);}
+ for(const itemId of affected){
+  const survivors=byItem.get(itemId)||[];
+  if(!survivors.length){delete profile.fusion[itemId];continue;}
+  const slot=Object.keys(profile.equipment).find(s=>profile.equipment[s]===itemId);
+  const equipped=profile.equippedInstanceIds[slot];
+  projectFusionForInstance(profile,itemId,(survivors.find(row=>row.uid===equipped)||survivors[0]).uid);
+ }
+ return removed;
+}
 export function swapInventoryInstances(profile,from,to){
  ensureFusionIdentity(profile);
  [profile.inventory[from],profile.inventory[to]]=[profile.inventory[to],profile.inventory[from]];

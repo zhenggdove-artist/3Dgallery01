@@ -219,7 +219,7 @@ async function renderPreview(item){
   camera=new THREE.PerspectiveCamera(35,1,.01,1000);
  }
  const creatureSuit=item.slot==='outfit';
- renderer.setSize(creatureSuit?384:192,creatureSuit?384:192);
+ const portraitMask=['trump-mask','huang-mask','musk-mask'].includes(item.design);const resolution=portraitMask?512:creatureSuit?384:192;renderer.setSize(resolution,resolution);
  const model=item.family==='saber'?saberProductPortrait():creatureSuit?creatureOutfitProductPortrait(item):shapeModel(item);
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
