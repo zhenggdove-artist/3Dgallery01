@@ -1013,3 +1013,14 @@ body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;f
 #hud #chat-hud.chat-minimized{width:42px!important;height:42px!important;max-width:42px!important;max-height:42px!important}
 #hud #chat-hud.chat-minimized #chat-resize,#hud #chat-hud.chat-minimized #chat-toggle{width:42px!important;height:42px!important;min-height:42px!important;touch-action:none!important}
 #hud #chat-hud.chat-minimized #chat-toggle{font-size:20px;line-height:1;cursor:grab}
+
+/* r116 shop: price/quality, quantity, total and buy precede the product art and description. */
+#panel .shop-detail>.item>h3{margin:0 0 6px;line-height:1.2;font-size:14px}
+#panel .shop-buy-controls{display:grid;gap:4px;padding:5px 0 8px;background:#f5f2f9}
+#panel .shop-buy-controls .shop-purchase{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px;align-items:end;margin:0;padding:5px}
+#panel .shop-buy-controls .shop-unit-price,#panel .shop-buy-controls [data-buy],#panel .shop-buy-controls [data-buy-total]{grid-column:1/-1}
+#panel .shop-buy-controls .shop-quantity-label{grid-column:1/-1;display:grid;grid-template-columns:1fr minmax(62px,100px);align-items:center;gap:4px}
+#panel .shop-buy-controls [data-buy]{min-height:40px!important;background:#d7b4e9!important;color:#30203e;font-weight:900}
+#panel .shop-buy-controls select,#panel .shop-buy-controls input{min-height:34px!important;font-size:12px!important}
+#panel .shop-detail>.item>img{margin:8px auto!important}
+@media(max-height:480px){#panel .shop-buy-controls{gap:2px;padding:2px 0 4px}#panel .shop-buy-controls .shop-purchase{gap:2px;padding:2px}#panel .shop-detail>.item>h3{font-size:12px;margin:0 0 2px}}

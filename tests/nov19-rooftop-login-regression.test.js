@@ -31,7 +31,16 @@ test('fully destroyed houses retain a lower collision body and walkable roof',()
 });
 
 test('server permits walking on roofs but rejects entering the solid wall',()=>{
- const y=cityRoofHeight(lot,0),prev={position:[lot.x+lot.width*1.3,y,lot.z],rotation:0,animation:'idle'};
+ const y=cityRoofHeight(lot,0);
+ // Locate real open pavement: the dense city no longer guarantees a clear
+ // spot at an arbitrary global-X offset from the selected house.
+ let clear=null;
+ for(let r=lot.width*.7;r<=24&&!clear;r+=.5)for(let k=0;k<64&&!clear;k++){
+  const a=k*Math.PI*2/64,x=lot.x+Math.cos(a)*r,z=lot.z+Math.sin(a)*r;
+  if(Math.hypot(x,z)<242&&!cityBlocked(x,z,0,intact)&&!cityBlocked(x,z,0,ruined))clear=[x,y,z];
+ }
+ assert.ok(clear,'a genuine unblocked street exists near the test lot');
+ const prev={position:clear,rotation:0,animation:'idle'};
  const next={position:[lot.x,y,lot.z],rotation:0,animation:'walk'};
  const onTop=validateState(prev,next,3000,'fighter',null,null,3000,{cityDamage:intact,stats:{speed:1}});
  assert.equal(onTop.error,undefined,onTop.error);

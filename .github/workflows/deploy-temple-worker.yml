@@ -54,6 +54,8 @@ jobs:
       - name: Verify production Worker protocol and artwork APIs
         run: |
           node --input-type=module <<'NODE'
+          import {SHOP_CATALOG_REVISION, SHOP_CATALOG_IDS} from './src/shared/catalog.js';
+          import {CITY_LAYOUT_SIGNATURE, CITY_BUILDING_COUNT} from './src/shared/city-layout.js';
           const url = 'https://temple-arena.zhenggdove-artist.workers.dev/health';
           const required = ['artMediaUpload', 'artBombPlace', 'gmReset', 'compactCombat', 'guestLogin', 'artworkCoordinateRecovery', 'fighterOverflow', 'spectatorWrite', 'gmSpectatorPreview', 'bulkSell'];
           let verified = false;
@@ -67,8 +69,8 @@ jobs:
               const health = await response.json();
               const missing = required.filter(feature => health.features?.[feature] !== true);
               if (missing.length) throw new Error('Missing production features: ' + missing.join(', '));
-              if (health.apiVersion !== 7 || health.inventoryCapacity !== 3000 || health.features?.wearableCatalog !== 'r111') throw new Error('Production catalog or inventory protocol is stale: ' + JSON.stringify(health));
-              console.log('Production Temple Worker verified: ' + required.join(', '));
+              if (health.apiVersion !== 7 || health.inventoryCapacity !== 3000 || health.features?.wearableCatalog !== SHOP_CATALOG_REVISION || health.cityLayoutSignature !== CITY_LAYOUT_SIGNATURE || health.cityBuildingCount !== CITY_BUILDING_COUNT || JSON.stringify(health.shopCatalogIds) !== JSON.stringify(SHOP_CATALOG_IDS)) throw new Error('Production catalog or inventory protocol is stale: ' + JSON.stringify(health));
+              console.log('Production Temple Worker verified: '+SHOP_CATALOG_REVISION+' / '+SHOP_CATALOG_IDS.length+' purchasable item IDs / '+CITY_BUILDING_COUNT+' collision lots / '+CITY_LAYOUT_SIGNATURE);
               verified = true;
               break;
             } catch (error) {

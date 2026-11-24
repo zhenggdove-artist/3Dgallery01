@@ -371,9 +371,9 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
   // Authoritative solid city collision. Allow a fighter already inside a
   // building after a physics impulse to exit, but never permit entry.
   if(role==='fighter'&&mobility?.cityDamage&&
-   cityBlocked(next.position[0],next.position[2],next.position[1],mobility.cityDamage)&&
+   cityBlocked(next.position[0],next.position[2],next.position[1]+.002,mobility.cityDamage,.218)&&
    !cityBlocked(previous?.position?.[0]??1e6,previous?.position?.[2]??1e6,
-     previous?.position?.[1]??0,mobility.cityDamage))
+     (previous?.position?.[1]??0)+.002,mobility.cityDamage,.218))
    return {error:'Building collision',state:previous||null};
   return {state:{position:next.position.map(n=>+n.toFixed(3)),rotation:+next.rotation.toFixed(4),animation:String(next.animation||'idle').slice(0,12),visible:next.visible!==false}};
 }
