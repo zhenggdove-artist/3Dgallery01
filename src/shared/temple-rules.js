@@ -16,7 +16,7 @@ import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-st
 import {playerStats,refreshStats} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
 import {fuseTemple} from './temple-fusion.js';
-import {ensureFusionIdentity,ensureWeaponAffixes,appendInventoryInstance,removeInventoryInstance,selectEquipmentInstance,swapInventoryInstances} from './fusion-instances.js';
+import {ensureFusionIdentity,ensureWeaponAffixes,appendInventoryInstance,removeInventoryInstance,selectEquipmentInstance,swapInventoryInstances,removeInventoryInstances} from './fusion-instances.js';
 import {fusionSniperEchoDamage} from './fusion-balance.js';
 import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './island-combat.js';
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
@@ -165,8 +165,8 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   if(!current.collectorSoldArtworks||typeof current.collectorSoldArtworks!=='object'||Array.isArray(current.collectorSoldArtworks))
    current.collectorSoldArtworks={};
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById):[current.starterWeaponId];
-  // Do not truncate legitimate GM purchases when reconnecting. Ordinary accounts retain their existing cap.
-  if(!current.admin)current.inventory=current.inventory.slice(0,inventoryCapacity(current));
+  // Existing saves above the cap remain intact; only new additions are blocked.
+  // Login must NEVER discard inventory or its per-instance records.
   if(current.starterWeaponId==='fan')current.starterWeaponId=STARTER_LOADOUT.weapon;
   // Preserve chosen item even when its stack is empty: it will be shown
   // with a red depleted overlay and automatically reactivate after restock.
@@ -267,7 +267,7 @@ export function publicProfile(profile){
 
 export function worldProfileView(world,actorKey,now){
  const profile=world.profiles[actorKey];
- return profile?{...publicProfile(profile),stats:playerStats(world,profile,now),starterWeaponId:profile.starterWeaponId,inventory:clone(profile.inventory),quickSlots:clone(profile.quickSlots||[null,null,null]),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
+ return profile?{...publicProfile(profile),stats:playerStats(world,profile,now),starterWeaponId:profile.starterWeaponId,inventoryCapacity:inventoryCapacity(profile),inventoryCount:profile.inventory.length,inventory:clone(profile.inventory),quickSlots:clone(profile.quickSlots||[null,null,null]),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
 }
 
 export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true){
@@ -873,7 +873,7 @@ function sell(world,profile,body){
  const index=body.uid?profile.inventoryInstances.findIndex(row=>row.uid===body.uid&&row.itemId===body.itemId):profile.inventory.findIndex((id,i)=>id===body.itemId&&sellableInstance(profile,i));
  if(index<0||!sellableInstance(profile,index))return {error:'Item cannot be sold (equipped, starter or inventory changed)'};
  const item=itemById(profile.inventory[index]),resale=shopResalePrice(item,profile.inventoryInstances[index],world.shopPrices);
- removeInventoryInstance(profile,index);earn(profile,resale,world);return {notice:`Sold ${item.name} · +${resale} coins`};
+ const row=removeInventoryInstance(profile,index);earn(profile,resale,world);return {notice:`Sold ${item.name} · +${resale} coins`,sold:{count:1,coins:profile.admin?0:resale,uids:[row.uid],remaining:profile.inventory.length,capacity:inventoryCapacity(profile)}};
 }
 function sellBulk(world,profile,body){
  ensureFusionIdentity(profile);
@@ -888,8 +888,8 @@ function sellBulk(world,profile,body){
   indices.push(i);total+=shopResalePrice(base,row,world.shopPrices);
  }
  if(indices.length!==ids.size||!Number.isSafeInteger(total))return {error:'Inventory changed; review the sale again'};
- for(const i of indices.reverse())removeInventoryInstance(profile,i);
- earn(profile,total,world);return {notice:`Sold ${indices.length} items · +${total} coins`};
+ const removed=removeInventoryInstances(profile,indices);
+ earn(profile,total,world);return {notice:`Sold ${removed.length} items · +${total} coins`,sold:{count:removed.length,coins:profile.admin?0:total,uids:removed.map(row=>row.uid),remaining:profile.inventory.length,capacity:inventoryCapacity(profile)}};
 }
 function equip(profile,body){const item=itemById(body.itemId);if(!item||!profile.inventory.includes(item.id)||!EQUIPPABLE_SLOTS.includes(item.slot))return {error:'Item is not owned'};const index=Number.isInteger(body.inventoryIndex)?body.inventoryIndex:profile.inventory.indexOf(item.id);if(profile.inventory[index]!==item.id)return {error:'Inventory changed: choose the equipment again'};selectEquipmentInstance(profile,item.slot,index);return {notice:`Equipped ${item.name}`};}
 
