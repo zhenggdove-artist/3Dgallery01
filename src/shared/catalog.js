@@ -47,7 +47,7 @@ export function shopWeaponGroups(items){
    group.variants=SHOP_EXOTIC_TIERS.map(tier=>shopWeaponVariant(item,tier));
   }
  }
- return [...groups.values()].map(group=>({...group,variants:group.variants.sort((a,b)=>(a.shopTier||a.tier||0)-(b.shopTier||b.tier||0))}));
+ return [...groups.values()].reverse().sort((a,b)=>(b.base.shopRelease||0)-(a.base.shopRelease||0)).map(group=>({...group,variants:group.variants.sort((a,b)=>(a.shopTier||a.tier||0)-(b.shopTier||b.tier||0))}));
 }
 // Mystery is limited to five-quality whip/pan/swatter sets and the giraffe.
 // Family labels alone are insufficient: many unrelated exotics are 'pan'.
@@ -170,7 +170,7 @@ export function registerCustomWings(wings=[]){
 export const itemById = id => INDEX.get(id) || null;
 
 export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>!['material','armor'].includes(item.slot)&&!item.notForSale&&!isRetiredHeadgear(item)&&item.price>0));
-export const SHOP_CATALOG_REVISION='r116';
+export const SHOP_CATALOG_REVISION='r117';
 export const SHOP_CATALOG_IDS=Object.freeze(SHOP_ITEMS.map(item=>item.id).sort());
 // Canonical price keys distinguish every weapon quality, including exotics.
 export const shopPriceKey=item=>item.id+(item.slot==='weapon'?':'+(item.shopTier??item.tier??3):'');

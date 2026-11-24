@@ -30,7 +30,7 @@ export class EquipmentPortraitViewport{
   }
   this.model=null;this.source=null;this.paintRevision++;
   this.renderer?.dispose();
-  this.renderer?.forceContextLoss();
+  if(this.renderer){this.renderer.forceContextLoss();if(this.canvas)this.canvas.dataset.portraitRetired='1';}
   this.renderer=null;this.scene=null;this.camera=null;this.canvas=null;
   this.signature='';this.error=null;
  }
@@ -79,7 +79,9 @@ export class EquipmentPortraitViewport{
   for(const source of parts){
    const node=copyPortraitPart(source);
    if(!node)continue;
-   if(slot==='wings'){
+   if(source.parent===this.source){
+    this.model.children[0].add(node);
+   }else if(slot==='wings'){
     // Copy the actual sails, never their particle emitter. Anchor in the
     // front-facing portrait frame instead of inheriting the world bone yaw.
     node.position.set(0,0,0);node.quaternion.identity();node.scale.setScalar(1);
@@ -133,7 +135,7 @@ export class EquipmentPortraitViewport{
   if(canvas!==this.canvas||!this.renderer){
    this.close();this.canvas=canvas;
    this.renderer=new THREE.WebGLRenderer({
-    canvas,alpha:false,antialias:true,powerPreference:'low-power'
+    canvas,alpha:false,antialias:true,preserveDrawingBuffer:true,powerPreference:'low-power'
    });
    // Opaque neutral backing prevents translucent layered squares/old arena pixels
     // from leaking into a freshly opened EQUIP WebGL canvas.
@@ -160,7 +162,7 @@ export class EquipmentPortraitViewport{
     if(revision!==this.paintRevision)return;
     void this.draw(revision).catch(error=>{
      if(revision!==this.paintRevision)return;
-     this.canvas?.setAttribute('data-render-error',error.message);
+     this.canvas?.setAttribute('data-render-error',error.message);this.lastWidth=0;this.lastHeight=0;
      console.warn('EQUIP render failed',error);
     });
    });

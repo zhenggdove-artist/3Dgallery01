@@ -12,7 +12,7 @@ import {comfortCashImage} from './comfort-cash-art.js';
 // Only the actual model (or the outfit's authored full-resolution artwork)
 // may appear in SHOP/BAG. There is no legacy glyph or temporary icon layer.
 // Shared promises prevent redundant GPU work across both panels.
-const finished=new Map(),pending=new Map(),failed=new Set();
+const finished=new Map(),pending=new Map(),failed=new Set(),failUntil=new Map();
 let renderer,scene,camera,queue=Promise.resolve();
 let previewCharacterSource=null,previewIdleEnabled=false,previewIdleTimer=null,warmingPreviews=false;
 export function setOutfitPreviewCharacter(source){previewCharacterSource=source||null;}
@@ -30,16 +30,17 @@ export function itemPreview(item){
   return Promise.resolve(image);
  }
  if(finished.has(key))return Promise.resolve(finished.get(key));
- if(failed.has(key))return Promise.resolve(null);
+ if((failUntil.get(key)||0)>Date.now())return Promise.resolve(null);
  if(pending.has(key))return pending.get(key);
  const job=queue.then(async()=>{
   try{
    let url;
    url=await renderPreview(item);
-   finished.set(key,url);
+   finished.set(key,url);failed.delete(key);failUntil.delete(key);
    return url;
   }catch(error){
-   failed.add(key);
+   failed.add(key);failUntil.set(key,Date.now()+1000);
+   if(renderer?.getContext().isContextLost())releasePreviewRenderer();
    console.warn('Full equipment preview unavailable',item.id,error);
    return null;
   }finally{pending.delete(key);if(!pending.size&&previewIdleEnabled){clearTimeout(previewIdleTimer);previewIdleTimer=setTimeout(()=>{if(!pending.size)releasePreviewRenderer();},1500);}}
@@ -75,6 +76,12 @@ export function previewMarkup(item){
   '<span class="equipment-preview-pending" data-preview="'+escape(item.id)+'" aria-label="Loading full equipment model"></span>';
 }
 export async function hydrateItemPreviews(root){
+ for(const img of root.querySelectorAll('img[data-preview]')){
+  if(img.dataset.previewRecovery)continue;img.dataset.previewRecovery='1';
+  const recover=()=>{if(!img.isConnected)return;const item=itemById(img.dataset.preview);if(!item)return;const key=keyOf(item),url=finished.get(key);if(url===img.getAttribute('src')){finished.delete(key);if(url.startsWith('blob:'))URL.revokeObjectURL(url);}
+   const placeholder=document.createElement('span');placeholder.className='equipment-preview-pending';placeholder.dataset.preview=item.id;img.replaceWith(placeholder);void hydrateItemPreviews(root);};
+  img.addEventListener('error',recover,{once:true});if(img.complete&&img.naturalWidth===0)recover();
+ }
  const nodes=[...root.querySelectorAll('.equipment-preview-pending[data-preview]')];
  if(!nodes.length)return;
  const items=[...new Set(nodes.map(n=>n.dataset.preview))].map(itemById).filter(Boolean);
@@ -87,6 +94,7 @@ export async function hydrateItemPreviews(root){
   const img=document.createElement('img');
   img.dataset.preview=item.id;img.src=url;img.alt='';img.decoding='async';img.loading='lazy';
   node.replaceWith(img);
+  img.addEventListener('error',()=>{if(!img.isConnected)return;const key=keyOf(item);if(finished.get(key)===url){finished.delete(key);if(url.startsWith('blob:'))URL.revokeObjectURL(url);}const fallback=document.createElement('span');fallback.className='equipment-preview-pending';fallback.dataset.preview=item.id;fallback.textContent='Preview unavailable';img.replaceWith(fallback);},{once:true});
  }
 }
 function shapeModel(item){
@@ -225,6 +233,7 @@ function releasePreviewRenderer(){
  renderer=null;scene=null;camera=null;
 }
 async function renderPreview(item){
+ if(renderer?.getContext().isContextLost())releasePreviewRenderer();
  if(!renderer){
   renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true});
   renderer.setSize(192,192);renderer.setPixelRatio(1);
@@ -248,7 +257,7 @@ async function renderPreview(item){
   renderer.render(scene,camera);
   const portrait=creatureSuit?cropCreatureOutfitPortrait(renderer.domElement):renderer.domElement;
   let blob;
-  try{blob=await new Promise(resolve=>portrait.toBlob(resolve,creatureSuit||portraitMask?'image/png':'image/webp',.96));}
+  try{blob=await new Promise(resolve=>portrait.toBlob(resolve,'image/png'));}
   finally{if(portrait!==renderer.domElement)portrait.width=portrait.height=0;}
   if(!blob)throw Error('WebGL preview image encoding failed');
   // Decode during loading, not when the inventory is first opened.

@@ -99,7 +99,7 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
   const g=new T.Group(),frame=disguiseFrame(T,model,bones,height);
   // Build and measure in an unparented, canonical Y-up coordinate system.
   record.parts.push(g);
-  g.name='disguise:'+item.creature;g.userData.disguiseHeight=item.disguiseHeight;
+  g.name='disguise:'+item.creature;g.userData.disguiseHeight=item.disguiseHeight;g.userData.outfit=item.id;
   const black=mat('#211f20'),rust=mat('#86523a'),silver=mat('#a6a6a0',.65),wood=mat('#b28b58'),woodDark=mat('#715037'),tape=mat('#b9aa87'),soot=mat('#39302e');
   const kind=item.creature;
   const b=(p,s,m=main)=>box(g,p,s,m);
@@ -185,6 +185,38 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
    function rimSafe(){return darkConcrete;}
    tube(g,[[.18,.27,-.05],[.23,1.32,-.05],[.17,2.43,-.05]],.025,wire);
    slit(.9,.184,.14);
+  }else if(kind==='tin-pipe-disguise'){
+   const metal=mat('#b5c2c5',.73),rim=mat('#6c797e',.68);
+   const joints=[];const radius=.27;
+   for(let i=0;i<16;i++){
+    const q=new T.Group();q.position.set(0,.06+i*.125,0);g.add(q);joints.push(q);
+    const shell=add(q,new T.CylinderGeometry(radius,radius,.15,20,1,true),[0,0,0],[1,1,1],metal);shell.material.side=T.DoubleSide;
+    const ring=add(q,new T.TorusGeometry(radius,.035,8,20),[0,.065,0],[1,1,1],rim);ring.rotation.x=Math.PI/2;
+   }
+   record.flexPipe=joints;
+  }else if(kind==='luroufan-sign-disguise'){
+   const frameMat=mat('#bd3826',.2),light=mat('#fff9d0');light.emissive.set('#ffd78b');light.emissiveIntensity=.85;
+   b([0,1,0],[1.06,1.95,.24],frameMat);
+   const canvas=document.createElement('canvas');canvas.width=512;canvas.height=896;const ctx=canvas.getContext('2d');
+   ctx.fillStyle='#fff0b2';ctx.fillRect(0,0,512,896);ctx.strokeStyle='#b52720';ctx.lineWidth=26;ctx.strokeRect(20,20,472,856);
+   ctx.fillStyle='#b3211b';ctx.textAlign='center';ctx.font='bold 150px sans-serif';for(const [i,ch] of [...'滷肉飯'].entries())ctx.fillText(ch,256,220+i*173);
+   ctx.fillStyle='#3e231b';ctx.font='bold 54px sans-serif';ctx.fillText('台灣小吃',256,740);ctx.font='bold 31px sans-serif';ctx.fillText('BRAISED PORK RICE',256,810);
+   const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;light.map=tex;light.emissiveMap=tex;record.extraTextures??=[];record.extraTextures.push(tex);
+   for(const z of [-.128,.128]){const panel=add(g,new T.PlaneGeometry(.99,1.88),[0,1,z],[1,1,1],light);if(z<0)panel.rotation.y=Math.PI;}
+   record.blinkLight=light;
+  }else if(kind==='bubble-tea-disguise'){
+   const tea=mat('#c99864'),lid=mat('#f5e3c9'),pearl=mat('#422921'),straw=mat('#d47692');
+   c([0,.80,0],.48,.32,1.48,tea,32);c([0,1.55,0],.51,.49,.10,lid,32);c([0,.075,0],.34,.34,.07,lid,32);
+   const strawMesh=c([.13,1.78,0],.055,.055,.46,straw,16);strawMesh.rotation.z=-.15;
+   for(let i=0;i<25;i++){const a=i*2.39996,y=.19+(i%5)*.105,r=.345+y*.085;o([Math.cos(a)*r,y,Math.sin(a)*r],[.068,.068,.038],pearl).rotation.y=-a;}
+   const label=mat('#fff0d0');b([0,.99,.43],[.49,.40,.025],label);
+   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff0d0';ctx.fillRect(0,0,256,192);ctx.fillStyle='#583a25';ctx.textAlign='center';ctx.font='bold 47px sans-serif';ctx.fillText('珍珠奶茶',128,82);ctx.font='bold 24px sans-serif';ctx.fillText('BUBBLE TEA',128,135);const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;label.map=tex;record.extraTextures??=[];record.extraTextures.push(tex);
+  }else if(kind==='fried-chicken-disguise'){
+   const crust=mat('#c88536'),crumbs=[mat('#e5ad55'),mat('#b66b28'),mat('#efc26a')];
+   const shape=new T.Shape();shape.moveTo(-.24,.03);shape.bezierCurveTo(-.75,.45,-.65,1.02,-.43,1.47);shape.bezierCurveTo(-.31,2.08,.43,2.02,.53,1.55);shape.bezierCurveTo(.82,1.12,.52,.30,.20,.05);shape.closePath();
+   const geo=new T.ExtrudeGeometry(shape,{depth:.21,bevelEnabled:true,bevelSize:.075,bevelThickness:.065,bevelSegments:2,steps:1,curveSegments:12});geo.translate(0,0,-.105);add(g,geo,[0,0,0],[1,1,1],crust);
+   const crumbGeo=new T.DodecahedronGeometry(.045,0),dummy=new T.Object3D();
+   for(let k=0;k<3;k++){const inst=new T.InstancedMesh(crumbGeo,crumbs[k],52);for(let i=0;i<52;i++){const y=.22+((i*37+k*11)%150)/100,x=Math.sin(i*12.9898+k)*(.34+.12*Math.sin(y*1.8));dummy.position.set(x,y,(i%2?1:-1)*.19);dummy.rotation.set(i*.8,i*1.3,i*.9);dummy.scale.setScalar(.65+(i%5)*.17);dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);}g.add(inst);}
   }else if(kind==='wooden-horse-disguise'){
    const red=mat('#8b3d32'),gold=mat('#c2a36b'),saddle=mat('#344d73');
    // A tall carved wooden horse with a long body, four legs and rocker rails.
@@ -210,6 +242,8 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
   const factor=frame.height*item.disguiseHeight/Math.max(.001,extent.y);
   g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);
   g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*factor);
+  // Position new tall props beside the body, with a full clear head/hat silhouette.
+  if(item.exposedHead)g.position.addScaledVector(new T.Vector3(1,0,0).applyQuaternion(frame.rotation),-(frame.height*.40+extent.x*factor*.52));
   model.add(g);g.updateMatrixWorld(true);
   // Existing avatar and collision dimensions remain untouched by cosmetic props.
   return record;
@@ -397,3 +431,5 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
  if(d==='astronaut'){box(chest,[0,-.23,-.42],[.66,.7,.28],cream);for(const side of [-1,1])ball(chest,[side*.3,-.22,-.61],[.13,.4,.13],trim);box(chest,[0,-.15,.43],[.35,.3,.08],cream);for(let i=0;i<3;i++)ball(chest,[-.1+i*.1,-.12,.49],[.025,.025,.02],dark);if(hood){const h=anchor('Head'),glass=mat('#adc7cf');glass.transparent=true;glass.opacity=.15;glass.depthWrite=false;ball(h,[0,.32,.1],[.79,.83,.75],glass);const seal=add(h,new T.TorusGeometry(.61,.06,8,36),[0,-.2,.04],[1,1,1],cream);seal.rotation.x=Math.PI/2;}}
  return record;}
 export function disposeOutfit(record){if(!record)return;for(const r of record.surfaces){r.mesh.geometry=r.originalGeometry;r.mesh.material=r.originalMaterial;r.geometry.dispose();r.mats.forEach(m=>m.dispose());}const geometries=new Set();for(const root of record.parts){root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});root.removeFromParent();}geometries.forEach(g=>g.dispose());record.materials.forEach(m=>m.dispose());record.extraTextures?.forEach(t=>t.dispose());record.texture.dispose();}
+
+export function animateOutfit(record,time){if(!record)return;if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=i/15;q.position.x=Math.sin(time*3.2-i*.42)*v*.17;q.position.z=Math.cos(time*2.7-i*.35)*v*.09;q.rotation.z=Math.cos(time*3.2-i*.42)*v*.13;}if(record.blinkLight)record.blinkLight.emissiveIntensity=.45+.85*(Math.sin(time*5.4)>.20?1:0);}

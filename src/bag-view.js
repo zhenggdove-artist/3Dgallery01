@@ -119,7 +119,7 @@ export function renderOriginalBag(ui,profile){
   ui.content.innerHTML=`<div class="original-bag">${bagStatus}<nav id="bag-tabs">${tabs.map(row=>`<div class="bag-tab-row">${row.map(([id,label])=>`<button data-category="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</div>`).join('')}</nav><div class="bag-toolbar"><label class="bag-sort-control">SORT <select id="bag-sort"><option value="recent" ${!ui.bagSort||ui.bagSort==='recent'?'selected':''}>Newest first</option><option value="quality" ${ui.bagSort==='quality'?'selected':''}>Quality ↓</option><option value="manual" ${ui.bagSort==='manual'?'selected':''}>Manual order</option></select></label><button id="fusion-toggle" aria-pressed="${!!ui.bagFusionMode}">FUSION: ${ui.bagFusionMode?'ON':'OFF'}</button><button type="button" id="bag-sale-toggle" aria-expanded="${!!ui.bagSaleOpen}" aria-controls="bag-sale-tools">SELL</button></div>${bulkMarkup}<div id="bag-items" class="${tab==='equipment'?'equipment-view':''}">${body}</div><div id="bag-detail">Tap to inspect · Double tap to equip / remove</div><p id="bag-feedback">${ui.bagFusionMode?'Drag same-category gear to fuse.':''}</p></div>`;
   if(tab==='equipment'){
    const fresh=ui.content.querySelector('#bag-portrait');
-   if(ui.bagPortraitCanvas)fresh.replaceWith(ui.bagPortraitCanvas);
+   if(ui.bagPortraitCanvas&&!ui.bagPortraitCanvas.dataset.portraitRetired)fresh.replaceWith(ui.bagPortraitCanvas);
    else ui.bagPortraitCanvas=fresh;
   }
  }
