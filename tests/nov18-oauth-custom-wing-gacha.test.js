@@ -80,5 +80,8 @@ test('Google-only Firebase entry and verified server route integration',()=>{
  assert.match(ui,/wing-epic-win/);
  assert.match(client,/ui\.addEventListener\('firebase-login'/);
  assert.match(atlas,/epicSpecimenCanvas/);
- assert.match(painter,/data-wing-mirror-x/);
+ assert.doesNotMatch(painter,/data-wing-mirror-[xy]/);
+ assert.doesNotMatch(painter,/data-wing-(?:zoom|ratio|scale)/);
+ assert.match(painter,/data-wing-tool="scale"/);
+ assert.match(painter,/data-wing-ability/);
 });

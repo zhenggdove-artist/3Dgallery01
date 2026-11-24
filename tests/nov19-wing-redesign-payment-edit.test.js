@@ -17,13 +17,14 @@ test('GM edits published wing in-place without inventory duplication or lost own
  assert.ok(p.publishedWingId,p.error);
  const initial=gm.inventory.length,id=p.publishedWingId;
  const updated=applyAction(world,actor(admin),{action:'gm-wing-update',wingId:id,
-  wing:{...draft('After',7),color:'#1a9ef8'}},{now:T+1});
+  wing:{...draft('After',7),color:'#1a9ef8',abilities:['glide','swift','sparkle']}},{now:T+1});
  assert.equal(updated.error,undefined);
  assert.equal(updated.updatedWingId,id);
  assert.equal(gm.inventory.length,initial);
  assert.equal(gm.equipment.wings,id);
  assert.equal(itemById(id)?.name,'After');
  assert.equal(itemById(id)?.color,'#1a9ef8');
+ assert.deepEqual(itemById(id)?.abilities,['glide','swift','sparkle']);
  assert.equal(world.customWings.length,1);
  assert.equal(world.customWings[0].drawRatePct,7);
 });
@@ -44,7 +45,7 @@ test('one paid design credit grants one private wing and ignores forged weapon s
  world.profiles[player]=profile;profile.wingDesignCredits=1;
  const size=profile.inventory.length;
  const result=applyAction(world,actor(player),{action:'redeem-wing-design',
-  wing:{...draft('My One Wing',0),impulse:18,gravity:.2,ability:'guardian',tier:5}}, {now:T});
+  wing:{...draft('My One Wing',0),impulse:18,gravity:.2,ability:'guardian',abilities:['guardian','swift','aerial'],tier:5}}, {now:T});
  assert.equal(result.error,undefined);
  assert.equal(profile.inventory.length,size+1);
  assert.equal(profile.equipment.wings,result.personalWingId);
@@ -52,6 +53,7 @@ test('one paid design credit grants one private wing and ignores forged weapon s
  assert.equal(itemById(result.personalWingId).personalWing,true);
  assert.equal(itemById(result.personalWingId).tier,3);
  assert.equal(itemById(result.personalWingId).ability,'glide');
+ assert.deepEqual(itemById(result.personalWingId).abilities,['glide','sparkle']);
  assert.match(applyAction(world,actor(player),{action:'redeem-wing-design',
   wing:draft('Again')},{now:T+20}).error,/No paid/);
 });
