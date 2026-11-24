@@ -866,12 +866,13 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
  text-align:right;
 }
 
-/* Pickup and throw hints: identical 70% scale, lower placement and 50% opacity. */
+/* Both hints are 30% smaller than their previous rendered size. */
 #prompt.artwork-pickup-hint,#prompt.artwork-throw-hint{
- transform:translate(-50%,clamp(28px,7vh,60px)) scale(.7);
+ transform:translate(-50%,clamp(28px,7vh,60px)) scale(.7) scale(var(--previous-prompt-scale,1));
  transform-origin:center bottom;
  pointer-events:none;
 }
+#prompt.artwork-pickup-hint{--previous-prompt-scale:.82;padding:5px 8px;font-size:11px;line-height:1.2}
 #prompt.artwork-pickup-hint.visible,#prompt.artwork-throw-hint.visible{opacity:.5}
 
 /* Quick healing is an independent simultaneous touch, not browser zoom. */
