@@ -64,5 +64,5 @@ test('public viewer and GM test use one real role, invisible first-person camera
  assert.match(network,/typeof role==='string'\?\{role\}:role/);
  assert.match(worker,/preview_seat/);
  assert.match(worker,/const spectatorWrite=session\.role==='spectator'&&body\.action==='plant'/);
- assert.match(worker,/position:spectatorWrite\?\[0,0,0\]:state\.position/);
+ assert.match(worker,/position:spectatorWrite\|\|!state\?\.position\?\[0,0,0\]:state\.position/);
 });

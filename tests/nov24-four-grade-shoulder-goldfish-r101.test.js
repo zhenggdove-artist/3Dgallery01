@@ -24,15 +24,15 @@ test('server persists each non-exotic shop grade and applies its combat stats',(
  const now=4_200_000,actor={key:'shop-grade',name:'Shop Grade',role:'fighter',color:'#ffffff',position:[75,0,0]};
  const world=createInitialWorld(now),p=ensureProfile(world,actor.key,actor.name,actor.color,now);
  p.wallet=300_000;
- const base=itemById('tide-2'),low=shopWeaponVariant(base,1),high=shopWeaponVariant(base,4);
- const buy=(tier,time)=>applyAction(world,actor,{action:'buy',itemId:base.id,qualityTier:tier},{now:time,actors:[actor],rng:()=>.5});
+ const low=shopWeaponVariant(itemById('tide-1'),1),high=shopWeaponVariant(itemById('tide-4'),4);
+ const buy=(tier,time)=>applyAction(world,actor,{action:'buy',itemId:'tide-'+tier,qualityTier:tier},{now:time,actors:[actor],rng:()=>.5});
  assert.equal(buy(1,now+10).purchased.total,low.price);
  assert.equal(buy(4,now+20).purchased.total,high.price);
- const copies=p.inventoryInstances.map((row,index)=>({...row,index})).filter(row=>row.itemId===base.id);
+ const copies=p.inventoryInstances.map((row,index)=>({...row,index})).filter(row=>['tide-1','tide-4'].includes(row.itemId));
  assert.deepEqual(copies.map(row=>row.shopTier),[1,4]);
- applyAction(world,actor,{action:'equip',itemId:base.id,inventoryIndex:copies[1].index},{now:now+30,actors:[actor],rng:()=>.5});
- assert.equal(equippedItem(p,base).shopTier,4);
- assert.equal(equippedItem(p,base).damage,high.damage);
+ applyAction(world,actor,{action:'equip',itemId:high.id,inventoryIndex:copies[1].index},{now:now+30,actors:[actor],rng:()=>.5});
+ assert.equal(equippedItem(p,itemById(high.id)).shopTier,4);
+ assert.equal(equippedItem(p,itemById(high.id)).damage,high.damage);
 });
 test('goldfish pursuit cannot reverse back toward its own player',()=>{
  const fx={origin:[0,2,0],launchDirection:[0,0,1],direction:[0,0,1],position:[0,2,5],range:25,travelled:5};

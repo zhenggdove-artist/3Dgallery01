@@ -18,15 +18,16 @@ const profile=(world,key='p',admin=false)=>ensureProfile(world,key,key,'#abcdef'
 test('weapon can fuse only weapon; every other slot can fuse only its own slot',()=>{
  const world=createInitialWorld(NOW),gm=profile(world,'gm',true);
  const groups=new Map();
- for(const item of ITEMS)if(['weapon','head','outfit','wings','shield','armor'].includes(item.slot)){
+ for(const item of ITEMS)if(['weapon','head','outfit','wings','shield'].includes(item.slot)){
   if(!groups.has(item.slot))groups.set(item.slot,[]);
   groups.get(item.slot).push(item);
  }
- for(const slot of ['weapon','head','outfit','wings','shield','armor'])
+ for(const slot of ['weapon','head','outfit','wings','shield'])
   assert.ok(groups.get(slot).length>=2,slot+' needs two items');
+ assert.equal(ITEMS.some(item=>item.slot==='armor'),false,'removed armor slot must not return');
  assert.equal(ITEMS.some(item=>item.slot==='material'),false,'deprecated material slot must not exist');
  for(const [a,b] of [['weapon','head'],['head','weapon'],['weapon','outfit'],['outfit','wings'],
-     ['wings','shield'],['armor','head']]){
+     ['wings','shield'],['shield','head']]){
   const source=groups.get(b)[0],target=groups.get(a)[0];
   const inventory=[...gm.inventory],wallet=gm.wallet;
   const result=fuseTemple(world,gm,{sourceId:source.id,targetId:target.id,requestId:'reject-'+a+'-'+b},()=>0);
@@ -34,7 +35,7 @@ test('weapon can fuse only weapon; every other slot can fuse only its own slot',
   assert.deepEqual(gm.inventory,inventory,'invalid cross-slot attempts consume nothing');
   assert.equal(gm.wallet,wallet);
  }
- for(const slot of ['weapon','head','outfit','wings','shield','armor']){
+ for(const slot of ['weapon','head','outfit','wings','shield']){
   const [source,target]=groups.get(slot);
   const result=fuseTemple(world,gm,{sourceId:source.id,targetId:target.id,
    requestId:'same-slot-'+slot},()=>0);

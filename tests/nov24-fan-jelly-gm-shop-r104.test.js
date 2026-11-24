@@ -33,7 +33,7 @@ test('all five jellyfish qualities deal exactly 70% of previous monster and PvP 
   assert.ok(Math.abs(pvpShotDamage(w,full,{tier})-pvpShotDamage(reference,full,{tier})*.7)<.001);
  }
 });
-test('authenticated GM can bulk buy above 600 with no wallet debit and keeps instances on rejoin; normal player still capped',()=>{
+test('authenticated GM can bulk buy above 600 with no wallet debit and keeps instances on rejoin; normal player has the same 3000 cap',()=>{
  const w=createInitialWorld(now),p=ensureProfile(w,gm.key,gm.name,gm.color,now,true);
  p.wallet=0;p.inventory=Array(600).fill('saber-2');
  ensureProfile(w,gm.key,gm.name,gm.color,now+1,true);
@@ -49,8 +49,8 @@ test('authenticated GM can bulk buy above 600 with no wallet debit and keeps ins
  assert.equal(p.inventory.length,count+3);
  assert.deepEqual(p.inventoryInstances.slice(-3).map(row=>row.uid),uids);
  const normal=ensureProfile(w,user.key,user.name,user.color,now,false);
- normal.wallet=100000;normal.inventory=Array(600).fill('saber-2');
- assert.equal(inventoryCapacity(normal),600);
+ normal.wallet=100000;normal.inventory=Array(3000).fill('saber-2');
+ assert.equal(inventoryCapacity(normal),3000);
  assert.match(applyAction(w,user,{action:'buy',itemId:'jellybrella',quantity:1},{now:now+4}).error,/Inventory full/);
  assert.equal(normal.wallet,100000);
 });

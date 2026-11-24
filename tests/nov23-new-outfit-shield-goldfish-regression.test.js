@@ -28,18 +28,18 @@ function chargedGoldfish(){
 test('reading NEW leaves the selected item detail and its DOM untouched',()=>{
  const ui=source('src/ui.js'),bag=source('src/bag-view.js');
  assert.match(ui,/export function inventoryPanelSignature\(profile\)/);
- assert.match(ui,/map\(row=>\[row.uid,row.itemId\]\)/);
+ assert.match(ui,/map\(row=>\[row.uid,row.itemId,row.shopTier\]\)/);
  assert.match(ui,/this.panelSignature!==inventoryPanelSignature\(world.profile\)/);
  assert.match(bag,/querySelector\('\.bag-new-mark'\)\?\.remove\(\)/);
  assert.match(bag,/action:'inspect-item'/);
 });
 
-test('new creature outfit icon uses transparent-margin crop, old outfit artwork remains unaffected',()=>{
+test('all outfit icons use high-resolution actual character renders and transparent-margin crop',()=>{
  const src=source('src/item-preview.js');
  assert.match(src,/export function cropCreatureOutfitPortrait\(source\)/);
  assert.match(src,/maxX-minX\+1,maxY-minY\+1/);
  assert.match(src,/const portrait=creatureSuit\?cropCreatureOutfitPortrait\(renderer.domElement\):renderer.domElement/);
- assert.match(src,/item.slot==='outfit'&&!item.creature/);
+ assert.match(src,/const creatureSuit=item.slot==='outfit'/); assert.match(src,/creatureSuit\?768/); assert.match(src,/creatureOutfitProductPortrait\(item\)/);
 });
 
 test('shield hit has a persistent and distinctly saturated red overlay, not faint additive tint alone',()=>{

@@ -947,3 +947,8 @@ body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;f
 /* r110 authoritative BAG usage and transaction feedback */
 #panel .bag-capacity{display:flex;align-items:center;justify-content:space-between;gap:5px;flex:0 0 auto;padding:6px 8px;border:1px solid #c5b6d2;border-radius:6px;background:#eee5f5;font:700 12px/1.2 Arial,sans-serif;color:#493653}
 #panel .bag-inventory-status:not([hidden]){display:block;flex:0 0 auto;font:700 11px/1.25 Arial,sans-serif;overflow-wrap:anywhere;color:#773b59;padding:3px 5px}
+
+/* Shop: two explicit rows, with independent equal-width cells and no horizontal clipping. */
+#panel .shop-tabs{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;overflow:visible;width:100%;max-width:100%;flex:none}
+#panel .shop-tabs .shop-tab-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px;min-width:0}
+#panel .shop-tabs .shop-tab-row button{min-width:0;width:100%;min-height:34px;padding:3px 2px;white-space:normal;overflow-wrap:anywhere;line-height:1.12;font-size:clamp(9px,2.1vw,12px)}

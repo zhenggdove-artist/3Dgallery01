@@ -47,9 +47,9 @@ test('quantity orders reject unaffordable or overflowing purchases without losin
  assert.equal(p.wallet,1500);
  assert.equal(p.inventory.filter(id=>id==='comfort-dollar-20').length,0);
  p.wallet=1000000;
- while(p.inventory.length<599)p.inventory.push('tide-1'); // capacity check occurs before allocation
+ while(p.inventory.length<2999)p.inventory.push('tide-1'); // capacity check occurs before allocation
  const first=p.wallet;
- assert.match(execute(world,'buy',{itemId:'comfort-dollar-20',quantity:2}).error,/Inventory full/);
+ assert.match(execute(world,'buy',{itemId:'comfort-dollar-20',quantity:2}).error,/Inventory full.*3000/);
  assert.equal(p.wallet,first);
 });
 test('server protects 1/2/3 slots: correct heal, exact stock consumption, red slot persistence and restock',()=>{

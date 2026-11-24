@@ -205,6 +205,7 @@ export function cropCreatureOutfitPortrait(source){
  const result=document.createElement('canvas');
  result.width=width;result.height=height;
  const out=result.getContext('2d');
+ out.imageSmoothingEnabled=true;out.imageSmoothingQuality='high';
  out.drawImage(source2d,centerX-side*.5,centerY-side*.5,side,side,0,0,width,height);
  return result;
 }
@@ -219,18 +220,19 @@ async function renderPreview(item){
   camera=new THREE.PerspectiveCamera(35,1,.01,1000);
  }
  const creatureSuit=item.slot==='outfit';
- const portraitMask=['trump-mask','huang-mask','musk-mask'].includes(item.design);const resolution=portraitMask?512:creatureSuit?384:192;renderer.setSize(resolution,resolution);
+ const portraitMask=['trump-mask','huang-mask','musk-mask'].includes(item.design);const resolution=portraitMask?768:creatureSuit?768:192;renderer.setSize(resolution,resolution);
  const model=item.family==='saber'?saberProductPortrait():creatureSuit?creatureOutfitProductPortrait(item):shapeModel(item);
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
- const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*(item.slot==='outfit'?1.9:2.2);
+ const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*(item.slot==='outfit'?1.75:portraitMask?1.8:2.2);
  camera.position.copy(center).add((item.family==='saber'||item.slot==='outfit'||['trump-mask','huang-mask','musk-mask'].includes(item.design)?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
+ camera.near=Math.max(.001,distance*.01);camera.far=Math.max(100,distance*8);camera.updateProjectionMatrix();
  camera.lookAt(center);
  try{
   await renderer.compileAsync(scene,camera);
   renderer.render(scene,camera);
   const portrait=creatureSuit?cropCreatureOutfitPortrait(renderer.domElement):renderer.domElement;
-  const blob=await new Promise(resolve=>portrait.toBlob(resolve,'image/webp',.92));
+  const blob=await new Promise(resolve=>portrait.toBlob(resolve,creatureSuit||portraitMask?'image/png':'image/webp',.96));
   if(!blob)throw Error('WebGL preview image encoding failed');
   // Decode during loading, not when the inventory is first opened.
   const url=URL.createObjectURL(blob);

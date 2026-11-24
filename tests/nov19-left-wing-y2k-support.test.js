@@ -39,7 +39,7 @@ test('public SUPPORT never includes GM design/management controls or GM-facing d
  assert.match(editor,/gm-wing-workspace/);
  assert.match(editor,/data-gm-action="wing-painter"/);
  assert.match(editor,/data-gm-action="wing-manage"/);
- assert.match(ui,/if\(\['gm','wing-manage'\]\.includes\(name\)/);
+ assert.match(ui,/if\(\['gm','wing-manage','shop-prices'\]\.includes\(name\)&&!this\.self\.profile\?\.admin\)/);
  assert.match(ui,/wingDesignCredits>0/);
 });
 
