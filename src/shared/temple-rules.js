@@ -413,7 +413,7 @@ export function applyAction(world,actor,body,context={}){
    // Player paint is cosmetic; server fixes movement and power, preventing
    // tampered client fields from awarding extra stats.
    Object.assign(wing,{
-    tier:3,ability:'glide',impulse:10.15,gravity:.585,flapMs:300,
+    tier:3,ability:'glide',abilities:['glide','sparkle'],impulse:10.15,gravity:.585,flapMs:300,
     personalWing:true,ownerKey:actor.key,drawRatePct:0,
     gmWingExclusive:false,description:'Private commissioned wing · not listed for sale'
    });

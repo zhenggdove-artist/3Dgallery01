@@ -31,6 +31,31 @@ export function simplifyFreehandOutline(points,maxPoints=96){
  }
  return [...keep].sort((a,b)=>a-b).map(i=>[...points[i]]);
 }
+// Bounds and handles are in normalized canvas space, independent of CSS size.
+export function wingBounds(art){
+ const pts=art.outline||[],xs=pts.map(q=>.5+(art.offsetX||0)+(q[0]-.5)*(art.scaleX||1)),ys=pts.map(q=>.5+(art.offsetY||0)+(q[1]-.5)*(art.scaleY||1));
+ return {left:Math.min(...xs),right:Math.max(...xs),top:Math.min(...ys),bottom:Math.max(...ys)};
+}
+export function wingHandles(b){
+ const mx=(b.left+b.right)/2,my=(b.top+b.bottom)/2;
+ return [[-1,-1,b.left,b.top],[0,-1,mx,b.top],[1,-1,b.right,b.top],[-1,0,b.left,my],[1,0,b.right,my],[-1,1,b.left,b.bottom],[0,1,mx,b.bottom],[1,1,b.right,b.bottom]].map(([hx,hy,x,y])=>({hx,hy,x,y}));
+}
+export function wingScaleFromDrag(art,b,h,start,point){
+ const sx=art.scaleX||1,sy=art.scaleY||1,ox=art.offsetX||0,oy=art.offsetY||0;
+ const w=Math.max(.0001,b.right-b.left),height=Math.max(.0001,b.bottom-b.top);
+ const ax=h.hx<0?b.right:b.left,ay=h.hy<0?b.bottom:b.top;
+ const dx=point[0]-start[0],dy=point[1]-start[1];
+ let fx=h.hx?1+dx*h.hx/w:1,fy=h.hy?1+dy*h.hy/height:1;
+ const capX=h.hx?Math.max(1,(h.hx<0?ax:1-ax)/w):1,capY=h.hy?Math.max(1,(h.hy<0?ay:1-ay)/height):1;
+ if(h.hx&&h.hy){
+  const f=1+(dx*h.hx*w+dy*h.hy*height)/(w*w+height*height);
+  fx=fy=clamp(f,Math.max(.35/sx,.35/sy),Math.min(2/sx,2/sy,capX,capY));
+ }else{
+  if(h.hx)fx=clamp(fx,.35/sx,Math.min(2/sx,capX));
+  if(h.hy)fy=clamp(fy,.35/sy,Math.min(2/sy,capY));
+ }
+ return {scaleX:sx*fx,scaleY:sy*fy,offsetX:h.hx?ax+(.5+ox-ax)*fx-.5:ox,offsetY:h.hy?ay+(.5+oy-ay)*fy-.5:oy};
+}
 export function mountWingPainter(ui,{personal=false,preview=false}={}){
  const admin=ui.self?.profile?.admin===true;
  if(preview&&!admin)return;
@@ -43,41 +68,36 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   impulse:11,gravity:.53,flapMs:300
  };
  ui[draftKey]=design;let tool=design.outline?.length>=3?'brush':'outline',pen='#1b1b22',
-  size=12,opacity=1,mirrorX=false,mirrorY=false,zoom=1,
-  pan=[0,0],active=null,pointerId=null,history=[],redo=[],pointers=new Map();
+  size=12,opacity=1,
+  pan=[0,0],active=null,pointerId=null,history=[],redo=[];
  ui.content.innerHTML=`<section class="wing-painter" aria-label="wing painting editor">
   <div class="wing-painter-tools">
    <label>翅膀名稱<input data-wing-field="name" value="${safe(design.name)}" maxlength="50" placeholder="請命名翅膀"></label>
    ${isGm?`<label>品質<select data-wing-field="tier">${['White','Green','Blue','Purple · Epic','Gold'].map((s,i)=>`<option value="${i+1}" ${design.tier===i+1?'selected':''}>${s}</option>`).join('')}</select></label>
    <label>單次中獎率（%）<input data-wing-field="drawRatePct" type="number" min="0" max="100" step=".001" value="${design.drawRatePct??1}"></label>
-   <small>此為全服每次抽獎的絕對機率；所有自訂翅膀合計不得超過 100%。0% 代表不會抽中。剩餘機率按基本品質抽取。</small>`:'<small>個人翅膀固定使用平衡的裝飾數值；儲存一件消耗一次已付款權限，永不公開販售。</small>'}
+   <small>此為全服每次抽獎的絕對機率；所有自訂翅膀合計不得超過 100%。0% 代表不會抽中。剩餘機率按基本品質抽取。</small>`:'<small>個人翅膀固定使用平衡的裝飾數值，並自帶粒子粉塵；儲存一件消耗一次已付款權限，永不公開販售。</small>'}
    <div class="wing-outline-note">左翅專用畫布：從角色背後觀看，繪製畫面原圖會顯示在角色左翅；右翅由系統自動左右鏡像。按住滑鼠左鍵或手指自由畫出輪廓，放開後自動閉合。</div>
    <button type="button" class="wing-clear-outline" data-wing-clear-outline>清除輪廓／重新繪製</button>
    <div class="wing-tools-row" role="toolbar" aria-label="畫筆工具">
-    <button type="button" data-wing-tool="outline" aria-pressed="${tool==='outline'}">自由畫輪廓</button>
+    <button type="button" data-wing-tool="outline" aria-pressed="${tool==='outline'}">編輯翅膀輪廓</button>
     <button type="button" data-wing-tool="brush" aria-pressed="${tool==='brush'}">畫筆</button>
     <button type="button" data-wing-tool="eraser">橡皮擦</button>
     <button type="button" data-wing-tool="pan">移動翅膀輪廓圖</button>
+    <button type="button" data-wing-tool="scale">縮放</button>
     <button type="button" data-wing-undo>↶ Undo</button>
     <button type="button" data-wing-redo>↷ Redo</button>
    </div>
    <label>色盤<input data-wing-pen type="color" value="${pen}"></label>
    <label>畫筆尺寸<input data-wing-size type="range" min="1" max="90" value="12"><output data-wing-size-label>12px</output></label>
    <label>不透明度<input data-wing-opacity type="range" min=".1" max="1" step=".05" value="1"></label>
-   <label><input data-wing-mirror-x type="checkbox"> 水平同步鏡像</label>
-   <label><input data-wing-mirror-y type="checkbox"> 垂直同步鏡像</label>
-   <div class="wing-tools-row"><button data-wing-zoom="-1">－</button><output data-wing-zoom-label>100%</output><button data-wing-zoom="1">＋</button><button data-wing-reset-view>置中</button></div>
-   <label><input data-wing-ratio type="checkbox" checked> 等比例縮放</label>
-   <label>寬度比例<input data-wing-scale="scaleX" type="range" min=".35" max="2" step=".05" value="${design.scaleX}"></label>
-   <label>高度比例<input data-wing-scale="scaleY" type="range" min=".35" max="2" step=".05" value="${design.scaleY}"></label>
    <label>基底色<input data-wing-field="color" type="color" value="${design.color}"></label>
-   ${isGm?`<label>附帶能力<select data-wing-field="ability"><option value="glide">滑翔減緩落下</option><option value="swift">移動速度提升</option><option value="aerial">跳躍能力提升</option><option value="guardian">防護力提升</option><option value="sparkle">魔法粉塵</option></select></label>
+   ${isGm?`<fieldset class="wing-ability-options"><legend>附加能力（可複選）</legend>${[['glide','滑翔減緩落下'],['swift','移動速度提升'],['aerial','跳躍能力提升'],['guardian','防護力提升'],['sparkle','魔法粉塵']].map(([value,label])=>`<label><input type="checkbox" data-wing-ability value="${value}" ${(design.abilities??[design.ability||'glide']).includes(value)?'checked':''}> ${label}</label>`).join('')}</fieldset>
    <label>跳躍推力<input data-wing-field="impulse" type="number" step=".1" min="5" max="18" value="${design.impulse}"></label>
    <label>重力係數<input data-wing-field="gravity" type="number" step=".01" min=".2" max="1" value="${design.gravity}"></label>
    <label>翅膀拍動間隔（ms）<input data-wing-field="flapMs" type="number" min="180" max="900" step="10" value="${design.flapMs}"></label>
    `:``}
     <button type="button" class="panel-button" data-wing-publish>${isGm?(design.id?'儲存修改並重新上架':'儲存、上架並自動裝備'):'儲存至 BAG 並自動裝備 · 消耗一次權限'}</button>
-   <small>以「自由畫輪廓」一筆畫出外形並放開自動閉合，之後可使用畫筆、橡皮擦、Undo／Redo 與清除重畫。滾輪縮放；使用「移動翅膀輪廓圖」調整檢視位置。玩家儲存後直接加入自己的背包並裝備，不會公開販售。</small>
+   <small>以「編輯翅膀輪廓」一筆畫出外形並放開自動閉合。縮放模式：四角等比例、中點單軸，拖曳時固定對側。使用「移動翅膀輪廓圖」調整檢視位置。玩家儲存後直接加入自己的背包並裝備，不會公開販售。</small>
   </div>
   <div class="wing-painter-stage"><div class="wing-left-wing-label"><strong>LEFT WING · 左翅原圖</strong><span>RIGHT WING · 自動鏡像</span></div><div class="wing-painter-checker">
    <canvas class="wing-painter-canvas" width="768" height="640" aria-label="可繪畫的翅膀畫布"></canvas>
@@ -86,28 +106,36 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
  </section>`;
  const root=ui.content.querySelector('.wing-painter'),canvas=root.querySelector('canvas'),ctx=canvas.getContext('2d');
  let publishing=false;
- if(isGm)root.querySelector('[data-wing-field=ability]').value=design.ability||'glide';
+ const artState=()=>copy({outline:design.outline,strokes:design.strokes,scaleX:design.scaleX,scaleY:design.scaleY,offsetX:design.offsetX||0,offsetY:design.offsetY||0,shape:design.shape});
  const report=t=>{root.querySelector('[data-wing-status]').textContent=t;};
- const snapshot=()=>{history.push(copy({outline:design.outline,strokes:design.strokes,scaleX:design.scaleX,scaleY:design.scaleY,shape:design.shape}));if(history.length>60)history.shift();redo.length=0;};
- const restore=value=>{Object.assign(design,copy(value));root.querySelectorAll('[data-wing-scale]').forEach(el=>el.value=design[el.dataset.wingScale]);draw();};
+ const snapshot=()=>{history.push(artState());if(history.length>60)history.shift();redo.length=0;};
+ const restore=value=>{Object.assign(design,copy(value));draw();};
  function draw(){
   renderPaintedWing(canvas,design);
   if(active?.tool==='outline'&&active.points.length){
    ctx.save();ctx.lineWidth=4;ctx.strokeStyle='#16b7ff';ctx.fillStyle='#ffffff';ctx.setLineDash([9,5]);
    ctx.beginPath();
-   active.points.forEach(([x,y],i)=>{const px=(.5+(x-.5)*(design.scaleX||1))*canvas.width,py=(.5+(y-.5)*(design.scaleY||1))*canvas.height;if(!i)ctx.moveTo(px,py);else ctx.lineTo(px,py);});
+   active.points.forEach(([x,y],i)=>{const px=(.5+(design.offsetX||0)+(x-.5)*(design.scaleX||1))*canvas.width,py=(.5+(design.offsetY||0)+(y-.5)*(design.scaleY||1))*canvas.height;if(!i)ctx.moveTo(px,py);else ctx.lineTo(px,py);});
    ctx.stroke();ctx.setLineDash([]);
-   for(const [x,y] of active.points){ctx.beginPath();ctx.arc((.5+(x-.5)*(design.scaleX||1))*canvas.width,(.5+(y-.5)*(design.scaleY||1))*canvas.height,2.5,0,Math.PI*2);ctx.fill();}
+   for(const [x,y] of active.points){ctx.beginPath();ctx.arc((.5+(design.offsetX||0)+(x-.5)*(design.scaleX||1))*canvas.width,(.5+(design.offsetY||0)+(y-.5)*(design.scaleY||1))*canvas.height,2.5,0,Math.PI*2);ctx.fill();}
    ctx.restore();
   }
-  canvas.style.transform=`translate(${pan[0]}px,${pan[1]}px) scale(${zoom})`;
-  root.querySelector('[data-wing-zoom-label]').textContent=Math.round(zoom*100)+'%';
+  canvas.style.transform=`translate(${pan[0]}px,${pan[1]}px)`;
+  canvas.style.cursor=tool==='pan'?'move':tool==='scale'?'default':'crosshair';
+  if(tool==='scale'&&design.outline?.length>=3){
+   const b=wingBounds(design),w=canvas.width,h=canvas.height,r=canvas.getBoundingClientRect();
+   const rx=6*w/Math.max(1,r.width),ry=6*h/Math.max(1,r.height);
+   ctx.save();ctx.strokeStyle='#087df5';ctx.fillStyle='#fff';ctx.lineWidth=2*w/Math.max(1,r.width);
+   ctx.strokeRect(b.left*w,b.top*h,(b.right-b.left)*w,(b.bottom-b.top)*h);
+   for(const q of wingHandles(b)){ctx.fillRect(q.x*w-rx,q.y*h-ry,2*rx,2*ry);ctx.strokeRect(q.x*w-rx,q.y*h-ry,2*rx,2*ry);}
+   ctx.restore();
+  }
  }
  const imagePoint=event=>{
   const rect=canvas.getBoundingClientRect();
-  return [clamp(.5+((event.clientX-rect.left)/rect.width-.5)/(design.scaleX||1),0,1),clamp(.5+((event.clientY-rect.top)/rect.height-.5)/(design.scaleY||1),0,1)];
+  return [clamp(.5+((event.clientX-rect.left)/rect.width-.5-(design.offsetX||0))/(design.scaleX||1),0,1),clamp(.5+((event.clientY-rect.top)/rect.height-.5-(design.offsetY||0))/(design.scaleY||1),0,1)];
  };
- const setZoom=value=>{zoom=clamp(value,.35,5);draw();};
+ const viewPoint=e=>{const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height];};
  draw();
  root.addEventListener('click',event=>{
   const b=event.target.closest('button');if(!b)return;
@@ -115,24 +143,23 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
    if(!design.outline?.length&&b.dataset.wingTool!=='outline'&&b.dataset.wingTool!=='pan'){
     report('請先使用「自由畫輪廓」在畫布上繪製完整輪廓');return;
    }
-   tool=b.dataset.wingTool;root.querySelectorAll('[data-wing-tool]').forEach(el=>el.setAttribute('aria-pressed',el.dataset.wingTool===tool));return;
+   tool=b.dataset.wingTool;root.querySelectorAll('[data-wing-tool]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.wingTool===tool)));draw();return;
   }
   if(b.hasAttribute('data-wing-clear-outline')){
    snapshot();design.outline=[];design.shape='freehand';tool='outline';
    root.querySelectorAll('[data-wing-tool]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.wingTool===tool)));
    report('輪廓已清除，按住並拖曳畫出新輪廓');draw();return;
   }
-  if(b.hasAttribute('data-wing-undo')){if(!history.length)return;redo.push(copy({outline:design.outline,strokes:design.strokes,scaleX:design.scaleX,scaleY:design.scaleY,shape:design.shape}));restore(history.pop());return;}
-  if(b.hasAttribute('data-wing-redo')){if(!redo.length)return;history.push(copy({outline:design.outline,strokes:design.strokes,scaleX:design.scaleX,scaleY:design.scaleY,shape:design.shape}));restore(redo.pop());return;}
-  if(b.dataset.wingZoom)setZoom(zoom*(b.dataset.wingZoom==='1'?1.25:.8));
-  if(b.hasAttribute('data-wing-reset-view')){pan=[0,0];setZoom(1);}
+  if(b.hasAttribute('data-wing-undo')){if(!history.length)return;redo.push(artState());restore(history.pop());return;}
+  if(b.hasAttribute('data-wing-redo')){if(!redo.length)return;history.push(artState());restore(redo.pop());return;}
   if(b.hasAttribute('data-wing-publish')){
    if(publishing)return;
    const input=copy(design);
    input.name=String(root.querySelector('[data-wing-field=name]').value||'').trim();
    input.tier=isGm?Number(root.querySelector('[data-wing-field=tier]').value):3;
    input.color=root.querySelector('[data-wing-field=color]').value;
-   input.ability=isGm?root.querySelector('[data-wing-field=ability]').value:'glide';
+   input.abilities=isGm?[...root.querySelectorAll('[data-wing-ability]:checked')].map(el=>el.value):['glide','sparkle'];
+   input.ability=input.abilities[0]||'glide';
    input.drawRatePct=isGm?Number(root.querySelector('[data-wing-field=drawRatePct]').value):0;
    if(isGm)for(const field of ['impulse','gravity','flapMs'])input[field]=Number(root.querySelector(`[data-wing-field="${field}"]`).value);
     else Object.assign(input,{impulse:10.15,gravity:.585,flapMs:300});
@@ -175,34 +202,26 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   if(el.hasAttribute('data-wing-size')){size=+el.value;root.querySelector('[data-wing-size-label]').textContent=size+'px';}
   if(el.hasAttribute('data-wing-opacity'))opacity=+el.value;
   if(el.hasAttribute('data-wing-pen'))pen=el.value;
-  if(el.hasAttribute('data-wing-mirror-x'))mirrorX=el.checked;
-  if(el.hasAttribute('data-wing-mirror-y'))mirrorY=el.checked;
   if(el.dataset.wingField==='name')design.name=el.value;
-  if(el.dataset.wingScale){snapshot();const axis=el.dataset.wingScale;design[axis]=+el.value;
-   if(root.querySelector('[data-wing-ratio]').checked){
-    const other=axis==='scaleX'?'scaleY':'scaleX';design[other]=design[axis];
-    root.querySelector(`[data-wing-scale="${other}"]`).value=design[axis];}
-   draw();}
+  if(el.hasAttribute('data-wing-ability')){design.abilities=[...root.querySelectorAll('[data-wing-ability]:checked')].map(e=>e.value);design.ability=design.abilities[0]||'glide';}
   if(el.dataset.wingField==='color'){design.color=el.value;draw();}
  });
  // No predefined shapes: freehand vertices are the authoritative silhouette.
  const start=e=>{
-  if(pointers.size>1)return;pointerId=e.pointerId;canvas.setPointerCapture(e.pointerId);
+  if(pointerId!==null)return;pointerId=e.pointerId;canvas.setPointerCapture(e.pointerId);
   if(tool==='pan'){active={start:[e.clientX,e.clientY],pan:[...pan]};return;}
+  if(tool==='scale'){const r=canvas.getBoundingClientRect(),point=viewPoint(e),b=wingBounds(design);const q=wingHandles(b).map(h=>({...h,dist:Math.hypot((h.x-point[0])*r.width,(h.y-point[1])*r.height)})).sort((a,b)=>a.dist-b.dist)[0];if(!q||q.dist>22)return;snapshot();active={tool,handle:q,bounds:b,original:artState(),start:point};return;}
   if(!design.outline?.length&&tool!=='outline'){report('請先畫出封閉輪廓');return;}
   snapshot();const point=imagePoint(e);
   if(tool==='outline')active={tool,points:[point]};
-  else {const stroke={tool,color:pen,size,opacity,material:'ink',mirrorX,mirrorY,points:[point]};active=stroke;design.strokes.push(stroke);}
+  else {const stroke={tool,color:pen,size,opacity,material:'ink',points:[point]};active=stroke;design.strokes.push(stroke);}
   draw();
  };
- let pinching=false,pinchDistance=0;
- canvas.addEventListener('pointerdown',e=>{e.preventDefault();pointers.set(e.pointerId,[e.clientX,e.clientY]);canvas.setPointerCapture(e.pointerId);if(pointers.size===1&&!pinching)start(e);else if(pointers.size===2){if(active&&active.tool&&history.length)restore(history.pop());active=null;pointerId=null;pinching=true;const pair=[...pointers.values()];pinchDistance=Math.hypot(pair[0][0]-pair[1][0],pair[0][1]-pair[1][1]);draw();}});
+ canvas.addEventListener('pointerdown',e=>{e.preventDefault();start(e);});
  canvas.addEventListener('pointermove',e=>{
-  if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,[e.clientX,e.clientY]);
-  if(pointers.size===2){const pair=[...pointers.values()],distance=Math.hypot(pair[0][0]-pair[1][0],pair[0][1]-pair[1][1]);
-   if(pinchDistance>0&&distance>0)setZoom(zoom*distance/pinchDistance);pinchDistance=distance;return;}
   if(e.pointerId!==pointerId||!active)return;
   if(tool==='pan'){pan=[active.pan[0]+e.clientX-active.start[0],active.pan[1]+e.clientY-active.start[1]];}
+  else if(active.tool==='scale'){Object.assign(design,wingScaleFromDrag(active.original,active.bounds,active.handle,active.start,viewPoint(e)));}
   else{
    const point=imagePoint(e),last=active.points.at(-1);
    if(Math.hypot(point[0]-last[0],point[1]-last[1])>.002&&active.points.length<(tool==='outline'?2048:96))active.points.push(point);
@@ -210,7 +229,6 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   draw();
  });
  const stop=e=>{
-  pointers.delete(e.pointerId);if(pointers.size<2)pinchDistance=0;if(!pointers.size)pinching=false;
   if(e.pointerId!==pointerId)return;
   if(tool==='outline'){
    if(active?.points.length>=3){
@@ -224,5 +242,5 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   active=null;pointerId=null;draw();
  };
  canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);canvas.addEventListener('lostpointercapture',stop);
- canvas.addEventListener('wheel',e=>{e.preventDefault();setZoom(zoom*(e.deltaY>0?.9:1.1));},{passive:false});
+
 }

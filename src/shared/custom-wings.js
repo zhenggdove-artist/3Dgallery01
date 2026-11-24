@@ -24,7 +24,10 @@ export function normalizePaintedWing(raw,id){
  const tier=Number(raw.tier);
  if(!Number.isInteger(tier)||tier<1||tier>5)throw Error('Invalid quality');
  if(!hex(raw.color))throw Error('Invalid base color');
- if(!ALLOWED_ABILITIES.has(raw.ability))throw Error('Invalid wing ability');
+ const abilities=raw.abilities===undefined?[raw.ability]:raw.abilities;
+ if(!Array.isArray(abilities)||abilities.length>ALLOWED_ABILITIES.size||abilities.some(a=>!ALLOWED_ABILITIES.has(a)))throw Error('Invalid wing ability');
+ const cleanAbilities=[...new Set(abilities)];
+ for(const field of ['offsetX','offsetY'])if(!finite(Number(raw[field]??0),-1.5,1.5))throw Error('Invalid wing offset');
  const outline=raw.outline;
  if(!Array.isArray(outline)||outline.length<3||outline.length>96)throw Error('Draw a closed wing outline');
  const normalizePoint=p=>{
@@ -48,9 +51,9 @@ export function normalizePaintedWing(raw,id){
  if(!validWingDrawRate(drawRatePct))throw Error('Winning probability must be 0–100% (up to 3 decimals)');
  return {id,name,tier,slot:'wings',family:'wings',design:'painted-wing',
   premiumWing:true,gmWingExclusive:true,notForSale:true,price:0,
-  color:raw.color,ability:raw.ability,drawRatePct,retired:false,
+  color:raw.color,ability:cleanAbilities[0]||'glide',abilities:cleanAbilities,drawRatePct,retired:false,
   outline:outline.map(normalizePoint),strokes:clean,shape:String(raw.shape||'freehand').slice(0,20),
-  scaleX:Number(raw.scaleX),scaleY:Number(raw.scaleY),
+  scaleX:Number(raw.scaleX),scaleY:Number(raw.scaleY),offsetX:Number(raw.offsetX??0),offsetY:Number(raw.offsetY??0),
   impulse:Number(raw.impulse),gravity:Number(raw.gravity),flapMs:Number(raw.flapMs),
   visualComplexity:clean.length,description:'GM-painted original collectible'};
 }

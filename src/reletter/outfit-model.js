@@ -83,12 +83,12 @@ export function disguiseFrame(T,model,bones,headHeight){
  const worldScale=model.getWorldScale(new T.Vector3()),unit=headHeight/Math.max(.00001,Math.abs(worldScale.y));
  const low=feet.length?Math.min(...feet.map(p=>p.clone().sub(hp).dot(up)))-unit*.10:-unit*2.2;
  const high=at(top).sub(hp).dot(up)+unit*.18;
- return {base:hp.clone().addScaledVector(up,low),up,rotation,height:Math.max(unit*2,high-low)};
+ return {base:hp.clone().addScaledVector(up,low),up,rotation,height:Math.max(unit*2,high-low),head:hd,unit};
 }
 export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;model.updateMatrixWorld(true);const bones=new Map();model.traverse(o=>{if(o.isBone)bones.set(o.name.replace(/^mixamorig/,''),o);});const head=bones.get('Head');if(!head)return null;const top=bones.get('HeadTop_End'),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,forward=head.getWorldQuaternion(new T.Quaternion()),texture=fabric(T,item),record={id:item.id,parts:[],surfaces:[],texture};
  const meshes=[];model.traverse(o=>{if(o.isSkinnedMesh&&o.geometry.attributes.skinIndex)meshes.push(o);});
  for(const mesh of meshes){const originalGeometry=mesh.geometry,originalMaterial=mesh.material,geometry=originalGeometry.clone(),si=geometry.attributes.skinIndex,sw=geometry.attributes.skinWeight,mask=new Float32Array(si.count);for(let i=0;i<si.count;i++)for(let k=0;k<4;k++){const idx=si.array[i*si.itemSize+k],name=mesh.skeleton.bones[idx]?.name||'';if(/Hips|Spine|Arm|Leg|Foot|Toe/.test(name))mask[i]+=sw.array[i*sw.itemSize+k];}geometry.setAttribute('outfitMask',new T.BufferAttribute(mask,1));const mats=(Array.isArray(originalMaterial)?originalMaterial:[originalMaterial]).map(source=>{const m=source.clone(),before=source.onBeforeCompile,key=source.customProgramCacheKey();m.onBeforeCompile=function(shader){before.call(m,shader);shader.uniforms.outfitFabric={value:texture};shader.vertexShader='attribute float outfitMask;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvOutfitMask=outfitMask;vOutfitUV=uv*3.;');shader.fragmentShader='uniform sampler2D outfitFabric;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
- vec3 cloth=texture2D(outfitFabric,vOutfitUV).rgb;float shade=clamp(dot(diffuseColor.rgb,vec3(.2126,.7152,.0722)),.4,1.);diffuseColor.rgb=mix(diffuseColor.rgb,cloth*(.82+.18*shade),smoothstep(.35,.8,vOutfitMask));`);};m.customProgramCacheKey=()=>key+'-outfit-'+item.id;m.needsUpdate=true;return m;});mesh.geometry=geometry;mesh.material=Array.isArray(originalMaterial)?mats:mats[0];record.surfaces.push({mesh,originalGeometry,originalMaterial,geometry,mats});}
+ ${item.exposedHead?'if(vOutfitMask>.48) discard;':''}\n vec3 cloth=texture2D(outfitFabric,vOutfitUV).rgb;float shade=clamp(dot(diffuseColor.rgb,vec3(.2126,.7152,.0722)),.4,1.);diffuseColor.rgb=mix(diffuseColor.rgb,cloth*(.82+.18*shade),smoothstep(.35,.8,vOutfitMask));`);};m.customProgramCacheKey=()=>key+'-outfit-'+item.id;m.needsUpdate=true;return m;});mesh.geometry=geometry;mesh.material=Array.isArray(originalMaterial)?mats:mats[0];record.surfaces.push({mesh,originalGeometry,originalMaterial,geometry,mats});}
  const materials=[],mat=(color,metal=0)=>{const m=new T.MeshStandardMaterial({color,roughness:.72,metalness:metal});materials.push(m);return m;},main=mat(item.color),cream=mat('#e8dfcf'),dark=mat('#514b62'),trim=mat('#c9b58b',.3),pink=mat('#c597a2');record.materials=materials;
  function anchor(name){const bone=bones.get(name)||head,g=new T.Group(),scale=bone.getWorldScale(new T.Vector3());g.name=item.id;g.userData.outfit=item.id;bone.add(g);g.quaternion.copy(bone.getWorldQuaternion(new T.Quaternion()).invert().multiply(forward));g.scale.set(height/scale.x,height/scale.y,height/scale.z);record.parts.push(g);return g;}
  const add=(g,geo,p,scale,m=main)=>{const o=new T.Mesh(geo,m);o.position.set(...p);o.scale.set(...scale);g.add(o);return o;},ball=(g,p,s,m=main)=>add(g,new T.SphereGeometry(1,16,12),p,s,m),box=(g,p,s,m=main)=>add(g,new T.BoxGeometry(1,1,1),p,s,m),cone=(g,p,r,h,m=main)=>add(g,new T.ConeGeometry(r,h,12),p,[1,1,1],m),tube=(g,pts,r,m=main)=>add(g,new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>new T.Vector3(...p))),18,r,6,false),[0,0,0],[1,1,1],m);
@@ -186,37 +186,57 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
    tube(g,[[.18,.27,-.05],[.23,1.32,-.05],[.17,2.43,-.05]],.025,wire);
    slit(.9,.184,.14);
   }else if(kind==='tin-pipe-disguise'){
-   const metal=mat('#b5c2c5',.73),rim=mat('#6c797e',.68);
-   const joints=[];const radius=.27;
-   for(let i=0;i<16;i++){
-    const q=new T.Group();q.position.set(0,.06+i*.125,0);g.add(q);joints.push(q);
-    const shell=add(q,new T.CylinderGeometry(radius,radius,.15,20,1,true),[0,0,0],[1,1,1],metal);shell.material.side=T.DoubleSide;
-    const ring=add(q,new T.TorusGeometry(radius,.035,8,20),[0,.065,0],[1,1,1],rim);ring.rotation.x=Math.PI/2;
+   const metal=mat('#aebabe',.72),rim=mat('#727d80',.72),inner=mat('#323c3f',.32);
+   metal.roughness=.43;rim.roughness=.42;
+   // Open, torso-sized flexible pipe with rolled metal seams, flanges and bolts.
+   const joints=[],radius=.43;
+   for(let i=0;i<14;i++){
+    const q=new T.Group();q.position.set(0,.075+i*.13,0);g.add(q);joints.push(q);
+    const shell=add(q,new T.CylinderGeometry(radius,radius,.158,28,1,true),[0,0,0],[1,1,1],metal);shell.material.side=T.DoubleSide;
+    const ring=add(q,new T.TorusGeometry(radius,.028,8,28),[0,.065,0],[1,1,1],rim);ring.rotation.x=Math.PI/2;
    }
+   for(const y of [.055,1.89]){
+    const flange=add(g,new T.TorusGeometry(radius,.07,10,32),[0,y,0],[1,1,1],rim);flange.rotation.x=Math.PI/2;
+    for(let i=0;i<8;i++){const a=i*Math.PI/4;c([Math.cos(a)*.47,y-.018,Math.sin(a)*.47],.034,.034,.05,silver,6);}
+   }
+   add(g,new T.CylinderGeometry(.40,.40,.20,28,1,true),[0,1.80,0],[1,1,1],inner).material.side=T.DoubleSide;
    record.flexPipe=joints;
   }else if(kind==='luroufan-sign-disguise'){
-   const frameMat=mat('#bd3826',.2),light=mat('#fff9d0');light.emissive.set('#ffd78b');light.emissiveIntensity=.85;
-   b([0,1,0],[1.06,1.95,.24],frameMat);
-   const canvas=document.createElement('canvas');canvas.width=512;canvas.height=896;const ctx=canvas.getContext('2d');
-   ctx.fillStyle='#fff0b2';ctx.fillRect(0,0,512,896);ctx.strokeStyle='#b52720';ctx.lineWidth=26;ctx.strokeRect(20,20,472,856);
-   ctx.fillStyle='#b3211b';ctx.textAlign='center';ctx.font='bold 150px sans-serif';for(const [i,ch] of [...'滷肉飯'].entries())ctx.fillText(ch,256,220+i*173);
-   ctx.fillStyle='#3e231b';ctx.font='bold 54px sans-serif';ctx.fillText('台灣小吃',256,740);ctx.font='bold 31px sans-serif';ctx.fillText('BRAISED PORK RICE',256,810);
-   const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;light.map=tex;light.emissiveMap=tex;record.extraTextures??=[];record.extraTextures.push(tex);
-   for(const z of [-.128,.128]){const panel=add(g,new T.PlaneGeometry(.99,1.88),[0,1,z],[1,1,1],light);if(z<0)panel.rotation.y=Math.PI;}
-   record.blinkLight=light;
+   const porcelain=mat('#f6ebd8'),blue=mat('#31578c'),rice=mat('#fff4dd'),pork=mat('#804222'),fat=mat('#b97743'),sauce=mat('#5a301d');
+   pork.roughness=.32;fat.roughness=.38;sauce.roughness=.25;
+   const profile=[[.18,0],[.26,.04],[.37,.10],[.52,.25],[.65,.52],[.72,.82],[.70,.89],[.66,.87],[.60,.57],[.48,.30],[.25,.10]].map(v=>new T.Vector2(...v));
+   add(g,new T.LatheGeometry(profile,48),[0,0,0],[1,1,1],porcelain).material.side=T.DoubleSide;
+   for(const [r,y] of [[.70,.86],[.63,.64],[.31,.06]]){const ring=add(g,new T.TorusGeometry(r,.022,8,48),[0,y,0],[1,1,1],blue);ring.rotation.x=Math.PI/2;}
+   o([0,.76,0],[.65,.17,.65],rice);
+   const dummy=new T.Object3D(),grainGeo=new T.SphereGeometry(1,6,4),grains=new T.InstancedMesh(grainGeo,rice,180);
+   for(let i=0;i<180;i++){const a=i*2.39996,r=.64*Math.sqrt((i+.5)/180);dummy.position.set(Math.cos(a)*r,.87+.035*Math.cos(r*2),Math.sin(a)*r);dummy.rotation.set(.1,i*.77,.3);dummy.scale.set(.034,.016,.018);dummy.updateMatrix();grains.setMatrixAt(i,dummy.matrix);}g.add(grains);
+   const porkGeo=new T.BoxGeometry(1,1,1);
+   for(let k=0;k<3;k++){const pieces=new T.InstancedMesh(porkGeo,[pork,fat,sauce][k],35);for(let i=0;i<35;i++){const a=(i*3+k)*2.39996,r=.30+.27*Math.sqrt((i+.5)/35);dummy.position.set(Math.cos(a)*r,.94+(i%4)*.024,Math.sin(a)*r);dummy.rotation.set(.12*Math.sin(i),i*.83,.12*Math.cos(i));dummy.scale.set(.075+(i%4)*.012,.048+(i%3)*.013,.06+(i%5)*.009);dummy.updateMatrix();pieces.setMatrixAt(i,dummy.matrix);}g.add(pieces);}
+   const scallion=mat('#4a823e');for(let i=0;i<12;i++){const a=i*2.4,r=.34+i%4*.06;const ring=add(g,new T.TorusGeometry(.029,.011,5,8),[Math.cos(a)*r,1.025,Math.sin(a)*r],[1,1,1],scallion);ring.rotation.x=Math.PI/2;}
+   const egg=mat('#e9d8b1'),yolk=mat('#da8d26');o([.49,.98,.08],[.16,.07,.12],egg);o([.49,1.035,.08],[.09,.025,.072],yolk);
   }else if(kind==='bubble-tea-disguise'){
-   const tea=mat('#c99864'),lid=mat('#f5e3c9'),pearl=mat('#422921'),straw=mat('#d47692');
-   c([0,.80,0],.48,.32,1.48,tea,32);c([0,1.55,0],.51,.49,.10,lid,32);c([0,.075,0],.34,.34,.07,lid,32);
-   const strawMesh=c([.13,1.78,0],.055,.055,.46,straw,16);strawMesh.rotation.z=-.15;
-   for(let i=0;i<25;i++){const a=i*2.39996,y=.19+(i%5)*.105,r=.345+y*.085;o([Math.cos(a)*r,y,Math.sin(a)*r],[.068,.068,.038],pearl).rotation.y=-a;}
-   const label=mat('#fff0d0');b([0,.99,.43],[.49,.40,.025],label);
-   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff0d0';ctx.fillRect(0,0,256,192);ctx.fillStyle='#583a25';ctx.textAlign='center';ctx.font='bold 47px sans-serif';ctx.fillText('珍珠奶茶',128,82);ctx.font='bold 24px sans-serif';ctx.fillText('BUBBLE TEA',128,135);const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;label.map=tex;record.extraTextures??=[];record.extraTextures.push(tex);
+   const tea=mat('#c99762'),ice=mat('#e8d5b4'),pearl=mat('#37221c'),straw=mat('#d94d70'),cup=mat('#f7efe2'),label=mat('#fff3dc');
+   tea.roughness=.36;pearl.roughness=.22;ice.roughness=.24;cup.transparent=true;cup.opacity=.26;cup.depthWrite=false;cup.roughness=.19;
+   c([0,.79,0],.56,.37,1.45,tea,40);
+   const shell=add(g,new T.CylinderGeometry(.59,.39,1.50,40,1,true),[0,.79,0],[1,1,1],cup);shell.material.side=T.DoubleSide;shell.renderOrder=2;
+   for(const [r,y] of [[.40,.055],[.59,1.53]]){const ring=add(g,new T.TorusGeometry(r,.027,8,40),[0,y,0],[1,1,1],cup);ring.rotation.x=Math.PI/2;ring.renderOrder=3;}
+   // Raised tapioca spheres remain visible through the lightly transparent cup.
+   const dummy=new T.Object3D(),geo=new T.SphereGeometry(1,10,8),pearls=new T.InstancedMesh(geo,pearl,68);
+   for(let i=0;i<68;i++){const a=i*2.39996,y=.15+(i%8)*.076,r=.386+y*.12;dummy.position.set(Math.cos(a)*r,y,Math.sin(a)*r);dummy.rotation.set(0,-a,0);dummy.scale.setScalar(.050+(i%5)*.006);dummy.updateMatrix();pearls.setMatrixAt(i,dummy.matrix);}g.add(pearls);
+   for(let i=0;i<8;i++){const a=i*2.39996,iceCube=b([Math.cos(a)*.39,1.39,Math.sin(a)*.39],[.14,.13,.14],ice);iceCube.rotation.set(i*.3,i*.8,i*.4);}
+   const strawMesh=c([.44,1.66,-.15],.065,.065,.45,straw,16);strawMesh.rotation.z=-.22;
+   const lid=add(g,new T.TorusGeometry(.56,.048,10,40),[0,1.55,0],[1,1,1],cup);lid.rotation.x=Math.PI/2;
+   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff3dc';ctx.fillRect(0,0,256,192);ctx.fillStyle='#583a25';ctx.textAlign='center';ctx.font='bold 47px sans-serif';ctx.fillText('珍珠奶茶',128,82);ctx.font='bold 24px sans-serif';ctx.fillText('BUBBLE TEA',128,135);const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;label.map=tex;record.extraTextures??=[];record.extraTextures.push(tex);b([0,1.05,.535],[.49,.34,.022],label);
   }else if(kind==='fried-chicken-disguise'){
-   const crust=mat('#c88536'),crumbs=[mat('#e5ad55'),mat('#b66b28'),mat('#efc26a')];
-   const shape=new T.Shape();shape.moveTo(-.24,.03);shape.bezierCurveTo(-.75,.45,-.65,1.02,-.43,1.47);shape.bezierCurveTo(-.31,2.08,.43,2.02,.53,1.55);shape.bezierCurveTo(.82,1.12,.52,.30,.20,.05);shape.closePath();
-   const geo=new T.ExtrudeGeometry(shape,{depth:.21,bevelEnabled:true,bevelSize:.075,bevelThickness:.065,bevelSegments:2,steps:1,curveSegments:12});geo.translate(0,0,-.105);add(g,geo,[0,0,0],[1,1,1],crust);
-   const crumbGeo=new T.DodecahedronGeometry(.045,0),dummy=new T.Object3D();
-   for(let k=0;k<3;k++){const inst=new T.InstancedMesh(crumbGeo,crumbs[k],52);for(let i=0;i<52;i++){const y=.22+((i*37+k*11)%150)/100,x=Math.sin(i*12.9898+k)*(.34+.12*Math.sin(y*1.8));dummy.position.set(x,y,(i%2?1:-1)*.19);dummy.rotation.set(i*.8,i*1.3,i*.9);dummy.scale.setScalar(.65+(i%5)*.17);dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);}g.add(inst);}
+   const crust=mat('#c57a29'),crumbs=['#e6a849','#a95b20','#f2c36e','#d98c2f'].map(v=>mat(v)),paper=mat('#f0dfbb'),red=mat('#a73727');
+   // A thick, irregular flattened cutlet, not a thin sign beside the avatar.
+   const shape=new T.Shape();shape.moveTo(-.28,.06);shape.bezierCurveTo(-.72,.32,-.74,.98,-.54,1.39);shape.bezierCurveTo(-.55,1.72,-.24,1.92,-.09,1.80);shape.bezierCurveTo(.28,2.02,.61,1.74,.55,1.48);shape.bezierCurveTo(.78,1.20,.66,.54,.35,.13);shape.closePath();
+   const geo=new T.ExtrudeGeometry(shape,{depth:.42,bevelEnabled:true,bevelSize:.11,bevelThickness:.10,bevelSegments:3,steps:1,curveSegments:18});geo.translate(0,0,-.21);add(g,geo,[0,0,0],[1,1,1],crust);
+   const crumbGeo=new T.DodecahedronGeometry(1,0),dummy=new T.Object3D();
+   for(let k=0;k<4;k++){const inst=new T.InstancedMesh(crumbGeo,crumbs[k],120);for(let i=0;i<120;i++){const y=.24+((i*37+k*11)%145)/100,x=Math.sin(i*12.9898+k)*(.37+.13*Math.sin(y*1.8)),r=.026+(i%7)*.008;dummy.position.set(x,y,(i%2?1:-1)*(.27+.018*Math.sin(i)));dummy.rotation.set(i*.8,i*1.3,i*.9);dummy.scale.set(r*1.2,r*.8,r);dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);}g.add(inst);}
+   const bag=b([0,.30,0],[1.04,.59,.66],paper);bag.rotation.z=-.025;
+   for(let i=0;i<5;i++){const fold=b([-.42+i*.21,.28,.337],[.016,.47,.013],wood);fold.rotation.z=(i%2?.08:-.06);}
+   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;const ctx=canvas.getContext('2d');ctx.fillStyle='#f0dfbb';ctx.fillRect(0,0,256,128);ctx.fillStyle='#b13022';ctx.font='bold 65px sans-serif';ctx.textAlign='center';ctx.fillText('雞排',128,70);ctx.font='bold 19px sans-serif';ctx.fillText('TAIWAN FRIED CHICKEN',128,105);const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;const print=mat('#ffffff');print.map=tex;record.extraTextures??=[];record.extraTextures.push(tex);b([0,.31,.349],[.83,.39,.01],print);
   }else if(kind==='wooden-horse-disguise'){
    const red=mat('#8b3d32'),gold=mat('#c2a36b'),saddle=mat('#344d73');
    // A tall carved wooden horse with a long body, four legs and rocker rails.
@@ -242,8 +262,13 @@ export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;m
   const factor=frame.height*item.disguiseHeight/Math.max(.001,extent.y);
   g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);
   g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*factor);
-  // Position new tall props beside the body, with a full clear head/hat silhouette.
-  if(item.exposedHead)g.position.addScaledVector(new T.Vector3(1,0,0).applyQuaternion(frame.rotation),-(frame.height*.40+extent.x*factor*.52));
+  // Center exposed-head costumes on the avatar's anatomical axis. Fit the
+  // top below the head bone; retain a generous shell width even for tall props.
+  if(item.exposedHead){
+   const neckSpan=Math.max(frame.unit*.6,frame.head.clone().sub(frame.base).dot(frame.up)-frame.unit*.25);
+   const fy=neckSpan/Math.max(.001,extent.y),side=Math.max(fy,frame.height*.58/Math.max(.15,Math.min(extent.x,extent.z)));
+   g.scale.set(side,fy,side);g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*fy);
+  }
   model.add(g);g.updateMatrixWorld(true);
   // Existing avatar and collision dimensions remain untouched by cosmetic props.
   return record;

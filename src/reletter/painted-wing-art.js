@@ -70,7 +70,7 @@ export function renderPaintedWing(canvas,item){
  // hidden template masquerading as a hand-drawn outline.
  const outline=item.outline?.length>=3?item.outline:(item.shape==='freehand'?null:presetWingOutline(item.shape));
  ctx.save();
- ctx.translate(w/2,h/2);ctx.scale(sx,sy);ctx.translate(-w/2,-h/2);
+ ctx.translate(w*(.5+(Number(item.offsetX)||0)),h*(.5+(Number(item.offsetY)||0)));ctx.scale(sx,sy);ctx.translate(-w/2,-h/2);
  if(!pathFor(ctx,outline,w,h,1,1)){ctx.restore();return canvas;}
  ctx.fillStyle=item.color||'#e3cbb5';ctx.fill();
  ctx.strokeStyle='#26242a';ctx.lineWidth=8;ctx.stroke();ctx.clip();

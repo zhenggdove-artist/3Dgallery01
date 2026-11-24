@@ -64,13 +64,14 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   ['water-tower-disguise','Giant Water Tower','#849698',4,4900,2,{hp:2.4,defense:.13,speed:-.04}],
   ['utility-pole-disguise','Towering Utility Pole','#999388',4,4900,3,{hp:1.8,defense:.09,jump:.12}],
   ['tin-pipe-disguise','Giant Flexible Tin Pipe','#aab6ba',3,2950,2,{defense:.12,hp:1.3}],
-  ['luroufan-sign-disguise','Taiwan Braised Pork Rice Sign','#d9a537',3,2950,2,{hp:1.5,defense:.10}],
+  ['luroufan-sign-disguise','Taiwan Braised Pork Rice Bowl','#d9a537',3,2950,2,{hp:1.5,defense:.10}],
   ['bubble-tea-disguise','Giant Bubble Milk Tea','#c99b68',3,2950,2,{hp:1.5,speed:.08}],
   ['fried-chicken-disguise','Giant Taiwanese Fried Chicken Cutlet','#bd792e',3,2950,2,{hp:1.2,attack:.10}]
  ];
  OUTFITS.push(...disguises.map(([creature,name,color,tier,templePrice,disguiseHeight,bonuses])=>({
   id:'outfit-'+creature,name,color,tier,price:templePrice,templePrice,slot:'outfit',family:'outfit',
   design:'disguise',creature,disguiseHeight,pattern:0,bonuses,r113Wearable:true,
-  ...(['tin-pipe-disguise','luroufan-sign-disguise','bubble-tea-disguise','fried-chicken-disguise'].includes(creature)?{shopRelease:117,exposedHead:true}:{}),
+  ...(['tin-pipe-disguise','luroufan-sign-disguise','bubble-tea-disguise','fried-chicken-disguise'].includes(creature)?{shopRelease:117}:{}),
+  ...(!['wooden-horse-disguise','utility-pole-disguise'].includes(creature)?{exposedHead:true}:{}),
   description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed'}[k]||k)).join(' · ')
  })));
