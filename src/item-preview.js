@@ -224,7 +224,7 @@ async function renderPreview(item){
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
  const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*(item.slot==='outfit'?1.9:2.2);
- camera.position.copy(center).add((item.family==='saber'||item.slot==='outfit'?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
+ camera.position.copy(center).add((item.family==='saber'||item.slot==='outfit'||['trump-mask','huang-mask','musk-mask'].includes(item.design)?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
  camera.lookAt(center);
  try{
   await renderer.compileAsync(scene,camera);
