@@ -82,8 +82,9 @@ export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weap
  // Exotic weapons must keep their stable canonical IDs: fusion records, held
  // 3D models and skill dispatch all refer to IDs like "telephone" directly.
  // The purchased quality belongs to the unique inventory instance, not its ID.
-// GM testing needs more physical instances than the ordinary BAG limit.
-export const inventoryCapacity=profile=>profile?.admin===true?3000:600;
+// All accounts share the same physical-instance capacity; never truncate saves.
+export const INVENTORY_CAPACITY=3000;
+export const inventoryCapacity=()=>INVENTORY_CAPACITY;
 export const SHOP_EXOTIC_TIERS=Object.freeze([1,2,3,4,5]);
 const EXOTIC_QUALITY=Object.freeze([
   {price:.48,power:.64,reach:.84,tempo:1.18},
