@@ -1091,3 +1091,26 @@ body.panel-open #panel.sky-color-floating{width:min(270px,calc(100vw - 16px))!im
 body.panel-open #panel.gallery-guide-floating{width:min(320px,calc(100vw - 16px))!important;height:auto!important;max-height:calc(100dvh - 16px)!important}
 #panel .gallery-guide-copy{font-size:13px;line-height:1.65;margin:5px 3px 8px;overflow-wrap:anywhere}
 #panel.gallery-guide-floating .build-resize,#panel.sky-color-floating .build-resize{display:none}
+
+/* V037: unread guide attention, a single CSS pulse with no game-loop work. */
+#gallery-guide.guide-unread{
+ background:#fff0a1;color:#8a5600;border-color:#f5c44f;
+ animation:gallery-guide-yellow-pulse 1.6s ease-in-out infinite;
+}
+#gallery-guide.guide-unread svg{fill:#ffe371;stroke:#835200}
+@keyframes gallery-guide-yellow-pulse{
+ 0%,100%{box-shadow:0 0 3px 1px #e8bd4b66;filter:brightness(.94)}
+ 50%{box-shadow:0 0 9px 3px #ffd940b0,0 0 16px 4px #ffcc4044;filter:brightness(1.18)}
+}
+@media(prefers-reduced-motion:reduce){
+ #gallery-guide.guide-unread{animation:none;box-shadow:0 0 8px 2px #ffd94099}
+}
+body.panel-open #panel.gallery-guide-floating{
+ width:min(360px,calc(100vw - 16px))!important;
+ max-height:calc(100dvh - 80px)!important;
+}
+#panel .gallery-guide-copy{
+ white-space:pre-line;font-size:clamp(12px,3.3vw,13px);
+ line-height:1.48;margin:4px 3px 5px;overflow-wrap:anywhere;
+}
+#panel.gallery-guide-floating #panel-content{padding-bottom:4px}
