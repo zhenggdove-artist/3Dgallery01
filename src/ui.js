@@ -652,7 +652,7 @@ export class TempleUI extends EventTarget{
      return itemCard({...selected,name:selected.name},selection+(editing?edit:actions));
     });
     this.content.innerHTML=`<div class="armory-balance"><span>Equipment · ${(profile.inventory?.length||0).toLocaleString('en-US')}/${inventoryCapacity(profile).toLocaleString('en-US')} BAG</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
-     <nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>
+     <div data-inventory-error role="alert" ${this.inventoryActionError?'':'hidden'} style="color:#9c2740;font-size:12px;overflow-wrap:anywhere">${escape(this.inventoryActionError||'')}</div><nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>
      <div class="shop-layout ${chosen?'has-selection':''}"><div class="shop-grid" role="group" aria-label="Shop items">${visible.map(g=>{
       const item=g.variants.find(v=>String(v.shopTier??v.id)===this.shopVariantChoice[g.key])||g.variants.find(v=>v.shopTier===3)||g.base;
       const label=shopOutfitCollection(item)||g.base.name;
