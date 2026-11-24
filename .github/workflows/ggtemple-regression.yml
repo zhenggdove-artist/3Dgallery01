@@ -27,7 +27,7 @@ jobs:
       - run: npm test
 
   electric-ocean-chat-gpu:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +37,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run start > /tmp/electric-ocean-static.log 2>&1 &
+      - name: Start static server and await readiness
+        run: |
+          npm run start > /tmp/electric-ocean-static.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/ >/dev/null && exit 0; sleep 1; done
+          cat /tmp/electric-ocean-static.log
+          exit 1
       - run: node tests/electric-ocean-chat-browser.mjs
       - if: always()
         uses: actions/upload-artifact@v4
