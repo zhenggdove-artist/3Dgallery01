@@ -10,17 +10,17 @@
   <title>Temple</title>
   <link rel="icon" href="data:,">
   <link rel="preload" href="./src/reletter/FONTS/Golden%20Girdle.otf" as="font" type="font/otf" crossorigin>
-  <link rel="stylesheet" href="./styles.css?v=20261125-v033-r118">
+  <link rel="stylesheet" href="./styles.css?v=20261125-v034-r118">
   <link rel="stylesheet" href="./src/reletter/fonts.css">
   <link rel="stylesheet" href="./reletter-theme.css">
-  <link rel="stylesheet" href="./gun.css?v=20261125-v033-r118">
+  <link rel="stylesheet" href="./gun.css?v=20261125-v034-r118">
   <link rel="stylesheet" href="./sketch-hud.css">
-  <link rel="stylesheet" href="./fidelity-ui.css?v=20261125-v033-r118">
-  <link rel="stylesheet" href="./wing-atelier.css?v=20261125-v033-r118">
-  <link rel="stylesheet" href="./wall-paint.css?v=20261125-v033-r118">
+  <link rel="stylesheet" href="./fidelity-ui.css?v=20261125-v034-r118">
+  <link rel="stylesheet" href="./wing-atelier.css?v=20261125-v034-r118">
+  <link rel="stylesheet" href="./wall-paint.css?v=20261125-v034-r118">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
-  <script src="./temple-config.js?v=20261125-v033-r118"></script>
+  <script src="./temple-config.js?v=20261125-v034-r118"></script>
   <script>
   // One release token for the entire first-party ES-module graph.
   // GitHub Pages and mobile Safari can otherwise mix cached modules from
@@ -29,7 +29,7 @@
     // Stable for one deployment: 15-second URL rotation previously defeated Safari cache
     // and forced every 4G reload to download the whole large module graph.
     // Bump this token when changing the boot graph or deployed JS modules.
-    const release = '20261125-v033-r118';
+    const release = '20261125-v034-r118';
     const imports = {
       "three": "./vendor/three/build/three.module.js",
       "three/addons/": "./vendor/three/examples/jsm/"
@@ -43,7 +43,7 @@
   // Import/link failures happen before main.js can enter its boot try/catch.
   (() => {
     let moduleFailure = "";
-    window.templeStartupDiagnostics = {release: "20261125-v033-r118", failures: []};
+    window.templeStartupDiagnostics = {release: "20261125-v034-r118", failures: []};
     function displayFailure(message) {
       if (!message || document.body?.classList.contains("ready")) return;
       // Do not replace the original module/import error with a later timeout.
@@ -128,7 +128,7 @@
       </form>
       </div>
     </section>
-    <span id="entry-version" aria-label="Game version V033" style="position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));font:12px/1 monospace;color:#fff;pointer-events:none;z-index:2">V033</span>
+    <span id="entry-version" aria-label="Game version V034" style="position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));font:12px/1 monospace;color:#fff;pointer-events:none;z-index:2">V034</span>
   </main>
 
   <section id="hud" hidden>
@@ -176,7 +176,7 @@
   <!-- Purchase status must be outside #hud: SHOP hides the gameplay HUD. -->
   <div id="purchase-notice" role="status" aria-live="polite" hidden></div>
   <div id="chat-speech-layer" aria-hidden="true"></div>
-  <aside id="panel" class="glass-card" hidden aria-live="polite"><header><div><small id="panel-kicker">GGTEMPLE</small><h2 id="panel-title">PANEL</h2></div><button id="panel-close" aria-label="Close">×</button></header><div id="panel-content"></div></aside>
+  <aside id="panel" class="glass-card" hidden aria-live="polite"><header><div data-gm-panel-drag><small id="panel-kicker">GGTEMPLE</small><h2 id="panel-title">PANEL</h2></div><button id="panel-close" aria-label="Close">×</button></header><div id="panel-content"></div></aside>
   <aside id="art-editor" hidden aria-label="GM artwork editor"></aside>
   <div id="art-handles" hidden></div>
   <div id="art-label-handles" hidden aria-label="名稱底色框八點控制器"></div>

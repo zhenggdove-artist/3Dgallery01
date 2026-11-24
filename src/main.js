@@ -198,7 +198,7 @@ const writer=new WriteCinematic({scene,controller:()=>controller,arena,ui,send:s
 const plantHover=bindPlantHover({canvas,camera,arena,controller:()=>controller,ui});
 ui.addEventListener('write-start',()=>writer.begin());
 const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>itemById(world?.profile?.equipment?.weapon),ui,attack:performAttack,canShoulderCharge:()=>hasBlackCatFusionUltimate()});
-const artEditor=new ArtworkEditor({scene,camera,canvas,arena,player:()=>localRoot,isGM:()=>!!self?.profile?.admin,ownerKey:()=>self?.key,send:sendAction,control:enabled=>{if(controller){controller.setEnabled(enabled&&!ui.panelName&&!wasDead);controller.cameraLocked=!!artEditor.mode&&artEditor.mode!=='follow';}},toast:text=>ui.toast(text)});
+const artEditor=new ArtworkEditor({scene,camera,canvas,arena,player:()=>localRoot,isGM:()=>!!self?.profile?.admin,ownerKey:()=>self?.key,focusArtwork:root=>{if(!controller)return;controller.artworkEditTarget=root;if(root){controller.target.copy(root.position);controller.yaw=root.rotation.y;controller.pitch=.05;controller.updateCamera(1,true);}},send:sendAction,control:enabled=>{if(controller){controller.setEnabled(enabled&&!ui.panelName&&!wasDead);controller.cameraLocked=!!artEditor.mode&&artEditor.mode!=='follow';}},toast:text=>ui.toast(text)});
 const platformDelete=new PlatformDeleteEditor({canvas,camera,arena,ui,editor:artEditor,isGM:()=>!!self?.profile?.admin,send:sendAction,controller:()=>controller,cancelBuild:cancelBuildPlacement});
 const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>controller,
  role:()=>self?.role,ui,send:(action,data)=>sendAction(action,data,{throwOnError:true}),
@@ -209,7 +209,7 @@ const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>contro
 // untouched. Pointer capture continues the orbit beyond the canvas edge.
 let editMiddleOrbit=null;
 const canEditMiddleOrbit=()=>!!controller&&(
- !!(buildPlacement||wallPainter.active||ui.panelName==='build')||
+ !!(buildPlacement||wallPainter.active||ui.panelName==='build'||artEditor.selected)||
  (!!self?.profile?.admin&&!!(platformDelete.active||artEditor.selected||
   ['gm','editor'].includes(ui.panelName))));
 canvas.addEventListener('pointerdown',e=>{
@@ -471,6 +471,7 @@ ui.addEventListener('gm-artwork-select',async event=>{
  if(!root)return ui.toast('作品模型尚未載入：'+id);
  artEditor.select(root);
 });
+ui.addEventListener('own-artwork-select',async event=>{if(self?.role!=='fighter'||!controller)return ui.toast('JOIN AS A FIGHTER TO EDIT');const id=event.detail.id;if(!(world?.customArtworks||[]).some(a=>a.id===id&&a.owner===self.key))return;if(artEditor.dirty)return ui.toast('請先儲存或取消目前作品修改');let root=arena.artworks.get(id);if(!root){try{await arena.loadCustomArtworks(world.customArtworks,network.base);}catch(error){return ui.toast(error.message);}root=arena.artworks.get(id);}if(!root)return ui.toast('作品尚未載入');ui.closePanel();artEditor.select(root);});
 ui.addEventListener('art-bomb-resize',event=>sendAction('resize-art-bomb',event.detail));
 
 ui.addEventListener('art-bomb-appearance-preview',event=>{
@@ -518,7 +519,7 @@ ui.addEventListener('art-bomb-appearance',async event=>{
 ui.addEventListener('art-bomb-upload',async event=>{
  if(self?.role!=='fighter')return ui.toast('JOIN AS A FIGHTER TO PLACE ARTWORK');
  if(artBombUploading)return;
- const {files,size,title,labelBackground}=event.detail;
+ const {files,size,title,author,labelBackground}=event.detail;
  if(!title?.trim())return ui.toast('請輸入作品名稱');
  if(!Number.isFinite(size)||size<1||size>3)return ui.toast('藝術品尺寸只能設定 1–3 倍');
  artBombUploading=true;
@@ -526,7 +527,7 @@ ui.addEventListener('art-bomb-upload',async event=>{
  if(button)button.disabled=true;
  try{
   ui.toast('上傳中：驗證檔案並確認 Cloudflare 已儲存…');
-  const upload={...await uploadArtwork(network,files,{maxBytes:8*1024*1024}),title:title.trim().slice(0,100),labelBackground};
+  const upload={...await uploadArtwork(network,files,{maxBytes:8*1024*1024}),title:title.trim().slice(0,100),author:String(author||'').slice(0,100),labelBackground};
   ui.closePanel();
   startBuildPlacement('art-bomb',null,{...upload,size,previewFile:files.find(f=>f.type.startsWith('image/'))||null});
   arena.setBuildPreview('art-bomb',controller.buildPosition(3.2),controller.root.rotation.y,true,size,files.find(f=>f.type.startsWith('image/'))||null);
@@ -535,7 +536,7 @@ ui.addEventListener('art-bomb-upload',async event=>{
  }catch(error){ui.toast(error.message);}
  finally{artBombUploading=false;if(button)button.disabled=false;}
 });
-ui.addEventListener('upload-artwork',async event=>{if(!self?.profile?.admin)return;const button=ui.content.querySelector('[data-upload-submit]');if(button)button.disabled=true;try{ui.toast('正在驗證藝術品…');const upload={...await uploadArtwork(network,event.detail.files,{maxBytes:32*1024*1024}),title:event.detail.title.trim().slice(0,100)},position=controller.buildPosition(4);position[1]+=2;const result=await sendAction('add-artwork',{artwork:{...upload,position,appearance:{labelBackground:event.detail.labelBackground||'#000000'}}});if(!result)throw Error('Artwork was not published. Retry after checking the connection.');await arena.loadCustomArtworks(world.customArtworks,network.base);ui.closePanel();artEditor.select(arena.artworks.get(result.artwork.id));ui.toast('藝術品已發布 · 可調整位置及表面');}catch(error){ui.toast(error.message);const status=ui.content.querySelector('[data-upload-status]');if(status)status.textContent=error.message;}finally{if(button)button.disabled=false;}});
+ui.addEventListener('upload-artwork',async event=>{if(!self?.profile?.admin)return;const button=ui.content.querySelector('[data-upload-submit]');if(button)button.disabled=true;try{ui.toast('正在驗證藝術品…');const upload={...await uploadArtwork(network,event.detail.files,{maxBytes:32*1024*1024}),title:event.detail.title.trim().slice(0,100),author:String(event.detail.author||'').slice(0,100)},position=controller.buildPosition(4);position[1]+=2;const result=await sendAction('add-artwork',{artwork:{...upload,position,appearance:{labelBackground:event.detail.labelBackground||'#000000'}}});if(!result)throw Error('Artwork was not published. Retry after checking the connection.');await arena.loadCustomArtworks(world.customArtworks,network.base);ui.closePanel();artEditor.select(arena.artworks.get(result.artwork.id));ui.toast('藝術品已發布 · 可調整位置及表面');}catch(error){ui.toast(error.message);const status=ui.content.querySelector('[data-upload-status]');if(status)status.textContent=error.message;}finally{if(button)button.disabled=false;}});
 ui.addEventListener('use-item',event=>{const item=itemById(event.detail);if(item&&controller)ui.toast('Use this material in BAG → FUSION');});
 ui.addEventListener('original-action',event=>sendAction(event.detail.action,event.detail));
 // Safari's AudioContext must be resumed during the trusted jump touch gesture.
@@ -920,7 +921,7 @@ async function sendAction(action,data={},options={}){const inventoryAction=['buy
 function startBuildPlacement(kind,surface=null,artwork=null){if(self?.role!=='fighter')return ui.toast('SPECTATORS CANNOT BUILD');buildPlacement={kind,surface,artwork,rotation:controller?.root.rotation.y||0,position:controller?.buildPosition(kind==='art-bomb'?3.2:5)||[0,0,0],valid:false};ui.buildKind=kind;document.getElementById('build-kind').textContent=kind==='art-bomb'?'YOUR ARTWORK':kind.toUpperCase();document.getElementById('build-mode').hidden=false;document.activeElement?.blur();if(!writer.active&&!artEditor.mode)controller?.setEnabled(true);ui.toast('MOVE WITH YOUR ARTWORK · R ROTATE · E / PLACE');}
 function rotateBuildPlacement(){if(!buildPlacement)return;buildPlacement.rotation+=Math.PI/4;}
 async function confirmBuildPlacement(){if(!buildPlacement||!controller)return;if(!buildPlacement.valid)return ui.toast('CANNOT BUILD HERE');const result=buildPlacement.kind==='art-bomb'
- ?await sendAction('publish-art-bomb',{artwork:{title:buildPlacement.artwork?.title,mediaId:buildPlacement.artwork?.mediaId,position:[buildPlacement.position[0],buildPlacement.position[1]+1.5*(buildPlacement.artwork?.size||1),buildPlacement.position[2]],appearance:{labelBackground:buildPlacement.artwork?.labelBackground||'#000000'}},size:buildPlacement.artwork?.size})
+ ?await sendAction('publish-art-bomb',{artwork:{title:buildPlacement.artwork?.title,author:buildPlacement.artwork?.author,mediaId:buildPlacement.artwork?.mediaId,position:[buildPlacement.position[0],buildPlacement.position[1]+1.5*(buildPlacement.artwork?.size||1),buildPlacement.position[2]],appearance:{labelBackground:buildPlacement.artwork?.labelBackground||'#000000'}},size:buildPlacement.artwork?.size})
  :await sendAction('build',{kind:buildPlacement.kind,surface:buildPlacement.surface,position:buildPlacement.position,rotation:buildPlacement.rotation});
  if(result)cancelBuildPlacement();}
 function cancelBuildPlacement(){buildPlacement=null;arena.clearBuildPreview();ui.clearBuildMode();}
@@ -1083,7 +1084,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V033',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V034',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

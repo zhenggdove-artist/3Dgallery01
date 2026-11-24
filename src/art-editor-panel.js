@@ -6,7 +6,8 @@ export const appearanceRows=[
  ['contrast','對比',0,3],['saturation','飽和度',0,3],
  ['blackPoint','黑點',0,.95]
 ];
-export function editorPanelMarkup(appearance,platformRadius,originalArtwork,title=''){
+export function editorPanelMarkup(appearance,platformRadius,originalArtwork,title='',author='',playerMode=false){
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const axes=['position','rotation','scale'].map(prop=>
   `<label class="art-editor-field"><span class="art-field-name">${axisLabels[prop]} XYZ</span><span class="art-editor-values art-xyz">
    ${[0,1,2].map(i=>`<input type="number" step="${prop==='rotation'?'1':'.05'}" data-axis="${prop}-${i}" aria-label="${axisLabels[prop]} ${'XYZ'[i]}">`).join('')}
@@ -19,7 +20,7 @@ export function editorPanelMarkup(appearance,platformRadius,originalArtwork,titl
  const radius=originalArtwork?`<label class="art-editor-field"><span class="art-field-name">展示圓盤半徑</span>
    <span class="art-editor-values"><input data-platform-radius type="number" min="1.5" max="14" step=".1" value="${Number(platformRadius||3).toFixed(2)}"></span></label>`:'';
  return `<header class="gm-floating-head">
-   <span class="gm-floating-grab" data-gm-panel-drag role="button" tabindex="-1" aria-label="拖曳移動 GM 藝術品配置視窗">GM · 配置</span>
+   <span class="gm-floating-grab" data-gm-panel-drag role="button" tabindex="-1" aria-label="拖曳移動 GM 藝術品配置視窗">${playerMode?'MY ARTWORK':'GM · 配置'}</span>
    <button type="button" data-gm-panel-toggle aria-expanded="true" aria-label="展開或收合編輯視窗">收合</button>
    <button type="button" data-action="save" class="gm-floating-quick-save" aria-label="儲存目前作品配置">儲存</button>
    <button type="button" data-action="cancel" class="gm-floating-close" aria-label="取消並關閉藝術品配置">×</button>
@@ -27,9 +28,9 @@ export function editorPanelMarkup(appearance,platformRadius,originalArtwork,titl
   <div class="gm-floating-body">
   <p data-art-name></p>
   <p class="art-editor-help">Shift+T 縮放／Shift+R 旋轉／Shift+G 移動；Esc 取消</p>
-  <div class="art-editor-toolbar"><button data-action="scale">尺寸</button><button data-action="rotate">旋轉</button><button data-action="translate">位置</button><button data-action="label-resize">編輯名稱底色框</button><button data-action="label-center">名稱條回到水平置中</button></div>
+  <div class="art-editor-toolbar"><button data-action="scale">尺寸</button><button data-action="rotate">旋轉</button><button data-action="translate">位置</button><button data-action="move">長按移動</button><button data-action="label-resize">編輯名稱底色框</button><button data-action="label-center">名稱條回到水平置中</button></div>
   <p class="art-editor-help">點擊「編輯名稱底色框」，即可用八個控制點變形；手機長按名稱條約 0.6 秒後拖曳，可自由調整上下左右的位置。名稱條偏移不會移動作品本身。</p>
-  <div class="art-editor-fields">${`<label class="art-editor-field"><span class="art-field-name">作品名稱</span><span class="art-editor-values"><input type="text" data-art-title maxlength="120" value="${String(title).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}" aria-label="作品名稱"></span></label>`}${axes}${radius}
+  <div class="art-editor-fields">${`<label class="art-editor-field"><span class="art-field-name">作品名稱</span><span class="art-editor-values"><input type="text" data-art-title maxlength="120" value="${String(title).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}" aria-label="作品名稱"></span></label>`}<label class="art-editor-field"><span class="art-field-name">作者姓名</span><span class="art-editor-values"><input type="text" data-art-author maxlength="100" value="${esc(author)}" aria-label="作者姓名"></span></label>${playerMode?'':axes+radius}
    <h4>表面屬性</h4>${numbers}
    <label class="art-editor-field"><span class="art-field-name">色彩</span><span class="art-editor-values"><input data-appearance="tint" type="color" value="${appearance.tint}"></span></label>
    ${`<label class="art-editor-field"><span class="art-field-name">作品名稱底色</span><span class="art-editor-values"><input type="color" data-appearance="labelBackground" value="${appearance.labelBackground||'#000000'}" aria-label="作品名稱底色"></span></label>`}

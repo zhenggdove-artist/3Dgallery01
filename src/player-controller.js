@@ -311,8 +311,8 @@ export class PlayerController{
       this.target.copy(this.root.position);
       return;
     }
-    const focus=this.followTarget?.visible?this.followTarget.position:this.root.position;
-   this.target.lerp(new THREE.Vector3(focus.x,focus.y+1.5,focus.z),Math.min(1,dt*4));
+    const focus=this.artworkEditTarget?.position|| (this.followTarget?.visible?this.followTarget.position:this.root.position);
+   this.target.lerp(new THREE.Vector3(focus.x,focus.y+(this.artworkEditTarget?0:1.5),focus.z),Math.min(1,dt*4));
    // Pull back the third-person view for the lightning/prism pair only.
    // Separate the player silhouette from the original vendor's long beam.
    const id=this.root.userData.weaponId||'';

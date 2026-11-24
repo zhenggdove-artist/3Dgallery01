@@ -32,7 +32,7 @@ export function publishArtBomb(world,profile,actor,body,now=Date.now()){
  if(world.customArtworks.filter(a=>a.bomb&&a.owner===actor.key).length>=MAX_ART_BOMBS_PER_PLAYER)return {error:'Each player may place up to four art bombs'};
  const appearance=validateAppearance(record.appearance||{},media);if(!appearance)return {error:'Invalid artwork appearance'};
  const id='bomb-'+crypto.randomUUID(),entry={
-  id,title:String(record.title||'Untitled').slice(0,100),mediaId:media.id,
+  id,title:String(record.title||'Untitled').slice(0,100),author:String(record.author||'').trim().slice(0,100),mediaId:media.id,
   type:media.type.startsWith('image/')?'image':media.type.startsWith('video/')?'video':'model',
   mime:media.type,position:[...p],createdAt:now,owner:actor.key,version:1,bomb:true
  };

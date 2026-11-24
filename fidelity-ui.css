@@ -1033,3 +1033,27 @@ body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;f
 #hud #chat-hud.chat-dragging #chat-toggle{cursor:grabbing}
 
 #entry [data-google-login][hidden],#entry #guest-form[hidden]{display:none!important}
+
+/* V034: the existing floating-panel controller is shared by BUILD and the
+   artwork editor. Only the player controls are filtered, not the editor. */
+body.panel-open #panel.build-floating{
+ position:fixed!important;inset:auto!important;left:var(--gm-editor-x,8px)!important;top:var(--gm-editor-y,60px)!important;
+ width:var(--gm-editor-width,244px)!important;height:var(--gm-editor-height,246px)!important;
+ max-width:none!important;max-height:none!important;min-width:0;min-height:0;box-sizing:border-box;
+ display:flex;flex-direction:column;padding:7px!important;gap:4px;overflow:hidden;
+}
+#panel.build-floating[hidden]{display:none!important}
+#panel.build-floating header [data-gm-panel-drag]{flex:1;cursor:grab;touch-action:none;user-select:none}
+#panel.build-floating #panel-title{font-size:16px!important;margin:0}
+#panel.build-floating #panel-kicker{display:none}
+#panel.build-floating #panel-content{flex:1;min-height:0;overflow:auto;padding-bottom:23px}
+#panel.build-floating .build-resize{position:absolute;bottom:0;right:0;width:25px;height:25px;touch-action:none;cursor:nwse-resize;z-index:2}
+#panel.build-floating .build-art-list{display:grid;gap:3px}
+#panel.build-floating .build-art-row{display:flex;width:100%;align-items:center;justify-content:space-between;text-align:left;padding:5px;gap:6px;font-size:11px}
+#panel.build-floating .build-art-row span:first-child{min-width:0;overflow-wrap:anywhere}
+#panel.build-floating .build-art-row small{display:block;font-size:10px}
+#panel.build-floating h3,#panel.build-floating summary{font-size:12px!important;margin:4px 0;cursor:pointer}
+#panel.build-floating details{margin:5px 0;border-top:1px solid #c5b6d2;padding:3px}
+#art-editor.player-art-editor [data-axis],#art-editor.player-art-editor label:has([data-appearance="labelWidth"]),#art-editor.player-art-editor label:has([data-appearance="labelHeight"]),#art-editor.player-art-editor [data-action="follow"],#art-editor.player-art-editor [data-action="export"]{display:none!important}
+#art-handles .art-drag-target{position:absolute;pointer-events:auto;touch-action:none;cursor:grab;user-select:none;-webkit-touch-callout:none;z-index:0;background:rgba(54,150,246,.035)}
+#art-handles .art-handle{z-index:2}

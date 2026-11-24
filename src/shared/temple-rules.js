@@ -658,7 +658,7 @@ export function applyAction(world,actor,body,context={}){
     return {notice:'圓盤已刪除 · 所有玩家同步',platformId:key};
   }
   if(body.action==='add-artwork')return addArtwork(world,profile,actor,body,now);
-  if(body.action==='set-artwork-layout')return setArtworkLayout(world,profile,body,now);
+  if(body.action==='set-artwork-layout')return setArtworkLayout(world,profile,body,now,actor);
   if(body.action==='apply-my-artwork-label-style')return applyMyArtworkLabelStyle(world,actor,body,now);
   // Inventory bookkeeping does not involve combat or world-space actions.
   // Allow purchasing, inspecting and equipping while a room is full and the
@@ -938,15 +938,21 @@ export function applyMyArtworkLabelStyle(world,actor,body,now=Date.now()){
   revisions:Object.fromEntries(updates.map(({record,layout})=>[record.id,layout.revision]))};
 }
 
-export function setArtworkLayout(world,profile,body,now=Date.now()){
-  if(!profile.admin)return {error:'GM only'};
+export function setArtworkLayout(world,profile,body,now=Date.now(),actor=null){
+  const ownerRecord=(world.customArtworks||[]).find(a=>a.id===body.platformId);
+  const gm=!!profile.admin;
+  if(!gm){
+   if(!actor||!ownerRecord||ownerRecord.owner!==actor.key)return {error:'GM only or artwork owner'};
+   const denied=requireFighter(actor)||requireAlive(profile,now);if(denied)return denied;
+   if(body.layout?.platformRadius!==undefined)return {error:'GM only'};
+  }
   const platform=artworkDefinitions(world).find(p=>p.id===body.platformId);if(!platform)return {error:'Unknown artwork'};
   const art=world.artworks[platform.id]??=( {availableAt:0,holder:null,throwEvent:null} );
-  const isLockedExhibit=(world.customArtworks||[]).some(a=>a.id===platform.id&&isArtwork22(a));
+  const isLockedExhibit=gm&&(world.customArtworks||[]).some(a=>a.id===platform.id&&isArtwork22(a));
   // Preserve ordinary players' held or airborne artworks; only the reported
   // stuck exhibit can be force-released by a GM layout save.
   if((art.holder||art.availableAt>now)&&!isLockedExhibit)return {error:'Wait until the artwork returns'};
-  const current=world.artworkLayout?.[platform.id];if(body.expectedRevision!==(current?.revision||0)&&!isLockedExhibit)return {error:'Layout changed by another GM. Reload and retry.'};
+  const current=world.artworkLayout?.[platform.id];if(body.expectedRevision!==(current?.revision||0)&&!isLockedExhibit)return {error:'Layout changed by another editor. Reload and retry.'};
   const layout=body.layout,vec=value=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);
   if(!layout||!vec(layout.position)||!vec(layout.rotation)||!vec(layout.scale))return {error:'Invalid transform'};
   if(Math.hypot(layout.position[0],layout.position[2])>ARENA_RADIUS+5||layout.position[1]<-2||layout.position[1]>60||layout.scale.some(v=>v<.05||v>20)||layout.rotation.some(v=>Math.abs(v)>Math.PI*8))return {error:'Transform exceeds bounds'};
@@ -960,6 +966,8 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
    (current?.title??uploadedRecord?.title):String(layout.title).trim();
   if(proposedTitle!==undefined&&(!proposedTitle||proposedTitle.length>120))
    return {error:'Artwork name must be 1–120 characters'};
+  const proposedAuthor=layout.author===undefined?(current?.author??uploadedRecord?.author??''):String(layout.author).trim();
+  if(proposedAuthor.length>100)return {error:'Artist name must be at most 100 characters'};
   const proposedRadius=layout.platformRadius??current?.platformRadius;
   if(proposedRadius!==undefined&&proposedRadius!==null&&(!original||!Number.isFinite(proposedRadius)||proposedRadius<1.5||proposedRadius>14))
    return {error:'Platform radius must be 1.5–14, available for original artworks only'};
@@ -978,8 +986,8 @@ export function setArtworkLayout(world,profile,body,now=Date.now()){
   }
   world.artworkLayout[platform.id]={position:[...layout.position],rotation:[...layout.rotation],scale:[...layout.scale],
    ...(original&&proposedRadius!=null?{platformRadius:proposedRadius}:{}),
-   appearance,...(proposedTitle!==undefined?{title:proposedTitle}:{}),revision:(current?.revision||0)+1,updatedAt:now};
-  if(uploadedRecord)uploadedRecord.title=proposedTitle;
+   appearance,...(proposedTitle!==undefined?{title:proposedTitle}:{}),author:proposedAuthor,revision:(current?.revision||0)+1,updatedAt:now};
+  if(uploadedRecord){uploadedRecord.title=proposedTitle;uploadedRecord.author=proposedAuthor;}
   world.revision++;
   return {notice:'ARTWORK DEFAULT SAVED · ALL PLAYERS',artworkLayout:clone(world.artworkLayout[platform.id])};
 }

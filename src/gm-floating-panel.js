@@ -26,12 +26,12 @@ export function clampFloatingPanelLayout(layout,view,collapsed=false){
 }
 
 export class FloatingGmEditorPanel{
- constructor(panel,{host=window,store=window.localStorage}={}){
-  this.panel=panel;this.host=host;this.store=store;
+ constructor(panel,{host=window,store=window.localStorage,storageKey=STORAGE_KEY,force=false}={}){
+  this.panel=panel;this.host=host;this.store=store;this.storageKey=storageKey;this.force=force;
   this.mobile=false;this.pointer=null;
   this.layout=null;this.collapsed=false;
   try{
-   const saved=JSON.parse(store?.getItem(STORAGE_KEY)||'null');
+   const saved=JSON.parse(store?.getItem(this.storageKey)||'null');
    if(saved&&typeof saved==='object'){
     this.layout={x:saved.x,y:saved.y,width:saved.width,height:saved.height};
     this.collapsed=!!saved.collapsed;
@@ -69,7 +69,7 @@ export class FloatingGmEditorPanel{
    this.host.innerWidth<=720;
  }
  open(){
-  this.mobile=!!this.isMobile();
+  this.mobile=this.force||!!this.isMobile();
   this.panel.classList.toggle('gm-mobile-floating',this.mobile);
   if(!this.mobile)return;
   this.layout??=defaultFloatingPanelLayout(this.viewport());
@@ -107,7 +107,7 @@ export class FloatingGmEditorPanel{
  }
  persist(){
   if(!this.mobile||!this.layout)return;
-  try{this.store?.setItem(STORAGE_KEY,JSON.stringify({...this.layout,collapsed:this.collapsed}));}catch{}
+  try{this.store?.setItem(this.storageKey,JSON.stringify({...this.layout,collapsed:this.collapsed}));}catch{}
  }
  start(e){
   if(!this.mobile||e.button!==0||this.pointer)return;

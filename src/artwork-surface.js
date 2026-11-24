@@ -73,7 +73,7 @@ export async function loadCustomArtwork(arena,record,base){const root=new THREE.
  * The parent remains an actual Sprite to preserve artwork picking behavior.
  */
 export function addArtworkTitlePlate(root,title,background='#000000',options={}){
- const value=String(title||'').trim().slice(0,120);
+ const value=String(title||'').trim().slice(0,120),author=String(root.userData.editAuthorDraft??root.userData.authorOverride??root.userData.record?.author??'').trim().slice(0,100);
  const style={...LABEL_STYLE_DEFAULTS,...options,labelBackground:background||options?.labelBackground||'#000000'};
  const color=/^#[0-9a-f]{6}$/i.test(style.labelColor)?style.labelColor:'#ffffff';
  const backdrop=/^#[0-9a-f]{6}$/i.test(style.labelBackground)?style.labelBackground:'#000000';
@@ -82,7 +82,7 @@ export function addArtworkTitlePlate(root,title,background='#000000',options={})
  const height=Math.max(.18,Math.min(4,Number(style.labelHeight)||.492));
  const offsetX=Number.isFinite(style.labelOffsetX)?style.labelOffsetX:0;
  const offsetY=Number.isFinite(style.labelOffsetY)?style.labelOffsetY:0;
- const signature=JSON.stringify([value,backdrop,color,fontSize,width,height,offsetX,offsetY]);
+ const signature=JSON.stringify([value,backdrop,color,fontSize,width,height,offsetX,offsetY,author]);
  if(root.userData.titlePlateSignature===signature)return root.userData.titlePlate||null;
  const prior=root.userData.titlePlate;
  if(prior){
@@ -119,8 +119,10 @@ export function addArtworkTitlePlate(root,title,background='#000000',options={})
   textCtx.textAlign='center';textCtx.textBaseline='middle';
   textCtx.font='bold 44px system-ui, sans-serif';textCtx.fillStyle=color;
   const lineHeight=58;
+  const center=author?137:160;
   for(let i=0;i<rows.length;i++)
-   textCtx.fillText(rows[i],512,160+(i-(rows.length-1)/2)*lineHeight,940);
+   textCtx.fillText(rows[i],512,center+(i-(rows.length-1)/2)*lineHeight,940);
+  if(author){textCtx.font='32px system-ui, sans-serif';textCtx.fillText(author,512,Math.min(298,center+(rows.length-1)*lineHeight/2+55),940);}
  }
  const textTexture=new THREE.CanvasTexture(textCanvas);
  textTexture.colorSpace=THREE.SRGBColorSpace;

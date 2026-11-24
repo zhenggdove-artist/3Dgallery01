@@ -50,7 +50,7 @@ export function addArtwork(world,profile,actor,body,now){
  if((world.customArtworks?.length||0)>=64)return {error:'Artwork limit reached (64 uploads)'};
  const p=record.position;if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)||Math.hypot(p[0],p[2])>ARENA_RADIUS||p[1]<0||p[1]>50)return {error:'Invalid artwork position'};
  const appearance=validateAppearance(record.appearance,media);if(!appearance)return {error:'Invalid artwork appearance'};
- const id='art-'+crypto.randomUUID(),entry={id,title:String(record.title||'Untitled').slice(0,120),mediaId:media.id,type:media.type.startsWith('image/')?'image':media.type.startsWith('video/')?'video':'model',mime:media.type,position:[...p],createdAt:now,owner:actor.key,version:1};
+ const id='art-'+crypto.randomUUID(),entry={id,title:String(record.title||'Untitled').slice(0,120),author:String(record.author||'').trim().slice(0,100),mediaId:media.id,type:media.type.startsWith('image/')?'image':media.type.startsWith('video/')?'video':'model',mime:media.type,position:[...p],createdAt:now,owner:actor.key,version:1};
  world.customArtworks??=[];world.customArtworks.push(entry);world.artworks[id]={availableAt:0,holder:null,throwEvent:null};world.artworkLayout[id]={position:[...p],rotation:[0,0,0],scale:[1,1,1],appearance,revision:1,updatedAt:now};world.revision++;
  return {notice:'Artwork published',artwork:entry};
 }
