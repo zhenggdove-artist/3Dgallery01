@@ -31,47 +31,72 @@ if(d==='hydra-dragon'){
  ]:[
  [-.61,.02,.53],[-.51,.29,.63],[-.33,.45,.65],[-.12,.46,.64],[.09,.49,.62],[.30,.47,.57],[.52,.44,.49],[.69,.30,.43],[.76,.02,.40]
  ];
- const positions=[],indices=[],steps=40;
- for(let j=0;j<rows.length;j++){
-  const [y,w,z]=rows[j];
+ // Interpolate the independent facial landmark profiles for a smooth mask.
+ const sample=(t)=>{const i=Math.min(rows.length-2,Math.floor(t)),f=t-i,a=rows[Math.max(0,i-1)],b=rows[i],c=rows[i+1],d=rows[Math.min(rows.length-1,i+2)];return b.map((v,k)=>.5*((2*v)+(-a[k]+c[k])*f+(2*a[k]-5*v+4*c[k]-d[k])*f*f+(-a[k]+3*v-3*c[k]+d[k])*f*f*f));};
+ const positions=[],indices=[],colors=[],steps=80,vertical=(rows.length-1)*7;
+ const baseTone=new T.Color(trump?'#dfa078':huang?'#c9a28b':'#dfb5a5');
+ const warmTone=new T.Color(trump?'#cb8560':huang?'#b88d78':'#c99a90'),eyeTone=new T.Color(trump?'#e6c7b1':huang?'#ae877a':'#c2a199');
+ for(let j=0;j<=vertical;j++){
+  const [y,rawW,z]=sample(j/vertical*(rows.length-1)),w=Math.max(.014,rawW);
   for(let k=0;k<=steps;k++){
    const angle=-Math.PI/2+Math.PI*k/steps,x=w*Math.sin(angle);
    const eyeSocket=.045*Math.exp(-Math.pow((Math.abs(x)-.20)/.13,2)-Math.pow((y-.25)/.12,2));
    const cheek=(trump?.055:huang?.045:.025)*Math.exp(-Math.pow((Math.abs(x)-.32)/.16,2)-Math.pow((y-.03)/.18,2));
-   positions.push(x,y,.22+(z-.22)*Math.cos(angle)+cheek-eyeSocket);
+   const g=(cx,cy,sx,sy)=>Math.exp(-(((x-cx)/sx)**2+((y-cy)/sy)**2));
+   const noseBridge=(trump?.075:huang?.10:.115)*g(0,.11,.095,.24);
+   const noseTip=(trump?.105:huang?.065:.09)*g(0,-.035,.12,.095);
+   const muzzle=(trump?.035:huang?.02:.055)*g(0,-.19,.23,.12);
+   const chin=(trump?.06:huang?.035:.07)*g(0,-.43,.25,.13);
+   positions.push(x,y,.22+(z-.22)*Math.cos(angle)+cheek-eyeSocket+noseBridge+noseTip+muzzle+chin);
+   const tone=baseTone.clone().lerp(warmTone,Math.min(.65,.5*g(Math.sign(x)*.33,-.04,.17,.21)+.22*g(0,-.04,.14,.13))).lerp(eyeTone,.52*g(Math.sign(x)*.20,.24,.18,.105));
+   const grain=.006*Math.sin(x*520+y*113)*Math.cos(y*421-x*73);tone.multiplyScalar(1+grain);
+   colors.push(tone.r,tone.g,tone.b);
    if(j&&k){const i=j*(steps+1)+k;indices.push(i-steps-2,i-steps-1,i,i-steps-2,i,i-1);}
   }
  }
- const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));geo.setIndex(indices);geo.computeVertexNormals();
- skin.side=T.DoubleSide;mesh(geo,[0,0,0],[1,1,1],skin);
- const eyeY=huang?.25:trump?.25:.29,eyeZ=.61,eyeW=huang?.115:trump?.12:.13,eyeH=huang?.034:trump?.043:.052;
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.setIndex(indices);geo.computeVertexNormals();
+ const faceMat=new T.MeshStandardMaterial({color:0xffffff,vertexColors:true,roughness:.83,metalness:0,side:T.DoubleSide});mats.push(faceMat);mesh(geo,[0,0,0],[1,1,1],faceMat);
+ const eyeY=huang?.25:trump?.25:.29,eyeZ=huang?.59:trump?.59:.60,eyeW=huang?.115:trump?.115:.122,eyeH=huang?.029:trump?.032:.047;
  for(const side of [-1,1]){
   const x=side*(huang?.205:.20);
   ball([side*(trump?.52:huang?.46:.49),.10,.29],[.08,.15,.10],skin);
-  ball([x,eyeY,eyeZ],[eyeW,eyeH,.033],white);
+  ball([x,eyeY,eyeZ],[eyeW,eyeH,.026],white);
   ball([x,eyeY,eyeZ+.028],[.037,.036,.015],iris);
   ball([x,eyeY,eyeZ+.042],[.018,.019,.009],dark);
   tube([[x-eyeW,eyeY,eyeZ],[x,eyeY+eyeH,eyeZ+.024],[x+eyeW,eyeY,eyeZ]],.014,shading);
-  const brow=ball([x,eyeY+.105,.59],[eyeW+.02,trump?.027:.018,.035],hair);
+  const brow=ball([x,eyeY+.105,.59],[eyeW+.02,trump?.022:huang?.014:.028,.021],hair);
   brow.rotation.z=side*(huang?.10:trump?-.07:.16);
   tube([[side*.09,.04,.69],[side*.20,-.08,.65],[side*.25,-.20,.59]],.012,shading);
-  if(trump||huang)tube([[x-.10,eyeY-.075,.60],[x,eyeY-.09,.61],[x+.10,eyeY-.065,.60]],.009,shading);
+  if(trump||huang){
+   tube([[x-.10,eyeY-.075,.60],[x,eyeY-.09,.61],[x+.10,eyeY-.065,.60]],.009,shading);
+   for(let k=0;k<3;k++)tube([[side*.30,eyeY-.035-k*.024,.57],[side*.36,eyeY-.035-k*.035,.53],[side*.40,eyeY-.07-k*.025,.48]],.0045,shading);
+  }
+  for(let k=0;k<9;k++){const dx=(k-4)*.022;const y=eyeY+.105+Math.sin(k/8*Math.PI)*.014;tube([[x+dx,y-.012,.607],[x+dx+side*.013,y+.009,.615]],.0035,hair);}
+  const upper=eyeH*(huang?.76:.95);tube([[x-eyeW,eyeY,eyeZ],[x-eyeW*.45,eyeY+upper,eyeZ+.023],[x+eyeW*.42,eyeY+upper,eyeZ+.023],[x+eyeW,eyeY,eyeZ]],.007,shading);
  }
- const nose=ball([0,huang?.10:.08,.66],[huang?.075:trump?.095:.09,huang?.18:trump?.17:.20,huang?.11:.14],skin);
+ const nose=ball([0,huang?.10:.08,.64],[huang?.065:trump?.080:.077,huang?.17:trump?.14:.19,huang?.09:.12],skin);
  if(!trump&&!huang)nose.rotation.z=-.055;
- ball([0,-.035,.76],[trump?.125:huang?.09:.105,.067,.083],skin);
+ ball([0,-.035,.745],[trump?.105:huang?.075:.086,.055,.075],skin);
  for(const side of [-1,1])ball([side*.075,-.06,.745],[.035,.016,.021],shading);
- const mouthY=trump?-.23:huang?-.17:-.19,mouthW=trump?.15:huang?.17:.20;
+ const mouthY=trump?-.23:huang?-.17:-.19,mouthW=trump?.135:huang?.185:.205;
  tube([[-mouthW,mouthY,.64],[0,mouthY+(trump?-.022:.015),.73],[mouthW,mouthY,.64]],.023,lip);
  tube([[-mouthW*.93,mouthY-.008,.65],[0,mouthY+(trump?-.027:.01),.747],[mouthW*.93,mouthY-.008,.65]],.009,dark);
+ // Distinct age and expression details: Trump pursed lips and heavy jowls,
+ // Huang smiling cheek folds and angular temples, Musk fuller lower lip.
+ const wrinkle=mat(trump?'#bb876a':huang?'#ac8570':'#bc9287',0);
+ if(trump||huang){
+  for(let k=0;k<(trump?3:2);k++){const yy=.44+k*.046;tube([[-.27,yy,.51],[-.12,yy+.015,.57],[.12,yy+.015,.57],[.27,yy,.51]],.0045,wrinkle);}
+  for(const side of [-1,1])tube([[side*.22,-.12,.65],[side*.28,-.25,.60],[side*.25,-.36,.58]],.008,wrinkle);
+ }
+ if(!trump&&!huang){ball([0,mouthY-.042,.70],[.11,.024,.034],lip);for(const side of [-1,1])tube([[side*.17,mouthY,.65],[side*.23,mouthY+.016,.61]],.006,wrinkle);}
  if(trump){
   const sweep=ball([-.06,.68,.39],[.55,.21,.27],hair);sweep.rotation.z=.25;
-  for(let i=0;i<12;i++)tube([[-.46,.54+i*.023,.45],[-.14,.78+i*.008,.65],[.40,.65+i*.007,.53]],.026,hair);
+  const highlight=mat('#f2d898',0),lowlight=mat('#bc9858',0);for(let i=0;i<25;i++)tube([[-.46,.49+i*.013,.45],[-.14,.77+i*.004,.65],[.40,.63+i*.004,.53]],.014,i%5===0?lowlight:i%3===0?highlight:hair);
   for(const side of [-1,1])ball([side*.44,.43,.27],[.10,.20,.19],hair);
  }else if(huang){
   ball([0,.66,.34],[.45,.16,.23],hair);
   for(const side of [-1,1]){
-   for(let i=0;i<7;i++)tube([[side*.43,.35+i*.035,.29],[side*.33,.57+i*.018,.43],[side*.10,.73,.42]],.019,hair);
+   const silver=mat('#dedbd5',0);for(let i=0;i<15;i++)tube([[side*.43,.33+i*.018,.29],[side*.33,.54+i*.012,.43],[side*.10,.73,.42]],.011,i%3===0?silver:hair);
    const frame=new T.Shape();frame.moveTo(-.15,-.075);frame.quadraticCurveTo(-.16,.09,-.10,.09);frame.lineTo(.10,.09);frame.quadraticCurveTo(.16,.09,.15,-.075);frame.quadraticCurveTo(0,-.115,-.15,-.075);
    const pts=frame.getPoints(18).map(v=>[side*.205+v.x,eyeY+v.y,.69]);pts.push(pts[0]);tube(pts,.018,dark);
    box([side*.40,eyeY,.46],[.028,.027,.42],dark);
@@ -79,7 +104,7 @@ if(d==='hydra-dragon'){
   box([0,eyeY+.025,.69],[.11,.022,.027],dark);
  }else{
   ball([0,.66,.32],[.45,.20,.25],hair);
-  for(let i=0;i<9;i++)tube([[-.39+i*.085,.51,.45],[-.24+i*.085,.78,.55],[.06+i*.065,.67,.44]],.027,hair);
+  const lighter=mat('#826657',0);for(let i=0;i<19;i++)tube([[-.39+i*.040,.51,.45],[-.24+i*.040,.78,.55],[.06+i*.031,.67,.44]],.015,i%4===0?lighter:hair);
   for(const side of [-1,1])ball([side*.43,.48,.27],[.08,.16,.17],hair);
  }
  // Thin rear straps make the piece visibly a wearable mask, not a second head.
