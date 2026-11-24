@@ -69,14 +69,15 @@ export const SOUND_PROFILES=Object.freeze({
 });
 export class GameAudio{
  constructor(){
-  this.voices=0;this.played={};this.volumes={};this.muted=false;this.trackSources=['./sound/backgroundmusic.MP3'];this.musicIndex=0; // Sound is ON by default.
+  this.voices=0;this.played={};this.volumes={};this.muted=false;this.trackSources=[];this.musicIndex=0; // Sound is ON by default.
   // A HEAD probe ensures an absent user MP3 never interrupts browser playback.
   // The file becomes the primary soundtrack automatically once present on Pages.
   const preferred='./sound/GGTEMPLEMUSIC.mp3';
   this.musicProbe=fetch(preferred,{method:'HEAD',cache:'no-store'})
    .then(response=>{
     if(!response.ok||this.uploadedMusicUrl)return false;
-    this.trackSources=[preferred,'./sound/backgroundmusic.MP3'];this.musicIndex=0;
+    this.trackSources=[preferred];this.musicIndex=0;
+    if(this.musicRequested&&!this.music)this.startMusic();
     if(this.music&&this.music.src!==new URL(preferred,location.href).href){
      this.music.pause();this.music.src=preferred;this.music.load();
      this.music.volume=this.musicVolume();this.music.play().catch(()=>{});
@@ -183,7 +184,7 @@ export class GameAudio{
   const url=String(backendUrl).replace(/\/$/,'')+'/api/gm/music?v='+encodeURIComponent(version);
   if(url===this.uploadedMusicUrl)return;
   this.uploadedMusicUrl=url;
-  this.trackSources=[url,'./sound/GGTEMPLEMUSIC.mp3','./sound/backgroundmusic.MP3'];
+  this.trackSources=[url];
   this.musicIndex=0;
   if(this.music){
    this.music.pause();this.music.src=url;this.music.load();
@@ -192,9 +193,10 @@ export class GameAudio{
   }
  }
  startMusic(){
-  this.unlock(false);if(!this.music){
+  this.unlock(false);this.musicRequested=true;if(!this.trackSources.length)return;
+  if(!this.music){
    this.music=new Audio();this.music.loop=true;this.music.preload='auto';
-   this.music.addEventListener('error',()=>{if(++this.musicIndex<this.trackSources.length){this.music.src=this.trackSources[this.musicIndex];this.music.play().catch(()=>{});}});
+   this.music.addEventListener('error',()=>{if(++this.musicIndex<this.trackSources.length){this.music.src=this.trackSources[this.musicIndex];this.music.play().catch(()=>{});}else this.music.pause();});
    this.music.src=this.trackSources[0];
   }
   this.music.volume=this.musicVolume();this.music.play().catch(()=>{});

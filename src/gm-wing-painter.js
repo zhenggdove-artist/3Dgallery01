@@ -42,7 +42,7 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   outline:[],strokes:[],scaleX:1,scaleY:1,
   impulse:11,gravity:.53,flapMs:300
  };
- ui[draftKey]=design;let tool=design.outline?.length>=3?'brush':'outline',material='ink',pen='#1b1b22',
+ ui[draftKey]=design;let tool=design.outline?.length>=3?'brush':'outline',pen='#1b1b22',
   size=12,opacity=1,mirrorX=false,mirrorY=false,zoom=1,
   pan=[0,0],active=null,pointerId=null,history=[],redo=[],pointers=new Map();
  ui.content.innerHTML=`<section class="wing-painter" aria-label="wing painting editor">
@@ -57,11 +57,10 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
     <button type="button" data-wing-tool="outline" aria-pressed="${tool==='outline'}">自由畫輪廓</button>
     <button type="button" data-wing-tool="brush" aria-pressed="${tool==='brush'}">畫筆</button>
     <button type="button" data-wing-tool="eraser">橡皮擦</button>
-    <button type="button" data-wing-tool="pan">拖曳畫布</button>
+    <button type="button" data-wing-tool="pan">移動翅膀輪廓圖</button>
     <button type="button" data-wing-undo>↶ Undo</button>
     <button type="button" data-wing-redo>↷ Redo</button>
    </div>
-   <label>筆頭材質<select data-wing-material><option value="ink">實心墨水</option><option value="airbrush">柔霧噴槍</option><option value="chalk">粉彩顆粒</option><option value="watercolor">水彩暈染</option><option value="metallic">金屬光澤</option></select></label>
    <label>色盤<input data-wing-pen type="color" value="${pen}"></label>
    <label>畫筆尺寸<input data-wing-size type="range" min="1" max="90" value="12"><output data-wing-size-label>12px</output></label>
    <label>不透明度<input data-wing-opacity type="range" min=".1" max="1" step=".05" value="1"></label>
@@ -78,10 +77,11 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
    <label>翅膀拍動間隔（ms）<input data-wing-field="flapMs" type="number" min="180" max="900" step="10" value="${design.flapMs}"></label>
    `:``}
     <button type="button" class="panel-button" data-wing-publish>${isGm?(design.id?'儲存修改並重新上架':'儲存、上架並自動裝備'):'儲存至 BAG 並自動裝備 · 消耗一次權限'}</button>
-   <small>以「自由畫輪廓」一筆畫出外形並放開自動閉合，之後可使用畫筆、橡皮擦、Undo／Redo 與清除重畫。滾輪縮放、拖曳畫布移動。玩家儲存後直接加入自己的背包並裝備，不會公開販售。</small>
+   <small>以「自由畫輪廓」一筆畫出外形並放開自動閉合，之後可使用畫筆、橡皮擦、Undo／Redo 與清除重畫。滾輪縮放；使用「移動翅膀輪廓圖」調整檢視位置。玩家儲存後直接加入自己的背包並裝備，不會公開販售。</small>
   </div>
   <div class="wing-painter-stage"><div class="wing-left-wing-label"><strong>LEFT WING · 左翅原圖</strong><span>RIGHT WING · 自動鏡像</span></div><div class="wing-painter-checker">
    <canvas class="wing-painter-canvas" width="768" height="640" aria-label="可繪畫的翅膀畫布"></canvas>
+   <span class="wing-attachment-note">右側：翅膀與手臂接合處</span>
   </div><small data-wing-status>畫布 768 × 640 · 操作記錄上限 60 步</small></div>
  </section>`;
  const root=ui.content.querySelector('.wing-painter'),canvas=root.querySelector('canvas'),ctx=canvas.getContext('2d');
@@ -177,7 +177,6 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   if(el.hasAttribute('data-wing-pen'))pen=el.value;
   if(el.hasAttribute('data-wing-mirror-x'))mirrorX=el.checked;
   if(el.hasAttribute('data-wing-mirror-y'))mirrorY=el.checked;
-  if(el.hasAttribute('data-wing-material'))material=el.value;
   if(el.dataset.wingField==='name')design.name=el.value;
   if(el.dataset.wingScale){snapshot();const axis=el.dataset.wingScale;design[axis]=+el.value;
    if(root.querySelector('[data-wing-ratio]').checked){
@@ -193,7 +192,7 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   if(!design.outline?.length&&tool!=='outline'){report('請先畫出封閉輪廓');return;}
   snapshot();const point=imagePoint(e);
   if(tool==='outline')active={tool,points:[point]};
-  else {const stroke={tool,color:pen,size,opacity,material,mirrorX,mirrorY,points:[point]};active=stroke;design.strokes.push(stroke);}
+  else {const stroke={tool,color:pen,size,opacity,material:'ink',mirrorX,mirrorY,points:[point]};active=stroke;design.strokes.push(stroke);}
   draw();
  };
  let pinching=false,pinchDistance=0;

@@ -17,7 +17,15 @@ export class CityWallPainter{
   this.brush?.addEventListener('click',()=>this.setTool('brush'));
   this.eraser?.addEventListener('click',()=>this.setTool('eraser'));
   this.colorInput?.addEventListener('input',event=>{this.color=event.target.value;});
-  this.sizeInput?.addEventListener('input',event=>{this.size=clamp(Number(event.target.value),.04,.95);});
+  const sizeLabel=document.getElementById('paint-size-value');
+  const updateSize=()=>{this.size=clamp(Number(this.sizeInput.value),.04,.95);if(sizeLabel)sizeLabel.value=this.size.toFixed(2);};
+  this.sizeInput?.addEventListener('input',updateSize);
+  let sliderPointer=null;
+  const slide=e=>{const r=this.sizeInput.getBoundingClientRect();const t=clamp((e.clientX-r.left)/Math.max(1,r.width),0,1);this.sizeInput.value=(.04+.91*t).toFixed(2);updateSize();};
+  this.sizeInput?.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();e.stopPropagation();sliderPointer=e.pointerId;this.sizeInput.setPointerCapture(e.pointerId);slide(e);});
+  this.sizeInput?.addEventListener('pointermove',e=>{if(e.pointerId===sliderPointer){e.preventDefault();e.stopPropagation();slide(e);}});
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])this.sizeInput?.addEventListener(type,e=>{if(e.pointerId!==sliderPointer)return;if(type==='pointerup')slide(e);sliderPointer=null;e.stopPropagation();});
+  if(this.sizeInput)updateSize();
   this.toolbar?.querySelector('[data-paint-close]')?.addEventListener('click',()=>this.setActive(false));
   // Capture input before camera/attack handlers. Moving the game camera or
   // firing a gun during a stroke would permanently corrupt the paint coords.
@@ -88,7 +96,7 @@ export class CityWallPainter{
  }
  start(hit){
   this.stroke={lotId:hit.lotId,wall:hit.wall,tool:this.tool,
-   color:this.color,size:this.size,points:[]};
+   color:this.color,size:this.size,clientId:globalThis.crypto?.randomUUID?.()||('local-'+Date.now()+'-'+Math.random().toString(36).slice(2)),points:[]};
   this.append(hit);
  }
  append(hit){
@@ -111,10 +119,11 @@ export class CityWallPainter{
   return true;
  }
  move(event){
-  if(!this.active||event.pointerId!==this.pointer||!this.stroke)return;
+  if(!this.active||event.pointerId!==this.pointer)return;
   if(event.pointerType==='mouse'&&(event.buttons&4))return;
   this.consume(event);
   const hit=this.pick(event);
+  if(!this.stroke){if(hit)this.start(hit);return;}
   if(!hit||hit.lotId!==this.stroke.lotId||hit.wall!==this.stroke.wall){
    this.finish();
    if(hit)this.start(hit);
@@ -139,10 +148,12 @@ export class CityWallPainter{
   const stroke=this.stroke;this.stroke=null;
   if(stroke.points.length>130)stroke.points=stroke.points.slice(0,130);
   const paint=this.arena.outerCity?.wallPaint;
+  // Move the finished segment into a local pending layer before starting
+  // the next segment. Keep it visible throughout HTTP and snapshot latency.
+  paint?.queuePreview(stroke);
   this.pending=this.pending.catch(()=>{}).then(async()=>{
-   try{await this.send('paint-building',{stroke});}
-   catch(error){this.ui.toast(error?.message||'Paint could not be saved');}
-   finally{paint?.endPreview(stroke.lotId,stroke.wall,stroke);}
+   try{const result=await this.send('paint-building',{stroke});if(!result?.paintStroke)throw Error('Paint could not be saved');paint?.ackPreview(stroke,result.paintStroke);}
+   catch(error){paint?.rejectPreview(stroke);this.ui.toast(error?.message||'Paint could not be saved');}
   });
  }
 }

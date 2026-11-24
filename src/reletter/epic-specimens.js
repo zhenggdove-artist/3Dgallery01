@@ -82,25 +82,28 @@ export function epicSpecimenCanvas(item){
  return canvas;
 }
 export function addEpicDust(T,root){
- const n=72,positions=new Float32Array(n*3),colors=new Float32Array(n*3),
-  palette=[0xf7d6a2,0xb6ffe9,0xffb5b7,0xc0d8ff,0xffffff];
- for(let i=0;i<n;i++){const col=new T.Color(palette[i%5]);colors.set([col.r,col.g,col.b],i*3);}
+ const n=72*20,positions=new Float32Array(n*3),colors=new Float32Array(n*3),seeds=new Float32Array(n),
+  palette=[0xf7d6a2,0xb6ffe9,0xffb5b7,0xc0d8ff,0xffffff],clock={value:0};
+ for(let i=0;i<n;i++){const col=new T.Color(palette[i%5]);colors.set([col.r,col.g,col.b],i*3);seeds[i]=i;}
  const geo=new T.BufferGeometry();
- geo.setAttribute('position',new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage));
+ geo.setAttribute('position',new T.BufferAttribute(positions,3));
  geo.setAttribute('color',new T.BufferAttribute(colors,3));
- const dust=new T.Points(geo,new T.PointsMaterial({
-  size:.035,transparent:true,opacity:.75,sizeAttenuation:true,
-  vertexColors:true,depthWrite:false
- }));dust.frustumCulled=false;root.add(dust);root.userData.epicDust=dust;
+ geo.setAttribute('dustSeed',new T.BufferAttribute(seeds,1));
+ const material=new T.PointsMaterial({size:.035/10,transparent:true,opacity:.75,sizeAttenuation:true,vertexColors:true,depthWrite:false});
+ // Twenty times the particles, but their trajectories run in the vertex shader.
+ // Each frame updates one uniform rather than reallocating or uploading buffers.
+ material.onBeforeCompile=shader=>{
+  shader.uniforms.dustTime=clock;
+  shader.vertexShader='uniform float dustTime; attribute float dustSeed;\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`
+   float i=dustSeed;
+   float t=fract(dustTime*(.14+mod(i,7.)*.013)+i*.61803398875);
+   vec3 transformed=vec3((mod(i,2.)>0.?-1.:1.)*(.24+mod(i*29.,71.)/70.)+sin(dustTime*.92+i)*.1,.76-t*1.8+sin(dustTime*11.+i*.8)*.12,.03+mod(i*13.,29.)/130.);
+  `);
+ };
+ material.customProgramCacheKey=()=> 'epic-fine-dust-v027';
+ const dust=new T.Points(geo,material);dust.frustumCulled=false;root.add(dust);root.userData.epicDust=dust;dust.userData.clock=clock;
 }
 export function animateEpicDust(root,time){
- const dust=root?.userData?.epicDust;if(!dust)return;
- const attr=dust.geometry.attributes.position,a=attr.array;
- for(let i=0;i<attr.count;i++){
-  const t=(time*(.14+i%7*.013)+i*.61803398875)%1;
-  a[i*3]=(i%2?-1:1)*(.24+((i*29)%71)/70)+Math.sin(time*.92+i)*.1;
-  a[i*3+1]=.76-t*1.8+Math.sin(time*11+i*.8)*.12;
-  a[i*3+2]=.03+((i*13)%29)/130;
- }
- attr.needsUpdate=true;
+ const dust=root?.userData?.epicDust;if(dust?.userData.clock)dust.userData.clock.value=time;
 }

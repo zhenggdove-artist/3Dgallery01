@@ -10,17 +10,17 @@
   <title>Temple</title>
   <link rel="icon" href="data:,">
   <link rel="preload" href="./src/reletter/FONTS/Golden%20Girdle.otf" as="font" type="font/otf" crossorigin>
-  <link rel="stylesheet" href="./styles.css?v=20261125-v026-fix-r117">
+  <link rel="stylesheet" href="./styles.css?v=20261125-v027-r117">
   <link rel="stylesheet" href="./src/reletter/fonts.css">
   <link rel="stylesheet" href="./reletter-theme.css">
-  <link rel="stylesheet" href="./gun.css?v=20261125-v026-fix-r117">
+  <link rel="stylesheet" href="./gun.css?v=20261125-v027-r117">
   <link rel="stylesheet" href="./sketch-hud.css">
-  <link rel="stylesheet" href="./fidelity-ui.css?v=20261125-v026-fix-r117">
-  <link rel="stylesheet" href="./wing-atelier.css?v=20261125-v026-fix-r117">
-  <link rel="stylesheet" href="./wall-paint.css?v=20261125-v026-fix-r117">
+  <link rel="stylesheet" href="./fidelity-ui.css?v=20261125-v027-r117">
+  <link rel="stylesheet" href="./wing-atelier.css?v=20261125-v027-r117">
+  <link rel="stylesheet" href="./wall-paint.css?v=20261125-v027-r117">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
-  <script src="./temple-config.js?v=20261125-v026-fix-r117"></script>
+  <script src="./temple-config.js?v=20261125-v027-r117"></script>
   <script>
   // One release token for the entire first-party ES-module graph.
   // GitHub Pages and mobile Safari can otherwise mix cached modules from
@@ -29,7 +29,7 @@
     // Stable for one deployment: 15-second URL rotation previously defeated Safari cache
     // and forced every 4G reload to download the whole large module graph.
     // Bump this token when changing the boot graph or deployed JS modules.
-    const release = '20261125-v026-fix-r117';
+    const release = '20261125-v027-r117';
     const imports = {
       "three": "./vendor/three/build/three.module.js",
       "three/addons/": "./vendor/three/examples/jsm/"
@@ -43,7 +43,7 @@
   // Import/link failures happen before main.js can enter its boot try/catch.
   (() => {
     let moduleFailure = "";
-    window.templeStartupDiagnostics = {release: "20261125-v026-fix-r117", failures: []};
+    window.templeStartupDiagnostics = {release: "20261125-v027-r117", failures: []};
     function displayFailure(message) {
       if (!message || document.body?.classList.contains("ready")) return;
       // Do not replace the original module/import error with a later timeout.
@@ -128,7 +128,7 @@
       </form>
       </div>
     </section>
-    <span id="entry-version" aria-label="Game version V026" style="position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));font:12px/1 monospace;color:#fff;pointer-events:none;z-index:2">V026</span>
+    <span id="entry-version" aria-label="Game version V027" style="position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));font:12px/1 monospace;color:#fff;pointer-events:none;z-index:2">V027</span>
   </main>
 
   <section id="hud" hidden>
@@ -167,7 +167,7 @@
       <button id="paint-brush" type="button" aria-pressed="true">Brush</button>
       <button id="paint-eraser" type="button" aria-pressed="false">Eraser</button>
       <label title="Paint colour"><span>Color</span><input id="paint-color" type="color" value="#e73b33" aria-label="Paint color"></label>
-      <label title="Brush width"><span>Size</span><input id="paint-size" type="range" min=".04" max=".95" step=".01" value=".17" aria-label="Brush size"></label>
+      <label title="Brush width"><span>Size <output id="paint-size-value" for="paint-size">0.17</output></span><input id="paint-size" type="range" min=".04" max=".95" step=".01" value=".17" aria-label="Brush size"></label>
       <button data-paint-close type="button" aria-label="Exit painting">Done</button>
     </div>
     <div id="mobile-stick" aria-hidden="true"><i></i></div>

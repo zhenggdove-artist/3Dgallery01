@@ -532,7 +532,8 @@ export function applyAction(world,actor,body,context={}){
    const strokes=walls[bodyStroke.wall]??=[];
    if(strokes.length>=100)return {error:'This wall has reached the mural limit'};
    const stroke={id:'paint-'+id(),owner:actor.key,lotId:lot.id,wall:bodyStroke.wall,
-    tool:bodyStroke.tool,color,size,points:verified,time:now};
+    tool:bodyStroke.tool,color,size,points:verified,time:now,
+    ...(typeof bodyStroke.clientId==='string'&&/^[a-zA-Z0-9-]{1,80}$/.test(bodyStroke.clientId)?{clientId:bodyStroke.clientId}:{})};
    strokes.push(stroke);
    world.wallPaintRevision=(world.wallPaintRevision||0)+1;
    world.revision=(world.revision||0)+1;

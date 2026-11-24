@@ -18,5 +18,5 @@ test('ordinary player buys every displayed variant and sells its exact instance,
 });
 test('shop tabs keep exactly two ordered rows and high-resolution outfit output',()=>{
  const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8'),preview=readFileSync(new URL('../src/item-preview.js',import.meta.url),'utf8');
- assert(ui.includes("[['near','mid','far','mystery'],['head','outfit','wings','shield','comfort']]"));assert(preview.includes('creatureSuit?768'));assert(preview.includes("creatureSuit||portraitMask?'image/png'"));
+ assert(ui.includes("[['near','mid','far','mystery'],['head','outfit','wings','shield','comfort']]"));assert(preview.includes('creatureSuit?768'));assert(preview.includes("portrait.toBlob(resolve,'image/png')"));
 });

@@ -168,11 +168,10 @@ export class TempleUI extends EventTarget{
       // clicked element while the browser is opening its auth window.
       if(this.googleLoginBusy)return;
       this.googleLoginBusy=true;
-      this.firebaseIdToken='';
       this.pendingLoginMode='firebase';
       this.form.hidden=true;
       $('entry-error').textContent='';
-      $('account-login-status').textContent='正在開啟 Google 帳號選擇視窗…';
+      $('account-login-status').textContent=this.firebaseIdToken?'Reconnecting your verified account…':'正在開啟 Google 帳號選擇視窗…';
       this.emit('firebase-login');
     });
     $('guest-form').addEventListener('submit',event=>{
@@ -288,7 +287,7 @@ export class TempleUI extends EventTarget{
   setFirebaseLoginStatus(enabled,message=''){
     this.googleLoginBusy=false;
     const button=this.entry.querySelector('[data-google-login]');
-    if(button)button.disabled=!enabled;
+    if(button){button.disabled=!enabled;const label=button.querySelector('span:last-child');if(label)label.textContent=this.firebaseIdToken?'Retry connection':'Choose Google Account';}
     $('account-login-status').textContent=message||(
       enabled?'Choose an account to continue.':
       'Google sign-in is unavailable.'
@@ -319,6 +318,7 @@ export class TempleUI extends EventTarget{
     $('clothing-color').value=existing&&/^#[0-9a-fA-F]{6}$/.test(profile.color||'')?profile.color:'#43b59a';
     $('enter-button').textContent=existing?'Enter Game':'Create & Enter';
     this.form.hidden=false;
+    this.entry.querySelector('[data-google-login]').hidden=true;
     $('player-name').required=true;
     if(!existing)$('player-name').focus();
   }
@@ -336,10 +336,10 @@ export class TempleUI extends EventTarget{
       $('entry-error').textContent=details;
       const status=$('account-login-status');
       if(status&&this.entry&&!this.entry.hidden)
-       status.textContent='Character loading failed. '+details+' Select your Google account to retry.';
+       status.textContent='Character loading failed. '+details+(this.firebaseIdToken?' Retry your verified account.':' Select your Google account to retry.');
     }
     this.googleLoginBusy=false;
-    this.entry.querySelector('[data-google-login]').disabled=false;
+    const login=this.entry.querySelector('[data-google-login]');login.disabled=false;const label=login.querySelector('span:last-child');if(label)label.textContent=this.firebaseIdToken?'Retry connection':'Choose Google Account';
     this.joinBusy(false);
   }
   refreshSpectatorControls(){

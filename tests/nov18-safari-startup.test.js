@@ -25,6 +25,6 @@ test('missing soundtrack must not abort first page load',()=>{
  assert.match(audio,/sound\/GGTEMPLEMUSIC\.mp3/);
  assert.match(audio,/method:'HEAD'/);
  assert.match(audio,/if\(!response\.ok\|\|this\.uploadedMusicUrl\)return false/);
- assert.match(audio,/sound\/backgroundmusic\.MP3/);
+ assert.doesNotMatch(audio,/sound\/backgroundmusic\.MP3/);
  assert.match(audio,/setUploadedMusic/);
 });

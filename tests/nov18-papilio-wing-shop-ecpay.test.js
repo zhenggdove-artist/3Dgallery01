@@ -8,7 +8,8 @@ import {PRODUCTION_GATEWAY,STAGE_GATEWAY,wingPaymentStatus} from '../cloudflare/
 const T=18500000,actor=(key,role='fighter')=>({key,name:key,color:'#abcdef',role,position:[15,0,0]});
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
 test('exactly fourteen curated BLUE/GOLD/PURPLE wing designs retain collectible IDs',()=>{
- const wings=WINGS;
+ const wings=SWALLOWTAIL_WINGS;
+ assert.equal(WINGS.length,17);
  assert.equal(SWALLOWTAIL_WINGS.length,14);
  assert.equal(wings.length,14);
  assert.equal(new Set(wings.map(w=>w.id)).size,14);
@@ -22,9 +23,9 @@ test('exactly fourteen curated BLUE/GOLD/PURPLE wing designs retain collectible 
   assert.ok(!SHOP_ITEMS.some(w=>w.id===id));
  }
 });
-test('all fourteen wings can be purchased in ordinary shop using coins; no random draws exist',()=>{
+test('all seventeen wings can be purchased in ordinary shop using coins; no random draws exist',()=>{
  const shop=SHOP_ITEMS.filter(i=>i.slot==='wings');
- assert.equal(shop.length,14);
+ assert.equal(shop.length,17);
  const world=createInitialWorld(T),profile=ensureProfile(world,'player','Player','#abcdef',T,false);
  profile.wallet=100000;
  for(const item of shop){

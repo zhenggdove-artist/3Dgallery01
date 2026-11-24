@@ -90,5 +90,5 @@ test('client uses scope or fused shoulder state and the camera surface can fire'
  assert.match(main,/aimMode:gun\.mode===1\?'shoulder':'scope'/);
  assert.match(gun,/\['goldfish','black-cat'\]/);
  assert.match(audio,/sound\/GGTEMPLEMUSIC\.mp3/);
- assert.match(audio,/sound\/backgroundmusic\.MP3/);
+ assert.doesNotMatch(audio,/sound\/backgroundmusic\.MP3/);
 });

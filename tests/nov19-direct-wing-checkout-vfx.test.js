@@ -58,7 +58,8 @@ test('all camera rays share thirty-pixel-up crosshair in a viewport-independent 
  assert.ok(cameraAimDirection(camera).y>0,'camera ray rises along screen reticle');
 });
 test('ordinary shop includes exactly fourteen purchasable material wings',()=>{
- const wings=SHOP_ITEMS.filter(item=>item.slot==='wings');
+ const wings=SHOP_ITEMS.filter(item=>item.slot==='wings'&&item.design==='crafted-wing');
+ assert.equal(SHOP_ITEMS.filter(item=>item.slot==='wings').length,17);
  assert.equal(wings.length,14);
  assert.equal(new Set(wings.map(x=>x.motif)).size,14);
  assert.ok(wings.every(x=>x.price>0));

@@ -32,7 +32,7 @@ test('six duplicate head designs are retired from sale while saved gear and fusi
 test('ten outfit collections each expose five individual styles and eleven creature outfits stay separate',()=>{
  const groups=shopWeaponGroups(SHOP_ITEMS).filter(g=>g.base.slot==='outfit');
  assert.equal(groups.filter(g=>!g.base.r113Wearable).length,28);
- assert.equal(groups.filter(g=>g.base.r113Wearable).length,8);
+ assert.equal(groups.filter(g=>g.base.r113Wearable).length,12);
  for(const g of groups.filter(g=>shopOutfitCollection(g.base))){
   assert.deepEqual(g.variants.map(v=>v.tier),[1,2,3,4,5]);
   assert.equal(new Set(g.variants.map(v=>v.id)).size,5);

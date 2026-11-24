@@ -192,7 +192,7 @@ const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>
 const artEditor=new ArtworkEditor({scene,camera,canvas,arena,player:()=>localRoot,isGM:()=>!!self?.profile?.admin,ownerKey:()=>self?.key,send:sendAction,control:enabled=>{if(controller){controller.setEnabled(enabled&&!ui.panelName&&!wasDead);controller.cameraLocked=!!artEditor.mode&&artEditor.mode!=='follow';}},toast:text=>ui.toast(text)});
 const platformDelete=new PlatformDeleteEditor({canvas,camera,arena,ui,editor:artEditor,isGM:()=>!!self?.profile?.admin,send:sendAction,controller:()=>controller,cancelBuild:cancelBuildPlacement});
 const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>controller,
- role:()=>self?.role,ui,send:sendAction,
+ role:()=>self?.role,ui,send:(action,data)=>sendAction(action,data,{throwOnError:true}),
  beforeStart:()=>{gun.end();ui.emit('attack-cancel');}});
 
 // Shared capture-phase MIDDLE-MOUSE orbit for player BUILD/PAINT and
@@ -265,7 +265,7 @@ async function completeFirebaseLogin(firebaseIdToken){
   if(account.existing&&account.profile){
     // Re-enable account selection in case joining fails, so the GM or any
     // other existing account can retry rather than remaining locked out.
-    ui.setFirebaseLoginStatus(true,'Account verified. Loading your character…');
+    ui.setFirebaseLoginStatus(false,'Account verified. Loading your character…');
     ui.emit('join',{
       name:account.profile.name,color:account.profile.color,
       firebaseIdToken,backendUrl:network.base
@@ -291,7 +291,8 @@ ui.addEventListener('firebase-login',async()=>{
   try{
     // Firebase SDK is preloaded before clicking the button, keeping the popup
     // tied to the original user gesture on iOS Safari.
-    const token=await signInWithGoogle();
+    // A failed game connection must not open another Google account chooser.
+    const token=ui.firebaseIdToken||await signInWithGoogle();
      ui.confirmGoogleIdentity(token);
      await completeFirebaseLogin(token);
   }catch(error){
@@ -305,7 +306,8 @@ ui.addEventListener('firebase-login',async()=>{
 ui.addEventListener('join',async event=>{
    if(event.detail?.mode==='guest'&&ui.googleAuthenticated)
      return ui.joinError('Google account already selected. Enter with Google instead.');
-   if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.startMusic();ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();
+   if(joined||ui.joining)return;
+   if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.unlock(false);ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();audio.startMusic();
     void resumeWingCheckout(network,ui);
     void arena.loadCustomArtworks(data.world.customArtworks,network.base).catch(error=>console.warn('Deferred artwork loading',error));
     network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
@@ -1065,14 +1067,14 @@ function update(dt,time,movementDt=dt){
 }
 
 let lastFrameFaultAt=0,lastRenderFaultAt=0,contextLost=false,lastHealthSampleAt=0;
-const runtimeHealthKey='temple-render-health-v026';
+const runtimeHealthKey='temple-render-health-v027';
 const gpuFrames=new GPUFrameQueue(renderer.getContext(),coarse,2);
 let previousRuntimeHealth=null;try{previousRuntimeHealth=JSON.parse(localStorage.getItem(runtimeHealthKey)||localStorage.getItem('temple-render-health-v024')||localStorage.getItem('temple-render-health-v023')||'null');}catch{}
 const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextRestores:0,renderFaults:0,lastError:null,previousRuntimeHealth};
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V026',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V027',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

@@ -704,3 +704,6 @@ body.panel-wing-shop .wing-design-support .wing-support-pay{min-height:44px!impo
 body.panel-wing-shop .wing-design-support .wing-support-pay:disabled{background:#e5e1ec!important;color:#534d61!important}
 body.panel-wing-shop .wing-design-support button:focus-visible{outline:2px solid #3e2a78;outline-offset:2px}
 body.panel-wing-shop .wing-design-support .y2k-taskbar{justify-content:space-between;padding:6px 10px;color:#494258;background:#e5e2eb;font-size:11px}
+
+.wing-painter-checker{position:relative}
+.wing-attachment-note{position:absolute;right:5px;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;padding:5px 3px;background:#ffffffe0;color:#333;font:10px/1.3 sans-serif;border-radius:2px;pointer-events:none;z-index:2}

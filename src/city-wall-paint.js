@@ -74,7 +74,7 @@ export class CityWallPaint{
   });
   const mesh=new THREE.Mesh(geometry,material);mesh.name='Wall-painted '+key;
   mesh.renderOrder=1;this.root.add(mesh);
-  const slot={lot,wall,mesh,canvas,ctx,texture,original,strokes:[],stamp:'',preview:null};
+  const slot={lot,wall,mesh,canvas,ctx,texture,original,strokes:[],stamp:'',preview:null,pending:[]};
   this.surfaces.set(key,slot);
   const tier=this.city.renderedTiers?.get(lot.index)??this.city.damage[lot.id]?.tier??0;
   if(tier>0)this.deform(slot,tier);
@@ -83,6 +83,8 @@ export class CityWallPaint{
  draw(slot){
   slot.ctx.clearRect(0,0,SIZE,SIZE);
   for(const stroke of slot.strokes)strokeOnCanvas(slot.ctx,stroke,slot.lot,slot.wall);
+  const acknowledged=new Set(slot.strokes.map(stroke=>stroke.clientId).filter(Boolean));
+  for(const stroke of slot.pending)if(!acknowledged.has(stroke.clientId))strokeOnCanvas(slot.ctx,stroke,slot.lot,slot.wall);
   if(slot.preview)strokeOnCanvas(slot.ctx,slot.preview,slot.lot,slot.wall);
   slot.texture.needsUpdate=true;
  }
@@ -90,6 +92,22 @@ export class CityWallPaint{
   if(!stroke)return;
   const slot=this.slot(stroke.lotId,stroke.wall);if(!slot)return;
   slot.preview=stroke;this.draw(slot);
+ }
+ queuePreview(stroke){
+  const slot=this.slot(stroke.lotId,stroke.wall);if(!slot)return;
+  if(slot.preview===stroke)slot.preview=null;
+  if(!slot.pending.some(s=>s.clientId===stroke.clientId))slot.pending.push(stroke);
+  this.draw(slot);
+ }
+ ackPreview(stroke,serverStroke){
+  const slot=this.slot(stroke.lotId,stroke.wall);if(!slot)return;
+  // HTTP may be earlier or later than the websocket world broadcast.
+  if(!slot.strokes.some(s=>s.id===serverStroke.id))slot.strokes=[...slot.strokes,serverStroke];
+  slot.pending=slot.pending.filter(s=>s.clientId!==stroke.clientId);this.draw(slot);
+ }
+ rejectPreview(stroke){
+  const slot=this.surfaces.get(this.key(stroke.lotId,stroke.wall));if(!slot)return;
+  slot.pending=slot.pending.filter(s=>s.clientId!==stroke.clientId);this.draw(slot);
  }
  endPreview(lotId,wall,stroke=null){
   const slot=this.surfaces.get(this.key(lotId,wall));
@@ -110,6 +128,7 @@ export class CityWallPaint{
    }
   }
   for(const [key,slot] of this.surfaces)if(!seen.has(key)){
+   if(slot.preview||slot.pending.length){slot.strokes=[];slot.stamp='';this.draw(slot);continue;}
    this.disposeSlot(slot);this.surfaces.delete(key);
   }
  }

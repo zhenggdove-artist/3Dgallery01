@@ -74,3 +74,7 @@ body.wall-paint-active #crosshair{opacity:.4}
  }
  #hud #paint-toolbar button{min-height:28px}
 }
+
+/* Pointer capture keeps the full native range reachable even on touch screens. */
+#hud #paint-toolbar input[type=range]{touch-action:none;min-width:0;max-width:100%;padding:0;cursor:ew-resize;}
+#hud #paint-size-value{font:10px/1.2 monospace;font-variant-numeric:tabular-nums;}
