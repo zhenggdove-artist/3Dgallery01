@@ -79,8 +79,8 @@ export class TempleUI extends EventTarget{
      const raw=Number(input.value),quantity=Number.isSafeInteger(raw)?raw:0;
      this.shopQuantities[input.dataset.shopQuantity]=quantity;
      const valid=quantity>=1&&quantity<=99,profile=this.world?.profile,price=shopPrice(item,this.world?.shopPrices);
-     const affordable=profile?.admin||Number(profile?.wallet)>=price*quantity;
-     const room=(profile?.inventory?.length||0)+quantity<=inventoryCapacity(profile);
+     const affordable=profile?.admin||this.self?.profile?.admin||Number(profile?.wallet)>=price*quantity;
+     const room=(profile?.inventory?.length||0)+quantity<=inventoryCapacity(this.self?.profile?.admin?{...profile,admin:true}:profile);
      const button=card.querySelector('[data-buy]'),label=card.querySelector('[data-buy-total]');
      if(button){button.disabled=!valid||!affordable||!room;button.textContent=!room&&valid?'BAG FULL':!affordable&&valid?'NOT ENOUGH COINS':'BUY '+(valid?'×'+quantity:'')+' · '+(valid?((price*quantity).toLocaleString('en-US')+' COINS'):'—');}
      if(label)label.textContent=!valid?'QUANTITY 1–99':!room?'BAG FULL · '+inventoryCapacity(profile)+' MAX':'TOTAL · '+(price*quantity).toLocaleString('en-US')+' COINS';
@@ -588,7 +588,7 @@ export class TempleUI extends EventTarget{
   renderBag(profile){renderOriginalBag(this,profile);}
   renderShop(profile){
     this.shopPriceSignature=JSON.stringify(this.world?.shopPrices||{});
-    const editing=this.panelName==='shop-prices'&&!!profile.admin,prices=this.world?.shopPrices||{};
+    const editing=this.panelName==='shop-prices'&&!!(profile.admin||this.self?.profile?.admin),prices=this.world?.shopPrices||{};
     const tab=['owned','armor'].includes(this.shopTab)?'near':this.shopTab||'near',tabs={
      near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',
      comfort:'Comfort for the Soul',shield:'Shields',head:'Headwear',
@@ -627,15 +627,15 @@ export class TempleUI extends EventTarget{
      const quantity=this.shopQuantities[key]??1;
      const valid=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=99;
      const price=shopPrice(selected,prices),total=valid?price*quantity:0;
-     const affordable=profile.admin||Number(profile.wallet)>=total;
-     const room=(profile.inventory?.length||0)+quantity<=inventoryCapacity(profile);
+     const affordable=profile.admin||this.self?.profile?.admin||Number(profile.wallet)>=total;
+     const room=(profile.inventory?.length||0)+quantity<=inventoryCapacity(this.self?.profile?.admin?{...profile,admin:true}:profile);
      const outfitCollection=shopOutfitCollection(selected);
      const familyName=outfitCollection||(selected.slot==='weapon'&&!selected.exotic?
        selected.name.replace(/^(?:Seed|Dawn|Radiant|Celestial|Eternal)\s+/,''):group.base.name);
      const selection=variants.length>1?`<label class="shop-quality-picker">${outfitCollection?'OUTFIT VARIANT / PRICE':'WEAPON QUALITY / PRICE'}
        <select data-shop-variant="${escape(key)}" aria-label="Choose variant for ${escape(familyName)}">
        ${variants.map(v=>{
-        const grade=v.shopTier?SHOP_WEAPON_GRADES[v.shopTier-1]:null;
+        const grade=v.slot==='weapon'&&v.shopTier?SHOP_WEAPON_GRADES[v.shopTier-1]:null;
         const value=String(v.shopTier??v.id),current=String(selected.shopTier??selected.id);
         return `<option value="${escape(value)}" ${value===current?'selected':''}>${escape(grade?.label||v.name)} · ${escape((grade?.rarity||v.rarity||'common').toUpperCase())} — ${shopPrice(v,prices).toLocaleString('en-US')} Coins</option>`;
        }).join('')}
@@ -653,13 +653,13 @@ export class TempleUI extends EventTarget{
     });
     this.content.innerHTML=`<div class="armory-balance"><span>Equipment · ${(profile.inventory?.length||0).toLocaleString('en-US')}/${inventoryCapacity(profile).toLocaleString('en-US')} BAG</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
      <nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>
-     <div class="shop-layout"><div class="shop-grid" role="group" aria-label="Shop items">${visible.map(g=>{
+     <div class="shop-layout ${chosen?'has-selection':''}"><div class="shop-grid" role="group" aria-label="Shop items">${visible.map(g=>{
       const item=g.variants.find(v=>String(v.shopTier??v.id)===this.shopVariantChoice[g.key])||g.variants.find(v=>v.shopTier===3)||g.base;
       const label=shopOutfitCollection(item)||g.base.name;
       const color=RARITIES.find(v=>v.id===item.rarity)?.color||'#eadcf4';
       return `<button type="button" class="bag-cell shop-cell ${g===chosen?'selected':''}" data-shop-select="${escape(g.key)}" data-rarity="${escape(item.rarity)}" style="--rarity:${color}" aria-pressed="${g===chosen}" title="${escape(label)}">${previewMarkup(item)}<span class="shop-cell-name">${escape(label)}</span></button>`;
      }).join('')||'<p>There are no items in this category.</p>'}</div>
-     <div class="shop-detail">${cards.join('')||'<p>Select an item to inspect its stats, quality and price.</p>'}</div></div>`;
+     <div class="shop-detail">${chosen?'<button type="button" class="shop-close-detail" data-close-shop-detail>BACK TO ITEMS</button>':''}${cards.join('')||'<p>Select an item to inspect its stats, quality and price.</p>'}</div></div>`;
     this.content.querySelector('.shop-grid').scrollTop=scroll;
     void hydrateItemPreviews(this.content);
   }
@@ -801,6 +801,7 @@ export class TempleUI extends EventTarget{
   renderEditor(){const saved=JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');this.content.innerHTML=`<p><b>Shift + Y</b> 開啟編輯設定，<b>Shift + O</b> 編輯圓盤位置與尺寸；編輯時按住滑鼠中鍵拖曳可旋轉視角。</p><form data-form="editor"><label>解析度倍率上限<input class="panel-input" name="pixelRatio" type="number" min="0.6" max="2" step="0.05" value="${saved.pixelRatio||1.35}"></label><label>霧氣濃度<input class="panel-input" name="fog" type="number" min="0" max="0.04" step="0.0001" value="${saved.fog??.0008}"></label><label>作品漂浮幅度<input class="panel-input" name="artFloat" type="number" min="0" max="0.6" step="0.01" value="${saved.artFloat??.17}"></label><button class="panel-button">儲存編輯結果</button></form><button class="panel-button" data-export-layout>下載 temple-layout.json</button><p>${PLATFORMS.length} 件預設作品，配置由伺服器保存。</p>`;}
   async panelClick(event){const button=event.target.closest('button');if(!button||button.disabled)return;
     if(button.hasAttribute('data-open-shop-prices')){if(!this.self?.profile?.admin)return;this.openPanel('shop-prices');return;}
+    if(button.hasAttribute('data-close-shop-detail')){this.shopSelectedKey=null;this.renderShop(this.world.profile);return;}
     if(button.dataset.shopSelect){this.shopSelectedKey=button.dataset.shopSelect;this.renderShop(this.world.profile);return;}
     if(button.dataset.gmPriceSave||button.dataset.gmPriceReset){if(!this.world?.profile?.admin)return;const reset=!!button.dataset.gmPriceReset,field=button.closest('.shop-price-editor')?.querySelector('[data-gm-price-input]'),price=reset?null:Number(field?.value);if(!reset&&(!field?.value.trim()||!Number.isSafeInteger(price)||price<1||price>100000000))return this.toast('PRICE 1–100,000,000');button.blur();this.emit('server-action',{action:'gm-shop-price',itemId:button.dataset.gmPriceSave||button.dataset.gmPriceReset,price,...(button.dataset.shopTier?{qualityTier:Number(button.dataset.shopTier)}:{})});return;}
     if(button.dataset.gmPlatformTool&&this.self?.profile?.admin){
@@ -851,6 +852,7 @@ export class TempleUI extends EventTarget{
      const quantity=Number(button.closest('.item')?.querySelector('[data-shop-quantity]')?.value??1);
      if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)return this.toast('QUANTITY 1–99');
      button.blur();
+     if(this.shopPurchasePending)return;
      this.emit('server-action',{action:'buy',itemId:button.dataset.buy,quantity,
       ...(button.dataset.shopTier?{qualityTier:Number(button.dataset.shopTier)}:{})});
     }if(button.dataset.equip)this.emit('server-action',{action:'equip',itemId:button.dataset.equip,...(button.hasAttribute('data-equip-index')?{inventoryIndex:Number(button.dataset.equipIndex)}:{})});if(button.dataset.sell)this.emit('server-action',{action:'sell',itemId:button.dataset.sell,...(button.dataset.sellUid?{uid:button.dataset.sellUid}:{})});if(button.dataset.build){this.buildKind=button.dataset.build;$('build-kind').textContent=this.buildKind.toUpperCase();$('build-mode').hidden=false;this.closePanel();this.emit('build-start',{kind:this.buildKind,file:this.content.querySelector('[data-build-skin]')?.files[0]});}if(button.dataset.role)this.emit('role-change',button.dataset.role);if(button.hasAttribute('data-follow'))this.emit('spectator-follow',button.dataset.follow);if(button.hasAttribute('data-destroy-near'))this.emit('destroy-near');if(button.dataset.removeStructure)this.emit('server-action',{action:'remove-structure',structureId:button.dataset.removeStructure});if(button.hasAttribute('data-save-code'))this.emit('save-code');if(button.hasAttribute('data-copy-save-code')){const value=this.saveCode||this.self?.saveCode;if(value){if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);else{this.content.querySelector('#save-code-output')?.select();document.execCommand('copy');}this.toast('已複製存檔代碼');}}if(button.hasAttribute('data-export-layout'))this.exportLayout();}catch(error){this.toast(error.message);}}
