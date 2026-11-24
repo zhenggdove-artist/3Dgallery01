@@ -62,7 +62,8 @@ test('GM-enlarged artwork remains collectible near its rendered edge',()=>{
 test('artwork interaction takes priority over decorations and exposes server errors',()=>{
   const arena=readFileSync(new URL('../src/arena-view.js',import.meta.url),'utf8');
   const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
-  assert.match(arena,/return artworks\.sort\(\(a,b\)=>a\.distance-b\.distance\)\[0\]/);
+  assert.match(arena,/distance<=reach\.horizontal&&\(!artwork\|\|distance<artwork\.distance\)/);
+  assert.match(arena,/if\(artwork\)return artwork;/);
   assert.match(arena,/artworkPickupReach\(layout\)/);
   assert.match(main,/action==='pickup-artwork'\|\|!/);
 });
