@@ -18,8 +18,8 @@ function roomFixture(env,admin=false){
   if(q.startsWith('CREATE ')||q.startsWith('CREATE INDEX'))return {toArray:()=>[]};
   if(q.startsWith('SELECT COUNT(*) AS n'))rows=[{n:0}];
   else if(q.startsWith('INSERT INTO wing_design_orders')){
-   const [id,key,amount,product,mode,status,createdAt]=args;
-   orders.set(id,{merchant_trade_no:id,profile_key:key,amount,product,mode,status,created_at:createdAt});
+   const [id,key,amount,product,mode,status,createdAt,totalAmount=amount,designCredits=1]=args;
+   orders.set(id,{merchant_trade_no:id,profile_key:key,amount,product,mode,status,created_at:createdAt,total_amount:totalAmount,design_credits:designCredits});
   }else if(q.startsWith('SELECT merchant_trade_no,status')){
    const row=orders.get(args[0]);if(row?.profile_key===args[1])rows=[row];
   }else if(q.startsWith('SELECT * FROM wing_design_orders')){
@@ -39,9 +39,9 @@ function roomFixture(env,admin=false){
   credits:()=>worldState.profiles[profileKey].wingDesignCredits,
   revision:()=>worldState.revision};
 }
-async function checkout(fixture){
+async function checkout(fixture,body={}){
  const resp=await wingCheckoutApi(fixture.room,new Request('https://gg.example/api/wing-pay/checkout',
-  {method:'POST',body:'{}'}),fixture.session);
+  {method:'POST',body:JSON.stringify(body)}),fixture.session);
  return {response:resp,data:await resp.json()};
 }
 function callback(room,fields){
@@ -59,7 +59,7 @@ test('CheckMacValue matches official SHA256 reference vector',async()=>{
  assert.equal(await ecpayCheckMac(params,STAGE_KEY,STAGE_IV),
   '6C51C9E6888DE861FD62FB1DD17029FC742634498FD813DC43D4243B5685B840');
 });
-test('payment is a fixed NT$30 single creative entitlement, no randomness',async()=>{
+test('default purchase is a NT$30 single creative entitlement, no randomness',async()=>{
  assert.equal(WING_PRICE_TWD,30);
  const id=newWingTradeNo();
  assert.match(id,/^GW[A-Z0-9]{18}$/);
@@ -67,7 +67,7 @@ test('payment is a fixed NT$30 single creative entitlement, no randomness',async
  const fields=await stageCheckoutFields(id,'https://gg.example/api/wing-pay/notify',
   'https://gg.example/game/?wingOrder='+id);
  assert.equal(fields.TotalAmount,'30');
- assert.match(fields.ItemName,/One Personal Wing Design/);
+ assert.match(fields.ItemName,/Personal Wing Design x 1/);
  assert.equal(fields.CheckMacValue,await ecpayCheckMac(fields,STAGE_KEY,STAGE_IV));
  assert.equal(STAGE_GATEWAY,'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5');
  assert.equal(PRODUCTION_GATEWAY,'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5');
@@ -154,4 +154,25 @@ test('client uses same-tab hosted ECPay POST after checking Worker status, never
   assert.equal(await beginWingCheckout(network,{toast:s=>messages.push(s)}),null);
   assert.equal(posted.length,1);
  }finally{globalThis.document=prior.document;globalThis.sessionStorage=prior.sessionStorage;}
+});
+
+test('quantity and additional support use signed total and award exactly the selected credits',async()=>{
+ const f=roomFixture(PRODUCTION,false);
+ const {data,response}=await checkout(f,{quantity:3,amount:155});
+ assert.equal(response.status,200);
+ assert.equal(data.amount,155);assert.equal(data.designCredits,3);
+ assert.equal(data.fields.TotalAmount,'155');
+ assert.equal(data.fields.CheckMacValue,await ecpayCheckMac(data.fields,PRODUCTION.ECPAY_HASH_KEY,PRODUCTION.ECPAY_HASH_IV));
+ const fields={MerchantID:PRODUCTION.ECPAY_MERCHANT_ID,MerchantTradeNo:data.orderId,RtnCode:'1',TradeAmt:'90',TradeNo:'2611191234567892'};
+ fields.CheckMacValue=await ecpayCheckMac(fields,PRODUCTION.ECPAY_HASH_KEY,PRODUCTION.ECPAY_HASH_IV);
+ assert.equal((await callback(f.room,fields)).status,400);
+ assert.equal(f.credits(),0);
+ fields.TradeAmt='155';
+ fields.CheckMacValue=await ecpayCheckMac(fields,PRODUCTION.ECPAY_HASH_KEY,PRODUCTION.ECPAY_HASH_IV);
+ assert.equal(await (await callback(f.room,fields)).text(),'1|OK');
+ assert.equal(await (await callback(f.room,fields)).text(),'1|OK');
+ assert.equal(f.credits(),3);
+ const order=await wingOrderStatus(f.room,new Request('https://gg.example/api/wing-pay/order?id='+data.orderId),f.session).json();
+ assert.equal(order.amount,155);assert.equal(order.designCredits,3);
+ assert.equal((await checkout(f,{quantity:3,amount:89})).response.status,400);
 });
