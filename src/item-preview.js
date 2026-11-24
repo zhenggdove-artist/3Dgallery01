@@ -229,6 +229,7 @@ async function renderPreview(item){
  camera.near=Math.max(.001,distance*.01);camera.far=Math.max(100,distance*8);camera.updateProjectionMatrix();
  camera.lookAt(center);
  try{
+  if(model.portraitReady)await model.portraitReady;
   await renderer.compileAsync(scene,camera);
   renderer.render(scene,camera);
   const portrait=creatureSuit?cropCreatureOutfitPortrait(renderer.domElement):renderer.domElement;
@@ -240,6 +241,7 @@ async function renderPreview(item){
   return url;
  }finally{
   if(model.userData.previewOutfitRecord){disposeOutfit(model.userData.previewOutfitRecord);delete model.userData.previewOutfitRecord;}
+  model.portraitDisposed=true;model.portraitTexture?.dispose();
   model.removeFromParent();
   const geometries=new Set(),materials=new Set();
   model.traverse(o=>{

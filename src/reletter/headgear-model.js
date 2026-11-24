@@ -1,3 +1,5 @@
+// Landmark-warped facial albedo from the three supplied reference photographs.
+const PORTRAIT_REFERENCE=Object.freeze({"huang-mask":"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","kim-mask":"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABcQERQRDhcUEhQaGBcbIjklIh8fIkYyNSk5UkhXVVFIUE5bZoNvW2F8Yk5QcptzfIeLkpSSWG2grJ+OqoOPko3/2wBDARgaGiIeIkMlJUONXlBejY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY3/wAARCABwAFgDASIAAhEBAxEB/8QAGgAAAgMBAQAAAAAAAAAAAAAAAwQAAQIFBv/EAC0QAAEEAQMCBQMEAwAAAAAAAAEAAgMRIQQSMSJBBRNRYXEjMoEGFFKhYnLh/8QAFwEBAQEBAAAAAAAAAAAAAAAAAQIAA//EABsRAQEBAQEBAQEAAAAAAAAAAAABEQIxIWFx/9oADAMBAAIRAxEAPwDjxStaCHMBCy42cLUZa01S24F+Nte6iL69ZghklPT2Kd0+hldIAW9+U14ZEBF7rpsaAVNqpGdLo2xMN5W36UE4qkdvC0toJy6RpaT37Lh6yExniqXpykNXA2W8BbTjzJftwFkkHuAnNZoi2y0UueGG67qvU2YJ01zaiojaKIURjGvEIxDq3AUM3tHZSJ28jK6H6g0wZJFKKtwo49Fy9PZcBSnjreV9T67uh+xOA5S2jbTBhNhu5F9aNseOLW7WGx1wFdFIU91ILjaOWWEJzaRTCmoiD43WOQuA9uyR3oF6SYdBXB1oAcb5VcjopI7caUUhidPMyNv3PcAPyotepGk+PU+MQCVkTTd7if6/6k9PoGMO45KaOs/dhpIA29qWsluFy4lkxX9WOkdItQv1NfTjjPy5KTSSRHDSUu/XaxrAWMZk1Rsn+lcFdWPUSV9Ru13oDaL5+OFzopJXP2yt6gLscH8pzyz5e5Oti5NS8DoZuPpay2Wci3w0P9glJppGPDI22459ktH4jqpGOJYKbigclZsdJzt3Ir5SWo0LJjfBWodQZuxBTI4yp1WA+E+HsZrmyHJY0kfPCiYh1DdM90hbfTSi5dS2pst8JxtDDhOxEUEtQwRWBR+bRGuXVd+mnMbI3sgHT5wiMJRwQBZVYgFkQjZVZR6HkIBeZJDt4HKNuAhIu1mBewPZjBQvJLj1Z+VsPLZNrhzkH1RScLFgNYwVQQ5PZU8m+VguRWAkG80eKUWw23l3aqUQvcamIMhDRtrnFZVsGEHfueXHkkkozThafoooNLRcSKQxlZkkEbSSaVJVLFJnyn7bGfZC2akN8veSQPuPKwJtROPosDR/m7aT8KidY0lnkzWM3usJwmYWSuoynIGPdH3GkjHrXNcGTxujd/I8FNtO4WEBl5Q3FFchOU0oxzdwDwCPi1EJzlEbWwEPoo7X4SuVoOpJOiTCogONn8Jdsg7lHje090pVJfYIYkfwQmg5vsVAW+gSdCY0EZC2Ojjhbc9lYAS75QigRz0Jz0J0l8LFkoLe7KixRUQVgKbVLCu0hhwrhU15aURSgllicq/PKzTVNrUBHTEoduce6JTVMLFQar2q7VWsy1FVqLM//9k=","putin-mask":"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABcQERQRDhcUEhQaGBcbIjklIh8fIkYyNSk5UkhXVVFIUE5bZoNvW2F8Yk5QcptzfIeLkpSSWG2grJ+OqoOPko3/2wBDARgaGiIeIkMlJUONXlBejY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY3/wAARCABwAFgDASIAAhEBAxEB/8QAGgAAAgMBAQAAAAAAAAAAAAAAAwQAAgUBBv/EAC0QAAICAQMDAgYBBQEAAAAAAAECABEDEiExBEFRYXEFEyIyQoGRUqGxweHw/8QAGQEBAQEBAQEAAAAAAAAAAAAAAAECBAMF/8QAGxEBAQEBAQEBAQAAAAAAAAAAAAERAgMhEjH/2gAMAwEAAhEDEQA/ANi4p1PU6EpeSahuoyjFhJJAJ4uZLZNeQt92+1TDUHGTQO5MLjJeorhx5MpsKfeauHBoUXzMvRVQSNzCBdtp0rXrIOIEKwOQFd6hiN5BjLDeVMJ/NokjnwZj/FenVGHUJsMjUV8Gb2bpW02ouKtgXIGx9Qv0kfuenn3+ax3zsecAkhMuJsGQ43Ugg+ZJ9OfZrivytrrS2bOydgah8fTqgGNQKA3PmUQfOylyKF3GA1Ez5Fd8FTSq0BUurxYNvOh6PJmNemG9XpOXvBB/1+xJr34Ne00gwqWBgBk8An2FzvzDXiNMH1bwHUi1sCyO0gf/AMZxnuwe8amMn4tgV8AypZKAH3B/7JHM+O0KGvrUpZHmSdnl65zjm9ONug4W0Y7AuzDbtAYRsqeDDlgu52E4q6pE38SwF+kXydVpGwA8RXL8QyLenv6SYutVUvbVQ95cDjx6G/8AMxk6/I25of7jS9SSNjKv9P6Sb3M4Ae8RbqytfVUA3xIg7UPeDGtRG/MqN+Ijh+IOxF8e0eDK4sVZhA8pLYyf6TJKsacg+hkmpXnYB0mtsAdxv29R5hMy2ktZ0rfNTvJ34mXozXZl+1C7XsAIrnfKrhWxBr7nmbhVfEEyLvt/eWDHIdCRX6PaO9F9eM2DYNGXfpy3ke8Z6TDoY+Ce8lIzesJGfQosARUOiMAyM7HwNpsZ+l1ZHI4JuVTANiRZHntLC6TULiYFAyqdirDgzQ6LIS5B4PEIuNCKIseKhlxItEDSYAetJw41cCzemSE6hRkx1VnUK95JFgZNGzwBB/NbVtOs1LfmDBveCChieRIdNd4O995R3IFLuZGsXV1Zyqg7ckdo7hAK7HeZWPM3SlgykhjZNRheuAAogCVk5lWiTufQRZSrbq2063xDGq6mNntUW+YWynKi6Ufc+8EOhq9ZDl+nvfaAVyRxLgg8wuDA60q6vmSDx7GjuDJJpIDl3HtK/aoE6Ws1B5HVQSTvKy7qHc7zodFN6tzE2bI5+il9TOfKflsjGFPOoZb5imbHT2oNHxIMef8AHKK9ZNfUYwVcK/e5cMHw4kK0259Y0NKrRqqmauXOAToBvxI79Q3NCoD2kDdTtOqwYTOXPlTZlJ9QY1gyrk95FOIdzJKX3MkiUm2XsJUAE2dzDDGo/GdquAB+5VCrvRlWY8V/EPXneQgeICRbL2ucD575P8R2h4nRpH4yhQPmHN/xDISfujACVvIUU95BTQCOIMoV3G0YCAcGW0+0ASZgRpaSXKA8iSTB/9k="});
 // Original stylized wearable sculptures, centered around the skull in local head space.
 export function createHeadgear(T,item){const root=new T.Group();root.name=item.name;root.userData.headgear=item.id;const mats=[],mat=(color,metal=.1)=>{const m=new T.MeshStandardMaterial({color,roughness:.4,metalness:metal});mats.push(m);return m;},main=mat(item.color),white=mat('#f5eee2'),dark=mat('#24303d'),gold=mat('#e8bd65',.65),pink=mat('#e6aab6'),green=mat('#78ab73'),glass=new T.MeshStandardMaterial({color:'#c0edff',transparent:true,opacity:.2,roughness:.1,metalness:.2});mats.push(glass);
 const mesh=(geo,p,scale=[1,1,1],m=main)=>{const o=new T.Mesh(geo,m);o.position.set(...p);o.scale.set(...scale);root.add(o);return o;},ball=(p,s,m=main)=>mesh(new T.SphereGeometry(1,20,14),p,s,m),box=(p,s,m=main)=>mesh(new T.BoxGeometry(1,1,1),p,s,m),cone=(p,r,h,m=main)=>mesh(new T.ConeGeometry(r,h,20),p,[1,1,1],m),tube=(pts,r=.06,m=main)=>mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>new T.Vector3(...p))),24,r,7,false),[0,0,0],[1,1,1],m),ring=(p,r=.6,t=.045,m=main)=>mesh(new T.TorusGeometry(r,t,8,36),p,[1,1,1],m),eyes=(y=.15,z=.62)=>{for(const x of [-.24,.24]){ball([x,y,z],[.14,.17,.07],white);ball([x,y,z+.055],[.07,.11,.04],dark);}},cap=()=>mesh(new T.SphereGeometry(.69,24,16,0,Math.PI*2,0,Math.PI*.58),[0,.15,0]),wing=(side,y=.4)=>{for(let i=0;i<6;i++){const f=ball([side*(.55+i*.12),y+i*.1,-.05],[.13,.42-i*.04,.08],white);f.rotation.z=-side*(.4+i*.14);}},horn=(side,y=.5)=>tube([[side*.45,y,0],[side*.8,y+.35,0],[side*.8,y+.8,0],[side*.5,y+1,0]],.085,gold),mask=()=>ball([0,.05,.52],[.57,.68,.13]);
@@ -19,17 +21,17 @@ if(d==='hydra-dragon'){
  // Anatomically distinct continuous masks with landmark-projected facial details.
  const huang=d==='huang-mask',xi=d==='xi-mask',putin=d==='putin-mask',kim=d==='kim-mask';
  const cfg=huang?{
-  rows:[[-.66,.025,.41],[-.57,.20,.53],[-.45,.31,.57],[-.30,.40,.60],[-.10,.46,.62],[.10,.48,.61],[.29,.45,.58],[.46,.43,.55],[.61,.37,.51],[.73,.24,.43],[.80,.02,.32]],
-  skin:'#c69c83',warm:'#b77b65',shadow:'#8c6555',hair:'#a8a9a7',light:'#e1e0dc',brow:'#57524d',lip:'#a37267',eyeX:.205,eyeY:.235,eyeW:.115,eyeH:.036,nose:.064,bridge:.075,tip:.095,cheek:.080,mouthW:.183,mouthY:-.205,jaw:.039
+  rows:[[-.66,.025,.41],[-.57,.24,.53],[-.45,.34,.57],[-.30,.41,.60],[-.10,.46,.62],[.10,.48,.61],[.29,.45,.58],[.46,.43,.55],[.61,.37,.51],[.73,.24,.43],[.80,.02,.32]],
+  skin:'#c69c83',warm:'#b77b65',shadow:'#8c6555',hair:'#a8a9a7',light:'#e1e0dc',brow:'#57524d',lip:'#a37267',eyeX:.205,eyeY:.235,eyeW:.112,eyeH:.030,nose:.083,bridge:.10,tip:.125,cheek:.065,mouthW:.195,mouthY:-.205,jaw:.039
  }:xi?{
   rows:[[-.65,.03,.37],[-.55,.27,.52],[-.40,.42,.57],[-.20,.51,.61],[.04,.52,.62],[.23,.48,.60],[.43,.46,.55],[.61,.40,.51],[.74,.27,.41],[.80,.02,.30]],
   skin:'#d0a486',warm:'#bc8a70',shadow:'#946a56',hair:'#262322',light:'#55514d',brow:'#3d3029',lip:'#a97468',eyeX:.212,eyeY:.23,eyeW:.118,eyeH:.025,nose:.10,bridge:.075,tip:.10,cheek:.07,mouthW:.195,mouthY:-.23,jaw:.09
  }:putin?{
   rows:[[-.67,.02,.40],[-.56,.22,.54],[-.41,.33,.62],[-.23,.39,.63],[-.01,.45,.61],[.19,.44,.57],[.39,.43,.55],[.57,.42,.50],[.72,.32,.42],[.82,.02,.29]],
-  skin:'#d8b4a0',warm:'#c49585',shadow:'#a17f72',hair:'#b6a68d',light:'#ddd0b9',brow:'#a18573',lip:'#ad8178',eyeX:.183,eyeY:.235,eyeW:.109,eyeH:.032,nose:.076,bridge:.12,tip:.115,cheek:.05,mouthW:.16,mouthY:-.24,jaw:.072
+  skin:'#d8b4a0',warm:'#c49585',shadow:'#a17f72',hair:'#b6a68d',light:'#ddd0b9',brow:'#a18573',lip:'#ad8178',eyeX:.183,eyeY:.235,eyeW:.103,eyeH:.025,nose:.076,bridge:.12,tip:.115,cheek:.05,mouthW:.16,mouthY:-.24,jaw:.072
  }:{
-  rows:[[-.72,.03,.39],[-.64,.27,.49],[-.50,.42,.57],[-.31,.53,.64],[-.08,.56,.63],[.14,.53,.60],[.32,.48,.57],[.53,.43,.54],[.69,.35,.47],[.79,.02,.33]],
-  skin:'#d6ac95',warm:'#c58e79',shadow:'#a57b68',hair:'#252223',light:'#4d4845',brow:'#43342f',lip:'#ad746d',eyeX:.206,eyeY:.23,eyeW:.113,eyeH:.028,nose:.093,bridge:.065,tip:.097,cheek:.10,mouthW:.178,mouthY:-.20,jaw:.112
+  rows:[[-.72,.03,.39],[-.64,.30,.49],[-.50,.45,.57],[-.31,.55,.64],[-.08,.56,.63],[.14,.53,.60],[.32,.48,.57],[.53,.43,.54],[.69,.35,.47],[.79,.02,.33]],
+  skin:'#d6ac95',warm:'#c58e79',shadow:'#a57b68',hair:'#252223',light:'#4d4845',brow:'#43342f',lip:'#ad746d',eyeX:.206,eyeY:.23,eyeW:.105,eyeH:.022,nose:.093,bridge:.045,tip:.073,cheek:.10,mouthW:.178,mouthY:-.20,jaw:.112
  };
  const skin=mat(cfg.skin,0),shadow=mat(cfg.shadow,0),lip=mat(cfg.lip,0),hair=mat(cfg.hair,0),strand=mat(cfg.light,0),brow=mat(cfg.brow,0),crease=mat('#75554c',0),sclera=mat('#e4dbd1',0),iris=mat(putin?'#71898c':'#403026',0),pupil=mat('#262222',0),frame=mat('#222326',.3);
  const {rows,eyeX,eyeY,eyeW,eyeH,mouthW,mouthY}=cfg;
@@ -38,17 +40,22 @@ if(d==='hydra-dragon'){
  const depth=(x,y)=>{const [w,z]=sample(y),a=Math.sqrt(Math.max(0,1-(x/Math.max(.02,w))**2)),X=Math.abs(x);
   return .18+(z-.18)*a+cfg.cheek*g(X,y,.31,.02,.15,.17)-.055*g(X,y,eyeX,eyeY,.12,.08)+.035*g(X,y,eyeX,eyeY+.095,.16,.065)+cfg.bridge*g(x,y,0,.095,.082,.23)+cfg.tip*g(x,y,0,-.055,.105,.085)+.027*g(X,y,cfg.nose,-.07,.045,.06)+.045*g(x,y,0,mouthY,.22,.11)+cfg.jaw*g(x,y,0,-.46,.25,.15);
  };
- const pos=[],indices=[],colors=[],N=112,M=112,base=new T.Color(cfg.skin),warm=new T.Color(cfg.warm),cool=new T.Color(cfg.shadow);
+ const pos=[],indices=[],colors=[],uv=[],N=112,M=112,base=new T.Color(cfg.skin),warm=new T.Color(cfg.warm),cool=new T.Color(cfg.shadow);
  for(let j=0;j<=M;j++){const y=rows[0][0]+(rows.at(-1)[0]-rows[0][0])*j/M,[w]=sample(y);
-  for(let k=0;k<=N;k++){const x=w*Math.sin(-Math.PI/2+Math.PI*k/N);pos.push(x,y,depth(x,y));
+  for(let k=0;k<=N;k++){const x=w*Math.sin(-Math.PI/2+Math.PI*k/N);pos.push(x,y,depth(x,y));uv.push((x/Math.max(.001,w)+1)*.5,j/M);
    const c=base.clone().lerp(warm,.35*g(Math.abs(x),y,.29,.02,.18,.19)+.17*g(x,y,0,-.06,.14,.10)).lerp(cool,.20*g(Math.abs(x),y,eyeX,eyeY-.02,.14,.085));colors.push(c.r,c.g,c.b);
    if(j&&k){const i=j*(N+1)+k;indices.push(i-N-2,i-N-1,i,i-N-2,i,i-1);}
   }
  }
- const geom=new T.BufferGeometry();geom.setAttribute('position',new T.Float32BufferAttribute(pos,3));geom.setAttribute('color',new T.Float32BufferAttribute(colors,3));geom.setIndex(indices);geom.computeVertexNormals();
+ const geom=new T.BufferGeometry();geom.setAttribute('position',new T.Float32BufferAttribute(pos,3));geom.setAttribute('color',new T.Float32BufferAttribute(colors,3));geom.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geom.setIndex(indices);geom.computeVertexNormals();
  const faceMat=new T.MeshStandardMaterial({vertexColors:true,roughness:.78,side:T.DoubleSide});mats.push(faceMat);mesh(geom,[0,0,0],[1,1,1],faceMat);
+ const reference=PORTRAIT_REFERENCE[d],referenceReady=!!reference&&typeof Image!=='undefined';
+ // Reference-derived texture is applied to the sculpt itself, not the SHOP UI.
+ // Keep a procedural fallback for headless server tests and failed image decode.
+ const facialParts=[];
  // Side skull behind the front surface gives the wearable mask real thickness.
  ball([0,.04,.05],[kim?.49:xi?.46:.40,.64,.24],skin);
+ const facialStart=root.children.length;
  const line=(points,r,m,offset=.014)=>tube(points.map(([x,y])=>[x,y,depth(x,y)+offset]),r,m);
  for(const side of [-1,1]){
   const x=side*eyeX,z=depth(x,eyeY),inner=x-side*eyeW,outer=x+side*eyeW;
@@ -75,6 +82,7 @@ if(d==='hydra-dragon'){
  if(huang){line([[-.105,mouthY-.004],[0,mouthY-.010],[.105,mouthY-.004]],.004,sclera,.045);}
  if(huang||putin)for(let k=0;k<3;k++){const y=.42+k*.055;line([[-.26,y],[-.13,y+.012],[.08,y+.007],[.25,y-.008]],.004,shadow,.012);}
  if(kim)line([[-.26,-.49],[-.12,-.535],[.12,-.535],[.26,-.49]],.007,shadow,.012);
+ facialParts.push(...root.children.slice(facialStart));
  if(huang){
   // Broad side part, silver swept hair, close cropped temples.
   const cap=ball([-.035,.715,.20],[.455,.235,.295],hair);cap.rotation.z=-.11;
@@ -86,12 +94,18 @@ if(d==='hydra-dragon'){
  }else if(putin){
   ball([0,.70,.055],[.37,.15,.21],hair);
   for(const side of [-1,1]){ball([side*.38,.48,.14],[.062,.22,.12],hair);for(let k=0;k<9;k++)tube([[side*(.38-k*.012),.42+.025*k,.25],[side*(.34-k*.012),.68,.28],[side*.12,.77,.19]],.006,k%3?hair:strand);}
+ }else if(kim){
+  // Flat swept-back pompadour, closely shaved sides, no glasses.
+  const top=box([0,.785,.13],[.84,.25,.47],hair);top.rotation.x=-.06;
+  ball([0,.86,.15],[.43,.125,.27],hair);
+  for(const side of [-1,1])ball([side*.40,.67,.14],[.065,.13,.19],hair);
+  for(let k=0;k<27;k++){const x=-.40+.8*k/26;tube([[x,.70,.37],[x,.83,.39],[x*.97,.90,.12],[x*.94,.84,-.12]],.011,k%5===0?strand:hair);}
  }else{
   const cap=ball([xi?-.035:0,kim?.77:.71,.17],[kim?.48:.465,kim?.25:.21,.30],hair);cap.rotation.z=xi?-.08:0;
   for(const side of [-1,1]){ball([side*.405,kim?.60:.48,.14],[.08,kim?.12:.22,.15],hair);}
   for(let k=0;k<25;k++){const x=-.41+.82*k/24;const y=kim?.68:.59;tube([[x,y,.44],[x-(xi?.08:.02),y+.20,.48],[x-(xi?.12:.03),y+.24,.23]],.012,k%5===0?strand:hair);}
  }
- if(huang||kim){
+ if(huang&&!referenceReady){
   const fw=huang?.150:.158,fh=huang?.074:.085,cy=eyeY+.005;
   for(const side of [-1,1]){
    const cx=side*eyeX,shape=new T.Shape();
@@ -102,7 +116,18 @@ if(d==='hydra-dragon'){
   const z=depth(eyeX,cy)+.12;tube([[-.055,cy+.028,z],[0,cy+.043,z+.008],[.055,cy+.028,z]],.011,frame);
  }
  tube([[-.43,.06,.23],[-.48,.06,-.04],[0,.06,-.34],[.48,.06,-.04],[.43,.06,.23]],.024,frame);
- root.userData.portraitSculpt=huang?'huang-r113':d+'-r113';
+ if(referenceReady){
+  const tex=new T.Texture();tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=4;tex.minFilter=T.LinearFilter;
+  const img=new Image();
+  // Do not retain textures or promises in userData (SkeletonUtils clones it).
+  root.portraitReady=new Promise(resolve=>{
+   img.onload=()=>{if(!root.portraitDisposed){tex.image=img;tex.needsUpdate=true;faceMat.map=tex;faceMat.vertexColors=false;faceMat.color.set('#ffffff');faceMat.needsUpdate=true;
+     facialParts.forEach(part=>part.visible=false); }resolve();};
+   img.onerror=()=>resolve();img.src='data:image/jpeg;base64,'+reference;
+  });
+  root.portraitTexture=tex;
+ }
+ root.userData.portraitSculpt=huang?'huang-r114':d+'-r114';
 }else if(d==='musk-mask'){
 // Separate landmark-based portraits. Features are projected onto each face,
  // rather than sharing a generic depth plane where eyelids/lips disappear.
@@ -379,7 +404,7 @@ else if(d==='pirate'){const brim=ball([0,.55,0],[.95,.18,.6]);cap();ball([0,.65,
 else if(d==='banana'||d==='banana-bunch'){for(let i=0;i<4;i++){const a=i*1.57;tube([[0,.7,0],[Math.cos(a)*.5,.5,Math.sin(a)*.5],[Math.cos(a)*.8,.1,Math.sin(a)*.8]],.13);}cone([0,1,0],.17,.7,white);}
 else if(d==='cloud'){for(let i=0;i<7;i++)ball([Math.sin(i*2.4)*.5,.65+i%2*.15,Math.cos(i*2.4)*.35],[.38,.3,.32],white);for(let i=0;i<5;i++)ball([-.5+i*.25,.16,0],[.04,.13,.04],glass);}
 root.userData.materials=mats;return root;}
-export function disposeHeadgear(root){const geo=new Set(),mat=new Set(root.userData.materials||[]);root.traverse(o=>{if(o.geometry)geo.add(o.geometry);if(o.material)mat.add(o.material);});root.removeFromParent();geo.forEach(g=>g.dispose());mat.forEach(m=>m.dispose());}
+export function disposeHeadgear(root){root.portraitDisposed=true;root.portraitTexture?.dispose();const geo=new Set(),mat=new Set(root.userData.materials||[]);root.traverse(o=>{if(o.geometry)geo.add(o.geometry);if(o.material)mat.add(o.material);});root.removeFromParent();geo.forEach(g=>g.dispose());mat.forEach(m=>m.dispose());}
 export function attachHeadgear(T,model,item){let head=null,top=null;model.traverse(o=>{if(o.isBone&&/Head$/i.test(o.name))head=o;if(o.isBone&&/HeadTop/i.test(o.name))top=o;});if(!head)return null;model.updateMatrixWorld(true);const scale=head.getWorldScale(new T.Vector3()),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,root=createHeadgear(T,item);head.add(root);const portraitMask=['trump-mask','huang-mask','musk-mask','xi-mask','putin-mask','kim-mask'].includes(item.design),safe=v=>Math.max(.00001,Math.abs(v));root.position.set(0,height*(portraitMask?.35:.48)/safe(scale.y),height*(portraitMask?.25:.12)/safe(scale.z));root.scale.set(height/safe(scale.x),height/safe(scale.y),height/safe(scale.z));root.userData.anchor=head.name;return root;}
 
 // Reuse articulated neck groups; no geometry allocation on animation frames.
