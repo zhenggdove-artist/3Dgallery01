@@ -26,9 +26,9 @@ const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(
 // cell and open description while NEW is removed in place.
 export function inventoryPanelSignature(profile){
  return JSON.stringify([
-  profile?.inventory,profile?.equipment,profile?.wallet,profile?.fusion,
+  profile?.inventory,profile?.equipment,profile?.wallet,profile?.fusion,profile?.inventoryCapacity,profile?.admin,
   profile?.wingDesignCredits,profile?.quickSlots,
-  (profile?.inventoryInstances||[]).map(row=>[row.uid,row.itemId])
+  (profile?.inventoryInstances||[]).map(row=>[row.uid,row.itemId,row.shopTier])
  ]);
 }
 
