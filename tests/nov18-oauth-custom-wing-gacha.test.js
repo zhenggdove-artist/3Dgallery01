@@ -76,7 +76,7 @@ test('Google-only Firebase entry and verified server route integration',()=>{
  assert.match(firebase,/signInWithPopup/);
  assert.match(firebase,/existingGoogleToken/);
  assert.match(ui,/setFirebaseLoginStatus/);
- assert.match(ui,/mountWingPainter\(this\)/);
+ assert.match(ui,/mountWingPainter\(this,\{personal:this\.panelName==='wing-personal-painter',preview:this\.panelName==='wing-player-preview'\}\)/);
  assert.match(ui,/wing-epic-win/);
  assert.match(client,/ui\.addEventListener\('firebase-login'/);
  assert.match(atlas,/epicSpecimenCanvas/);

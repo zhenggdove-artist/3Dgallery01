@@ -669,7 +669,7 @@ ui.addEventListener('wing-publish-request',async event=>{
    if(world?.profile?.equipment?.wings!==result.personalWingId)
     throw new Error('個人翅膀已存入背包，裝備資料仍在同步中');
    resolve({...result,wingName:wing.name});
-   ui.wingDraft=null;ui.bagCategory='equipment';ui.openPanel('bag');
+   ui.wingPersonalDraft=null;ui.bagCategory='equipment';ui.openPanel('bag');
    ui.toast('翅膀已存入 BAG 並自動裝備：'+wing.name);return;
   }
   if(updating){
@@ -694,10 +694,10 @@ ui.addEventListener('wing-payment-status-request',async()=>{
  try{ui.setWingPaymentStatus(await network.request('/api/wing-pay/status'));}
  catch(error){ui.setWingPaymentStatus({checkoutEnabled:false,checkoutMode:'disabled'});ui.toast('Payment status unavailable.');}
 });
-ui.addEventListener('wing-payment-checkout',async()=>{
+ui.addEventListener('wing-payment-checkout',async event=>{
  if(ui.wingCheckoutBusy)return;
  ui.wingCheckoutBusy=true;if(ui.panelName==='wing-shop')ui.renderWingShop(world.profile);
- const order=await beginWingCheckout(network,ui);
+ const order=await beginWingCheckout(network,ui,event.detail);
  if(!order){ui.wingCheckoutBusy=false;if(ui.panelName==='wing-shop')ui.renderWingShop(world.profile);}
 });
 ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;

@@ -161,7 +161,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.level=Math.max(1,Math.floor(current.level||1));current.xp=Math.max(0,Math.floor(current.xp||0));
   current.wingTrialDraws=Number.isFinite(current.wingTrialDraws)?Math.max(0,Math.min(FREE_WING_TRIAL_LIMIT,Math.floor(current.wingTrialDraws))):0;
   current.wingPaidDraws=Number.isSafeInteger(current.wingPaidDraws)?Math.max(0,Math.min(100000,Math.floor(current.wingPaidDraws))):0;
-  current.wingDesignCredits=Number.isSafeInteger(current.wingDesignCredits)?Math.max(0,Math.min(1000,current.wingDesignCredits)):0;
+  current.wingDesignCredits=Number.isSafeInteger(current.wingDesignCredits)?Math.max(0,current.wingDesignCredits):0;
   if(!current.collectorSoldArtworks||typeof current.collectorSoldArtworks!=='object'||Array.isArray(current.collectorSoldArtworks))
    current.collectorSoldArtworks={};
   current.inventory=Array.isArray(current.inventory)?current.inventory.filter(itemById):[current.starterWeaponId];

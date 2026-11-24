@@ -198,7 +198,7 @@ export class TempleUI extends EventTarget{
     const charge=$('attack-button');let attackPointer=null;charge.onpointerdown=event=>{event.preventDefault();if(attackPointer!==null)return;attackPointer=event.pointerId;charge.setPointerCapture(event.pointerId);this.emit('attack-start');};const endAttack=(event,cancel=false)=>{if(event.pointerId!==attackPointer)return;attackPointer=null;this.emit(cancel?'attack-cancel':'attack-release');};charge.onpointerup=e=>endAttack(e);charge.onpointercancel=charge.onlostpointercapture=e=>endAttack(e,true);const jump=document.querySelector('[data-action=jump]');jump.onpointerdown=e=>{e.preventDefault();jump.setPointerCapture(e.pointerId);this.emit('jump');};jump.onclick=e=>{if(e.detail===0)this.emit('jump');e.stopPropagation();};
     addEventListener('keydown',event=>{if(this.self&&!this.panelName&&event.code==='KeyQ'&&!event.repeat&&!/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)){event.preventDefault();this.emit('attack-start');}});
     addEventListener('keyup',event=>{if(event.code==='KeyQ')this.emit('attack-release');});addEventListener('blur',()=>this.emit('attack-cancel'));
-    $('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.id==='wing-gift-button')this.openPanel('wing-painter');else if(button.dataset.action)this.emit(button.dataset.action);});
+    $('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.id==='wing-gift-button')this.openPanel('wing-personal-painter');else if(button.dataset.action)this.emit(button.dataset.action);});
     $('build-confirm').onclick=()=>this.emit('build-confirm');$('build-rotate').onclick=()=>this.emit('build-rotate');$('build-cancel').onclick=()=>this.emit('build-cancel');
     this.content.addEventListener('click',event=>this.panelClick(event));this.content.addEventListener('submit',event=>this.panelSubmit(event));
     // Native color inputs dispatch 'input' continuously while the picker
@@ -253,7 +253,7 @@ export class TempleUI extends EventTarget{
   const invincible=event.target.closest('[data-gm-invincible]');
   if(invincible)this.emit('gm-invincible',{enabled:invincible.checked});
  });
-     this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');else if(action==='wing-painter')this.openPanel('wing-painter');else if(action==='wing-manage')this.openPanel('wing-manage');
+     this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');else if(action==='wing-painter')this.openPanel('wing-painter');else if(action==='wing-player-preview')this.openPanel('wing-player-preview');else if(action==='wing-manage')this.openPanel('wing-manage');
       else if(action==='recover-misplaced-artwork')this.emit('server-action',{action:'recover-misplaced-artwork'});
       else if(action==='reset-buildings')this.emit('server-action',{action:'reset-buildings'});
        else if(action==='clean-graffiti'&&window.confirm('確定清除全部永久保存的房屋塗鴉？這個操作無法復原。'))this.emit('server-action',{action:'clean-graffiti'});
@@ -505,16 +505,16 @@ export class TempleUI extends EventTarget{
     this.fusionTimer=setTimeout(()=>{box.remove();if(this.fusionIndicator===box)this.fusionIndicator=null;},1020);
   }
   death(until,killer=''){if(this.deathUntil===until&&this.deathKiller===killer)return;this.deathUntil=until;this.deathKiller=killer;clearTimeout(this.deathTimer);const overlay=$('death');$('death-killer').textContent=killer?'KILLED BY '+killer:'';if(!until||until<=Date.now()){overlay.hidden=true;return;}overlay.hidden=false;const update=()=>{const left=Math.max(0,Math.ceil((until-Date.now())/1000));$('respawn-count').textContent=left;if(left)this.deathTimer=setTimeout(update,200);else overlay.hidden=true;};update();}
-  openPanel(name,fromJourney=false){if(!this.self)return;if(this.self.gmSpectatorPreview&&['gm','editor','help','wing-manage','wing-painter','shop-prices'].includes(name))return;
-     if(['gm','wing-manage','shop-prices'].includes(name)&&!this.self.profile?.admin)return;
-    if(name==='wing-painter'&&!this.self.profile?.admin&&!(this.world?.profile?.wingDesignCredits>0))return;if(name==='social'&&!fromJourney&&this.self.role!=='spectator'){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',name==='wing-painter');document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});
+  openPanel(name,fromJourney=false){if(!this.self)return;if(this.self.gmSpectatorPreview&&['gm','editor','help','wing-manage','wing-painter','wing-personal-painter','wing-player-preview','shop-prices'].includes(name))return;
+     if(['gm','wing-manage','shop-prices','wing-player-preview','wing-painter'].includes(name)&&!this.self.profile?.admin)return;
+    if(name==='wing-personal-painter'&&!(this.world?.profile?.wingDesignCredits>0))return;if(name==='social'&&!fromJourney&&this.self.role!=='spectator'){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',['wing-painter','wing-personal-painter','wing-player-preview'].includes(name));document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});
     if(name==='wing-shop'){$('panel-close').focus({preventScroll:true});this.emit('wing-payment-status-request');}
     if(name==='gm')this.requestGmPresence();}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;document.body.classList.remove('panel-open','panel-wing-painter','panel-wing-shop');this.wingGalleryObserver?.disconnect();this.panelName='';this.emit('panel',{open:false});}
-  renderPanel(){this.panelSignature=inventoryPanelSignature(this.world?.profile);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG',shop:'TEMPLE SHOP','shop-prices':'GM · SHOP PRICES','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
+  renderPanel(){this.panelSignature=inventoryPanelSignature(this.world?.profile);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG',shop:'TEMPLE SHOP','shop-prices':'GM · SHOP PRICES','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-personal-painter':'翅膀繪圖工作室','wing-player-preview':'翅膀繪圖工作室 · GM TEST','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
     if(this.panelName==='gm'){this.renderGm();return;}
-     if(this.panelName==='wing-painter'){mountWingPainter(this);return;}
-    if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + O：圓盤／三角檯座編輯（點選變藍，可修改座標與尺寸、DELETE 刪除、ESC 離開）<br>滑鼠中鍵拖曳：編輯模式下自由旋轉視角<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p><h3>GM 指令</h3><p><code>/reset building</code>：復原全部破損房屋（保留塗鴉）<br><code>/clean graffic</code>：永久清除牆面塗鴉<br><code>/reset message</code>：永久清空中央留言與聊天室<br><code>/reset</code>：清空玩家上傳作品<br><code>/recovery</code>：還原藝術品</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(['shop','shop-prices'].includes(this.panelName))this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='wing-manage')this.renderWingManage(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<section class="gm-wing-workspace"><h3>GM 觀眾模式測試</h3><p>使用正式觀眾權限及無模型自由鏡頭；測試期間保留 GM 戰鬥席。</p><button type="button" class="panel-button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button><hr><h3>GM 翅膀編輯工作區</h3><p>繪製、上架、設定中獎率及下架管理。</p><div class="gm-tools"><button type="button" data-gm-action="wing-painter">畫翅膀／上架</button><button type="button" data-gm-action="wing-manage">已上架翅膀／機率／下架</button></div></section><hr><h3>編輯展示圓盤與檯座</h3>
+     if(['wing-painter','wing-personal-painter','wing-player-preview'].includes(this.panelName)){mountWingPainter(this,{personal:this.panelName==='wing-personal-painter',preview:this.panelName==='wing-player-preview'});return;}
+    if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + O：圓盤／三角檯座編輯（點選變藍，可修改座標與尺寸、DELETE 刪除、ESC 離開）<br>滑鼠中鍵拖曳：編輯模式下自由旋轉視角<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p><h3>GM 指令</h3><p><code>/reset building</code>：復原全部破損房屋（保留塗鴉）<br><code>/clean graffic</code>：永久清除牆面塗鴉<br><code>/reset message</code>：永久清空中央留言與聊天室<br><code>/reset</code>：清空玩家上傳作品<br><code>/recovery</code>：還原藝術品</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(['shop','shop-prices'].includes(this.panelName))this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='wing-manage')this.renderWingManage(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<section class="gm-wing-workspace"><h3>GM 觀眾模式測試</h3><p>使用正式觀眾權限及無模型自由鏡頭；測試期間保留 GM 戰鬥席。</p><button type="button" class="panel-button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button><hr><h3>GM 翅膀編輯工作區</h3><p>繪製、上架、設定中獎率及下架管理。</p><div class="gm-tools"><button type="button" data-gm-action="wing-painter">畫翅膀／上架</button><button type="button" data-gm-action="wing-player-preview">測試玩家已開通的繪圖介面</button><button type="button" data-gm-action="wing-manage">已上架翅膀／機率／下架</button></div></section><hr><h3>編輯展示圓盤與檯座</h3>
  <div class="gm-tools">
   <button type="button" data-gm-platform-tool="edit">編輯圓盤／三角檯座</button>
   <button type="button" data-gm-platform-tool="place" data-gm-platform-kind="disc">增加圓盤</button>
@@ -560,7 +560,7 @@ export class TempleUI extends EventTarget{
         <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-open-shop-prices>商品售價編輯</button>
          <button type="button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button>
         <button type="button" data-gm-action="help" aria-label="GM instructions and shortcuts">！ GM 說明與快捷鍵</button>
-        <button type="button" data-gm-action="wing-painter">畫翅膀／上架翅膀</button>
+        <button type="button" data-gm-action="wing-painter">畫翅膀／上架翅膀</button><button type="button" data-gm-action="wing-player-preview">測試玩家已開通的繪圖介面</button>
         <button type="button" data-gm-action="wing-manage">翅膀上架管理／刪除／中獎率</button>
         <button type="button" data-gm-action="recover-misplaced-artwork">找回座標 -100 的失蹤作品</button>
         <button type="button" data-gm-action="reset-buildings">/reset building · 復原所有房屋（保留塗鴉）</button>
@@ -674,7 +674,7 @@ export class TempleUI extends EventTarget{
     void hydrateItemPreviews(this.content);
   }
 
-  // SUPPORT sells one authoring entitlement, not chance-based capsules.
+  // SUPPORT sells authoring entitlements, not chance-based capsules.
   // The merchant/checkout status is provided by the authenticated Worker.
   renderWingShop(profile){
    const credits=Math.max(0,Number(profile.wingDesignCredits)||0);
@@ -682,15 +682,21 @@ export class TempleUI extends EventTarget{
    const ready=status?.checkoutEnabled===true;
    const stage=status?.checkoutMode==='stage-only',busy=!!this.wingCheckoutBusy;
    const amount=Number.isInteger(status?.amount)&&status.amount>0?status.amount:30;
+   const flexible=status?.flexibleAmount===true,maxQuantity=flexible?(status.maxQuantity||100):1,maxAmount=flexible?(status.maxAmount||20000):amount;
+   const draft=this.wingSupportDraft??={quantity:1,extra:''};
+   const quantity=Math.min(maxQuantity,Math.max(1,Number(draft.quantity)||1));
    this.content.innerHTML=`<section class="wing-shop-panel wing-support-app wing-design-support" aria-label="Support GGTEMPLE">
     <div class="y2k-shell-header"><strong>▣ &nbsp; GGTEMPLE — SUPPORT.EXE</strong>${stage?'<small>TEST MODE</small>':''}</div>
     <div class="wing-support-controls">
      <header class="wing-shop-hero">
       <svg aria-hidden="true" width="64" height="48" viewBox="0 0 64 48"><path d="M31 36C11 35 4 20 4 7c12 1 22 9 27 24m2 5C53 35 60 20 60 7c-12 1-22 9-27 24" fill="#e6dcff" stroke="#574279" stroke-width="2"/><path d="M12 19c9 2 15 7 19 16m21-16c-9 2-15 7-19 16M32 3v12m-6-6h12" fill="none" stroke="#8c6ab3" stroke-width="2"/></svg>
-      <div><h3>Make your own wings.</h3><p>Support GGTEMPLE and unlock one wing canvas.</p></div>
+      <div><h3>Make your own wings.</h3><p>Support GGTEMPLE and unlock your own wing canvases.</p></div>
      </header>
      <section class="wing-payment-preview">
-      <div class="wing-order-line"><span>1 × Wing canvas</span><strong>NT$${amount}</strong></div>
+      <div class="wing-order-line"><span>Wing canvas · NT$${amount} each</span><strong><label>Qty <select data-wing-order-quantity aria-label="Number of wing canvases" ${!flexible||busy?'disabled':''}>${Array.from({length:maxQuantity},(_,i)=>`<option value="${i+1}" ${quantity===i+1?'selected':''}>${i+1}</option>`).join('')}</select></label></strong></div>
+      <div class="wing-order-line"><label for="wing-extra-support">Custom total (optional)</label><input id="wing-extra-support" data-wing-order-amount type="number" inputmode="numeric" min="${quantity*amount}" max="${maxAmount}" step="1" placeholder="NT$${quantity*amount}" value="${escape(draft.extra)}" ${!flexible||busy?'disabled':''} style="width:8em;max-width:45%;min-height:32px"></div>
+      <small>Each canvas costs NT$30. Any amount above your selected canvas cost is additional support.</small>
+      <div class="wing-order-line"><span data-wing-order-summary>${quantity} × Wing canvas</span><strong data-wing-order-total>NT$${quantity*amount}</strong></div>
       <button type="button" class="panel-button wing-support-pay" data-wing-checkout ${ready&&!busy?'':'disabled'}>${busy?'Opening checkout…':ready?stage?'Open test checkout':'Continue to ECPay ↗':status?'Checkout unavailable':'Checking availability…'}</button>
       <small class="wing-payment-hint" role="status">${busy?'Preparing your order.':ready?stage?'Test mode · no real charge.':'Payment takes place on ECPay.':status?'Online checkout is not available right now.':'Checking payment status.'}</small>
       ${credits>0?`<button type="button" class="panel-button wing-gift-action" data-open-gift>Open your canvas (${credits})</button>`:''}
@@ -698,6 +704,20 @@ export class TempleUI extends EventTarget{
     </div>
     <footer class="y2k-taskbar"><span>WING STUDIO</span><span>One-time purchase</span></footer>
    </section>`;
+   const qty=this.content.querySelector('[data-wing-order-quantity]'),custom=this.content.querySelector('[data-wing-order-amount]'),pay=this.content.querySelector('[data-wing-checkout]');
+   const refresh=()=>{
+    const n=Number(qty.value),min=n*amount;
+    custom.min=String(min);custom.placeholder='NT$'+min;
+    const total=custom.value===''?min:Number(custom.value);
+    const valid=Number.isSafeInteger(n)&&n>=1&&n<=maxQuantity&&Number.isSafeInteger(total)&&total>=min&&total<=maxAmount&&!custom.validity.badInput;
+    draft.quantity=n;draft.extra=custom.value;
+    this.content.querySelector('[data-wing-order-summary]').textContent=n+' × Wing canvas';
+    this.content.querySelector('[data-wing-order-total]').textContent=valid?'NT$'+total.toLocaleString('en-US'):'Invalid amount';
+    custom.setCustomValidity(valid?'':'Enter a whole amount from NT$'+min+' to NT$'+maxAmount+'.');
+    pay.disabled=!ready||busy||!valid;this.wingSupportSelection=valid?{quantity:n,amount:total}:null;
+   };
+   qty.addEventListener('change',()=>{if(custom.value!==''&&Number(custom.value)<Number(qty.value)*amount)custom.value='';refresh();});
+   custom.addEventListener('input',refresh);refresh();
   }
   setWingPaymentStatus(value){
    this.wingPaymentStatus=value;
@@ -826,8 +846,8 @@ export class TempleUI extends EventTarget{
      }
      if(button.dataset.openPlant){const plant=(this.world?.plants||[]).find(p=>p.id===button.dataset.openPlant);if(plant)this.showPlant(plant);return;}if(button.hasAttribute('data-open-wing-shop')){this.openPanel('wing-shop');return;}
     if(button.hasAttribute('data-open-wing-painter')){this.openPanel('wing-painter');return;}
-    if(button.hasAttribute('data-open-gift')){this.openPanel('wing-painter');return;}
-    if(button.hasAttribute('data-wing-checkout')){this.emit('wing-payment-checkout');return;}
+    if(button.hasAttribute('data-open-gift')){this.openPanel('wing-personal-painter');return;}
+    if(button.hasAttribute('data-wing-checkout')){if(this.wingSupportSelection)this.emit('wing-payment-checkout',{...this.wingSupportSelection});return;}
     if(button.hasAttribute('data-open-wing-manage')){this.openPanel('wing-manage');return;}
     if(button.hasAttribute('data-wing-edit')){
       if(!this.self?.profile?.admin)return;

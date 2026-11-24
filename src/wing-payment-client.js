@@ -5,15 +5,17 @@ const GATEWAYS={
  'stage-only':'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5',
  production:'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5'
 };
-export async function beginWingCheckout(network,ui){
+export async function beginWingCheckout(network,ui,selection={quantity:1,amount:30}){
  try{
   const status=await network.request('/api/wing-pay/status');
   if(!status.checkoutEnabled)throw Error('Payments are currently unavailable.');
   if(!['production','stage-only'].includes(status.checkoutMode))throw Error('Invalid checkout configuration.');
-  const order=await network.request('/api/wing-pay/checkout',{method:'POST',body:{}});
+  const {quantity,amount}=selection;
+  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>(status.maxQuantity||1)||!Number.isSafeInteger(amount)||amount<quantity*30||amount>(status.maxAmount||30))throw Error('Invalid support amount or quantity.');
+  const order=await network.request('/api/wing-pay/checkout',{method:'POST',body:{quantity,amount}});
   if(order.gateway!==GATEWAYS[status.checkoutMode]||order.checkoutMode!==status.checkoutMode||
-     order.amount!==30||order.designCredits!==1||!order.fields?.CheckMacValue||
-     !/^GW[A-Z0-9]{18}$/.test(order.orderId)||order.fields.TotalAmount!=='30')
+     order.amount!==amount||order.designCredits!==quantity||!order.fields?.CheckMacValue||
+     !/^GW[A-Z0-9]{18}$/.test(order.orderId)||order.fields.TotalAmount!==String(amount))
    throw Error('The checkout could not be verified.');
   if(order.fields.MerchantTradeNo!==order.orderId)throw Error('Checkout order mismatch.');
   sessionStorage.setItem('ggtemple-wing-pending-order',order.orderId);
@@ -42,7 +44,7 @@ export async function resumeWingCheckout(network,ui){
   const order=await network.request('/api/wing-pay/order?id='+encodeURIComponent(id));
   if(order.status==='paid'){
    sessionStorage.removeItem('ggtemple-wing-pending-order');
-   ui.toast('Payment confirmed. Your wing canvas is ready.');
+   ui.toast('Payment confirmed. '+order.designCredits+' wing canvas'+(order.designCredits===1?' is':'es are')+' ready.');
    return order;
   }
   ui.toast('Payment pending. Please do not pay again.');
