@@ -87,7 +87,7 @@ export class TempleUI extends EventTarget{
     });
     this.content.addEventListener('change',event=>{
      const select=event.target.closest('[data-shop-variant]');
-     if(!select||this.panelName!=='shop')return;
+     if(!select||!['shop','shop-prices'].includes(this.panelName))return;
      this.shopVariantChoice??={};
      this.shopVariantChoice[select.dataset.shopVariant]=select.value;
      const offset=this.content.scrollTop;
@@ -350,7 +350,7 @@ export class TempleUI extends EventTarget{
    enter(data){document.activeElement?.blur();this.self=data.self;this.authMode=data.authMode||'firebase';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;$('gm-menu').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;$('gm-menu').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();if(this.panelName&&this.panelName!=='bag')this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
-  setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(this.panelName==='shop'&&this.shopPriceSignature!==JSON.stringify(world.shopPrices||{})))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
+  setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','shop-prices','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(['shop','shop-prices'].includes(this.panelName)&&this.shopPriceSignature!==JSON.stringify(world.shopPrices||{})))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
   refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);
  const shieldItem=itemById(profile.equipment?.shield),shieldDisplay=$('shield-readout');
  if(shieldDisplay){
@@ -496,16 +496,16 @@ export class TempleUI extends EventTarget{
     this.fusionTimer=setTimeout(()=>{box.remove();if(this.fusionIndicator===box)this.fusionIndicator=null;},1020);
   }
   death(until,killer=''){if(this.deathUntil===until&&this.deathKiller===killer)return;this.deathUntil=until;this.deathKiller=killer;clearTimeout(this.deathTimer);const overlay=$('death');$('death-killer').textContent=killer?'KILLED BY '+killer:'';if(!until||until<=Date.now()){overlay.hidden=true;return;}overlay.hidden=false;const update=()=>{const left=Math.max(0,Math.ceil((until-Date.now())/1000));$('respawn-count').textContent=left;if(left)this.deathTimer=setTimeout(update,200);else overlay.hidden=true;};update();}
-  openPanel(name,fromJourney=false){if(!this.self)return;if(this.self.gmSpectatorPreview&&['gm','editor','help','wing-manage','wing-painter'].includes(name))return;
-     if(['gm','wing-manage'].includes(name)&&!this.self.profile?.admin)return;
+  openPanel(name,fromJourney=false){if(!this.self)return;if(this.self.gmSpectatorPreview&&['gm','editor','help','wing-manage','wing-painter','shop-prices'].includes(name))return;
+     if(['gm','wing-manage','shop-prices'].includes(name)&&!this.self.profile?.admin)return;
     if(name==='wing-painter'&&!this.self.profile?.admin&&!(this.world?.profile?.wingDesignCredits>0))return;if(name==='social'&&!fromJourney&&this.self.role!=='spectator'){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',name==='wing-painter');document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.renderPanel();this.emit('panel',{open:true,name});
     if(name==='wing-shop'){$('panel-close').focus({preventScroll:true});this.emit('wing-payment-status-request');}
     if(name==='gm')this.requestGmPresence();}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;document.body.classList.remove('panel-open','panel-wing-painter','panel-wing-shop');this.wingGalleryObserver?.disconnect();this.panelName='';this.emit('panel',{open:false});}
-  renderPanel(){this.panelSignature=inventoryPanelSignature(this.world?.profile);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
+  renderPanel(){this.panelSignature=inventoryPanelSignature(this.world?.profile);const profile=this.world?.profile;if(!profile)return;const titles={bag:'BAG / FUSION',shop:'TEMPLE SHOP','shop-prices':'GM · SHOP PRICES','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
     if(this.panelName==='gm'){this.renderGm();return;}
      if(this.panelName==='wing-painter'){mountWingPainter(this);return;}
-    if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + O：圓盤／三角檯座編輯（點選變藍，可修改座標與尺寸、DELETE 刪除、ESC 離開）<br>滑鼠中鍵拖曳：編輯模式下自由旋轉視角<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p><h3>GM 指令</h3><p><code>/reset building</code>：復原全部破損房屋（保留塗鴉）<br><code>/clean graffic</code>：永久清除牆面塗鴉<br><code>/reset message</code>：永久清空中央留言與聊天室<br><code>/reset</code>：清空玩家上傳作品<br><code>/recovery</code>：還原藝術品</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(this.panelName==='shop')this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='wing-manage')this.renderWingManage(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<section class="gm-wing-workspace"><h3>GM 觀眾模式測試</h3><p>使用正式觀眾權限及無模型自由鏡頭；測試期間保留 GM 戰鬥席。</p><button type="button" class="panel-button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button><hr><h3>GM 翅膀編輯工作區</h3><p>繪製、上架、設定中獎率及下架管理。</p><div class="gm-tools"><button type="button" data-gm-action="wing-painter">畫翅膀／上架</button><button type="button" data-gm-action="wing-manage">已上架翅膀／機率／下架</button></div></section><hr><h3>編輯展示圓盤與檯座</h3>
+    if(this.panelName==='help'){this.content.innerHTML='<h3>GM 編輯快捷鍵</h3><p>點擊作品選取。<br>Shift + Y：設定／匯出／上傳／新增圓盤<br>Shift + T：縮放（四角等比、中點單軸）<br>Shift + R：三軸旋轉<br>Shift + G：三軸移動<br>Shift + O：圓盤／三角檯座編輯（點選變藍，可修改座標與尺寸、DELETE 刪除、ESC 離開）<br>滑鼠中鍵拖曳：編輯模式下自由旋轉視角<br>跟隨 GM：讓作品隨玩家移動<br>儲存：發布預設位置與尺寸<br>ESC：取消尚未儲存修改</p><h3>GM 指令</h3><p><code>/reset building</code>：復原全部破損房屋（保留塗鴉）<br><code>/clean graffic</code>：永久清除牆面塗鴉<br><code>/reset message</code>：永久清空中央留言與聊天室<br><code>/reset</code>：清空玩家上傳作品<br><code>/recovery</code>：還原藝術品</p>';return;}if(this.panelName==='save')this.renderSave();if(this.panelName==='bag')this.renderBag(profile);if(['shop','shop-prices'].includes(this.panelName))this.renderShop(profile);if(this.panelName==='wing-shop')this.renderWingShop(profile);if(this.panelName==='wing-manage')this.renderWingManage(profile);if(this.panelName==='build')this.renderBuild(profile);if(this.panelName==='social')this.renderSocial(profile);if(this.panelName==='plant')this.renderPlant();if(this.panelName==='plant-list')this.renderPlantList();if(this.panelName==='editor'){this.renderEditor();if(this.self.profile?.admin)this.content.insertAdjacentHTML('beforeend',`<section class="gm-wing-workspace"><h3>GM 觀眾模式測試</h3><p>使用正式觀眾權限及無模型自由鏡頭；測試期間保留 GM 戰鬥席。</p><button type="button" class="panel-button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button><hr><h3>GM 翅膀編輯工作區</h3><p>繪製、上架、設定中獎率及下架管理。</p><div class="gm-tools"><button type="button" data-gm-action="wing-painter">畫翅膀／上架</button><button type="button" data-gm-action="wing-manage">已上架翅膀／機率／下架</button></div></section><hr><h3>編輯展示圓盤與檯座</h3>
  <div class="gm-tools">
   <button type="button" data-gm-platform-tool="edit">編輯圓盤／三角檯座</button>
   <button type="button" data-gm-platform-tool="place" data-gm-platform-kind="disc">增加圓盤</button>
@@ -588,11 +588,11 @@ export class TempleUI extends EventTarget{
   renderBag(profile){renderOriginalBag(this,profile);}
   renderShop(profile){
     this.shopPriceSignature=JSON.stringify(this.world?.shopPrices||{});
-    const editing=!!(profile.admin&&this.shopPriceEditing),prices=this.world?.shopPrices||{};
-    const tab=this.shopTab||'near',tabs={
+    const editing=this.panelName==='shop-prices'&&!!profile.admin,prices=this.world?.shopPrices||{};
+    const tab=this.shopTab==='owned'?'near':this.shopTab||'near',tabs={
      near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',
      comfort:'Comfort for the Soul',shield:'Shields',head:'Headwear',
-     outfit:'Outfits',armor:'Armor',wings:'Wings',owned:'Owned'};
+     outfit:'Outfits',armor:'Armor',wings:'Wings'};
     // One card per family: the shop has five qualities, not five separate
     // native weapon IDs each with a second set of grades.
     const groups=shopWeaponGroups(SHOP_ITEMS);
@@ -606,7 +606,6 @@ export class TempleUI extends EventTarget{
     });
     const visible=groups.filter(group=>{
      const base=group.base;
-     if(tab==='owned')return group.variants.some(v=>ownedIndicesFor(v).length>0);
      if(tab==='mystery')return base.mysteryWeapon;
      if(['near','mid','far'].includes(tab))return base.slot==='weapon'&&!base.mysteryWeapon&&weaponRangeClass(base)===tab;
      return base.slot===tab||(tab==='comfort'&&base.slot==='consumable');
@@ -617,7 +616,6 @@ export class TempleUI extends EventTarget{
     const cards=(chosen?[chosen]:[]).map(group=>{
      const {key,variants}=group;
      const selected=variants.find(v=>String(v.shopTier??v.id)===this.shopVariantChoice[key])||
-       (tab==='owned'?variants.find(v=>ownedIndicesFor(v).length>0):null)||
        variants.find(v=>v.shopTier===3)||variants[0];
      const ownedIndices=ownedIndicesFor(selected),ownedCount=ownedIndices.length;
      const equippedUid=profile.equippedInstanceIds?.[selected.slot];
@@ -643,28 +641,25 @@ export class TempleUI extends EventTarget{
        }).join('')}
        </select></label>`:'';
      const actions=`<div class="shop-purchase"><div class="shop-unit-price">UNIT PRICE · ${price.toLocaleString('en-US')} COINS</div>
-       <div class="shop-stock">OWNED ×${ownedCount}${selectedEquipped?' · EQUIPPED':''}</div>
        <label class="shop-quantity-label">QUANTITY
          <input type="number" min="1" max="99" step="1" inputmode="numeric"
           data-shop-quantity="${escape(key)}" value="${escape(quantity)}" aria-label="Purchase quantity for ${escape(familyName)}">
        </label>
        <output data-buy-total>${!valid?'QUANTITY 1–99':!room?'BAG FULL · '+inventoryCapacity(profile)+' MAX':'TOTAL · '+total.toLocaleString('en-US')+' COINS'}</output>
        <button type="button" data-buy="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''} ${!valid||!affordable||!room?'disabled':''}>${!room&&valid?'BAG FULL':!affordable&&valid?'NOT ENOUGH COINS':`BUY ×${valid?quantity:1} · ${total.toLocaleString('en-US')} COINS`}</button>
-       ${ownedCount&&selected.slot!=='consumable'?`<button type="button" data-equip="${escape(selected.id)}" ${selected.shopTier?`data-equip-index="${ownedIndices[0]}"`:''} ${selectedEquipped?'disabled':''}>${selectedEquipped?'EQUIPPED':'EQUIP OWNED'}</button>`:''}
      </div>`;
      const edit=editing?`<section class="shop-price-editor"><label>UNIT PRICE (COINS)<input type="number" inputmode="numeric" min="1" max="100000000" step="1" data-gm-price-input value="${price}"></label><div class="shop-price-actions"><button type="button" data-gm-price-save="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''}>SAVE PRICE</button><button type="button" data-gm-price-reset="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''}>RESET DEFAULT</button></div><small>Applies to this exact quality / style for every player.</small></section>`:'';
-     return itemCard({...selected,name:selected.name},selection+edit+actions);
+     return itemCard({...selected,name:selected.name},selection+(editing?edit:actions));
     });
     this.content.innerHTML=`<div class="armory-balance"><span>Equipment · ${(profile.inventory?.length||0).toLocaleString('en-US')}/${inventoryCapacity(profile).toLocaleString('en-US')} BAG</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
      <nav class="shop-tabs">${Object.entries(tabs).map(([id,label])=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${label}</button>`).join('')}</nav>
-     ${profile.admin?`<button type="button" class="panel-button" data-toggle-shop-prices aria-pressed="${editing}">PRICE EDITOR: ${editing?'ON':'OFF'}</button>`:''}
-     <div class="shop-grid" role="group" aria-label="Shop items">${visible.map(g=>{
+     <div class="shop-layout"><div class="shop-grid" role="group" aria-label="Shop items">${visible.map(g=>{
       const item=g.variants.find(v=>String(v.shopTier??v.id)===this.shopVariantChoice[g.key])||g.variants.find(v=>v.shopTier===3)||g.base;
       const label=shopOutfitCollection(item)||g.base.name;
       const color=RARITIES.find(v=>v.id===item.rarity)?.color||'#eadcf4';
       return `<button type="button" class="bag-cell shop-cell ${g===chosen?'selected':''}" data-shop-select="${escape(g.key)}" data-rarity="${escape(item.rarity)}" style="--rarity:${color}" aria-pressed="${g===chosen}" title="${escape(label)}">${previewMarkup(item)}<span class="shop-cell-name">${escape(label)}</span></button>`;
      }).join('')||'<p>There are no items in this category.</p>'}</div>
-     <div class="shop-detail">${cards.join('')||'<p>Select an item to inspect its stats, quality and price.</p>'}</div>`;
+     <div class="shop-detail">${cards.join('')||'<p>Select an item to inspect its stats, quality and price.</p>'}</div></div>`;
     this.content.querySelector('.shop-grid').scrollTop=scroll;
     void hydrateItemPreviews(this.content);
   }
@@ -803,10 +798,9 @@ export class TempleUI extends EventTarget{
   renderSocial(profile){this.content.innerHTML=`<h3>WRITE / PLANT</h3>${this.self?.role==='spectator'?'<p>觀眾直接在中央 WRITE 樹留下留言；不需角色飛升儀式。</p>':''}<form data-form="plant"><textarea class="panel-input" name="text" maxlength="500" rows="4" placeholder="Leave a message in the garden"></textarea>${drawingForm}<button class="panel-button">PLANT MESSAGE</button></form>`;attachDrawing(this.content);}
   renderPlantList(){const plants=[...(this.world?.plants||[])].reverse().slice(0,100);this.content.innerHTML=`<h3>留言之樹 · ${this.world?.plants?.length||0} 則記錄</h3><p>點擊任一留言可閱讀內容及回覆。</p>${plants.map(p=>`<button class="panel-button plant-list-entry" data-open-plant="${escape(p.id)}"><b>${escape(p.author)}</b> · ${escape(p.text||'媒體留言').slice(0,140)}</button>`).join('')||'<p>尚無留言。請使用 WRITE 種下第一則記錄。</p>'}`;}
   renderPlant(){const plant=this.selectedPlant;if(!plant)return this.closePanel();const parent=plant.parentId&&(this.world?.plants||[]).find(entry=>entry.id===plant.parentId);this.content.innerHTML=`<article class="plant-message"><small>${new Date(plant.createdAt).toLocaleString()}</small><h3>${escape(plant.author)}</h3><p>${escape(plant.text)}</p>${mediaMarkup(plant.media,window.TEMPLE_CONFIG.backendUrl)}${parent?`<small>Reply to ${escape(parent.author)}：${escape(parent.text).slice(0,80)}</small>`:''}</article><h3>REPLY BRANCH</h3><form data-form="plant-reply"><textarea class="panel-input" name="text" maxlength="500" rows="4" placeholder="Grow a reply branch from this plant"></textarea><button class="panel-button">PLANT REPLY</button></form>`;}
-  renderEditor(){const saved=JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');this.content.innerHTML=`<button type="button" class="panel-button" data-open-shop-prices>商品售價編輯 / SHOP PRICES</button><p><b>Shift + Y</b> 開啟編輯設定，<b>Shift + O</b> 編輯圓盤位置與尺寸；編輯時按住滑鼠中鍵拖曳可旋轉視角。</p><form data-form="editor"><label>解析度倍率上限<input class="panel-input" name="pixelRatio" type="number" min="0.6" max="2" step="0.05" value="${saved.pixelRatio||1.35}"></label><label>霧氣濃度<input class="panel-input" name="fog" type="number" min="0" max="0.04" step="0.0001" value="${saved.fog??.0008}"></label><label>作品漂浮幅度<input class="panel-input" name="artFloat" type="number" min="0" max="0.6" step="0.01" value="${saved.artFloat??.17}"></label><button class="panel-button">儲存編輯結果</button></form><button class="panel-button" data-export-layout>下載 temple-layout.json</button><p>${PLATFORMS.length} 件預設作品，配置由伺服器保存。</p>`;}
+  renderEditor(){const saved=JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');this.content.innerHTML=`<p><b>Shift + Y</b> 開啟編輯設定，<b>Shift + O</b> 編輯圓盤位置與尺寸；編輯時按住滑鼠中鍵拖曳可旋轉視角。</p><form data-form="editor"><label>解析度倍率上限<input class="panel-input" name="pixelRatio" type="number" min="0.6" max="2" step="0.05" value="${saved.pixelRatio||1.35}"></label><label>霧氣濃度<input class="panel-input" name="fog" type="number" min="0" max="0.04" step="0.0001" value="${saved.fog??.0008}"></label><label>作品漂浮幅度<input class="panel-input" name="artFloat" type="number" min="0" max="0.6" step="0.01" value="${saved.artFloat??.17}"></label><button class="panel-button">儲存編輯結果</button></form><button class="panel-button" data-export-layout>下載 temple-layout.json</button><p>${PLATFORMS.length} 件預設作品，配置由伺服器保存。</p>`;}
   async panelClick(event){const button=event.target.closest('button');if(!button||button.disabled)return;
-    if(button.hasAttribute('data-open-shop-prices')){if(!this.self?.profile?.admin)return;this.shopPriceEditing=true;this.openPanel('shop');return;}
-    if(button.hasAttribute('data-toggle-shop-prices')){if(!this.world?.profile?.admin)return;this.shopPriceEditing=!this.shopPriceEditing;this.renderShop(this.world.profile);return;}
+    if(button.hasAttribute('data-open-shop-prices')){if(!this.self?.profile?.admin)return;this.openPanel('shop-prices');return;}
     if(button.dataset.shopSelect){this.shopSelectedKey=button.dataset.shopSelect;this.renderShop(this.world.profile);return;}
     if(button.dataset.gmPriceSave||button.dataset.gmPriceReset){if(!this.world?.profile?.admin)return;const reset=!!button.dataset.gmPriceReset,field=button.closest('.shop-price-editor')?.querySelector('[data-gm-price-input]'),price=reset?null:Number(field?.value);if(!reset&&(!field?.value.trim()||!Number.isSafeInteger(price)||price<1||price>100000000))return this.toast('PRICE 1–100,000,000');button.blur();this.emit('server-action',{action:'gm-shop-price',itemId:button.dataset.gmPriceSave||button.dataset.gmPriceReset,price,...(button.dataset.shopTier?{qualityTier:Number(button.dataset.shopTier)}:{})});return;}
     if(button.dataset.gmPlatformTool&&this.self?.profile?.admin){
