@@ -18,7 +18,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:6,features:{artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,wearableCatalog:'r109',supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,features:{artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,wearableCatalog:'r110',supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
