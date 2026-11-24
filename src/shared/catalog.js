@@ -19,8 +19,14 @@ export const SHOP_WEAPON_GRADES=Object.freeze([
  {rank:4,label:'Gold',rarity:'relic',color:'#f1cc62'},
  {rank:5,label:'Purple',rarity:'epic',color:'#bd7bea'}
 ]);
+// Old IDs remain resolvable for already-owned gear, but are no longer sold, dropped or granted.
+export const RETIRED_HEADGEAR=Object.freeze({'pilgrim-mask':'hat-hockey','glass-crown':'hat-crown','temple-halo':'hat-angel','hat-jelly':'hat-jellyfish','hat-crab':'hat-crab-claw','hat-banana':'hat-banana-bunch'});
+export const isRetiredHeadgear=item=>!!item&&Object.hasOwn(RETIRED_HEADGEAR,item.id);
+const OUTFIT_COLLECTION_NAMES=Object.freeze({pajamas:'Pajamas',silk:'Silk',fuzzy:'Fuzzy',pig:'Pig',angel:'Angel',centaur:'Centaur',dinosaur:'Dinosaur',skater:'Skater',witch:'Witch',astronaut:'Astronaut'});
+export function shopOutfitCollection(item){return item?.slot==='outfit'&&!item.creature&&OUTFIT_COLLECTION_NAMES[item.design]||null;}
 const SHOP_NATIVE_FAMILIES=new Set(['tide','frost','ember','storm','prism','bloom','nova','saber','whip','swatter','pan','planter','palm']);
 export function shopWeaponGroupKey(item){
+ if(shopOutfitCollection(item))return 'outfit:'+item.design;
  if(item?.slot!=='weapon')return item?.id||'';
  const match=/^([a-z]+)-([1-5])$/.exec(item.id);
  return 'weapon:'+(match&&SHOP_NATIVE_FAMILIES.has(match[1])?match[1]:item.id);
@@ -28,6 +34,7 @@ export function shopWeaponGroupKey(item){
 export function shopWeaponGroups(items){
  const groups=new Map();
  for(const item of items||[]){
+  if(isRetiredHeadgear(item))continue;
   const key=shopWeaponGroupKey(item);
   if(!groups.has(key))groups.set(key,{key,variants:[],base:item});
   const group=groups.get(key);
@@ -40,7 +47,7 @@ export function shopWeaponGroups(items){
    group.variants=SHOP_EXOTIC_TIERS.map(tier=>shopWeaponVariant(item,tier));
   }
  }
- return [...groups.values()].map(group=>({...group,variants:group.variants.sort((a,b)=>(a.shopTier||0)-(b.shopTier||0))}));
+ return [...groups.values()].map(group=>({...group,variants:group.variants.sort((a,b)=>(a.shopTier||a.tier||0)-(b.shopTier||b.tier||0))}));
 }
 // Mystery is limited to five-quality whip/pan/swatter sets and the giraffe.
 // Family labels alone are insufficient: many unrelated exotics are 'pan'.
@@ -161,7 +168,7 @@ export function registerCustomWings(wings=[]){
 }
 export const itemById = id => INDEX.get(id) || null;
 
-export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>item.slot!=='material'&&!item.notForSale&&item.price>0));
+export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>item.slot!=='material'&&!item.notForSale&&!isRetiredHeadgear(item)&&item.price>0));
 export const ECONOMY = Object.freeze({
   platformCoinValue:40,
   platformCoinRespawnMs:90_000,
@@ -193,12 +200,12 @@ export function groundDropRoll(rng=Math.random){
  ],rng).id;
  if(kind==='coin')return {kind,amount:20+Math.floor(rng()*41)};
  const pool=kind==='weapon'?WEAPONS.filter(item=>item.tier>0&&item.tier<=3&&!item.notForSale):
-  RELETTER_ITEMS.filter(item=>['head','outfit','shield'].includes(item.slot)&&item.tier<=3);
+  RELETTER_ITEMS.filter(item=>['head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier<=3);
  const weighted=pool.map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));
  return {kind,itemId:weightedChoice(weighted,rng).id};
 }
 
 export function monsterDropRoll(rng=Math.random){
-  const pool=RELETTER_ITEMS.filter(item=>['weapon','head','outfit','shield'].includes(item.slot)&&item.tier>0).map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
+  const pool=RELETTER_ITEMS.filter(item=>['weapon','head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier>0).map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
   return {kind:'equipment',itemId:weightedChoice(pool,rng).id};
 }

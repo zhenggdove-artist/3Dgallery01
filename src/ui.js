@@ -4,7 +4,7 @@ import {ART_ACCEPT} from './artwork-upload.js';
 import {bindBagDrag} from './bag-drag.js';
 import {PLATFORMS} from './shared/arena.js';
 import {playerArtworkAppearanceMarkup} from './art-editor-panel.js';
-import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_WEAPON_GRADES,shopWeaponGroups,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant,inventoryCapacity} from './shared/catalog.js';
+import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_WEAPON_GRADES,shopWeaponGroups,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant,inventoryCapacity,shopOutfitCollection} from './shared/catalog.js';
 import {SOUND_PROFILES} from './game-audio.js';
 import {pvpShotDamage} from './shared/combat-balance.js';
 import {weaponQuality} from './shared/weapon-abilities.js';
@@ -627,14 +627,16 @@ export class TempleUI extends EventTarget{
      const total=valid?selected.price*quantity:0;
      const affordable=profile.admin||Number(profile.wallet)>=total;
      const room=(profile.inventory?.length||0)+quantity<=inventoryCapacity(profile);
-     const familyName=selected.slot==='weapon'&&!selected.exotic?
-       selected.name.replace(/^(?:Seed|Dawn|Radiant|Celestial|Eternal)\\s+/,''):group.base.name;
-     const selection=variants.length>1?`<label class="shop-quality-picker">WEAPON QUALITY / PRICE
-       <select data-shop-variant="${escape(key)}" aria-label="Choose quality for ${escape(familyName)}">
+     const outfitCollection=shopOutfitCollection(selected);
+     const familyName=outfitCollection||(selected.slot==='weapon'&&!selected.exotic?
+       selected.name.replace(/^(?:Seed|Dawn|Radiant|Celestial|Eternal)\s+/,''):group.base.name);
+     const selection=variants.length>1?`<label class="shop-quality-picker">${outfitCollection?'OUTFIT VARIANT / PRICE':'WEAPON QUALITY / PRICE'}
+       <select data-shop-variant="${escape(key)}" aria-label="Choose variant for ${escape(familyName)}">
        ${variants.map(v=>{
-        const grade=SHOP_WEAPON_GRADES[(v.shopTier||3)-1];
+        const grade=v.shopTier?SHOP_WEAPON_GRADES[v.shopTier-1]:null;
+        const value=String(v.shopTier??v.id),current=String(selected.shopTier??selected.id);
         const own=ownedIndicesFor(v).length;
-        return `<option value="${v.shopTier}" ${v.shopTier===selected.shopTier?'selected':''}>${escape(grade.label)} · ${escape(grade.rarity.toUpperCase())} — ${Number(v.price).toLocaleString('en-US')} Coins${own?' · ×'+own:''}</option>`;
+        return `<option value="${escape(value)}" ${value===current?'selected':''}>${escape(grade?.label||v.name)} · ${escape((grade?.rarity||v.rarity||'common').toUpperCase())} — ${Number(v.price).toLocaleString('en-US')} Coins${own?' · ×'+own:''}</option>`;
        }).join('')}
        </select></label>`:'';
      const actions=`<div class="shop-purchase">

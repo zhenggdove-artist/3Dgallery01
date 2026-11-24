@@ -28,7 +28,7 @@ test('every specified colour/rank is exactly five times its former shop price',(
  assert.equal(giraffe.price,19999,'Giraffe Boomerang has a fixed Mystery price');
  // Exotic weapons may share 'whip', 'swatter' or 'pan' families but
  // should not inherit a 5x price multiplier.
- for(const id of ['goldfish','telephone','fan','accordion','clam','white-cat','planter-1']){
+ for(const id of ['goldfish','telephone','accordion','clam','white-cat','planter-1']){
   const original=EQUIPMENT.find(i=>i.id===id),item=WEAPONS.find(i=>i.id===id);
   assert.equal(item.mysteryWeapon,false,id);
   assert.equal(item.price,ranks[Math.max(1,Math.min(5,original.tier||1))-1]+Math.min(180,original.price||0),id);

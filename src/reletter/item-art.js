@@ -5,7 +5,9 @@ export function itemIcon(item){
  if(item.id==='chiang-token')return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M15 53L12 17Q32-6 52 17L49 53Z" fill="#493455" stroke="#c8a565" stroke-width="3"/><path d="M20 51V18Q32 5 44 18V51Z" fill="none" stroke="#987548"/><text x="32" y="38" text-anchor="middle" fill="#efd6a3" font-size="24" font-family="serif">蔣</text><path d="M27 55V63M32 55V64M37 55V63" stroke="#a875ba" stroke-width="3"/></svg>');
  if(['seed','harvest'].includes(item.slot))return botanicalIcon(item);if(item.slot==='wings')return wingIcon(item);
  if(item.slot==='outfit')return './art/outfits/'+item.id+'.webp';
- if(item.slot==='head')return './art/headgear/'+item.id+'.webp';
+ // Headgear uses createHeadgear for both product previews and world loot.
+ // Do not fetch the retired pre-rendered pictures from any legacy caller.
+ if(item.slot==='head')return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><text x="32" y="34" text-anchor="middle" font-size="9" fill="white">HEADGEAR</text></svg>');
  const c=item.color||'#91b8d9',family=item.family,t=item.tier||0;
  const blade='<path d="M49 7L52 20 28 46 21 39Z" fill="url(#metal)" stroke="#d5f8ff"/><path d="M47 12L25 40" stroke="white" stroke-width="2"/><path d="M14 36L31 51M12 53L22 43" stroke="#6d4a35" stroke-width="6"/>';
  const gun='<path d="M10 26L46 22 52 29 43 36 24 37 21 52 13 50 16 34Z" fill="url(#metal)" stroke="#395465"/><path d="M30 22V36M36 21V35M42 21V34" stroke="#25394e" stroke-width="2"/><rect x="43" y="24" width="13" height="8" rx="2" fill="#e2f2fb"/><circle cx="22" cy="30" r="5" fill="'+c+'"/>';

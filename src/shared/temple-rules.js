@@ -7,7 +7,7 @@ import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
-import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
+import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
@@ -132,7 +132,7 @@ export function migrateWorld(raw,now=Date.now()){
 
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
-    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,starterWeaponId:STARTER_LOADOUT.weapon,inventory:admin?ITEMS.map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
+    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,starterWeaponId:STARTER_LOADOUT.weapon,inventory:admin?ITEMS.filter(item=>!isRetiredHeadgear(item)).map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
     gmAllItemsGranted:!!admin,gmKnownCustomWingIds:[],collectorSoldArtworks:{},
     fusion:{},wingTrialDraws:0,wingPaidDraws:0,wingDesignCredits:0,createdAt:now,updatedAt:now,lastAttackAt:0};
 }
@@ -182,7 +182,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
     const owned=new Set(current.inventory);
     for(const item of ITEMS){
      if(current.inventory.length>=inventoryCapacity(current))break;
-     if(!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}
+     if(!isRetiredHeadgear(item)&&!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}
     }
     current.gmAllItemsGranted=true;
    }
@@ -218,11 +218,6 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   for(const record of [...Object.values(current.fusion||{}),...Object.values(current.fusionByInstance||{})]){
    if(Array.isArray(record?.effects)&&record.effects.includes('fan'))record.effects=record.effects.filter(id=>id!=='fan');
    if(Array.isArray(record?.original?.fusionEffects)&&record.original.fusionEffects.includes('fan'))record.original.fusionEffects=record.original.fusionEffects.filter(id=>id!=='fan');
-  }
-  if(current.equipment.weapon&&!current.inventory.includes(current.equipment.weapon)){
-   const replacement=current.inventory.find(id=>itemById(id)?.slot==='weapon');
-   current.equipment.weapon=replacement||STARTER_LOADOUT.weapon;
-   if(!replacement)current.inventory.unshift(STARTER_LOADOUT.weapon);
   }
   ensureFusionIdentity(current);
   // The old one-time GM grant excluded later catalog releases. Add only the

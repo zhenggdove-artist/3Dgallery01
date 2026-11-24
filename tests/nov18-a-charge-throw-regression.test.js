@@ -9,7 +9,7 @@ const NOW=2400000;
 const actor={key:'a-button-regression',name:'A tester',role:'fighter',position:[75,0,0],color:'#fff'};
 
 test('server validates fully charged ultimates for melee, odd weapons and first-person firearms',()=>{
- for(const id of ['pan-1','whip-1','telephone','goldfish','fan','accordion','jellybrella','white-cat','black-cat','calico-cat']){
+ for(const id of ['pan-1','whip-1','telephone','goldfish','accordion','jellybrella','white-cat','black-cat','calico-cat']){
   const world=createInitialWorld(NOW),profile=ensureProfile(world,actor.key,actor.name,actor.color,NOW);
   profile.inventory.push(id);profile.equipment.weapon=id;
   const weapon=itemById(id),pressed=NOW+1000;

@@ -11,7 +11,7 @@ const revision=await readFile(resolve(source,'.git/refs/heads/main'),'utf8').cat
 const copied=new Set(),manifest={source:'zhenggdove-artist/RELETTER (owner local checkout)',revision:revision.trim(),files:{},fonts:{}};
 async function vendor(name){if(copied.has(name))return;copied.add(name);const data=await readFile(resolve(source,name));await mkdir(dirname(resolve(dest,name)),{recursive:true});await copyFile(resolve(source,name),resolve(dest,name));manifest.files[name]=createHash('sha256').update(data).digest('hex');for(const match of data.toString().matchAll(/from\s+['"](\.{1,2}\/.*?\.js)['"]/g))await vendor(relative(source,resolve(source,dirname(name),match[1])).replaceAll('\\','/'));}
 for(const name of [...names,'odd-weapon-art.js','odd-weapon-effects.js','fusion-catalog.js','server/fusion-rules.js','enemy-spell-effects.js','damage-numbers.js','chimera-art.js'])await vendor(name);
-await cp(resolve(source,'art'),resolve('art'),{recursive:true});
+await cp(resolve(source,'art'),resolve('art'),{recursive:true,filter:path=>relative(resolve(source,'art'),path).split(/[\\/]/)[0]!=='headgear'});
 await mkdir(resolve(dest,'art'),{recursive:true});
 for(const name of ['guardian-points.json','guardian-run.bin','guardian-body.jpg','guardian-face-reference.png','foreman-rig.glb','foreman-reference.png'])await copyFile(resolve(source,'art',name),resolve(dest,'art',name));
 const html=(await readFile(resolve(source,'index.html'),'utf8')).replaceAll('\r\n','\n');

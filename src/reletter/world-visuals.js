@@ -7,6 +7,7 @@ import {fishDataURL} from './fish-art.js';
 import {createFishModel,createWorldFishModel,animateFishModel,disposeFishModel} from './fish-model.js';
 import {rightHand} from './held-weapons.js';
 import {itemIcon} from './item-art.js';
+import {createHeadgear} from './headgear-model.js';
 export function originalWorldVisuals(scene,onCatch=()=>{}){
 let globalTime=0,charModel=null,charRoot=new THREE.Group(),selectedCharacter='',reelHeld=false;
 const remotePlayers=new Map(),cropTextures=new Map(),fishTextures=new Map(),fishingRods=new Map();
@@ -140,7 +141,11 @@ function updateFishingRods(f){
 
 const lootTextures=new Map();let lootHalo;
 function lootGlow(color){if(!lootHalo){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'#ffffffaa');g.addColorStop(.35,'#ffffff55');g.addColorStop(1,'#ffffff00');x.fillStyle=g;x.fillRect(0,0,128,128);lootHalo=new THREE.CanvasTexture(c);lootHalo.userData.sharedGarden=true;}return new THREE.Sprite(new THREE.SpriteMaterial({map:lootHalo,color,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));}
-function createItemDrop(item,affixed=false){const g=new THREE.Group(),rarity=itemRarity(affixed?{...item,affixId:'dread'}:item);g.name='Loot: '+item.name;g.userData.itemId=item.id;g.userData.rarity=rarity.id;const glow=lootGlow(rarity.color);glow.scale.set(3.5,3.5,1);g.add(glow);let texture=lootTextures.get(item.id);if(!texture){texture=new THREE.TextureLoader().load(itemIcon(item));texture.colorSpace=THREE.SRGBColorSpace;texture.userData.sharedGarden=true;lootTextures.set(item.id,texture);}const icon=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,toneMapped:false}));icon.scale.set(1.65,1.65,1);g.add(icon);return g;}
+function createItemDrop(item,affixed=false){const g=new THREE.Group(),rarity=itemRarity(affixed?{...item,affixId:'dread'}:item);g.name='Loot: '+item.name;g.userData.itemId=item.id;g.userData.rarity=rarity.id;if(item.slot==='head'){
+ const model=createHeadgear(THREE,item),bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3());
+ const scale=1.55/Math.max(.15,size.x,size.y,size.z);model.scale.setScalar(scale);
+ model.position.copy(bounds.getCenter(new THREE.Vector3()).multiplyScalar(-scale));g.add(model);return g;
+}const glow=lootGlow(rarity.color);glow.scale.set(3.5,3.5,1);g.add(glow);let texture=lootTextures.get(item.id);if(!texture){texture=new THREE.TextureLoader().load(itemIcon(item));texture.colorSpace=THREE.SRGBColorSpace;texture.userData.sharedGarden=true;lootTextures.set(item.id,texture);}const icon=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,toneMapped:false}));icon.scale.set(1.65,1.65,1);g.add(icon);return g;}
 
 return {makeCropModel,waterFeature,swimmingFish,createItemDrop,disposeAdventure,
  beforeAnimation:restoreFishingPoses,

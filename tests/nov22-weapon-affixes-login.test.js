@@ -55,7 +55,7 @@ test('weapons gain effective crit, damage reduction, HP and haste from owned enc
 });
 
 test('fusion preserves each prefix in acquisition order and inherits 30 percent of source value',()=>{
- const {world,p}=prepare(),target=itemById('accordion'),source=itemById('fan');
+ const {world,p}=prepare(),target=itemById('accordion'),source=itemById('telephone');
  const tIndex=p.inventory.indexOf(target.id),sIndex=p.inventory.indexOf(source.id);
  selectEquipmentInstance(p,'weapon',tIndex);
  p.fusionByInstance[p.inventoryInstances[tIndex].uid]??={};

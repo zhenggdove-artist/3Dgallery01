@@ -11,11 +11,12 @@ test('Golden Girdle is the exact original font binary',()=>{
  assert.equal(hash,'46e61e171acb970eabd7cc9918c349b851c25d448563e4613b229f1b34ffa523');
 });
 test('Original combat equipment IDs survive; the Temple-only farming catalog is retired',()=>{
- for(const item of EQUIPMENT.filter(item=>item.id!=='chiang-token'&&!['seed','harvest'].includes(item.slot))){
+ for(const item of EQUIPMENT.filter(item=>!['chiang-token','fan'].includes(item.id)&&!['seed','harvest'].includes(item.slot))){
   assert.equal(itemById(item.id)?.name,item.name);
   assert.equal(itemById(item.id)?.family,item.family);
  }
  assert.equal(itemById('chiang-token'),null);
+ assert.equal(itemById('fan'),null);
  assert.equal(itemById('seed-1'),null);
  assert.equal(itemById('harvest-1'),null);
 });

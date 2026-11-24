@@ -78,18 +78,12 @@ test('giraffe boomerang damages monster on both outbound and return independentl
  assert.ok(hits.some(e=>e.kind==='boomerang-out'));
  assert.ok(hits.some(e=>e.kind==='boomerang-return'));
 });
-test('fan produces four server-owned independently wandering vortex tracks, and quality lengthens them',()=>{
+test('retired electric fan cannot be purchased or cast',()=>{
  const {world,p}=game('fan');
- p.fusion.fan={layer:4,bonus:1};
- attack(world,start+1000,{phase:'charge'});
- const result=attack(world,start+2400,{charge:1});
- assert.ok(result.attackEvent?.ultimate);
- const fx=world.persistentAttacks.find(v=>v.kind==='fan');
- assert.ok(fx);
- assert.ok(fx.expiresAt-fx.createdAt>5000);
- const low=weaponQuality({...itemById('fan'),tier:1});
- assert.ok(fx.radius>low.radius*.6,'purple/legendary fan radius remains larger after the common 60% resize');
- assert.ok(fx.expiresAt-fx.createdAt>1400+low.tier*850);
+ assert.equal(itemById('fan'),null);
+ const result=attack(world,start+1000,{phase:'charge'});
+ assert.notEqual(p.equipment.weapon,'fan');
+ assert.ok(!world.persistentAttacks.some(v=>v.kind==='fan'));
 });
 test('shotgun is twenty half-sized glowing rainbow spheres, charged larger; other charged skills have separate constructions',()=>{
  const scene=new THREE.Scene(),vfx=new WeaponSignatureEffects(scene);
@@ -108,7 +102,6 @@ test('shotgun is twenty half-sized glowing rainbow spheres, charged larger; othe
   'all twenty marbled orbs have an additive luminous halo');
  const cases=[
   ['bloom-3','One enormous forward rotating translucent particle blossom','Points'],
-  ['fan','Four independent wandering volumetric tornadoes','Points'],
   ['giraffe','Visible spinning yellow giraffe model, outbound and returning','Mesh']
  ];
  for(const [id,name,type] of cases){
