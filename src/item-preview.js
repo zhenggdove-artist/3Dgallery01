@@ -35,11 +35,7 @@ export function itemPreview(item){
  const job=queue.then(async()=>{
   try{
    let url;
-   if(item.slot==='outfit'&&!item.creature){
-    // These are actual authored outfit illustrations, not old inventory icons.
-    url='./art/outfits/'+encodeURIComponent(item.id)+'.webp';
-    await preloadImage(url);
-   }else url=await renderPreview(item);
+   url=await renderPreview(item);
    finished.set(key,url);
    return url;
   }catch(error){
@@ -222,13 +218,13 @@ async function renderPreview(item){
   const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(3,5,4);scene.add(light);
   camera=new THREE.PerspectiveCamera(35,1,.01,1000);
  }
- const creatureSuit=item.slot==='outfit'&&!!item.creature;
+ const creatureSuit=item.slot==='outfit';
  renderer.setSize(creatureSuit?384:192,creatureSuit?384:192);
  const model=item.family==='saber'?saberProductPortrait():creatureSuit?creatureOutfitProductPortrait(item):shapeModel(item);
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
- const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*(item.slot==='outfit'&&item.creature?1.9:2.2);
- camera.position.copy(center).add((item.family==='saber'||item.slot==='outfit'&&item.creature?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
+ const size=box.getSize(new THREE.Vector3()),distance=Math.max(size.x,size.y,size.z,.1)*(item.slot==='outfit'?1.9:2.2);
+ camera.position.copy(center).add((item.family==='saber'||item.slot==='outfit'?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
  camera.lookAt(center);
  try{
   await renderer.compileAsync(scene,camera);
