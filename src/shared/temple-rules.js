@@ -7,7 +7,7 @@ import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
-import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,shopPrice,shopPriceKey,shopPurchaseVariant,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
+import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,shopPrice,shopPriceKey,shopPurchaseVariant,shopResalePrice,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
@@ -796,8 +796,8 @@ function buy(world,profile,body){
  const base=SHOP_ITEMS.find(entry=>entry.id===body.itemId);
  if(!base)return {error:'Item is not sold'};
  const weaponChoice=base.slot==='weapon';
-  const qualityTier=body.qualityTier===undefined?3:body.qualityTier;
-  const item=weaponChoice?shopWeaponVariant(base,qualityTier):base;
+  const qualityTier=body.qualityTier;
+  const item=shopPurchaseVariant(base.id,qualityTier);
   if(!item||(!weaponChoice&&body.qualityTier!==undefined))
   return {error:'Invalid weapon quality'};
  const quantity=body.quantity===undefined?1:body.quantity;
@@ -806,11 +806,11 @@ function buy(world,profile,body){
  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)
   return {error:'Quantity must be an integer from 1 to 99'};
  if(profile.inventory.length+quantity>inventoryCapacity(profile))return {error:`Inventory full (${inventoryCapacity(profile)} items maximum)`};
- const total=shopPrice(item,world.shopPrices)*quantity;
+ const unitPrice=shopPrice(item,world.shopPrices),total=unitPrice*quantity;
  if(!Number.isSafeInteger(total)||total<0)return {error:'Invalid purchase amount'};
  if(!spend(profile,total,world))return {error:'Not enough coins'};
  for(let i=0;i<quantity;i++)
-  appendInventoryInstance(profile,base.id,'shop',weaponChoice?item.shopTier:null);
+  appendInventoryInstance(profile,base.id,'shop',weaponChoice?item.shopTier:null,profile.admin?unitPrice:unitPrice);
  profile.itemOrigins??={};profile.itemOrigins[base.id]='shop';
  const charged=profile.admin?0:total;
  return {notice:`PURCHASE SUCCESSFUL · ${item.name} ×${quantity} · ${charged} coins`,
@@ -850,7 +850,7 @@ function useConsumable(world,profile,actor,body,now){
  return {notice:`Restored ${restored} HP · ${item.name}`,
   healed:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
 }
-function sell(world,profile,body){const item=itemById(body.itemId),index=profile.inventory.indexOf(body.itemId);if(!item||index<0)return {error:'Item is not owned'};if(item.id===(profile.starterWeaponId||STARTER_LOADOUT.weapon)||Object.values(profile.equipment).includes(item.id))return {error:'Unequip this item before selling'};removeInventoryInstance(profile,index);earn(profile,item.sell||Math.floor((item.price||0)*.25),world);return {notice:`Sold ${item.name} · +${item.sell||0} coins`};}
+function sell(world,profile,body){const item=itemById(body.itemId),index=profile.inventory.indexOf(body.itemId);if(!item||index<0)return {error:'Item is not owned'};if(item.id===(profile.starterWeaponId||STARTER_LOADOUT.weapon)||Object.values(profile.equipment).includes(item.id))return {error:'Unequip this item before selling'};const resale=shopResalePrice(item,profile.inventoryInstances?.[index],world.shopPrices);removeInventoryInstance(profile,index);earn(profile,resale,world);return {notice:`Sold ${item.name} · +${resale} coins`};}
 function equip(profile,body){const item=itemById(body.itemId);if(!item||!profile.inventory.includes(item.id)||!EQUIPPABLE_SLOTS.includes(item.slot))return {error:'Item is not owned'};const index=Number.isInteger(body.inventoryIndex)?body.inventoryIndex:profile.inventory.indexOf(item.id);if(profile.inventory[index]!==item.id)return {error:'Inventory changed: choose the equipment again'};selectEquipmentInstance(profile,item.slot,index);return {notice:`Equipped ${item.name}`};}
 
 function validPlatformTransform(position,radius,height){

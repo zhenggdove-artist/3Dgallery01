@@ -73,7 +73,7 @@ export function ensureFusionIdentity(profile){
   // Per-instance provenance. Never infer a newly purchased item's stats from catalog ID.
   const source=profile.itemOrigins?.[itemId];
   const origin=found?.origin||(source==='monster'||source==='ground'?'ground':source==='shop'?'shop':'grant');
-  return {uid,itemId,origin,acquiredAt:Number.isFinite(found?.acquiredAt)?found.acquiredAt:index,viewed:found?.viewed!==false,...(Number.isInteger(found?.shopTier)?{shopTier:found.shopTier}:{})};
+  return {uid,itemId,origin,acquiredAt:Number.isFinite(found?.acquiredAt)?found.acquiredAt:index,...(Number.isSafeInteger(found?.paidUnitPrice)?{paidUnitPrice:found.paidUnitPrice}:{}),viewed:found?.viewed!==false,...(Number.isInteger(found?.shopTier)?{shopTier:found.shopTier}:{})};
  });
  profile.inventoryInstances=current;
  profile.fusionByInstance??={};
@@ -181,11 +181,11 @@ export function selectEquipmentInstance(profile,slot,index){
  return true;
 }
 
-export function appendInventoryInstance(profile,itemId,origin='ground',shopTier=null){
+export function appendInventoryInstance(profile,itemId,origin='ground',shopTier=null,paidUnitPrice=null){
  ensureFusionIdentity(profile);
  profile.inventory.push(itemId);
  const uid=newUid();
- profile.inventoryInstances.push({uid,itemId,origin,acquiredAt:Date.now(),viewed:false,
+ profile.inventoryInstances.push({uid,itemId,origin,acquiredAt:Date.now(),viewed:false,...(Number.isSafeInteger(paidUnitPrice)?{paidUnitPrice}:{}),
   ...(Number.isInteger(shopTier)?{shopTier}:{})});
  if(itemById(itemId)?.slot==='weapon'){
   profile.fusionByInstance??={};

@@ -1,4 +1,4 @@
-import {itemById,EQUIPPABLE_SLOTS,RARITIES,shopWeaponVariant} from './shared/catalog.js';
+import {itemById,EQUIPPABLE_SLOTS,RARITIES,shopWeaponVariant,shopResalePrice} from './shared/catalog.js';
 import {previewMarkup,hydrateItemPreviews} from './item-preview.js';
 import {weaponClass,explainEquipment} from './shared/weapon-info.js';
 import {weaponPresentation} from './shared/weapon-presentation.js';
@@ -158,7 +158,7 @@ export function renderOriginalBag(ui,profile){
    ${!comfort&&EQUIPPABLE_SLOTS.includes(i.slot)?equipped(i,index>=0?index:null)?
    `<button type="button" data-unequip="${esc(i.slot)}">UNEQUIP</button>`:
    `<button type="button" data-equip="${esc(i.id)}" ${index>=0?`data-equip-index="${index}"`:''}>EQUIP NOW</button>`:''}
-  ${!equipped(i,index>=0?index:null)?`<button data-sell="${i.id}">SELL · +${i.sell||0}</button>`:''}</div>`;
+  ${!equipped(i,index>=0?index:null)?`<button data-sell="${i.id}">SELL · +${shopResalePrice(i,profile.inventoryInstances?.[index],ui.world?.shopPrices)}</button>`:''}</div>`;
  if(twice){
   if(comfort)showConsumableSlotPicker(ui,i,profile);
   else if(EQUIPPABLE_SLOTS.includes(i.slot))

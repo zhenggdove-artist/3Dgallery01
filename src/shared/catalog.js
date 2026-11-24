@@ -178,7 +178,18 @@ export function shopPrice(item,overrides={}){
 export function shopPurchaseVariant(itemId,qualityTier){
  const base=SHOP_ITEMS.find(item=>item.id===itemId);
  if(!base||base.slot!=='weapon'&&qualityTier!==undefined)return null;
- return base.slot==='weapon'?shopWeaponVariant(base,qualityTier??(base.exotic?3:base.tier)):base;
+ if(base.slot!=='weapon')return base;
+ const rank=qualityTier??(base.exotic?3:base.tier);
+ if(!base.exotic&&rank!==base.tier)return null;
+ return shopWeaponVariant(base,rank);
+}
+// Never let discounted purchases produce positive coin arbitrage on resale.
+export function shopResalePrice(item,instance,overrides={}){
+ const grade=item.slot==='weapon'?(instance?.shopTier??item.tier):undefined;
+ const variant=item.slot==='weapon'?shopWeaponVariant(item,grade):item;
+ const current=shopPrice(variant||item,overrides);
+ const paid=Number.isSafeInteger(instance?.paidUnitPrice)?instance.paidUnitPrice:Infinity;
+ return Math.max(0,Math.floor(Math.min(Number(item.sell??Infinity),current*.25,paid*.25)));
 }
 export const ECONOMY = Object.freeze({
   platformCoinValue:40,
