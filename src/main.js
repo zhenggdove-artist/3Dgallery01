@@ -705,6 +705,10 @@ ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;
   if(ui.bagFusionPending)return;
   ui.bagFusionPending=true;
   void sendAction(action,data).finally(()=>{ui.bagFusionPending=false;});
+ }else if(['buy','sell','sell-bulk'].includes(action)){
+  if(ui.shopPurchasePending)return;
+  ui.shopPurchasePending=true;
+  void sendAction(action,data).finally(()=>{ui.shopPurchasePending=false;});
  }else void sendAction(action,data);
 });
 ui.addEventListener('build-start',async event=>{try{const d=event.detail;const media=d.file?await uploadMedia(network,d.file):null;startBuildPlacement(d.kind,media?.id);}catch(error){ui.clearBuildMode();ui.toast(error.message);}});ui.addEventListener('build-rotate',()=>rotateBuildPlacement());ui.addEventListener('build-confirm',()=>confirmBuildPlacement());ui.addEventListener('build-cancel',()=>cancelBuildPlacement());
