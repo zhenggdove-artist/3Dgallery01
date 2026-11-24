@@ -108,3 +108,13 @@ test('floating editor markup and CSS include true scrollable controls and a clos
  assert.match(index,/const release = '20\d{6}-[^']+-r\d+'/);
  assert.match(index,/src\/gm-floating-panel\.js/);
 });
+
+test('BUILD edge resizing is opt-in; ordinary GM dragging does not need a DOM geometry read',()=>{
+ const f=fixture(),gm=new FloatingGmEditorPanel(f.panel,{host:f.host,store:f.store});gm.open();
+ gm.start(pointer(11,60,100,'[data-gm-panel-drag]'));assert.equal(gm.pointer.type,'drag');gm.end(pointer(11,60,100,'[data-gm-panel-drag]'));
+ const build=new FloatingGmEditorPanel(f.panel,{host:f.host,store:f.store,force:true,storageKey:'build-test'});build.open();
+ f.panel.getBoundingClientRect=()=>({left:build.layout.x,top:build.layout.y,right:build.layout.x+build.layout.width,bottom:build.layout.y+build.layout.height});
+ const before={...build.layout};const x=before.x+before.width-1,y=before.y+before.height/2;
+ build.start(pointer(12,x,y,'edge'));assert.equal(build.pointer.type,'resize');assert.equal(build.pointer.edgeX,1);
+ build.move(pointer(12,x+35,y,'edge'));build.end(pointer(12,x+35,y,'edge'));assert.equal(build.layout.width,before.width+35);assert.equal(build.layout.height,before.height);
+});

@@ -115,7 +115,7 @@ export class FloatingGmEditorPanel{
   const title=e.target.closest('[data-gm-panel-drag]');
   // BUILD can be resized from any outer edge, using the same controller
   // and viewport constraints as the GM floating panel.
-  const rect=this.panel.getBoundingClientRect(),edge=7;
+  const rect=this.force?this.panel.getBoundingClientRect():null,edge=7;
   const edgeX=this.force?(e.clientX-rect.left<=edge?-1:rect.right-e.clientX<=edge?1:0):0;
   const edgeY=this.force?(e.clientY-rect.top<=edge?-1:rect.bottom-e.clientY<=edge?1:0):0;
   if(!title&&!grip&&!edgeX&&!edgeY)return;

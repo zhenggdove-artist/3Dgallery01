@@ -1,5 +1,6 @@
 import {animateFlightVehicle} from './reletter/flight-vehicle.js';
 import * as THREE from 'three';
+import {CITY_OUTER_RADIUS} from './shared/city-layout.js';
 import {WeaponVFX} from './weapon-vfx.js';
 import {createMoonlitSky} from './night-sky.js';
 import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
@@ -21,7 +22,7 @@ export function buildReletterEnvironment(scene,renderer){
   scene.background=new THREE.Color('#020516'); // fallback behind the animated nebula dome
   const env=document.createElement('canvas');env.width=256;env.height=128;const ec=env.getContext('2d'),eg=ec.createLinearGradient(0,0,256,0);['#152f64','#385fa0','#749bd5','#ffe7a2','#a7b9d8','#2c578a'].forEach((color,i)=>eg.addColorStop(i/5,color));ec.fillStyle=eg;ec.fillRect(0,0,256,128);ec.globalAlpha=.35;ec.fillStyle='#fff';ec.fillRect(0,0,256,128*.45);const tex=new THREE.CanvasTexture(env);tex.mapping=THREE.EquirectangularReflectionMapping;scene.environment=tex;
   scene.fog=new THREE.FogExp2('#12284d',.0011);scene.add(new THREE.HemisphereLight('#86adff','#15304c',.72));const moonlight=new THREE.DirectionalLight('#ffe2a1',1.05);moonlight.position.set(-32,55,-48);scene.add(moonlight,new THREE.AmbientLight('#8fafff',.35));scene.userData.moonlitSky=createMoonlitSky(scene,renderer);
-  const ground=new THREE.Mesh(new THREE.CircleGeometry(500,80),new THREE.MeshStandardMaterial({color:'#2e6658',emissive:'#0c302b',emissiveIntensity:.16,roughness:.92,envMapIntensity:0}));ground.rotation.x=-Math.PI/2;ground.position.y=-.1;ground.name='RELETTER meadow';scene.add(ground);
+  const ground=new THREE.Mesh(new THREE.CircleGeometry(CITY_OUTER_RADIUS+1,192),new THREE.MeshStandardMaterial({color:'#2e6658',emissive:'#0c302b',emissiveIntensity:.16,roughness:.92,envMapIntensity:0}));ground.rotation.x=-Math.PI/2;ground.position.y=-.1;ground.name='Grass footprint only — direct nebula edge';scene.add(ground);
   const p=[],colors=[];let seed=12847;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};for(let i=0;i<9000;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand())*65,shade=.35+rand()*.3;p.push(Math.cos(a)*r,rand()*.25,Math.sin(a)*r);colors.push(shade*.45,shade*1.05,shade*.35);}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));scene.add(new THREE.Points(geo,new THREE.PointsMaterial({size:.07,vertexColors:true,transparent:true,opacity:.45,depthWrite:false})));
   const center=makePlant('TEMPLE RELETTER',{clipBelow:false});center.name='RELETTER message tree';center.scale.multiplyScalar(1.2);scene.add(center);
   return reletterPlatformMaterial();
