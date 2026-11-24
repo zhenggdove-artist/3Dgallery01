@@ -16,41 +16,75 @@ if(d==='hydra-dragon'){
  for(const side of [-1,1]){ball([side*.22,.23,.72],[.19,.22,.075],dark);tube([[side*.37,.58,.12],[side*.72,.82,.07],[side*.89,.53,.13],[side*.78,.13,.3],[side*.51,.02,.42]],.13,gold);for(let i=0;i<4;i++)box([side*(.045+i*.042),-.30,.73],[.025,.10,.025],dark);}
  cone([0,-.08,.76],.10,.16,dark).rotation.z=Math.PI;
 }else if(['trump-mask','huang-mask','musk-mask'].includes(d)){
+ // Continuous sculpted facial surface. Individual silhouettes and landmark
+ // proportions replace the shared oval face and separate spherical cheeks.
  const trump=d==='trump-mask',huang=d==='huang-mask';
- const skin=mat(trump?'#e5a171':huang?'#cba18b':'#e6bdab',0),hair=mat(trump?'#e6c46c':huang?'#b4b3ad':'#604639',0),crease=mat(trump?'#b97859':'#a77c68',0),lip=mat(trump?'#be7868':'#ab756e',0),iris=mat(huang?'#33251f':trump?'#78949f':'#72877e',0);
- ball([0,.10,.49],[trump?.57:huang?.49:.55,trump?.69:huang?.66:.70,.25],skin);
- ball([0,-.31,.54],[trump?.43:huang?.35:.43,.30,.22],skin);
- for(const side of [-1,1]){
-  ball([side*.50,.08,.48],[.10,.17,.10],skin);
-  ball([side*.30,.02,.68],[.22,.22,.10],skin);
-  ball([side*.20,.25,.72],[.14,huang?.045:.060,.042],white);
-  ball([side*.20,.25,.756],[.045,.046,.022],iris);
-  ball([side*.20,.25,.773],[.019,.022,.010],dark);
-  tube([[side*.07,.35,.72],[side*.20,.38,.74],[side*.34,.34,.69]],trump?.028:.020,hair);
-  tube([[side*.08,.19,.74],[side*.21,.17,.74],[side*.34,.20,.69]],.014,crease);
-  tube([[side*.12,.01,.81],[side*.23,-.09,.75],[side*.27,-.19,.70]],.015,crease);
- }
- ball([0,.11,.76],[huang?.085:.10,.18,.13],skin);
- ball([0,-.035,.83],[trump?.135:.105,.085,.095],skin);
- tube([[-.18,-.20,.73],[0,trump?-.25:-.19,.80],[.18,-.20,.73]],.026,lip);
- tube([[-.16,-.21,.74],[0,trump?-.25:-.19,.82],[.16,-.21,.74]],.010,dark);
- if(trump){
-  const sweep=ball([-.08,.70,.51],[.60,.24,.29],hair);sweep.rotation.z=.24;
-  for(let i=0;i<9;i++)tube([[-.48,.62+i*.025,.60],[-.10,.86+i*.012,.73],[.40,.66+i*.015,.67]],.027,hair);
-  ball([0,-.39,.66],[.33,.17,.13],skin);
- }else if(huang){
-  ball([0,.69,.48],[.50,.17,.25],hair);
-  for(const side of [-1,1]){
-   for(let i=0;i<5;i++)tube([[side*.45,.33+i*.055,.47],[side*.36,.60+i*.02,.58],[side*.13,.76,.55]],.021,hair);
-   const frame=ring([side*.22,.25,.80],.16,.023,dark);frame.scale.set(1.12,.72,1);
-   box([side*.42,.25,.65],[.04,.035,.30],dark);
+ const skin=mat(trump?'#dfa078':huang?'#c9a28b':'#dfb5a5',0);
+ const hair=mat(trump?'#ddbd76':huang?'#b6b4b0':'#634b3f',0);
+ const shading=mat(trump?'#b77c60':huang?'#a27a64':'#b58d7e',0);
+ const lip=mat(trump?'#bd7f70':huang?'#946c62':'#ac7d72',0);
+ const iris=mat(trump?'#7c9ba7':huang?'#35291f':'#68867f',0);
+ const rows=trump?[
+ [-.60,.02,.53],[-.52,.26,.63],[-.36,.43,.67],[-.15,.51,.66],[.04,.53,.62],[.24,.49,.58],[.46,.48,.53],[.65,.38,.45],[.76,.02,.41]
+ ]:huang?[
+ [-.59,.02,.48],[-.49,.19,.58],[-.30,.34,.63],[-.10,.45,.64],[.13,.48,.61],[.32,.45,.56],[.51,.44,.51],[.67,.31,.45],[.74,.02,.40]
+ ]:[
+ [-.61,.02,.53],[-.51,.29,.63],[-.33,.45,.65],[-.12,.46,.64],[.09,.49,.62],[.30,.47,.57],[.52,.44,.49],[.69,.30,.43],[.76,.02,.40]
+ ];
+ const positions=[],indices=[],steps=40;
+ for(let j=0;j<rows.length;j++){
+  const [y,w,z]=rows[j];
+  for(let k=0;k<=steps;k++){
+   const angle=-Math.PI/2+Math.PI*k/steps,x=w*Math.sin(angle);
+   const eyeSocket=.045*Math.exp(-Math.pow((Math.abs(x)-.20)/.13,2)-Math.pow((y-.25)/.12,2));
+   const cheek=(trump?.055:huang?.045:.025)*Math.exp(-Math.pow((Math.abs(x)-.32)/.16,2)-Math.pow((y-.03)/.18,2));
+   positions.push(x,y,.22+(z-.22)*Math.cos(angle)+cheek-eyeSocket);
+   if(j&&k){const i=j*(steps+1)+k;indices.push(i-steps-2,i-steps-1,i,i-steps-2,i,i-1);}
   }
-  box([0,.27,.80],[.15,.035,.035],dark);
- }else{
-  ball([0,.68,.46],[.49,.22,.26],hair);
-  for(let i=0;i<7;i++)tube([[-.40+i*.10,.60,.63],[-.29+i*.10,.81,.70],[.04+i*.08,.71,.60]],.025,hair);
-  ball([0,-.37,.64],[.30,.19,.13],skin);
  }
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));geo.setIndex(indices);geo.computeVertexNormals();
+ skin.side=T.DoubleSide;mesh(geo,[0,0,0],[1,1,1],skin);
+ const eyeY=huang?.25:trump?.25:.29,eyeZ=.61,eyeW=huang?.115:trump?.12:.13,eyeH=huang?.034:trump?.043:.052;
+ for(const side of [-1,1]){
+  const x=side*(huang?.205:.20);
+  ball([side*(trump?.52:huang?.46:.49),.10,.29],[.08,.15,.10],skin);
+  ball([x,eyeY,eyeZ],[eyeW,eyeH,.033],white);
+  ball([x,eyeY,eyeZ+.028],[.037,.036,.015],iris);
+  ball([x,eyeY,eyeZ+.042],[.018,.019,.009],dark);
+  tube([[x-eyeW,eyeY,eyeZ],[x,eyeY+eyeH,eyeZ+.024],[x+eyeW,eyeY,eyeZ]],.014,shading);
+  const brow=ball([x,eyeY+.105,.59],[eyeW+.02,trump?.027:.018,.035],hair);
+  brow.rotation.z=side*(huang?.10:trump?-.07:.16);
+  tube([[side*.09,.04,.69],[side*.20,-.08,.65],[side*.25,-.20,.59]],.012,shading);
+  if(trump||huang)tube([[x-.10,eyeY-.075,.60],[x,eyeY-.09,.61],[x+.10,eyeY-.065,.60]],.009,shading);
+ }
+ const nose=ball([0,huang?.10:.08,.66],[huang?.075:trump?.095:.09,huang?.18:trump?.17:.20,huang?.11:.14],skin);
+ if(!trump&&!huang)nose.rotation.z=-.055;
+ ball([0,-.035,.76],[trump?.125:huang?.09:.105,.067,.083],skin);
+ for(const side of [-1,1])ball([side*.075,-.06,.745],[.035,.016,.021],shading);
+ const mouthY=trump?-.23:huang?-.17:-.19,mouthW=trump?.15:huang?.17:.20;
+ tube([[-mouthW,mouthY,.64],[0,mouthY+(trump?-.022:.015),.73],[mouthW,mouthY,.64]],.023,lip);
+ tube([[-mouthW*.93,mouthY-.008,.65],[0,mouthY+(trump?-.027:.01),.747],[mouthW*.93,mouthY-.008,.65]],.009,dark);
+ if(trump){
+  const sweep=ball([-.06,.68,.39],[.55,.21,.27],hair);sweep.rotation.z=.25;
+  for(let i=0;i<12;i++)tube([[-.46,.54+i*.023,.45],[-.14,.78+i*.008,.65],[.40,.65+i*.007,.53]],.026,hair);
+  for(const side of [-1,1])ball([side*.44,.43,.27],[.10,.20,.19],hair);
+ }else if(huang){
+  ball([0,.66,.34],[.45,.16,.23],hair);
+  for(const side of [-1,1]){
+   for(let i=0;i<7;i++)tube([[side*.43,.35+i*.035,.29],[side*.33,.57+i*.018,.43],[side*.10,.73,.42]],.019,hair);
+   const frame=new T.Shape();frame.moveTo(-.15,-.075);frame.quadraticCurveTo(-.16,.09,-.10,.09);frame.lineTo(.10,.09);frame.quadraticCurveTo(.16,.09,.15,-.075);frame.quadraticCurveTo(0,-.115,-.15,-.075);
+   const pts=frame.getPoints(18).map(v=>[side*.205+v.x,eyeY+v.y,.69]);pts.push(pts[0]);tube(pts,.018,dark);
+   box([side*.40,eyeY,.46],[.028,.027,.42],dark);
+  }
+  box([0,eyeY+.025,.69],[.11,.022,.027],dark);
+ }else{
+  ball([0,.66,.32],[.45,.20,.25],hair);
+  for(let i=0;i<9;i++)tube([[-.39+i*.085,.51,.45],[-.24+i*.085,.78,.55],[.06+i*.065,.67,.44]],.027,hair);
+  for(const side of [-1,1])ball([side*.43,.48,.27],[.08,.16,.17],hair);
+ }
+ // Thin rear straps make the piece visibly a wearable mask, not a second head.
+ const strap=mat('#39333a',0);tube([[-.45,.12,.24],[-.54,.11,-.05],[0,.11,-.40],[.54,.11,-.05],[.45,.12,.24]],.032,strap);
+
 }
 else if(['elephant','rooster','anteater','guinea-pig','penguin','polar-bear','lion','eggplant'].includes(d)){
  cap();
@@ -117,7 +151,7 @@ else if(d==='banana'||d==='banana-bunch'){for(let i=0;i<4;i++){const a=i*1.57;tu
 else if(d==='cloud'){for(let i=0;i<7;i++)ball([Math.sin(i*2.4)*.5,.65+i%2*.15,Math.cos(i*2.4)*.35],[.38,.3,.32],white);for(let i=0;i<5;i++)ball([-.5+i*.25,.16,0],[.04,.13,.04],glass);}
 root.userData.materials=mats;return root;}
 export function disposeHeadgear(root){const geo=new Set(),mat=new Set(root.userData.materials||[]);root.traverse(o=>{if(o.geometry)geo.add(o.geometry);if(o.material)mat.add(o.material);});root.removeFromParent();geo.forEach(g=>g.dispose());mat.forEach(m=>m.dispose());}
-export function attachHeadgear(T,model,item){let head=null,top=null;model.traverse(o=>{if(o.isBone&&/Head$/i.test(o.name))head=o;if(o.isBone&&/HeadTop/i.test(o.name))top=o;});if(!head)return null;model.updateMatrixWorld(true);const scale=head.getWorldScale(new T.Vector3()),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,root=createHeadgear(T,item);head.add(root);root.position.set(0,height*.48/scale.y,height*.12/scale.z);root.scale.set(height/scale.x,height/scale.y,height/scale.z);root.userData.anchor=head.name;return root;}
+export function attachHeadgear(T,model,item){let head=null,top=null;model.traverse(o=>{if(o.isBone&&/Head$/i.test(o.name))head=o;if(o.isBone&&/HeadTop/i.test(o.name))top=o;});if(!head)return null;model.updateMatrixWorld(true);const scale=head.getWorldScale(new T.Vector3()),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,root=createHeadgear(T,item);head.add(root);const portraitMask=['trump-mask','huang-mask','musk-mask'].includes(item.design),safe=v=>Math.max(.00001,Math.abs(v));root.position.set(0,height*(portraitMask?.35:.48)/safe(scale.y),height*(portraitMask?.25:.12)/safe(scale.z));root.scale.set(height/safe(scale.x),height/safe(scale.y),height/safe(scale.z));root.userData.anchor=head.name;return root;}
 
 // Reuse articulated neck groups; no geometry allocation on animation frames.
 export function animateHeadgear(root,time,moving=false){
