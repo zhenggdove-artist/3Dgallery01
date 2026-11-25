@@ -398,6 +398,7 @@ export function applyAction(world,actor,body,context={}){
     if(target.hp>0)target.hp=target.maxHp;target.mana=target.maxMana;target.manaAt=now;
    }else{
     target.wingDesignCredits=(Number(target.wingDesignCredits)||0)+1;
+    if(target.key.startsWith('guest:'))target.gmGuestWingCredits=(Number(target.gmGuestWingCredits)||0)+1;
     target.lastWingCanvasGrant={id:id(),time:now,quantity:1,source:'gm'};
    }
    world.revision=(world.revision||0)+1;
@@ -427,7 +428,7 @@ export function applyAction(world,actor,body,context={}){
   // Public gacha has been permanently retired; old clients cannot draw.
   if(['wing-draw','gm-wing-draw'].includes(body.action))return {error:'Wing gacha has been removed'};
   if(body.action==='redeem-wing-design'){
-   if(typeof actor.key!=='string'||!actor.key.startsWith('firebase:')&&!(actor.key.startsWith('guest:')&&profile.wingDesignCredits>0))return {error:'Google sign-in required'};
+   if(typeof actor.key!=='string'||!actor.key.startsWith('firebase:')&&!(actor.key.startsWith('guest:')&&profile.gmGuestWingCredits>0))return {error:'Google sign-in required'};
    if(actor.role==='spectator')return {error:'Enter the arena to equip your wing'};
    if(!Number.isInteger(profile.wingDesignCredits)||profile.wingDesignCredits<1)return {error:'No paid wing design credit remains'};
    if(profile.inventory.length>=inventoryCapacity(profile))return {error:'Inventory full'};
@@ -448,6 +449,7 @@ export function applyAction(world,actor,body,context={}){
    appendInventoryInstance(profile,wing.id);
    selectEquipmentInstance(profile,'wings',profile.inventory.length-1);
    profile.wingDesignCredits--;
+   if(actor.key.startsWith('guest:'))profile.gmGuestWingCredits--;
    profile.itemOrigins??={};profile.itemOrigins[wing.id]='paid-personal-design';
    profile.updatedAt=now;refreshStats(world,profile,now);world.revision=(world.revision||0)+1;
    return {personalWingId:wing.id,equippedWingId:wing.id,

@@ -69,3 +69,18 @@ test('SUPPORT is a direct commission, not a lottery, with a left gift button and
  assert.match(main,/redeem-wing-design/);
  assert.match(painter,/個人翅膀固定使用平衡的裝飾數值/);
 });
+
+test('only a server-recorded GM gift enables a guest canvas, and each gift redeems once',()=>{
+ const world=createInitialWorld(T),guest='guest:gifted',gm='firebase:gg:gm';
+ world.profiles[guest]=createProfile(guest,'Guest','#aabbcc',T,false);
+ world.profiles[gm]=createProfile(gm,'GM','#aabbcc',T,true);
+ const administrator={...actor(gm),admin:true};
+ assert.ok(applyAction(world,actor(guest),{action:'gm-wing-canvas',targetKey:guest},{now:T}).error);
+ assert.ok(applyAction(world,actor(guest),{action:'redeem-wing-design',wing:wing(),gmGuestWingCredits:99},{now:T}).error);
+ assert.equal(applyAction(world,administrator,{action:'gm-wing-canvas',targetKey:guest},{now:T}).error,undefined);
+ const result=applyAction(world,actor(guest),{action:'redeem-wing-design',wing:wing()},{now:T+1});
+ assert.ok(result.personalWingId);
+ assert.equal(world.profiles[guest].wingDesignCredits,0);
+ assert.equal(world.profiles[guest].gmGuestWingCredits,0);
+ assert.ok(applyAction(world,actor(guest),{action:'redeem-wing-design',wing:wing()},{now:T+2}).error);
+});
