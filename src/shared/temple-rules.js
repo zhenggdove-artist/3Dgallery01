@@ -15,7 +15,7 @@ import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,shopPrice,shopPriceKey,shopPurchaseVariant,shopResalePrice,registerCustomWings,groundDropRoll,monsterDropRoll,isRestorativeDrop} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
-import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
+import {CITY_LOTS,CITY_MAX_HP,SIGN_HP,citySignSpecs,structureSignSpecs,signWorldPosition,signRayDistance,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
@@ -618,7 +618,7 @@ export function applyAction(world,actor,body,context={}){
   if(body.action==='reset-buildings'){
    if(!profile.admin)return {error:'GM only'};
    const count=Object.keys(world.cityDamage||{}).length;
-   world.cityDamage={};world.revision=(world.revision||0)+1;
+   world.cityDamage={};for(const house of world.structures||[])if(house.kind==='house')delete house.signDamage;world.revision=(world.revision||0)+1;
    return {notice:'已修復全部 '+count+' 棟受損房屋',resetBuildings:true,restoredBuildings:count};
   }
   if(body.action==='reset-messages'){
@@ -1335,6 +1335,10 @@ function attack(world,profile,actor,body,context,now){
   const structureHits=[],structureDestroyedEvents=[];
   // Evaluate builds regardless of hits on characters/monsters. Area attacks
   // reach every matching structure; directional attacks hit the nearest one.
+  if(!returningGiraffe&&!waveVortex&&tuningRatio!==0){
+   const signHits=structureSignHits(world,origin,direction,stats.range,area,Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*.7)),now);
+   for(const event of signHits){structureHit??=event;structureHits.push(event);}
+  }
   const candidates=(world.structures||[]).filter(v=>v.owner!=='temple').map(v=>{
    const point=[v.position[0],v.position[1]+structureHeight(v)*.5,v.position[2]],along=project(origin,direction,point);
    const inside=area&&['area','sector'].includes(area.mode)?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<(weapon.pattern==='scatter'?.65+along*(stats.ultimate?.56:.32):stats.radius)+structureRadius(v);
@@ -1717,11 +1721,30 @@ function rayHitsMonster(origin,direction,range,monster,radius){
 function normalDirection(value){if(!Array.isArray(value)||value.length!==3||!value.every(Number.isFinite))return null;const length=Math.hypot(...value);if(length<.5||length>1.5)return null;return value.map(n=>n/length);}
 function project(origin,direction,point){return (point[0]-origin[0])*direction[0]+(point[1]-origin[1])*direction[1]+(point[2]-origin[2])*direction[2];}
 function perpendicular(origin,direction,point,along){return Math.hypot(point[0]-origin[0]-direction[0]*along,point[1]-origin[1]-direction[1]*along,point[2]-origin[2]-direction[2]*along);}
+export function structureSignHits(world,origin,direction,range,area,damage,now){
+ const hits=[],candidates=[];
+ for(const structure of world.structures||[]){
+  if(structure.kind!=='house'||structure.owner==='temple'||structure.hp<=0)continue;
+  const lot={x:structure.position[0],y:structure.position[1],z:structure.position[2],yaw:structure.rotation||0};
+  for(const sign of structureSignSpecs(structure)){
+   if((structure.signDamage?.[sign.id]??SIGN_HP)<=0)continue;
+   const point=signWorldPosition(lot,sign),radius=Math.hypot(sign.width,sign.height,sign.depth)/2;
+   const distance=area&&['area','sector'].includes(area.mode)?(insideChargedArea(area,point,radius)?0:null):signRayDistance(lot,sign,origin,direction,range);
+   if(distance!==null)candidates.push({structure,sign,point,distance});
+  }
+ }
+ candidates.sort((a,b)=>a.distance-b.distance);
+ for(const {structure,sign,point} of (area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
+  structure.signDamage??={};const hp=Math.max(0,(structure.signDamage[sign.id]??SIGN_HP)-damage);structure.signDamage[sign.id]=hp;
+  hits.push({id:id(),structureId:structure.id,kind:'house-sign',part:sign.id,partDestroyed:hp===0,position:point,signColor:sign.color,signSize:[sign.width,sign.height,sign.depth],rotation:structure.rotation||0,hp:structure.hp,maxHp:structure.maxHp,damage,time:now});
+ }
+ return hits;
+}
 function structureRadius(structure){if(structure.gmHouse)return Math.hypot(structure.house.width,structure.house.depth)/2;return structure.kind==='house'?3.4:structure.kind==='tree'?1.4:['wall','bar'].includes(structure.kind)?3.3:1.7;}
 function structureHeight(structure){if(structure.gmHouse)return structure.house.height;return structure.kind==='house'?3.8:structure.kind==='tree'?4:structure.kind==='column'?4:structure.kind==='platform'?.7:2;}
 function structureEvent(structure,now){return {id:structure.id,kind:structure.kind,variant:structure.variant||0,position:[...structure.position],rotation:structure.rotation||0,surface:structure.surface||null,time:now};}
 // The Worker owns every city's health and four independent component pools.
-const CITY_PART_HEALTH=Object.freeze({windows:36,pillars:74,sheets:48,masonry:105});
+const CITY_PART_HEALTH=Object.freeze({windows:36,pillars:74,sheets:48,sign:SIGN_HP,masonry:105});
 function damageCityLot(world,lot,part,damage,now,position=null){
  world.cityDamage??={};
  const previous=world.cityDamage[lot.id];
@@ -1732,10 +1755,11 @@ function damageCityLot(world,lot,part,damage,now,position=null){
  const previousTier=cityDamageTier(state.hp,CITY_MAX_HP);
  const base=String(part||'masonry').split('-')[0];
  const kind=Object.hasOwn(CITY_PART_HEALTH,base)?String(part):'masonry';
+ state.parts??={};
  const hp=state.parts[kind]??CITY_PART_HEALTH[base in CITY_PART_HEALTH?base:'masonry'];
  const partDestroyed=hp>0&&hp<=damage;
  state.parts[kind]=Math.max(0,hp-damage);
- state.hp=Math.max(0,state.hp-damage);
+ state.hp=Math.max(0,state.hp-(kind.startsWith('sign-')?0:damage));
  world.cityDamage[lot.id]=state;
  const stage=cityStage(state.hp,CITY_MAX_HP);
  const tier=cityDamageTier(state.hp,CITY_MAX_HP);
@@ -1755,6 +1779,7 @@ function cityWeaponHits(world,origin,direction,range,area,damage,now,scatter=fal
    if(!insideChargedArea(area,point,Math.hypot(lot.width,lot.depth)*.43))continue;
    const result=damageCityLot(world,lot,'masonry',impactDamage(point),now,point);
    if(result){hits.push(result.event);if(result.destroyed)destroyed.push(result.destroyed);}
+   if(result&&!result.destroyed)for(const sign of citySignSpecs(lot)){const p=signWorldPosition(lot,sign);if((world.cityDamage[lot.id]?.parts?.[sign.id]??SIGN_HP)>0&&insideChargedArea(area,p,Math.hypot(sign.width,sign.height,sign.depth)/2)){const hit=damageCityLot(world,lot,sign.id,impactDamage(p),now,p);if(hit)hits.push(hit.event);}}
    if(hits.length>=24)break;
   }
  }else{

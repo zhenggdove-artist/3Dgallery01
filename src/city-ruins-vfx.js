@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {CITY_MAX_HP} from './shared/city-layout.js';
+import {CITY_MAX_HP,citySignSpecs} from './shared/city-layout.js';
 import {houseTileTexture} from './build-style.js';
 
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -188,6 +188,12 @@ export function buildDetachableFixture(lot,part,seed=1){
   group.position.set(x,y,front+.13);
   windowAssembly(group,lot.width/5,Math.min(1.3,floor*.53),seed,lot.trim);
   box(group,0,-Math.min(.42,floor*.13),.23,lot.width/5+.16,.08,.13,lot.trim);
+ }else if(part.startsWith('sign-')){
+  const s=citySignSpecs(lot).find(v=>v.id===part);
+  if(s){group.position.set(s.x,s.y,s.z);for(let i=0;i<3;i++)for(let j=0;j<2;j++){
+    if(s.blade)box(group,0,(i-1)*s.height/3,(j-.5)*s.depth/2,s.width,s.height/3*.94,s.depth/2*.94,s.color);
+    else box(group,(j-.5)*s.width/2,(i-1)*s.height/3,0,s.width/2*.94,s.height/3*.94,s.depth,s.color);
+   }for(const side of [-1,1])box(group,0,side*s.height*.32,-s.depth*.45,.12,.10,.24,'#6b6961',.6);}
  }else if(part==='sign'){
   group.position.set(0,2.96,front+.62);
   signAssembly(group,lot);

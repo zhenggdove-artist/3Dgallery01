@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
- cityLots,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
+ cityLots,citySignSpecs,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,CityImpactPlumes,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
 import {CityWallPaint} from './city-wall-paint.js';
@@ -109,6 +109,11 @@ function batchGeometry(lots,mobile){
   for(let k=0;k<(mobile?4:8);k++){
    box(lot,-w*.44+k*w*.12,2.52,frontage+1.04,w*.11,.12,.24,k%2?lot.detail:lot.style[3]);
   }
+  for(const sign of citySignSpecs(lot)){
+   category=sign.id;box(lot,sign.x,sign.y,sign.z,sign.width,sign.height,sign.depth,sign.color);
+   if(sign.blade){for(const dy of [-.36,.36])box(lot,sign.x,sign.y+sign.height*dy,frontage+.16,.18,.10,.34,lot.trim);}
+   else for(const side of [-1,1])box(lot,sign.x+side*sign.width*.34,h+.15,sign.z,.11,.32,.14,lot.trim);
+  }
   category='roof-clutter';
   for(let k=0;k<(mobile?2:5);k++){
    box(lot,(r()-.5)*w,h+.12+r()*.15,(r()-.5)*d,.18,.08,1+r()*3,scraps[(lot.index+k)%scraps.length]);
@@ -170,7 +175,7 @@ function batchGeometry(lots,mobile){
 }
 function signAtlas(lots){
  const columns=16,rows=Math.ceil(lots.length/columns),tile=128;
- const canvas=document.createElement('canvas');canvas.width=columns*tile;canvas.height=rows*tile;
+ const canvas=document.createElement('canvas');canvas.width=columns*tile*2;canvas.height=rows*tile;
  const g=canvas.getContext('2d');
  for(const lot of lots){
   const x=(lot.index%columns)*tile,y=Math.floor(lot.index/columns)*tile;
@@ -180,30 +185,35 @@ function signAtlas(lots){
   g.fillText(lot.shopName,x+tile/2,y+49,tile-10);
   g.font='bold 10px sans-serif';g.fillText(lot.enName,x+tile/2,y+75,tile-10);
   g.font='9px sans-serif';g.fillText('OPEN / 營業中',x+tile/2,y+94,tile-12);
+  const vx=x+columns*tile;g.fillStyle=lot.style[3];g.fillRect(vx,y,tile,tile);
+  g.strokeStyle='#e4d9bc';g.lineWidth=3;g.strokeRect(vx+5,y+5,tile-10,tile-10);
+  const label=Array.from(lot.shopName.split('・')[0]).slice(0,7);g.font='bold '+Math.min(24,Math.floor(110/label.length))+'px sans-serif';g.fillStyle='#fff4d7';label.forEach((ch,i)=>g.fillText(ch,vx+tile/2,y+15+i*(108/label.length)));
  }
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
  return {map,columns,rows};
 }
 function buildShopSigns(lots){
- const atlas=signAtlas(lots),p=[],uv=[],ids=[],lotIds=[],ranges=new Map();
- for(const lot of lots){
-  const base=p.length/3,y=2.96,z=lot.depth/2+.62,w=lot.width*.45;
-  for(const [x,h] of [[-w,y-.39],[w,y-.39],[w,y+.39],[-w,y+.39]]){
-   const pos=localToWorld(lot,x,z);p.push(pos[0],h,pos[1]);
-  }
-  const col=lot.index%atlas.columns,row=Math.floor(lot.index/atlas.columns),m=.008;
-  const l=col/atlas.columns+m,r=(col+1)/atlas.columns-m;
-  const t=1-(row+1)/atlas.rows+m,b=1-row/atlas.rows-m;
+ const atlas=signAtlas(lots),p=[],uv=[],ids=[],lotIds=[],ranges=new Map(),partRanges=new Map();
+ const quad=(lot,points,vertical)=>{
+  const base=p.length/3;for(const [x,y,z] of points){const q=localToWorld(lot,x,z);p.push(q[0],y,q[1]);lotIds.push(lot.index);}
+  const col=lot.index%atlas.columns+(vertical?atlas.columns:0),row=Math.floor(lot.index/atlas.columns),m=.0012;
+  const l=col/(atlas.columns*2)+m,r=(col+1)/(atlas.columns*2)-m,t=1-(row+1)/atlas.rows+m,b=1-row/atlas.rows-m;
   uv.push(l,t,r,t,r,b,l,b);ids.push(base,base+1,base+2,base,base+2,base+3);
-   lotIds.push(lot.index,lot.index,lot.index,lot.index);
-  ranges.set(lot.index,[base,p.length/3]);
+ };
+ for(const lot of lots){
+  const begin=p.length/3,y=2.96,z=lot.depth/2+.62,w=lot.width*.45;
+  quad(lot,[[-w,y-.39,z],[w,y-.39,z],[w,y+.39,z],[-w,y+.39,z]],false);
+  partRanges.set(lot.index+':sign',[[begin,p.length/3]]);
+  for(const s of citySignSpecs(lot)){
+   const start=p.length/3,a=s.x-s.width/2,b=s.x+s.width/2,c=s.y-s.height/2+.035,d=s.y+s.height/2-.035,e=s.z-s.depth/2+.035,g=s.z+s.depth/2-.035;
+   if(s.blade)for(const x of [a-.008,b+.008])quad(lot,[[x,c,e],[x,c,g],[x,d,g],[x,d,e]],true);
+   else for(const z of [e-.044,g+.044])quad(lot,[[a+.035,c,z],[b-.035,c,z],[b-.035,d,z],[a+.035,d,z]],false);
+   partRanges.set(lot.index+':'+s.id,[[start,p.length/3]]);
+  }
+  ranges.set(lot.index,[begin,p.length/3]);
  }
- const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
- geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
-  geo.setAttribute('cityLotId',new THREE.Float32BufferAttribute(lotIds,1));
-  geo.setIndex(ids);geo.computeVertexNormals();
- const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:atlas.map,side:THREE.DoubleSide}));
- mesh.name='Unique bilingual shop sign atlas';mesh.userData.lotRanges=ranges;return mesh;
+ const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setAttribute('cityLotId',new THREE.Float32BufferAttribute(lotIds,1));geo.setIndex(ids);geo.computeVertexNormals();
+ const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:atlas.map,side:THREE.DoubleSide}));mesh.name='Unique bilingual shop sign atlas';mesh.userData.lotRanges=ranges;mesh.userData.partRanges=partRanges;return mesh;
 }
 function buildWallGraffiti(lots){
  const canvas=document.createElement('canvas');canvas.width=canvas.height=1024;
@@ -647,6 +657,7 @@ export class OuterCity{
   this.partsHidden??=new Set();if(this.partsHidden.has(key))return;
   this.partsHidden.add(key);
   for(const [a,b] of this.walls.userData.partRanges?.get(key)||[])this.hideRange(this.walls,a,b);
+  for(const [a,b] of this.signs.userData.partRanges?.get(key)||[])this.hideRange(this.signs,a,b);
   // Independent street signs and painted wall grime must survive the loss of
   // a corrugated awning or a small masonry component.
  }
@@ -761,7 +772,10 @@ export class OuterCity{
   if(detached){
    // The actual detailed mounted fixture remains recognizable; this is a
    // shared deep clone and never compiles/upload a fresh GPU material on hit.
-   add(this.cloneFixture(lot,part),1.15);
+   if(part.startsWith('sign-')){
+    const fixture=this.cloneFixture(lot,part);fixture.updateMatrixWorld(true);
+    for(const child of [...fixture.children]){child.position.add(fixture.position);child.userData.sharedCityFixture=true;child.userData.fixtureCacheKey=fixture.userData.fixtureCacheKey;add(child,1.15);}
+   }else add(this.cloneFixture(lot,part),1.15);
   }
   const local=point?this.toLocal(lot,point):[0,Math.min(2,lot.height*.5),lot.depth*.5];
   const prototypes=this.scrapPrefabs.get(lot.material);
@@ -826,10 +840,7 @@ export class OuterCity{
   const part=sequence[Math.min(9,tier-1)];
   const impact=event?.position||[lot.x,Math.min(lot.height*.65,5),lot.z+lot.depth*.5];
   this.eject(lot,part,impact,true);
-  if(part==='sign'){
-   const range=this.signs.userData.lotRanges?.get(lot.index);
-   if(range)this.hideRange(this.signs,...range);
-  }
+  if(part==='sign'){this.hidePart(lot.index,'sign');for(const sign of citySignSpecs(lot))if(!this.partsHidden.has(lot.index+':'+sign.id)){this.eject(lot,sign.id,impact,true);this.hidePart(lot.index,sign.id);}}
   if(part==='sheets-awning')this.hidePart(lot.index,part);
   this.spawnPlume(impact,lot.index*131+tier*499);
   // More identifiable flying windows, iron sheets, wooden planks,
@@ -858,7 +869,7 @@ export class OuterCity{
    this.splinters?.burst(lot,tier,impact,lot.index+Math.floor(performance.now()),
     this.mobile?5:8);
   }else this.beginCollapse(lot,from,tier,event);
-  if(event.partDestroyed&&event.part!=='masonry')this.hidePart(lot.index,event.part);
+  if(event.partDestroyed&&event.part!=='masonry'){if(tier!==from&&event.part.startsWith('sign-')&&!this.partsHidden.has(lot.index+':'+event.part))this.eject(lot,event.part,event.position,true);this.hidePart(lot.index,event.part);}
  }
  syncDamage(damage={}){
   if(damage===this.lastDamage)return;
@@ -891,8 +902,7 @@ export class OuterCity{
    if(firstSnapshot||staticChange){
     this.collapseLot(lot.index,tier);
     if(tier>=3){
-     const range=this.signs.userData.lotRanges?.get(lot.index);
-     if(range)this.hideRange(this.signs,...range);
+     this.hidePart(lot.index,'sign');for(const sign of citySignSpecs(lot))this.hidePart(lot.index,sign.id);
     }
     if(stage===3)this.createChunks(lot,stage,false);
    }

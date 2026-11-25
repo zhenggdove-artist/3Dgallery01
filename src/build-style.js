@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {houseSignSpecs} from './shared/city-layout.js';
 export const originalBuildSizes={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4]};
 const textures=new Map();
 export function buildMaterial(surface){const material=new THREE.MeshStandardMaterial({color:'#c6a5dc',roughness:.72,metalness:.03});if(surface){if(!textures.has(surface)){const t=new THREE.TextureLoader().load(window.TEMPLE_CONFIG.backendUrl+'/api/media/'+surface);t.colorSpace=THREE.SRGBColorSpace;textures.set(surface,t);}material.map=textures.get(surface);material.color.set('#ffffff');}return material;}
@@ -33,14 +34,26 @@ export function houseTileTexture(){
 export function houseWallMaterial(color='#ffffff'){return new THREE.MeshStandardMaterial({color,map:houseTileTexture(),roughness:.96});}
 export function createGmHouseMesh(spec,{preview=false}={}){
  const root=new THREE.Group(),{width:w,depth:d,height:h,floors,windows,signs,pipes,metal}=spec;
- const tile=houseWallMaterial('#b4a395'),trim=new THREE.MeshStandardMaterial({color:'#8b8073',roughness:.96}),glass=new THREE.MeshStandardMaterial({color:'#465c60',roughness:.42,metalness:.12}),steel=new THREE.MeshStandardMaterial({color:'#83837e',roughness:.78,metalness:.25}),sign=new THREE.MeshStandardMaterial({color:'#964b42',roughness:.8}),black=new THREE.MeshStandardMaterial({color:'#292b2b'});
- const materials=[tile,trim,glass,steel,sign,black],box=(x,y,z,a,b,c,m)=>{const geo=new THREE.BoxGeometry(a,b,c);if(m===tile){const uv=geo.attributes.uv;for(let face=0;face<6;face++){const su=(face<2?c:a)/2.4,sv=(face<4?b:c)/1.2;for(let k=0;k<4;k++){const i=face*4+k;uv.setXY(i,uv.getX(i)*su,uv.getY(i)*sv);}}}const mesh=new THREE.Mesh(geo,m);mesh.position.set(x,y,z);root.add(mesh);return mesh;};
- box(0,h/2,0,w,h,d,tile);box(0,h+.07,0,w+.18,.14,d+.18,trim);box(0,Math.min(1,h*.24),d/2+.04,Math.min(1.4,w*.24),Math.min(2,h*.48),.10,black);
+ const tile=houseWallMaterial(spec.wallColor||'#b4a395'),roofMat=new THREE.MeshStandardMaterial({color:spec.roofColor||'#8b8073',roughness:.96}),trim=new THREE.MeshStandardMaterial({color:'#8b8073',roughness:.96}),glass=new THREE.MeshStandardMaterial({color:'#465c60',roughness:.42,metalness:.12}),steel=new THREE.MeshStandardMaterial({color:'#83837e',roughness:.78,metalness:.25}),sign=new THREE.MeshStandardMaterial({color:'#964b42',roughness:.8}),black=new THREE.MeshStandardMaterial({color:spec.doorColor||'#292b2b'});
+ const materials=[tile,roofMat,trim,glass,steel,sign,black],box=(x,y,z,a,b,c,m)=>{const geo=new THREE.BoxGeometry(a,b,c);if(m===tile){const uv=geo.attributes.uv;for(let face=0;face<6;face++){const su=(face<2?c:a)/2.4,sv=(face<4?b:c)/1.2;for(let k=0;k<4;k++){const i=face*4+k;uv.setXY(i,uv.getX(i)*su,uv.getY(i)*sv);}}}const mesh=new THREE.Mesh(geo,m);mesh.position.set(x,y,z);root.add(mesh);return mesh;};
+ box(0,h/2,0,w,h,d,tile);box(0,h+.07,0,w+.18,.14,d+.18,roofMat);box(0,Math.min(1,h*.24),d/2+.04,Math.min(1.4,w*.24),Math.min(2,h*.48),.10,black);
  for(let level=0;level<floors;level++){const y=(level+.53)*h/floors;for(let i=0;i<windows;i++){const x=(i-(windows-1)/2)*w/(windows+1),ww=Math.min(1.45,w/(windows+2)),wh=Math.min(1.35,h/floors*.46);for(const z of [-d/2-.035,d/2+.035]){box(x,y,z,ww+.12,wh+.12,.075,trim);box(x,y,z+Math.sign(z)*.055,ww,wh,.045,glass);box(x,y,z+Math.sign(z)*.085,.045,wh,.04,trim);}}}
  for(let i=0;i<signs;i++){const x=(i-(signs-1)/2)*w/(signs+1),y=Math.min(h-.35,2.35);box(x,y,d/2+.15,Math.min(w/(signs+1),2.5),.46,.25,sign);box(x,y,d/2+.29,Math.min(w/(signs+1),2.5)*.72,.055,.02,trim);}
  if(pipes)for(const side of [-1,1]){box(side*(w/2-.16),h*.47,d/2+.17,.12,h*.88,.12,steel);box(side*(w/2-.29),h*.9,d/2+.17,.38,.12,.12,steel);}
  if(metal){box(0,Math.min(2.6,h-.2),d/2+.45,w+.12,.12,.85,steel);const count=Math.min(32,Math.ceil(w*4));for(let i=0;i<count;i++)box(-w/2+(i+.5)*w/count,Math.min(2.67,h-.13),d/2+.45,.045,.065,.86,trim);}
- if(preview)for(const m of materials){m.color.lerp(new THREE.Color('#247fff'),.35);m.transparent=true;m.opacity=.82;}
+ for(const s of houseSignSpecs({...spec,bladeCount:spec.bladeCount??0,roofCount:spec.roofCount??0})){
+  const group=new THREE.Group();group.name=s.id;group.userData.houseSignId=s.id;group.position.set(s.x,s.y,s.z);root.add(group);
+  const mat=new THREE.MeshStandardMaterial({color:s.color,roughness:.75});materials.push(mat);
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(s.width,s.height,s.depth),mat);group.add(panel);
+  const border=new THREE.Mesh(new THREE.BoxGeometry(s.blade?s.width+.025:s.width*.94,s.height*.93,s.blade?s.depth*.94:s.depth+.025),mat);group.add(border);
+  if(typeof document!=='undefined'){
+   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d');ctx.fillStyle=s.color;ctx.fillRect(0,0,c.width,c.height);ctx.strokeStyle='#f1e1b9';ctx.lineWidth=5;ctx.strokeRect(5,5,c.width-10,c.height-10);ctx.fillStyle='#fff5d9';ctx.textAlign='center';ctx.font='bold 45px sans-serif';if(s.blade){['商','店'].forEach((v,i)=>ctx.fillText(v,64,90+i*85));}else ctx.fillText('商店',128,80);
+   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const faceMat=new THREE.MeshStandardMaterial({map:tex,roughness:.8,side:THREE.DoubleSide});faceMat.userData.ownedSignMap=true;materials.push(faceMat);
+   for(const side of [-1,1]){const face=new THREE.Mesh(new THREE.PlaneGeometry((s.blade?s.depth:s.width)*.92,s.height*.92),faceMat);if(s.blade){face.rotation.y=side*Math.PI/2;face.position.x=side*(s.width/2+.02);}else{face.rotation.y=side===1?0:Math.PI;face.position.z=side*(s.depth/2+.02);}group.add(face);}
+  }
+  for(const side of [-1,1]){const support=new THREE.Mesh(new THREE.BoxGeometry(.11,s.blade?.11:.32,s.blade?.35:.14),steel);support.position.set(s.blade?0:side*s.width*.32,s.blade?side*s.height*.35:-s.height/2-.15,s.blade?-s.depth/2:0);group.add(support);}
+ }
+ if(preview)for(const m of materials){m.transparent=true;m.opacity=.86;}
  root.userData.gmHouseMaterials=materials;return root;
 }
-export function disposeGmHouseMesh(root){if(!root)return;root.removeFromParent();root.traverse(o=>o.geometry?.dispose());for(const m of root.userData.gmHouseMaterials||[])m.dispose();}
+export function disposeGmHouseMesh(root){if(!root)return;root.removeFromParent();root.traverse(o=>o.geometry?.dispose());for(const m of root.userData.gmHouseMaterials||[]){if(m.userData.ownedSignMap)m.map?.dispose();m.dispose();}}

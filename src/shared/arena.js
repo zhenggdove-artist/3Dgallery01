@@ -29,14 +29,18 @@ export function distance2d(a,b){return Math.hypot((a?.[0]||0)-(b?.[0]||0),(a?.[2
 export function insideArena(position,pad=0){return Array.isArray(position)&&position.length===3&&position.every(Number.isFinite)&&Math.hypot(position[0],position[2])<=ARENA_RADIUS+pad&&position[1]>=-4&&position[1]<=64;}
 export function insideSafeZone(position){return distance2d(position,[SAFE_ZONE.x,0,SAFE_ZONE.z])<SAFE_ZONE.radius;}
 
-export const GM_HOUSE_DEFAULT=Object.freeze({width:6,depth:5,height:6,floors:2,windows:3,signs:1,pipes:true,metal:true});
+export const GM_HOUSE_DEFAULT=Object.freeze({width:6,depth:5,height:6,floors:2,windows:3,signs:1,pipes:true,metal:true,wallColor:'#b4a395',roofColor:'#8b8073',doorColor:'#292b2b',bladeCount:1,roofCount:1,bladeColor:'#c84730',roofSignColor:'#4c9ea1',bladeSize:1,roofSize:1});
 export function validateGmHouse(value){
  const s=value?.house,p=value?.position,yaw=value?.rotation;
  if(!s||!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)||p[1]<0||p[1]>40||!Number.isFinite(yaw))return null;
  const range=(n,min,max)=>Number.isFinite(n)&&n>=min&&n<=max;
  if(!range(s.width,2,24)||!range(s.depth,2,24)||!range(s.height,2,40)||!Number.isInteger(s.floors)||!range(s.floors,1,12)||!Number.isInteger(s.windows)||!range(s.windows,0,8)||!Number.isInteger(s.signs)||!range(s.signs,0,6)||typeof s.pipes!=='boolean'||typeof s.metal!=='boolean'||s.height/s.floors<1.2||p[1]+s.height>62)return null;
  if(Math.hypot(p[0],p[2])+Math.hypot(s.width,s.depth)/2>ARENA_RADIUS||Math.hypot(p[0],p[2])-Math.hypot(s.width,s.depth)/2<SAFE_ZONE.radius+1)return null;
- return {position:[...p],rotation:Math.atan2(Math.sin(yaw),Math.cos(yaw)),house:{width:s.width,depth:s.depth,height:s.height,floors:s.floors,windows:s.windows,signs:s.signs,pipes:s.pipes,metal:s.metal}};
+ const colors=['wallColor','roofColor','doorColor','bladeColor','roofSignColor'],extras={};
+ for(const key of colors){const v=s[key]??GM_HOUSE_DEFAULT[key];if(typeof v!=='string'||!/^#[0-9a-f]{6}$/i.test(v))return null;extras[key]=v;}
+ for(const key of ['bladeCount','roofCount']){const v=s[key]??0;if(!Number.isInteger(v)||v<0||v>(key==='bladeCount'?4:3))return null;extras[key]=v;}
+ for(const key of ['bladeSize','roofSize']){const v=s[key]??1;if(!range(v,.5,2.5))return null;extras[key]=v;}
+ return {position:[...p],rotation:Math.atan2(Math.sin(yaw),Math.cos(yaw)),house:{width:s.width,depth:s.depth,height:s.height,floors:s.floors,windows:s.windows,signs:s.signs,pipes:s.pipes,metal:s.metal,...extras}};
 }
 export function gmHouseBlocked(structures,x,z,y,margin=.22){
  for(const s of structures||[]){if(!s.gmHouse||!s.house||s.hp<=0||y<s.position[1]-.2||y>=s.position[1]+s.house.height+.14)continue;

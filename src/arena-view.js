@@ -2,7 +2,7 @@ import {disposeGardenModel} from './reletter/garden-art.js';
 import * as THREE from 'three';
 import {GrassField} from './grass-field.js';
 import {OuterCity} from './outer-city.js';
-import {cityGroundHeight,cityBlocked} from './shared/city-layout.js';
+import {cityGroundHeight,cityBlocked,structureSignSpecs,signWorldPosition} from './shared/city-layout.js';
 import {DisplayPlatforms} from './display-platforms.js';
 import {artworkPosition,artworkLanding,artworkRenderFlight} from './shared/artwork-flight.js';
 import {artworkDefinitions,artworkPickupReach} from './shared/artwork-library.js';
@@ -128,8 +128,8 @@ export class TempleArena{
    if(this.seenStructureHits.size>128)this.seenStructureHits.delete(this.seenStructureHits.values().next().value);
    const now=performance.now();
    this.structureHitTimes.set(event.structureId,{start:now,until:now+550});
-   // Every hit sheds small chips; a final hit triggers a much larger breakdown.
-   this.showStructureBreak({...event,id:'chips-'+event.id,minor:true});
+   // Every hit sheds small chips; a final sign hit throws colored sign fragments.
+   this.showStructureBreak({...event,id:'chips-'+event.id,minor:!event.partDestroyed});
   }
   animateStructureHits(){
    const now=performance.now();
@@ -162,8 +162,8 @@ export class TempleArena{
     if(!event?.position||this.destroyedEffects.has(event.id))return;
     this.destroyedEffects.add(event.id);
     if(this.destroyedEffects.size>80)this.destroyedEffects.delete(this.destroyedEffects.values().next().value);
-    const count=event.minor?(touch?3:6):(touch?12:24),geometry=new THREE.BoxGeometry(.34,.28,.32);
-    const material=new THREE.MeshStandardMaterial({color:event.kind==='tree'?'#536344':'#777064',roughness:.9,transparent:true});
+    const count=event.minor?(touch?3:6):(touch?12:24),geometry=event.kind==='house-sign'?new THREE.BoxGeometry(.21,.28,.08):new THREE.BoxGeometry(.34,.28,.32);
+    const material=new THREE.MeshStandardMaterial({color:event.kind==='house-sign'?event.signColor||'#964b42':event.kind==='tree'?'#536344':'#777064',roughness:.9,transparent:true});
     const mesh=new THREE.InstancedMesh(geometry,material,count),random=seededRandom(hashText(event.id)),pieces=[];
     for(let i=0;i<count;i++)pieces.push({
       position:new THREE.Vector3(event.position[0]+(random()-.5)*1.2,event.position[1]+.5+random()*2,event.position[2]+(random()-.5)*1.2),
@@ -171,7 +171,7 @@ export class TempleArena{
       spin:new THREE.Vector3(random()*4,random()*4,random()*4)
     });
     mesh.userData={pieces,age:0};this.scene.add(mesh);this.debrisBursts.push(mesh);
-    if(!event.minor)this.startStructureCollapse(event);
+    if(!event.minor&&event.kind!=='house-sign')this.startStructureCollapse(event);
   }
   startStructureCollapse(event){
     // Keep a transient shell after the authoritative structure disappears.
@@ -299,7 +299,7 @@ export class TempleArena{
    // disposed EVERY structure mesh/material and recreated its GL resources
    // after a single damage tick, forcing shader rebuilds and long GPU stalls.
    signature=JSON.stringify(structures.map(s=>[s.id,s.kind,s.surface,s.variant,s.position,s.rotation,s.house])),
-   health=JSON.stringify(structures.map(s=>[s.id,s.hp,s.maxHp]));
+   health=JSON.stringify(structures.map(s=>[s.id,s.hp,s.maxHp,s.signDamage]));
    if(signature===this.structureSignature){
     if(health===this.structureHealthSignature)return;
     this.structureHealthSignature=health;
@@ -312,8 +312,16 @@ export class TempleArena{
     this.registerStructureMeshes(); // in-place GPU instance updates only
     return;
    }
-   this.structureSignature=signature;this.structureHealthSignature=health;while(this.structureGroup.children.length){const child=this.structureGroup.children[0];if(child.userData.gmHouseId){disposeGmHouseMesh(child);continue;}child.removeFromParent();if(child.isInstancedMesh)child.dispose();child.geometry?.dispose();child.material?.dispose();}const kinds=new Map();for(const structure of structures){if(structure.gmHouse){const mesh=createGmHouseMesh(structure.house);mesh.userData.gmHouseId=structure.id;mesh.position.fromArray(structure.position);mesh.rotation.y=structure.rotation;this.updateGmHouseHealth(mesh,structure);this.structureGroup.add(mesh);continue;}const key=structure.kind+'|'+(structure.surface||'');if(!kinds.has(key))kinds.set(key,[]);kinds.get(key).push(structure);}for(const [key,list] of kinds){const kind=list[0].kind;if(kind==='tree'){this.addTreeInstances(list);continue;}if(kind==='house'){this.addHouseInstances(list);continue;}const dimensions=originalBuildSizes[kind]||[2,2,2],mesh=new THREE.InstancedMesh(buildGeometry(kind),buildMaterial(list[0].surface),list.length);list.forEach((structure,index)=>{const variant=structure.variant||0,temp=1+(variant%3)*.08;tempPosition.set(structure.position[0],structure.position[1]+dimensions[1]*temp/2,structure.position[2]);tempQuaternion.setFromEuler(new THREE.Euler(0,structure.rotation||0,0));tempScale.set(dimensions[0]*temp,dimensions[1]*temp,dimensions[2]);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);});mesh.instanceMatrix.needsUpdate=true;mesh.userData.records=list;mesh.userData.baseMatrices=list.map((_,i)=>{const m=new THREE.Matrix4();mesh.getMatrixAt(i,m);return m;});list.forEach((_,i)=>mesh.setColorAt(i,new THREE.Color('#ffffff')));mesh.instanceColor.needsUpdate=true;mesh.name=`${kind} structures`;this.structureGroup.add(mesh);}this.registerStructureMeshes();}
-  updateGmHouseHealth(mesh,structure){const wear=THREE.MathUtils.clamp(1-structure.hp/structure.maxHp,0,1);for(const m of mesh.userData.gmHouseMaterials||[]){m.userData.baseColor??=m.color.clone();m.color.copy(m.userData.baseColor).lerp(new THREE.Color('#3a302c'),wear*.55);}}
+   this.structureSignature=signature;this.structureHealthSignature=health;while(this.structureGroup.children.length){const child=this.structureGroup.children[0];if(child.userData.gmHouseId){disposeGmHouseMesh(child);continue;}child.removeFromParent();if(child.isInstancedMesh)child.dispose();child.geometry?.dispose();child.material?.dispose();}const kinds=new Map();for(const structure of structures){if(structure.gmHouse){const mesh=createGmHouseMesh(structure.house);mesh.userData.gmHouseId=structure.id;mesh.position.fromArray(structure.position);mesh.rotation.y=structure.rotation;this.updateGmHouseHealth(mesh,structure);this.structureGroup.add(mesh);continue;}const key=structure.kind+'|'+(structure.surface||'');if(!kinds.has(key))kinds.set(key,[]);kinds.get(key).push(structure);}for(const [key,list] of kinds){const kind=list[0].kind;if(kind==='tree'){this.addTreeInstances(list);continue;}if(kind==='house'){this.addHouseInstances(list);this.addLegacyHouseSigns(list);continue;}const dimensions=originalBuildSizes[kind]||[2,2,2],mesh=new THREE.InstancedMesh(buildGeometry(kind),buildMaterial(list[0].surface),list.length);list.forEach((structure,index)=>{const variant=structure.variant||0,temp=1+(variant%3)*.08;tempPosition.set(structure.position[0],structure.position[1]+dimensions[1]*temp/2,structure.position[2]);tempQuaternion.setFromEuler(new THREE.Euler(0,structure.rotation||0,0));tempScale.set(dimensions[0]*temp,dimensions[1]*temp,dimensions[2]);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);});mesh.instanceMatrix.needsUpdate=true;mesh.userData.records=list;mesh.userData.baseMatrices=list.map((_,i)=>{const m=new THREE.Matrix4();mesh.getMatrixAt(i,m);return m;});list.forEach((_,i)=>mesh.setColorAt(i,new THREE.Color('#ffffff')));mesh.instanceColor.needsUpdate=true;mesh.name=`${kind} structures`;this.structureGroup.add(mesh);}this.registerStructureMeshes();}
+  updateGmHouseHealth(mesh,structure){for(const child of mesh.children)if(child.userData.houseSignId)child.visible=(structure.signDamage?.[child.userData.houseSignId]??42)>0;const wear=THREE.MathUtils.clamp(1-structure.hp/structure.maxHp,0,1);for(const m of mesh.userData.gmHouseMaterials||[]){m.userData.baseColor??=m.color.clone();m.color.copy(m.userData.baseColor).lerp(new THREE.Color('#3a302c'),wear*.55);}}
+  addLegacyHouseSigns(list){
+   for(const index of [0,1]){
+    const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.8}),list.length);
+    mesh.userData.records=list;mesh.userData.signIds=[];
+    list.forEach((s,i)=>{const sign=structureSignSpecs(s)[index];mesh.userData.signIds.push(sign.id);const p=signWorldPosition({x:s.position[0],y:s.position[1],z:s.position[2],yaw:s.rotation||0},sign);tempPosition.fromArray(p);tempQuaternion.setFromEuler(new THREE.Euler(0,s.rotation||0,0));tempScale.set(sign.width,sign.height,sign.depth);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(i,tempMatrix);mesh.setColorAt(i,new THREE.Color(sign.color));});
+    mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;this.structureGroup.add(mesh);
+   }
+  }
   registerStructureMeshes(){
     for(const mesh of this.structureGroup.children){
      if(!mesh.isInstancedMesh||!Array.isArray(mesh.userData.records))continue;
@@ -339,8 +347,9 @@ export class TempleArena{
        tempPosition.y-=wear*tempScale.y*.09;
        tempScale.multiply(new THREE.Vector3(1-wear*.12,1-wear*.32,1-wear*.14));
        matrix.compose(tempPosition,tempQuaternion,tempScale);
-       mesh.setMatrixAt(i,matrix);
       }
+      if(mesh.userData.signIds&&(record.signDamage?.[mesh.userData.signIds[i]]??42)<=0){matrix.scale(new THREE.Vector3(0,0,0));}
+      mesh.setMatrixAt(i,matrix);
       return matrix;
      });
      mesh.userData.baseColors=records.map((record,i)=>{

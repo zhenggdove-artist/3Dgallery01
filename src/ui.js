@@ -603,7 +603,7 @@ export class TempleUI extends EventTarget{
  <div class="gm-tools">
   <button type="button" data-gm-platform-tool="edit">編輯圓盤／三角檯座</button>
   <button type="button" data-gm-platform-tool="place" data-gm-platform-kind="disc">增加圓盤</button>
-  <button type="button" data-gm-platform-tool="place" data-gm-platform-kind="pedestal">增加灰色三角檯座</button><button type="button" data-gm-platform-tool="place" data-gm-platform-kind="house">新增房屋</button><button type="button" data-gm-platform-tool="edit" data-gm-platform-kind="house">編輯 GM 房屋</button>
+  <button type="button" data-gm-platform-tool="place" data-gm-platform-kind="pedestal">增加灰色三角檯座</button>
  </div>
  <p>編輯：直接點選場景中的物件使其變藍，再修改位置／半徑／高度，SAVE 儲存或 DELETE 刪除。新增：物件跟隨 GM，按 PLACE / ENTER 固定。</p>
  <h3>作品位置與拾取修復</h3>
@@ -684,7 +684,7 @@ export class TempleUI extends EventTarget{
        <small data-gm-player-status role="status">${escape(this.gmPlayerActionMessage||'可贈送曾登入的玩家（包含離線）。')}</small>
       </section>
       <h3>GM 功能</h3><div class="gm-tools">
-        <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-gm-action="wanted">Wanted List 管理</button><button type="button" data-open-sky-color>星空環境底色</button><button type="button" data-open-terrain-style>草地／草長／地板顏色</button><button type="button" data-gm-action="chat-position-edit">調整全服 CHAT 預設位置</button><button type="button" data-gm-action="chat-position-save">儲存目前 CHAT 位置為全服預設</button><button type="button" data-open-shop-prices>商品售價／裝備數值編輯</button>
+        <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-gm-platform-tool="place" data-gm-platform-kind="house">GM 蓋房子</button><button type="button" data-gm-platform-tool="edit" data-gm-platform-kind="house">GM 編輯房屋</button><button type="button" data-gm-action="wanted">Wanted List 管理</button><button type="button" data-open-sky-color>星空環境底色</button><button type="button" data-open-terrain-style>草地／草長／地板顏色</button><button type="button" data-gm-action="chat-position-edit">調整全服 CHAT 預設位置</button><button type="button" data-gm-action="chat-position-save">儲存目前 CHAT 位置為全服預設</button><button type="button" data-open-shop-prices>商品售價／裝備數值編輯</button>
          <button type="button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button>
         <button type="button" data-gm-action="help" aria-label="GM instructions and shortcuts">！ GM 說明與快捷鍵</button>
         <button type="button" data-gm-action="wing-painter">畫翅膀／上架翅膀</button><button type="button" data-gm-action="wing-player-preview">測試玩家已開通的繪圖介面</button>

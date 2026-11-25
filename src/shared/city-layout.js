@@ -330,6 +330,12 @@ export function cityRaycast(origin,direction,range,damage={}){
  for(const lot of CITY_LOTS){
   const record=damage[lot.id],stage=cityStage(record?.hp??CITY_MAX_HP);
   if(stage===3)continue;
+  // Test protruding signs before the masonry volume. Detached signs cannot be hit again.
+  for(const sign of citySignSpecs(lot)){
+   if((record?.parts?.[sign.id]??SIGN_HP)<=0)continue;
+   const distance=signRayDistance(lot,sign,origin,direction,Math.min(range,nearest?.distance??range));
+   if(distance!==null&&(!nearest||distance<nearest.distance))nearest={lot,distance,part:sign.id,position:origin.map((v,i)=>v+direction[i]*distance)};
+  }
   const [ox,oz]=cityLocal(lot,origin[0],origin[2]);
   const c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
   const d=[direction[0]*c-direction[2]*s,direction[1],direction[0]*s+direction[2]*c];
@@ -351,7 +357,7 @@ export function cityRaycast(origin,direction,range,damage={}){
    hitAxis===0&&Math.abs(px)>lot.width*.45?'pillars-'+(px<0?0:1):
    hitAxis===2&&pz>=0&&py>1&&py<h*.85?'windows-'+level+'-'+windowIndex:
    'masonry';
-  nearest={lot,distance:near,part,position:origin.map((v,i)=>v+direction[i]*near)};
+  if(!nearest||near<nearest.distance)nearest={lot,distance:near,part,position:origin.map((v,i)=>v+direction[i]*near)};
  }
  return nearest;
 }
@@ -425,4 +431,38 @@ export function cityPaintHit(origin,direction,range=17,damage={}){
   }
  }
  return best;
+}
+
+export const SIGN_HP=42;
+export function houseSignSpecs(s){
+ const w=s.width,d=s.depth,h=s.height,out=[];
+ const blade=s.bladeCount??1,roof=s.roofCount??1;
+ const bs=s.bladeSize??1,rs=s.roofSize??1;
+ for(let i=0;i<blade;i++){
+  const side=i%2?1:-1,level=Math.floor(i/2),height=Math.min(h*.78,2.6*bs),depth=Math.min(d*.55,1.05*bs);
+  out.push({id:'sign-blade-'+i,x:side*w*.37,y:Math.min(h-height/2,Math.max(height/2,h*.68-level*(height+.16))),z:d/2+depth/2+.08,width:.17,height,depth,color:s.bladeColor||s.signColor||'#c84730',blade:true});
+ }
+ for(let i=0;i<roof;i++){
+  const width=Math.min(w/(roof+.12),3.6*rs),height=1.45*rs;
+  out.push({id:'sign-roof-'+i,x:(i-(roof-1)/2)*w/(roof+1),y:h+height/2+.30,z:d*.32,width,height,depth:.18,color:s.roofSignColor||s.signColor||'#4c9ea1',blade:false});
+ }
+ return out;
+}
+export function citySignSpecs(lot){
+ return houseSignSpecs({...lot,bladeCount:1+(lot.index%3===0?1:0),roofCount:1,bladeSize:.8+(lot.index%5)*.16,roofSize:.85+(lot.index%4)*.18,bladeColor:lot.style[3],roofSignColor:CITY_SHOP_STYLES[(lot.index+5)%CITY_SHOP_STYLES.length][3]});
+}
+export function structureSignSpecs(structure){
+ if(structure.kind!=='house')return [];
+ if(structure.gmHouse)return houseSignSpecs({...structure.house,bladeCount:structure.house.bladeCount??0,roofCount:structure.house.roofCount??0});
+ const v=structure.variant||0;return houseSignSpecs({width:4.7+(v%2)*.65,depth:3.8+(v%3)*.3,height:3.4+(v%2)*.45,bladeCount:1,roofCount:1,bladeColor:CITY_SHOP_STYLES[v][3],roofSignColor:CITY_SHOP_STYLES[v+5][3],bladeSize:.85,roofSize:.85});
+}
+export function signWorldPosition(lot,sign){
+ const c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);return [lot.x+c*sign.x+s*sign.z,(lot.y||0)+sign.y,lot.z-s*sign.x+c*sign.z];
+}
+export function signRayDistance(lot,sign,origin,direction,range){
+ const [x,z]=cityLocal(lot,origin[0],origin[2]),c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
+ const o=[x-sign.x,origin[1]-(lot.y||0)-sign.y,z-sign.z],v=[direction[0]*c-direction[2]*s,direction[1],direction[0]*s+direction[2]*c],half=[sign.width/2+.06,sign.height/2+.06,sign.depth/2+.06];
+ let near=0,far=range;
+ for(let i=0;i<3;i++){if(Math.abs(v[i])<1e-8){if(Math.abs(o[i])>half[i])return null;continue;}const a=(-half[i]-o[i])/v[i],b=(half[i]-o[i])/v[i];near=Math.max(near,Math.min(a,b));far=Math.min(far,Math.max(a,b));if(near>far)return null;}
+ return near;
 }
