@@ -3,6 +3,7 @@ import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
  cityLots,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,CityImpactPlumes,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
+import {houseTileTexture} from './build-style.js';
 import {CityWallPaint} from './city-wall-paint.js';
 import {CityFireField} from './city-fire-field.js';
 import {CitySplinterField} from './city-splinter-field.js';
@@ -34,12 +35,12 @@ function compactedSand(){
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;return map;
 }
 function batchGeometry(lots,mobile){
- const position=[],normal=[],color=[],indices=[],lotRanges=new Map(),partRanges=new Map(),lotIds=[],localPoints=[];
+ const position=[],normal=[],color=[],indices=[],lotRanges=new Map(),partRanges=new Map(),lotIds=[],localPoints=[],tilePoints=[];
  let category='core',current=-1;
- const face=(corners,n,col,lot,locals)=>{
+ const face=(corners,n,col,lot,locals,axis)=>{
   const at=position.length/3,c=rgb(col);
   for(let i=0;i<corners.length;i++){position.push(...corners[i]);normal.push(...n);color.push(...c);
-   lotIds.push(lot.index??-1);localPoints.push(...(locals?.[i]||[0,0,0]));}
+   lotIds.push(lot.index??-1);localPoints.push(...(locals?.[i]||[0,0,0]));const p=locals?.[i]||[0,0,0];tilePoints.push((axis===0?p[2]:p[0])/2.4,p[1]/1.2,category==='core'&&lot.index>=0&&axis!==1?1:0);}
   indices.push(at,at+1,at+2,at,at+2,at+3);
  };
  const box=(lot,x,y,z,w,h,d,c)=>{
@@ -51,7 +52,7 @@ function batchGeometry(lots,mobile){
   const cs=Math.cos(lot.yaw),sn=Math.sin(lot.yaw);
   for(const [ids,n] of [[[4,5,6,7],[0,0,1]],[[1,0,3,2],[0,0,-1]],
    [[5,1,2,6],[1,0,0]],[[0,4,7,3],[-1,0,0]],[[7,6,2,3],[0,1,0]],[[0,1,5,4],[0,-1,0]]]){
-    face(ids.map(i=>vertices[i]),[n[0]*cs+n[2]*sn,n[1],-n[0]*sn+n[2]*cs],c,lot,ids.map(i=>locals[i]));
+    face(ids.map(i=>vertices[i]),[n[0]*cs+n[2]*sn,n[1],-n[0]*sn+n[2]*cs],c,lot,ids.map(i=>locals[i]),Math.abs(n[0])>.5?0:Math.abs(n[1])>.5?1:2);
   }
   if(current>=0&&category!=='core'){
    const key=current+':'+category,group=partRanges.get(key)||[];
@@ -161,6 +162,7 @@ function batchGeometry(lots,mobile){
  geo.setAttribute('color',new THREE.Float32BufferAttribute(color,3));
  geo.setAttribute('cityLotId',new THREE.Float32BufferAttribute(lotIds,1));
  geo.setAttribute('cityLocal',new THREE.Float32BufferAttribute(localPoints,3));
+ geo.setAttribute('cityTile',new THREE.Float32BufferAttribute(tilePoints,3));
  geo.setIndex(indices);geo.computeBoundingSphere();
  const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.97,metalness:.02,side:THREE.FrontSide}));
  mesh.name='Batched solid concrete, timber, red-brick, stone and ochre ruined homes';
@@ -424,7 +426,7 @@ export class OuterCity{
    batch.count=0;batch.visible=false;this.scrapBatches.push(batch);template.userData.batch=batch;this.root.add(batch);
   }
   // Outer district is covered by GrassField's continuous living grass canopy.
-  this.walls=batchGeometry(this.lots,mobile);this.facade=installFacadeCracks(this.walls);
+  this.walls=batchGeometry(this.lots,mobile);this.facade=installFacadeCracks(this.walls,houseTileTexture());
   this.signs=buildShopSigns(this.lots);this.graffiti=buildWallGraffiti(this.lots);
    installAttachedFlash(this.signs,this.facade.texture);installAttachedFlash(this.graffiti,this.facade.texture);
   this.gpuPose=cityDeformationTexture(this.lots);

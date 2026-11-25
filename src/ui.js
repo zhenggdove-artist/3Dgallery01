@@ -603,7 +603,7 @@ export class TempleUI extends EventTarget{
  <div class="gm-tools">
   <button type="button" data-gm-platform-tool="edit">編輯圓盤／三角檯座</button>
   <button type="button" data-gm-platform-tool="place" data-gm-platform-kind="disc">增加圓盤</button>
-  <button type="button" data-gm-platform-tool="place" data-gm-platform-kind="pedestal">增加灰色三角檯座</button>
+  <button type="button" data-gm-platform-tool="place" data-gm-platform-kind="pedestal">增加灰色三角檯座</button><button type="button" data-gm-platform-tool="place" data-gm-platform-kind="house">新增房屋</button><button type="button" data-gm-platform-tool="edit" data-gm-platform-kind="house">編輯 GM 房屋</button>
  </div>
  <p>編輯：直接點選場景中的物件使其變藍，再修改位置／半徑／高度，SAVE 儲存或 DELETE 刪除。新增：物件跟隨 GM，按 PLACE / ENTER 固定。</p>
  <h3>作品位置與拾取修復</h3>

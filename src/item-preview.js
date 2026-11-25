@@ -17,7 +17,7 @@ let renderer,scene,camera,queue=Promise.resolve();
 let previewCharacterSource=null,previewIdleEnabled=false,previewIdleTimer=null,warmingPreviews=false;
 export function setOutfitPreviewCharacter(source){previewCharacterSource=source||null;}
 
-const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0)+(item.id==='outfit-luroufan-bowl-disguise'?':v065':item.id==='outfit-pooh-plush-disguise'?':v067':'');
+const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0)+(item.id==='outfit-luroufan-bowl-disguise'?':v065':item.id==='outfit-pooh-plush-disguise'?':v070':'');
 // Exact release-scoped PNGs: same resolution, no second WebGL render.
 const previewRelease=new URL(import.meta.url).searchParams.get('temple-release');
 // V053 changes combat billing, not the authored models or portrait renderer.

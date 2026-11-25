@@ -142,34 +142,36 @@ export function disguiseFrame(T,model,bones,headHeight){
   const puff=(g,p,s,m=fur,seed=0)=>{const geo=new T.SphereGeometry(1,24,16),a=geo.attributes.position;for(let i=0;i<a.count;i++){const x=a.getX(i),y=a.getY(i),z=a.getZ(i),v=1+.018*Math.sin(5*x+4*y+seed)*Math.cos(4*z-3*y);a.setXYZ(i,x*v,y*v,z*v);}a.needsUpdate=true;geo.computeVertexNormals();const mesh=new T.Mesh(geo,m);mesh.position.set(...p);mesh.scale.set(...s);g.add(mesh);return mesh;};
   const hips=pos('Hips'),chest=pos('Spine2'),neck=pos('Neck');
   const torsoLength=Math.max(1.25,neck.clone().sub(hips).dot(up)/u),body=group('Spine',hips.clone().lerp(neck,.43));
-  puff(body,[0,-.16,.08],[.92,torsoLength*.60,.62],fur,1);
-  const shirt=puff(body,[0,torsoLength*.19,.055],[.94,torsoLength*.42,.65],red,2);
+  puff(body,[0,-.16,.08],[.77,torsoLength*.60,.57],fur,1);
+  const shirt=puff(body,[0,torsoLength*.19,.055],[.79,torsoLength*.42,.60],red,2);
   // A slightly raised curved hem reads as sewn cloth, not armour.
-  const hem=new T.Mesh(new T.TorusGeometry(1,.035,8,36),red);hem.rotation.x=Math.PI/2;hem.scale.set(.84,.61,1);hem.position.set(0,-torsoLength*.12,.055);body.add(hem);
+  const hem=new T.Mesh(new T.TorusGeometry(1,.035,8,36),red);hem.rotation.x=Math.PI/2;hem.scale.set(.73,.56,1);hem.position.set(0,-torsoLength*.12,.055);body.add(hem);
   const pelvis=group('Hips',hips.clone().addScaledVector(up,-.16*u));puff(pelvis,[0,0,0],[.77,.55,.60],fur,3);
   const tail=new T.Group();tail.position.set(0,-.12,-.49);pelvis.add(tail);puff(tail,[0,0,-.21],[.25,.23,.35],fur,4);
   record.plushMotion={tail,pos:new T.Vector3(),last:null,energy:0,angle:0};
-  const axis=new T.Vector3(0,1,0);
-  const segment=(name,end,r,depth,m=fur)=>{if(!bones.has(name)||!bones.has(end))return;const a=pos(name),b=pos(end),delta=b.clone().sub(a),len=delta.length()/u;if(len<.05)return;const local=delta.normalize().applyQuaternion(frame.rotation.clone().invert());const q=frame.rotation.clone().multiply(new T.Quaternion().setFromUnitVectors(axis,local));const g=group(name,a.clone().lerp(b,.5),q);puff(g,[0,0,0],[r,len*.61,depth],m,len);return {g,len};};
+  const axis=new T.Vector3(0,1,0),across=new T.Vector3(1,0,0).applyQuaternion(frame.rotation);
+  const segment=(name,end,r,depth,m=fur,offset=0)=>{if(!bones.has(name)||!bones.has(end))return;const a=pos(name),b=pos(end),delta=b.clone().sub(a),len=delta.length()/u;if(len<.05)return;const local=delta.normalize().applyQuaternion(frame.rotation.clone().invert());const q=frame.rotation.clone().multiply(new T.Quaternion().setFromUnitVectors(axis,local));const g=group(name,a.clone().lerp(b,.5).addScaledVector(across,offset*u),q);puff(g,[0,0,0],[r,len*.61,depth],m,len);return {g,len};};
   for(const side of ['Left','Right']){
-   const upper=segment(side+'Arm',side+'ForeArm',.36,.35);
-   if(upper)puff(upper.g,[0,-upper.len*.26,0],[.41,upper.len*.34,.40],red);
-   segment(side+'ForeArm',side+'Hand',.31,.30);
-   if(bones.has(side+'Hand'))puff(group(side+'Hand',pos(side+'Hand')),[0,-.15,.03],[.34,.45,.30],fur);
+   const outward=side==='Left'?1:-1;const upper=segment(side+'Arm',side+'ForeArm',.30,.31,fur,outward*.14);
+   if(upper)puff(upper.g,[0,-upper.len*.26,0],[.34,upper.len*.34,.35],red);
+   segment(side+'ForeArm',side+'Hand',.27,.28,fur,outward*.28);
+   if(bones.has(side+'Hand'))puff(group(side+'Hand',pos(side+'Hand').addScaledVector(across,outward*.31*u)),[0,-.15,.03],[.30,.42,.28],fur);
    segment(side+'UpLeg',side+'Leg',.43,.43);segment(side+'Leg',side+'Foot',.35,.37);
    if(bones.has(side+'Foot'))puff(group(side+'Foot',pos(side+'Foot')),[0,-.06,.26],[.43,.29,.65],fur);
   }
-  const hood=group('Head',frame.head.clone().addScaledVector(up,.42*u).addScaledVector(front,-.42*u));
-  puff(hood,[0,.10,0],[.94,1.01,.80],hoodFur);
-  puff(hood,[0,-.24,.46],[.64,.49,.43],hoodMuzzle);
+  const hood=group('Head',frame.head.clone().addScaledVector(up,.39*u).addScaledVector(front,-.08*u));
+  const hoodGeo=new T.SphereGeometry(1,40,28),a=hoodGeo.attributes.position;
+  for(let i=0;i<a.count;i++){const x=a.getX(i),y=a.getY(i),z=a.getZ(i),soft=1+.025*Math.sin(x*8+y*4)*Math.cos(z*6);a.setXYZ(i,x*.76*soft,y*.81*soft,z*.61*soft+.10*Math.max(0,z)*(1-y*y));}
+  a.needsUpdate=true;hoodGeo.computeVertexNormals();
+  const hoodMesh=new T.Mesh(hoodGeo,hoodFur);hoodFur.side=T.DoubleSide;hood.add(hoodMesh);
+  const rim=new T.Mesh(new T.TorusGeometry(1,.075,10,48),hoodMuzzle);rim.scale.set(.49,.56,.72);rim.position.set(0,-.09,.54);hood.add(rim);
   for(const side of [-1,1]){
-   puff(hood,[side*.69,.86,-.03],[.32,.34,.25],hoodFur);
-   puff(hood,[side*.69,.88,.17],[.20,.22,.095],hoodInside);
-   puff(hood,[side*.37,.35,.71],[.075,.085,.04],dark);
-   const brow=puff(hood,[side*.38,.58,.64],[.13,.035,.04],dark);brow.rotation.z=side*.18;
+   puff(hood,[side*.54,.69,-.02],[.25,.27,.20],hoodFur);
+   puff(hood,[side*.54,.71,.13],[.15,.17,.06],hoodInside);
+   puff(hood,[side*.30,.44,.52],[.053,.062,.03],dark);
+   const brow=puff(hood,[side*.31,.60,.43],[.09,.025,.03],dark);brow.rotation.z=side*.18;
   }
-  // The real player's face remains visible through the nose/mouth aperture.
-  cutDisguiseOpening(T,hood,0,-.20,.61,.63,.83);
+  cutDisguiseOpening(T,hood,0,-.09,.49,.56,.64);
   return record;
  }
  export function animatePlushBear(record,time,root,dt){

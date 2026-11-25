@@ -262,16 +262,18 @@ export function buildBrokenStructure(lot,index,w,h,d,color){
  }
  return group;
 }
-export function installFacadeCracks(mesh){
+export function installFacadeCracks(mesh,tileMap){
  const width=512,bytes=new Uint8Array(width*4);
  const map=new THREE.DataTexture(bytes,width,1,THREE.RGBAFormat,THREE.UnsignedByteType);
  map.minFilter=map.magFilter=THREE.NearestFilter;map.wrapS=THREE.ClampToEdgeWrapping;
  map.generateMipmaps=false;map.needsUpdate=true;
  mesh.material.onBeforeCompile=shader=>{
-  shader.uniforms.uCityDamage={value:map};
-  shader.vertexShader='attribute float cityLotId;\nattribute vec3 cityLocal;\nvarying float vCityLot;\nvarying vec3 vCitySurface;\n'+shader.vertexShader;
-  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvCityLot=cityLotId;vCitySurface=cityLocal;');
+  shader.uniforms.uCityDamage={value:map};shader.uniforms.uHouseTile={value:tileMap};
+  shader.vertexShader='attribute float cityLotId;\nattribute vec3 cityLocal;\nattribute vec3 cityTile;\nvarying vec3 vCityTile;\nvarying float vCityLot;\nvarying vec3 vCitySurface;\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvCityLot=cityLotId;vCitySurface=cityLocal;vCityTile=cityTile;');
   const header=`uniform sampler2D uCityDamage;
+uniform sampler2D uHouseTile;
+varying vec3 vCityTile;
 varying float vCityLot;
 varying vec3 vCitySurface;
 float cityHash(vec2 x){return fract(sin(dot(x,vec2(127.1,311.7)))*43758.5453123);}
@@ -284,6 +286,7 @@ float cityNoise(vec2 x){
   shader.fragmentShader=header+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
 if(vCityLot>=0.){
+ if(vCityTile.z>.5){vec3 tile=texture2D(uHouseTile,vCityTile.xy).rgb;diffuseColor.rgb=mix(diffuseColor.rgb,tile,.83);}
  float damage=texture2D(uCityDamage,vec2((floor(vCityLot+.5)+.5)/512.,.5)).r;
  if(damage>.001){
   vec2 p=abs(vCitySurface.z)>abs(vCitySurface.x)?vCitySurface.xy:vCitySurface.zy;
@@ -305,7 +308,7 @@ if(vCityLot>=0.){
  diffuseColor.rgb=mix(diffuseColor.rgb,vec3(1.,.014,.025),hitTint*.93);
 }`);
  };
- mesh.material.customProgramCacheKey=()=> 'city-facade-cracks-2026-11-19';
+ mesh.material.customProgramCacheKey=()=> 'city-facade-cracks-tiles-v070';
  mesh.material.needsUpdate=true;
  return {texture:map,set(index,hp,maxHp=CITY_MAX_HP){
   if(index<0||index>=width)return;

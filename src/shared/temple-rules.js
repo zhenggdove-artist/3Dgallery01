@@ -1,3 +1,4 @@
+import {validateGmHouse,gmHouseBlocked} from './arena.js';
 import {isDelisted,reclaimDelisted,retireShopItem,relistShopItem} from './shop-retirement.js';
 import {validateDiscPaint} from './disc-paint.js';
 import {setTerrainStyle} from './terrain-style.js';
@@ -388,6 +389,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
    !cityBlocked(previous?.position?.[0]??1e6,previous?.position?.[2]??1e6,
      (previous?.position?.[1]??0)+.002,mobility.cityDamage,.218))
    return {error:'Building collision',state:previous||null};
+  if(previous&&role==='fighter'&&gmHouseBlocked(mobility?.structures,next.position[0],next.position[2],next.position[1],.218)&&!gmHouseBlocked(mobility?.structures,previous.position[0],previous.position[2],previous.position[1],.218))return {error:'Building collision',state:previous};
   return {state:{position:next.position.map(n=>+n.toFixed(3)),rotation:+next.rotation.toFixed(4),animation:String(next.animation||'idle').slice(0,12),visible:next.visible!==false}};
 }
 
@@ -656,6 +658,17 @@ export function applyAction(world,actor,body,context={}){
     world.revision=(world.revision||0)+1;
     return {notice:'GM 個人融合成功率 '+body.percent.toFixed(1)+'%',gmFusionChance:profile.gmFusionChance};
    }
+  if(['gm-create-house','gm-update-house','gm-delete-house'].includes(body.action)){
+   if(!profile.admin||actor.admin!==true)return {error:'GM only'};
+   const existing=(world.structures||[]).find(s=>s.id===body.structureId&&s.gmHouse===true);
+   if(body.action==='gm-delete-house'){if(!existing)return {error:'House not found'};world.structures.splice(world.structures.indexOf(existing),1);world.revision++;return {structureId:existing.id,notice:'房屋已刪除'};}
+   const draft=validateGmHouse(body);if(!draft)return {error:'Invalid house dimensions or position'};
+   if(body.action==='gm-update-house'&&!existing)return {error:'House not found'};
+   if(body.action==='gm-create-house'&&world.structures.filter(s=>s.gmHouse).length>=64)return {error:'GM house limit 64'};
+   const house=existing||{id:id(),kind:'house',gmHouse:true,variant:0,owner:actor.key,hp:240,maxHp:240,createdAt:now};
+   Object.assign(house,draft);if(!existing)world.structures.push(house);
+   world.revision++;return {structureId:house.id,structure:house,notice:'GM 房屋已儲存'};
+  }
   if(body.action==='create-platform'){
     if(!profile.admin)return {error:'僅限 GM'};
     const position=body.position,radius=Number(body.radius),height=Number(body.height??.62),kind=body.kind==='pedestal'?'pedestal':'disc';
@@ -1704,8 +1717,8 @@ function rayHitsMonster(origin,direction,range,monster,radius){
 function normalDirection(value){if(!Array.isArray(value)||value.length!==3||!value.every(Number.isFinite))return null;const length=Math.hypot(...value);if(length<.5||length>1.5)return null;return value.map(n=>n/length);}
 function project(origin,direction,point){return (point[0]-origin[0])*direction[0]+(point[1]-origin[1])*direction[1]+(point[2]-origin[2])*direction[2];}
 function perpendicular(origin,direction,point,along){return Math.hypot(point[0]-origin[0]-direction[0]*along,point[1]-origin[1]-direction[1]*along,point[2]-origin[2]-direction[2]*along);}
-function structureRadius(structure){return structure.kind==='house'?3.4:structure.kind==='tree'?1.4:['wall','bar'].includes(structure.kind)?3.3:1.7;}
-function structureHeight(structure){return structure.kind==='house'?3.8:structure.kind==='tree'?4:structure.kind==='column'?4:structure.kind==='platform'?.7:2;}
+function structureRadius(structure){if(structure.gmHouse)return Math.hypot(structure.house.width,structure.house.depth)/2;return structure.kind==='house'?3.4:structure.kind==='tree'?1.4:['wall','bar'].includes(structure.kind)?3.3:1.7;}
+function structureHeight(structure){if(structure.gmHouse)return structure.house.height;return structure.kind==='house'?3.8:structure.kind==='tree'?4:structure.kind==='column'?4:structure.kind==='platform'?.7:2;}
 function structureEvent(structure,now){return {id:structure.id,kind:structure.kind,variant:structure.variant||0,position:[...structure.position],rotation:structure.rotation||0,surface:structure.surface||null,time:now};}
 // The Worker owns every city's health and four independent component pools.
 const CITY_PART_HEALTH=Object.freeze({windows:36,pillars:74,sheets:48,masonry:105});

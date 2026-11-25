@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
+import {createGmHouseMesh,disposeGmHouseMesh} from './build-style.js';
+import {GM_HOUSE_DEFAULT,validateGmHouse} from './shared/arena.js';
 import {ARENA_RADIUS} from './shared/arena.js';
 
 // GM platform editor: local blue 3D manipulation preview followed by an
@@ -21,6 +23,7 @@ export class PlatformDeleteEditor {
   this.gizmo.addEventListener('objectChange',()=>{
    if(!this.proxy||!this.draft||this.mode!=='edit')return;
    const proxy=this.proxy;
+   if(this.kind==='house'){this.draft.position=proxy.position.toArray();this.draft.rotation=proxy.rotation.y;if(this.gizmoMode==='scale'){const base=this.houseProxySpec;for(const [key,axis] of [['width','x'],['height','y'],['depth','z']])this.draft.house[key]=THREE.MathUtils.clamp(base[key]*Math.abs(proxy.scale[axis]),2,key==='height'?40:24);}this.frame?.update();this.setStatus('UNSAVED · SAVE');return;}
    // The server validates the same arena bounds on SAVE. Keep the handles
    // within that range, including the platform's non-negative base altitude.
    const p=proxy.position;
@@ -55,8 +58,8 @@ export class PlatformDeleteEditor {
    if((e.code==='Delete'||e.code==='Backspace')&&this.mode==='edit'&&!e.repeat){
     e.preventDefault();e.stopImmediatePropagation();void this.removeSelected();return;
    }
-   if(this.mode==='edit'&&this.selectedKey&&!e.repeat&&['KeyG','KeyT'].includes(e.code)){
-    e.preventDefault();e.stopImmediatePropagation();this.setGizmoMode(e.code==='KeyG'?'translate':'scale');return;
+   if(this.mode==='edit'&&this.selectedKey&&!e.repeat&&['KeyG','KeyT',...(this.kind==='house'?['KeyR']:[])].includes(e.code)){
+    e.preventDefault();e.stopImmediatePropagation();this.setGizmoMode(e.code==='KeyG'?'translate':e.code==='KeyR'?'rotate':'scale');return;
    }
    if(['Enter','NumpadEnter','KeyE'].includes(e.code)&&!e.repeat){
     e.preventDefault();e.stopImmediatePropagation();
@@ -79,6 +82,7 @@ export class PlatformDeleteEditor {
    const bounds=canvas.getBoundingClientRect();
    this.pointer.set((e.clientX-bounds.left)/bounds.width*2-1,-(e.clientY-bounds.top)/bounds.height*2+1);
    this.ray.setFromCamera(this.pointer,this.camera);
+   if(this.kind==='house'){const hits=this.ray.intersectObjects(this.arena.structureGroup.children.filter(o=>o.userData.gmHouseId),true);if(hits.length){let o=hits[0].object;while(o&&!o.userData.gmHouseId)o=o.parent;const record=this.arena.world?.structures?.find(s=>s.id===o?.userData.gmHouseId);if(record){e.preventDefault();e.stopImmediatePropagation();this.selectHouse(record);}}return;}
    const selected=this.arena.displayPlatforms?.pick(this.ray);
    if(selected){e.preventDefault();e.stopImmediatePropagation();this.select(selected);}
   },{capture:true});
@@ -89,8 +93,9 @@ export class PlatformDeleteEditor {
    else if(command==='save')void this.saveSelected();
    else if(command==='delete')void this.removeSelected();
    else if(command==='place')void this.place();
-   else if(command==='translate'||command==='scale')this.setGizmoMode(command);
+   else if(command==='translate'||command==='scale'||command==='rotate')this.setGizmoMode(command);
   });
+  this.overlay.addEventListener('change',e=>{const key=e.target.dataset.houseField;if(this.kind!=='house'||!key||!this.draft)return;this.draft.house[key]=e.target.type==='checkbox'?e.target.checked:Number(e.target.value);this.rebuildHouseProxy();});
   ui.addEventListener('panel',e=>{if(e.detail.open&&this.active)this.cancel();});
  }
  setStatus(message){
@@ -99,8 +104,8 @@ export class PlatformDeleteEditor {
  }
  setGizmoMode(mode){
   if(!this.proxy)return;
-  this.gizmoMode=mode==='scale'?'scale':'translate';
-  this.gizmo.setMode(this.gizmoMode);
+  this.gizmoMode=mode==='rotate'&&this.kind==='house'?'rotate':mode==='scale'?'scale':'translate';
+  this.gizmo.setMode(this.gizmoMode);this.gizmo.showX=this.gizmo.showZ=this.gizmoMode!=='rotate';this.gizmo.showY=true;
   for(const button of this.overlay.querySelectorAll('[data-platform-command="translate"],[data-platform-command="scale"]')){
    const chosen=button.dataset.platformCommand===this.gizmoMode;
    button.style.background=chosen?'#186de3':'#2d3547';
@@ -113,6 +118,7 @@ export class PlatformDeleteEditor {
   this.gizmo.detach();this.gizmo.visible=false;this.dragging=false;
   if(this.frame){this.frame.removeFromParent();this.frame.geometry.dispose();this.frame.material.dispose();this.frame=null;}
   if(this.proxy){
+   if(this.proxy.userData.gmHouseMaterials){disposeGmHouseMesh(this.proxy);this.proxy=null;return;}
    const material=this.proxy.children[0]?.material;
    this.proxy.removeFromParent();
    material?.dispose();
@@ -135,6 +141,23 @@ export class PlatformDeleteEditor {
   this.gizmo.attach(proxy);this.gizmo.visible=true;
   this.setGizmoMode('translate');
  }
+ houseFields(){
+   const s=this.draft.house;
+   const field=(k,label,min,max,step=1)=>'<label style="display:grid;grid-template-columns:1fr 84px;gap:6px;margin:5px 0">'+label+'<input data-house-field="'+k+'" type="number" min="'+min+'" max="'+max+'" step="'+step+'" value="'+s[k]+'"></label>';
+   return field('width','寬度',2,24,.1)+field('depth','深度',2,24,.1)+field('height','總樓高',2,40,.1)+field('floors','樓層數',1,12)+field('windows','每層每面窗戶數',0,8)+field('signs','招牌數（0=無）',0,6)+['pipes','metal'].map((k,i)=>'<label style="display:block"><input data-house-field="'+k+'" type="checkbox" '+(s[k]?'checked':'')+'>'+['外牆水管','鐵皮雨遮'][i]+'</label>').join('');
+ }
+ houseCommands(){
+   this.overlay.innerHTML='<b>GM · 房屋 '+(this.mode==='place'?'放置':'編輯')+'</b><p>調整參數；'+(this.mode==='place'?'移動角色攜帶房屋，按 PLACE 固定。':'使用三軸 MOVE / RESIZE / ROTATE，按 SAVE 儲存。')+'</p>'+this.houseFields()+(this.mode==='place'?'<button data-platform-command="place">PLACE</button>':'<button data-platform-command="translate">MOVE</button> <button data-platform-command="scale">RESIZE</button> <button data-platform-command="rotate">ROTATE</button> <button data-platform-command="save">SAVE</button> <button data-platform-command="delete">DELETE</button>')+' <button data-platform-command="close">CLOSE</button><p data-platform-status role="status"></p>';
+ }
+ rebuildHouseProxy(){
+   if(!this.draft||!validateGmHouse({...this.draft,position:[30,0,0]})){this.setStatus('參數無效：請確認樓高與樓層數');return;}
+   this.destroyProxy();const mesh=createGmHouseMesh(this.draft.house,{preview:true});mesh.position.fromArray(this.draft.position);mesh.rotation.y=this.draft.rotation;
+   this.arena.scene.add(mesh);this.proxy=mesh;this.houseProxySpec={...this.draft.house};
+   if(this.mode==='edit'){this.frame=new THREE.BoxHelper(mesh,0x247fff);this.arena.scene.add(this.frame);this.gizmo.attach(mesh);this.gizmo.visible=true;this.setGizmoMode('translate');}
+ }
+ selectHouse(record){
+   this.selectedKey=record.id;this.draft={position:[...record.position],rotation:record.rotation||0,house:{...record.house}};this.houseCommands();this.rebuildHouseProxy();
+ }
  begin(mode='edit',kind='disc'){
   if(!this.isGM())return;
   if(this.editor.dirty){this.ui.toast('請先儲存或取消作品編輯');return;}
@@ -147,6 +170,7 @@ export class PlatformDeleteEditor {
   this.ui.platformToolMode=mode;
   this.controller()?.setEnabled(mode==='place');
   this.overlay.hidden=false;
+  if(kind==='house'){if(mode==='place'){this.draft={position:[30,0,0],rotation:0,house:{...GM_HOUSE_DEFAULT}};this.houseCommands();this.rebuildHouseProxy();this.update();}else this.overlay.innerHTML='<b>GM · 編輯房屋</b><p>點選 GM 新增的房屋。</p><button data-platform-command="close">CLOSE</button>';return;}
   if(mode==='place'){
    this.draft={position:[0,0,0],radius:kind==='disc'?2.5:.6,height:.62};
    this.overlay.innerHTML=`<b>GM · ${kind==='disc'?'新增桃紅色圓盤':'新增灰色三角檯座'}</b>
@@ -193,9 +217,10 @@ export class PlatformDeleteEditor {
   if(this.proxy&&this.frame)this.frame.update();
   if(!this.active||!this.controller())return;
   if(this.mode==='place'){
-   const placement=this.controller().buildPosition(4);
+   const placement=this.controller().buildPosition(this.kind==='house'?Math.max(4,this.draft.house.depth/2+2):4);
    if(!placement||!placement.every(Number.isFinite))return;
    this.draft.position=[placement[0],Math.max(0,placement[1]),placement[2]];
+   if(this.kind==='house'){this.draft.rotation=this.controller().root.rotation.y;this.proxy?.position.fromArray(this.draft.position);if(this.proxy)this.proxy.rotation.y=this.draft.rotation;return;}
    this.arena.displayPlatforms?.previewPlacement(this.kind,this.draft.position,this.draft.radius,this.draft.height);
   }
  }
@@ -203,6 +228,7 @@ export class PlatformDeleteEditor {
   if(!this.active||this.mode!=='place'||this.saving)return;
   this.saving=true;
   try{
+   if(this.kind==='house'){const result=await this.send('gm-create-house',this.draft);if(result?.structureId)this.cancel();else this.setStatus('PLACE FAILED');return;}
    const result=await this.send('create-platform',{kind:this.kind,...this.draft});
    if(result?.platformId){this.ui.toast('已固定展示物件位置');this.cancel();}
   }finally{this.saving=false;}
@@ -212,6 +238,7 @@ export class PlatformDeleteEditor {
   this.saving=true;
   const key=this.selectedKey;
   try{
+   if(this.kind==='house'){const result=await this.send('gm-update-house',{structureId:key,...this.draft});if(result?.structureId){this.houseCommands();this.rebuildHouseProxy();this.setStatus('SAVED');}else this.setStatus('SAVE FAILED');return;}
    const result=await this.send('update-platform',{platformId:key,...this.draft});
    if(result?.platformId===key){
     this.setStatus('SAVED · Changes synced to all players');
@@ -225,6 +252,7 @@ export class PlatformDeleteEditor {
   if(!this.active||this.mode!=='edit'||!this.selectedKey||this.saving)return;
   this.saving=true;const key=this.selectedKey;
   try{
+   if(this.kind==='house'){const result=await this.send('gm-delete-house',{structureId:key});if(result?.structureId){this.destroyProxy();this.selectedKey=null;this.draft=null;this.overlay.innerHTML='<b>GM · 編輯房屋</b><p>點選下一棟房屋。</p><button data-platform-command="close">CLOSE</button>';}return;}
    const result=await this.send('delete-platform',{platformId:key});
    if(result?.platformId===key){
     this.arena.displayPlatforms?.clearPreview();
