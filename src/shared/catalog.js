@@ -169,6 +169,9 @@ export function registerCustomWings(wings=[]){
  }
 }
 export const itemById = id => INDEX.get(id) || null;
+// Catalog identity is authoritative, even for an older persisted drop kind.
+export const isRestorativeDrop=drop=>itemById(drop?.itemId)?.slot==='consumable';
+export function groundDropVisualKind(drop){if(isRestorativeDrop(drop))return 'cash';if(drop?.kind==='consumable')return null;if(drop?.kind==='coin'||drop?.kind==='heart')return drop.kind;return itemById(drop?.itemId)?'equipment':null;}
 
 export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>!['material','armor'].includes(item.slot)&&!item.notForSale&&!isRetiredHeadgear(item)&&item.price>0));
 export const SHOP_CATALOG_REVISION='r121';

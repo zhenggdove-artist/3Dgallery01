@@ -8,7 +8,7 @@ import {saberWaveCrest} from './saber-wave.js';
 import {artworkLanding,artworkPosition} from './artwork-flight.js';
 import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks,projectileHitsActor,artBombDamage,artworkBlastHits,ARTWORK_BLAST_RADIUS} from './art-bomb.js';
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
-import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,shopPrice,shopPriceKey,shopPurchaseVariant,shopResalePrice,registerCustomWings,groundDropRoll,monsterDropRoll} from './catalog.js';
+import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,shopPrice,shopPriceKey,shopPurchaseVariant,shopResalePrice,registerCustomWings,groundDropRoll,monsterDropRoll,isRestorativeDrop} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
@@ -126,8 +126,9 @@ export function migrateWorld(raw,now=Date.now()){
   // Purge persisted deprecated material loot immediately, even if its
   // original drop lifetime has not expired.
   world.groundDrops=world.groundDrops.filter(drop=>
-   drop.kind!=='material'&&(!drop.itemId||
+   drop.kind!=='material'&&(drop.kind!=='consumable'||isRestorativeDrop(drop))&&(!drop.itemId||
     (itemById(drop.itemId)&&!['material','wings'].includes(itemById(drop.itemId).slot))));
+  for(const drop of world.groundDrops)if(isRestorativeDrop(drop))drop.kind='consumable';
   world.persistentAttacks=world.persistentAttacks.filter(fx=>fx.weapon!=='fan'&&fx.kind!=='fan');
   return cleanLegacyScene(world);
 }

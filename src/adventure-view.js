@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {originalWorldVisuals} from './reletter/world-visuals.js';
 import {disposeGardenModel} from './reletter/garden-art.js';
 import {makePlant} from './reletter/plants.js';
-import {itemById} from './shared/catalog.js';
+import {itemById,groundDropVisualKind} from './shared/catalog.js';
 import {makeHeldWeapon} from './reletter/held-weapons.js';
 import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
 
@@ -32,7 +32,7 @@ export class AdventureView{
  update(dt,time,roots,camera){
   if(!this.world)return;
   if(time>=this.nextSync){this.nextSync=time+.5;
-   this.reconcile(this.loot,this.world.groundDrops.filter(d=>d.kind!=='heart'&&d.kind!=='coin'&&itemById(d.itemId)),d=>{const o=createVisibleDrop(itemById(d.itemId),this.original);o.userData.drop=d;this.scene.add(o);return o;});
+   this.reconcile(this.loot,this.world.groundDrops.filter(d=>groundDropVisualKind(d)==='equipment'),d=>{const o=createVisibleDrop(itemById(d.itemId),this.original);o.userData.drop=d;this.scene.add(o);return o;});
    // Detailed original plants are distance bounded. All entries remain persistent/readable.
    const {x,y,z}=camera.position;
    const distance=p=>(p.position[0]-x)**2+(p.position[1]-y)**2+(p.position[2]-z)**2;

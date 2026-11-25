@@ -10,7 +10,8 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {PLATFORMS,SAFE_ZONE,distance2d} from './shared/arena.js';
-import {itemById} from './shared/catalog.js';
+import {itemById,groundDropVisualKind} from './shared/catalog.js';
+import {createCashDropGeometry,cashDropMaterial} from './comfort-cash-art.js';
 import {buildReletterEnvironment,reletterPlatformMaterial,ReletterPresentation,disposeVisual} from './reletter-presentation.js';
 import {AdventureView} from './adventure-view.js';
 import {IslandEnemies} from './island-enemies.js';
@@ -273,7 +274,21 @@ export class TempleArena{
      mesh.removeFromParent();mesh.geometry.dispose();mesh.material.dispose();this.heartDrops.delete(id);
     }
    }
-  syncDrops(){const drops=(this.world?.groundDrops||[]).filter(d=>d.kind==='coin'||d.kind==='consumable'),signature=drops.map(d=>`${d.id}:${d.position.join(',')}`).join('|');if(signature===this.dropSignature)return;this.dropSignature=signature;for(const mesh of this.dropMeshes){mesh.removeFromParent();mesh.dispose();mesh.geometry.dispose();mesh.material.dispose();}this.dropMeshes=[];if(!drops.length)return;const groups=new Map();for(const drop of drops){const item=itemById(drop.itemId),shape=drop.kind==='coin'?'coin':item?.slot==='consumable'?'cash':item?.slot==='weapon'?'weapon':['armor','head'].includes(item?.slot)?'armor':'material';if(!groups.has(shape))groups.set(shape,[]);groups.get(shape).push(drop);}for(const [shape,records] of groups){let geometry;if(shape==='coin')geometry=this.coinMesh.geometry.clone();else if(shape==='cash')geometry=new THREE.BoxGeometry(1.05,.16,.54);else if(shape==='weapon')geometry=new THREE.BoxGeometry(.16,1.55,.12);else if(shape==='armor')geometry=new THREE.DodecahedronGeometry(.46,0);else geometry=new THREE.OctahedronGeometry(.43,1);const material=shape==='coin'?this.coinMesh.material.clone():new THREE.MeshStandardMaterial({roughness:.42,metalness:shape==='weapon'?.72:.3,vertexColors:false,emissive:'#111111'}),mesh=new THREE.InstancedMesh(geometry,material,records.length),color=new THREE.Color();mesh.userData.records=records;records.forEach((drop,i)=>{setDropMatrix(mesh,drop,i,shape,0);const item=itemById(drop.itemId);mesh.setColorAt(i,color.set(shape==='coin'?'#f2cf55':item?.color||'#a8d7cc'));});mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;mesh.name=`Ground loot · ${shape}`;this.scene.add(mesh);this.dropMeshes.push(mesh);}}
+  syncDrops(){
+   const drops=(this.world?.groundDrops||[]).filter(d=>['coin','cash'].includes(groundDropVisualKind(d))),signature=drops.map(d=>d.id+':'+d.kind+':'+(d.itemId||'')+':'+d.position.join(',')).join('|');
+   if(signature===this.dropSignature)return;this.dropSignature=signature;
+   for(const mesh of this.dropMeshes){mesh.removeFromParent();mesh.dispose();mesh.geometry.dispose();mesh.material.dispose();}this.dropMeshes=[];
+   const groups=new Map();
+   for(const drop of drops){const kind=groundDropVisualKind(drop),key=kind==='cash'?drop.itemId:'coin';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(drop);}
+   for(const [key,records] of groups){
+    const cash=key!=='coin',item=cash?itemById(key):null,shape=cash?'cash':'coin';
+    const geometry=cash?createCashDropGeometry(THREE):this.coinMesh.geometry.clone(),material=cash?cashDropMaterial(THREE,item):this.coinMesh.material.clone();
+    const mesh=new THREE.InstancedMesh(geometry,material,records.length);mesh.userData.records=records;mesh.userData.dropShape=shape;mesh.frustumCulled=false;
+    records.forEach((drop,i)=>{setDropMatrix(mesh,drop,i,shape,this.clock);if(!cash)mesh.setColorAt(i,new THREE.Color('#f2cf55'));});
+    mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+    mesh.name=cash?'Ground loot · cash '+item.denomination:'Ground loot · coin';this.scene.add(mesh);this.dropMeshes.push(mesh);
+   }
+  }
   syncStructures(){const structures=this.world?.structures||[],
    // Geometry/placement identity is independent of HP. Previous code
    // disposed EVERY structure mesh/material and recreated its GL resources
@@ -347,7 +362,7 @@ export class TempleArena{
       const seed=mesh.userData.seed;mesh.position.y=mesh.userData.baseY+.32*Math.sin(time*2.1+seed);
       mesh.rotation.set(.09*Math.sin(time*.9+seed),time*1.55+seed,.10*Math.sin(time*1.1+seed));
      }
-     for(const mesh of this.dropMeshes){const shape=mesh.name.split(' · ')[1];mesh.userData.records.forEach((drop,i)=>setDropMatrix(mesh,drop,i,shape,time));mesh.instanceMatrix.needsUpdate=true;}
+     for(const mesh of this.dropMeshes){const shape=mesh.userData.dropShape;mesh.userData.records.forEach((drop,i)=>setDropMatrix(mesh,drop,i,shape,time));mesh.instanceMatrix.needsUpdate=true;}
     for(let i=this.dropCoinFlights.length-1;i>=0;i--){
      const fly=this.dropCoinFlights[i];fly.age+=dt;
      const t=Math.min(1,fly.age/.8),ease=1-(1-t)*(1-t);
@@ -468,7 +483,7 @@ export class TempleArena{
 
 function direction(name){return {east:[1,0],west:[-1,0],north:[0,-1],south:[0,1]}[name]||[1,0];}
 function hashText(value){let hash=2166136261;for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return hash>>>0;}
-function setDropMatrix(mesh,drop,index,shape,time){tempPosition.set(...drop.position);tempPosition.y+=.55+Math.sin(time*2+index)*.12;if(shape==='weapon')tempQuaternion.setFromEuler(tempEuler.set(0,time*.9+index,.55));else tempQuaternion.setFromEuler(tempEuler.set(time*.25,time*.85+index,0));tempScale.setScalar(shape==='coin'?1.6:shape==='weapon'?.9:1);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);}
+function setDropMatrix(mesh,drop,index,shape,time){tempPosition.set(...drop.position);tempPosition.y+=(shape==='cash'?.85:.55)+Math.sin(time*2+index)*.12;if(shape==='cash')tempQuaternion.setFromEuler(tempEuler.set(.20+Math.sin(time*1.1+index)*.13,time*.7+index,.15));else tempQuaternion.setFromEuler(tempEuler.set(time*.25,time*.85+index,0));tempScale.setScalar(shape==='coin'?1.6:shape==='weapon'?.9:1);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);}
 function previewMeshes(kind,material){const mesh=(geometry,x=0,y=0,z=0)=>{const value=new THREE.Mesh(geometry,material.clone());value.position.set(x,y,z);return value;};if(kind==='art-bomb')return [mesh(new THREE.BoxGeometry(3,3,.16),0,1.5,0)];if(kind==='tree')return [mesh(new THREE.CylinderGeometry(.28,.42,3.2,7),0,1.6,0),mesh(new THREE.IcosahedronGeometry(1.4,1),0,3.7,0)];if(kind==='house')return [mesh(new THREE.BoxGeometry(4.8,3.4,3.8),0,1.7,0),mesh(new THREE.ConeGeometry(3.45,1.7,4),0,4.25,0)];const dimensions=originalBuildSizes[kind]||[2,2,2];return [mesh(kind==='cylinder'?new THREE.CylinderGeometry(dimensions[0]/2,dimensions[0]/2,dimensions[1],24):new THREE.BoxGeometry(...dimensions),0,dimensions[1]/2,0)];}
 function disposeArtworkRoot(root){
  if(!root)return;
