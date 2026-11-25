@@ -1,5 +1,6 @@
 // Deterministic server-owned homing, shared with 2-second victim motion.
-export const VORTEX_FLIGHT_MS=4200;
+export const VORTEX_FLIGHT_MS=2100;
+export const VORTEX_VISUAL_SPIN_RATE=4;
 export const VORTEX_DAMAGE_INTERVAL_MS=500;
 export const VORTEX_SPIN_MS=2000;
 export const VORTEX_SPIN_LOCK_MS=5000;
@@ -12,10 +13,9 @@ export function advanceHomingVortex(fx,target,elapsedMs,flightMs=VORTEX_FLIGHT_M
   const tx=target.position[0]-fx.position[0],tz=target.position[2]-fx.position[2];
   const distance=Math.hypot(tx,tz);
   if(distance>.001){
-   const steer=1-Math.exp(-7*dt);
-   dx=dx*(1-steer)+tx/distance*steer;
-   dz=dz*(1-steer)+tz/distance*steer;
-   const n=Math.hypot(dx,dz)||1;dx/=n;dz/=n;
+   const from=Math.atan2(dx,dz),to=Math.atan2(tx,tz);
+   const turn=Math.atan2(Math.sin(to-from),Math.cos(to-from));
+   const angle=from+turn*(1-Math.exp(-7*dt));dx=Math.sin(angle);dz=Math.cos(angle);
   }
  }
  const remaining=Math.max(0,fx.range-(fx.travelled||0));
@@ -24,6 +24,13 @@ export function advanceHomingVortex(fx,target,elapsedMs,flightMs=VORTEX_FLIGHT_M
  fx.position=[fx.position[0]+dx*step,fx.position[1],fx.position[2]+dz*step];
  fx.travelled=(fx.travelled||0)+step;
  return fx.position;
+}
+// Swept horizontal contact prevents a faster vortex crossing a target
+// between Worker ticks without registering the visible collision.
+export function vortexSegmentDistance(start,end,point){
+ const dx=end[0]-start[0],dz=end[2]-start[2],len2=dx*dx+dz*dz;
+ const t=len2>1e-9?Math.max(0,Math.min(1,((point[0]-start[0])*dx+(point[2]-start[2])*dz)/len2)):0;
+ return Math.hypot(point[0]-start[0]-dx*t,point[2]-start[2]-dz*t);
 }
 export function vortexSpinPoint(spin,now){
  if(!Array.isArray(spin?.start)||!Array.isArray(spin?.center))return null;

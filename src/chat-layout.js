@@ -1,6 +1,7 @@
 // Three-step chat sizing: max -> two-line medium -> + only -> max.
 // Tap + to change size; drag 5px or hold 180ms to move it. The expanded panel keeps its 1s hold.
-// A new position key discards old placements that stranded chat high on iOS.
+// The manual-position key is stable across game releases. Default placement
+// is CSS-anchored above the quickbar and never stored as a manual drag.
 export function bindChatLayout(){
  const panel=document.getElementById('chat-hud');
  const handle=document.getElementById('chat-resize');
@@ -46,7 +47,7 @@ export function bindChatLayout(){
  function fitSafely(){
   if(manualPosition){const r=panel.getBoundingClientRect();relocate(r.left,r.top);return;}
   clearInline();
-  let rect=panel.getBoundingClientRect();
+  let rect=panel.getBoundingClientRect();if(!rect.width||!rect.height)return;
   const obstacles=blocking(),viewTop=(window.visualViewport?.offsetTop||0)+6;
   if(!obstacles.some(b=>collide(rect,b)))return;
   for(let step=0;step<80;step++){
@@ -62,7 +63,8 @@ export function bindChatLayout(){
    }
    rect=panel.getBoundingClientRect();
   }
-  if(obstacles.some(b=>collide(panel.getBoundingClientRect(),b))&&!manualPosition)resetPosition();
+  // A temporary small viewport may leave overlap; never erase a stored
+  // manual preference or move the default back down into combat controls.
  }
  function setSize(next,{hold=false}={}){
   size=next;
@@ -197,10 +199,15 @@ export function bindChatLayout(){
   };
   for(const type of ['pointerup','pointercancel','lostpointercapture'])panel.addEventListener(type,finish);
  }
- addEventListener('resize',()=>{
+ const onViewportResize=()=>{
   if(size==='max')panel.style.setProperty('--chat-height',maxHeight()+'px');
   requestAnimationFrame(fitSafely);
- });
+ };
+ addEventListener('resize',onViewportResize);
+ window.visualViewport?.addEventListener('resize',onViewportResize);
+ // The HUD starts hidden at login. Refit only when layout dimensions change,
+ // not on world snapshots or game frames.
+ if(typeof ResizeObserver==='function'){const observer=new ResizeObserver(()=>requestAnimationFrame(fitSafely));observer.observe(panel);const quickbar=document.getElementById('comfort-hotbar');if(quickbar)observer.observe(quickbar);}
  try{
   const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
   if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top)){

@@ -27,7 +27,7 @@ import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
-import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS} from './vortex-flight.js';
+import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS,vortexSegmentDistance} from './vortex-flight.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
 import {replenishHearts} from './heart-pickups.js';
@@ -278,7 +278,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
       key,{targetKey:lock.targetKey,kind:lock.kind,position:clone(lock.position),since:lock.since,
         multiplier:prismDamageMultiplier(now-lock.since),range:lock.range}
     ])),
-    vortexes:(world.persistentAttacks||[]).filter(v=>v.kind==='vortex').map(v=>({id:v.id,position:clone(v.position||v.origin),owner:v.owner})),
+    vortexes:(world.persistentAttacks||[]).filter(v=>v.kind==='vortex').map(v=>({id:v.id,position:clone(v.position||v.origin),owner:v.owner,direction:clone(v.direction),travelled:v.travelled||0,range:v.range,flightMs:v.expiresAt-v.createdAt,sampledAt:v.lastAt})),
     tidalLocks:Object.fromEntries(Object.entries(world.tidalLocks||{}).map(([key,lock])=>[
       key,{targets:(lock.targets||[]).map(t=>({targetKey:t.targetKey,kind:t.kind,position:clone(t.position)}))}
     ])),
@@ -2209,14 +2209,14 @@ function tickPersistentAttacks(world,actors,now,rng){
     viable.sort((a,b)=>Math.hypot(a.value.position[0]-fx.position[0],a.value.position[2]-fx.position[2])-
       Math.hypot(b.value.position[0]-fx.position[0],b.value.position[2]-fx.position[2]))[0];
    if(aim)fx.targetId=aim.value.id||aim.value.key;
-   const start=[...fx.position],elapsed=Math.max(0,now-fx.lastAt);
-   advanceHomingVortex(fx,aim?.value,elapsed);
+   const start=[...fx.position],elapsed=Math.max(0,Math.min(now,fx.expiresAt)-fx.lastAt);
+   advanceHomingVortex(fx,aim?.value,elapsed,flight);
    if(Math.hypot(fx.position[0]-start[0],fx.position[2]-start[2])>.001)changed=true;
    const radius=Math.max(2.1,Math.min(7,fx.radius*.5));
    for(const target of candidates){
     const victim=target.value,key=victim.id||victim.key;
     const victimRadius=target.kind==='monster'?(victim.bodyRadius||ENEMY_RADIUS):1.02;
-    if(Math.hypot(victim.position[0]-fx.position[0],victim.position[2]-fx.position[2])>radius+victimRadius||
+    if(vortexSegmentDistance(start,fx.position,victim.position)>radius+victimRadius||
      Math.abs(victim.position[1]-fx.position[1])>8||(fx.hitTimes?.[key]||0)>now)continue;
     const point=[victim.position[0],victim.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),victim.position[2]];
     const hit=target.kind==='monster'?

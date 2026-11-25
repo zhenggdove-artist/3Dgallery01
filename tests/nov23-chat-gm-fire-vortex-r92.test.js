@@ -67,7 +67,7 @@ test('native flame shaders preserve geometry while setting flame transparency to
  assert.match(s,/m\.transparent=true;m\.depthWrite=false/);
  assert.match(s,/m\.userData\.templeFireOpacity=\.4/);
 });
-test('conch water vortex channel retains one sustained native instance across damage pulses',()=>{
+test('one upright vortex instance per authoritative flight; repeat pulses do not reset it',()=>{
  const scene=new THREE.Scene();
  const effects=new NumberedWeaponEffects(scene,()=>new THREE.Vector3(0,1,0));
  let acquireCount=0;
@@ -90,4 +90,12 @@ test('conch water vortex channel retains one sustained native instance across da
  assert.equal(acquireCount,1);
  assert.equal(effects.active.length,1);
  assert.ok(advance.length>=2);
+ assert.ok(Math.abs(advance.at(-1)-.064)<1e-9,'native spin clock is 4x');
+ assert.deepEqual(effects.active[0].fx.group.quaternion.toArray(),[0,0,0,1]);
+ root.rotation.set(1,2,3);root.userData.staffAimDirection=[0,1,0];
+ effects.update(.016,null,{vortexes:[{id:'vortex-1',position:[6,1,6]}]});
+ assert.deepEqual(effects.active[0].fx.group.quaternion.toArray(),[0,0,0,1]);
+ assert.equal(effects.play({...event,persistentAttackId:'vortex-2'},item,root),true);
+ assert.equal(acquireCount,2,'a new flight must not teleport the existing vortex');
+ assert.equal(effects.active.length,2);
 });

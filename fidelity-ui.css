@@ -488,9 +488,17 @@ body.sniper-scoped #chat-hud{visibility:hidden!important;pointer-events:none!imp
 
 /* 2026-11-20: HUD corrections. Keep the full three-state chat interaction. */
 #bag-items .bag-cell.equipped::after{top:1px!important;bottom:auto!important;right:1px!important}
-#hud #chat-hud{bottom:max(163px,env(safe-area-inset-bottom) + 149px)!important}
-@media(max-height:520px){#hud #chat-hud{bottom:121px!important}}
-@media(max-width:720px),(pointer:coarse){#hud #chat-hud{bottom:max(133px,env(safe-area-inset-bottom) + 119px)!important}}
+/* Permanent CHAT/quickbar layout contract. The default matches the
+   reference: centered, two lines, 10px above the three healing slots.
+   Explicit inline drag positions still override the stylesheet. */
+#hud{--comfort-bottom:max(148px,env(safe-area-inset-bottom) + 136px);--comfort-slot-size:47px;--chat-gap:10px}
+#hud #chat-hud{bottom:calc(var(--comfort-bottom) + var(--comfort-slot-size) + var(--chat-gap))!important}
+@media(max-width:720px),(pointer:coarse){
+ #hud{--comfort-bottom:max(143px,env(safe-area-inset-bottom) + 133px);--comfort-slot-size:43px}
+}
+@media(max-height:520px) and (orientation:landscape){
+ #hud{--comfort-bottom:max(110px,env(safe-area-inset-bottom) + 96px);--comfort-slot-size:35px}
+}
 /* The GM exclamation mark lives inside the S panel; it never blocks the HP bar. */
 #gm-help{display:none!important}
 /* Clear, stable portrait backdrop; remove the translucent stacked checker/scanline layers. */
@@ -546,11 +554,11 @@ body.sniper-scoped #chat-hud{visibility:hidden!important;pointer-events:none!imp
 /* 2026-11-23 · Restorative-money 1/2/3 quickbar and batch-purchase cards. */
 #comfort-hotbar[hidden]{display:none!important}
 #comfort-hotbar{position:fixed;right:max(13px,env(safe-area-inset-right) + 8px);
- bottom:max(148px,env(safe-area-inset-bottom) + 136px);
+ bottom:var(--comfort-bottom);
  display:flex;flex-direction:row;align-items:center;gap:5px;z-index:28;
  pointer-events:auto;touch-action:manipulation}
 #comfort-hotbar .comfort-quick-slot{position:relative;display:grid;place-items:center;
- flex:none;width:47px;height:47px;padding:3px;overflow:hidden;
+ flex:none;width:var(--comfort-slot-size);height:var(--comfort-slot-size);padding:3px;overflow:hidden;
  background:linear-gradient(135deg,#fff9ed,#dfedee);border:2px solid #cbb5d8;
  border-radius:4px;box-shadow:inset 0 1px #fff9,0 3px 8px #17071f55;
  cursor:pointer;touch-action:manipulation;user-select:none}
@@ -571,12 +579,7 @@ body.sniper-scoped #chat-hud{visibility:hidden!important;pointer-events:none!imp
 #comfort-hotbar .comfort-quick-slot:focus-visible{outline:3px solid #ffffff;outline-offset:2px}
 @media(max-width:720px),(pointer:coarse){
  #comfort-hotbar{right:max(11px,env(safe-area-inset-right) + 6px);
- bottom:max(143px,env(safe-area-inset-bottom) + 133px);gap:4px}
- #comfort-hotbar .comfort-quick-slot{width:43px;height:43px}
-}
-@media(max-height:520px) and (orientation:landscape){
- #comfort-hotbar{bottom:max(110px,env(safe-area-inset-bottom) + 96px)}
- #comfort-hotbar .comfort-quick-slot{width:35px;height:35px}
+ gap:4px}
 }
 #panel .shop-quality-picker,#panel .shop-quantity-label{display:grid;gap:5px;
  margin:8px 0;color:#463350;font:700 11px/1.25 Arial,sans-serif}

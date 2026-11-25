@@ -86,9 +86,11 @@ test('prism 20% per second compound ramp reaches an absolute 5x ceiling',()=>{
  assert.equal(prismDamageMultiplier(600000),5);
 });
 
-test('default chat is 3px higher on desktop, mobile and landscape',()=>{
+test('default chat stays ten pixels above the healing quickbar across viewport sizes',()=>{
  const css=src('fidelity-ui.css');
- assert.match(css,/#hud #chat-hud\{bottom:max\(163px,env\(safe-area-inset-bottom\) \+ 149px\)!important\}/);
- assert.match(css,/@media\(max-height:520px\)\{#hud #chat-hud\{bottom:121px!important\}\}/);
- assert.match(css,/@media\(max-width:720px\),\(pointer:coarse\)\{#hud #chat-hud\{bottom:max\(133px,env\(safe-area-inset-bottom\) \+ 119px\)!important\}\}/);
+ assert.ok(css.includes('--chat-gap:10px'));
+ assert.ok(css.includes('bottom:calc(var(--comfort-bottom) + var(--comfort-slot-size) + var(--chat-gap))!important'));
+ assert.ok(css.includes('bottom:var(--comfort-bottom)'));
+ assert.ok(css.includes('--comfort-slot-size:43px'));
+ assert.ok(css.includes('--comfort-slot-size:35px'));
 });

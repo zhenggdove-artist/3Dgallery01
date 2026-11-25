@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {VORTEX_FLIGHT_MS,VORTEX_VISUAL_SPIN_RATE} from './shared/vortex-flight.js';
 import {installNativeCurve,updateNativeCurve,targetOnBeam} from './native-beam-curve.js';
 // The authoritative forward ray is now owned by WeaponVFX, not this vendor module.
 // These are byte-for-byte official 00GameDevs downloads. Their SHA-256 hashes,
@@ -78,7 +79,7 @@ const CLAM_WAVE_INTERVAL=.38;
 const CLAM_WAVE_LIFETIME=2.18;
 const CYCLE_INTERVAL=Object.freeze({20:1.35,43:1.08,70:.76});
 const TRAVELLING_NATIVE=new Set([20,43,70]);
-const travelLifetime=number=>number===70?1.26:number===43?2.2:4.2;
+const travelLifetime=number=>number===70?1.26:number===43?2.2:VORTEX_FLIGHT_MS/1000;
 const rainbowPalette=['#ff234f','#ff9900','#fff000','#28ff64','#20d9ff','#4464ff','#e337ff'].map(c=>new THREE.Color(c));
 function rainbowFlower(fx,age,phase){
  if(!fx._templeRainbowUniforms){const set=new Set();fx.group.traverse(o=>{for(const mat of Array.isArray(o.material)?o.material:[o.material])if(mat?.uniforms?.uColor?.value?.isColor)set.add(mat.uniforms.uColor.value);});fx._templeRainbowUniforms=[...set];}
@@ -246,7 +247,7 @@ export class NumberedWeaponEffects {
   play(event,item,root) {
   const spec=requestedEffect(item,event);
   if(!spec)return false;
-  const key=event.channel&&root?root.uuid+':'+spec.number+':'+(event.fusionEcho?'fusion'+(event.fusionSlot||0):'main'):null;
+  const key=spec.number===20&&event.persistentAttackId?'vortex:'+event.persistentAttackId:event.channel&&root?root.uuid+':'+spec.number+':'+(event.fusionEcho?'fusion'+(event.fusionSlot||0):'main'):null;
   const live=key?this.active.find(e=>e.key===key):null;
   const direction=vector(event.direction,FORWARD).normalize();
   if(live) {
@@ -256,7 +257,7 @@ export class NumberedWeaponEffects {
    live.lastPulse=performance.now();
    if(event.persistentAttackId)live.attackId=event.persistentAttackId;
    if(event.owner)live.owner=event.owner;
-   if(!live.waves&&!live.cycles)this.align(live);
+   if(live.spec.number!==20&&!live.waves&&!live.cycles)this.align(live);
    return true;
   }
   const quality=Math.max(.25,Math.min(4,Number(event.qualityScale)||1));
@@ -295,7 +296,7 @@ export class NumberedWeaponEffects {
    worldScale:ultimateWorldScale(spec.number,event,options),
    range:Math.max(.5,Number(event.range)||12),
    key,channel:!!event.channel,fusionEcho:!!event.fusionEcho,areaLocked,age:0,
-   duration:event.channel?Infinity:(spec.asset==='energy-sword-wave'?1.55:spec.number===31?2.5:spec.number===20?4.5:spec.number===33?3.3:spec.number===43?2.25:spec.number===48?6.5:spec.number===53?7:5),
+   duration:spec.number===20?VORTEX_FLIGHT_MS/1000+.15:event.channel?Infinity:(spec.asset==='energy-sword-wave'?1.55:spec.number===31?2.5:spec.number===33?3.3:spec.number===43?2.25:spec.number===48?6.5:spec.number===53?7:5),
    lastPulse:performance.now(),stopping:false,
    heading:root?.rotation.y||0,
    // These original assets are one-shot. Each next copy begins before the
@@ -319,7 +320,12 @@ export class NumberedWeaponEffects {
   }
   // A sustained conch vortex must reach steady state ONCE; restarting its
   // 1.1-second reveal for each damage pulse caused repeated visible flashes.
-  if(entry.channel&&spec.number===20)fx.update((fx.lifecycle?.start||1.1)+.02);
+  if(spec.number===20){
+   fx.group.quaternion.identity();
+   fx.update((fx.lifecycle?.start||1.1)+.02);
+   entry.vortexMotion={position:entry.origin.clone(),direction:direction.clone().setY(0),sample:null,predicted:new THREE.Vector3()};
+   if(entry.vortexMotion.direction.lengthSq()<1e-8)entry.vortexMotion.direction.set(0,0,1);else entry.vortexMotion.direction.normalize();
+  }
   if(entry.worldScale!=null)fx.group.scale.setScalar(entry.worldScale);
   // The vendor clamps 'size' at 2. Double the physical world-space group.
   if(spec.number===26)fx.group.scale.setScalar(entry.worldScale||2*quality);
@@ -388,6 +394,8 @@ export class NumberedWeaponEffects {
    return;
   }
   fx.group.position.copy(origin);
+  // #20 is an upright, rotationally symmetric Y-axis tornado, not a forward beam.
+  if(spec.number===20){fx.group.position.copy(entry.origin);fx.group.quaternion.identity();return;}
   if(spec.asset==='energy-sword-wave'){
    // The unchanged 00GameDevs geometry emits five solar-yellow crescents on XZ,
    // facing +Z in a symmetrical 60-degree spread. Match actual server range.
@@ -562,12 +570,42 @@ export class NumberedWeaponEffects {
   }
   if(entry.age>=1.88)entry.stopping=true;
  }
+ updateVortex(entry,dt,world){
+  const motion=entry.vortexMotion,fx=entry.fx;
+  const synced=entry.attackId?world?.vortexes?.find(v=>v.id===entry.attackId):null;
+  if(synced&&Array.isArray(synced.position)){
+   const stamp=synced.sampledAt??synced.position.join(',');
+   if(motion.sample?.stamp!==stamp){
+    const sample=motion.sample={stamp,age:entry.age,position:new THREE.Vector3(...synced.position),travelled:Math.max(0,Number(synced.travelled)||0),range:Math.max(.5,Number(synced.range)||entry.range),flight:Math.max(1,Number(synced.flightMs)||VORTEX_FLIGHT_MS)};
+    if(Array.isArray(synced.direction)){motion.direction.fromArray(synced.direction).setY(0);if(motion.direction.lengthSq()>1e-8)motion.direction.normalize();else motion.direction.set(0,0,1);}
+   }
+  }else if(motion.sample&&Array.isArray(world?.vortexes)){
+   // A previously observed authoritative projectile is gone; do not replay
+   // it at the moving caster or redirect an old animation to the next cast.
+   this.remove(entry);return;
+  }
+  const sample=motion.sample;
+  if(sample){
+   const extrapolate=Math.min(.12,Math.max(0,entry.age-sample.age));
+   const step=Math.min(Math.max(0,sample.range-sample.travelled),sample.range*extrapolate/(sample.flight/1000));
+   motion.predicted.copy(sample.position).addScaledVector(motion.direction,step);
+   motion.position.lerp(motion.predicted,1-Math.exp(-dt*22));
+  }else{
+   motion.position.copy(entry.origin).addScaledVector(motion.direction,entry.range*Math.min(1,entry.age/(VORTEX_FLIGHT_MS/1000)));
+  }
+  fx.update(dt*VORTEX_VISUAL_SPIN_RATE);
+  // Apply the authoritative translation AFTER native update. Never apply a
+  // pitch, roll, camera aim quaternion or the player's animation rotation.
+  fx.group.position.copy(motion.position);fx.group.quaternion.identity();
+  if(entry.age>=entry.duration||fx.finished)this.remove(entry);
+ }
  update(dt,camera=null,world=null){
   if(camera)this.camera=camera;
   const now=performance.now();
   for(const e of [...this.active]){
    try{
    e.age+=dt;
+   if(e.spec.number===20){this.updateVortex(e,dt,world);continue;}
    if(e.channel){
     const prism=e.item?.family==='beam'&&e.spec.number===29&&!e.fusionEcho;
     const locked=prism&&e.owner?world?.prismLocks?.[e.owner]:null;
@@ -616,20 +654,6 @@ export class NumberedWeaponEffects {
     continue;
    }
 
-   if(e.channel&&e.spec.number===20){
-    // The native vortex is an indefinitely active non-burst effect. One
-    // instance follows the authoritative projectile until key release;
-    // repeated pulses must NEVER recycle / reconstruct its shader or phase.
-    const synced=e.attackId?world?.vortexes?.find(v=>v.id===e.attackId):null;
-    const destination=synced?.position?
-     new THREE.Vector3(...synced.position):
-     e.origin.clone().addScaledVector(e.visualDirection,
-      e.range*Math.min(1,e.age/travelLifetime(20)));
-    e.fx.group.position.lerp(destination,Math.min(1,dt*14));
-    e.fx.group.quaternion.setFromUnitVectors(FORWARD,e.visualDirection);
-    e.fx.update(dt);
-    continue;
-   }
    if(e.singleTravel){
     const t=Math.min(1,e.age/travelLifetime(e.spec.number));
     const ease=t*t*(3-2*t);
@@ -682,7 +706,7 @@ export class NumberedWeaponEffects {
   else renderer.render(world,camera);
  }
  stop(root){
-  for(const e of [...this.active])if(e.channel&&e.root===root)this.remove(e);
+  for(const e of [...this.active])if(e.channel&&e.root===root&&(e.spec.number!==20||e.fusionEcho))this.remove(e);
  }
  remove(e){
   const i=this.active.indexOf(e);
