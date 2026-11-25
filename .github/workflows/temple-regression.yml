@@ -106,6 +106,8 @@ jobs:
         run: |
           npx wrangler dev --local --port 8787 > /tmp/temple-browser-worker.log 2>&1 &
           npm run start > /tmp/temple-browser-static.log 2>&1 &
+      - name: Verify terrain editor controls and live WebGL uniforms
+        run: node tests/v061-terrain-browser.mjs
       - name: Verify Wanted List actual menu CSS, text styling and preview pagination
         run: node tests/v057-wanted-browser.mjs
       - name: Verify BAG image node identity and EQUIP canvas preservation

@@ -817,10 +817,11 @@ ui.addEventListener('sky-color-save',async event=>{
  try{const result=await sendAction('gm-sky-color',{color:event.detail.color},{throwOnError:true});if(!result?.environment)throw Error('Server did not confirm sky color');skyColorPreview=null;applySkyColor(result.environment.skyBaseColor);ui.toast('星空底色已儲存');}catch(error){ui.toast(error.message);}
 });
 ui.addEventListener('panel',event=>{if(ui.panelName!=='sky-color'&&skyColorPreview!==null){skyColorPreview=null;applySkyColor(savedSkyColor());}});
-let terrainPreview=null,terrainSaving=false;
+let terrainPreview=null,terrainSaving=false,appliedTerrainKey='';
 const savedTerrain=()=>terrainStyle(world?.environment);
 function applyTerrain(style){
- arena.grass?.setTerrainStyle({terrain:style});
+ if(!arena.grass)return;const key=JSON.stringify(style);if(key===appliedTerrainKey)return;appliedTerrainKey=key;
+ arena.grass.setTerrainStyle({terrain:style});
  const ground=scene.userData.terrainGround?.material;
  if(ground){ground.color.set(style.floorColor);if(style.floorColor===TERRAIN_DEFAULTS.floorColor)ground.emissive.set('#0c302b');else ground.emissive.set(style.floorColor).multiplyScalar(.18);}
 }
