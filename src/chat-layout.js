@@ -18,7 +18,7 @@ export function bindChatLayout(){
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
  const mediumHeight=92;
  const maxHeight=()=>Math.min(220,Math.max(114,innerHeight*.42));
- const obstacleSelector='#dock button,#mobile-stick,#comfort-hotbar,#map-cluster,#gm-menu,#gm-help,#gm-spectator-test-exit,#identity,#player-roster,#vitals,#shield-readout,#spectator-controls,#build-mode';
+ const obstacleSelector='#dock button,#mobile-stick,#comfort-hotbar,#map-cluster,#gm-menu,#gm-help,#gm-spectator-test-exit,#identity,#player-roster,#vitals,#shield-readout,#spectator-fly-controls,#gallery-guide,#paint-toolbar,#build-mode';
  const blocking=()=>[...document.querySelectorAll(obstacleSelector)]
   .filter(el=>el&&el.isConnected&&getComputedStyle(el).display!=='none'&&getComputedStyle(el).visibility!=='hidden')
   .map(el=>el.getBoundingClientRect()).filter(r=>r.width>0&&r.height>0);
