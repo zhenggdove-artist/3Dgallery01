@@ -11,7 +11,7 @@ try{
   const page=await browser.newPage({viewport});
   await page.setContent('<style>'+css+'</style><div id="hud" class="functions-open">'+menu+'</div><section id="panel"><div id="panel-content"></div></section>');
   const result=await page.evaluate(async source=>{
-   const {bindWantedList,syncWantedButton}=await import('data:text/javascript;base64,'+btoa(source));
+   const {bindWantedList,syncWantedButton}=await import('data:text/javascript;charset=utf-8,'+encodeURIComponent(source));
    const ui=new EventTarget();ui.panelName='wanted-gm';ui.content=document.getElementById('panel-content');ui.world={profile:{name:'Artist'}};ui.toast=console.error;
    const settings={label:'Artists',color:'#ff0022',fontSize:20,background:null};
    const calls=[];const network={base:'https://example.com',request:async(...args)=>{calls.push(args);return {settings,self:{name:'Artist'},total:1,pages:1,page:0,entries:[{key:'one',name:'Artist',quote:'Hello',level:1,kills:0,deaths:0,hasArtwork:true}]};}};
