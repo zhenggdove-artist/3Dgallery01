@@ -27,8 +27,8 @@ export class AdventureView{
  // GGTEMPLE never supplies fishing sessions. Keep the original model factory
  // for loot art, but do not tick the inactive RELETTER fishing runtime.
  beforeAnimation(){}
- takeLoot(id){const mesh=this.loot.get(id);if(mesh)this.loot.delete(id);return mesh;}
- sync(world){this.world=world;}
+ takeLoot(id,drop=null){let mesh=this.loot.get(id);if(mesh)this.loot.delete(id);else if(drop&&itemById(drop.itemId)){mesh=createVisibleDrop(itemById(drop.itemId),this.original);mesh.position.fromArray(drop.position);mesh.position.y+=mesh.userData.weaponDrop?.95:1.2;}return mesh;}
+ sync(world){this.world=world;const active=new Set((world.groundDrops||[]).map(d=>d.id));for(const [id,mesh] of this.loot)if(!active.has(id)){disposeGardenModel(mesh);this.loot.delete(id);}}
  reconcile(cache,records,create,remove=disposeGardenModel){const live=new Set();for(const record of records){live.add(record.id);if(!cache.has(record.id))cache.set(record.id,create(record));}for(const [id,o] of cache)if(!live.has(id)){remove(o);cache.delete(id);}}
  update(dt,time,roots,camera){
   if(!this.world)return;

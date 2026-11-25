@@ -254,8 +254,8 @@ export class TempleArena{
   spawnDropCoinFlight(drop){
    if(!this.coinMesh||!Array.isArray(drop.position))return;
    const kind=groundDropVisualKind(drop);let mesh,dispose=()=>{},scale=1;
-   if(kind==='heart'){mesh=this.heartDrops.get(drop.id);if(mesh){this.heartDrops.delete(drop.id);dispose=()=>{mesh.geometry.dispose();mesh.material.dispose();};}}
-   else if(kind==='equipment'){mesh=this.adventure.takeLoot(drop.id);if(mesh)dispose=()=>disposeGardenModel(mesh);}
+   if(kind==='heart'){mesh=this.heartDrops.get(drop.id);if(mesh)this.heartDrops.delete(drop.id);else{mesh=createHeart();mesh.position.fromArray(drop.position);mesh.position.y+=.9;}dispose=()=>{mesh.geometry.dispose();mesh.material.dispose();};}
+   else if(kind==='equipment'){mesh=this.adventure.takeLoot(drop.id,drop);if(mesh)dispose=()=>disposeGardenModel(mesh);}
    else if(kind==='cash'){mesh=new THREE.Mesh(createCashDropGeometry(THREE),cashDropMaterial(THREE,itemById(drop.itemId)));mesh.position.fromArray(drop.position);mesh.position.y+=.85;dispose=()=>{mesh.geometry.dispose();mesh.material.dispose();};}
    else if(kind==='coin'){mesh=new THREE.Mesh(this.coinMesh.geometry,this.coinMesh.material);mesh.position.fromArray(drop.position);mesh.position.y+=.55;mesh.scale.setScalar(1.6);}
    if(!mesh)return;

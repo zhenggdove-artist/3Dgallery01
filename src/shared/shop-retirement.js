@@ -7,6 +7,7 @@ export function reclaimDelisted(world,profile){
  if(indices.length)removeInventoryInstances(profile,indices);
  for(const [slot,id] of Object.entries(profile.equipment||{}))if(isDelisted(world,id)){profile.equipment[slot]=null;if(profile.equippedInstanceIds)delete profile.equippedInstanceIds[slot];}
  if(isDelisted(world,profile.starterWeaponId))profile.spentStarterWeapon=true;
+ if(isDelisted(world,profile.channelWeapon)){profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;profile.manaChannelPaid=false;profile.lastChannelPulseAt=0;delete profile.channelManaNextAt;delete profile.prismChannelStats;delete profile.tidalChannelStats;if(world.prismLocks)delete world.prismLocks[profile.key];if(world.tidalLocks)delete world.tidalLocks[profile.key];}
  if(profile.quickSlots)profile.quickSlots=profile.quickSlots.map(id=>isDelisted(world,id)?null:id);
  for(const record of [...Object.values(profile.fusion||{}),...Object.values(profile.fusionByInstance||{})])if(record){if(Array.isArray(record.effects))record.effects=record.effects.filter(id=>!isDelisted(world,id));if(Array.isArray(record.original?.fusionEffects))record.original.fusionEffects=record.original.fusionEffects.filter(id=>!isDelisted(world,id));if(Array.isArray(record.sources))record.sources=record.sources.map(s=>isDelisted(world,s.id)&&s.echo?{...s,echo:false}:s);}
  return indices.length;

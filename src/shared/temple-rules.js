@@ -194,7 +194,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
     const owned=new Set(current.inventory);
     for(const item of ITEMS){
      if(current.inventory.length>=inventoryCapacity(current))break;
-     if(item.slot!=='armor'&&!isRetiredHeadgear(item)&&!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}
+     if(item.slot!=='armor'&&!isRetiredHeadgear(item)&&!isDelisted(world,item.id)&&!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}
     }
     current.gmAllItemsGranted=true;
    }
@@ -249,16 +249,16 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
      item.id.startsWith('outfit-creature-'));
    for(const item of additions){
     if(current.inventory.length>=inventoryCapacity(current))break;
-    if(!current.inventory.includes(item.id))appendInventoryInstance(current,item.id,'grant');
+    if(!isDelisted(world,item.id)&&!current.inventory.includes(item.id))appendInventoryInstance(current,item.id,'grant');
    }
-   current.gmCreatureGearGrantedV2=additions.every(item=>current.inventory.includes(item.id));
+   current.gmCreatureGearGrantedV2=additions.every(item=>isDelisted(world,item.id)||current.inventory.includes(item.id));
   }
   if(current.admin&&!current.gmR106WearablesGranted){
    for(const item of ITEMS.filter(i=>i.r106Wearable)){
     if(current.inventory.length>=inventoryCapacity(current))break;
-    if(!current.inventory.includes(item.id))appendInventoryInstance(current,item.id,'grant');
+    if(!isDelisted(world,item.id)&&!current.inventory.includes(item.id))appendInventoryInstance(current,item.id,'grant');
    }
-   current.gmR106WearablesGranted=ITEMS.filter(i=>i.r106Wearable).every(i=>current.inventory.includes(i.id));
+   current.gmR106WearablesGranted=ITEMS.filter(i=>i.r106Wearable).every(i=>isDelisted(world,i.id)||current.inventory.includes(i.id));
   }
   reclaimDelisted(world,current);
   ensureWeaponAffixes(current); // Server-owned one-time roll, persisted on join.
@@ -1088,6 +1088,7 @@ function attack(world,profile,actor,body,context,now){
    return {error:'Paralysed: attacks disabled'};
 
   if(profile.hitReaction&&now-profile.hitReaction.time<profile.hitReaction.stunMs)return {error:'Recovering from hit'};
+  if(isDelisted(world,profile.equipment.weapon||STARTER_LOADOUT.weapon))return {error:'Weapon is delisted'};
   const weapon=tunedEquipment(world,equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon))),bonus=profile.fusion[weapon.id]?.bonus||0;
   if(weapon.id==='black-cat'&&(body.scoped!==true||body.aimMode==='shoulder')){
     profile.chargeStartedAt=0;
@@ -1382,7 +1383,7 @@ function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosit
 
 function monsterHit(world,profile,actor,body,now,rng){
   const monster=world.monster;if(!monster.active)return {error:'No monster is active'};if(distance2d(actor.position,monster.position)>20)return {error:'Move closer to the monster'};
-  const weapon=itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon);if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};profile.lastAttackAt=now;const result=damageMonster(world,profile,weapon.damage+(profile.fusion[weapon.id]?.bonus||0),now,rng);return result.defeated?{notice:'Monster defeated · loot dropped',monsterHit:result}:{notice:`${Math.ceil(monster.hp)} HP remaining`,monsterHit:result};
+  if(isDelisted(world,profile.equipment.weapon||STARTER_LOADOUT.weapon))return {error:'Weapon is delisted'};const weapon=itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon);if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};profile.lastAttackAt=now;const result=damageMonster(world,profile,weapon.damage+(profile.fusion[weapon.id]?.bonus||0),now,rng);return result.defeated?{notice:'Monster defeated · loot dropped',monsterHit:result}:{notice:`${Math.ceil(monster.hp)} HP remaining`,monsterHit:result};
 }
 
 function build(world,profile,actor,body,now,rng){
@@ -1391,7 +1392,7 @@ function build(world,profile,actor,body,now,rng){
   const position=body.position;if(!validBuildPosition(world,actor,position))return {error:'Invalid build position'};
   if(!spend(profile,cost,world))return {error:'Not enough coins'};const structure={id:id(),kind,surface:typeof body.surface==='string'?body.surface:null,variant:Math.floor(rng()*4),position:position.map(n=>+n.toFixed(2)),rotation:+(Number(body.rotation)||0).toFixed(3),owner:actor.key,hp:kind==='house'?220:kind==='tree'?90:140,maxHp:kind==='house'?220:kind==='tree'?90:140,createdAt:now};world.structures.push(structure);return {notice:`Built ${kind}`,structure};
 }
-function destroy(world,profile,actor,body,now){const structure=world.structures.find(entry=>entry.id===body.structureId);if(!structure)return {error:'Structure is gone'};if(distance2d(actor.position,structure.position)>12)return {error:'Move closer to the structure'};const weapon=itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon);if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};profile.lastAttackAt=now;const damage=Math.max(8,weapon.damage+(profile.fusion[weapon.id]?.bonus||0));structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;structure.hp=Math.max(0,structure.hp-damage);const structureHit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};let structureDestroyed=null;if(structure.hp<=0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}return {notice:structureDestroyed?'Structure destroyed':`${Math.ceil(structure.hp)} structure HP`,structureDestroyed,structureHit,attackEvent:{id:id(),owner:actor.key,origin:actor.position,direction:normalDirection(body.direction)||[0,0,-1],weapon:weapon.id,time:now}};}
+function destroy(world,profile,actor,body,now){const structure=world.structures.find(entry=>entry.id===body.structureId);if(!structure)return {error:'Structure is gone'};if(distance2d(actor.position,structure.position)>12)return {error:'Move closer to the structure'};if(isDelisted(world,profile.equipment.weapon||STARTER_LOADOUT.weapon))return {error:'Weapon is delisted'};const weapon=itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon);if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};profile.lastAttackAt=now;const damage=Math.max(8,weapon.damage+(profile.fusion[weapon.id]?.bonus||0));structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;structure.hp=Math.max(0,structure.hp-damage);const structureHit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};let structureDestroyed=null;if(structure.hp<=0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}return {notice:structureDestroyed?'Structure destroyed':`${Math.ceil(structure.hp)} structure HP`,structureDestroyed,structureHit,attackEvent:{id:id(),owner:actor.key,origin:actor.position,direction:normalDirection(body.direction)||[0,0,-1],weapon:weapon.id,time:now}};}
 
 function removeStructure(world,profile,actor,body,now){
   const structure=(world.structures||[]).find(s=>s.id===body.structureId);
