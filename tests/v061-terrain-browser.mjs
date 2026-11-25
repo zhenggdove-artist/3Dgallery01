@@ -29,9 +29,9 @@ try{
  }
  // Compile and render the actual production grass shaders on the static server.
  const page=await browser.newPage({viewport:{width:320,height:240}});
- const base='http://127.0.0.1:4173';
+ const base='http://127.0.0.1:8000';
  // Resolve the repo's actual dev-server port from its package start script below.
- await page.goto(process.env.TEMPLE_STATIC_URL||base,{waitUntil:'domcontentloaded',timeout:60000});
+ const host=process.env.TEMPLE_STATIC_URL||base;await page.route(host+'/terrain-test',route=>route.fulfill({contentType:'text/html',body:'<script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script>'}));await page.goto(host+'/terrain-test',{waitUntil:'domcontentloaded',timeout:60000});
  const render=await page.evaluate(async()=>{
   const THREE=await import('three'),{GrassField}=await import('./src/grass-field.js');
   const scene=new THREE.Scene(),renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true});renderer.setSize(64,64);
