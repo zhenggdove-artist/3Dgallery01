@@ -58,9 +58,10 @@ export function attackDirection(controller,camera,arena,roots,item,charge,muzzle
  for(const enemy of [arena.world?.monster,...(arena.world?.monsters||[])])if(enemy?.active){const p=enemy.position,r=enemy.bodyRadius||ENEMY_RADIUS,h=enemy.bodyHeight||ENEMY_HEIGHT;box.min.set(p[0]-r,p[1]-.3,p[2]-r);box.max.set(p[0]+r,p[1]+h+.3,p[2]+r);accept(ray.ray.intersectBox(box,hit));}
  for(const model of [arena.islandEnemies?.current,...(arena.islandEnemies?.extraModels||[])])if(model?.visible){box.setFromObject(model);accept(ray.ray.intersectBox(box,hit));}
  for(const root of roots.values())if(root!==controller.root&&root.visible){sphere.center.copy(root.position);sphere.center.y+=1;sphere.radius=1.25;accept(ray.ray.intersectSphere(sphere,hit));}
- const floor=ray.ray.intersectPlane(ground,hit);if(floor&&floor.distanceTo(ray.ray.origin)<nearest)point.copy(floor);
+ const floor=ray.ray.intersectPlane(ground,hit);accept(floor);
  let direction=point.sub(origin).normalize();if(direction.dot(ray.ray.direction)<.1)direction=ray.ray.direction.clone();
  if(isChannelStaff(item))return direction.toArray();
  const vertical=THREE.MathUtils.clamp(direction.y,charge>=1&&controller.root.position.y<5?0:-.98,.98),horizontal=Math.sqrt(1-vertical*vertical);
- return [Math.sin(heading)*horizontal,vertical,Math.cos(heading)*horizontal];
+ const flat=Math.hypot(direction.x,direction.z);
+ return flat>1e-6?[direction.x/flat*horizontal,vertical,direction.z/flat*horizontal]:[Math.sin(heading)*horizontal,vertical,Math.cos(heading)*horizontal];
 }

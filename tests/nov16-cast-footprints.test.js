@@ -1,5 +1,5 @@
 import {applySkillAreaScale} from '../src/shared/equipment-tuning.js';
-import {GOLDFISH_SCHOOL_RADIUS} from '../src/shared/goldfish-school.js';
+import {GOLDFISH_TRAVEL_SCALE,GOLDFISH_SCHOOL_RADIUS} from '../src/shared/goldfish-school.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -85,7 +85,7 @@ test('all weapons have dimensional warning contracts derived from identical atta
    stats.range=+(item.chargedRange*quality.range).toFixed(2);
    stats.radius=Math.max(stats.radius,5.9*quality.visual);
   }
-  if(item.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
+  if(item.id==='goldfish'&&stats.ultimate){stats.range=+(stats.range*GOLDFISH_TRAVEL_SCALE).toFixed(3);stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;}
   // Apply after the returning giraffe and goldfish geometry overrides.
   applySkillAreaScale(stats,item);
   if(item.id==='clam'||item.family==='saber'){

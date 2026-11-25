@@ -19,6 +19,7 @@ import {CollectorView} from './collector-view.js';
 import {ElementalStatusVisuals} from './elemental-status-visuals.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {attackDirection,cameraAimDirection} from './aiming.js';
+import {castBaseOrigin} from './shared/charge-area.js';
 import {lateralBeamInput,targetOnBeam} from './native-beam-curve.js';
 import {isChannelStaff,isStaffTap,channelInterval,chargeProgress,STAFF_TAP_MAX_MS,CAST_MOVE_FACTOR} from './shared/weapon-abilities.js';
 import {uploadArtwork} from './artwork-upload.js';
@@ -171,7 +172,7 @@ function beginStaffChannel(){
  const elapsed=now-chargeStarted,chargeMs=Number(item?.chargeMs)||1500;
  if(elapsed<chargeMs)return;
  window._templeLastChannelAttempt=now;
- const serial=++staffChannelSerial;
+ const serial=++staffChannelSerial,firstCast=captureReleasedCast(item,1);
  staffChannel={weapon:item.id,serial,ready:false};
  staffChannelShotAt=-Infinity;
  staffChannelPromise=Promise.resolve(chargeRequest).then(result=>{
@@ -185,7 +186,7 @@ function beginStaffChannel(){
    if(!staffChannelBusy){
     staffChannelShotAt=performance.now();
     staffChannelBusy=true;
-    void Promise.resolve(performAttack(1,'channel')).catch(error=>{if(/not enough mana|channel is not active/i.test(error.message||'')&&staffChannel){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}}).finally(()=>{staffChannelBusy=false;});
+    void Promise.resolve(performAttack(1,'channel',firstCast)).catch(error=>{if(/not enough mana|channel is not active/i.test(error.message||'')&&staffChannel){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}}).finally(()=>{staffChannelBusy=false;});
    }
   }else if(staffChannel?.serial===serial){
    staffChannel=null;
@@ -593,6 +594,7 @@ ui.addEventListener('attack-start',event=>{
    pendingAInteraction=nearbyArt;
  }
  attackHeld=true;
+ lastWarnedCast=null;
  attackHoldStarted=performance.now();
  chargeStarted=null;chargeRequest=null;nextChargeRetryAt=0;
  clearChargeDelay();
@@ -624,6 +626,8 @@ ui.addEventListener('attack-release',async()=>{
  const weapon=currentTunedWeapon()||itemById('clam');
  const heldMs=performance.now()-attackHoldStarted;
  const charge=chargeProgress(heldMs,weapon?.chargeMs||1500);
+ const releaseAim=controller&&localRoot?captureReleasedCast(weapon,charge):null;
+ lastWarnedCast=null;
 
  attackHoldStarted=null;chargeStarted=null;
  const pending=chargeRequest;chargeRequest=null;
@@ -636,7 +640,7 @@ ui.addEventListener('attack-release',async()=>{
   if(gun.mode===1){gun.cycle();return;} // scoped A remains camera-only
   if(heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
   if(pending)await pending;
-  if(charge>=1)await performAttack(1); // original full-size red fish
+  if(charge>=1)await performAttack(1,null,releaseAim); // original full-size red fish
   else void sendAction('attack',{phase:'channel-stop'}); // clear interrupted charge
   return;
  }
@@ -648,17 +652,17 @@ ui.addEventListener('attack-release',async()=>{
    if(localRoot)localRoot.userData.staffCastingUntil=Infinity;
    const liftRemaining=Math.max(0,STAFF_RAISE_SECONDS*1000-heldMs);
    if(liftRemaining>0)await new Promise(resolve=>setTimeout(resolve,liftRemaining));
-   if(world?.profile?.equipment?.weapon===weapon.id)await performAttack(0);
+   if(world?.profile?.equipment?.weapon===weapon.id)await performAttack(0,null,releaseAim);
    if(localRoot)localRoot.userData.staffCastingUntil=performance.now()+200;
   }else if(weapon.family==='ice'&&charge>=1){
    // A charged frost staff is a RELEASE cast. Never start a continuous
    // channel or abort its ice circle when A is lifted.
    if(world?.profile?.equipment?.weapon===weapon.id)
-    await performAttack(1);
+    await performAttack(1,null,releaseAim);
    if(localRoot)localRoot.userData.staffCastingUntil=performance.now()+200;
   }else if(localRoot)localRoot.userData.staffCastingUntil=0;
  }else{
-  performAttack(heldMs<STAFF_TAP_MAX_MS?0:charge);
+  performAttack(heldMs<STAFF_TAP_MAX_MS?0:charge,null,releaseAim);
  }
 });
 ui.addEventListener('attack-cancel',()=>{
@@ -991,7 +995,24 @@ function cancelBuildPlacement(){buildPlacement=null;arena.clearBuildPreview();ui
 function followSpectator(key){if(self?.role!=='spectator')return;const target=key?roots.get(key):null;controller.setFollowTarget(target||null);spectatorFollowIndex=players.filter(player=>player.role==='fighter').findIndex(player=>player.key===key);ui.toast(target?`FOLLOWING ${players.find(player=>player.key===key)?.name||'FIGHTER'}`:'FREE SPECTATOR CAMERA');}
 function cycleSpectator(){if(self?.role!=='spectator')return;const fighters=players.filter(player=>player.role==='fighter'&&roots.get(player.key));if(!fighters.length)return followSpectator('');spectatorFollowIndex=(spectatorFollowIndex+1)%fighters.length;followSpectator(fighters[spectatorFollowIndex].key);}
 
-function performAttack(charge=0,phase=null){
+let lastWarnedCast=null;
+function sampleCast(item,charge=0){
+ const goldfishUltimate=item.id==='goldfish'&&charge>=1&&gun.mode===0;
+ const shot=item.firstPerson&&!goldfishUltimate?gun.shot():null;
+ const muzzle=isChannelStaff(item)||item.family==='saber'||item.id==='calico-cat'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
+ const origin=shot?.origin||muzzle?.toArray()||castBaseOrigin(controller.root.position.toArray());
+ const direction=goldfishUltimate?cameraAimDirection(camera).toArray():
+  shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,new THREE.Vector3(...origin));
+ return {weapon:item.id,origin,direction,castPoseV081:true,at:performance.now()};
+}
+function captureReleasedCast(item,charge){
+ // Use the actual last displayed warning at release, not a new ray after
+ // awaiting a network request, walking, turning the camera or lifting a staff.
+ const warned=lastWarnedCast;
+ return charge>=1&&warned?.weapon===item.id&&performance.now()-warned.at<350
+  ?warned:sampleCast(item,charge);
+}
+function performAttack(charge=0,phase=null,captured=null){
  if(wallPainter.active)return;
  if(controller?.status?.freeze||world?.profile?.effects?.paralysis?.until>Date.now())return;
  if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
@@ -999,18 +1020,15 @@ function performAttack(charge=0,phase=null){
  // Centralized guard covers UI A/Q, canvas clicks, auto-charge and fusion.
  if(item.id==='black-cat'&&(gun.mode!==2||charge!==0||phase))return;
  if(item.id==='goldfish'&&gun.mode!==1&&charge<1)return;
- // Unscoped goldfish ultimate follows the camera forward ray; an 11m
- // third-person muzzle intersection can otherwise aim behind the avatar.
- const goldfishUltimate=item.id==='goldfish'&&charge>=1&&gun.mode===0;
- const shot=item.firstPerson&&!goldfishUltimate?gun.shot():null;
- const muzzle=isChannelStaff(item)||item.family==='saber'||item.id==='calico-cat'?arena.presentation.vfx.channelMuzzle(localRoot,item):null;
- const direction=goldfishUltimate?cameraAimDirection(camera).toArray():
-  shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
- return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
+ if(captured&&captured.weapon!==item.id)return;
+ const sample=captured||sampleCast(item,charge);
+ const {origin,direction}=sample;
+ // A movement sample can be in flight over the socket; the Worker checks
+ // this bounded cast origin against its authoritative player position.
+ return sendAction('attack',{origin,direction,castPoseV081:true,charge,...(phase?{phase}:{}),
   ...(item.id==='black-cat'?{
    scoped:gun.mode===2,aimMode:'scope'
-  }:{}),
-  ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})},{throwOnError:phase==='channel'});
+  }:{})},{throwOnError:phase==='channel'});
 }
 function performInteract(target=null){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=target||arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
 
@@ -1129,17 +1147,16 @@ function update(dt,time,movementDt=dt){
     }
    }else lastHealVisualAt=0;
   if(charge>=1&&!isChannelStaff(heldItem)&&heldItem?.autoCharge&&!autoChargeBusy){
-   autoChargeBusy=true;const pending=chargeRequest;chargeStarted=null;
-   Promise.resolve(pending).then(async()=>{await performAttack(1);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeStarted=performance.now();chargeRequest=sendAction('attack',{phase:'charge'});}}).finally(()=>autoChargeBusy=false);
+   autoChargeBusy=true;const pending=chargeRequest,releaseAim=captureReleasedCast(heldItem,1);chargeStarted=null;
+   Promise.resolve(pending).then(async()=>{await performAttack(1,null,releaseAim);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeStarted=performance.now();chargeRequest=sendAction('attack',{phase:'charge'});}}).finally(()=>autoChargeBusy=false);
   }
   arena.presentation.charging(localRoot,charge);
   const chargedWeapon=castingItem;
   if(charge>.08&&!staffChannel&&chargedWeapon&&controller){
-   const muzzle=isChannelStaff(chargedWeapon)||chargedWeapon.family==='saber'?arena.presentation.vfx.channelMuzzle(localRoot,chargedWeapon):null;
-   const direction=chargedWeapon.id==='goldfish'&&gun.mode===0?cameraAimDirection(camera).toArray():
-     chargedWeapon.firstPerson?gun.shotDirection().toArray():attackDirection(controller,camera,arena,roots,chargedWeapon,1,muzzle);
-   chargePreview.update(localRoot,chargedWeapon,charge,direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null,muzzle?.toArray(),dt);
-  }else chargePreview.hide();
+   const cast=sampleCast(chargedWeapon,1);
+   chargePreview.update(localRoot,chargedWeapon,charge,cast.direction,arena,world?.profile?.fusion?.[chargedWeapon.id]||null,cast.origin,dt);
+   lastWarnedCast=cast;
+  }else{chargePreview.hide();lastWarnedCast=null;}
   const attackButton=document.getElementById('attack-button'),charging=charge>0||!!staffChannel||artworkThrow.started!==null,chargeStyle=`${(artworkThrow.started!==null?artworkThrow.progress:charge)*100}%`;if(attackButton.classList.contains('charging')!==charging)attackButton.classList.toggle('charging',charging);if(attackButton.style.getPropertyValue('--charge')!==chargeStyle)attackButton.style.setProperty('--charge',chargeStyle);artEditor.update();for(let i=effects.length-1;i>=0;i--){const effect=effects[i];effect.age+=dt;effect.material.opacity=Math.max(0,1-effect.age/effect.duration);effect.scale.setScalar(1+effect.age*3);if(effect.age>=effect.duration){effect.removeFromParent();effect.geometry.dispose();effect.material.dispose();effects.splice(i,1);}}
 }
 

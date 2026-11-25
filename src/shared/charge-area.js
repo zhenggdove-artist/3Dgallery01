@@ -8,6 +8,14 @@ import {itemById,attackStats} from './catalog.js';
 const AREAS=new Set(['water','ice','fire','lightning','petal','wave']);
 const EXOTIC_AREAS=new Set(['jet','score','gust','echo','jelly','shells']);
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+export const castBaseOrigin=position=>[position[0],position[1]+1.16,position[2]];
+export function resolveCastOrigin(position,requested,{strict=false,legacyMuzzle=false}={}){
+ const fallback=castBaseOrigin(position);
+ if(!strict&&!legacyMuzzle)return fallback;
+ const valid=Array.isArray(requested)&&requested.length===3&&requested.every(Number.isFinite)&&
+  Math.hypot(...requested.map((v,i)=>v-position[i]))<=3;
+ return valid?[...requested]:strict?null:fallback;
+}
 // Fusion echoes are positioned by the primary's authoritative marker, not
 // by the ingredient's innate range. The returning endpoint is shared by
 // source VFX, hitbox and server-side travel distance.
@@ -190,8 +198,11 @@ export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
  // The returning giraffe sweeps the entire outbound ray (then retraces it):
  // show the same full-length corridor instead of a tiny remote AoE circle.
  if((item?.id==='giraffe'&&stats?.ultimate)||isChannelStaff(item)||(item?.id==='accordion'&&stats?.ultimate)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||item?.id==='goldfish'){
-  const x=origin[0]+dx*range*.5,z=origin[2]+dz*range*.5;
-  return {shape:'rectangle',position:[x,at(x,z),z],yaw,length:range,width,range};
+  const normalized=safeDirection(direction);
+  const horizontalTravel=item?.family==='ice'||item?.family==='wave'||item?.id==='goldfish'&&stats?.ultimate;
+  const length=horizontalTravel?range:Math.max(.1,range*Math.hypot(normalized[0],normalized[2]));
+  const x=origin[0]+dx*length*.5,z=origin[2]+dz*length*.5;
+  return {shape:'rectangle',position:[x,at(x,z),z],yaw,length,width,range};
  }
  const center=area?.visualCenter||[origin[0],at(origin[0],origin[2]),origin[2]];
  return {shape:'circle',position:[...center],radius:Number(area?.radius)||Number(stats?.radius)||1,range};

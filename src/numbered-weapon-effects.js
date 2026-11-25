@@ -252,6 +252,7 @@ export class NumberedWeaponEffects {
   const direction=vector(event.direction,FORWARD).normalize();
   if(live) {
    live.direction.copy(direction);
+   live.origin.copy(vector(event.origin,live.origin));
    live.range=Math.max(.5,Number(event.range)||live.range);
    live.heading=root?.rotation.y||0;
    live.lastPulse=performance.now();
@@ -349,7 +350,7 @@ export class NumberedWeaponEffects {
   return true;
  }
  muzzleAt(entry) {
-  if(entry.root&&(entry.channel||entry.spec.number===31||entry.spec.number===33||entry.spec.number===38)) {
+  if(entry.root&&entry.channel) {
    const m=this.muzzle(entry.root,entry.item,entry.origin.clone());
    if(m?.isVector3)return m;
   }
@@ -446,7 +447,7 @@ export class NumberedWeaponEffects {
   if(!entry.waves)return;
   const fx=existing||this.acquire(entry.spec,entry.options);
   const dir=entry.direction.clone();
-  if(entry.root)dir.applyAxisAngle(UP,entry.root.rotation.y-entry.heading).normalize();
+  if(entry.root&&entry.channel)dir.applyAxisAngle(UP,entry.root.rotation.y-entry.heading).normalize();
   const start=this.muzzleAt(entry);
   const wave={fx,age:0,start,direction:dir,reach:entry.range};
   fx.group.position.copy(start);
@@ -472,7 +473,7 @@ export class NumberedWeaponEffects {
    wave.age+=dt;
    // The emerging crest follows the real moving shell for 0.2s. After
    // detaching it travels independently instead of snapping to the avatar.
-   if(wave.age<=.2&&entry.root)wave.start.copy(this.muzzleAt(entry));
+   if(wave.age<=.2&&entry.root&&entry.channel)wave.start.copy(this.muzzleAt(entry));
    const t=Math.min(1,Math.max(0,wave.age-.2)/(CLAM_WAVE_LIFETIME-.2));
    // Move the old crest gently outwards and let the next crest grow behind.
    // Reserve ~5 original scene metres for the source module's own front.

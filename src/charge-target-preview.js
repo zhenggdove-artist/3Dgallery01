@@ -2,9 +2,9 @@ import {equipmentTuning,applySkillAreaScale} from './shared/equipment-tuning.js'
 import * as THREE from 'three';
 import {attackStats} from './shared/catalog.js';
 import {SNIPER_RANGE} from './shared/combat-balance.js';
-import {chargedArea,spellGroundHeight,spellFootprint,scaleUltimateFootprint} from './shared/charge-area.js';
+import {chargedArea,spellGroundHeight,spellFootprint,scaleUltimateFootprint,castBaseOrigin} from './shared/charge-area.js';
 import {weaponQuality,isChannelStaff,forwardCastRadius,channelReachMultiplier,GOLDFISH_SWIM_RADIUS} from './shared/weapon-abilities.js';
-import {GOLDFISH_SCHOOL_RADIUS} from './shared/goldfish-school.js';
+import {GOLDFISH_TRAVEL_SCALE,GOLDFISH_SCHOOL_RADIUS} from './shared/goldfish-school.js';
 // These are the ORIGINAL source downloads from 00GameDevs; do not redraw them.
 import createSector from '../vendor/00gamedevs/source/spell-indicator-sector.js';
 import createRectangle from '../vendor/00gamedevs/source/spell-indicator-rectangle.js';
@@ -97,11 +97,11 @@ export class ChargeTargetPreview {
     stats.range=+(equipped.chargedRange*quality.range).toFixed(2);
     stats.radius=Math.max(stats.radius,5.9*quality.visual);
    }
-   if(equipped.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
+   if(equipped.id==='goldfish'&&stats.ultimate){stats.range=+(stats.range*GOLDFISH_TRAVEL_SCALE).toFixed(3);stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;}
   const tuning=equipmentTuning(arena?.world,equipped);stats.range*=tuning.rangeScale??1;applySkillAreaScale(stats,equipped,tuning);
   const ground=(x,z,y)=>spellGroundHeight(arena?.world,x,z,y);
   const origin=Array.isArray(muzzle)&&muzzle.length===3&&muzzle.every(Number.isFinite)
-   ?[...muzzle]:[root.position.x,root.position.y+1,root.position.z];
+   ?[...muzzle]:castBaseOrigin(root.position.toArray());
   const area=chargedArea(equipped,origin,direction,stats,ground,isChannelStaff(equipped));
   const footprint=spellFootprint(equipped,origin,direction,stats,area,ground);
   const type=footprint.shape;

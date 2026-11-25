@@ -6,7 +6,7 @@ import {wantedSettings,countWantedDeath} from './wanted-list.js';
 import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown,migrateSkillQuality,applySkillAreaScale,bloomHealRate} from './equipment-tuning.js';
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recovery.js';
-import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor,iceEruptionContact,ICE_ERUPTION_TRAVEL_MS,ICE_ERUPTION_VISIBLE_MS} from './charge-area.js';
+import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,resolveCastOrigin,fusionEchoAnchor,iceEruptionContact,ICE_ERUPTION_TRAVEL_MS,ICE_ERUPTION_VISIBLE_MS} from './charge-area.js';
 import {GOLDFISH_TRAVEL_SCALE,GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition,advanceGoldfishSchool} from './goldfish-school.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {saberWaveCrest} from './saber-wave.js';
@@ -1154,7 +1154,15 @@ function attack(world,profile,actor,body,context,now){
   if(now-profile.lastAttackAt<(channel?channelInterval(weapon):weapon.cooldown))return {error:'Weapon is recovering'};
   let direction=normalDirection(body.direction);
   if(!direction)return {error:'Invalid attack direction'};
-  const charge=weapon.id==='black-cat'?0:channel?1:Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
+  const castOrigin=resolveCastOrigin(actor.position,body.origin,{strict:body.castPoseV081===true,
+   legacyMuzzle:weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber'});
+  if(!castOrigin)return {error:'Attack position changed; aim again'};
+  const requestedCharge=clamp(Number(body.charge)||0,0,1),chargeMs=weapon.chargeMs||1500;
+  const elapsedCharge=profile.chargeStartedAt?now-profile.chargeStartedAt:0;
+  if(body.castPoseV081===true&&!channel&&weapon.id!=='black-cat'&&requestedCharge>=1&&
+    (!profile.chargeStartedAt||elapsedCharge<chargeMs-120))return {error:'Charge not complete'};
+  const charge=weapon.id==='black-cat'?0:channel?1:Math.min(requestedCharge,profile.chargeStartedAt?
+   clamp((elapsedCharge+(body.castPoseV081===true&&requestedCharge>=1?120:0))/chargeMs,0,1):0);
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
   const enchants=weaponAffixTotals(weapon),sustained=channel?sustainedSpellBalance(weapon):null;
   // Retain quality, affixes, fusion bonuses and GM ratios; only replace the
@@ -1214,7 +1222,7 @@ function attack(world,profile,actor,body,context,now){
   if(channel){profile.manaChannelPaid=true;profile.channelManaPulseCost=quote.pulse;profile.channelManaNextAt=now+channelInterval(weapon);}
   profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
   if(!channel)profile.chargeStartedAt=0;
-  const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
+  const origin=castOrigin,combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
   const prismChannel=channel&&weapon.family==='beam'&&!weapon.exotic;
