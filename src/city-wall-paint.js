@@ -120,9 +120,9 @@ export class CityWallPaint{
   if(slot&&(!stroke||slot.preview===stroke)){slot.preview=null;this.draw(slot);}
  }
  sync(data={},revision=0,structures=this.structures){
-  const old=this.structures;this.structures=structures||[];
+  const old=this.structures;this.structures=structures||old||[];
   if(old!==this.structures){
-   for(const [key,slot] of this.surfaces){if(!slot.lot.structure)continue;const current=this.structures.find(s=>s.id===slot.lot.id);if(!current){this.disposeSlot(slot);this.surfaces.delete(key);continue;}
+   for(const [key,slot] of this.surfaces){if(!slot.lot?.structure)continue;const current=this.structures.find(s=>s.id===slot.lot.id);if(!current){this.disposeSlot(slot);this.surfaces.delete(key);continue;}
     const lot=structurePaintLot(current),previous=slot.lot.structure;slot.lot=lot;
     if(JSON.stringify([previous.position,previous.rotation,previous.house])!==JSON.stringify([current.position,current.rotation,current.house])){const geometry=paintGeometry(lot,slot.wall);if(!geometry){this.disposeSlot(slot);this.surfaces.delete(key);continue;}slot.mesh.geometry.dispose();slot.mesh.geometry=geometry;slot.original=geometry.attributes.position.array.slice();}
     this.updateSignVisibility(slot);
