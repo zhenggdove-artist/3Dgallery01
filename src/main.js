@@ -1,4 +1,4 @@
-import {tunedEquipment} from './shared/equipment-tuning.js';
+import {tunedEquipment,weaponManaQuote,restorativeCooldown} from './shared/equipment-tuning.js';
 import {equippedItem} from './shared/fusion-adapter.js';
 import {mergeWingCatalog} from './shared/world-patch.js';
 import {registerCustomWings,SHOP_CATALOG_REVISION} from './shared/catalog.js';
@@ -191,7 +191,7 @@ function beginStaffChannel(){
    staffChannel=null;
    // Server charge start can lag the client clock. Retry the actual state
    // transition without depending on rendering/fps; never fake an attack.
-   if(Number(world?.profile?.mana)<30){attackHeld=false;chargeStarted=null;ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}
+   if(Number(world?.profile?.mana)<weaponManaQuote(world,item,world?.profile?.fusion?.[item.id]).initial){attackHeld=false;chargeStarted=null;ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}
    else if(attackHeld&&['lightning','beam'].includes(item.family))
     scheduleBeamChannelStart(260);
   }
@@ -553,7 +553,7 @@ const pendingQuickUses=new Set();
 ui.addEventListener('quick-use',event=>{
  const slot=event.detail?.slot;
  if(!Number.isInteger(slot)||slot<0||slot>2||pendingQuickUses.has(slot))return;
- if(!joined||self?.role!=='fighter'||!controller?.enabled||ui.panelName||Date.now()<(world?.profile?.consumableCooldownUntil||0))return;
+ if(!joined||self?.role!=='fighter'||!controller?.enabled||ui.panelName||document.body.classList.contains('chat-typing')||Date.now()<restorativeCooldown(world?.profile,itemById(world?.profile?.quickSlots?.[slot])))return;
  pendingQuickUses.add(slot);
  void sendAction('use-consumable',{slot}).finally(()=>pendingQuickUses.delete(slot));
 });
@@ -1134,7 +1134,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V046',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V047',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

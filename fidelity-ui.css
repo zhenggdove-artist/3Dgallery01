@@ -1149,3 +1149,6 @@ body.panel-open #panel.gallery-guide-floating{
 
 /* V046 GM numeric tuning: mobile-friendly item detail. */
 .gm-equipment-tuning{padding:8px;border:1px solid #b7a2c7;border-radius:6px;background:#f5effb;display:grid;gap:6px;margin:6px 0}.gm-equipment-tuning h3{margin:0;font-size:14px}.gm-equipment-tuning small{font-size:11px;line-height:1.4}.gm-tuning-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.gm-tuning-grid label{display:grid;gap:2px;font-size:11px;min-width:0}.gm-tuning-grid input{width:100%;min-width:0;box-sizing:border-box;padding:4px;font-size:13px}.gm-equipment-tuning button{min-height:32px}
+
+#weapon-mana-cost{color:#89d9ff;font-size:10px;line-height:1.1;white-space:nowrap;text-shadow:0 1px 2px #000;font-weight:700}#weapon-mana-cost.mana-insufficient{color:#ff9ba8}.bag-mana-cost{color:#1958a9;font-weight:700;font-size:12px}
+body.chat-typing #comfort-hotbar{visibility:hidden!important;pointer-events:none!important}body.chat-typing #chat-hud{z-index:190!important}body.chat-typing #comfort-hotbar *{pointer-events:none!important}

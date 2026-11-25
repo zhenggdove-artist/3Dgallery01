@@ -1,4 +1,5 @@
-import {tuningFields,equipmentTuning,tunedEquipment,tuningDamageRatio} from './shared/equipment-tuning.js';
+import {equippedItem} from './shared/fusion-adapter.js';
+import {tuningFields,equipmentTuning,tunedEquipment,tuningDamageRatio,weaponManaQuote,weaponManaLabel,restorativeCooldown} from './shared/equipment-tuning.js';
 import {FloatingGmEditorPanel} from './gm-floating-panel.js';
 import {renderOriginalBag} from './bag-view.js';
 import {weaponRangeClass} from './reletter/odd-weapons.js';
@@ -114,6 +115,9 @@ export class TempleUI extends EventTarget{
     $('function-toggle').onclick=()=>{const open=this.hud.classList.toggle('functions-open');$('function-toggle').setAttribute('aria-expanded',String(open));};
     // A single IME Return commits and sends the completed text.
     const chatInput=$('chat-input');let composing=false,imeEnter=false;
+    const chatFocus=active=>{document.body.classList.toggle('chat-typing',active);this.chatLayout?.position?.();};
+    chatInput.addEventListener('focus',()=>chatFocus(true));chatInput.addEventListener('blur',()=>chatFocus(false));
+    window.addEventListener('pagehide',()=>chatFocus(false));
     const sendChat=()=>{if(composing)return;const value=chatInput.value.trim();if(!value)return;chatInput.value='';imeEnter=false;chatInput.blur();this.emit('chat',value);};
     chatInput.addEventListener('compositionstart',()=>{composing=true;});
     chatInput.addEventListener('compositionend',()=>{composing=false;if(imeEnter){imeEnter=false;setTimeout(()=>{if(!composing)sendChat();},0);}});
@@ -381,7 +385,8 @@ export class TempleUI extends EventTarget{
   }
  }
  const held=itemById(profile.equipment?.weapon);
- $('weapon').textContent=(held?weaponPresentation(held,profile.fusion?.[held.id]).title:'UNARMED').toUpperCase();}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();this.renderQuickBar(profile);
+ $('weapon').textContent=(held?weaponPresentation(held,profile.fusion?.[held.id]).title:'UNARMED').toUpperCase();
+ const costNode=$('weapon-mana-cost');if(costNode){const signature=JSON.stringify([held?.id,held&&profile.fusion?.[held.id],this.world?.equipmentTuning]);if(this.weaponManaSignature!==signature){this.weaponManaSignature=signature;this.weaponManaQuote=held?weaponManaQuote(this.world,equippedItem(profile,held),profile.fusion?.[held.id]):null;costNode.textContent=this.weaponManaQuote?weaponManaLabel(this.weaponManaQuote):'';}costNode.hidden=!held;costNode.classList.toggle('mana-insufficient',!!this.weaponManaQuote&&profile.mana<this.weaponManaQuote.initial);}}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();this.renderQuickBar(profile);
     const gift=$('wing-gift-button');
     if(gift)gift.hidden=!(Number(profile?.wingDesignCredits)||0);
      this.showCanvasGrant(profile);
@@ -412,14 +417,14 @@ export class TempleUI extends EventTarget{
     const item=itemById(assigned[i]),count=item?.slot==='consumable'?(this.quickItemCounts.get(item.id)||0):0;
     return {item:item?.slot==='consumable'?item:null,count};
    });
-   const until=Number(profile?.consumableCooldownUntil)||0,remaining=Math.max(0,until-Date.now());
+   const until=slots.map(v=>v.item?restorativeCooldown(profile,v.item):0),remaining=until.some(v=>v>Date.now());
    const signature=JSON.stringify([slots.map(v=>[v.item?.id||null,v.count]),until]);
    if(this.quickBarSignature===signature){this.updateQuickCooldown();return;}
    this.quickBarSignature=signature;this.quickCooldownUntil=until;clearInterval(this.quickCooldownTimer);
    root.innerHTML=slots.map(({item,count},i)=>{
     const empty=!item,depleted=!!item&&count===0;
     const label=item?`${item.name} · ${count} remaining`:`Quick slot ${i+1} · Empty`;
-    return `<button type="button" class="comfort-quick-slot ${depleted?'depleted':''}" data-quick-use="${i}" ${empty||depleted||remaining?'disabled':''}
+    return `<button type="button" class="comfort-quick-slot ${depleted?'depleted':''}" data-quick-use="${i}" ${empty||depleted||until[i]>Date.now()?'disabled':''}
      aria-label="${escape(label)}" title="${escape(label)}">
      ${item?`<img src="${escape(comfortCashImage(item))}" alt="" draggable="false">`:''}
      <span class="comfort-quick-key">${i+1}</span>${item?'<span class="comfort-cooldown" hidden></span>':''}
@@ -428,7 +433,7 @@ export class TempleUI extends EventTarget{
    }).join('');
    this.updateQuickCooldown();if(remaining)this.quickCooldownTimer=setInterval(()=>this.updateQuickCooldown(),100);
   }
-  updateQuickCooldown(){const remaining=Math.max(0,(this.quickCooldownUntil||0)-Date.now());for(const b of document.querySelectorAll('#comfort-hotbar [data-quick-use]')){const overlay=b.querySelector('.comfort-cooldown');if(!overlay)continue;overlay.hidden=!remaining;overlay.textContent=remaining?(remaining/1000).toFixed(1):'';b.disabled=!!remaining||b.classList.contains('depleted');}if(!remaining)clearInterval(this.quickCooldownTimer);}
+  updateQuickCooldown(){let active=false;for(const b of document.querySelectorAll('#comfort-hotbar [data-quick-use]')){const overlay=b.querySelector('.comfort-cooldown');if(!overlay)continue;const remaining=Math.max(0,(this.quickCooldownUntil?.[Number(b.dataset.quickUse)]||0)-Date.now());active||=remaining>0;overlay.hidden=!remaining;overlay.textContent=remaining?(remaining/1000).toFixed(1):'';b.disabled=!!remaining||b.classList.contains('depleted');}if(!active)clearInterval(this.quickCooldownTimer);}
   renderRoster(){
     const box=$('player-roster');if(!box)return;
     const signature=JSON.stringify(this.players.map(p=>[p.key,p.name,p.role,p.profile?.hp,p.profile?.maxHp]));
@@ -746,9 +751,9 @@ export class TempleUI extends EventTarget{
        <output data-buy-total>${!valid?'QUANTITY 1–99':!room?'BAG FULL · '+inventoryCapacity(profile)+' MAX':'TOTAL · '+total.toLocaleString('en-US')+' COINS'}</output>
        <button type="button" data-buy="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''} ${!valid||!affordable||!room?'disabled':''}>${!room&&valid?'BAG FULL':!affordable&&valid?'NOT ENOUGH COINS':`BUY ×${valid?quantity:1} · ${total.toLocaleString('en-US')} COINS`}</button>
      </div>`;
-     const canPrice=SHOP_ITEMS.some(i=>i.id===selected.id),tuning=equipmentTuning(this.world,selected),fields=tuningFields(selected),gradeAttr=selected.shopTier?`data-shop-tier="${selected.shopTier}"`:'';
-     const edit=editing?(canPrice?`<section class="shop-price-editor"><label>UNIT PRICE (COINS)<input type="number" inputmode="numeric" min="1" max="100000000" step="1" data-gm-price-input value="${price}"></label><div class="shop-price-actions"><button type="button" data-gm-price-save="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''}>SAVE PRICE</button><button type="button" data-gm-price-reset="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''}>RESET DEFAULT</button></div><small>Applies to this exact quality / style for every player.</small></section>`:'')+`<section class="gm-equipment-tuning"><h3>裝備數值測試</h3><small>僅此品質／款式 · 全服即時生效。傷害為基礎值，最終傷害仍受融合、防禦等影響。</small><div class="gm-tuning-grid">${fields.map(f=>`<label>${escape(f.label)}<input type="number" inputmode="decimal" data-gm-tuning-field="${f.key}" min="${f.min}" max="${f.max}" step="${f.step===1?1:'any'}" value="${tuning[f.key]??f.value}"></label>`).join('')}</div><div class="shop-price-actions"><button type="button" data-gm-tuning-save="${escape(selected.id)}" ${gradeAttr}>套用數值</button><button type="button" data-gm-tuning-reset="${escape(selected.id)}" ${gradeAttr}>恢復預設</button></div></section>`:'';
-     return itemCard({...tunedEquipment(this.world,selected),name:selected.name,gmDamageRatio:tuningDamageRatio(this.world,selected,false)},selection+(editing?edit:actions));
+     const canPrice=SHOP_ITEMS.some(i=>i.id===selected.id),tuning=equipmentTuning(this.world,selected),fields=tuningFields(selected,this.world),gradeAttr=selected.shopTier?`data-shop-tier="${selected.shopTier}"`:'';
+     const edit=editing?(canPrice?`<section class="shop-price-editor"><label>UNIT PRICE (COINS)<input type="number" inputmode="numeric" min="1" max="100000000" step="1" data-gm-price-input value="${price}"></label><div class="shop-price-actions"><button type="button" data-gm-price-save="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''}>SAVE PRICE</button><button type="button" data-gm-price-reset="${escape(selected.id)}" ${selected.shopTier?`data-shop-tier="${selected.shopTier}"`:''}>RESET DEFAULT</button></div><small>Applies to this exact quality / style for every player.</small></section>`:'')+`<section class="gm-equipment-tuning"><h3>裝備數值測試</h3><small>修改任一品質後按套用，同系列品質按目前比例同步調整。售價仍獨立。魔力為大絕首次消耗。</small><div class="gm-tuning-grid">${fields.map(f=>`<label>${escape(f.label)}<input type="number" inputmode="decimal" data-gm-tuning-field="${f.key}" data-current-value="${tuning[f.key]??f.value}" min="${f.min}" max="${f.max}" step="${f.step===1?1:'any'}" value="${tuning[f.key]??f.value}"></label>`).join('')}</div><div class="shop-price-actions"><button type="button" data-gm-tuning-save="${escape(selected.id)}" ${gradeAttr}>套用數值</button><button type="button" data-gm-tuning-reset="${escape(selected.id)}" ${gradeAttr}>恢復預設</button></div></section>`:'';
+     return itemCard({...tunedEquipment(this.world,selected),name:selected.name,manaQuote:weaponManaQuote(this.world,selected),gmDamageRatio:tuningDamageRatio(this.world,selected,false)},selection+(editing?edit:actions));
     });
     this.content.innerHTML=`<div class="armory-balance"><span>Equipment · ${(profile.inventory?.length||0).toLocaleString('en-US')}/${inventoryCapacity(profile).toLocaleString('en-US')} BAG</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
      <div data-inventory-error role="alert" ${this.inventoryActionError?'':'hidden'} style="color:#9c2740;font-size:12px;overflow-wrap:anywhere">${escape(this.inventoryActionError||'')}</div><nav class="shop-tabs">${[['head','outfit','wings'],['weapons','shield','comfort'],...(weaponActive?[weaponTabs]:[])].map(row=>`<div class="shop-tab-row">${row.map(id=>`<button data-shop-tab="${id}" aria-pressed="${tab===id||(id==='weapons'&&weaponActive)}">${tabs[id]}</button>`).join('')}</div>`).join('')}</nav>
@@ -948,9 +953,9 @@ export class TempleUI extends EventTarget{
      const reset=!!button.dataset.gmTuningReset,values={};
      if(!reset)for(const input of button.closest('.gm-equipment-tuning').querySelectorAll('[data-gm-tuning-field]')){
       if(!input.value.trim()||!input.checkValidity())return this.toast('請輸入有效數值 · '+input.dataset.gmTuningField);
-      values[input.dataset.gmTuningField]=Number(input.value);
+      if(Number(input.value)!==Number(input.dataset.currentValue))values[input.dataset.gmTuningField]=Number(input.value);
      }
-     button.blur();this.emit('server-action',{action:'gm-equipment-tuning',itemId:button.dataset.gmTuningSave||button.dataset.gmTuningReset,values:reset?null:values,...(button.dataset.shopTier?{qualityTier:Number(button.dataset.shopTier)}:{})});return;
+     if(!reset&&!Object.keys(values).length)return this.toast('數值未變更');button.blur();this.emit('server-action',{action:'gm-equipment-tuning',itemId:button.dataset.gmTuningSave||button.dataset.gmTuningReset,values:reset?null:values,...(button.dataset.shopTier?{qualityTier:Number(button.dataset.shopTier)}:{})});return;
     }
     if(button.dataset.gmPriceSave||button.dataset.gmPriceReset){if(!this.world?.profile?.admin)return;const reset=!!button.dataset.gmPriceReset,field=button.closest('.shop-price-editor')?.querySelector('[data-gm-price-input]'),price=reset?null:Number(field?.value);if(!reset&&(!field?.value.trim()||!Number.isSafeInteger(price)||price<1||price>100000000))return this.toast('PRICE 1–100,000,000');button.blur();this.emit('server-action',{action:'gm-shop-price',itemId:button.dataset.gmPriceSave||button.dataset.gmPriceReset,price,...(button.dataset.shopTier?{qualityTier:Number(button.dataset.shopTier)}:{})});return;}
     if(button.dataset.gmPlatformTool&&this.self?.profile?.admin){
@@ -1021,4 +1026,4 @@ export class TempleUI extends EventTarget{
 }
 
 function option(item){return `<option value="${item.id}">${escape(item.name)}</option>`;}
-function itemCard(item,action){const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${+(pvpShotDamage(item,attackStats(item,0),weaponQuality(item))*(item.gmDamageRatio??1)).toFixed(2)} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.slot==='consumable'?item.category+' · RECOVER '+Math.round((item.manaFraction||item.healFraction)*100)+(item.manaFraction?'% MAX MP':'% MAX HP')+' · CD '+(item.cooldownMs/1000)+'s':item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88"><h3>${escape(item.name)}</h3><div class="shop-buy-controls">${action}</div>${previewMarkup(item)}<small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><small>${escape(stats)}</small><p class="equipment-description">${escape(explainEquipment(item))}</p>${item.slot==='weapon'?'<small class="weapon-enchantment-hint">Fixed shop stats. Random 3–15% affixes are exclusive to ground loot.</small>':''}</article>`;}
+function itemCard(item,action){const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${+(pvpShotDamage(item,attackStats(item,0),weaponQuality(item))*(item.gmDamageRatio??1)).toFixed(2)} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms · ${weaponManaLabel(item.manaQuote||weaponManaQuote(null,item))}`:item.slot==='consumable'?item.category+' · RECOVER '+Math.round((item.manaFraction||item.healFraction)*100)+(item.manaFraction?'% MAX MP':'% MAX HP')+' · CD '+(item.cooldownMs/1000)+'s':item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88"><h3>${escape(item.name)}</h3><div class="shop-buy-controls">${action}</div>${previewMarkup(item)}<small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><small>${escape(stats)}</small><p class="equipment-description">${escape(explainEquipment(item))}</p>${item.slot==='weapon'?'<small class="weapon-enchantment-hint">Fixed shop stats. Random 3–15% affixes are exclusive to ground loot.</small>':''}</article>`;}

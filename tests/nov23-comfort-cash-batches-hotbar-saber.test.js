@@ -73,7 +73,7 @@ test('server protects 1/2/3 slots: correct heal, exact stock consumption, red sl
   assert.equal(result.error,undefined);
   if(slot===1){assert.equal(p.hp,10);assert.equal(result.restoredMana,50);}
   else{assert.equal(p.hp,Math.min(p.maxHp,10+Math.ceil(p.maxHp*o.fraction)));assert.ok(result.healed>0);}
-  assert.equal(p.consumableCooldownUntil,at+(slot===2?3000:2000));
+  assert.equal(p.restorativeCooldowns[slot===1?'mana':'health'],at+(slot===2?3000:2000));
   assert.equal(p.inventory.filter(id=>id===o.id).length,0);
   assert.equal(p.quickSlots[slot],o.id);
   assert.match(execute(world,'use-consumable',{slot},at+500).error,/Out of stock/);

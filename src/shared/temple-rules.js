@@ -1,4 +1,4 @@
-import {tuningVariant,validateTuning,tunedEquipment,equipmentTuning,tuningDamageRatio} from './equipment-tuning.js';
+import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown} from './equipment-tuning.js';
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor,iceEruptionContact,ICE_ERUPTION_TRAVEL_MS,ICE_ERUPTION_VISIBLE_MS} from './charge-area.js';
@@ -134,7 +134,7 @@ export function migrateWorld(raw,now=Date.now()){
 
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
-    wallet:80,level:1,xp:0,hp:100,maxHp:100,mana:100,maxMana:100,manaAt:now,consumableCooldownUntil:0,deadUntil:0,starterWeaponId:STARTER_LOADOUT.weapon,inventory:admin?ITEMS.filter(item=>item.slot!=='armor'&&!isRetiredHeadgear(item)).map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
+    wallet:80,level:1,xp:0,hp:100,maxHp:100,mana:100,maxMana:100,manaAt:now,restorativeCooldowns:{health:0,mana:0},consumableCooldownUntil:0,deadUntil:0,starterWeaponId:STARTER_LOADOUT.weapon,inventory:admin?ITEMS.filter(item=>item.slot!=='armor'&&!isRetiredHeadgear(item)).map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
     gmAllItemsGranted:!!admin,gmKnownCustomWingIds:[],collectorSoldArtworks:{},
     fusion:{},wingTrialDraws:0,wingPaidDraws:0,wingDesignCredits:0,createdAt:now,updatedAt:now,lastAttackAt:0};
 }
@@ -175,6 +175,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   if(current.starterWeaponId==='fan')current.starterWeaponId=STARTER_LOADOUT.weapon;
   // Preserve chosen item even when its stack is empty: it will be shown
   // with a red depleted overlay and automatically reactivate after restock.
+  current.restorativeCooldowns??={health:current.consumableCooldownUntil||0,mana:current.consumableCooldownUntil||0};
   const savedQuickSlots=Array.isArray(current.quickSlots)?current.quickSlots:[];
   current.quickSlots=Array.from({length:3},(_,i)=>{
    const item=itemById(savedQuickSlots[i]);return item?.slot==='consumable'?item.id:null;
@@ -265,7 +266,7 @@ export function validName(value){return typeof value==='string'&&value.trim().le
 
 export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
-    level:profile.level,xp:profile.xp,mana:profile.mana??manaCapacity(profile.level),maxMana:manaCapacity(profile.level),consumableCooldownUntil:profile.consumableCooldownUntil||0,lastWingCanvasGrant:clone(profile.lastWingCanvasGrant||null),wingTrialDraws:profile.wingTrialDraws||0,wingPaidDraws:Math.max(0,Number(profile.wingPaidDraws)||0),wingDesignCredits:Math.max(0,Number(profile.wingDesignCredits)||0),deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
+    level:profile.level,xp:profile.xp,mana:profile.mana??manaCapacity(profile.level),maxMana:manaCapacity(profile.level),consumableCooldownUntil:0,restorativeCooldowns:clone(profile.restorativeCooldowns||{health:profile.consumableCooldownUntil||0,mana:profile.consumableCooldownUntil||0}),lastWingCanvasGrant:clone(profile.lastWingCanvasGrant||null),wingTrialDraws:profile.wingTrialDraws||0,wingPaidDraws:Math.max(0,Number(profile.wingPaidDraws)||0),wingDesignCredits:Math.max(0,Number(profile.wingDesignCredits)||0),deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
     respawnPosition:clone(profile.respawnPosition||null),
     spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),shield:clone(profile.shield||null),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,tidePush:profile.tidePush||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
@@ -418,12 +419,11 @@ export function applyAction(world,actor,body,context={}){
    if(!profile.admin||actor.admin!==true)return {error:'GM only'};
    const item=tuningVariant(body.itemId,body.qualityTier);
    if(!item)return {error:'Invalid equipment or quality'};
-   let values;try{values=validateTuning(item,body.values);}catch(e){return {error:e.message};}
-   world.equipmentTuning??={};const key=shopPriceKey(item);
-   if(!values||!Object.keys(values).length)delete world.equipmentTuning[key];else world.equipmentTuning[key]=values;
-   for(const target of Object.values(world.profiles))if(Object.values(target.equipment||{}).includes(item.id))refreshStats(world,target,now);
+   let change;try{change=linkedEquipmentTuning(world,item,body.values);}catch(e){return {error:e.message};}
+   world.equipmentTuning=change.overrides;const ids=new Set(change.variants.map(v=>v.id));
+   for(const target of Object.values(world.profiles))if(Object.values(target.equipment||{}).some(id=>ids.has(id)))refreshStats(world,target,now);
    world.revision=(world.revision||0)+1;
-   return {notice:'裝備數值已更新 · '+item.name,tuningKey:key};
+   return {notice:'裝備數值已更新 · '+item.name+' · '+change.variants.length+' 款品質',tuningKey:shopPriceKey(item),tuningCount:change.variants.length};
   }
   if(body.action==='gm-shop-price'){
    // Role is obtained from the authenticated server session, not the request payload.
@@ -889,12 +889,15 @@ function useConsumable(world,profile,actor,body,now){
  if(item?.slot!=='consumable')return {error:'No restorative consumable assigned'};
  const inventoryIndex=profile.inventory.indexOf(itemId);
  if(inventoryIndex<0)return {error:'Out of stock · Restock this consumable at SHOP'};
- if(now<(profile.consumableCooldownUntil||0))return {error:'Restorative item is cooling down'};
+ const type=restorativeType(item);
+ if(now<restorativeCooldown(profile,item))return {error:'Restorative item is cooling down'};
+ profile.restorativeCooldowns??={health:0,mana:0};
  refreshMana(profile,now,world);
- if(item.manaFraction){
+ if(type==='mana'){
   const restored=Math.min(profile.maxMana-profile.mana,Math.ceil(profile.maxMana*item.manaFraction));
   if(restored<=0)return {error:'Mana is already full'};
-  removeInventoryInstance(profile,inventoryIndex);profile.mana+=restored;profile.consumableCooldownUntil=now+(item.cooldownMs??2000);
+  removeInventoryInstance(profile,inventoryIndex);profile.mana+=restored;profile.restorativeCooldowns.mana=now+(item.cooldownMs??2000);
+  recordTempleDamage(world,{amount:restored,kind:'mana-heal',position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],owner:profile.key,target:profile.key},now);
   return {notice:'Restored '+Math.round(restored)+' MP',restoredMana:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
  }
  if(profile.hp>=profile.maxHp)return {error:'Health is already full'};
@@ -904,7 +907,7 @@ function useConsumable(world,profile,actor,body,now){
  const restored=Math.min(profile.maxHp-hpBefore,Math.ceil(profile.maxHp*item.healFraction));
  if(restored<=0)return {error:'Health is already full'};
  removeInventoryInstance(profile,inventoryIndex);
- profile.hp=Math.min(profile.maxHp,hpBefore+restored);profile.consumableCooldownUntil=now+(item.cooldownMs??2000);
+ profile.hp=Math.min(profile.maxHp,hpBefore+restored);profile.restorativeCooldowns.health=now+(item.cooldownMs??2000);
  recordTempleDamage(world,{amount:restored,kind:'heal',
   position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],
   owner:profile.key,target:profile.key},now);
@@ -1087,7 +1090,7 @@ function attack(world,profile,actor,body,context,now){
     if(!profile.chargeStartedAt||now-profile.chargeStartedAt<(weapon.chargeMs||1500))
       return {error:'Charge must reach 100% before channeling'};
     refreshMana(profile,now,world);
-    if(profile.mana<30)return {error:'Not enough mana'};
+    if(profile.mana<weaponManaQuote(world,weapon,profile.fusion?.[weapon.id]).initial)return {error:'Not enough mana'};
     profile.channelWeapon=weapon.id;profile.manaChannelPaid=false;
     profile.channelStartedAt=profile.chargeStartedAt;
     profile.lastChannelPulseAt=now;
@@ -1167,7 +1170,7 @@ function attack(world,profile,actor,body,context,now){
   refreshMana(profile,now,world);
   if(manaCost>profile.mana+1e-6)return {error:'Not enough mana'};
   profile.mana=Math.max(0,profile.mana-manaCost);
-  if(channel)profile.manaChannelPaid=true;
+  if(channel){profile.manaChannelPaid=true;profile.channelManaPulseCost=ultimateManaCost(weapon,stats,quality,true,fusionCount);}
   profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
   if(!channel)profile.chargeStartedAt=0;
   const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
@@ -1314,7 +1317,7 @@ function attack(world,profile,actor,body,context,now){
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,
     aimMode:shoulderSniper?'shoulder':body.aimMode==='scope'?'scope':null,
-    piercing:shoulderSniper&&charge>=1,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+    piercing:shoulderSniper&&charge>=1,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,manaCost,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
@@ -1567,7 +1570,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   const liveKeys=new Set(actors.map(a=>a.key));
   for(const profile of Object.values(world.profiles||{})){
    if(liveKeys.has(profile.key))changed=refreshMana(profile,now,world)||changed;
-   if(profile.channelWeapon&&(!isLiveStaffChannel(profile,now,world)||(profile.manaChannelPaid===true&&profile.mana<2))){
+   if(profile.channelWeapon&&(!isLiveStaffChannel(profile,now,world)||(profile.manaChannelPaid===true&&profile.mana<(profile.channelManaPulseCost??2)))){
     // Clear orphaned continuous-cast state before validating later movement.
     profile.channelWeapon=null;profile.channelStartedAt=0;
     profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;

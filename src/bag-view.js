@@ -1,3 +1,5 @@
+import {weaponManaQuote,weaponManaLabel,tunedEquipment} from './shared/equipment-tuning.js';
+import {equippedItem} from './shared/fusion-adapter.js';
 import {itemById,EQUIPPABLE_SLOTS,RARITIES,shopWeaponVariant,shopResalePrice,inventoryCapacity} from './shared/catalog.js';
 import {previewMarkup,hydrateItemPreviews} from './item-preview.js';
 import {weaponClass,explainEquipment} from './shared/weapon-info.js';
@@ -90,7 +92,7 @@ export function renderOriginalBag(ui,profile){
   }).join('');
   const st=profile.stats||{},lv=Math.max(0,(profile.level||1)-1),round=v=>Number((Number(v)||0).toFixed(1));
   const statRows=[['HP',st.maxHp,100,lv*4],['ATK',(st.attack??1)*100,100,0],['DEF',(1-(st.defense??1))*100,0,0],['SPD',(st.speed??1)*100,100,0],['JUMP',(st.jump??1)*100,100,0],['MP',st.maxMana??100,100,lv*4]];
-  body+=`<section class="equip-stat-summary">${statRows.map(([label,total,base,level])=>`<div><b>${label} ${round(total)}${['ATK','DEF','SPD','JUMP'].includes(label)?'%':''}</b> (<span class="stat-o">${round(base)}</span> + <span class="stat-a">${round(level)}</span> + <span class="stat-b">${round(total-base-level)}</span>)</div>`).join('')}<small>O Base · A Level · B Gear / active effects</small></section>`;
+  body+=`<section class="equip-stat-summary">${statRows.map(([label,total,base,level])=>`<div><b>${label} ${round(total)}${['ATK','DEF','SPD','JUMP'].includes(label)?'%':''}</b> (<span class="stat-o">${round(base)}</span> + <span class="stat-a">${round(level)}</span> + <span class="stat-b">${round(total-base-level)}</span>)</div>`).join('')}<small>O Base · A Level · B Gear / active effects</small>${profile.equipment?.weapon?`<div class="bag-mana-cost">${esc(weaponManaLabel(weaponManaQuote(ui.world,equippedItem(profile,itemById(profile.equipment.weapon)),profile.fusion?.[profile.equipment.weapon])))}</div>`:''}</section>`;
   body+=`<section class="comfort-bag-gear" aria-label="Comfort for the Soul">
    <h3>Comfort for the Soul</h3>
    <p>Double tap a consumable, then choose shortcut 1, 2 or 3 in the popup. Restock at SHOP.</p>
@@ -168,7 +170,7 @@ export function renderOriginalBag(ui,profile){
  const description=comfort?`<div class="comfort-bag-description">${esc(i.description)} · ${Math.round((i.manaFraction||i.healFraction)*100)}% ${i.manaFraction?'MP':'HP'} · CD ${i.cooldownMs/1000}s · STOCK ×${ownedCount}</div>
   <div>Double tap to choose shortcut 1, 2 or 3. ${(profile.quickSlots||[]).map((id,j)=>id===i.id?'SLOT '+(j+1):'').filter(Boolean).join(' · ')}</div>`:'';
  ui.content.querySelector('#bag-detail').innerHTML=`<strong>${esc(f.title)}</strong> <span>${esc(i.category||i.rarity)}</span>
-  <div>${esc(explainEquipment(i,record))}</div>${description}
+  <div>${esc(explainEquipment(tunedEquipment(ui.world,i),record))}</div>${i.slot==='weapon'?`<div class="bag-mana-cost">${esc(weaponManaLabel(weaponManaQuote(ui.world,equippedItem(profile,itemById(i.id),{...record,shopTier:i.shopTier??record?.shopTier??i.tier}),record)))}</div>`:''}${description}
   ${comfort?'':`<div>Next Fusion: +${completed+1} · Success Chance: ${(odds*100).toFixed(5).replace(/0+$/,'').replace(/\.$/,'')}% · Failure consumes the ingredient but does not increase fusion level or lower future odds</div>`}
   ${f.traits.length&&!comfort?`<div class="weapon-traits">${f.traits.map(t=>`<span class="weapon-trait" title="${esc(t.details)}">${esc(t.name)} · ${esc(t.details)}</span>`).join('')}</div>`:''}
   ${f.bonuses.length&&!comfort?`<div class="weapon-bonuses">${f.bonuses.map(x=>`<span>${esc(x)}</span>`).join(' · ')}</div>`:''}

@@ -1,4 +1,4 @@
-import {tunedEquipment,equipmentTuning} from './equipment-tuning.js';
+import {tunedEquipment,equipmentTuning,manaCostFromStats} from './equipment-tuning.js';
 import {effectActive} from './combat-status.js';
 import {traitStats} from '../reletter/combat-traits.js';
 import {itemById} from './catalog.js';
@@ -19,13 +19,7 @@ export function refreshMana(profile,now,world){
  profile.mana=Math.min(max,Math.max(0,before)+(profile.hp>0?elapsed/1000*manaRegen(profile,world):0));
  return Math.floor(before)!==Math.floor(profile.mana);
 }
-export function ultimateManaCost(weapon,stats,quality,channel=false,fusionCount=0){
- if(!stats.ultimate)return 0;
- const tier=Math.max(1,quality?.tier||weapon.tier||1);
- const power=Math.max(0,Number(stats.damage)||0),range=Math.max(0,Number(stats.range)||0),radius=Math.max(0,Number(stats.radius)||0);
- const cost=Math.min(75,Math.round(30+(tier-1)*4+Math.max(0,power-12)*.28+Math.max(0,range-30)*.10+Math.max(0,radius-6)*.55+fusionCount*4));
- return channel?Math.max(2,Math.ceil(cost*.28*Math.max(260,weapon.cooldown||700)/1000)):cost;
-}
+export function ultimateManaCost(weapon,stats,quality,channel=false,fusionCount=0){return manaCostFromStats(weapon,stats,quality,channel,fusionCount);}
 // Original equipment/crop multipliers; Temple uses a 100 HP base instead of 3 HP.
 export function playerStats(world,profile,now=Date.now()){
   // Only equipped items contribute to traits. Do not rebuild every owned

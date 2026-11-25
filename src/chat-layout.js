@@ -60,6 +60,7 @@ export function bindChatLayout(){
  function fitSafely(){
   if(!panel.offsetWidth||!panel.offsetHeight||panel.closest('[hidden]')||getComputedStyle(panel).visibility==='hidden')return;
   if(active?.mode==='move'||miniDrag?.mode==='move')return;
+  if(document.body.classList.contains('chat-typing')){const b=bounds(),r=panel.getBoundingClientRect();panel.style.setProperty('left',limit(r.left,b.left,b.right)+'px','important');panel.style.setProperty('top',limit(r.top,b.top,b.bottom)+'px','important');panel.style.setProperty('bottom','auto','important');panel.style.right='auto';panel.style.transform='none';return;}
   const anchor=manualPosition?manualAnchor:globalDefault;
   let left,top;
   if(anchor){const b=bounds();left=b.left+(b.right-b.left)*anchor.x;top=b.top+(b.bottom-b.top)*anchor.y;}

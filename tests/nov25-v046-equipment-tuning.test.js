@@ -6,14 +6,14 @@ import {itemById} from '../src/shared/catalog.js';
 import {playerStats} from '../src/shared/player-stats.js';
 import {shotgunDistanceScale} from '../src/shared/calico-pellets.js';
 const now=Date.now(),gm={key:'gm',name:'GM',color:'#abcdef',admin:true,role:'fighter',position:[75,0,0]},user={key:'u',name:'User',color:'#abcdef',admin:false,role:'fighter',position:[75,0,10]};
-test('GM-only tuning persists per grade, validates fields and resets independently',()=>{
+test('GM-only tuning persists across grades, validates fields and resets family',()=>{
  const w=createInitialWorld(now);ensureProfile(w,gm.key,gm.name,gm.color,now,true);ensureProfile(w,user.key,user.name,user.color,now,false);
  const act=(actor,body)=>applyAction(w,actor,{action:'gm-equipment-tuning',...body},{now:now+1000,actors:[gm,user]});
  const base=tuningVariant('calico-cat',3),d=tuningFields(base).find(f=>f.key==='damage').value;
  const payload={itemId:base.id,qualityTier:3,values:{damage:d*2,cooldown:500,effectPower:2}};
  assert.ok(act(user,payload).error);assert.ok(!act(gm,payload).error);
  assert.equal(tuningDamageRatio(w,base,false),2);assert.equal(tunedEquipment(w,base).cooldown,500);
- assert.equal(tuningDamageRatio(w,tuningVariant('calico-cat',2),false),1);
+ assert.ok(Math.abs(tuningDamageRatio(w,tuningVariant('calico-cat',2),false)-2)<1e-6);
  assert.equal(tuningDamageRatio(w,base,true),1);
  assert.ok(act(gm,{...payload,values:{damage:-1}}).error);
  const restored=migrateWorld(JSON.parse(JSON.stringify(w)),now+2000);
