@@ -50,7 +50,8 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
  id:'outfit-'+creature,name,slot:'outfit',family:'outfit',
  design:creature==='formal-suit'?'suit':creature==='leather'?'leather':'creature',creature,pattern:0,tier,color,
  price:templePrice,templePrice,bonuses,r106Wearable:true,
- description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed',jump:'jump height',attack:'attack'}[k]||k)).join(' · ')
+ ...(creature==='mutton-sign-disguise'?{shopRelease:121}:{}),
+  description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed',jump:'jump height',attack:'attack'}[k]||k)).join(' · ')
 })));
 
  // Full-body prop disguises use the actual avatar height as their scale reference.
@@ -69,7 +70,8 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   ['notok-sign-disguise','NOTOK Convenience Store Sign','#d32b35',3,2950,2,{hp:1.5,defense:.10}],
   ['987-sign-disguise','987 Convenience Store Sign','#d32b35',3,2950,2,{hp:1.5,defense:.10}],
   ['bubble-tea-disguise','Giant Bubble Milk Tea','#c99b68',3,2950,2,{hp:1.5,speed:.08}],
-  ['fried-chicken-disguise','Giant Taiwanese Fried Chicken Cutlet','#bd792e',3,2950,2,{hp:1.2,attack:.10}]
+  ['fried-chicken-disguise','Giant Taiwanese Fried Chicken Cutlet','#bd792e',3,2950,2,{hp:1.2,attack:.10}],
+  ['mutton-sign-disguise','老家羊肉爐招牌','#f1d626',3,2950,2.5,{hp:1.5,defense:.10}]
  ];
  OUTFITS.push(...disguises.map(([creature,name,color,tier,templePrice,disguiseHeight,bonuses])=>({
   id:'outfit-'+creature,name,color,tier,price:templePrice,templePrice,slot:'outfit',family:'outfit',

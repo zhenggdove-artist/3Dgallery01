@@ -1,4 +1,4 @@
-import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown} from './equipment-tuning.js';
+import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown,migrateSkillQuality,applySkillAreaScale,bloomHealRate} from './equipment-tuning.js';
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor,iceEruptionContact,ICE_ERUPTION_TRAVEL_MS,ICE_ERUPTION_VISIBLE_MS} from './charge-area.js';
@@ -71,7 +71,7 @@ export function createInitialWorld(now=Date.now()){
 export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
-  world.profiles??={};world.equipmentTuning??={};world.customWings??=[];registerCustomWings(world.customWings);
+  world.profiles??={};world.equipmentTuning??={};migrateSkillQuality(world);world.customWings??=[];registerCustomWings(world.customWings);
   world.environment??={skyBaseColor:'#101b36'};world.removedArtworkIds??=[];world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.customPedestals??=[];world.platformOverrides??={};world.removedPlatformIds??=[];world.persistentAttacks??=[];world.prismLocks??={};world.pendingArtworkFlights??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};if(world.removedArtworkIds.includes(p.id)){delete world.artworks[p.id];delete world.artworkLayout[p.id];continue;}world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
@@ -1164,7 +1164,7 @@ function attack(world,profile,actor,body,context,now){
     stats.radius=Math.max(stats.radius,5.9*quality.visual);
    }
   const tuning=equipmentTuning(world,weapon),tuningRatio=tuningDamageRatio(world,weapon,stats.ultimate);
-  stats.damage*=tuningRatio;stats.range*=tuning.rangeScale??1;stats.radius*=tuning.radiusScale??1;
+  stats.damage*=tuningRatio;stats.range*=tuning.rangeScale??1;applySkillAreaScale(stats,weapon,tuning);
   const fusionCount=(profile.fusion?.[weapon.id]?.effects||[]).length;
   const quote=stats.ultimate?weaponManaQuote(world,weapon,profile.fusion?.[weapon.id]):null;
   const manaCost=quote?(channel&&profile.manaChannelPaid===true?quote.pulse:quote.initial):0;
@@ -1233,7 +1233,7 @@ function attack(world,profile,actor,body,context,now){
       radius:stats.radius,area,damage:stats.damage+bonus*.1*tuningRatio*(weapon.id==='jellybrella'?.5:1),pvpDamage,gmTuning:tuning,damageRatio:tuningRatio,charge,critChance:weapon.critChance,
       qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,iceGround,
       shoulderSpread:shoulderSniper,
-      flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual*(tuning.radiusScale??1)}))||null,
+      flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual*(stats.ultimate?(tuning.radiusScale??1):1)}))||null,
       hits:[],pelletHits:{},areaResolved:false,
       createdAt:now,lastAt:now,expiresAt:now+Math.max(duration,visualLifetime)
     });
@@ -1244,13 +1244,13 @@ function attack(world,profile,actor,body,context,now){
     for(const [fusionSlot,sourceId] of (profile.fusion?.[weapon.id]?.effects||[]).slice(0,2).entries()){
       const source=tunedEquipment(world,itemById(sourceId));if(source?.slot!=='weapon')continue;
       const sourceQuality=weaponQuality(source),full=attackStats(source,1),echoTuning=equipmentTuning(world,source),echoRatio=tuningDamageRatio(world,source,true);
-      full.damage*=echoRatio;full.radius*=echoTuning.radiusScale??1;
+      full.damage*=echoRatio;
       // All borrowed skills terminate at the primary weapon's warned target.
       const anchor=fusionEchoAnchor(primaryFootprint,origin);
       const echoChannel=channel&&isChannelStaff(source);
       const native={...full,range:full.range*sourceQuality.range,
        radius:forwardCastRadius(source,sourceQuality,full.radius,echoChannel)};
-      scaleUltimateFootprint(native,source,sourceQuality);
+      scaleUltimateFootprint(native,source,sourceQuality);applySkillAreaScale(native,source,echoTuning);
       const secondary={...native,range:source.id==='goldfish'?anchor.distance*GOLDFISH_TRAVEL_SCALE:anchor.distance};
       const echoArea=source.id==='goldfish'||source.family==='wave'?null:
        chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel,true);
@@ -1280,7 +1280,7 @@ function attack(world,profile,actor,body,context,now){
         origin:[...origin],direction:[...direction],launchDirection:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,
         damage:echoDamage,pvpDamage:echoPvP,gmTuning:echoTuning,damageRatio:echoRatio,charge:1,qualityDuration:sourceQuality.duration*echoScale,
         tier:sourceQuality.tier,flightMs:flight,iceGround:source.family==='ice',hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
-        pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
+        pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5*(echoTuning.radiusScale??1)}))||null,
         outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[],
         createdAt:now,lastAt:now,expiresAt:now+duration});
       fusionEchoes.push({id:echoId,persistentAttackId:echoId,owner:actor.key,fusionSlot,origin:[...origin],direction:[...direction],
@@ -1429,7 +1429,7 @@ export function tickBloomChannelHeal(profile,now,world){
  const pulses=Math.max(0,Math.floor((now-since)/1000));
  if(!pulses)return 0;
  profile.lastBloomHealAt=since+pulses*1000;
- const t=equipmentTuning(world,item);const restored=Math.min(pulses*(t.healPerSecond??1)*(t.effectPower??1),Math.max(0,profile.maxHp-profile.hp));
+ const restored=Math.min(pulses*bloomHealRate(world,item),Math.max(0,profile.maxHp-profile.hp));
  profile.hp+=restored;
  return restored;
 }
@@ -1618,7 +1618,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
     if(insideArtSanctuary(mob.position)){mob.position=[...MONSTER_SPAWNS[(mob.slot||0)%MONSTER_SPAWNS.length]];}
     mob.bodyHeight=ENEMY_HEIGHT;mob.bodyRadius=ENEMY_RADIUS;
     const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));
-    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!mob.panBlastFlight||!!mob.whipPull||!!mob.vortexSpin&&now<mob.vortexSpin.time+VORTEX_SPIN_MS||!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),silenced:!!effectActive(mob,'paralysis',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
+    mob.lastPosition=[...mob.position];advanceIslandEnemy(mob,fighters,now,{disabled:!!mob.panBlastFlight||!!mob.whipPull||!!mob.vortexSpin&&now<mob.vortexSpin.time+(mob.vortexSpin.durationMs??VORTEX_SPIN_MS)||!!effectActive(mob,'stun',now)||!!effectActive(mob,'root',now)||!!effectActive(mob,'freeze',now),silenced:!!effectActive(mob,'paralysis',now),slow:effectActive(mob,'root',now)?1:effectActive(mob,'slow',now)?.power||0,
      move:(target,distance)=>{
        const confused=effectActive(mob,'confuse',now);
        if(confused){
@@ -1764,7 +1764,7 @@ function advanceVortexMonster(world,mob,now){
  const spin=mob?.vortexSpin;
  if(!spin||!mob.active)return false;
  const point=vortexSpinPoint(spin,now);
- if(point&&now<spin.time+VORTEX_SPIN_MS)
+ if(point&&now<spin.time+(spin.durationMs??VORTEX_SPIN_MS))
   moveMonster(world,mob,point,Math.hypot(point[0]-mob.position[0],point[2]-mob.position[2]));
  else delete mob.vortexSpin;
  return true;
@@ -1832,7 +1832,7 @@ export function tickPrismChannels(world,actors,now=Date.now(),rng=Math.random){
   const sample=Math.min(elapsed,500);
   lock.lastHitAt=now;
   const t=equipmentTuning(world,tunedEquipment(world,equippedItem(profile,weapon)));
-  const multiplier=t.ramp===undefined&&t.rampCap===undefined?prismDamageMultiplier(now-lock.since):Math.min(t.rampCap??5,(t.ramp??1.2)**Math.max(0,Math.floor((now-lock.since)/1000)));
+  const rawMultiplier=t.ramp===undefined&&t.rampCap===undefined?prismDamageMultiplier(now-lock.since):Math.min(t.rampCap??5,(t.ramp??1.2)**Math.max(0,Math.floor((now-lock.since)/1000)));const multiplier=1+(rawMultiplier-1)*(t.effectPower??1);
   const base=target.kind==='monster'?params.monsterDps:params.pvpDps;
   const dps=Math.max(0,Number(base)||0)*multiplier;
   if(dps<=0)continue;
@@ -2288,7 +2288,8 @@ function tickPersistentAttacks(world,actors,now,rng){
    const start=[...fx.position],elapsed=Math.max(0,Math.min(now,fx.expiresAt)-fx.lastAt);
    advanceHomingVortex(fx,aim?.value,elapsed,VORTEX_FLIGHT_MS);
    if(Math.hypot(fx.position[0]-start[0],fx.position[2]-start[2])>.001)changed=true;
-   const radius=Math.max(2.1,Math.min(7,fx.radius*.5));
+   const radius=Math.max(2.1*(fx.gmTuning?.radiusScale??1),Math.min(7*(fx.gmTuning?.radiusScale??1),fx.radius*.5));
+   const spinMs=Math.max(1,Math.round(VORTEX_SPIN_MS*(fx.gmTuning?.effectDuration??1)));
    for(const target of candidates){
     const victim=target.value,key=victim.id||victim.key;
     const victimRadius=target.kind==='monster'?(victim.bodyRadius||ENEMY_RADIUS):1.02;
@@ -2304,12 +2305,12 @@ function tickPersistentAttacks(world,actors,now,rng){
     if(!fx.locked){
      // Capture the first real hit once. The vortex remains the fixed orbit center.
      fx.locked=true;fx.position=[victim.position[0],fx.position[1],victim.position[2]];
-     fx.lockedAt=now;fx.expiresAt=Math.max(fx.expiresAt,now+VORTEX_SPIN_MS);
+     fx.lockedAt=now;fx.expiresAt=Math.max(fx.expiresAt,now+spinMs);
     }
     if(hit.defeated)continue;
     const status=target.kind==='monster'?victim:world.profiles[victim.key];
-    if(status&&now>=(status.vortexSpinCooldownUntil||0)&&now+VORTEX_SPIN_MS<=fx.expiresAt){
-     status.vortexSpin={id:id(),time:now,durationMs:VORTEX_SPIN_MS,
+    if(status&&now>=(status.vortexSpinCooldownUntil||0)&&now+spinMs<=fx.expiresAt){
+     status.vortexSpin={id:id(),time:now,durationMs:spinMs,power:fx.gmTuning?.effectPower??1,
       center:[fx.position[0],fx.position[2]],start:[...victim.position]};
      status.vortexSpinCooldownUntil=now+VORTEX_SPIN_LOCK_MS;
     }
@@ -2339,7 +2340,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       :damagePlayer(world,owner,value,(fx.pvpDamage??12)*.62,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',center);
      if(hit&&!hit.immune&&!hit.defeated)applyElementalHit(
       target.kind==='monster'?value:world.profiles[value.key],owner,
-      {family:'lightning',element:'electric'},now,fx.echo?.2:1);
+      {family:'lightning',element:'electric',gmTuning:fx.gmTuning},now,fx.echo?.2:1);
      changed=true;
     }
     // The revolving soft rod can also strike the real building footprint.
@@ -2464,13 +2465,13 @@ function tickPersistentAttacks(world,actors,now,rng){
       const result=damageMonster(world,owner,raw,now,rng,'giant-goldfish',value,center);
       fx.damageSpent[key]=(fx.damageSpent[key]||0)+raw*amplification;
       if(result&&!result.defeated&&first){
-       if(fx.echo)applyElementalHit(value,owner,itemById('goldfish'),now,.2);
+       if(fx.echo)applyElementalHit(value,owner,{...itemById('goldfish'),gmTuning:fx.gmTuning},now,.2);
        else applyStatus(world,owner,value,itemById('goldfish'),{
         direction:fx.direction,charge:1,damage:fx.damage,qualityDuration:1
        },now);
-       const moved=[value.position[0]+fx.direction[0]*(3+fx.tier*.7)*(fx.echo?.2:1),value.position[1],value.position[2]+fx.direction[2]*(3+fx.tier*.7)*(fx.echo?.2:1)];
+       const moved=[value.position[0]+fx.direction[0]*(3+fx.tier*.7)*(fx.echo?.2:1)*(fx.gmTuning?.effectPower??1),value.position[1],value.position[2]+fx.direction[2]*(3+fx.tier*.7)*(fx.echo?.2:1)];
        if(insideArena(moved,-2)&&!insideArtSanctuary(moved))value.position=moved;
-       value.effects??={};value.effects.stun={owner:fx.owner,power:fx.echo?.2:1,until:now+(fx.echo?160:800),next:now+1000};
+       value.effects??={};value.effects.stun={owner:fx.owner,power:fx.echo?.2:1,until:now+Math.round((fx.echo?160:800)*(fx.gmTuning?.effectDuration??1)),next:now+1000};
       }
      }else{
       const pvpDirect=Math.min(direct,contacts*(fx.pvpDamage??12)*1.08*GOLDFISH_DAMAGE_PER_FISH);
@@ -2479,12 +2480,12 @@ function tickPersistentAttacks(world,actors,now,rng){
       if(hit&&!hit.immune&&first){
        const profile=world.profiles[value.key];
        if(profile?.hp>0){
-        if(fx.echo)applyElementalHit(profile,owner,itemById('goldfish'),now,.2);
+        if(fx.echo)applyElementalHit(profile,owner,{...itemById('goldfish'),gmTuning:fx.gmTuning},now,.2);
         else applyStatus(world,owner,profile,itemById('goldfish'),{
          direction:fx.direction,charge:1,damage:fx.pvpDamage,qualityDuration:1
         },now);
        }
-       if(profile?.hitReaction){profile.hitReaction.stunMs=fx.echo?100:300;profile.hitReaction.knockback=fx.echo?2.8:14;}
+       if(profile?.hitReaction){profile.hitReaction.stunMs=(fx.echo?100:300)*(fx.gmTuning?.effectDuration??1);profile.hitReaction.knockback=(fx.echo?2.8:14)*(fx.gmTuning?.effectPower??1);}
       }
      }
      splitGoldfishDamageNumbers(world,damageEventStart,contacts,center);

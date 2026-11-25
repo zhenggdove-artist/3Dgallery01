@@ -65,7 +65,7 @@ test('ranged weapon fused into melee cannot change normal reach, including old p
  assert.ok(gm.fusion[pan.id].effects.includes('frost-1'));
 });
 
-test('flower crown channel restores one HP per second, capped, never on tap or after stopping',()=>{
+test('flower crown channel restores quality-scaled HP per second, capped, never on tap or after stopping',()=>{
  const world=createInitialWorld(NOW),a=person('flora');
  const p=profile(world,'flora');
  p.inventory.push('bloom-1');p.equipment.weapon='bloom-1';p.hp=91;
@@ -81,13 +81,13 @@ test('flower crown channel restores one HP per second, capped, never on tap or a
  p.hp=91; // Equip refresh can add +20 max HP; set test damage afterward.
  assert.equal(tickBloomChannelHeal(p,started+999),0);
  tickWorld(world,{now:started+1000,actors:[],activeFighters:0,rng:()=>.5});
- assert.equal(p.hp,92);
+ assert.ok(Math.abs(p.hp-91.6)<1e-8);
  assert.equal(tickBloomChannelHeal(p,started+1000),0,'repeat tick in same second cannot double heal');
  const heartbeat=applyAction(world,a,{action:'attack',phase:'channel',direction:[0,0,1]},
   {now:started+1750,actors:[a],rng:()=>.5});
  assert.ok(heartbeat.attackEvent,'a live 1 HP/s channel sends authenticated attack pulses');
- assert.equal(tickBloomChannelHeal(p,started+2300),1);
- assert.equal(p.hp,93);
+ assert.equal(tickBloomChannelHeal(p,started+2300),.6);
+ assert.ok(Math.abs(p.hp-92.2)<1e-8);
  p.hp=p.maxHp-.5;
  assert.equal(tickBloomChannelHeal(p,started+3300),.5,'healing is capped at max HP');
  assert.equal(p.hp,p.maxHp);

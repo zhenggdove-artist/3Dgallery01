@@ -15,7 +15,7 @@ export function applyStatus(world,source,target,weapon,shot,now){
  // Rarity extends every newly inflicted debuff without multiplying older
  // stacks each time the same persistent fire or vine hits again.
  // Temple's six elemental responses are authoritative and generated only after a real hit.
- applyElementalHit(target,source,{...weapon,ultimateHit:!!shot.ultimate},now);
+ applyElementalHit(target,source,{...weapon,gmTuning:null,ultimateHit:!!shot.ultimate},now);
  const durationScale=Math.max(1,Math.min(2.4,Number(shot.qualityDuration)||1));
  for(const [key,effect] of Object.entries(target.effects||{})){
   if(effect.owner!==source.key||effect.until<=(previous[key]||0))continue;
@@ -40,7 +40,8 @@ export function applyElementalHit(target,source,weapon,now,scale=1){
  if(!target||target.admin||target.hp<=0||!weapon)return null;
  target.effects??={};target.effectLocks??={};
  const e=target.effects,locks=target.effectLocks,owner=source?.key||'environment',strength=Math.max(.05,Math.min(1,Number(scale)||1));
- const put=(key,duration,power=0,cooldown=0)=>{duration=Math.max(150,Math.round(duration*strength));power*=strength;
+ const powerScale=weapon.gmTuning?.effectPower??1,durationScale=weapon.gmTuning?.effectDuration??1;
+ const put=(key,duration,power=0,cooldown=0)=>{duration=Math.max(0,Math.round(duration*strength*durationScale));power*=strength*powerScale;
   if(cooldown&&(locks[key]||0)>now)return null;
   e[key]={owner,power,until:now+duration,next:now+1000};
   if(cooldown)locks[key]=now+cooldown;
@@ -58,7 +59,7 @@ export function applyElementalHit(target,source,weapon,now,scale=1){
   }
   // Freeze is a per-target 6s proc lock, NOT a 6s weapon cooldown.
   // Every other charged frost contact can still slow movement by 30%.
-  e.slow={owner,power:.30*strength,until:now+Math.round(3000*strength),next:now+1000};
+  e.slow={owner,power:.30*strength*powerScale,until:now+Math.round(3000*strength*durationScale),next:now+1000};
   return 'slow';
  }
  // Coconut palm ultimate binds legs for three seconds, independently
@@ -72,7 +73,7 @@ export function applyElementalHit(target,source,weapon,now,scale=1){
   return 'burn';
  }
  if(weapon.element==='water'||family==='water') {
-  e.soaked={owner,power:.5*strength,until:now+Math.round(5000*strength),next:now+1000};
+  e.soaked={owner,power:.5*strength*powerScale,until:now+Math.round(5000*strength*durationScale),next:now+1000};
   return 'soaked';
  }
  if(weapon.element==='dark')return put('confuse',3000,0,10000);

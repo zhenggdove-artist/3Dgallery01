@@ -13,13 +13,36 @@ export function tuningVariant(id,tier){
  if(!item.exotic&&rank!==(item.tier||1))return null;
  return shopWeaponVariant(item,rank);
 }
+// Highest authored quality keeps its V047 values. Apply a separate quality
+// factor to skill area and special effects, not ordinary attack reach.
+export function skillGradeScale(item){if(item?.slot!=='weapon'||item.id==='water')return 1;return [.6,.7,.8,.9,1][Math.max(1,Math.min(5,item.shopTier??item.tier??1))-1]??1;}
+export function qualitySkillDefaults(item){
+ if(item?.slot!=='weapon')return {};
+ const scale=skillGradeScale(item);
+ return {radiusScale:scale,effectPower:scale,effectDuration:scale,...(item.family==='petal'&&!item.exotic?{healPerSecond:scale}:{})};
+}
+export function migrateSkillQuality(world){
+ if(world.skillQualityV048)return;
+ const overrides=world.equipmentTuning??={};
+ for(const group of shopWeaponGroups(ITEMS.filter(i=>i.slot==='weapon'))){
+  const variants=group.variants,top=variants.at(-1);if(!top)continue;
+  const baseline=overrides[shopPriceKey(top)]||{};
+  for(const item of variants){const key=shopPriceKey(item),next={...overrides[key]};
+   for(const [field,value] of Object.entries(qualitySkillDefaults(item))){
+    if(baseline[field]!==undefined)next[field]=+(baseline[field]*value/skillGradeScale(top)).toFixed(6);else delete next[field];
+   }
+   if(Object.keys(next).length)overrides[key]=next;else delete overrides[key];
+  }
+ }
+ world.skillQualityV048=true;
+}
 export function tuningFields(item,world){
  if(!item)return [];
- const f=field,one=(k,l)=>f(k,l,1,0,10);
+ const f=field,defaults=qualitySkillDefaults(item),one=(k,l)=>f(k,l,defaults[k]??1,0,10);
  if(item.slot==='weapon'){
   const a=attackStats(item,0),b=attackStats(item,1);
   const fields=[f('damage','普通攻擊基礎傷害',a.damage,0,100000),f('ultimateDamage','大絕基礎傷害',b.damage,0,100000),f('manaCost','大絕單次魔力消耗 (MP)',weaponManaQuote(world,item).initial,0,10000,1),f('cooldown','普攻冷卻 (ms)',item.cooldown||800,70,4000,1),f('chargeMs','蓄力時間 (ms)',item.chargeMs||1500,100,60000,1),one('rangeScale','射程倍率'),one('radiusScale','技能範圍倍率'),one('effectPower','特殊效果強度倍率'),one('effectDuration','特殊效果持續時間倍率')];
-  if(item.family==='petal'&&!item.exotic)fields.push(f('healPerSecond','花冠每秒回血',1,0,100));
+  if(item.family==='petal'&&!item.exotic)fields.push(f('healPerSecond','花冠每秒回血',defaults.healPerSecond,0,100));
   if(/^whip-/.test(item.id))fields.push(f('pullSpeed','牽引速度 (m/s)',4.32,0,50));
   if(item.family==='beam'&&!item.exotic)fields.push(f('ramp','每秒增傷倍率',1.2,1,3),f('rampCap','累積增傷上限',5,1,30));
   if(/^tide-/.test(item.id))fields.push(f('pushDistance','擊退距離 (m)',3,0,20));
@@ -43,7 +66,7 @@ export function validateTuning(item,values){
  return out;
 }
 export function equipmentTuning(world,item){
- return item&&world?.equipmentTuning?.[shopPriceKey(item)]||{};
+ return item?{...qualitySkillDefaults(item),...(world?.equipmentTuning?.[shopPriceKey(item)]||{})}:{};
 }
 export function tunedEquipment(world,item){
  if(!item)return item;
@@ -79,7 +102,7 @@ export function linkedEquipmentTuning(world,item,values){
  const supplied=validateTuning(item,values),sourceFields=new Map(tuningFields(item,world).map(f=>[f.key,f])),defaults=new Map(tuningFields(item).map(f=>[f.key,f]));
  const sourceOld=equipmentTuning(world,item);
  for(const variant of variants){
-  const key=shopPriceKey(variant),prior=equipmentTuning(world,variant),next={...prior};
+  const key=shopPriceKey(variant),prior=equipmentTuning(world,variant),next={...world.equipmentTuning?.[key]};
   const authored=new Map(tuningFields(variant).map(f=>[f.key,f])),effective=new Map(tuningFields(variant,world).map(f=>[f.key,f]));
   for(const [field,value] of Object.entries(supplied)){
    const f=effective.get(field),original=authored.get(field),source=sourceFields.get(field);
@@ -117,10 +140,23 @@ export function weaponManaQuote(world,item,record=null){
  scaleUltimateFootprint(stats,w,q);
  if(w.id==='goldfish'){stats.range=+(stats.range*GOLDFISH_TRAVEL_SCALE).toFixed(3);stats.radius=GOLDFISH_SCHOOL_RADIUS*q.visual;}
  if(w.id==='giraffe'){stats.range=+(w.chargedRange*q.range).toFixed(2);stats.damage=+(stats.damage*3).toFixed(3);stats.radius=Math.max(stats.radius,5.9*q.visual);}
- const t=equipmentTuning(world,w);stats.damage*=tuningDamageRatio(world,w,true);stats.range*=t.rangeScale??1;stats.radius*=t.radiusScale??1;
+ const t=equipmentTuning(world,w);stats.damage*=tuningDamageRatio(world,w,true);stats.range*=t.rangeScale??1;applySkillAreaScale(stats,w,t);
  const count=(record?.effects||[]).length;
  return {initial:manaCostFromStats(w,stats,q,false,count),pulse:channel?manaCostFromStats(w,stats,q,true,count):0,channel};
 }
 export function weaponManaLabel(q){return 'ULT '+q.initial+' MP'+(q.channel?' · +'+q.pulse+' MP / pulse':'');}
 export const restorativeType=item=>item?.manaFraction!==undefined?'mana':'health';
 export function restorativeCooldown(profile,item){return Number(profile?.restorativeCooldowns?.[restorativeType(item)]??profile?.consumableCooldownUntil??0)||0;}
+
+export function applySkillAreaScale(stats,item,tuning=equipmentTuning(null,item)){
+ if(!stats?.ultimate)return stats;
+ const scale=tuning.radiusScale??1;stats.radius*=scale;
+ if(item?.family==='saber'||item?.id==='clam')stats.range*=scale;
+ return stats;
+}
+export function bloomHealRate(world,item){
+ const t=equipmentTuning(world,item);
+ // Healing has its own absolute quality-scaled field; effect power modifies
+ // it relative to that grade's baseline, avoiding a second default nerf.
+ return (t.healPerSecond??1)*(t.effectPower??1)/skillGradeScale(item);
+}

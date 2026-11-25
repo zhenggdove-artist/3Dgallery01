@@ -272,30 +272,64 @@ export function disguiseFrame(T,model,bones,headHeight){
    for(let k=0;k<3;k++){const pieces=new T.InstancedMesh(porkGeo,[pork,fat,sauce][k],35);for(let i=0;i<35;i++){const a=(i*3+k)*2.39996,r=.30+.27*Math.sqrt((i+.5)/35);dummy.position.set(Math.cos(a)*r,.94+(i%4)*.024,Math.sin(a)*r);dummy.rotation.set(.12*Math.sin(i),i*.83,.12*Math.cos(i));dummy.scale.set(.075+(i%4)*.012,.048+(i%3)*.013,.06+(i%5)*.009);dummy.updateMatrix();pieces.setMatrixAt(i,dummy.matrix);}g.add(pieces);}
    const scallion=mat('#4a823e');for(let i=0;i<12;i++){const a=i*2.4,r=.34+i%4*.06;const ring=add(g,new T.TorusGeometry(.029,.011,5,8),[Math.cos(a)*r,1.025,Math.sin(a)*r],[1,1,1],scallion);ring.rotation.x=Math.PI/2;}
    const egg=mat('#e9d8b1'),yolk=mat('#da8d26');o([.49,.98,.08],[.16,.07,.12],egg);o([.49,1.035,.08],[.09,.025,.072],yolk);
+  }else if(kind==='mutton-sign-disguise'){
+   // Vertical Taiwanese street lightbox, manually redrawn from the reference.
+   const canvas=document.createElement('canvas');canvas.width=512;canvas.height=864;const ctx=canvas.getContext('2d');
+   const yellow=ctx.createLinearGradient(0,0,512,864);yellow.addColorStop(0,'#f9e326');yellow.addColorStop(1,'#d7ba13');ctx.fillStyle=yellow;ctx.fillRect(0,0,512,864);
+   ctx.fillStyle='#ae171c';ctx.textAlign='center';ctx.font='bold 122px "Noto Serif TC",serif';ctx.fillText('老 家',315,139);
+   // Hand-cut black-and-white goat silhouette and curled horns.
+   ctx.save();ctx.translate(15,25);ctx.scale(.95,.94);
+   const goat=new Path2D('M64 78 Q30 40 51 17 Q72 0 96 22 Q65 11 63 40 L85 80 Q103 37 147 17 Q118 44 110 91 L136 121 Q154 168 206 178 Q294 165 356 199 L424 220 L455 250 L425 248 L403 237 L384 269 L398 346 L425 397 L404 410 L374 372 L350 305 L318 294 L299 356 L284 402 L260 405 L275 361 L279 304 L218 286 L192 335 L177 396 L152 400 L162 334 L162 283 L134 253 L103 205 L84 177 L55 178 L39 152 L51 126 Z');
+   ctx.strokeStyle='#fff9d8';ctx.lineWidth=10;ctx.stroke(goat);ctx.fillStyle='#171717';ctx.fill(goat);
+   ctx.fillStyle='#f7f4e9';ctx.fill(new Path2D('M125 157 Q155 183 210 188 Q289 178 354 203 L396 225 L363 260 L352 233 L329 268 L311 241 L282 278 L265 247 L234 275 L217 243 L194 266 L170 224 L151 207 Z'));
+   ctx.fill(new Path2D('M59 113 L82 91 L95 113 L83 136 L64 153 L48 149 L63 139 L56 132 Z'));ctx.fillStyle='#171717';ctx.beginPath();ctx.ellipse(77,124,4,6,.2,0,Math.PI*2);ctx.fill();ctx.restore();
+   const column=(str,x,y,step,color,size)=>{ctx.fillStyle=color;ctx.font='bold '+size+'px "Noto Serif TC",serif';[...str].forEach((ch,i)=>ctx.fillText(ch,x,y+i*step));};
+   column('羊肉爐',45,208,76,'#ad191d',61);column('螺肉',466,338,62,'#171717',49);
+   column('鍋燒',72,523,96,'#228232',78);column('烏龍',44,724,70,'#228232',53);column('意麵',104,724,70,'#228232',53);
+   column('蝦仁炒飯',190,530,91,'#171717',76);column('什錦炒麵',294,530,91,'#171717',76);
+   column('羊肉',422,528,92,'#ad191d',77);column('炒飯',389,721,69,'#ad191d',53);column('燴飯',454,721,69,'#ad191d',53);
+   for(let x=2;x<512;x+=5){ctx.fillStyle=x%10===2?'rgba(255,255,255,.08)':'rgba(99,69,0,.05)';ctx.fillRect(x,0,1,864);}
+   const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);
+   const casing=mat('#75674e',.5),face=mat('#ffffff');face.map=tex;face.emissive.set('#fff4c2');face.emissiveMap=tex;face.emissiveIntensity=.65;
+   b([0,1.18,0],[1.43,2.36,.23],casing);
+   for(const side of [-1,1]){b([0,1.18,side*.125],[1.32,2.24,.025],face);for(const x of [-.69,.69])b([x,1.18,side*.14],[.045,2.36,.032],woodDark);}
+   for(const y of [.025,2.335])b([0,y,0],[1.47,.05,.29],woodDark);
   }else if(kind==='bubble-tea-disguise'){
    const tea=mat('#c99762'),ice=mat('#e8d5b4'),pearl=mat('#37221c'),straw=mat('#d94d70'),cup=mat('#f7efe2'),label=mat('#fff3dc');
-   tea.roughness=.36;pearl.roughness=.22;ice.roughness=.24;cup.transparent=true;cup.opacity=.26;cup.depthWrite=false;cup.roughness=.19;
-   tea.transparent=true;tea.opacity=.58;tea.depthWrite=false;
-   const milk=c([0,.79,0],.56,.37,1.45,tea,40);milk.renderOrder=1;
+   tea.roughness=.27;pearl.roughness=.20;ice.roughness=.24;cup.transparent=true;cup.opacity=.26;cup.depthWrite=false;cup.roughness=.19;
+   tea.transparent=true;tea.opacity=.62;tea.depthWrite=false;
+   // The top surface is actually deformed by the damped slosh simulation.
+   const milk=c([0,.715,0],.555,.37,1.32,tea,40);milk.renderOrder=1;
    const shell=add(g,new T.CylinderGeometry(.59,.39,1.50,40,1,true),[0,.79,0],[1,1,1],cup);shell.material.side=T.DoubleSide;shell.renderOrder=2;
    for(const [r,y] of [[.40,.055],[.59,1.53]]){const ring=add(g,new T.TorusGeometry(r,.027,8,40),[0,y,0],[1,1,1],cup);ring.rotation.x=Math.PI/2;ring.renderOrder=3;}
-   // Tapioca is fully inside the liquid and cup wall; translucent milk reveals the clustered pearls.
-   const dummy=new T.Object3D(),geo=new T.SphereGeometry(1,10,8),pearls=new T.InstancedMesh(geo,pearl,68);
-   for(let i=0;i<68;i++){const a=i*2.39996,y=.11+(i%4)*.116,r=(.25+y*.10)*Math.sqrt(((i*29)%68+.5)/68);dummy.position.set(Math.cos(a)*r,y,Math.sin(a)*r);dummy.rotation.set(0,-a,0);dummy.scale.setScalar(.050+(i%5)*.006);dummy.updateMatrix();pearls.setMatrixAt(i,dummy.matrix);}g.add(pearls);
-   for(let i=0;i<8;i++){const a=i*2.39996,iceCube=b([Math.cos(a)*.39,1.39,Math.sin(a)*.39],[.14,.13,.14],ice);iceCube.rotation.set(i*.3,i*.8,i*.4);}
+   const dummy=new T.Object3D(),geo=new T.SphereGeometry(1,10,8),pearls=new T.InstancedMesh(geo,pearl,68),rest=[];
+   for(let i=0;i<68;i++){const a=i*2.39996,y=.11+(i%4)*.116,r=(.25+y*.10)*Math.sqrt(((i*29)%68+.5)/68),size=.050+(i%5)*.006;dummy.position.set(Math.cos(a)*r,y,Math.sin(a)*r);dummy.rotation.set(0,-a,0);dummy.scale.setScalar(size);dummy.updateMatrix();pearls.setMatrixAt(i,dummy.matrix);rest.push([dummy.position.x,y,dummy.position.z,size,a]);}g.add(pearls);pearls.frustumCulled=false;
+   const cubes=[];for(let i=0;i<8;i++){const a=i*2.39996,iceCube=b([Math.cos(a)*.39,1.31,Math.sin(a)*.39],[.14,.13,.14],ice);iceCube.rotation.set(i*.3,i*.8,i*.4);cubes.push({mesh:iceCube,x:iceCube.position.x,z:iceCube.position.z,a});}
    const strawMesh=c([.44,1.66,-.15],.065,.065,.45,straw,16);strawMesh.rotation.z=-.22;
    const lid=add(g,new T.TorusGeometry(.56,.048,10,40),[0,1.55,0],[1,1,1],cup);lid.rotation.x=Math.PI/2;
+   const splashMat=mat('#d7a36f');splashMat.roughness=.23;const drops=new T.InstancedMesh(new T.SphereGeometry(1,7,5),splashMat,36);drops.frustumCulled=false;
+   for(let i=0;i<36;i++){dummy.position.set(0,1.45,0);dummy.scale.setScalar(0);dummy.updateMatrix();drops.setMatrixAt(i,dummy.matrix);}g.add(drops);
+   record.teaMotion={group:g,milk,vertices:milk.geometry.attributes.position.array.slice(),pearls,rest,cubes,drops,dummy,particles:Array.from({length:36},()=>({age:99,p:new T.Vector3(),v:new T.Vector3()})),last:null,velocity:new T.Vector3(),accel:new T.Vector3(),tilt:new T.Vector2(),tiltVelocity:new T.Vector2(),worldPos:new T.Vector3(),delta:new T.Vector3(),localVelocity:new T.Vector3(),localAccel:new T.Vector3(),q:new T.Quaternion(),inverse:new T.Matrix4(),next:0,credit:0};
    const canvas=document.createElement('canvas');canvas.width=256;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff3dc';ctx.fillRect(0,0,256,192);ctx.fillStyle='#583a25';ctx.textAlign='center';ctx.font='bold 47px sans-serif';ctx.fillText('珍珠奶茶',128,82);ctx.font='bold 24px sans-serif';ctx.fillText('BUBBLE TEA',128,135);const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;label.map=tex;record.extraTextures??=[];record.extraTextures.push(tex);b([0,1.05,.535],[.49,.34,.022],label);
   }else if(kind==='fried-chicken-disguise'){
-   const crust=mat('#c57a29'),crumbs=['#e6a849','#a95b20','#f2c36e','#d98c2f'].map(v=>mat(v)),paper=mat('#f0dfbb'),red=mat('#a73727');
-   // A thick, irregular flattened cutlet, not a thin sign beside the avatar.
-   const shape=new T.Shape();shape.moveTo(-.28,.06);shape.bezierCurveTo(-.72,.32,-.74,.98,-.54,1.39);shape.bezierCurveTo(-.55,1.72,-.24,1.92,-.09,1.80);shape.bezierCurveTo(.28,2.02,.61,1.74,.55,1.48);shape.bezierCurveTo(.78,1.20,.66,.54,.35,.13);shape.closePath();
-   const geo=new T.ExtrudeGeometry(shape,{depth:.42,bevelEnabled:true,bevelSize:.11,bevelThickness:.10,bevelSegments:3,steps:1,curveSegments:18});geo.translate(0,0,-.21);add(g,geo,[0,0,0],[1,1,1],crust);
-   const crumbGeo=new T.DodecahedronGeometry(1,0),dummy=new T.Object3D();
-   for(let k=0;k<4;k++){const inst=new T.InstancedMesh(crumbGeo,crumbs[k],120);for(let i=0;i<120;i++){const y=.24+((i*37+k*11)%145)/100,x=Math.sin(i*12.9898+k)*(.37+.13*Math.sin(y*1.8)),r=.026+(i%7)*.008;dummy.position.set(x,y,(i%2?1:-1)*(.27+.018*Math.sin(i)));dummy.rotation.set(i*.8,i*1.3,i*.9);dummy.scale.set(r*1.2,r*.8,r);dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);}g.add(inst);}
-   const bag=b([0,.30,0],[1.04,.59,.66],paper);bag.rotation.z=-.025;
-   for(let i=0;i<5;i++){const fold=b([-.42+i*.21,.28,.337],[.016,.47,.013],wood);fold.rotation.z=(i%2?.08:-.06);}
-   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;const ctx=canvas.getContext('2d');ctx.fillStyle='#f0dfbb';ctx.fillRect(0,0,256,128);ctx.fillStyle='#b13022';ctx.font='bold 65px sans-serif';ctx.textAlign='center';ctx.fillText('雞排',128,70);ctx.font='bold 19px sans-serif';ctx.fillText('TAIWAN FRIED CHICKEN',128,105);const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;const print=mat('#ffffff');print.map=tex;record.extraTextures??=[];record.extraTextures.push(tex);b([0,.31,.349],[.83,.39,.01],print);
+   // Irregular grilled/fried cutlet: a thick sculpted base plus two scales
+   // of real raised batter granules, warm glaze and pale sesame seeds.
+   const crust=mat('#b56e27'),crumbMat=mat('#ffffff'),seedMat=mat('#fff0bb');crust.roughness=.45;crumbMat.roughness=.48;seedMat.roughness=.66;
+   const outline=new T.Shape();const lobes=72,edge=a=>1+.075*Math.sin(5*a+.2)+.047*Math.sin(11*a+1.7)+.035*Math.cos(19*a-.6);
+   for(let i=0;i<=lobes;i++){const a=i/lobes*Math.PI*2,r=edge(a),x=Math.cos(a)*.68*r,y=1+Math.sin(a)*.94*r;i?outline.lineTo(x,y):outline.moveTo(x,y);}outline.closePath();
+   const geo=new T.ExtrudeGeometry(outline,{depth:.31,bevelEnabled:true,bevelSize:.075,bevelThickness:.09,bevelSegments:3,steps:1,curveSegments:1});geo.translate(0,0,-.155);add(g,geo,[0,0,0],[1,1,1],crust);
+   const dummy=new T.Object3D(),color=new T.Color(),palette=['#9c4c16','#bc6d24','#d98e39','#e6aa54','#f0b863','#a65920'];let seed=41273;const rand=()=>{seed=(1664525*seed+1013904223)>>>0;return seed/4294967296;};
+   // Shared geometry and per-instance colours: thousands of relief facets,
+   // but only three additional draw calls, not thousands of individual meshes.
+   for(const [count,small] of [[560,false],[1300,true]]){
+    const crumbGeo=new T.IcosahedronGeometry(1,small?0:1),inst=new T.InstancedMesh(crumbGeo,crumbMat,count);
+    for(let i=0;i<count;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand())*.98,rr=edge(a)*r,x=Math.cos(a)*.68*rr,y=1+Math.sin(a)*.94*rr,side=i%2?1:-1;
+     const bump=.023*Math.sin(x*21+y*17)+.022*Math.cos(x*31-y*16),size=(small?.012:.035)+rand()*(small?.024:.067);
+     dummy.position.set(x,y,side*(.155+.032*(1-r)+bump+(r>.91?.025:0)));dummy.rotation.set(rand()*6.28,rand()*6.28,rand()*6.28);dummy.scale.set(size*(.8+rand()*.9),size*(.65+rand()*.7),size*(.75+rand()*.95));dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);color.set(palette[Math.floor(rand()*palette.length)]);inst.setColorAt(i,color);
+    }g.add(inst);
+   }
+   const sesame=new T.InstancedMesh(new T.SphereGeometry(1,7,4),seedMat,230);
+   for(let i=0;i<230;i++){const a=rand()*6.283,r=Math.sqrt(rand())*.88,rr=edge(a)*r,x=Math.cos(a)*.68*rr,y=1+Math.sin(a)*.94*rr;dummy.position.set(x,y,(i%2?1:-1)*(.245+.018*Math.sin(x*21+y*17)));dummy.rotation.set(rand()*.5,rand()*.5,rand()*6.28);dummy.scale.set(.011+rand()*.005,.023+rand()*.007,.007);dummy.updateMatrix();sesame.setMatrixAt(i,dummy.matrix);}g.add(sesame);
   }else if(kind==='wooden-horse-disguise'){
    const red=mat('#8b3d32'),gold=mat('#c2a36b'),saddle=mat('#344d73');
    // A tall carved wooden horse with a long body, four legs and rocker rails.
@@ -318,7 +352,7 @@ export function disguiseFrame(T,model,bones,headHeight){
   }
   g.updateMatrixWorld(true);
   const bounds=new T.Box3().setFromObject(g,true),extent=bounds.getSize(new T.Vector3());
-  const giant=['chimney-disguise','cardboard-disguise','water-tower-disguise','utility-pole-disguise','tin-pipe-disguise','luroufan-sign-disguise','luroufan-bowl-disguise','bubble-tea-disguise','fried-chicken-disguise','notok-sign-disguise','987-sign-disguise'].includes(kind);
+  const giant=['chimney-disguise','cardboard-disguise','water-tower-disguise','utility-pole-disguise','tin-pipe-disguise','luroufan-sign-disguise','luroufan-bowl-disguise','bubble-tea-disguise','fried-chicken-disguise','notok-sign-disguise','987-sign-disguise','mutton-sign-disguise'].includes(kind);
   const widest=kind==='luroufan-bowl-disguise';
   const factor=frame.height*item.disguiseHeight/Math.max(.001,widest?Math.max(extent.x,extent.y,extent.z):extent.y);
   g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);
@@ -327,7 +361,7 @@ export function disguiseFrame(T,model,bones,headHeight){
    const front=new T.Vector3(0,0,1).applyQuaternion(frame.rotation);
    const headCenter=frame.head.clone().addScaledVector(frame.up,frame.unit*.42);
    const headY=headCenter.clone().sub(frame.base).dot(frame.up)/factor+bounds.min.y;
-   const preferred=kind==='luroufan-bowl-disguise'? .46:kind==='bubble-tea-disguise'? .68:kind==='tin-pipe-disguise'? .55:kind==='cardboard-disguise'? .52:kind.endsWith('sign-disguise')? .56:headY;
+   const preferred=kind==='luroufan-bowl-disguise'? .46:kind==='bubble-tea-disguise'? .68:kind==='tin-pipe-disguise'? .55:kind==='cardboard-disguise'? .52:kind==='mutton-sign-disguise'?1.42:kind.endsWith('sign-disguise')? .56:headY;
    const y=T.MathUtils.clamp(preferred,bounds.min.y+extent.y*.17,bounds.max.y-extent.y*.17);
    // One uniform scale for the entire prop, including the opening. The head
    // projects from the front wall instead of being moved above a squashed prop.
@@ -528,4 +562,36 @@ export function disguiseFrame(T,model,bones,headHeight){
  return record;}
 export function disposeOutfit(record){if(!record)return;for(const r of record.surfaces){r.mesh.geometry=r.originalGeometry;r.mesh.material=r.originalMaterial;r.geometry.dispose();r.mats.forEach(m=>m.dispose());}const geometries=new Set();for(const root of record.parts){root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});root.removeFromParent();}geometries.forEach(g=>g.dispose());record.materials.forEach(m=>m.dispose());record.extraTextures?.forEach(t=>t.dispose());record.texture.dispose();}
 
-export function animateOutfit(record,time){if(!record)return;if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=q.userData.pipeBend||0;q.position.x=.48*v*v+Math.sin(time*3.2-i*.42)*v*.035;q.position.z=Math.cos(time*2.7-i*.35)*v*.025;q.rotation.z=-.43*v+Math.cos(time*3.2-i*.42)*v*.05;}if(record.blinkLight){const t=(time%5.6+5.6)%5.6;record.blinkLight.emissiveIntensity=t<.12||t>.31&&t<.43||t>2.8&&t<3.05?.04:t<.65?.35:1.35;}}
+export function animateOutfit(record,time,movingRoot=null,frameDt=1/60){if(!record)return;if(record.teaMotion&&movingRoot)animateTeaMotion(record.teaMotion,time,movingRoot,frameDt);if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=q.userData.pipeBend||0;q.position.x=.48*v*v+Math.sin(time*3.2-i*.42)*v*.035;q.position.z=Math.cos(time*2.7-i*.35)*v*.025;q.rotation.z=-.43*v+Math.cos(time*3.2-i*.42)*v*.05;}if(record.blinkLight){const t=(time%5.6+5.6)%5.6;record.blinkLight.emissiveIntensity=t<.12||t>.31&&t<.43||t>2.8&&t<3.05?.04:t<.65?.35:1.35;}}
+
+// Damped spring driven by acceleration, with bounded fixed-step particle pool.
+export function teaSloshStep(tilt,velocity,accelX,accelZ,dt){
+ dt=Math.max(0,Math.min(.05,dt));const targetX=Math.max(-.42,Math.min(.42,-accelX*.028)),targetZ=Math.max(-.42,Math.min(.42,-accelZ*.028));
+ velocity.x+=(38*(targetX-tilt.x)-8*velocity.x)*dt;velocity.y+=(38*(targetZ-tilt.y)-8*velocity.y)*dt;
+ tilt.x=Math.max(-.52,Math.min(.52,tilt.x+velocity.x*dt));tilt.y=Math.max(-.52,Math.min(.52,tilt.y+velocity.y*dt));
+ return tilt;
+}
+function animateTeaMotion(d,time,root,dt){
+ dt=Math.min(.05,Math.max(.001,dt));root.getWorldPosition(d.worldPos);
+ if(!d.last){d.last=d.worldPos.clone();return;}
+ d.delta.copy(d.worldPos).sub(d.last);d.last.copy(d.worldPos);
+ if(d.delta.length()>3){d.velocity.set(0,0,0);d.accel.set(0,0,0);return;}
+ d.localVelocity.copy(d.delta).divideScalar(dt);d.accel.copy(d.localVelocity).sub(d.velocity).multiplyScalar(1/dt);d.velocity.lerp(d.localVelocity,1-Math.exp(-dt*9));
+ d.group.getWorldQuaternion(d.q).invert();d.localAccel.copy(d.accel).applyQuaternion(d.q);d.localVelocity.copy(d.velocity).applyQuaternion(d.q);
+ teaSloshStep(d.tilt,d.tiltVelocity,d.localAccel.x,d.localAccel.z,dt);
+ const attr=d.milk.geometry.attributes.position,tx=d.tilt.x,tz=d.tilt.y,speed=Math.hypot(d.localVelocity.x,d.localVelocity.z),vertical=d.localVelocity.y;
+ for(let i=0;i<attr.count;i++){const x=d.vertices[i*3],y=d.vertices[i*3+1],z=d.vertices[i*3+2];const w=Math.max(0,(y+.66)/1.32),wave=(tx*x+tz*z+.017*Math.sin(time*7+x*9+z*5)*Math.min(1,speed/3))*w;
+  const ny=Math.min(.81,y+wave);const shrink=1+Math.min(0,wave)*.15*w;attr.setXYZ(i,x*shrink,ny,z*shrink);}
+ attr.needsUpdate=true;d.milk.geometry.computeVertexNormals();
+ for(let i=0;i<d.rest.length;i++){const [x,y,z,size,a]=d.rest[i],j=Math.min(1,speed*.12+Math.abs(vertical)*.12+Math.hypot(tx,tz)*2),px=x+tx*.18+Math.sin(time*7+a)*.025*j,pz=z+tz*.18+Math.cos(time*6+a)*.025*j,r=Math.hypot(px,pz),limit=.32+y*.11-size,k=r>limit?limit/r:1;
+  d.dummy.position.set(px*k,Math.max(size+.06,y+Math.sin(time*9+a)*.045*j),pz*k);d.dummy.rotation.set(0,-a+time*j*.3,0);d.dummy.scale.setScalar(size);d.dummy.updateMatrix();d.pearls.setMatrixAt(i,d.dummy.matrix);}
+ d.pearls.instanceMatrix.needsUpdate=true;
+ for(const {mesh,x,z,a} of d.cubes){mesh.position.set(x+tx*.07,Math.min(1.49,1.31+tx*x+tz*z),z+tz*.07);mesh.rotation.x=tx*.8+Math.sin(time*4+a)*.08;mesh.rotation.z=-tz*.8;}
+ // Launch at the high rim during running or flight, then integrate in world
+ // space. A reused pool prevents new objects or geometries on each spill.
+ const effort=Math.max(0,(speed-4.5)*1.1,Math.abs(vertical)-1.8,Math.hypot(tx,tz)*13-3);
+ d.credit=Math.min(4,d.credit+effort*dt*9);
+ d.group.updateWorldMatrix(true,false);d.inverse.copy(d.group.matrixWorld).invert();
+ while(d.credit>=1){d.credit--;const part=d.particles[d.next];d.next=(d.next+1)%d.particles.length;const a=Math.atan2(tz,tx)+(Math.sin(d.next*8.2+time)*.8);part.age=0;part.p.set(Math.cos(a)*.55,1.51,Math.sin(a)*.55).applyMatrix4(d.group.matrixWorld);part.v.set(Math.cos(a)*1.8,1.3+Math.abs(vertical)*.12,Math.sin(a)*1.8).applyQuaternion(d.q.clone().invert()).addScaledVector(d.velocity,.45);}
+ for(let i=0;i<d.particles.length;i++){const part=d.particles[i];part.age+=dt;if(part.age<1){part.v.y-=8.4*dt;part.v.multiplyScalar(Math.exp(-.6*dt));part.p.addScaledVector(part.v,dt);d.dummy.position.copy(part.p).applyMatrix4(d.inverse);const size=.035*(1-part.age*.5);d.dummy.scale.set(size,size*(1+Math.abs(part.v.y)*.13),size);}else{d.dummy.position.set(0,1.45,0);d.dummy.scale.setScalar(0);}d.dummy.rotation.set(0,0,0);d.dummy.updateMatrix();d.drops.setMatrixAt(i,d.dummy.matrix);}d.drops.instanceMatrix.needsUpdate=true;
+}

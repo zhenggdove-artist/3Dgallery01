@@ -1,3 +1,4 @@
+import {equipmentTuning,applySkillAreaScale} from './shared/equipment-tuning.js';
 import * as THREE from 'three';
 import {attackStats} from './shared/catalog.js';
 import {SNIPER_RANGE} from './shared/combat-balance.js';
@@ -97,6 +98,7 @@ export class ChargeTargetPreview {
     stats.radius=Math.max(stats.radius,5.9*quality.visual);
    }
    if(equipped.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
+  const tuning=equipmentTuning(arena?.world,equipped);stats.range*=tuning.rangeScale??1;applySkillAreaScale(stats,equipped,tuning);
   const ground=(x,z,y)=>spellGroundHeight(arena?.world,x,z,y);
   const origin=Array.isArray(muzzle)&&muzzle.length===3&&muzzle.every(Number.isFinite)
    ?[...muzzle]:[root.position.x,root.position.y+1,root.position.z];

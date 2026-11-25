@@ -35,13 +35,13 @@ export function vortexSegmentDistance(start,end,point){
 }
 export function vortexSpinPoint(spin,now){
  if(!Array.isArray(spin?.start)||!Array.isArray(spin?.center))return null;
- const progress=Math.max(0,Math.min(1,(now-spin.time)/VORTEX_SPIN_MS));
+ const progress=Math.max(0,Math.min(1,(now-spin.time)/Math.max(1,spin.durationMs??VORTEX_SPIN_MS)));
  const dx=spin.start[0]-spin.center[0],dz=spin.start[2]-spin.center[1];
  const distance=Math.hypot(dx,dz);
  const startingRadius=Math.max(.35,Math.min(2,distance));
  const angle=Math.atan2(dz,dx)+Math.PI*4*progress;
  // A victim captured exactly at the vortex center moves outward into a
  // visible orbit, then returns to the center without an initial teleport.
- const radius=distance<.1?1.65*Math.sin(Math.PI*progress):startingRadius*(1-.85*progress);
+ const radius=(distance<.1?1.65*Math.sin(Math.PI*progress):startingRadius*(1-.85*progress))*(spin.power??1);
  return [spin.center[0]+Math.cos(angle)*radius,spin.start[1],spin.center[1]+Math.sin(angle)*radius];
 }
