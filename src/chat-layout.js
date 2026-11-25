@@ -223,5 +223,5 @@ export function bindChatLayout(){
  // not on world snapshots or game frames.
  if(typeof ResizeObserver==='function'){const observer=new ResizeObserver(()=>requestAnimationFrame(fitSafely));observer.observe(panel);for(const el of document.querySelectorAll(obstacleSelector))observer.observe(el);}
  if(typeof MutationObserver==='function'){let queued=false;const observer=new MutationObserver(()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;fitSafely();});});for(const el of [document.body,document.getElementById('hud'),...document.querySelectorAll(obstacleSelector)])if(el)observer.observe(el,{attributes:true,attributeFilter:el===document.body||el.id==='hud'?['hidden','class']:['hidden']});}
- return {applyDefault,position:()=>{const r=panel.getBoundingClientRect();return anchorAt(r.left,r.top);},prepare:()=>{setSize('medium');}};
+ return {applyDefault,refit:()=>requestAnimationFrame(fitSafely),position:()=>{const r=panel.getBoundingClientRect();return anchorAt(r.left,r.top);},prepare:()=>{setSize('medium');}};
 }

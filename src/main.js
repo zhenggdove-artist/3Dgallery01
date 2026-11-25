@@ -191,7 +191,7 @@ function beginStaffChannel(){
    staffChannel=null;
    // Server charge start can lag the client clock. Retry the actual state
    // transition without depending on rendering/fps; never fake an attack.
-   if(Number(world?.profile?.mana)<weaponManaQuote(world,item,world?.profile?.fusion?.[item.id]).initial){attackHeld=false;chargeStarted=null;ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}
+   if(Number(world?.profile?.mana)<weaponManaQuote(world,equippedItem(world.profile,itemById(item.id)||item),world?.profile?.fusion?.[item.id]).initial){attackHeld=false;chargeStarted=null;ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}
    else if(attackHeld&&['lightning','beam'].includes(item.family))
     scheduleBeamChannelStart(260);
   }

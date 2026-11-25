@@ -1166,11 +1166,12 @@ function attack(world,profile,actor,body,context,now){
   const tuning=equipmentTuning(world,weapon),tuningRatio=tuningDamageRatio(world,weapon,stats.ultimate);
   stats.damage*=tuningRatio;stats.range*=tuning.rangeScale??1;stats.radius*=tuning.radiusScale??1;
   const fusionCount=(profile.fusion?.[weapon.id]?.effects||[]).length;
-  const manaCost=ultimateManaCost(weapon,stats,quality,channel&&profile.manaChannelPaid===true,fusionCount);
+  const quote=stats.ultimate?weaponManaQuote(world,weapon,profile.fusion?.[weapon.id]):null;
+  const manaCost=quote?(channel&&profile.manaChannelPaid===true?quote.pulse:quote.initial):0;
   refreshMana(profile,now,world);
   if(manaCost>profile.mana+1e-6)return {error:'Not enough mana'};
   profile.mana=Math.max(0,profile.mana-manaCost);
-  if(channel){profile.manaChannelPaid=true;profile.channelManaPulseCost=ultimateManaCost(weapon,stats,quality,true,fusionCount);}
+  if(channel){profile.manaChannelPaid=true;profile.channelManaPulseCost=quote.pulse;}
   profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
   if(!channel)profile.chargeStartedAt=0;
   const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;

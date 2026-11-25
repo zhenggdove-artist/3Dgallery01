@@ -127,3 +127,21 @@ test('five original native sword crescents use gold-yellow theme, no expensive d
  assert.equal(vfx.active.length,1);
  vfx.dispose();assert.equal(scene.children.length,0);
 });
+
+test('health and mana cooldowns run independently and blue mana restoration emits a floating number',()=>{
+ const {world,p}=setup();const at=T+1000;
+ for(const [slot,itemId] of ['comfort-dollar-20','comfort-dollar-50','comfort-dollar-100'].entries()){
+  assert.ok(!execute(world,'buy',{itemId,quantity:3},at).error);
+  assert.ok(!execute(world,'assign-consumable',{itemId,slot},at).error);
+ }
+ p.hp=1;p.mana=0;p.manaAt=at;
+ assert.equal(execute(world,'use-consumable',{slot:0},at).healed,30);
+ const mana=execute(world,'use-consumable',{slot:1},at);
+ assert.equal(mana.restoredMana,50);assert.equal(world.damageEvents.at(-1).kind,'mana-heal');assert.equal(world.damageEvents.at(-1).amount,50);
+ assert.match(execute(world,'use-consumable',{slot:2},at+1).error,/cooling down/);
+ assert.match(execute(world,'use-consumable',{slot:1},at+1).error,/cooling down/);
+ assert.equal(execute(world,'use-consumable',{slot:2},at+2000).healed,69);
+ p.mana=0;p.manaAt=at+2001;
+ assert.equal(execute(world,'use-consumable',{slot:1},at+2001).restoredMana,50);
+ assert.equal(p.restorativeCooldowns.health,at+5000);
+});

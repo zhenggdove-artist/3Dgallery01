@@ -115,7 +115,7 @@ export class TempleUI extends EventTarget{
     $('function-toggle').onclick=()=>{const open=this.hud.classList.toggle('functions-open');$('function-toggle').setAttribute('aria-expanded',String(open));};
     // A single IME Return commits and sends the completed text.
     const chatInput=$('chat-input');let composing=false,imeEnter=false;
-    const chatFocus=active=>{document.body.classList.toggle('chat-typing',active);this.chatLayout?.position?.();};
+    const chatFocus=active=>{document.body.classList.toggle('chat-typing',active);this.chatLayout?.refit?.();};
     chatInput.addEventListener('focus',()=>chatFocus(true));chatInput.addEventListener('blur',()=>chatFocus(false));
     window.addEventListener('pagehide',()=>chatFocus(false));
     const sendChat=()=>{if(composing)return;const value=chatInput.value.trim();if(!value)return;chatInput.value='';imeEnter=false;chatInput.blur();this.emit('chat',value);};
