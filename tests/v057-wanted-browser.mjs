@@ -13,8 +13,8 @@ try{
   const result=await page.evaluate(async source=>{
    const {bindWantedList,syncWantedButton,dragBackgroundCrop}=await import('data:text/javascript;charset=utf-8,'+encodeURIComponent(source));
    const ui=new EventTarget();ui.panelName='wanted-gm';ui.content=document.getElementById('panel-content');ui.world={profile:{name:'Artist'}};ui.toast=console.error;
-   const settings={label:'Artists',color:'#ff0022',fontSize:20,background:null,backgroundCrop:{x:21,y:73}};
-   const calls=[];const network={base:'https://example.com',request:async(...args)=>{calls.push(args);return {settings,self:{name:'Artist'},total:1,pages:1,page:0,entries:[{key:'one',name:'Artist',quote:'Hello',level:1,kills:0,deaths:0,hasArtwork:true}]};}};
+   const settings={label:'Artists',color:'#ff0022',fontSize:20,background:null,backgroundCrop:{x:21,y:73},revision:1};
+   const calls=[];const network={base:'https://example.com',request:async(...args)=>{calls.push(args);if(args[1]?.body?.action==='settings'){const {action,...draft}=args[1].body;Object.assign(settings,draft,{revision:settings.revision+1});return {ok:true,settings:{...settings}};}return {settings:{...settings},self:{name:'Artist'},total:1,pages:1,page:0,entries:[{key:'one',name:'Artist',quote:'Hello',level:1,kills:0,deaths:0,hasArtwork:true}]};}};
    syncWantedButton(settings,network.base);bindWantedList(ui,network,()=>{},()=>{});
    ui.dispatchEvent(new CustomEvent('wanted-open',{detail:{admin:true}}));
    await Promise.resolve();await Promise.resolve();
@@ -32,12 +32,12 @@ try{
    const preview=form.querySelector('.wanted-button-preview span'),style=getComputedStyle(preview),live=preview.textContent==='Custom'&&style.fontSize==='18px'&&style.color==='rgb(0, 255, 0)';
    ui.content.querySelector('[data-wanted-count]').value='25';ui.content.querySelector('[data-wanted-preview]').click();
    const count=()=>ui.content.querySelectorAll('.wanted-card').length;
-   const first=count()===12&&!ui.content.querySelector('[data-wanted-settings]')&&[...ui.content.querySelectorAll('[data-wanted-jump]')].every(b=>b.disabled);
-   ui.content.querySelector('[data-wanted-page="1"]').click();const second=count()===12;
-   ui.content.querySelector('[data-wanted-page="2"]').click();const third=count()===1;
-   return {menuOk,hint,live,first,second,third,persisted,dragged,centered,noWrites:calls.length===1};
+   const first=count()===6&&!ui.content.querySelector('[data-wanted-settings]')&&[...ui.content.querySelectorAll('[data-wanted-jump]')].every(b=>b.disabled);
+   ui.content.querySelector('[data-wanted-page="1"]').click();const second=count()===6;
+   ui.content.querySelector('[data-wanted-page="2"]').click();const third=count()===6;ui.content.querySelector('[data-wanted-page="3"]').click();const fourth=count()===6;ui.content.querySelector('[data-wanted-page="4"]').click();const fifth=count()===1;
+   const noWrites=calls.length===1;ui.content.querySelector('[data-wanted-preview-reset]').click();await new Promise(r=>setTimeout(r,20));const save=ui.content.querySelector('[data-wanted-settings]');save.elements.label.value='Saved Style';save.elements.color.value='#00ff00';save.elements.fontSize.value='18';save.querySelector('[data-wanted-save-button]').click();await new Promise(r=>setTimeout(r,40));syncWantedButton({label:'STALE',revision:1},network.base);const saved=btn.querySelector('span').textContent==='Saved Style'&&ui.content.querySelector('[data-wanted-save-status]').textContent.includes('Saved')&&calls.some(c=>c[1]?.body?.action==='settings');return {menuOk,hint,live,first,second,third,fourth,fifth,persisted,dragged,centered,noWrites,saved};
   },source);
-  assert.deepEqual(result,{menuOk:true,hint:true,live:true,first:true,second:true,third:true,persisted:true,dragged:true,centered:true,noWrites:true},JSON.stringify({viewport,result}));await page.close();
+  assert.deepEqual(result,{menuOk:true,hint:true,live:true,first:true,second:true,third:true,fourth:true,fifth:true,persisted:true,dragged:true,centered:true,noWrites:true,saved:true},JSON.stringify({viewport,result}));await page.close();
  }
  console.log('V057 Wanted layout and preview passed in desktop and mobile viewport');
 }finally{await browser.close();}

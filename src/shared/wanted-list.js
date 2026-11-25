@@ -1,8 +1,8 @@
 import {insideArena,PLATFORMS} from './arena.js';
 import {cityBlocked,cityGroundHeight} from './city-layout.js';
-export const WANTED_PAGE_SIZE=12;
+export const WANTED_PAGE_SIZE=6;
 export function normalizeWantedBackgroundCrop(value){const axis=v=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(100,v)):50;return {x:axis(value?.x),y:axis(value?.y)};}
-export function wantedSettings(world){const s=world.wantedSettings||{};return {label:s.label||'Wanted List',background:s.background||null,color:/^#[0-9a-f]{6}$/i.test(s.color||'')?s.color:'#422943',fontSize:Math.max(8,Math.min(30,Number(s.fontSize)||13)),backgroundCrop:normalizeWantedBackgroundCrop(s.backgroundCrop)};}
+export function wantedSettings(world){const s=world.wantedSettings||{};return {label:s.label||'Wanted List',background:s.background||null,color:/^#[0-9a-f]{6}$/i.test(s.color||'')?s.color:'#422943',fontSize:Math.max(8,Math.min(30,Number(s.fontSize)||13)),backgroundCrop:normalizeWantedBackgroundCrop(s.backgroundCrop),revision:Math.max(0,Number(s.revision)||0)};}
 const authorKey=v=>String(v||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
 export function wantedArtworks(world,key){
  const profile=world.profiles?.[key],name=authorKey(profile?.wanted?.name),removed=new Set(world.removedArtworkIds||[]);
@@ -18,8 +18,10 @@ export function wantedArtworks(world,key){
  // are legacy GM works; never treat a differently credited work as the GM's.
  return [...credited,...legacy];
 }
-export function wantedPage(world,page=0){
+export function wantedPage(world,page=0,seed=0){
  const profiles=Object.values(world.profiles||{}).filter(p=>p.wanted&&!p.wanted.hidden).sort((a,b)=>a.wanted.createdAt-b.wanted.createdAt||a.key.localeCompare(b.key));
+ // Sample the first six without replacement; preserve the remaining order.
+ if(profiles.length>WANTED_PAGE_SIZE){let state=(Number(seed)>>>0)||0x9e3779b9;const pool=[...profiles],first=[];for(let i=0;i<WANTED_PAGE_SIZE;i++){state=(Math.imul(state,1664525)+1013904223)>>>0;first.push(pool.splice(Math.floor(state/4294967296*pool.length),1)[0]);}profiles.splice(0,profiles.length,...first,...pool);}
  const pages=Math.max(1,Math.ceil(profiles.length/WANTED_PAGE_SIZE)),index=Math.max(0,Math.min(pages-1,Math.floor(Number(page)||0)));
  return {page:index,pages,total:profiles.length,entries:profiles.slice(index*WANTED_PAGE_SIZE,(index+1)*WANTED_PAGE_SIZE).map(p=>({key:p.key,...p.wanted,level:p.level||1,kills:p.wantedKills||0,deaths:p.wantedDeaths||0,hasArtwork:wantedArtworks(world,p.key).length>0})),settings:wantedSettings(world)};
 }
@@ -31,9 +33,11 @@ export function wantedProfile(input,previous,now){
  const crop=input.crop||{},n=(v,d)=>Number.isFinite(Number(v))?Math.min(100,Math.max(0,Number(v))):d;
  return {name,website,quote,avatar:input.avatar??previous?.avatar??null,crop:{x:n(crop.x,50),y:n(crop.y,50)},useName:input.useName===true,hidden:previous?.hidden===true,createdAt:previous?.createdAt||now};
 }
-export function wantedDestination(world,key,now=Date.now()){
+export function wantedDestination(world,key,now=Date.now(),rng=Math.random,previousId=null){
  const dims={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4],house:[5,3.8,4],tree:[1.2,4,1.2]};
- for(const art of wantedArtworks(world,key)){
+ const candidates=wantedArtworks(world,key);for(let i=candidates.length-1;i>0;i--){const j=Math.min(i,Math.max(0,Math.floor(rng()*(i+1))));[candidates[i],candidates[j]]=[candidates[j],candidates[i]];}
+ const previous=candidates.findIndex(a=>a.id===previousId);if(previous>=0)candidates.push(candidates.splice(previous,1)[0]);
+ for(const art of candidates){
   const state=world.artworks?.[art.id];if(state?.holder||Number(state?.availableAt)>now)continue;
   const layout=world.artworkLayout?.[art.id],p=layout?.position||art.position;
   if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite))continue;

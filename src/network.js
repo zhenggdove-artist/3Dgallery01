@@ -133,7 +133,7 @@ export class TempleNetwork extends EventTarget{
     const timer=controller?setTimeout(()=>controller.abort(),timeoutMs):null;
     let response;
     try{response=await fetch(this.base+path,{
-      method,headers,body:body===undefined?undefined:JSON.stringify(body),...(path==='/health'?{cache:'no-store'}:{}),
+      method,headers,body:body===undefined?undefined:JSON.stringify(body),...((path==='/health'||path.startsWith('/api/wanted'))?{cache:'no-store'}:{}),
       ...(controller?{signal:controller.signal}:{})
     });}
     catch(error){

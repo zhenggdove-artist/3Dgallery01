@@ -1,5 +1,5 @@
 import {wantedPage,wantedProfile,wantedDestination,wantedSettings,normalizeWantedBackgroundCrop} from '../src/shared/wanted-list.js';
-const json=(v,status=200)=>Response.json(v,{status});
+const json=(v,status=200)=>Response.json(v,{status,headers:{'Cache-Control':'no-store, private'}});
 const CHUNK=512*1024,MAX=5*1024*1024;
 const types=new Set(['image/png','image/jpeg','image/webp','image/gif','image/avif','image/bmp']);
 export function initializeWanted(sql){
@@ -20,7 +20,7 @@ export async function wantedApi(room,request,session,url){
  const world=room.world(),profile=world.profiles[session.profile_key],admin=profile?.admin===true,sql=room.sql,now=Date.now();
  if(!profile)return json({error:'Profile missing'},404);
  if(request.method==='GET'){
-  const data=wantedPage(world,url.searchParams.get('page'));return json({...data,self:profile.wanted||null,...(admin?{hidden:Object.values(world.profiles).filter(p=>p.wanted?.hidden).map(p=>({key:p.key,name:p.wanted.name}))}: {})});
+  const data=wantedPage(world,url.searchParams.get('page'),url.searchParams.get('seed'));return json({...data,self:profile.wanted||null,...(admin?{hidden:Object.values(world.profiles).filter(p=>p.wanted?.hidden).map(p=>({key:p.key,name:p.wanted.name}))}: {})});
  }
  if(!room.consumeRate('wanted:'+session.profile_key,24,60000))return json({error:'Too many requests'},429);
  if(url.pathname==='/api/wanted/media'){
@@ -51,15 +51,15 @@ export async function wantedApi(room,request,session,url){
    oldMedia=old?.avatar!==next.avatar?old?.avatar:null;p.wanted=next;
   }else if(body.action==='settings'){
    if(!isGM)throw Error('GM only');const label=String(body.label||'').trim();if(!label||label.length>32||!owns(body.background))throw Error('Invalid button settings');
-   const old=wantedSettings(live),color=body.color??old.color,fontSize=body.fontSize??old.fontSize;if(!/^#[0-9a-f]{6}$/i.test(color)||!Number.isInteger(fontSize)||fontSize<8||fontSize>30)throw Error('Invalid text color or size (8–30 px)');const background=body.background??old.background;const backgroundCrop=normalizeWantedBackgroundCrop(background?(body.backgroundCrop??(background===old.background?old.backgroundCrop:null)):null);live.wantedSettings={label,background,color,fontSize,backgroundCrop};oldMedia=old.background!==live.wantedSettings.background?old.background:null;
+   const old=wantedSettings(live),color=body.color??old.color,fontSize=body.fontSize??old.fontSize;if(!/^#[0-9a-f]{6}$/i.test(color)||!Number.isInteger(fontSize)||fontSize<8||fontSize>30)throw Error('Invalid text color or size (8–30 px)');const background=body.background??old.background;const backgroundCrop=normalizeWantedBackgroundCrop(background?(body.backgroundCrop??(background===old.background?old.backgroundCrop:null)):null);live.wantedSettings={label,background,color,fontSize,backgroundCrop,revision:old.revision+1};oldMedia=old.background!==live.wantedSettings.background?old.background:null;
   }else if(body.action==='moderate'){
    if(!isGM)throw Error('GM only');const target=live.profiles[String(body.key||'')];if(!target?.wanted)throw Error('Artist not found');target.wanted.hidden=body.hidden!==false;
   }else if(body.action==='jump'){
    if(!live.profiles[String(body.key||'')]?.wanted||live.profiles[String(body.key||'')].wanted.hidden)throw Error('Artist not listed');
    if(session.role==='fighter'&&(p.hp<=0||p.deadUntil>now||p.channelWeapon||p.writeJourney||p.effects?.freeze?.until>now||p.effects?.root?.until>now||p.vortexSpin?.until>now||Object.values(live.artworks||{}).some(a=>a.holder===p.key)))throw Error('Cannot jump while dead, casting, immobilized or carrying artwork');
    if(now-(p.wantedJumpAt||0)<5000)throw Error('Wait 5 seconds between jumps');
-   destination=wantedDestination(live,String(body.key),now);if(!destination)throw Error('No available artwork for this artist');
-   p.wantedJumpAt=now;
+   destination=wantedDestination(live,String(body.key),now,Math.random,p.wantedLastArtwork);if(!destination)throw Error('No available artwork for this artist');
+   p.wantedJumpAt=now;p.wantedLastArtwork=destination.id;
    if(session.role==='fighter'){
     // Update the authoritative pose before acknowledging the navigation.
     const state={position:destination.position,rotation:destination.rotation,animation:'idle',visible:true};

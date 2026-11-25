@@ -10,11 +10,11 @@ test('Wanted profile validates links, names, crop and preserves a single avatar'
  for(const website of ['javascript:alert(1)','https://a:b@example.com','not-a-url'])assert.throws(()=>wantedProfile({name:'A',website},null,0));
  assert.throws(()=>wantedProfile({name:'<x>'},null,0));
 });
-test('Wanted pagination shows 12 public artists without exposing player inventory',()=>{
+test('Wanted pagination shows 6 public artists without exposing player inventory',()=>{
  const profiles={};for(let i=0;i<26;i++){const key='p'+i;profiles[key]={key,level:2,wantedKills:5,wantedDeaths:4,inventory:['secret'],wanted:{...wantedProfile({name:'Artist '+i},null,i+1),hidden:i===25}};}
  const world={profiles,customArtworks:[{owner:'p0'}]};
- const a=wantedPage(world,0),b=wantedPage(world,1),c=wantedPage(world,2);
- assert.equal(a.total,25);assert.equal(a.entries.length,12);assert.equal(b.entries.length,12);assert.equal(c.entries.length,1);assert.equal(a.entries[0].hasArtwork,true);assert.equal(a.entries[0].inventory,undefined);assert.equal(a.entries[0].kills,5);
+ const a=wantedPage(world,0,123),b=wantedPage(world,1,123),c=wantedPage(world,4,123);
+ assert.equal(a.total,25);assert.equal(a.entries.length,6);assert.equal(b.entries.length,6);assert.equal(c.entries.length,1);const all=Array.from({length:5},(_,i)=>wantedPage(world,i,123).entries).flat();assert.equal(new Set(all.map(x=>x.key)).size,25);assert.equal(all.find(x=>x.key==='p0').hasArtwork,true);assert.equal(a.entries[0].inventory,undefined);assert.equal(a.entries[0].kills,5);assert.notDeepEqual(a.entries.map(x=>x.key),wantedPage(world,0,456).entries.map(x=>x.key));
 });
 test('PvP defeats are counted once by the death path and self kills are excluded',()=>{
  const a={key:'a'},b={key:'b'};countWantedDeath(b,a);countWantedDeath(a,a);countWantedDeath(b,null);
@@ -35,13 +35,13 @@ test('entry awaits uploaded art and texture upload before exposing HUD; paper do
 test('V057 explicit artist credit includes original exhibits and overrides uploader identity',()=>{
  const world={profiles:{gm:{key:'gm',admin:true,wanted:{name:'Ely'}},artist:{key:'artist',wanted:{name:'Artist A'}}},customArtworks:[{id:'a',owner:'gm',author:' Artist A ',position:[65,2,0]},{id:'b',owner:'artist',author:'Other',position:[75,2,0]}],artworkLayout:{'platform-01':{author:'ELY',position:[-12,0,-12]},'platform-02':{author:'Artist A',position:[40,4,0]}},artworks:{},cityDamage:{}};
  assert.equal(wantedArtworks(world,'gm')[0].id,'platform-01');assert.equal(wantedArtworks(world,'artist')[0].id,'platform-02');assert.ok(wantedArtworks(world,'artist').some(a=>a.id==='a'));assert.ok(!wantedArtworks(world,'artist').some(a=>a.id==='b'));
- assert.equal(wantedDestination(world,'gm',100).id,'platform-01');assert.equal(wantedDestination(world,'artist',100).id,'platform-02');
- world.artworks['platform-02']={availableAt:200,throwEvent:{}};assert.equal(wantedDestination(world,'artist',100).id,'a');world.artworks['platform-02'].availableAt=0;assert.equal(wantedDestination(world,'artist',100).id,'platform-02');
+ assert.ok(wantedDestination(world,'gm',100));assert.equal(wantedDestination(world,'artist',100,()=>.999).id,'platform-02');assert.equal(wantedDestination(world,'artist',100,()=>.999,'platform-02').id,'a');
+ world.artworks['platform-02']={availableAt:200,throwEvent:{}};assert.equal(wantedDestination(world,'artist',100).id,'a');world.artworks['platform-02'].availableAt=0;assert.equal(wantedDestination(world,'artist',100,()=>.999).id,'platform-02');
  assert.ok(wantedPage(world).entries.every(a=>a.hasArtwork));
 });
 test('V057 button style defaults and legacy saves are compatible',()=>{
- assert.deepEqual(wantedSettings({}),{label:'Wanted List',background:null,color:'#422943',fontSize:13,backgroundCrop:{x:50,y:50}});assert.equal(wantedSettings({wantedSettings:{label:'Artists',color:'#ff0022',fontSize:20}}).fontSize,20);
- assert.ok(read('index.html').includes('id="wanted-button"><span>Wanted List</span>'));assert.ok(read('wanted-list.css').includes('repeat(2,minmax(0,1fr))'));assert.ok(read('src/wanted-list.js').includes('previewCount-previewPage*12'));assert.ok(read('src/main.js').includes('controller.yaw=destination.rotation+Math.PI'));
+ assert.deepEqual(wantedSettings({}),{label:'Wanted List',background:null,color:'#422943',fontSize:13,backgroundCrop:{x:50,y:50},revision:0});assert.equal(wantedSettings({wantedSettings:{label:'Artists',color:'#ff0022',fontSize:20}}).fontSize,20);
+ assert.ok(read('index.html').includes('id="wanted-button"><span>Wanted List</span>'));assert.ok(read('wanted-list.css').includes('repeat(2,minmax(0,1fr))'));assert.ok(read('src/wanted-list.js').includes('previewCount-previewPage*PAGE_SIZE'));assert.ok(read('src/main.js').includes('controller.yaw=destination.rotation+Math.PI'));
 });
 
 test('V058 background crop is centered for legacy settings and clamped on both axes',()=>{assert.deepEqual(normalizeWantedBackgroundCrop({x:-20,y:200}),{x:0,y:100});assert.deepEqual(normalizeWantedBackgroundCrop({x:null,y:'12'}),{x:50,y:50});assert.deepEqual(wantedSettings({wantedSettings:{background:'a',backgroundCrop:{x:25,y:75}}}).backgroundCrop,{x:25,y:75});});

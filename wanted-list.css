@@ -40,3 +40,7 @@
 
 /* Only GM background preview handles image dragging; the live menu is unchanged. */
 .wanted-button-preview{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;background-repeat:no-repeat;background-origin:padding-box}.wanted-button-preview span{pointer-events:none}.wanted-button-preview.has-background{cursor:grab}.wanted-button-preview.is-dragging{cursor:grabbing}#dock #wanted-button{background-repeat:no-repeat;background-origin:padding-box}
+
+/* Six artist profiles per page; the title animation uses CSS only. */
+#panel .wanted-app .wanted-title{display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden}.wanted-ascii{flex:1;min-width:0;overflow:hidden;color:#a9c7ff;opacity:.9;font:11px monospace}.wanted-ascii>span{display:inline-block;white-space:nowrap;animation:wanted-ascii-scroll 7s linear infinite}@keyframes wanted-ascii-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}@media(prefers-reduced-motion:reduce){.wanted-ascii>span{animation:none}}.wanted-card{grid-template-columns:64px minmax(0,1fr);min-height:96px;gap:6px}.wanted-avatar{width:64px;height:64px}@media(min-width:900px){.wanted-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wanted-card{grid-template-columns:88px minmax(0,1fr);min-height:108px}.wanted-avatar{width:88px;height:88px}}@media(max-width:380px){.wanted-card{grid-template-columns:52px minmax(0,1fr)}.wanted-avatar{width:52px;height:52px}}
+[data-wanted-save-status]{display:block;min-height:1em;color:#000080;font-weight:bold}

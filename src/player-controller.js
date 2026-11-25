@@ -304,7 +304,17 @@ export class PlayerController{
    this.pitch=THREE.MathUtils.clamp(this.pitch+deltaY/innerHeight*2,-1.15,1.4);
    this.updateCamera(1,true);
   }
+  frameWantedArtwork(bounds,heading){
+    // Behind the player, facing the exhibit. Frame both complete bounding boxes.
+    const player=new THREE.Box3().setFromObject(this.root);if(player.isEmpty())player.setFromCenterAndSize(this.root.position.clone().add(new THREE.Vector3(0,1,0)),new THREE.Vector3(2,3,2));
+    const combined=bounds.clone().union(player),center=combined.getCenter(new THREE.Vector3()),radius=combined.getBoundingSphere(new THREE.Sphere()).radius;
+    const halfVertical=THREE.MathUtils.degToRad(this.camera.fov||50)/2,halfHorizontal=Math.atan(Math.tan(halfVertical)*Math.max(.15,this.camera.aspect||1)),half=Math.min(halfVertical,halfHorizontal);
+    const distance=Math.max(7,radius/Math.sin(half)*1.18),back=new THREE.Vector3(-Math.sin(heading),0,-Math.cos(heading));
+    const offset=Math.max(distance,center.clone().sub(this.root.position).dot(back)+5);const position=center.clone().addScaledVector(back,offset);position.y+=Math.max(2,Math.min(10,radius*.25));
+    this.distance=THREE.MathUtils.clamp(position.distanceTo(this.root.position),3,50);this.pitch=.15;this.wantedArtworkView={position,center};
+  }
   updateCamera(dt,force=false){
+    if(this.wantedArtworkView){if(!this.enabled){this.camera.position.copy(this.wantedArtworkView.position);this.camera.lookAt(this.wantedArtworkView.center);return;}this.wantedArtworkView=null;}
     if(this.cameraLocked&&!force)return;
     if(this.role==='spectator'&&!this.followTarget){
       // One invisible free camera for public spectators and GM test.
