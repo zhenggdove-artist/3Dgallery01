@@ -71,7 +71,7 @@ export function renderOriginalBag(ui,profile){
  const rank=row=>({common:1,uncommon:2,rare:3,relic:4,epic:5})[row.item.rarity]||1;
  if(ui.bagSort!=='manual')grouped.sort((a,b)=>
    (ui.bagSort==='quality'?rank(b)-rank(a):0)||recent(b)-recent(a)||b.index-a.index);
- body=grouped.map(({item,index,count})=>cell(item,index,count)).join('')+
+ body=(['all','wings'].includes(tab)&&profile.wingDesignCredits>0?`<button class="bag-cell wing-canvas-note" data-wing-canvas title="Double tap to draw wings"><span>WING<br>CANVAS</span><b>×${profile.wingDesignCredits}</b></button>`:'')+grouped.map(({item,index,count})=>cell(item,index,count)).join('')+
   '<div class="bag-cell" aria-hidden="true"></div>'.repeat(Math.max(0,42-grouped.length));}
  if(tab==='equipment'){
   const quick=Array.isArray(profile.quickSlots)?profile.quickSlots:[null,null,null];
@@ -88,6 +88,9 @@ export function renderOriginalBag(ui,profile){
    const item=itemById(id),index=items.find(v=>v.item.id===id)?.index;
    return `<div class="comfort-supply">${cell(item,index,count)}</div>`;
   }).join('');
+  const st=profile.stats||{},lv=Math.max(0,(profile.level||1)-1),round=v=>Number((Number(v)||0).toFixed(1));
+  const statRows=[['HP',st.maxHp,100,lv*4],['ATK',(st.attack??1)*100,100,0],['DEF',(1-(st.defense??1))*100,0,0],['SPD',(st.speed??1)*100,100,0],['JUMP',(st.jump??1)*100,100,0],['MP',st.maxMana??100,100,lv*4]];
+  body+=`<section class="equip-stat-summary">${statRows.map(([label,total,base,level])=>`<div><b>${label} ${round(total)}${['ATK','DEF','SPD','JUMP'].includes(label)?'%':''}</b> (<span class="stat-o">${round(base)}</span> + <span class="stat-a">${round(level)}</span> + <span class="stat-b">${round(total-base-level)}</span>)</div>`).join('')}<small>O Base · A Level · B Gear / active effects</small></section>`;
   body+=`<section class="comfort-bag-gear" aria-label="Comfort for the Soul">
    <h3>Comfort for the Soul</h3>
    <p>Double tap a consumable, then choose shortcut 1, 2 or 3 in the popup. Restock at SHOP.</p>
@@ -111,6 +114,7 @@ export function renderOriginalBag(ui,profile){
    const next=fresh.content.querySelectorAll('.equip-column')[i];
    const top=column.scrollTop;column.replaceChildren(...next.childNodes);column.scrollTop=top;
   });
+  const nextStats=fresh.content.querySelector('.equip-stat-summary'),currentStats=keepPortrait.querySelector('.equip-stat-summary');if(nextStats&&currentStats)currentStats.replaceWith(nextStats);
   const nextCash=fresh.content.querySelector('.comfort-bag-gear');
   const currentCash=keepPortrait.querySelector('.comfort-bag-gear');
   if(nextCash&&currentCash)currentCash.replaceWith(nextCash);
@@ -141,6 +145,7 @@ export function renderOriginalBag(ui,profile){
  ui.content.querySelector('#bag-sort').onchange=e=>{ui.bagSort=e.target.value;renderOriginalBag(ui,ui.world.profile);};
  ui.content.querySelector('#fusion-toggle').onclick=e=>{ui.bagFusionMode=!ui.bagFusionMode;e.currentTarget.textContent='FUSION: '+(ui.bagFusionMode?'ON':'OFF');e.currentTarget.setAttribute('aria-pressed',String(ui.bagFusionMode));const feedback=ui.content.querySelector('#bag-feedback');if(feedback)feedback.textContent=ui.bagFusionMode?'Drag same-category gear to fuse.':'';};
  ui.content.querySelector('#bag-items').onclick=e=>{
+  const canvas=e.target.closest('[data-wing-canvas]');if(canvas){const now=performance.now();if(ui.canvasTap&&now-ui.canvasTap<500){ui.canvasTap=0;ui.openPanel('wing-personal-painter');}else{ui.canvasTap=now;ui.content.querySelector('#bag-detail').textContent='WING CANVAS · Double tap to design your own wings';}return;}
   const target=e.target.closest('[data-quick-slot-target]');
   if(target){
    ui.selectedQuickSlot=Number(target.dataset.quickSlotTarget);
@@ -160,7 +165,7 @@ export function renderOriginalBag(ui,profile){
  const odds=fusionChance(profile,i.id,index>=0?index:undefined),completed=Math.max(0,Math.floor(Number(record?.layer)||0));
  const ownedCount=profile.inventory.filter(id=>id===i.id).length;
  const comfort=i.slot==='consumable';
- const description=comfort?`<div class="comfort-bag-description">${esc(i.description)} · ${Math.round(i.healFraction*100)}% HP · STOCK ×${ownedCount}</div>
+ const description=comfort?`<div class="comfort-bag-description">${esc(i.description)} · ${Math.round((i.manaFraction||i.healFraction)*100)}% ${i.manaFraction?'MP':'HP'} · CD ${i.cooldownMs/1000}s · STOCK ×${ownedCount}</div>
   <div>Double tap to choose shortcut 1, 2 or 3. ${(profile.quickSlots||[]).map((id,j)=>id===i.id?'SLOT '+(j+1):'').filter(Boolean).join(' · ')}</div>`:'';
  ui.content.querySelector('#bag-detail').innerHTML=`<strong>${esc(f.title)}</strong> <span>${esc(i.category||i.rarity)}</span>
   <div>${esc(explainEquipment(i,record))}</div>${description}

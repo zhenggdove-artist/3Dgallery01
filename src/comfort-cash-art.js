@@ -6,8 +6,8 @@ export function comfortCashImage(item){
  if(CACHE.has(item.id))return CACHE.get(item.id);
  const palette={
   20:{face:'#8adb9a',edge:'#397951',ink:'#16452c',accent:'#d1f7b2'},
-  50:{face:'#f6a9ce',edge:'#a14e7b',ink:'#6a2455',accent:'#fff1ca'},
-  100:{face:'#8ad0ff',edge:'#386eab',ink:'#1c4373',accent:'#e8f8ff'}
+  50:{face:'#8ad0ff',edge:'#386eab',ink:'#1c4373',accent:'#e8f8ff'},
+  100:{face:'#ff9d99',edge:'#aa4545',ink:'#752424',accent:'#ffe8ca'}
  };
  const den=Math.max(20,Math.min(100,Number(item.denomination)||20));
  const p=palette[den]||palette[20];

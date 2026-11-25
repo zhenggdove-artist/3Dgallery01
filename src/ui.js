@@ -28,7 +28,7 @@ const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(
 export function inventoryPanelSignature(profile){
  return JSON.stringify([
   profile?.inventory,profile?.equipment,profile?.wallet,profile?.fusion,profile?.inventoryCapacity,profile?.admin,
-  profile?.wingDesignCredits,profile?.quickSlots,
+  profile?.wingDesignCredits,profile?.quickSlots,profile?.level,
   (profile?.inventoryInstances||[]).map(row=>[row.uid,row.itemId,row.shopTier])
  ]);
 }
@@ -254,6 +254,12 @@ export class TempleUI extends EventTarget{
   if(invincible)this.emit('gm-invincible',{enabled:invincible.checked});
  });
      this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');else if(action==='wing-painter')this.openPanel('wing-painter');else if(action==='wing-player-preview')this.openPanel('wing-player-preview');else if(action==='wing-manage')this.openPanel('wing-manage');
+      else if(action==='player-level'||action==='player-canvas'){
+       const targetKey=this.content.querySelector('[data-gm-player]')?.value;
+       if(!targetKey)return this.toast('SELECT PLAYER');
+       if(action==='player-canvas')this.emit('server-action',{action:'gm-wing-canvas',targetKey});
+       else{const level=Number(this.content.querySelector('[data-gm-level]')?.value);if(!Number.isInteger(level)||level<1||level>999)return this.toast('LEVEL 1–999');this.emit('server-action',{action:'gm-player-level',targetKey,level});}
+      }
       else if(action==='chat-position-edit'){this.closePanel();this.chatLayout?.prepare();this.toast('拖曳 CHAT 的 ＋ 至指定位置，再開啟 GM 控制中心儲存');}
       else if(action==='chat-position-save'){this.closePanel();requestAnimationFrame(()=>{const position=this.chatLayout?.position();if(position)this.emit('server-action',{action:'gm-chat-default',...position});});}
       else if(action==='recover-misplaced-artwork')this.emit('server-action',{action:'recover-misplaced-artwork'});
@@ -355,6 +361,7 @@ export class TempleUI extends EventTarget{
   setPlayers(players){this.players=players||[];this.refreshHUD();}
   setWorld(world){this.world=world;this.chatLayout?.applyDefault(world.chatDefault);this.refreshHUD();if(['bag','shop','shop-prices','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(['shop','shop-prices'].includes(this.panelName)&&this.shopPriceSignature!==JSON.stringify(world.shopPrices||{})))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
   refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);
+ const mp=$('mana-bar'),mpLabel=$('mana-label');if(mp&&mpLabel){mp.max=profile.maxMana||100;mp.value=profile.mana??mp.max;mpLabel.textContent=Math.floor(mp.value)+'/'+mp.max;}
  const shieldItem=itemById(profile.equipment?.shield),shieldDisplay=$('shield-readout');
  if(shieldDisplay){
   const hasShield=shieldItem?.slot==='shield';shieldDisplay.hidden=!hasShield;
@@ -368,7 +375,20 @@ export class TempleUI extends EventTarget{
  $('weapon').textContent=(held?weaponPresentation(held,profile.fusion?.[held.id]).title:'UNARMED').toUpperCase();}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();this.renderQuickBar(profile);
     const gift=$('wing-gift-button');
     if(gift)gift.hidden=!(Number(profile?.wingDesignCredits)||0);
+     this.showCanvasGrant(profile);
     const monster=this.world?.monster,visible=false;$('monster-hud').hidden=!visible;if(visible){$('monster-name').textContent=`${String(monster.variant).toUpperCase()} · GENERATION ${monster.generation}`;$('monster-hp').max=monster.maxHp;$('monster-hp').value=monster.hp;}}
+  showCanvasGrant(profile){
+   const grant=profile?.lastWingCanvasGrant;if(!grant?.id||!profile?.key||!this.self||document.getElementById('hud').hidden)return;
+   const key='ggtemple-canvas-grant:'+profile.key;
+   if(this.seenCanvasGrant===grant.id)return;
+   try{if(localStorage.getItem(key)===grant.id)return;localStorage.setItem(key,grant.id);}catch{}
+   this.seenCanvasGrant=grant.id;
+   if(Date.now()-grant.time>86400000)return;
+   document.querySelector('.canvas-grant-celebration')?.remove();
+   const el=document.createElement('div');el.className='canvas-grant-celebration';el.setAttribute('role','status');
+   el.innerHTML=`<strong>THANK YOU!</strong><span>WING CANVAS ×${Number(grant.quantity)||1}</span><small>${grant.source==='gm'?'A gift from GGTEMPLE':'Thank you for supporting GGTEMPLE'}</small>`;
+   document.body.append(el);setTimeout(()=>el.remove(),3600);
+  }
   renderQuickBar(profile){
    const root=$('comfort-hotbar');if(!root)return;
    if(!this.self||this.self.role!=='fighter'){root.hidden=true;return;}
@@ -383,20 +403,23 @@ export class TempleUI extends EventTarget{
     const item=itemById(assigned[i]),count=item?.slot==='consumable'?(this.quickItemCounts.get(item.id)||0):0;
     return {item:item?.slot==='consumable'?item:null,count};
    });
-   const signature=JSON.stringify(slots.map(v=>[v.item?.id||null,v.count]));
-   if(this.quickBarSignature===signature)return;
-   this.quickBarSignature=signature;
+   const until=Number(profile?.consumableCooldownUntil)||0,remaining=Math.max(0,until-Date.now());
+   const signature=JSON.stringify([slots.map(v=>[v.item?.id||null,v.count]),until]);
+   if(this.quickBarSignature===signature){this.updateQuickCooldown();return;}
+   this.quickBarSignature=signature;this.quickCooldownUntil=until;clearInterval(this.quickCooldownTimer);
    root.innerHTML=slots.map(({item,count},i)=>{
     const empty=!item,depleted=!!item&&count===0;
     const label=item?`${item.name} · ${count} remaining`:`Quick slot ${i+1} · Empty`;
-    return `<button type="button" class="comfort-quick-slot ${depleted?'depleted':''}" data-quick-use="${i}" ${empty||depleted?'disabled':''}
+    return `<button type="button" class="comfort-quick-slot ${depleted?'depleted':''}" data-quick-use="${i}" ${empty||depleted||remaining?'disabled':''}
      aria-label="${escape(label)}" title="${escape(label)}">
      ${item?`<img src="${escape(comfortCashImage(item))}" alt="" draggable="false">`:''}
-     <span class="comfort-quick-key">${i+1}</span>
+     <span class="comfort-quick-key">${i+1}</span>${item?'<span class="comfort-cooldown" hidden></span>':''}
      ${item?`<span class="comfort-quick-count">×${count}</span>`:'<span class="comfort-quick-blank">+</span>'}
     </button>`;
    }).join('');
+   this.updateQuickCooldown();if(remaining)this.quickCooldownTimer=setInterval(()=>this.updateQuickCooldown(),100);
   }
+  updateQuickCooldown(){const remaining=Math.max(0,(this.quickCooldownUntil||0)-Date.now());for(const b of document.querySelectorAll('#comfort-hotbar [data-quick-use]')){const overlay=b.querySelector('.comfort-cooldown');if(!overlay)continue;overlay.hidden=!remaining;overlay.textContent=remaining?(remaining/1000).toFixed(1):'';b.disabled=!!remaining||b.classList.contains('depleted');}if(!remaining)clearInterval(this.quickCooldownTimer);}
   renderRoster(){
     const box=$('player-roster');if(!box)return;
     const signature=JSON.stringify(this.players.map(p=>[p.key,p.name,p.role,p.profile?.hp,p.profile?.maxHp]));
@@ -575,6 +598,7 @@ export class TempleUI extends EventTarget{
     const slider=(key,label)=>{const value=Math.max(0,Math.min(2,Number(volumes[key]??1)));return `<label style="display:grid;grid-template-columns:minmax(90px,1fr) minmax(80px,2fr) 3em;align-items:center;gap:10px;padding:3px 0"><span>${escape(label)}</span><input data-gm-volume="${escape(key)}" type="range" min="0" max="2" step=".05" value="${value}" aria-label="${escape(label)}"><output>${Math.round(value*100)}%</output></label>`;};
     const soundControls=['master','music',...Object.keys(SOUND_PROFILES)].map(key=>slider(key,key==='master'?'總音量':key==='music'?'背景音樂':key)).join('');
     const weaponControls=ITEMS.filter(item=>item.slot==='weapon').map(item=>slider('weapon-'+item.id,item.name||item.id)).join('');
+    const targets=new Map([[this.self.key,{key:this.self.key,name:this.self.name,level:this.world?.profile?.level}],...this.players.filter(p=>p.key).map(p=>[p.key,{...p,level:p.profile?.level}]),...online.filter(p=>p.key).map(p=>[p.key,p])]);
     this.content.innerHTML=`<section class="gm-admin">
       <h3>GM 功能</h3><div class="gm-tools">
         <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-gm-action="chat-position-edit">調整全服 CHAT 預設位置</button><button type="button" data-gm-action="chat-position-save">儲存目前 CHAT 位置為全服預設</button><button type="button" data-open-shop-prices>商品售價編輯</button>
@@ -590,6 +614,9 @@ export class TempleUI extends EventTarget{
       </div>
       <p><strong>作品位置復原：</strong>當僅有一件作品的 XYZ 數值被誤設為 -100，將其恢復至原始展示座標；其他位置、縮放、旋轉、外觀保留。</p>
       <p><strong>GM 指令：</strong><code>/recoverposition</code> 找回座標 -100 的作品 · <code>/reset building</code> 復原房屋（保留塗鴉） · <code>/clean graffic</code> 清除塗鴉 · <code>/reset message</code> 清空留言 · <code>/reset</code> 清空玩家作品 · <code>/recovery</code> 還原藝術品</p>
+      <h3>GM 玩家測試</h3><label>Player <select data-gm-player>${[...targets.values()].map(p=>`<option value="${escape(p.key)}">${escape(p.name)} · LV ${p.level??'?'}</option>`).join('')}</select></label>
+      <label>Level <input data-gm-level type="number" min="1" max="999" step="1" value="${this.world?.profile?.level||1}"></label>
+      <button type="button" data-gm-action="player-level">SET LEVEL</button> <button type="button" data-gm-action="player-canvas">GIFT WING CANVAS ×1</button>
       <h3>GM 個人設定</h3>
        <label style="display:flex;gap:10px;align-items:center"><input data-gm-invincible type="checkbox" ${this.world?.profile?.gmInvincible!==false?'checked':''}>自身無敵（可關閉以接受正常傷害）</label>
        <label style="display:grid;grid-template-columns:7em 1fr 4em;align-items:center;gap:8px">合成成功率
@@ -943,4 +970,4 @@ export class TempleUI extends EventTarget{
 }
 
 function option(item){return `<option value="${item.id}">${escape(item.name)}</option>`;}
-function itemCard(item,action){const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${pvpShotDamage(item,attackStats(item,0),weaponQuality(item))} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.slot==='consumable'?item.category+' · RECOVER '+Math.round(item.healFraction*100)+'% MAX HP':item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88"><h3>${escape(item.name)}</h3><div class="shop-buy-controls">${action}</div>${previewMarkup(item)}<small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><small>${escape(stats)}</small><p class="equipment-description">${escape(explainEquipment(item))}</p>${item.slot==='weapon'?'<small class="weapon-enchantment-hint">Fixed shop stats. Random 3–15% affixes are exclusive to ground loot.</small>':''}</article>`;}
+function itemCard(item,action){const rarity=RARITIES.find(entry=>entry.id===item.rarity)||RARITIES[0],stats=item.slot==='weapon'?`PvP ${pvpShotDamage(item,attackStats(item,0),weaponQuality(item))} / HIT · ${attackStats(item,0).range}m · CD ${item.cooldown}ms · CHARGE ${item.chargeMs}ms`:item.slot==='consumable'?item.category+' · RECOVER '+Math.round((item.manaFraction||item.healFraction)*100)+(item.manaFraction?'% MAX MP':'% MAX HP')+' · CD '+(item.cooldownMs/1000)+'s':item.description||item.slot.toUpperCase();return `<article class="item" draggable="true" data-bag-item="${item.id}" style="border-color:${rarity.color}88"><h3>${escape(item.name)}</h3><div class="shop-buy-controls">${action}</div>${previewMarkup(item)}<small class="rarity">${escape(rarity.name)} · T${item.tier||1}</small><small>${escape(stats)}</small><p class="equipment-description">${escape(explainEquipment(item))}</p>${item.slot==='weapon'?'<small class="weapon-enchantment-hint">Fixed shop stats. Random 3–15% affixes are exclusive to ground loot.</small>':''}</article>`;}

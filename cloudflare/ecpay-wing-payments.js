@@ -154,6 +154,7 @@ export async function wingNotifyApi(room,request){
   const world=room.world(),profile=world.profiles[row.profile_key];
   if(!profile||!row.profile_key.startsWith('firebase:'))throw Error('Missing authenticated profile');
   profile.wingDesignCredits=Math.max(0,Number(profile.wingDesignCredits)||0)+row.design_credits;
+  profile.lastWingCanvasGrant={id:tradeNo,time:Date.now(),quantity:row.design_credits,source:'payment'};
   profile.updatedAt=Date.now();
   world.revision=(world.revision||0)+1;
   room.save(world);

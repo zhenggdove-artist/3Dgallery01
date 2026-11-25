@@ -153,9 +153,9 @@ export function attackStats(item,charge=0){
 // Consumables are independent inventory instances; matching IDs can be
 // purchased in batches. Their assigned quickslots survive a zero stack.
 export const COMFORT_ITEMS=Object.freeze([
- {id:'comfort-dollar-20',name:'Comfort Cash · $20',slot:'consumable',category:'Comfort for the Soul',denomination:20,healFraction:.30,price:1000,tier:2,rarity:'uncommon',color:'#5eaa70',description:'Give me more!'},
- {id:'comfort-dollar-50',name:'Comfort Cash · $50',slot:'consumable',category:'Comfort for the Soul',denomination:50,healFraction:.50,price:2000,tier:3,rarity:'rare',color:'#d777ad',description:'Give me more!'},
- {id:'comfort-dollar-100',name:'Comfort Cash · $100',slot:'consumable',category:'Comfort for the Soul',denomination:100,healFraction:1,price:5000,tier:5,rarity:'relic',color:'#64a7db',description:'Give me more!'}
+ {id:'comfort-dollar-20',name:'Comfort Cash · $20',slot:'consumable',category:'Comfort for the Soul',denomination:20,healFraction:.30,cooldownMs:2000,price:300,tier:2,rarity:'uncommon',color:'#5eaa70',description:'Give me more!'},
+ {id:'comfort-dollar-50',name:'Comfort Cash · $50',slot:'consumable',category:'Comfort for the Soul',denomination:50,manaFraction:.50,cooldownMs:2000,price:300,tier:3,rarity:'rare',color:'#64a7db',description:'Give me more!'},
+ {id:'comfort-dollar-100',name:'Comfort Cash · $100',slot:'consumable',category:'Comfort for the Soul',denomination:100,healFraction:1,cooldownMs:3000,price:700,tier:5,rarity:'relic',color:'#e36c68',description:'Give me more!'}
 ].map(item=>Object.freeze({...item,sell:Math.floor(item.price*.25)})));
 export const ITEMS = Object.freeze([...RELETTER_ITEMS,...COMFORT_ITEMS]);
 const INDEX = new Map([...ITEMS,...ARMOR].map(item=>[item.id,item]));
@@ -170,7 +170,7 @@ export function registerCustomWings(wings=[]){
 export const itemById = id => INDEX.get(id) || null;
 
 export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>!['material','armor'].includes(item.slot)&&!item.notForSale&&!isRetiredHeadgear(item)&&item.price>0));
-export const SHOP_CATALOG_REVISION='r118';
+export const SHOP_CATALOG_REVISION='r120';
 export const SHOP_CATALOG_IDS=Object.freeze(SHOP_ITEMS.map(item=>item.id).sort());
 // Canonical price keys distinguish every weapon quality, including exotics.
 export const shopPriceKey=item=>item.id+(item.slot==='weapon'?':'+(item.shopTier??item.tier??3):'');
@@ -221,9 +221,10 @@ export function groundDropRoll(rng=Math.random){
  // Only coins and equippable gear may spawn. Former material weight is
  // redistributed to the gear categories rather than creating dead pickups.
  const kind=weightedChoice([
-  {id:'coin',weight:42},{id:'weapon',weight:35},{id:'equipment',weight:23}
+  {id:'coin',weight:34},{id:'weapon',weight:26},{id:'equipment',weight:20},{id:'consumable',weight:20}
  ],rng).id;
  if(kind==='coin')return {kind,amount:20+Math.floor(rng()*41)};
+ if(kind==='consumable')return {kind,itemId:weightedChoice(COMFORT_ITEMS.map((item,i)=>({id:item.id,weight:[45,40,15][i]})),rng).id};
  const pool=kind==='weapon'?WEAPONS.filter(item=>item.tier>0&&item.tier<=3&&!item.notForSale):
   RELETTER_ITEMS.filter(item=>['head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier<=3);
  const weighted=pool.map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));

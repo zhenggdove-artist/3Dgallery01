@@ -13,7 +13,7 @@ import {CITY_LOTS,CITY_MAX_HP,cityRaycast,cityStage,cityDamageTier,cityBlocked,c
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
-import {playerStats,refreshStats} from './player-stats.js';
+import {playerStats,refreshStats,refreshMana,manaCapacity,ultimateManaCost} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
 import {fuseTemple} from './temple-fusion.js';
 import {ensureFusionIdentity,ensureWeaponAffixes,appendInventoryInstance,removeInventoryInstance,selectEquipmentInstance,swapInventoryInstances,removeInventoryInstances} from './fusion-instances.js';
@@ -132,7 +132,7 @@ export function migrateWorld(raw,now=Date.now()){
 
 export function createProfile(key,name,color,now=Date.now(),admin=false){
   return {key,name:String(name||'Pilgrim').slice(0,24),color:validColor(color)?color:'#43b59a',admin:!!admin,
-    wallet:80,level:1,xp:0,hp:100,maxHp:100,deadUntil:0,starterWeaponId:STARTER_LOADOUT.weapon,inventory:admin?ITEMS.filter(item=>item.slot!=='armor'&&!isRetiredHeadgear(item)).map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
+    wallet:80,level:1,xp:0,hp:100,maxHp:100,mana:100,maxMana:100,manaAt:now,consumableCooldownUntil:0,deadUntil:0,starterWeaponId:STARTER_LOADOUT.weapon,inventory:admin?ITEMS.filter(item=>item.slot!=='armor'&&!isRetiredHeadgear(item)).map(item=>item.id):[STARTER_LOADOUT.weapon],quickSlots:[null,null,null],equipment:{...STARTER_LOADOUT,wings:null},gmWingsInitialized:!!admin,gmInvincible:admin?true:undefined,
     gmAllItemsGranted:!!admin,gmKnownCustomWingIds:[],collectorSoldArtworks:{},
     fusion:{},wingTrialDraws:0,wingPaidDraws:0,wingDesignCredits:0,createdAt:now,updatedAt:now,lastAttackAt:0};
 }
@@ -142,6 +142,7 @@ export function createProfile(key,name,color,now=Date.now(),admin=false){
 function reviveProfile(profile,now,seatIndex=0){
  const seat=Number.isInteger(seatIndex)&&seatIndex>=0?seatIndex:0;
  profile.hp=profile.maxHp||100;
+ profile.mana=profile.maxMana=manaCapacity(profile.level);profile.manaAt=now;
  profile.deadUntil=0;
  profile.lastRespawnAt=now;
  profile.respawnPosition=[...PLAYER_SPAWNS[seat%PLAYER_SPAWNS.length]];
@@ -158,7 +159,8 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   current.starterWeaponId??='white-cat';
   if(name)current.name=String(name).slice(0,24);if(validColor(color))current.color=color;current.admin=!!admin;current.updatedAt=now;
   current.wallet=Number.isFinite(current.wallet)?Math.max(0,Math.floor(current.wallet)):0;
-  current.level=Math.max(1,Math.floor(current.level||1));current.xp=Math.max(0,Math.floor(current.xp||0));
+  current.level=Math.max(1,Math.floor(current.level||1));
+  refreshMana(current,now);current.xp=Math.max(0,Math.floor(current.xp||0));
   current.wingTrialDraws=Number.isFinite(current.wingTrialDraws)?Math.max(0,Math.min(FREE_WING_TRIAL_LIMIT,Math.floor(current.wingTrialDraws))):0;
   current.wingPaidDraws=Number.isSafeInteger(current.wingPaidDraws)?Math.max(0,Math.min(100000,Math.floor(current.wingPaidDraws))):0;
   current.wingDesignCredits=Number.isSafeInteger(current.wingDesignCredits)?Math.max(0,current.wingDesignCredits):0;
@@ -260,7 +262,7 @@ export function validName(value){return typeof value==='string'&&value.trim().le
 
 export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
-    level:profile.level,xp:profile.xp,wingTrialDraws:profile.wingTrialDraws||0,wingPaidDraws:Math.max(0,Number(profile.wingPaidDraws)||0),wingDesignCredits:Math.max(0,Number(profile.wingDesignCredits)||0),deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
+    level:profile.level,xp:profile.xp,mana:profile.mana??manaCapacity(profile.level),maxMana:manaCapacity(profile.level),consumableCooldownUntil:profile.consumableCooldownUntil||0,lastWingCanvasGrant:clone(profile.lastWingCanvasGrant||null),wingTrialDraws:profile.wingTrialDraws||0,wingPaidDraws:Math.max(0,Number(profile.wingPaidDraws)||0),wingDesignCredits:Math.max(0,Number(profile.wingDesignCredits)||0),deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
     respawnPosition:clone(profile.respawnPosition||null),
     spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),shield:clone(profile.shield||null),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,tidePush:profile.tidePush||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
@@ -385,6 +387,21 @@ export function applyAction(world,actor,body,context={}){
    wingDrawAdmin=['gm-wing-draw','gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate'].includes(body.action)?world.profiles?.[actor.key]?.admin===true:null,
    profile=ensureProfile(world,actor.key,actor.name,actor.color,now,
     ['gm-wing-draw','gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate'].includes(body.action)?wingDrawAdmin:actor.admin);
+  if(['gm-player-level','gm-wing-canvas'].includes(body.action)){
+   if(!profile.admin||actor.admin!==true)return {error:'GM only'};
+   const target=world.profiles[String(body.targetKey||'')];
+   if(!target)return {error:'Player not found'};
+   if(body.action==='gm-player-level'){
+    if(!Number.isSafeInteger(body.level)||body.level<1||body.level>999)return {error:'Level must be 1–999'};
+    target.level=body.level;target.xp=0;refreshStats(world,target,now);
+    if(target.hp>0)target.hp=target.maxHp;target.mana=target.maxMana;target.manaAt=now;
+   }else{
+    target.wingDesignCredits=(Number(target.wingDesignCredits)||0)+1;
+    target.lastWingCanvasGrant={id:id(),time:now,quantity:1,source:'gm'};
+   }
+   world.revision=(world.revision||0)+1;
+   return {notice:body.action==='gm-player-level'?'LEVEL UPDATED · '+target.name:'WING CANVAS GRANTED · '+target.name};
+  }
   if(body.action==='gm-chat-default'){
    if(!profile.admin||actor.admin!==true)return {error:'GM only'};
    const {x,y}=body;
@@ -766,6 +783,7 @@ function pickupDrop(world,profile,actor,body,now){
     return {error:'Obsolete material drops can no longer be collected'};
    if(drop.itemId&&itemById(drop.itemId)?.slot==='wings')
     return {error:'Wings are exclusive to premium shop; ground pickup disabled'};
+   if(drop.itemId&&profile.inventory.length>=inventoryCapacity(profile))return {error:'Inventory full'};
    if(!near(actor,drop.position,3.2))return {error:'Move closer to the drop'};
   if(drop.owner===actor.key&&now<drop.ownerLockedUntil)return {error:'Drop is still settling'};
   world.groundDrops.splice(index,1);if(drop.kind==='coin')earn(profile,drop.amount,world);else if(drop.kind==='heart'){if(profile.hp>=profile.maxHp){world.groundDrops.splice(index,0,drop);return {error:'Health is full'};}profile.hp=Math.min(profile.maxHp,profile.hp+(drop.amount||25));}else{addItem(profile,drop.itemId);const item=itemById(drop.itemId);if(item&&EQUIPPABLE_SLOTS.includes(item.slot)&&!profile.equipment[item.slot])selectEquipmentInstance(profile,item.slot,profile.inventory.length-1);}
@@ -855,6 +873,14 @@ function useConsumable(world,profile,actor,body,now){
  if(item?.slot!=='consumable')return {error:'No restorative consumable assigned'};
  const inventoryIndex=profile.inventory.indexOf(itemId);
  if(inventoryIndex<0)return {error:'Out of stock · Restock this consumable at SHOP'};
+ if(now<(profile.consumableCooldownUntil||0))return {error:'Restorative item is cooling down'};
+ refreshMana(profile,now);
+ if(item.manaFraction){
+  const restored=Math.min(profile.maxMana-profile.mana,Math.ceil(profile.maxMana*item.manaFraction));
+  if(restored<=0)return {error:'Mana is already full'};
+  removeInventoryInstance(profile,inventoryIndex);profile.mana+=restored;profile.consumableCooldownUntil=now+2000;
+  return {notice:'Restored '+Math.round(restored)+' MP',restoredMana:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
+ }
  if(profile.hp>=profile.maxHp)return {error:'Health is already full'};
  const hpBefore=profile.hp;
  // A healing percentage is measured against CURRENT maximum HP, not coins
@@ -862,7 +888,7 @@ function useConsumable(world,profile,actor,body,now){
  const restored=Math.min(profile.maxHp-hpBefore,Math.ceil(profile.maxHp*item.healFraction));
  if(restored<=0)return {error:'Health is already full'};
  removeInventoryInstance(profile,inventoryIndex);
- profile.hp=Math.min(profile.maxHp,hpBefore+restored);
+ profile.hp=Math.min(profile.maxHp,hpBefore+restored);profile.consumableCooldownUntil=now+(item.cooldownMs||2000);
  recordTempleDamage(world,{amount:restored,kind:'heal',
   position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],
   owner:profile.key,target:profile.key},now);
@@ -1008,7 +1034,7 @@ function attack(world,profile,actor,body,context,now){
   // A release must clear server collision objects even while stunned, frozen,
   // or inside the previous hit-reaction recovery window.
   if(body.phase==='channel-stop'){
-   profile.channelWeapon=null;profile.channelStartedAt=0;profile.chargeStartedAt=0;
+   profile.channelWeapon=null;profile.manaChannelPaid=false;profile.channelStartedAt=0;profile.chargeStartedAt=0;
    profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
    delete profile.prismChannelStats;
    delete profile.tidalChannelStats;
@@ -1044,7 +1070,7 @@ function attack(world,profile,actor,body,context,now){
     // once the ORIGINAL charge request has reached the weapon's full time.
     if(!profile.chargeStartedAt||now-profile.chargeStartedAt<(weapon.chargeMs||1500))
       return {error:'Charge must reach 100% before channeling'};
-    profile.channelWeapon=weapon.id;
+    profile.channelWeapon=weapon.id;profile.manaChannelPaid=false;
     profile.channelStartedAt=profile.chargeStartedAt;
     profile.lastChannelPulseAt=now;
     profile.lastBloomHealAt=weapon.family==='petal'?now:0;
@@ -1064,8 +1090,7 @@ function attack(world,profile,actor,body,context,now){
     profile.chargeStartedAt=0;
     return {error:'Shoulder ultimate requires a fused chargeable weapon'};
   }
-  profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
-  if(!channel)profile.chargeStartedAt=0;
+  // Commit attack clocks only after authoritative mana validation below.
   if(shoulderSniper){
      // Server-owned drift stays inside the actual doubled 132px crosshair.
      const random=typeof context?.rng==='function'?context.rng:Math.random;
@@ -1117,6 +1142,14 @@ function attack(world,profile,actor,body,context,now){
     stats.damage=+(stats.damage*3).toFixed(3);
     stats.radius=Math.max(stats.radius,5.9*quality.visual);
    }
+  const fusionCount=(profile.fusion?.[weapon.id]?.effects||[]).length;
+  const manaCost=ultimateManaCost(weapon,stats,quality,channel&&profile.manaChannelPaid===true,fusionCount);
+  refreshMana(profile,now);
+  if(manaCost>profile.mana+1e-6)return {error:'Not enough mana'};
+  profile.mana=Math.max(0,profile.mana-manaCost);
+  if(channel)profile.manaChannelPaid=true;
+  profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
+  if(!channel)profile.chargeStartedAt=0;
   const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
@@ -1298,7 +1331,7 @@ function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosit
   let damage=fixedDamage?Math.max(0,+Number(amount).toFixed(1)):
     Math.max(1,+((amount)*(forceKill?1:1-reduction)*(forceKill?1:stats.defense)*(1+(effectActive(target,'soaked',now)?.power||0))).toFixed(1));
   if(forceKill)damage=Math.max(damage,target.hp); // A verified sniper headshot ignores armour and shields.
-  if(shotgunPellet)damage=+Math.max(5,Math.min(20,damage)).toFixed(1); // Per pellet after armour; shields still absorb.
+  if(shotgunPellet){const scale=typeof shotgunPellet==='number'?shotgunPellet:1;damage=+(Math.max(5,Math.min(20,damage))*scale).toFixed(1);} // Per pellet after armour; shields still absorb.
    if(target.shield&&!forceKill&&!fixedDamage){const absorbed=Math.min(Math.max(0,target.shield.hp),damage);if(absorbed>0){target.shield.hp=Math.max(0,target.shield.hp-absorbed);target.shield.lastHit=now;target.shield.lastAbsorbed=+absorbed.toFixed(2);target.shield.hitId=id();recordTempleDamage(world,{amount:absorbed,kind:'shield',position:hitPosition||[targetActor.position[0],targetActor.position[1]+1.3,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);}damage-=absorbed;}
   const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
@@ -1510,7 +1543,9 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
    damagePlayer(world,null,actor,damage,now,'collector',from,'collector-shot',
     [actor.position[0],actor.position[1]+1.15,actor.position[2]],false,false,true)
   )||artworkChanged;
+  const liveKeys=new Set(actors.map(a=>a.key));
   for(const profile of Object.values(world.profiles||{})){
+   if(liveKeys.has(profile.key))changed=refreshMana(profile,now)||changed;
    if(profile.channelWeapon&&!isLiveStaffChannel(profile,now)){
     // Clear orphaned continuous-cast state before validating later movement.
     profile.channelWeapon=null;profile.channelStartedAt=0;
@@ -1972,13 +2007,15 @@ function tickPersistentAttacks(world,actors,now,rng){
     // damaging, with a full 5x+ per-pellet random damage window.
     const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?42:96):
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
-    const shotgunPellet=!fx.echo&&isPlayer&&weapon.pattern==='scatter'&&pellet!==null;
-    const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage)*(frostProc?1.5:1);
+    const scatter=weapon.pattern==='scatter'&&pellet!==null;
+    const falloff=scatter?.2+.5*proximity:1;
+    const shotgunPellet=!fx.echo&&isPlayer&&scatter;
+    const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage)*(frostProc?1.5:1)*(shotgunPellet?1:falloff);
     const lethalHeadshot=!fx.echo&&fx.charge<1&&!fx.shoulderSpread&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
      fx.origin,fx.direction,fx.range,enemy.position);
     const hitKind=lethalHeadshot?(modifiers.critical?'critical-headshot':'headshot'):modifiers.kind;
     let applied;
-    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,hitKind,position,lethalHeadshot,shotgunPellet);
+    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,hitKind,position,lethalHeadshot,shotgunPellet?falloff:false);
     else applied=damageMonster(world,owner,damage,now,rng,modifiers.kind,enemy,position);
     if(applied&&!applied.immune){
      if(fx.channel){

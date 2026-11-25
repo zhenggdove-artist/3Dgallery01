@@ -1120,3 +1120,19 @@ body.panel-open #panel.gallery-guide-floating{
 
 /* V038: compact nested weapons categories; main shop defaults to Headwear. */
 .shop-tabs .shop-tab-row{display:flex;gap:3px;flex-wrap:nowrap}.shop-tabs .shop-tab-row button{min-width:0;flex:1;font-size:11px;padding:5px 3px;white-space:normal}
+
+/* V042 mana, compact equipment stats, restorative cooldown and canvas receipt. */
+#vitals #mana-readout{display:flex;gap:4px;align-items:center;height:13px;white-space:nowrap}
+#mana-bar{width:55px;height:7px;appearance:none;border:1px solid #42658f;border-radius:4px;overflow:hidden;background:#d7e7ff;accent-color:#2587f1}
+#mana-bar::-webkit-progress-bar{background:#d7e7ff}#mana-bar::-webkit-progress-value{background:#2587f1}#mana-bar::-moz-progress-bar{background:#2587f1}
+#mana-label{font:10px Arial,sans-serif;color:#245ca4}
+#vitals #wallet{top:76px}#vitals #vital-readouts{gap:1px}
+.equip-stat-summary{display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;padding:5px;font:11px Arial,sans-serif;color:#453650}
+.equip-stat-summary small{grid-column:1/-1;font-size:10px}.stat-o{color:#61596a}.stat-a{color:#2864bb}.stat-b{color:#218351}
+.comfort-cooldown{position:absolute;inset:0;display:grid;place-items:center;background:#17152bbd;color:white;font:bold 12px Arial;z-index:3;border-radius:inherit}
+.comfort-cooldown[hidden]{display:none}
+.wing-canvas-note{position:relative;background:linear-gradient(125deg,#ff9ab6,#ffea8b,#8df7af,#8bd6ff,#d0a1ff)!important;color:#49365e!important;border:3px double #765782!important;font:bold 9px Arial!important;line-height:1.1}
+.wing-canvas-note:before{content:'$';font:23px Georgia;position:absolute;opacity:.28;inset:3px auto auto 4px}.wing-canvas-note b{position:absolute;right:3px;bottom:2px}
+.canvas-grant-celebration{position:fixed;z-index:10000;left:50%;top:43%;transform:translate(-50%,-50%);display:grid;text-align:center;gap:9px;min-width:220px;padding:24px;border:3px double #ffeb9b;border-radius:12px;background:linear-gradient(130deg,#fff2a8,#ffd1e4,#b8eaff);color:#56336e;box-shadow:0 0 45px #ffdb69a0;pointer-events:none;animation:canvas-grant-pop 3.6s both}
+.canvas-grant-celebration strong{font:bold 25px Arial}.canvas-grant-celebration span{font:bold 17px Arial}.canvas-grant-celebration small{font:12px Arial}
+@keyframes canvas-grant-pop{0%{opacity:0;scale:.75}10%,85%{opacity:1;scale:1}100%{opacity:0;scale:1.05}}
