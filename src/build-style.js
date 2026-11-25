@@ -33,7 +33,7 @@ export function houseTileTexture(){
  return wallTile;
 }
 export function houseWallMaterial(color='#ffffff'){return new THREE.MeshStandardMaterial({color,map:houseTileTexture(),roughness:.96});}
-export function createGmHouseMesh(spec,{preview=false}={}){
+export function createGmHouseMesh(spec,{preview=false,seed=0}={}){
  const root=new THREE.Group(),{width:w,depth:d,height:h,floors,windows,signs,pipes,metal}=spec;
  const tile=houseWallMaterial(spec.wallColor||'#b4a395'),roofMat=new THREE.MeshStandardMaterial({color:spec.roofColor||'#8b8073',roughness:.96}),trim=new THREE.MeshStandardMaterial({color:'#8b8073',roughness:.96}),glass=new THREE.MeshStandardMaterial({color:'#465c60',roughness:.42,metalness:.12}),steel=new THREE.MeshStandardMaterial({color:'#83837e',roughness:.78,metalness:.25}),sign=new THREE.MeshStandardMaterial({color:'#964b42',roughness:.8}),black=new THREE.MeshStandardMaterial({color:spec.doorColor||'#292b2b'});
  const materials=[tile,roofMat,trim,glass,steel,sign,black],box=(x,y,z,a,b,c,m)=>{const geo=new THREE.BoxGeometry(a,b,c);if(m===tile){const uv=geo.attributes.uv;for(let face=0;face<6;face++){const su=(face<2?c:a)/2.4,sv=(face<4?b:c)/1.2;for(let k=0;k<4;k++){const i=face*4+k;uv.setXY(i,uv.getX(i)*su,uv.getY(i)*sv);}}}const mesh=new THREE.Mesh(geo,m);mesh.position.set(x,y,z);root.add(mesh);return mesh;};
@@ -47,7 +47,7 @@ export function createGmHouseMesh(spec,{preview=false}={}){
   const panel=new THREE.Mesh(new THREE.BoxGeometry(s.width,s.height,s.depth),mat);group.add(panel);
   const border=new THREE.Mesh(new THREE.BoxGeometry(s.blade?s.width+.025:s.width*.94,s.height*.93,s.blade?s.depth*.94:s.depth+.025),mat);group.add(border);
   if(typeof document!=='undefined'){
-   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d');drawSignArtwork(ctx,0,0,c.width,c.height,{color:s.color,title:'商店',subtitle:'TEMPLE SHOP',vertical:s.blade,aspect:s.blade?s.depth/s.height:s.width/s.height,seed:s.seed,style:s.style,font:s.font,saturation:s.saturation});
+   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d');drawSignArtwork(ctx,0,0,c.width,c.height,{color:s.color,title:'商店',subtitle:'TEMPLE SHOP',vertical:s.blade,aspect:s.blade?s.depth/s.height:s.width/s.height,seed:(s.seed+seed)|0,style:s.style,font:s.font,saturation:s.saturation});
    const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const faceMat=new THREE.MeshStandardMaterial({map:tex,roughness:.8,side:THREE.DoubleSide});faceMat.userData.ownedSignMap=true;materials.push(faceMat);
    for(const side of [-1,1]){const face=new THREE.Mesh(new THREE.PlaneGeometry((s.blade?s.depth:s.width)*.92,s.height*.92),faceMat);if(s.blade){face.rotation.y=side*Math.PI/2;face.position.x=side*(s.width/2+.02);}else{face.rotation.y=side===1?0:Math.PI;face.position.z=side*(s.depth/2+.02);}group.add(face);}
   }

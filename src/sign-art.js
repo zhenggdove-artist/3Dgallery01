@@ -1,4 +1,42 @@
-// Deterministic graphic signage; no image downloads or per-frame canvas work.
+// Deterministic signs: one original-illustration sheet, composed into the existing atlas once.
+let portraitSheet=null, mutedPortraitSheet=null, portraitLoad=null;
+export function portraitVariant(seed){
+ // All automatic portrait seeds are 4 modulo 5; do not use seed % 10.
+ const n=Math.abs(seed|0);
+ return (Math.floor(n/5)+(n%5)*3)%10;
+}
+export function signPortraitSeed(id){
+ let hash=0;for(const ch of String(id??''))hash=(Math.imul(hash,31)+ch.charCodeAt(0))|0;
+ return hash>>>0;
+}
+export function loadSignPortraits(){
+ if(portraitLoad)return portraitLoad;
+ if(typeof Image==='undefined'||typeof document==='undefined')return Promise.resolve(false);
+ portraitLoad=new Promise(resolve=>{
+  const image=new Image();
+  image.onload=()=>{
+   portraitSheet=image;
+   // Precompute the 50%-saturation version once; no Canvas filter dependency on Safari.
+   try{
+    const c=document.createElement('canvas');c.width=image.naturalWidth;c.height=image.naturalHeight;
+    const ctx=c.getContext('2d');ctx.drawImage(image,0,0);const pixels=ctx.getImageData(0,0,c.width,c.height),d=pixels.data;
+    for(let i=0;i<d.length;i+=4){const y=.2126*d[i]+.7152*d[i+1]+.0722*d[i+2];d[i]=(d[i]+y)*.5;d[i+1]=(d[i+1]+y)*.5;d[i+2]=(d[i+2]+y)*.5;}
+    ctx.putImageData(pixels,0,0);mutedPortraitSheet=c;
+   }catch(error){console.warn('Muted sign artwork unavailable',error);}
+   resolve(true);
+  };
+  image.onerror=()=>{console.warn('Sign portrait sheet unavailable; using vector fallback');resolve(false);};
+  image.src=new URL('../art/sign-portraits.webp',import.meta.url).href;
+ });
+ return portraitLoad;
+}
+function drawPortraitImage(ctx,seed,x,y,w,h,saturation){
+ const sheet=saturation<=.5&&mutedPortraitSheet?mutedPortraitSheet:portraitSheet;
+ if(!sheet)return false;
+ const i=portraitVariant(seed),sw=256,sh=320,scale=Math.max(w/sw,h/sh),cropW=w/scale,cropH=h/scale;
+ ctx.drawImage(sheet,(i%5)*sw+(sw-cropW)/2,Math.floor(i/5)*sh+(sh-cropH)*.33,cropW,cropH,x,y,w,h);
+ return true;
+}
 const palettes=['#f4d565','#f1ead0','#f2a465','#cce9dc','#f2c9cb','#d4e3f4'];
 function pictogram(ctx,kind){
  ctx.lineWidth=5;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#19272b';ctx.fillStyle='#19272b';
@@ -53,8 +91,31 @@ export function drawSignArtwork(ctx,x,y,w,h,{color='#965044',title='商店',subt
   const r=Math.min(W,H)*.40;circle(W/2,H/2,r,accent);graphic(W/2,H/2,r/23);ctx.restore();return;
  }
  if(style==='portrait'){
-  const cx=vertical?W/2:W*.20,cy=vertical?49:H/2,r=Math.min(W,H)*.42;circle(cx,cy,r,'#f5dfb7');graphic(cx,cy,r/22,true);
-  label(vertical?{x:8,y:94,w:W-16,h:91}:{x:W*.40,y:5,w:W*.57,h:H-10},'#fff4d7','#252633');ctx.restore();return;
+  const variant=portraitVariant(seed),mono=variant===5||variant===7;
+  // Ten distinct source illustrations: painterly auntie, retro uncle, children,
+  // manga sister and brother, ink grandpa, grandma, monochrome vendor, realistic cook.
+  const bg=mono?'#f7f1dc':base,ink=mono?'#191919':'#fff4d7',outline=mono?null:'#252633';
+  box(0,0,W,H,bg);
+  const frame=mono?'#191919':accent;
+  const band=vertical?Math.min(104,H*.53):Math.min(W*.41,H*.94);
+  const left=variant%3!==1;
+  const img=vertical?{x:5,y:5,w:W-10,h:band-7}:{x:left?4:W-band+2,y:4,w:band-6,h:H-8};
+  const area=vertical?{x:6,y:band+2,w:W-12,h:H-band-8}:{x:left?band+3:6,y:5,w:W-band-9,h:H-10};
+  box(img.x-2,img.y-2,img.w+4,img.h+4,frame);
+  ctx.save();
+  ctx.beginPath();
+  if(variant===0||variant===6){ctx.ellipse(img.x+img.w/2,img.y+img.h/2,img.w/2,img.h/2,0,0,Math.PI*2);}
+  else if(variant===3||variant===4){ctx.moveTo(img.x,img.y);ctx.lineTo(img.x+img.w,img.y);ctx.lineTo(img.x+img.w,img.y+img.h*.87);ctx.lineTo(img.x,img.y+img.h);ctx.closePath();}
+  else ctx.rect(img.x,img.y,img.w,img.h);
+  ctx.clip();
+  if(!drawPortraitImage(ctx,seed,img.x,img.y,img.w,img.h,saturation)){
+   circle(img.x+img.w/2,img.y+img.h/2,Math.min(img.w,img.h)*.48,'#f5dfb7');
+   graphic(img.x+img.w/2,img.y+img.h/2,Math.min(img.w,img.h)/44,true);
+  }
+  ctx.restore();
+  if(variant===2||variant===9){for(let i=0;i<4;i++)circle(area.x+(i+.5)*area.w/4,vertical?H-4:7,2.5,accent);}
+  ctx.strokeStyle=frame;ctx.lineWidth=1.5;ctx.strokeRect(2,2,W-4,H-4);
+  label(area,ink,outline,mono?'700':'900');ctx.restore();return;
  }
  if(style==='cute'){
   box(5,5,W-10,H-10,'#fff1d5');for(let i=0;i<5;i++)circle((i*31+seed*11)%W,(i*37+seed*7)%H,7+(i%3)*3,accent);

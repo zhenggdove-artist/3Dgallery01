@@ -176,24 +176,30 @@ function batchGeometry(lots,mobile){
 }
 function signAtlas(lots){
  // Three separately designed layouts, packed under the 4096px texture limit.
- const columns=40,tile=96,rows=Math.ceil(lots.length*3/columns);
- const canvas=document.createElement('canvas');canvas.width=columns*tile;canvas.height=rows*tile;
- const g=canvas.getContext('2d');
+ const columns=40,tile=96,slots=new Map(),entries=[];
+ // Allocate only artwork actually referenced by the geometry, at the original resolution.
  for(const lot of lots){
-  const sign=citySignSpecs(lot).find(v=>!v.blade),flat=cityShopSignSpec(lot);
-  for(let variant=0;variant<3;variant++){
-   const i=lot.index*3+variant,x=i%columns*tile,y=Math.floor(i/columns)*tile;
-   drawSignArtwork(g,x,y,tile,tile,{color:variant===2?sign?.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,vertical:variant===1,aspect:variant===2?(sign?sign.width/sign.height:2):variant===0?(flat?flat.width/flat.height:5):.5,...citySignArtOptions(lot,variant)});
+  const signs=citySignSpecs(lot),flat=cityShopSignSpec(lot),roof=signs.find(s=>!s.blade);
+  for(const [variant,sign] of [[0,flat],[1,signs.find(s=>s.blade)],[2,roof]]){
+   if(!sign)continue;
+   slots.set(lot.index*3+variant,entries.length);entries.push({lot,variant,sign});
   }
  }
+ const rows=Math.max(1,Math.ceil(entries.length/columns));
+ const canvas=document.createElement('canvas');canvas.width=columns*tile;canvas.height=rows*tile;
+ const g=canvas.getContext('2d');
+ entries.forEach(({lot,variant,sign},i)=>{
+  const x=i%columns*tile,y=Math.floor(i/columns)*tile;
+  drawSignArtwork(g,x,y,tile,tile,{color:variant===2?sign.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,vertical:variant===1,aspect:variant===1?.5:sign.width/sign.height,...citySignArtOptions(lot,variant)});
+ });
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
- return {map,columns,rows,tile};
+ return {map,columns,rows,tile,slots};
 }
 function buildShopSigns(lots){
  const atlas=signAtlas(lots),p=[],uv=[],ids=[],lotIds=[],ranges=new Map(),partRanges=new Map();
  const quad=(lot,points,variant)=>{
   const base=p.length/3;for(const [x,y,z] of points){const q=localToWorld(lot,x,z);p.push(q[0],y,q[1]);lotIds.push(lot.index);}
-  const i=lot.index*3+variant,col=i%atlas.columns,row=Math.floor(i/atlas.columns),mx=.8/(atlas.columns*atlas.tile),my=.8/(atlas.rows*atlas.tile);
+  const i=atlas.slots.get(lot.index*3+variant),col=i%atlas.columns,row=Math.floor(i/atlas.columns),mx=.8/(atlas.columns*atlas.tile),my=.8/(atlas.rows*atlas.tile);
   const l=col/atlas.columns+mx,r=(col+1)/atlas.columns-mx,t=1-(row+1)/atlas.rows+my,b=1-row/atlas.rows-my;
   uv.push(l,t,r,t,r,b,l,b);ids.push(base,base+1,base+2,base,base+2,base+3);
  };
@@ -402,7 +408,7 @@ export class OuterCity{
  constructor(scene,{mobile=false}={}){
   this.scene=scene;this.mobile=mobile;this.root=new THREE.Group();
   this.root.name='High-density ruined city, solid collision and staged destruction';scene.add(this.root);
-  this.lots=CITY_LOTS;this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();
+  this.lots=CITY_LOTS;this.lotById=new Map(this.lots.map(lot=>[lot.id,lot]));this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();
    this.renderedTiers=new Map();this.poseCache=new Map();this.collapseAnimations=new Map();this.shakes=new Map();this.seenCityEvents=new Set();
   this.plumeResources=createPlumeResources();this.partsHidden=new Set();
   this.impactPlumes=new CityImpactPlumes(this.root,this.plumeResources,mobile);
@@ -595,7 +601,10 @@ export class OuterCity{
   // The five-instanced-splinter bursts are still immediate on every impact.
   const priority=['windows-0-0','sign','pipes','sheets-awning','timber',
    'tiles','stone','sheets-roof','pillars-0'];
-  this.fixtureWarmQueue=nearest.slice(0,this.mobile?3:7)
+  // Keep speculative fixture count below the LRU limit, reserving slots for
+  // actual impacts. The old mobile 3*9=27 exceeded its 24-entry cache.
+  const warmLots=Math.min(this.mobile?2:7,Math.floor(((this.mobile?24:72)-6)/priority.length));
+  this.fixtureWarmQueue=nearest.slice(0,warmLots)
    .flatMap(({index})=>priority.map(part=>[index,part]))
    .filter(([index,part])=>!this.fixturePrefabs.has(index+':'+part));
   this.scheduleIdleBasisWarmup();
@@ -872,8 +881,9 @@ export class OuterCity{
   if(!Object.keys(damage).length&&Object.keys(this.damage).length)this.resetBuildings();
   const firstSnapshot=this.lastDamage===null;
   this.lastDamage=damage;
-  for(const lot of this.lots){
-   const record=damage[lot.id];if(!record)continue;
+  const byId=this.lotById??=new Map(this.lots.map(lot=>[lot.id,lot]));
+  for(const [id,record] of Object.entries(damage)){
+   const lot=byId.get(id);if(!lot||!record)continue;
    const maxHp=record.maxHp||CITY_MAX_HP;
    const tier=cityDamageTier(record.hp,maxHp),stage=cityStage(record.hp,maxHp);
    const existing=this.damage[lot.id],knownTier=existing?.tier??0;
@@ -957,7 +967,9 @@ export class OuterCity{
    this.facade.pulse(flash.index,Math.pow(Math.max(0,1-flash.age/.34),1.15));
    if(flash.age>=.34)this.flashes.splice(i,1);
   }
-  const animated=new Set([...this.collapseAnimations.keys(),...this.shakes.keys()]);
+  const animated=this.animatedLots??=new Set();animated.clear();
+  for(const index of this.collapseAnimations.keys())animated.add(index);
+  for(const index of this.shakes.keys())animated.add(index);
   for(const index of animated){
    const lot=this.lots[index],motion=this.collapseAnimations.get(index),shake=this.shakes.get(index);
    if(!lot)continue;

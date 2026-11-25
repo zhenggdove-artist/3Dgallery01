@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import {CITY_MAX_HP,citySignSpecs,cityShopSignSpec} from './shared/city-layout.js';
+import {CITY_MAX_HP,citySignSpecs,cityShopSignSpec,citySignArtOptions} from './shared/city-layout.js';
+import {drawSignArtwork} from './sign-art.js';
 import {houseTileTexture} from './build-style.js';
 
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -122,12 +123,8 @@ function windowAssembly(group,w,h,seed,frameColor=FRAME){
 function signAssembly(group,lot){
  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=192;
  const ctx=canvas.getContext('2d');
- ctx.fillStyle=lot.style[3];ctx.fillRect(0,0,512,192);
- ctx.fillStyle='#24272a';ctx.fillRect(11,13,490,166);
- ctx.strokeStyle='#dbcead';ctx.lineWidth=7;ctx.strokeRect(17,20,478,152);
- ctx.textAlign='center';ctx.fillStyle='#f6edd9';
- ctx.font='bold 48px sans-serif';ctx.fillText(lot.shopName,256,89,470);
- ctx.font='bold 26px sans-serif';ctx.fillText(lot.enName,256,139,468);
+ const sign=cityShopSignSpec(lot);
+ drawSignArtwork(ctx,0,0,512,192,{color:lot.style[3],title:lot.shopName,subtitle:lot.enName,aspect:sign?sign.width/sign.height:512/192,...citySignArtOptions(lot,0)});
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;
  const w=Math.min(4.5,lot.width*.85);
  const face=new THREE.Mesh(new THREE.PlaneGeometry(w,1.15),

@@ -2,6 +2,7 @@ import {disposeGardenModel} from './reletter/garden-art.js';
 import * as THREE from 'three';
 import {GrassField} from './grass-field.js';
 import {OuterCity} from './outer-city.js';
+import {loadSignPortraits,signPortraitSeed} from './sign-art.js';
 import {cityGroundHeight,cityBlocked,structureSignSpecs,signWorldPosition} from './shared/city-layout.js';
 import {DisplayPlatforms} from './display-platforms.js';
 import {artworkPosition,artworkLanding,artworkRenderFlight} from './shared/artwork-flight.js';
@@ -36,7 +37,7 @@ export class TempleArena{
     this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.collapsingShells=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
   }
   async load(progress=()=>{}){
-    progress(.08,'Building arena');this.buildEnvironment();
+    progress(.08,'Building arena');await loadSignPortraits();this.buildEnvironment();
     const artTask=fetch('./state.min.json').then(r=>{if(!r.ok)throw Error('Artwork state missing');return r.json();}).then(state=>this.loadArtworks(state.artworks||[],value=>progress(.1+value*.65,'Loading 13 artworks')));
     const [character,coin]=await Promise.all([
       this.loader.loadAsync('./temple-assets/character.temple.glb'),this.loader.loadAsync('./temple-assets/coin_small.temple.glb'),this.islandEnemies.load(),artTask
@@ -312,7 +313,23 @@ export class TempleArena{
     this.registerStructureMeshes(); // in-place GPU instance updates only
     return;
    }
-   this.structureSignature=signature;this.structureHealthSignature=health;while(this.structureGroup.children.length){const child=this.structureGroup.children[0];if(child.userData.gmHouseId){disposeGmHouseMesh(child);continue;}child.removeFromParent();if(child.isInstancedMesh)child.dispose();child.geometry?.dispose();child.material?.dispose();}const kinds=new Map();for(const structure of structures){if(structure.gmHouse){const mesh=createGmHouseMesh(structure.house);mesh.userData.gmHouseId=structure.id;mesh.position.fromArray(structure.position);mesh.rotation.y=structure.rotation;this.updateGmHouseHealth(mesh,structure);this.structureGroup.add(mesh);continue;}const key=structure.kind+'|'+(structure.surface||'');if(!kinds.has(key))kinds.set(key,[]);kinds.get(key).push(structure);}for(const [key,list] of kinds){const kind=list[0].kind;if(kind==='tree'){this.addTreeInstances(list);continue;}if(kind==='house'){this.addHouseInstances(list);this.addLegacyHouseSigns(list);continue;}const dimensions=originalBuildSizes[kind]||[2,2,2],mesh=new THREE.InstancedMesh(buildGeometry(kind),buildMaterial(list[0].surface),list.length);list.forEach((structure,index)=>{const variant=structure.variant||0,temp=1+(variant%3)*.08;tempPosition.set(structure.position[0],structure.position[1]+dimensions[1]*temp/2,structure.position[2]);tempQuaternion.setFromEuler(new THREE.Euler(0,structure.rotation||0,0));tempScale.set(dimensions[0]*temp,dimensions[1]*temp,dimensions[2]);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);});mesh.instanceMatrix.needsUpdate=true;mesh.userData.records=list;mesh.userData.baseMatrices=list.map((_,i)=>{const m=new THREE.Matrix4();mesh.getMatrixAt(i,m);return m;});list.forEach((_,i)=>mesh.setColorAt(i,new THREE.Color('#ffffff')));mesh.instanceColor.needsUpdate=true;mesh.name=`${kind} structures`;this.structureGroup.add(mesh);}this.registerStructureMeshes();}
+   this.structureSignature=signature;this.structureHealthSignature=health;
+   // Adding/moving another structure must not destroy every unrelated GM house
+   // and regenerate all its sign canvases, textures, windows and materials.
+   const wantedHouses=new Map(structures.filter(s=>s.gmHouse).map(s=>[s.id,JSON.stringify(s.house)])),retained=new Map();
+   for(const child of [...this.structureGroup.children]){
+    if(child.userData.gmHouseId){
+     const id=child.userData.gmHouseId;
+     if(wantedHouses.has(id)&&wantedHouses.get(id)===child.userData.houseGeometryKey){retained.set(id,child);continue;}
+     disposeGmHouseMesh(child);continue;
+    }
+    child.removeFromParent();if(child.isInstancedMesh)child.dispose();child.geometry?.dispose();child.material?.dispose();
+   }
+   const kinds=new Map();for(const structure of structures){if(structure.gmHouse){
+    const mesh=retained.get(structure.id)||createGmHouseMesh(structure.house,{seed:signPortraitSeed(structure.id)});
+    mesh.userData.gmHouseId=structure.id;mesh.userData.houseGeometryKey=wantedHouses.get(structure.id);
+    mesh.position.fromArray(structure.position);mesh.rotation.y=structure.rotation;this.updateGmHouseHealth(mesh,structure);
+    if(!mesh.parent)this.structureGroup.add(mesh);continue;}const key=structure.kind+'|'+(structure.surface||'');if(!kinds.has(key))kinds.set(key,[]);kinds.get(key).push(structure);}for(const [key,list] of kinds){const kind=list[0].kind;if(kind==='tree'){this.addTreeInstances(list);continue;}if(kind==='house'){this.addHouseInstances(list);this.addLegacyHouseSigns(list);continue;}const dimensions=originalBuildSizes[kind]||[2,2,2],mesh=new THREE.InstancedMesh(buildGeometry(kind),buildMaterial(list[0].surface),list.length);list.forEach((structure,index)=>{const variant=structure.variant||0,temp=1+(variant%3)*.08;tempPosition.set(structure.position[0],structure.position[1]+dimensions[1]*temp/2,structure.position[2]);tempQuaternion.setFromEuler(new THREE.Euler(0,structure.rotation||0,0));tempScale.set(dimensions[0]*temp,dimensions[1]*temp,dimensions[2]);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);});mesh.instanceMatrix.needsUpdate=true;mesh.userData.records=list;mesh.userData.baseMatrices=list.map((_,i)=>{const m=new THREE.Matrix4();mesh.getMatrixAt(i,m);return m;});list.forEach((_,i)=>mesh.setColorAt(i,new THREE.Color('#ffffff')));mesh.instanceColor.needsUpdate=true;mesh.name=`${kind} structures`;this.structureGroup.add(mesh);}this.registerStructureMeshes();}
   updateGmHouseHealth(mesh,structure){for(const child of mesh.children)if(child.userData.houseSignId)child.visible=(structure.signDamage?.[child.userData.houseSignId]??42)>0;const wear=THREE.MathUtils.clamp(1-structure.hp/structure.maxHp,0,1);for(const m of mesh.userData.gmHouseMaterials||[]){m.userData.baseColor??=m.color.clone();m.color.copy(m.userData.baseColor).lerp(new THREE.Color('#3a302c'),wear*.55);}}
   addLegacyHouseSigns(list){
    for(const index of [0,1]){
