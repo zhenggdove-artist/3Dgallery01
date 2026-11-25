@@ -1915,8 +1915,10 @@ export function tickTidalChannels(world,actors,now=Date.now(),rng=Math.random){
     const victim=t.kind==='player'?world.profiles[t.value.key]:t.value;
     if(!victim||victim.hp<=0||(t.kind==='player'&&(victim.spawnProtectedUntil>now||(victim.admin&&victim.gmInvincible!==false))))continue;
     const dx=t.value.position[0]-caster.position[0],dz=t.value.position[2]-caster.position[2],len=Math.hypot(dx,dz);if(len<.001)continue;
-    const t=equipmentTuning(world,equippedItem(profile,weapon));
-    victim.tidePush={id:id(),time:now,durationMs:Math.max(1,Math.round(TIDE_PUSH_DURATION_MS*(t.effectDuration??1))),distance:(t.pushDistance??TIDE_PUSH_DISTANCE)*(t.effectPower??1),vector:[dx/len,0,dz/len]};changed=true;
+    const pushTuning=equipmentTuning(world,equippedItem(profile,weapon));
+    victim.tidePush={id:id(),time:now,durationMs:TIDE_PUSH_DURATION_MS,distance:TIDE_PUSH_DISTANCE,vector:[dx/len,0,dz/len]};
+    victim.tidePush.durationMs=Math.max(1,Math.round(TIDE_PUSH_DURATION_MS*(pushTuning.effectDuration??1)));
+    victim.tidePush.distance=(pushTuning.pushDistance??TIDE_PUSH_DISTANCE)*(pushTuning.effectPower??1);changed=true;
    }
   }
   for(let i=0;i<targets.length;i++){
