@@ -187,7 +187,8 @@ function beginStaffChannel(){
    staffChannel=null;
    // Server charge start can lag the client clock. Retry the actual state
    // transition without depending on rendering/fps; never fake an attack.
-   if(attackHeld&&['lightning','beam'].includes(item.family))
+   if(Number(world?.profile?.mana)<30){attackHeld=false;chargeStarted=null;ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}
+   else if(attackHeld&&['lightning','beam'].includes(item.family))
     scheduleBeamChannelStart(260);
   }
   return result;
@@ -545,7 +546,7 @@ const pendingQuickUses=new Set();
 ui.addEventListener('quick-use',event=>{
  const slot=event.detail?.slot;
  if(!Number.isInteger(slot)||slot<0||slot>2||pendingQuickUses.has(slot))return;
- if(!joined||self?.role!=='fighter'||!controller?.enabled||ui.panelName)return;
+ if(!joined||self?.role!=='fighter'||!controller?.enabled||ui.panelName||Date.now()<(world?.profile?.consumableCooldownUntil||0))return;
  pendingQuickUses.add(slot);
  void sendAction('use-consumable',{slot}).finally(()=>pendingQuickUses.delete(slot));
 });

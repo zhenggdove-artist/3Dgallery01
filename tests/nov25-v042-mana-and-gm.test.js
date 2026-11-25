@@ -32,3 +32,6 @@ test('mana regenerates by level, water adds 50%, normal guns are free',()=>{
 test('restorative loot includes all three cash colours',()=>{
  for(const r of [.1,.6,.99]){let i=0;const roll=groundDropRoll(()=>i++===0?.95:r);assert.equal(roll.kind,'consumable');assert.ok(itemById(roll.itemId).slot==='consumable');}
 });
+
+import {shotgunDistanceScale} from '../src/shared/calico-pellets.js';
+test('shotgun muzzle midpoint and final damage fractions',()=>{assert.equal(shotgunDistanceScale(0,20),.7);assert.ok(Math.abs(shotgunDistanceScale(10,20)-.45)<1e-9);assert.ok(Math.abs(shotgunDistanceScale(20,20)-.2)<1e-9);});

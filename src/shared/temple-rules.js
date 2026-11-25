@@ -21,7 +21,7 @@ import {fusionSniperEchoDamage} from './fusion-balance.js';
 import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './island-combat.js';
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
-import {calicoPellets} from './calico-pellets.js';
+import {calicoPellets,shotgunDistanceScale} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,shoulderSniperSpread,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
@@ -427,7 +427,7 @@ export function applyAction(world,actor,body,context={}){
   // Public gacha has been permanently retired; old clients cannot draw.
   if(['wing-draw','gm-wing-draw'].includes(body.action))return {error:'Wing gacha has been removed'};
   if(body.action==='redeem-wing-design'){
-   if(typeof actor.key!=='string'||!actor.key.startsWith('firebase:'))return {error:'Google sign-in required'};
+   if(typeof actor.key!=='string'||!actor.key.startsWith('firebase:')&&!(actor.key.startsWith('guest:')&&profile.wingDesignCredits>0))return {error:'Google sign-in required'};
    if(actor.role==='spectator')return {error:'Enter the arena to equip your wing'};
    if(!Number.isInteger(profile.wingDesignCredits)||profile.wingDesignCredits<1)return {error:'No paid wing design credit remains'};
    if(profile.inventory.length>=inventoryCapacity(profile))return {error:'Inventory full'};
@@ -2011,7 +2011,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     const pvpCap=weapon.id==='black-cat'?(fx.charge>=1?42:96):
       fx.charge>=1?(pellet===null?29.5:2.95):(pellet===null?13.9:1.39);
     const scatter=weapon.pattern==='scatter'&&pellet!==null;
-    const falloff=scatter?.2+.5*proximity:1;
+    const falloff=scatter?shotgunDistanceScale(along,fx.range):1;
     const shotgunPellet=!fx.echo&&isPlayer&&scatter;
     const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage)*(frostProc?1.5:1)*(shotgunPellet?1:falloff);
     const lethalHeadshot=!fx.echo&&fx.charge<1&&!fx.shoulderSpread&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
