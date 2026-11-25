@@ -1,3 +1,4 @@
+import {equipmentTuning} from './equipment-tuning.js';
 import {fuseEquipment} from '../reletter/server/fusion-rules.js';
 import {equipmentById} from '../reletter/equipment-catalog.js';
 import {itemAffixes} from '../reletter/combat-traits.js';
@@ -12,8 +13,11 @@ export function originalEquipmentGame(profile,world={},equippedOnly=false){
   // Project Temple's authoritative successful headgear/outfit fusions into
   // resolveItem -> traitStats; without this, only the BAG number changes.
   const templeBonuses=record?.templeStats?.bonuses;
-  const rolledStats=templeBonuses?{...(original.stats||{}),
+  let rolledStats=templeBonuses?{...(original.stats||{}),
    bonuses:{...(original.stats?.bonuses||{}),...templeBonuses}}:original.stats;
+  const tuning=equipmentTuning(world,itemById(id));
+  const bonuses=Object.fromEntries(Object.entries(tuning).filter(([k])=>k.startsWith('bonus_')).map(([k,v])=>[k.slice(6),v]));
+  if(Object.keys(bonuses).length)rolledStats={...rolledStats,bonuses:{...rolledStats?.bonuses,...bonuses}};
   const affixIds=[...new Set([...itemAffixes(original),...itemAffixes(record)])];
   return {id,baseId:id,origin:profile.itemOrigins?.[id]||'monster',sourceLevel:profile.level,
    obtainedAt:profile.createdAt,...original,...(rolledStats?{stats:rolledStats}:{}),affixIds,affixId:affixIds[0]||null};

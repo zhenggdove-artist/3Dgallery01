@@ -43,7 +43,7 @@ export class ReletterPresentation{
     if(next.every((value,i)=>value===last[i]))return;
     if(next[0]!==last[0]){
      const weapon=itemById(equipment.weapon);
-     if(d.blade)disposeVisual(d.blade);d.blade=null;if(weapon&&(weapon.exotic||weapon.id==='chiang-token'||meleeFamilies.includes(weapon.family)||isSpellWeapon(weapon))){d.blade=isSpellWeapon(weapon)?makeSpellEquipment(weapon):makeHeldWeapon(weapon);root.add(d.blade);}d.weaponId=weapon?.id;d.staffRaise=0;
+     if(d.blade)disposeVisual(d.blade);d.blade=null;if(weapon&&(weapon.exotic||weapon.id==='chiang-token'||meleeFamilies.includes(weapon.family)||isSpellWeapon(weapon))){d.blade=isSpellWeapon(weapon)?makeSpellEquipment(weapon):makeHeldWeapon(weapon);d.blade.scale.multiplyScalar(.30);d.blade.userData.heldScale=.30;root.add(d.blade);}d.weaponId=weapon?.id;d.staffRaise=0;
     }
     if(next[1]!==last[1]){
      if(d.headgear)disposeHeadgear(d.headgear);d.headgear=equipment.head?attachHeadgear(THREE,d.model,itemById(equipment.head)):null;

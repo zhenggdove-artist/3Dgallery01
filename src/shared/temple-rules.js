@@ -1,3 +1,4 @@
+import {tuningVariant,validateTuning,tunedEquipment,equipmentTuning,tuningDamageRatio} from './equipment-tuning.js';
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor,iceEruptionContact,ICE_ERUPTION_TRAVEL_MS,ICE_ERUPTION_VISIBLE_MS} from './charge-area.js';
@@ -56,7 +57,7 @@ const initialStructures=now=>[
 export function createInitialWorld(now=Date.now()){
   return {
     version:WORLD_VERSION,revision:1,createdAt:now,
-    profiles:{},customWings:[],shopPrices:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
+    profiles:{},customWings:[],shopPrices:{},equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},tidalLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
@@ -70,7 +71,7 @@ export function createInitialWorld(now=Date.now()){
 export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
-  world.profiles??={};world.customWings??=[];registerCustomWings(world.customWings);
+  world.profiles??={};world.equipmentTuning??={};world.customWings??=[];registerCustomWings(world.customWings);
   world.environment??={skyBaseColor:'#101b36'};world.removedArtworkIds??=[];world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.customPedestals??=[];world.platformOverrides??={};world.removedPlatformIds??=[];world.persistentAttacks??=[];world.prismLocks??={};world.pendingArtworkFlights??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};if(world.removedArtworkIds.includes(p.id)){delete world.artworks[p.id];delete world.artworkLayout[p.id];continue;}world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
@@ -162,7 +163,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   if(name)current.name=String(name).slice(0,24);if(validColor(color))current.color=color;current.admin=!!admin;current.updatedAt=now;
   current.wallet=Number.isFinite(current.wallet)?Math.max(0,Math.floor(current.wallet)):0;
   current.level=Math.max(1,Math.floor(current.level||1));
-  refreshMana(current,now);current.xp=Math.max(0,Math.floor(current.xp||0));
+  refreshMana(current,now,world);current.xp=Math.max(0,Math.floor(current.xp||0));
   current.wingTrialDraws=Number.isFinite(current.wingTrialDraws)?Math.max(0,Math.min(FREE_WING_TRIAL_LIMIT,Math.floor(current.wingTrialDraws))):0;
   current.wingPaidDraws=Number.isSafeInteger(current.wingPaidDraws)?Math.max(0,Math.min(100000,Math.floor(current.wingPaidDraws))):0;
   current.wingDesignCredits=Number.isSafeInteger(current.wingDesignCredits)?Math.max(0,current.wingDesignCredits):0;
@@ -294,7 +295,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
        consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    chatDefault:clone(world.chatDefault||null),shopPrices:clone(world.shopPrices||{}),profile:worldProfileView(world,actorKey,now),
+    chatDefault:clone(world.chatDefault||null),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -412,6 +413,17 @@ export function applyAction(world,actor,body,context={}){
    world.chatDefault={x,y,revision:(world.chatDefault?.revision||0)+1};
    world.revision=(world.revision||0)+1;
    return {notice:'全服 CHAT 預設位置已儲存'};
+  }
+  if(body.action==='gm-equipment-tuning'){
+   if(!profile.admin||actor.admin!==true)return {error:'GM only'};
+   const item=tuningVariant(body.itemId,body.qualityTier);
+   if(!item)return {error:'Invalid equipment or quality'};
+   let values;try{values=validateTuning(item,body.values);}catch(e){return {error:e.message};}
+   world.equipmentTuning??={};const key=shopPriceKey(item);
+   if(!values||!Object.keys(values).length)delete world.equipmentTuning[key];else world.equipmentTuning[key]=values;
+   for(const target of Object.values(world.profiles))if(Object.values(target.equipment||{}).includes(item.id))refreshStats(world,target,now);
+   world.revision=(world.revision||0)+1;
+   return {notice:'裝備數值已更新 · '+item.name,tuningKey:key};
   }
   if(body.action==='gm-shop-price'){
    // Role is obtained from the authenticated server session, not the request payload.
@@ -873,16 +885,16 @@ function assignConsumable(profile,body){
 function useConsumable(world,profile,actor,body,now){
  const index=body.slot,itemId=profile.quickSlots?.[index];
  if(!Number.isInteger(index)||index<0||index>=3)return {error:'Invalid consumable slot'};
- const item=itemById(itemId);
+ const item=tunedEquipment(world,itemById(itemId));
  if(item?.slot!=='consumable')return {error:'No restorative consumable assigned'};
  const inventoryIndex=profile.inventory.indexOf(itemId);
  if(inventoryIndex<0)return {error:'Out of stock · Restock this consumable at SHOP'};
  if(now<(profile.consumableCooldownUntil||0))return {error:'Restorative item is cooling down'};
- refreshMana(profile,now);
+ refreshMana(profile,now,world);
  if(item.manaFraction){
   const restored=Math.min(profile.maxMana-profile.mana,Math.ceil(profile.maxMana*item.manaFraction));
   if(restored<=0)return {error:'Mana is already full'};
-  removeInventoryInstance(profile,inventoryIndex);profile.mana+=restored;profile.consumableCooldownUntil=now+2000;
+  removeInventoryInstance(profile,inventoryIndex);profile.mana+=restored;profile.consumableCooldownUntil=now+(item.cooldownMs??2000);
   return {notice:'Restored '+Math.round(restored)+' MP',restoredMana:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
  }
  if(profile.hp>=profile.maxHp)return {error:'Health is already full'};
@@ -892,7 +904,7 @@ function useConsumable(world,profile,actor,body,now){
  const restored=Math.min(profile.maxHp-hpBefore,Math.ceil(profile.maxHp*item.healFraction));
  if(restored<=0)return {error:'Health is already full'};
  removeInventoryInstance(profile,inventoryIndex);
- profile.hp=Math.min(profile.maxHp,hpBefore+restored);profile.consumableCooldownUntil=now+(item.cooldownMs||2000);
+ profile.hp=Math.min(profile.maxHp,hpBefore+restored);profile.consumableCooldownUntil=now+(item.cooldownMs??2000);
  recordTempleDamage(world,{amount:restored,kind:'heal',
   position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],
   owner:profile.key,target:profile.key},now);
@@ -1052,7 +1064,7 @@ function attack(world,profile,actor,body,context,now){
    return {error:'Paralysed: attacks disabled'};
 
   if(profile.hitReaction&&now-profile.hitReaction.time<profile.hitReaction.stunMs)return {error:'Recovering from hit'};
-  const weapon=equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon)),bonus=profile.fusion[weapon.id]?.bonus||0;
+  const weapon=tunedEquipment(world,equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon))),bonus=profile.fusion[weapon.id]?.bonus||0;
   // Shoulder shots have deliberately poor server-owned accuracy; an A-hold
   // charged blast is legal there only with a fused chargeable weapon.
   const shoulderSniper=weapon.id==='black-cat'&&body.aimMode==='shoulder';
@@ -1074,7 +1086,7 @@ function attack(world,profile,actor,body,context,now){
     // once the ORIGINAL charge request has reached the weapon's full time.
     if(!profile.chargeStartedAt||now-profile.chargeStartedAt<(weapon.chargeMs||1500))
       return {error:'Charge must reach 100% before channeling'};
-    refreshMana(profile,now);
+    refreshMana(profile,now,world);
     if(profile.mana<30)return {error:'Not enough mana'};
     profile.channelWeapon=weapon.id;profile.manaChannelPaid=false;
     profile.channelStartedAt=profile.chargeStartedAt;
@@ -1148,9 +1160,11 @@ function attack(world,profile,actor,body,context,now){
     stats.damage=+(stats.damage*3).toFixed(3);
     stats.radius=Math.max(stats.radius,5.9*quality.visual);
    }
+  const tuning=equipmentTuning(world,weapon),tuningRatio=tuningDamageRatio(world,weapon,stats.ultimate);
+  stats.damage*=tuningRatio;stats.range*=tuning.rangeScale??1;stats.radius*=tuning.radiusScale??1;
   const fusionCount=(profile.fusion?.[weapon.id]?.effects||[]).length;
   const manaCost=ultimateManaCost(weapon,stats,quality,channel&&profile.manaChannelPaid===true,fusionCount);
-  refreshMana(profile,now);
+  refreshMana(profile,now,world);
   if(manaCost>profile.mana+1e-6)return {error:'Not enough mana'};
   profile.mana=Math.max(0,profile.mana-manaCost);
   if(channel)profile.manaChannelPaid=true;
@@ -1165,7 +1179,7 @@ function attack(world,profile,actor,body,context,now){
   const area=stats.ultimate&&weapon.id!=='goldfish'&&!waveVortex?chargedArea(weapon,origin,direction,stats,groundForSpell,channel||(weapon.family==='ice'&&stats.ultimate)):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate,now):null;
   const fusionEchoes=[];
-  const pvpDamage=pvpShotDamage(weapon,stats,quality);
+  const pvpDamage=pvpShotDamage(weapon,stats,quality)*tuningRatio;
   if(tidalChannel){
    // Three authenticated homing streams, each intentionally weaker than the
    // single-target prism; regular water taps still use their original ray.
@@ -1194,7 +1208,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:attackId,kind:waveVortex?'vortex':swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
       origin:[...goldfishOrigin],direction:[...goldfishDirection],launchDirection:[...goldfishDirection],range:stats.range,position:[...goldfishOrigin],travelled:0,hitTimes:{},
-      damage:stats.damage+bonus*.1,pvpDamage,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
+      damage:stats.damage+bonus*.1*tuningRatio,pvpDamage,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
       createdAt:now,lastAt:now,expiresAt:now+duration,
       outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[]
     });
@@ -1212,7 +1226,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
-      radius:stats.radius,area,damage:stats.damage+bonus*.1*(weapon.id==='jellybrella'?.5:1),pvpDamage,charge,critChance:weapon.critChance,
+      radius:stats.radius,area,damage:stats.damage+bonus*.1*tuningRatio*(weapon.id==='jellybrella'?.5:1),pvpDamage,gmTuning:tuning,damageRatio:tuningRatio,charge,critChance:weapon.critChance,
       qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,iceGround,
       shoulderSpread:shoulderSniper,
       flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
@@ -1224,8 +1238,9 @@ function attack(world,profile,actor,body,context,now){
   if(stats.ultimate){
     const primaryFootprint=spellFootprint(weapon,origin,direction,stats,area,groundForSpell);
     for(const [fusionSlot,sourceId] of (profile.fusion?.[weapon.id]?.effects||[]).slice(0,2).entries()){
-      const source=itemById(sourceId);if(source?.slot!=='weapon')continue;
-      const sourceQuality=weaponQuality(source),full=attackStats(source,1);
+      const source=tunedEquipment(world,itemById(sourceId));if(source?.slot!=='weapon')continue;
+      const sourceQuality=weaponQuality(source),full=attackStats(source,1),echoTuning=equipmentTuning(world,source),echoRatio=tuningDamageRatio(world,source,true);
+      full.damage*=echoRatio;full.radius*=echoTuning.radiusScale??1;
       // All borrowed skills terminate at the primary weapon's warned target.
       const anchor=fusionEchoAnchor(primaryFootprint,origin);
       const echoChannel=channel&&isChannelStaff(source);
@@ -1255,11 +1270,11 @@ function attack(world,profile,actor,body,context,now){
        // echoes together must remain less powerful than a direct charged hit.
        const echoScale=weapon.id==='black-cat'?.08:.2;
        const echoId=id(),echoDamage=balancedSniper?.damage??+Math.min(full.damage*echoScale,weapon.id==='black-cat'?32:Infinity).toFixed(3);
-      const echoPvP=balancedSniper?.pvpDamage??+Math.min(pvpShotDamage(source,full,sourceQuality)*echoScale,weapon.id==='black-cat'?3.5:Infinity).toFixed(3);
+      const echoPvP=balancedSniper?.pvpDamage??+Math.min(pvpShotDamage(source,full,sourceQuality)*echoRatio*echoScale,weapon.id==='black-cat'?3.5:Infinity).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],launchDirection:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,
-        damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*echoScale,
+        damage:echoDamage,pvpDamage:echoPvP,gmTuning:echoTuning,damageRatio:echoRatio,charge:1,qualityDuration:sourceQuality.duration*echoScale,
         tier:sourceQuality.tier,flightMs:flight,iceGround:source.family==='ice',hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
         outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[],
@@ -1284,7 +1299,7 @@ function attack(world,profile,actor,body,context,now){
    return {v,along,inside};
   }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
   for(const {v:structure} of (returningGiraffe||waveVortex?[]:area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
-   const damage=Math.max(8,Math.round((stats.damage+bonus*.1)*.7));
+   const damage=Math.round(Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*.7))*(weapon.pattern==='scatter'?.7:1));
    structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
    structure.hp=Math.max(0,structure.hp-damage);
    const event={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
@@ -1293,7 +1308,7 @@ function attack(world,profile,actor,body,context,now){
   }
   // The city's structural impact follows weapon damage and charged strength,
   // without changing PvP damage or displaying health numbers on the building.
-  const structuralDamage=Math.max(8,Math.round((stats.damage+bonus*.1)*(charge>=1?1.5:1.1)));
+  const structuralDamage=Math.round(Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*(charge>=1?1.5:1.1)))*(weapon.pattern==='scatter'?.7:1));
   const city=returningGiraffe||waveVortex?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
@@ -1334,10 +1349,10 @@ function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosit
   const reduction=0;
   // The frying pan's self-damage is exactly 15 HP, not armour/shield
   // adjusted; it remains a genuine self-inflicted hazard even for the GM.
-  let damage=fixedDamage?Math.max(0,+Number(amount).toFixed(1)):
+  let damage=amount<=0?0:fixedDamage?Math.max(0,+Number(amount).toFixed(1)):
     Math.max(1,+((amount)*(forceKill?1:1-reduction)*(forceKill?1:stats.defense)*(1+(effectActive(target,'soaked',now)?.power||0))).toFixed(1));
   if(forceKill)damage=Math.max(damage,target.hp); // A verified sniper headshot ignores armour and shields.
-  if(shotgunPellet){const scale=typeof shotgunPellet==='number'?shotgunPellet:1;damage=+(Math.max(5,Math.min(20,damage))*scale).toFixed(1);} // Per pellet after armour; shields still absorb.
+  if(shotgunPellet){const scale=typeof shotgunPellet==='object'?shotgunPellet.scale:typeof shotgunPellet==='number'?shotgunPellet:1;damage=+(Math.max(5,Math.min(20,damage))*scale).toFixed(1);} // Per pellet after armour; shields still absorb.
    if(target.shield&&!forceKill&&!fixedDamage){const absorbed=Math.min(Math.max(0,target.shield.hp),damage);if(absorbed>0){target.shield.hp=Math.max(0,target.shield.hp-absorbed);target.shield.lastHit=now;target.shield.lastAbsorbed=+absorbed.toFixed(2);target.shield.hitId=id();recordTempleDamage(world,{amount:absorbed,kind:'shield',position:hitPosition||[targetActor.position[0],targetActor.position[1]+1.3,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);}damage-=absorbed;}
   const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
@@ -1400,7 +1415,7 @@ function validBuildPosition(world,actor,position){return canBuildAt(world,actor.
 // Authoritative 1 HP/s while flower-crown's authenticated sustained cast
 // is active. No free HP from ordinary attacks, inactive/expired channels,
 // repeated network packets, or from visuals and client-side clocks.
-export function tickBloomChannelHeal(profile,now){
+export function tickBloomChannelHeal(profile,now,world){
  const item=itemById(profile?.channelWeapon);
  if(!item||item.family!=='petal'||!isChannelStaff(item)||
     profile.equipment?.weapon!==item.id||
@@ -1410,7 +1425,7 @@ export function tickBloomChannelHeal(profile,now){
  const pulses=Math.max(0,Math.floor((now-since)/1000));
  if(!pulses)return 0;
  profile.lastBloomHealAt=since+pulses*1000;
- const restored=Math.min(pulses,Math.max(0,profile.maxHp-profile.hp));
+ const t=equipmentTuning(world,item);const restored=Math.min(pulses*(t.healPerSecond??1)*(t.effectPower??1),Math.max(0,profile.maxHp-profile.hp));
  profile.hp+=restored;
  return restored;
 }
@@ -1551,7 +1566,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   )||artworkChanged;
   const liveKeys=new Set(actors.map(a=>a.key));
   for(const profile of Object.values(world.profiles||{})){
-   if(liveKeys.has(profile.key))changed=refreshMana(profile,now)||changed;
+   if(liveKeys.has(profile.key))changed=refreshMana(profile,now,world)||changed;
    if(profile.channelWeapon&&(!isLiveStaffChannel(profile,now)||(profile.manaChannelPaid===true&&profile.mana<2))){
     // Clear orphaned continuous-cast state before validating later movement.
     profile.channelWeapon=null;profile.channelStartedAt=0;
@@ -1564,7 +1579,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
      !(fx.owner===profile.key&&fx.channel));
     changed=true;
    }
-   if(profile.manaChannelPaid!==false)changed=tickBloomChannelHeal(profile,now)>0||changed;
+   if(profile.manaChannelPaid!==false)changed=tickBloomChannelHeal(profile,now,world)>0||changed;
   }
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
   changed=tickPrismChannels(world,actors,now,rng)||changed;
@@ -1733,7 +1748,7 @@ function advanceWhipPullMonster(world,mob,now){
   const center=[pull.center[0],mob.position[1],pull.center[1]];
   const distance=Math.hypot(center[0]-mob.position[0],center[2]-mob.position[2]);
   if(distance>.0001)moveMonster(world,mob,center,
-   Math.min(distance,WHIP_PULL_SPEED*(to-from)/1000));
+   Math.min(distance,(pull.speed??WHIP_PULL_SPEED)*(to-from)/1000));
  }
  pull.updatedAt=to;
  if(now>=until)delete mob.whipPull;
@@ -1980,7 +1995,7 @@ function tickPersistentAttacks(world,actors,now,rng){
   const owner=world.profiles[fx.owner];
   if(!owner){fx.lastAt=now;continue;}
   if(fx.kind==='projectile'){
-   const weapon=itemById(fx.weapon);
+   const baseWeapon=itemById(fx.weapon),weapon=baseWeapon?{...baseWeapon,gmTuning:fx.gmTuning||{}}:null;
    if(!weapon){fx.lastAt=now;continue;}
    const panBlast=!fx.echo&&/^pan-[1-5]$/.test(weapon.id)&&fx.charge>=1;
    const palmStorm=/^palm-[1-5]$/.test(weapon.id)&&fx.charge>=1&&fx.area?.mode==='area';
@@ -2016,12 +2031,13 @@ function tickPersistentAttacks(world,actors,now,rng){
     const scatter=weapon.pattern==='scatter'&&pellet!==null;
     const falloff=scatter?shotgunDistanceScale(along,fx.range):1;
     const shotgunPellet=!fx.echo&&isPlayer&&scatter;
-    const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap):rawDamage)*(frostProc?1.5:1)*(shotgunPellet?1:falloff);
+    const ratio=fx.damageRatio??1;
+    const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap*ratio):rawDamage)*(frostProc?1.5:1)*(shotgunPellet?1:falloff);
     const lethalHeadshot=!fx.echo&&fx.charge<1&&!fx.shoulderSpread&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
      fx.origin,fx.direction,fx.range,enemy.position);
     const hitKind=lethalHeadshot?(modifiers.critical?'critical-headshot':'headshot'):modifiers.kind;
     let applied;
-    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,hitKind,position,lethalHeadshot,shotgunPellet?falloff:false);
+    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,hitKind,position,lethalHeadshot,shotgunPellet?{scale:falloff*ratio}:false);
     else applied=damageMonster(world,owner,damage,now,rng,modifiers.kind,enemy,position);
     if(applied&&!applied.immune){
      if(fx.channel){
@@ -2053,7 +2069,7 @@ function tickPersistentAttacks(world,actors,now,rng){
        // damage-over-time contacts cannot refresh the suction window.
        fx.pullHits??=[];fx.pullHits.push(key);
        const whipPull={id:id(),time:now,center:[fx.area.center[0],fx.area.center[2]],
-        durationMs:whipPullDurationMs(fx.tier||weapon.tier),speed:WHIP_PULL_SPEED};
+        durationMs:Math.round(whipPullDurationMs(fx.tier||weapon.tier)*(fx.gmTuning?.effectDuration??1)),speed:(fx.gmTuning?.pullSpeed??WHIP_PULL_SPEED)*(fx.gmTuning?.effectPower??1)};
        victim.whipPull=whipPull;
        // Preserve roots cast by OTHER players while clearing the whip's
        // own root; monsters are pulled server-side despite their AI status.
@@ -2272,7 +2288,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     const point=[victim.position[0],victim.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),victim.position[2]];
     const hit=target.kind==='monster'?
      damageMonster(world,owner,fx.damage*.12*1.5,now,rng,'vortex',victim,point):
-     damagePlayer(world,owner,victim,(fx.pvpDamage||12)*.18*1.5,now,'vortex',fx.origin,'vortex',point);
+     damagePlayer(world,owner,victim,(fx.pvpDamage??12)*.18*1.5,now,'vortex',fx.origin,'vortex',point);
     if(!hit||hit.immune)continue;
     fx.hitTimes??={};fx.hitTimes[key]=now+VORTEX_DAMAGE_INTERVAL_MS;
     changed=true;
@@ -2311,7 +2327,7 @@ function tickPersistentAttacks(world,actors,now,rng){
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
      const hit=target.kind==='monster'
       ?damageMonster(world,owner,fx.damage*.53,now,rng,leg==='out'?'boomerang-out':'boomerang-return',value,center)
-      :damagePlayer(world,owner,value,(fx.pvpDamage||12)*.62,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',center);
+      :damagePlayer(world,owner,value,(fx.pvpDamage??12)*.62,now,'boomerang',fx.origin,leg==='out'?'boomerang-out':'boomerang-return',center);
      if(hit&&!hit.immune&&!hit.defeated)applyElementalHit(
       target.kind==='monster'?value:world.profiles[value.key],owner,
       {family:'lightning',element:'electric'},now,fx.echo?.2:1);
@@ -2448,7 +2464,7 @@ function tickPersistentAttacks(world,actors,now,rng){
        value.effects??={};value.effects.stun={owner:fx.owner,power:fx.echo?.2:1,until:now+(fx.echo?160:800),next:now+1000};
       }
      }else{
-      const pvpDirect=Math.min(direct,contacts*(fx.pvpDamage||12)*1.08*GOLDFISH_DAMAGE_PER_FISH);
+      const pvpDirect=Math.min(direct,contacts*(fx.pvpDamage??12)*1.08*GOLDFISH_DAMAGE_PER_FISH);
       const hit=damagePlayer(world,owner,value,pvpDirect,now,'goldfish',fx.origin,'giant-goldfish',center);
       fx.damageSpent[key]=(fx.damageSpent[key]||0)+pvpDirect;
       if(hit&&!hit.immune&&first){
@@ -2489,7 +2505,7 @@ function tickPersistentAttacks(world,actors,now,rng){
      fx.fanHits[key]=now;
      const center=[value.position[0],value.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),value.position[2]];
      if(target.kind==='monster')damageMonster(world,owner,fx.damage*.18,now,rng,'tornado',value,center);
-     else damagePlayer(world,owner,value,(fx.pvpDamage||10)*.10,now,'tornado',fx.origin,'tornado',center);
+     else damagePlayer(world,owner,value,(fx.pvpDamage??10)*.10,now,'tornado',fx.origin,'tornado',center);
      const victim=target.kind==='monster'?value:world.profiles[value.key];
      if(victim){
       victim.effects??={};

@@ -34,4 +34,4 @@ test('restorative loot includes all three cash colours',()=>{
 });
 
 import {shotgunDistanceScale} from '../src/shared/calico-pellets.js';
-test('shotgun muzzle midpoint and final damage fractions',()=>{assert.equal(shotgunDistanceScale(0,20),.7);assert.ok(Math.abs(shotgunDistanceScale(10,20)-.45)<1e-9);assert.ok(Math.abs(shotgunDistanceScale(20,20)-.2)<1e-9);});
+test('shotgun muzzle midpoint and final damage fractions',()=>{assert.equal(shotgunDistanceScale(0,20),.49);assert.ok(Math.abs(shotgunDistanceScale(10,20)-Math.sqrt(.49*.14))<1e-9);assert.ok(Math.abs(shotgunDistanceScale(20,20)-.14)<1e-9);});

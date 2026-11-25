@@ -23,4 +23,4 @@ export function calicoPellets(direction,charged=false,seed=0){
 }
 
 // Linear retained fraction of V041 damage, for every pellet and quality.
-export function shotgunDistanceScale(distance,range){return .7-.5*Math.max(0,Math.min(1,(Number(distance)||0)/Math.max(.001,Number(range)||0)));}
+export function shotgunDistanceScale(distance,range){const t=Math.max(0,Math.min(1,(Number(distance)||0)/Math.max(.001,Number(range)||0)));return .49*Math.pow(2/7,t);}

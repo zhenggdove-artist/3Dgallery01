@@ -1146,3 +1146,6 @@ body.panel-open #panel.gallery-guide-floating{
 #panel .gm-player-controls button{min-height:38px;padding:6px;border:1px solid #9e80bb;background:#e6d7f5;color:#40295d;font-weight:700;border-radius:5px;font-size:13px;touch-action:manipulation}
 #panel .gm-player-controls .gm-canvas-gift{background:#d4ecff;border-color:#6496c6;color:#204e77}
 #panel .gm-player-controls small{font-size:11px;line-height:1.3;overflow-wrap:anywhere}
+
+/* V046 GM numeric tuning: mobile-friendly item detail. */
+.gm-equipment-tuning{padding:8px;border:1px solid #b7a2c7;border-radius:6px;background:#f5effb;display:grid;gap:6px;margin:6px 0}.gm-equipment-tuning h3{margin:0;font-size:14px}.gm-equipment-tuning small{font-size:11px;line-height:1.4}.gm-tuning-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.gm-tuning-grid label{display:grid;gap:2px;font-size:11px;min-width:0}.gm-tuning-grid input{width:100%;min-width:0;box-sizing:border-box;padding:4px;font-size:13px}.gm-equipment-tuning button{min-height:32px}

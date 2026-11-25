@@ -1,3 +1,5 @@
+import {tunedEquipment} from './shared/equipment-tuning.js';
+import {equippedItem} from './shared/fusion-adapter.js';
 import {mergeWingCatalog} from './shared/world-patch.js';
 import {registerCustomWings,SHOP_CATALOG_REVISION} from './shared/catalog.js';
 import {beginWingCheckout,resumeWingCheckout} from './wing-payment-client.js';
@@ -65,6 +67,7 @@ arena.artFloat=settings.artFloat??.17;
 
 let lastAppliedRespawnAt=0;
 let vitalModels=null;
+function currentTunedWeapon(){const p=world?.profile,base=itemById(p?.equipment?.weapon);return base&&p?tunedEquipment(world,equippedItem(p,base)):base;}
 let artBombUploading=false;let assetsReady=false,joined=false,self=null,world=null,players=[],controller=null,localRoot=null,wasDead=false,last=performance.now(),externalUntil=0,toastErrorAt=0,lastAutoCoinAt=0,frameSamples=[],fps=0,fpsFrames=0,fpsAt=performance.now(),buildPlacement=null,spectatorFollowIndex=-1;
 const roots=new Map(),remoteTargets=new Map(),effects=[],pendingAutoPickups=new Set();
 let heldArtworkSource=null,heldArtworkOwner=null,heldArtworkCached=false;
@@ -137,9 +140,9 @@ function startHeldCharge(){
     !controller?.enabled||performance.now()<nextChargeRetryAt)return;
  // Goldfish changes camera on a tap, but its original giant red fish
  // ultimate must remain chargeable ONLY before entering shoulder mode.
- if(itemById(world?.profile?.equipment?.weapon)?.id==='goldfish'&&gun.mode!==0)return;
+ if(currentTunedWeapon()?.id==='goldfish'&&gun.mode!==0)return;
  // Never begin a Black Cat charge while outside the actual sniper scope.
- if(itemById(world?.profile?.equipment?.weapon)?.id==='black-cat'&&
+ if(currentTunedWeapon()?.id==='black-cat'&&
     (!sniperScopeAtPress||(gun.mode!==2&&!(gun.mode===1&&hasBlackCatFusionUltimate()))))return;
  chargeStarted=performance.now();
  chargeRequest=sendAction('attack',{phase:'charge',...(sniperScopeAtPress?{
@@ -154,13 +157,13 @@ function startHeldCharge(){
  // Original vendor #08 and #29 now become visible on the FIRST channel pulse.
  // Do not wait for a future render frame to request that pulse: slow mobile
  // GPU compilation can starve the rAF-driven transition for several seconds.
- const weapon=itemById(world?.profile?.equipment?.weapon);
+ const weapon=currentTunedWeapon();
  if(weapon&&['lightning','beam'].includes(weapon.family))
   scheduleBeamChannelStart((Number(weapon.chargeMs)||1500)+75);
 }
 let staffChannel=null,staffChannelPromise=null,staffChannelBusy=false,staffChannelShotAt=0,staffChannelSerial=0;
 function beginStaffChannel(){
- const item=itemById(world?.profile?.equipment?.weapon);
+ const item=currentTunedWeapon();
  const now=performance.now();
  if(!attackHeld||!chargeStarted||!isChannelStaff(item)||item?.family==='ice'||staffChannel||
     !controller?.enabled||self?.role!=='fighter'||ui.panelName||
@@ -199,7 +202,7 @@ function beginStaffChannel(){
 const writer=new WriteCinematic({scene,controller:()=>controller,arena,ui,send:sendAction,audio,bursts,upload:file=>uploadMedia(network,file)});
 const plantHover=bindPlantHover({canvas,camera,arena,controller:()=>controller,ui});
 ui.addEventListener('write-start',()=>writer.begin());
-const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>itemById(world?.profile?.equipment?.weapon),ui,attack:performAttack,canShoulderCharge:()=>hasBlackCatFusionUltimate()});
+const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>currentTunedWeapon(),ui,attack:performAttack,canShoulderCharge:()=>hasBlackCatFusionUltimate()});
 const artEditor=new ArtworkEditor({scene,camera,canvas,arena,player:()=>localRoot,isGM:()=>!!self?.profile?.admin,ownerKey:()=>self?.key,focusArtwork:root=>{if(!controller)return;controller.artworkEditTarget=root;if(root){controller.target.copy(root.position);controller.yaw=root.rotation.y;controller.pitch=.05;controller.updateCamera(1,true);camera.updateMatrixWorld(true);}},send:sendAction,control:enabled=>{if(controller){controller.setEnabled(enabled&&!ui.panelName&&!wasDead);controller.cameraLocked=!!artEditor.mode&&artEditor.mode!=='follow';}},toast:text=>ui.toast(text)});
 const platformDelete=new PlatformDeleteEditor({canvas,camera,arena,ui,editor:artEditor,isGM:()=>!!self?.profile?.admin,send:sendAction,controller:()=>controller,cancelBuild:cancelBuildPlacement});
 const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>controller,
@@ -573,7 +576,7 @@ ui.addEventListener('attack-start',event=>{
   artworkThrow.begin();return;
  }
  if(attackHeld||staffChannel)return;
- const weapon=itemById(world?.profile?.equipment?.weapon);
+ const weapon=currentTunedWeapon();
  // Record scope at key-down, so holding A before aiming can never charge/fire.
  sniperScopeAtPress=weapon?.id==='black-cat'&&
   (gun.mode===2||(gun.mode===1&&hasBlackCatFusionUltimate()));
@@ -615,7 +618,7 @@ ui.addEventListener('attack-release',async()=>{
   return;
  }
  if(attackHoldStarted===null)return;
- const weapon=itemById(world?.profile?.equipment?.weapon)||itemById('clam');
+ const weapon=currentTunedWeapon()||itemById('clam');
  const heldMs=performance.now()-attackHoldStarted;
  const charge=chargeProgress(heldMs,weapon?.chargeMs||1500);
  const wasScopedAtPress=sniperScopeAtPress;sniperScopeAtPress=false;
@@ -963,7 +966,7 @@ if(localRoot&&profile){arena.setPlayerEquipment(localRoot,profile.equipment);loc
  wasDead=false;ui.toast('RESPAWNED · WRITE HUB');
 }if(!ui.panelName&&!artEditor.mode&&!writer.active&&!platformDelete.active)controller?.setEnabled(true);ui.death(0);}if(profile&&self)self.profile=profile;}
 
-async function sendAction(action,data={},options={}){const inventoryAction=['buy','sell','sell-bulk','equip','unequip','inspect-item','assign-consumable','swap-inventory','gm-shop-price','gm-player-level','gm-wing-canvas'].includes(action);if(!joined||!controller&&!inventoryAction){if(inventoryAction)ui.toast('CONNECT TO TEMPLE FIRST');return null;}try{const result=await network.action(action,data);if(result.purchased){const purchased=itemById(result.purchased.itemId);ui.purchaseNotice(purchased?.name||result.purchased.itemId,result.purchased.quantity);}if(inventoryAction){ui.inventoryActionError='';ui.inventoryActionNotice=result.sold?`SOLD ${result.sold.count} · BAG ${result.sold.remaining}/${result.sold.capacity}`:'';}if(result.world)acceptWorldView(result.world);if(inventoryAction&&['bag','shop','shop-prices'].includes(ui.panelName)){document.activeElement?.blur();ui.renderPanel();}if(!result.purchased&&result.notice)ui.toast(result.notice);if(result.resetMessages)ui.clearChat();if(['gm-wing-draw','wing-draw'].includes(action)&&result.wingDraw)ui.showWingDraw(result.wingDraw);if(['gm-wing-remove','gm-wing-set-rate'].includes(action)&&ui.panelName==='wing-manage')ui.renderPanel();if(action==='fuse'&&result.fusion){ui.fusionFeedback(!!result.fusion.success,result.notice);audio.play(result.fusion.success?'fusion-success':'fusion-fail',1);}if(result.attackEvent)showAttack(result.attackEvent);if(result.throwEvent)showThrowPulse(result.throwEvent);if(action==='pickup-coin'||action==='pickup-drop')audio.play('coin');for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))arena.showStructureHit(hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))arena.showStructureBreak(broken);if(result.hit?.defeated)ui.toast(`DEFEATED · ${result.hit.lostCoins} COINS DROPPED`);return result;}catch(error){if(['gm-wing-draw','wing-draw'].includes(action))ui.cancelWingDraw();if(options.throwOnError)throw error;if(action==='fuse')ui.fusionFeedback(false,error.message);if(['buy','sell','sell-bulk','equip'].includes(action)){ui.inventoryActionNotice='';ui.inventoryActionError=String(error.message||'Transaction failed');const status=ui.content.querySelector('[data-inventory-error]');if(status){status.textContent=ui.inventoryActionError;status.hidden=false;}if(action==='buy'&&/item is not sold|invalid weapon quality|unknown action/i.test(ui.inventoryActionError)){void network.request('/health',{auth:false,timeoutMs:5000}).then(health=>{if(health?.features?.wearableCatalog!==SHOP_CATALOG_REVISION){ui.inventoryActionError='SERVER CATALOG OUT OF DATE · '+String(error.message);const node=ui.content.querySelector('[data-inventory-error]');if(node){node.textContent=ui.inventoryActionError;node.hidden=false;}}}).catch(()=>{});}}if((action==='pickup-artwork'||!/^Move closer to (?:the )?(?:artwork|coin|drop)/i.test(error.message||''))&&performance.now()-toastErrorAt>400){toastErrorAt=performance.now();ui.toast(error.message);}return null;}}
+async function sendAction(action,data={},options={}){const inventoryAction=['buy','sell','sell-bulk','equip','unequip','inspect-item','assign-consumable','swap-inventory','gm-shop-price','gm-equipment-tuning','gm-player-level','gm-wing-canvas'].includes(action);if(!joined||!controller&&!inventoryAction){if(inventoryAction)ui.toast('CONNECT TO TEMPLE FIRST');return null;}try{const result=await network.action(action,data);if(result.purchased){const purchased=itemById(result.purchased.itemId);ui.purchaseNotice(purchased?.name||result.purchased.itemId,result.purchased.quantity);}if(inventoryAction){ui.inventoryActionError='';ui.inventoryActionNotice=result.sold?`SOLD ${result.sold.count} · BAG ${result.sold.remaining}/${result.sold.capacity}`:'';}if(result.world)acceptWorldView(result.world);if(inventoryAction&&['bag','shop','shop-prices'].includes(ui.panelName)){document.activeElement?.blur();ui.renderPanel();}if(!result.purchased&&result.notice)ui.toast(result.notice);if(result.resetMessages)ui.clearChat();if(['gm-wing-draw','wing-draw'].includes(action)&&result.wingDraw)ui.showWingDraw(result.wingDraw);if(['gm-wing-remove','gm-wing-set-rate'].includes(action)&&ui.panelName==='wing-manage')ui.renderPanel();if(action==='fuse'&&result.fusion){ui.fusionFeedback(!!result.fusion.success,result.notice);audio.play(result.fusion.success?'fusion-success':'fusion-fail',1);}if(result.attackEvent)showAttack(result.attackEvent);if(result.throwEvent)showThrowPulse(result.throwEvent);if(action==='pickup-coin'||action==='pickup-drop')audio.play('coin');for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))arena.showStructureHit(hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))arena.showStructureBreak(broken);if(result.hit?.defeated)ui.toast(`DEFEATED · ${result.hit.lostCoins} COINS DROPPED`);return result;}catch(error){if(['gm-wing-draw','wing-draw'].includes(action))ui.cancelWingDraw();if(options.throwOnError)throw error;if(action==='fuse')ui.fusionFeedback(false,error.message);if(['buy','sell','sell-bulk','equip'].includes(action)){ui.inventoryActionNotice='';ui.inventoryActionError=String(error.message||'Transaction failed');const status=ui.content.querySelector('[data-inventory-error]');if(status){status.textContent=ui.inventoryActionError;status.hidden=false;}if(action==='buy'&&/item is not sold|invalid weapon quality|unknown action/i.test(ui.inventoryActionError)){void network.request('/health',{auth:false,timeoutMs:5000}).then(health=>{if(health?.features?.wearableCatalog!==SHOP_CATALOG_REVISION){ui.inventoryActionError='SERVER CATALOG OUT OF DATE · '+String(error.message);const node=ui.content.querySelector('[data-inventory-error]');if(node){node.textContent=ui.inventoryActionError;node.hidden=false;}}}).catch(()=>{});}}if((action==='pickup-artwork'||!/^Move closer to (?:the )?(?:artwork|coin|drop)/i.test(error.message||''))&&performance.now()-toastErrorAt>400){toastErrorAt=performance.now();ui.toast(error.message);}return null;}}
 
 function startBuildPlacement(kind,surface=null,artwork=null){if(self?.role!=='fighter')return ui.toast('SPECTATORS CANNOT BUILD');buildPlacement={kind,surface,artwork,rotation:controller?.root.rotation.y||0,position:controller?.buildPosition(kind==='art-bomb'?3.2:5)||[0,0,0],valid:false};ui.buildKind=kind;document.getElementById('build-kind').textContent=kind==='art-bomb'?'YOUR ARTWORK':kind.toUpperCase();document.getElementById('build-mode').hidden=false;document.activeElement?.blur();if(!writer.active&&!artEditor.mode)controller?.setEnabled(true);ui.toast('MOVE WITH YOUR ARTWORK · R ROTATE · E / PLACE');}
 function rotateBuildPlacement(){if(!buildPlacement)return;buildPlacement.rotation+=Math.PI/4;}
@@ -979,7 +982,7 @@ function performAttack(charge=0,phase=null){
  if(wallPainter.active)return;
  if(controller?.status?.freeze||world?.profile?.effects?.paralysis?.until>Date.now())return;
  if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
- const item=itemById(world?.profile?.equipment?.weapon)||itemById('water');
+ const item=currentTunedWeapon()||itemById('water');
  // Centralized guard covers UI A/Q, canvas clicks, auto-charge and fusion.
  if(item.id==='black-cat'&&
    (gun.mode===0||(gun.mode===1&&charge>=1&&!hasBlackCatFusionUltimate())))return;
@@ -1016,7 +1019,7 @@ function update(dt,time,movementDt=dt){
    if(controller.status.paralysis&&(attackHeld||staffChannel))ui.emit('attack-cancel');
    // Desktop channel casts steer the camera with relative mouse movement
     // even without holding a mouse button. Mobile touch remains unchanged.
-    controller.channelAiming=!!(attackHeld&&isChannelStaff(itemById(world?.profile?.equipment?.weapon)));
+    controller.channelAiming=!!(attackHeld&&isChannelStaff(currentTunedWeapon()));
     writer.update();plantHover.update();controller.castMoveFactor=staffChannel?CAST_MOVE_FACTOR:1;const wasGrounded=controller.grounded;
     // Simulate movement in short physics slices using WALL-CLOCK elapsed
     // time. The previous global 50ms cap made gameplay run in slow motion
@@ -1032,7 +1035,7 @@ function update(dt,time,movementDt=dt){
   platformDelete.update();
   collectorView.update(time,camera);
   statusVisuals.update(dt);
-  const castingItem=itemById(world?.profile?.equipment?.weapon);
+  const castingItem=currentTunedWeapon();
   if(localRoot){
    localRoot.userData.staffCasting=!!(attackHeld&&isChannelStaff(castingItem));
    // Render the live native #08 / #29 on the EXACT ray that the next
@@ -1131,7 +1134,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V045',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V046',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);
@@ -1169,5 +1172,5 @@ addEventListener('pagehide',()=>{gpuFrames.reset();network.close();});
 window.render_game_to_text=()=>JSON.stringify({mode:joined?'play':'entry',name:self?.name||null,role:self?.role||null,connected:network.socket?.readyState===WebSocket.OPEN,position:controller?.root.position.toArray().map(n=>+n.toFixed(2))||null,players:players.map(p=>({name:p.name,role:p.role,seat:p.seat})),economy:{wallet:world?.profile?.wallet??null,inventory:world?.profile?.inventory?.length||0,groundDrops:world?.groundDrops?.length||0,platformCoins:Object.values(world?.coins||{}).filter(c=>c.available).length,platformCoinTotal:Object.keys(world?.coins||{}).length},artworks:{total:arena.artworks.size,available:Object.values(world?.artworks||{}).filter(a=>!a.holder&&Date.now()>=(a.availableAt||0)).length},monster:world?.monster?.active?{variant:world.monster.variant,hp:world.monster.hp}:null,render:{fps:+fps.toFixed(1),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,contextLosses:renderDiagnostics.contextLosses,contextRestores:renderDiagnostics.contextRestores,renderFaults:renderDiagnostics.renderFaults,gpuPending:gpuFrames.pending.length,gpuSkipped:gpuFrames.skipped,pixelRatio:renderer.getPixelRatio(),gunMode:gun.mode,frameMs:+(frameSamples.reduce((a,b)=>a+b,0)/Math.max(1,frameSamples.length)).toFixed(2)},movementSync:{sent:network.stateSequence,acked:network.lastAcceptedSequence,
   rejections:network.rejectionCounts,recent:network.motionDiagnostics},editorShortcut:'Shift+Y'});
 window.advanceTime=milliseconds=>{externalUntil=performance.now()+120;const steps=Math.ceil(milliseconds/16.6667);for(let i=0;i<steps;i++)update(Math.min(.05,milliseconds/steps/1000),(performance.now()+i*milliseconds/steps)/1000);vhs.render(scene,camera,performance.now()/1000);};
-if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.templeTest={writer,plantHover,audio,bursts,artworkThrow,arena,camera,renderer,ui,gun,editor:artEditor,platformDelete,portraitViewport,controller:()=>controller,network,roots,items:ITEMS,slots:EQUIPPABLE_SLOTS,performanceSamples,vitals:()=>vitalModels,hit:applyHitReaction,channelDebug:()=>({attackHeld,chargeStarted,chargeRequest:!!chargeRequest,staffChannel:staffChannel?{...staffChannel}:null,staffChannelBusy,staffChannelShotAt,enabled:controller?.enabled,role:self?.role,weapon:world?.profile?.equipment?.weapon,joined,panel:ui.panelName,now:performance.now(),attemptAge:performance.now()-(window._templeLastChannelAttempt||0),beamStartScheduled:beamStartTimer!==null,channelEligible:isChannelStaff(itemById(world?.profile?.equipment?.weapon)),paralysisUntil:world?.profile?.effects?.paralysis?.until||0,lastFrameFaultAt})};
+if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.templeTest={writer,plantHover,audio,bursts,artworkThrow,arena,camera,renderer,ui,gun,editor:artEditor,platformDelete,portraitViewport,controller:()=>controller,network,roots,items:ITEMS,slots:EQUIPPABLE_SLOTS,performanceSamples,vitals:()=>vitalModels,hit:applyHitReaction,channelDebug:()=>({attackHeld,chargeStarted,chargeRequest:!!chargeRequest,staffChannel:staffChannel?{...staffChannel}:null,staffChannelBusy,staffChannelShotAt,enabled:controller?.enabled,role:self?.role,weapon:world?.profile?.equipment?.weapon,joined,panel:ui.panelName,now:performance.now(),attemptAge:performance.now()-(window._templeLastChannelAttempt||0),beamStartScheduled:beamStartTimer!==null,channelEligible:isChannelStaff(currentTunedWeapon()),paralysisUntil:world?.profile?.effects?.paralysis?.until||0,lastFrameFaultAt})};
 import {PLATFORMS} from './shared/arena.js';

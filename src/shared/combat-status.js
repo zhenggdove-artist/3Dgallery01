@@ -18,8 +18,9 @@ export function applyStatus(world,source,target,weapon,shot,now){
  applyElementalHit(target,source,{...weapon,ultimateHit:!!shot.ultimate},now);
  const durationScale=Math.max(1,Math.min(2.4,Number(shot.qualityDuration)||1));
  for(const [key,effect] of Object.entries(target.effects||{})){
-  if(['freeze','root','confuse','dazzle','soaked'].includes(key)||effect.owner!==source.key||effect.until<=(previous[key]||0))continue;
-  effect.until+=Math.round((effect.until-now)*(durationScale-1));
+  if(effect.owner!==source.key||effect.until<=(previous[key]||0))continue;
+  const quality=['freeze','root','confuse','dazzle','soaked'].includes(key)?1:durationScale;
+  const gm=weapon.gmTuning||{};effect.until=now+Math.round((effect.until-now)*quality*(gm.effectDuration??1));effect.power*=gm.effectPower??1;
  }
  // Fusion echoes are separate server-owned projectiles. Their actual contact
  // calls applyElementalHit(..., 0.2); never proc the ingredient's full-strength

@@ -1,3 +1,4 @@
+import {tunedEquipment,equipmentTuning} from './equipment-tuning.js';
 import {effectActive} from './combat-status.js';
 import {traitStats} from '../reletter/combat-traits.js';
 import {itemById} from './catalog.js';
@@ -6,16 +7,16 @@ import {weaponAffixTotals} from './weapon-affixes.js';
 
 // Mana is authoritative; ordinary attacks never consume it.
 export function manaCapacity(level=1){return 100+4*Math.max(0,(Number(level)||1)-1);}
-export function manaRegen(profile){
- const weapon=itemById(profile.equipment?.weapon);
+export function manaRegen(profile,world){
+ const base=itemById(profile.equipment?.weapon),weapon=base&&equippedItem(profile,base);
  const water=weapon&&(['goldfish','clam','jellybrella'].includes(weapon.id)||(!weapon.exotic&&['water','ice','wave'].includes(weapon.family)));
- return (3+.25*Math.max(0,(profile.level||1)-1))*(water?1.5:1);
+ return (3+.25*Math.max(0,(profile.level||1)-1))*(equipmentTuning(world,weapon).manaRegenScale??(water?1.5:1));
 }
-export function refreshMana(profile,now){
+export function refreshMana(profile,now,world){
  const max=manaCapacity(profile.level),before=Number.isFinite(profile.mana)?profile.mana:max;
  const elapsed=Math.max(0,now-(profile.manaAt??now));
  profile.maxMana=max;profile.manaAt=Math.max(now,profile.manaAt||0);
- profile.mana=Math.min(max,Math.max(0,before)+(profile.hp>0?elapsed/1000*manaRegen(profile):0));
+ profile.mana=Math.min(max,Math.max(0,before)+(profile.hp>0?elapsed/1000*manaRegen(profile,world):0));
  return Math.floor(before)!==Math.floor(profile.mana);
 }
 export function ultimateManaCost(weapon,stats,quality,channel=false,fusionCount=0){
@@ -38,23 +39,24 @@ export function playerStats(world,profile,now=Date.now()){
     fusedDefense+=Math.max(0,(Number(stats.defense)||0)-(Number(base.defense)||0));
   }
   const weaponEnchants=weaponAffixTotals(profile.fusion?.[profile.equipment?.weapon]);
-  const rawWing=itemById(profile.equipment.wings),wing=rawWing&&equippedItem(profile,rawWing);
+  const rawWing=itemById(profile.equipment.wings),wing=rawWing&&tunedEquipment(world,equippedItem(profile,rawWing));
+  const wingTuning=equipmentTuning(world,wing);
   const abilities=wing?.design==='painted-wing'?(wing.abilities??[wing.ability]):[];
-  return {maxMana:manaCapacity(profile.level),manaRegen:manaRegen(profile),maxHp:+((100+(profile.level-1)*4+traits.hp*10)*(1+weaponEnchants.hp/100)).toFixed(3),
-    attack:(traits.attack+fusedAttack)*(1+weaponEnchants.attack/100)*(1-(effectActive(profile,'weak',now)?.power||0)),speed:traits.speed*(1+weaponEnchants.speed/100)*(abilities.includes('swift')?1.1:1)*(1-(effectActive(profile,'slow',now)?.power||0))*(effectActive(profile,'stun',now)||effectActive(profile,'root',now)?0:1),
-    jump:traits.jump*(1+weaponEnchants.jump/100)*(abilities.includes('aerial')?1.15:1),defense:Math.max(.35,traits.defense*(abilities.includes('guardian')?.9:1)*(1+(effectActive(profile,'expose',now)?.power||0))*(1-Math.min(.5,fusedDefense/300))*(1-weaponEnchants.defense/100)),
-    gravity:(wing?.gravity||1)*(abilities.includes('glide')?.85:1),impulse:wing?.impulse||0,flapMs:wing?.flapMs||0};
+  return {maxMana:manaCapacity(profile.level),manaRegen:manaRegen(profile,world),maxHp:+((100+(profile.level-1)*4+traits.hp*10)*(1+weaponEnchants.hp/100)).toFixed(3),
+    attack:(traits.attack+fusedAttack)*(1+weaponEnchants.attack/100)*(1-(effectActive(profile,'weak',now)?.power||0)),speed:traits.speed*(1+weaponEnchants.speed/100)*(abilities.includes('swift')?(wingTuning.swiftScale??1.1):1)*(1-(effectActive(profile,'slow',now)?.power||0))*(effectActive(profile,'stun',now)||effectActive(profile,'root',now)?0:1),
+    jump:traits.jump*(1+weaponEnchants.jump/100)*(abilities.includes('aerial')?(wingTuning.aerialScale??1.15):1),defense:Math.max(.35,traits.defense*(abilities.includes('guardian')?(wingTuning.guardianScale??.9):1)*(1+(effectActive(profile,'expose',now)?.power||0))*(1-Math.min(.5,fusedDefense/300))*(1-weaponEnchants.defense/100)),
+    gravity:(wing?.gravity||1)*(abilities.includes('glide')?(wingTuning.glideScale??.85):1),impulse:wing?.impulse||0,flapMs:wing?.flapMs||0};
 }
 export function refreshStats(world,profile,now=Date.now()){
   const stats=playerStats(world,profile,now),oldMax=profile.maxHp||100;
   profile.maxHp=stats.maxHp;
   profile.maxMana=stats.maxMana;profile.mana=Math.max(0,Math.min(stats.maxMana,Number.isFinite(profile.mana)?profile.mana:stats.maxMana));
   if(profile.hp>0)profile.hp=Math.min(stats.maxHp,Math.max(1,profile.hp+stats.maxHp-oldMax));
-  const rawShield=itemById(profile.equipment.shield),shield=rawShield&&equippedItem(profile,rawShield);
+  const rawShield=itemById(profile.equipment.shield),shield=rawShield&&tunedEquipment(world,equippedItem(profile,rawShield));
   if(!shield)profile.shield=null;
   else if(profile.shield?.item!==shield.id)profile.shield={item:shield.id,hp:shield.capacity*10,maxHp:shield.capacity*10,lastHit:0};
   else{
-   profile.shield.maxHp=shield.capacity*10;
+   profile.shield.maxHp=shield.capacity*10;profile.shield.hp=Math.min(profile.shield.hp,profile.shield.maxHp);
    if(now-profile.shield.lastHit>=shield.recharge*1000)profile.shield.hp=profile.shield.maxHp;
   }
   return stats;
