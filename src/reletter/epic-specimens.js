@@ -81,29 +81,66 @@ export function epicSpecimenCanvas(item){
  }
  return canvas;
 }
+// Eight fixed emission batches, each pinned to the actual wing position
+// when it flaps. All 1440 particles are evaluated in one GPU draw call.
+const DUST_BATCHES=8,DUST_LIFE=1.8;
 export function addEpicDust(T,root){
- const n=72*20,positions=new Float32Array(n*3),colors=new Float32Array(n*3),seeds=new Float32Array(n),
-  palette=[0xf7d6a2,0xb6ffe9,0xffb5b7,0xc0d8ff,0xffffff],clock={value:0};
- for(let i=0;i<n;i++){const col=new T.Color(palette[i%5]);colors.set([col.r,col.g,col.b],i*3);seeds[i]=i;}
+ const n=72*20,positions=new Float32Array(n*3),seeds=new Float32Array(n),clock={value:0};
+ for(let i=0;i<n;i++)seeds[i]=i;
  const geo=new T.BufferGeometry();
  geo.setAttribute('position',new T.BufferAttribute(positions,3));
- geo.setAttribute('color',new T.BufferAttribute(colors,3));
  geo.setAttribute('dustSeed',new T.BufferAttribute(seeds,1));
- const material=new T.PointsMaterial({size:.0035,transparent:true,opacity:.75,sizeAttenuation:true,vertexColors:true,depthWrite:false});
- // Twenty times the particles, but their trajectories run in the vertex shader.
- // Each frame updates one uniform rather than reallocating or uploading buffers.
+ const births={value:Array(DUST_BATCHES).fill(-1000)},left={value:Array.from({length:DUST_BATCHES},()=>new T.Vector3())},right={value:Array.from({length:DUST_BATCHES},()=>new T.Vector3())};
+ const material=new T.PointsMaterial({size:.0035,transparent:true,opacity:.85,sizeAttenuation:true,depthWrite:false,blending:T.AdditiveBlending});
  material.onBeforeCompile=shader=>{
-  shader.uniforms.dustTime=clock;
-  shader.vertexShader='uniform float dustTime; attribute float dustSeed;\n'+shader.vertexShader;
+  Object.assign(shader.uniforms,{dustTime:clock,dustBirth:births,dustLeft:left,dustRight:right});
+  shader.vertexShader='uniform float dustTime; uniform float dustBirth[8]; uniform vec3 dustLeft[8]; uniform vec3 dustRight[8]; attribute float dustSeed; varying float dustAlpha; varying vec3 dustRainbow;\n'+shader.vertexShader;
   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`
-   float i=dustSeed;
-   float t=fract(dustTime*(.14+mod(i,7.)*.013)+i*.61803398875);
-   vec3 transformed=vec3((mod(i,2.)>0.?-1.:1.)*(.24+mod(i*29.,71.)/70.)+sin(dustTime*.92+i)*.1,.76-t*1.8+sin(dustTime*11.+i*.8)*.12,.03+mod(i*13.,29.)/130.);
+   float seed=dustSeed;
+   int batch=int(floor(seed/180.));
+   float r=fract(sin(seed*12.9898+1.7)*43758.5453);
+   float q=fract(sin(seed*78.233+2.9)*24634.6345);
+   float k=fract(sin(seed*39.346+5.2)*13758.1357);
+   float age=dustTime-dustBirth[batch]-.12*r;
+   float t=clamp(age,0.,1.8);
+   vec3 origin=mod(seed,2.)<1.?dustLeft[batch]:dustRight[batch];
+   // Ballistic settling with drag: downward gravity, lateral wind and
+   // diminishing initial scatter. Position never follows the moving avatar.
+   float drag=1.-exp(-2.1*t);
+   vec3 scatter=vec3((r-.5)*.75,(q-.5)*.42,(k-.5)*.58);
+   vec3 wind=vec3(.32+.16*sin(dustBirth[batch]*.83),0.,.20);
+   vec3 transformed=origin+scatter*(.32+drag)+wind*t+vec3(.055*sin(5.*t+r*6.28)*t,-.24*t-.64*t*t,.035*cos(4.*t+q*6.28)*t);
+   float fade=smoothstep(0.,.08,age)*(1.-smoothstep(1.15,1.8,age));
+   dustAlpha=fade*(.66+.34*sin(dustTime*8.+seed*2.39));
+   float hue=fract(r+dustTime*.28+t*.19);
+   dustRainbow=.68+.32*cos(6.2831853*(hue+vec3(0.,.667,.333)));
+  `);
+  shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>',`
+   vec4 mvPosition=viewMatrix*vec4(transformed,1.);
+   gl_Position=projectionMatrix*mvPosition;
+  `);
+  shader.vertexShader=shader.vertexShader.replace('gl_PointSize = size;','gl_PointSize = size;').replace('#include <logdepthbuf_vertex>','gl_PointSize=clamp(gl_PointSize,1.2,3.5);\n#include <logdepthbuf_vertex>');
+  shader.fragmentShader='varying float dustAlpha; varying vec3 dustRainbow;\n'+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`
+   float radius=length(gl_PointCoord-vec2(.5));
+   diffuseColor.rgb*=dustRainbow;
+   diffuseColor.a*=dustAlpha*(1.-smoothstep(.13,.5,radius));
+   if(diffuseColor.a<.005)discard;
   `);
  };
- material.customProgramCacheKey=()=> 'epic-fine-dust-v027';
- const dust=new T.Points(geo,material);dust.frustumCulled=false;root.add(dust);root.userData.epicDust=dust;dust.userData.clock=clock;
+ material.customProgramCacheKey=()=> 'epic-flap-ballistic-rainbow-v045';
+ const dust=new T.Points(geo,material);dust.frustumCulled=false;root.add(dust);root.userData.epicDust=dust;
+ dust.userData={clock,births,left,right,next:0,lastBeat:null};
 }
-export function animateEpicDust(root,time){
- const dust=root?.userData?.epicDust;if(dust?.userData.clock)dust.userData.clock.value=time;
+export function animateEpicDust(root,time,phase=time*2){
+ const dust=root?.userData?.epicDust;if(!dust)return;
+ const d=dust.userData;d.clock.value=time;
+ const beat=Math.floor(phase/Math.PI);
+ if(beat===d.lastBeat)return;
+ d.lastBeat=beat;const i=d.next;d.next=(i+1)%DUST_BATCHES;d.births.value[i]=time;
+ root.updateWorldMatrix(true,false);
+ // Capture the real two wing surfaces in world space. No per-particle CPU
+ // update, no allocations per frame and no blinking teleportation.
+ d.left.value[i].set(-.73,.23,0).applyMatrix4(root.matrixWorld);
+ d.right.value[i].set(.73,.23,0).applyMatrix4(root.matrixWorld);
 }

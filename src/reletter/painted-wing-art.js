@@ -1,3 +1,4 @@
+import {wingContours} from '../shared/custom-wings.js';
 // Compact, replayable 2-D wing artwork shared by GM editor and 3-D texture.
 // Coordinates are normalized [0..1] so browser zoom/pan never alter the art.
 const DEFAULT_OUTLINE=[[.07,.58],[.11,.36],[.19,.2],[.34,.09],[.57,.04],[.75,.08],[.89,.17],[.94,.31],[.88,.43],[.78,.48],[.91,.59],[.84,.7],[.76,.73],[.85,.97],[.72,.86],[.64,.76],[.52,.84],[.42,.79],[.30,.85],[.17,.75]];
@@ -8,9 +9,9 @@ export function presetWingOutline(shape='swallowtail'){
  if(shape==='longtail')return DEFAULT_OUTLINE.map(([x,y])=>[x,y>.7?Math.min(1,y*1.11):y]);
  return DEFAULT_OUTLINE.map(p=>[...p]);
 }
-function pathFor(c,points,w,h,sx,sy){
+function pathFor(c,points,w,h,sx,sy,append=false){
  if(!points||points.length<3)return false;
- c.beginPath();
+ if(!append)c.beginPath();
  points.forEach(([x,y],i)=>{
   const px=(.5+(x-.5)*sx)*w,py=(.5+(y-.5)*sy)*h;
   if(i===0)c.moveTo(px,py);else c.lineTo(px,py);
@@ -68,13 +69,22 @@ export function renderPaintedWing(canvas,item){
  const sx=clamp(Number(item.scaleX)||1,.35,2),sy=clamp(Number(item.scaleY)||1,.35,2);
  // A new freehand design starts with a blank transparent canvas, not a
  // hidden template masquerading as a hand-drawn outline.
- const outline=item.outline?.length>=3?item.outline:(item.shape==='freehand'?null:presetWingOutline(item.shape));
+ const legacy=item.shape==='freehand'?null:presetWingOutline(item.shape);
+ const contours=wingContours(item);
+ const shapes=contours.length?contours:(legacy?[{points:legacy,color:'#26242a',size:8}]:[]);
  ctx.save();
  ctx.translate(w*(.5+(Number(item.offsetX)||0)),h*(.5+(Number(item.offsetY)||0)));ctx.scale(sx,sy);ctx.translate(-w/2,-h/2);
- if(!pathFor(ctx,outline,w,h,1,1)){ctx.restore();return canvas;}
+ if(!shapes.length){ctx.restore();return canvas;}
+ // A nonzero union needs consistent winding, including hand-drawn clockwise
+ // and counterclockwise loops. Independent circles remain separate islands.
+ const oriented=points=>{let area=0;for(let i=0;i<points.length;i++){const a=points[i],b=points[(i+1)%points.length];area+=a[0]*b[1]-b[0]*a[1];}return area<0?[...points].reverse():points;};
+ ctx.beginPath();for(const contour of shapes)pathFor(ctx,oriented(contour.points),w,h,1,1,true);
  ctx.fillStyle=item.color||'#e3cbb5';ctx.fill();
- ctx.strokeStyle='#26242a';ctx.lineWidth=8;ctx.stroke();ctx.clip();
+ ctx.save();ctx.clip();
  for(const stroke of item.strokes||[])strokeOn(ctx,stroke,w,h);
+ ctx.restore();
+ ctx.lineJoin='round';ctx.lineCap='round';
+ for(const contour of shapes){pathFor(ctx,contour.points,w,h,1,1);ctx.strokeStyle=contour.color;ctx.lineWidth=contour.size;ctx.stroke();}
  ctx.restore();return canvas;
 }
 export function paintedWingCanvas(item){

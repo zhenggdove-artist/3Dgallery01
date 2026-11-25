@@ -1,5 +1,5 @@
 import {renderPaintedWing} from './reletter/painted-wing-art.js';
-import {normalizePaintedWing} from './shared/custom-wings.js';
+import {normalizePaintedWing,wingContours,MAX_WING_CONTOURS} from './shared/custom-wings.js';
 
 // GM-only atelier. Each paint operation is stored in normalized image space.
 // Undo snapshots are bounded, so mobile Safari does not retain huge bitmaps.
@@ -33,7 +33,7 @@ export function simplifyFreehandOutline(points,maxPoints=96){
 }
 // Bounds and handles are in normalized canvas space, independent of CSS size.
 export function wingBounds(art){
- const pts=art.outline||[],xs=pts.map(q=>.5+(art.offsetX||0)+(q[0]-.5)*(art.scaleX||1)),ys=pts.map(q=>.5+(art.offsetY||0)+(q[1]-.5)*(art.scaleY||1));
+ const pts=wingContours(art).flatMap(c=>c.points),xs=pts.map(q=>.5+(art.offsetX||0)+(q[0]-.5)*(art.scaleX||1)),ys=pts.map(q=>.5+(art.offsetY||0)+(q[1]-.5)*(art.scaleY||1));
  return {left:Math.min(...xs),right:Math.max(...xs),top:Math.min(...ys),bottom:Math.max(...ys)};
 }
 export function wingHandles(b){
@@ -59,7 +59,7 @@ export function wingScaleFromDrag(art,b,h,start,point){
 // Display-side reflection is reversible and includes offsets, contours and ink.
 export function reflectWingArtwork(art){
  const flip=points=>(points||[]).map(([x,y])=>[1-x,y]);
- return {...art,outline:flip(art.outline),strokes:(art.strokes||[]).map(stroke=>({...stroke,points:flip(stroke.points)})),offsetX:-(art.offsetX||0)};
+ return {...art,outline:flip(art.outline),...(Array.isArray(art.contours)?{contours:art.contours.map(c=>({...c,points:flip(c.points)}))}:{}),strokes:(art.strokes||[]).map(stroke=>({...stroke,points:flip(stroke.points)})),offsetX:-(art.offsetX||0)};
 }
 export function pinchWingView(start,mid,distance,baseCenter){
  const zoom=clamp(start.zoom*distance/Math.max(1,start.distance),.65,5);
@@ -74,10 +74,10 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   if(!preview&&!isGm&&!(ui.world?.profile?.wingDesignCredits>0)){ui.content.textContent='沒有可用的自製翅膀權限';return;}
  const design=ui[draftKey]||{
   name:'',tier:4,color:'#dfd1bc',ability:'glide',shape:'freehand',drawRatePct:1,
-  outline:[],strokes:[],scaleX:1,scaleY:1,
+  outline:[],contours:[],strokes:[],scaleX:1,scaleY:1,
   impulse:11,gravity:.53,flapMs:300
  };
- ui[draftKey]=design;let tool=design.outline?.length>=3?'brush':'outline',pen='#1b1b22',
+ design.contours=wingContours(design);ui[draftKey]=design;let tool=design.contours.length?'brush':'outline',pen='#1b1b22',outlinePen='#26242a',outlineSize=8,
   size=12,opacity=1,
   pan=[0,0],zoom=1,side=design.editorSide==='right'?'right':'left',active=null,pointerId=null,history=[],redo=[],touches=new Map(),pinch=null,gestureConsumed=false,strokeBefore=null;
  ui.content.innerHTML=`<section class="wing-painter" aria-label="wing painting editor">
@@ -95,16 +95,16 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
    <label>拍動間隔<input data-wing-field="flapMs" type="number" min="180" max="900" step="10" value="${design.flapMs}"></label></div></details>`:'<small class="wing-personal-note" hidden>個人翅膀固定使用平衡的裝飾數值，並自帶粒子粉塵；儲存一件消耗一次權限。</small>'}
    <button type="button" class="wing-clear-outline" data-wing-clear-outline>清除輪廓／重新繪製</button>
    <div class="wing-tools-row" role="toolbar" aria-label="畫筆工具">
-    <button type="button" data-wing-tool="outline" aria-pressed="${tool==='outline'}">編輯翅膀輪廓</button>
-    <button type="button" data-wing-tool="brush" aria-pressed="${tool==='brush'}">畫筆</button>
+    <button type="button" data-wing-tool="outline" aria-pressed="${tool==='outline'}">繪製翅膀輪廓</button>
+    <button type="button" data-wing-tool="brush" aria-pressed="${tool==='brush'}" aria-disabled="${!design.contours.length}">翅膀紋路畫筆</button>
     <button type="button" data-wing-tool="eraser">橡皮擦</button>
     <button type="button" data-wing-tool="pan">移動翅膀輪廓圖</button>
     <button type="button" data-wing-tool="scale">縮放</button>
     <button type="button" data-wing-undo>↶ Undo</button>
     <button type="button" data-wing-redo>↷ Redo</button>
    </div>
-   <label>色盤<input data-wing-pen type="color" value="${pen}"></label>
-   <label>畫筆尺寸<input data-wing-size type="range" min="1" max="90" value="12"><output data-wing-size-label>12px</output></label>
+   <label><span data-wing-color-label>${tool==='outline'?'外框線顏色':'紋路顏色'}</span><input data-wing-pen type="color" value="${tool==='outline'?outlinePen:pen}"></label>
+   <label><span data-wing-width-label>${tool==='outline'?'外框線粗細':'畫筆尺寸'}</span><input data-wing-size type="range" min="1" max="90" value="${tool==='outline'?outlineSize:size}"><output data-wing-size-label>${tool==='outline'?outlineSize:size}px</output></label>
    <label>不透明度<input data-wing-opacity type="range" min=".1" max="1" step=".05" value="1"></label>
    <label>基底色<input data-wing-field="color" type="color" value="${design.color}"></label>
     <button type="button" class="panel-button" data-wing-publish>${isGm?(design.id?'儲存修改並重新上架':'儲存、上架並自動裝備'):'儲存至 BAG'}</button>
@@ -112,29 +112,35 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   </div>
   <div class="wing-painter-stage"><div class="wing-left-wing-label"><strong data-wing-side-label>${side==='left'?'LEFT WING · 左翅':'RIGHT WING · 右翅'}</strong><span>雙指縮放</span></div><div class="wing-painter-checker">
    <canvas class="wing-painter-canvas" width="768" height="640" aria-label="可繪畫的翅膀畫布"></canvas>
-   <span class="wing-attachment-note" data-wing-attachment style="right:${side==='left'?'5px':'auto'};left:${side==='right'?'5px':'auto'}">接合處</span>
+   <div class="wing-tool-hint" data-wing-hint role="status" hidden></div><span class="wing-attachment-note" data-wing-attachment style="right:${side==='left'?'5px':'auto'};left:${side==='right'?'5px':'auto'}">接合處</span>
   </div><small data-wing-status>畫布 768 × 640 · 操作記錄上限 60 步</small></div>
  </section>`;
  const root=ui.content.querySelector('.wing-painter'),canvas=root.querySelector('canvas'),ctx=canvas.getContext('2d');
  let publishing=false;
- const artState=()=>copy({outline:design.outline,strokes:design.strokes,scaleX:design.scaleX,scaleY:design.scaleY,offsetX:design.offsetX||0,offsetY:design.offsetY||0,shape:design.shape});
+ const artState=()=>copy({outline:design.outline,contours:design.contours,strokes:design.strokes,scaleX:design.scaleX,scaleY:design.scaleY,offsetX:design.offsetX||0,offsetY:design.offsetY||0,shape:design.shape});
  const report=t=>{root.querySelector('[data-wing-status]').textContent=t;};
  const snapshot=()=>{history.push(artState());if(history.length>60)history.shift();redo.length=0;};
- const restore=value=>{Object.assign(design,copy(value));draw();};
+ const restore=value=>{Object.assign(design,copy(value));if(!design.contours.length&&['brush','eraser','scale'].includes(tool))tool='outline';syncTools();draw();};
+ const hasContour=()=>design.contours.length>0;
+ let hintTimer;
+ const hint=()=>{const el=root.querySelector('[data-wing-hint]');el.textContent='請先畫出翅膀輪廓';el.hidden=false;clearTimeout(hintTimer);hintTimer=setTimeout(()=>{el.hidden=true;},1800);report('請先畫出翅膀輪廓');};
+ function syncTools(){
+  root.querySelectorAll('[data-wing-tool]').forEach(el=>{el.setAttribute('aria-pressed',String(el.dataset.wingTool===tool));if(['brush','eraser','scale'].includes(el.dataset.wingTool))el.setAttribute('aria-disabled',String(!hasContour()));});
+  const outline=tool==='outline';root.querySelector('[data-wing-color-label]').textContent=outline?'外框線顏色':'紋路顏色';root.querySelector('[data-wing-width-label]').textContent=outline?'外框線粗細':'畫筆尺寸';root.querySelector('[data-wing-pen]').value=outline?outlinePen:pen;root.querySelector('[data-wing-size]').value=outline?outlineSize:size;root.querySelector('[data-wing-size-label]').textContent=(outline?outlineSize:size)+'px';
+ }
  function draw(){
   renderPaintedWing(canvas,design);
   if(active?.tool==='outline'&&active.points.length){
-   ctx.save();ctx.lineWidth=4;ctx.strokeStyle='#16b7ff';ctx.fillStyle='#ffffff';ctx.setLineDash([9,5]);
+   ctx.save();ctx.lineWidth=active.size*Math.sqrt((design.scaleX||1)*(design.scaleY||1));ctx.strokeStyle=active.color;ctx.lineCap='round';ctx.lineJoin='round';
    ctx.beginPath();
    active.points.forEach(([x,y],i)=>{const px=(.5+(design.offsetX||0)+(x-.5)*(design.scaleX||1))*canvas.width,py=(.5+(design.offsetY||0)+(y-.5)*(design.scaleY||1))*canvas.height;if(!i)ctx.moveTo(px,py);else ctx.lineTo(px,py);});
-   ctx.stroke();ctx.setLineDash([]);
-   for(const [x,y] of active.points){ctx.beginPath();ctx.arc((.5+(design.offsetX||0)+(x-.5)*(design.scaleX||1))*canvas.width,(.5+(design.offsetY||0)+(y-.5)*(design.scaleY||1))*canvas.height,2.5,0,Math.PI*2);ctx.fill();}
+   ctx.stroke();
    ctx.restore();
   }
   canvas.style.transform=`translate(${pan[0]}px,${pan[1]}px) scale(${zoom})`;
   root.querySelector('[data-wing-zoom=reset]').textContent=Math.round(zoom*100)+'%';
   canvas.style.cursor=tool==='pan'?'move':tool==='scale'?'default':'crosshair';
-  if(tool==='scale'&&design.outline?.length>=3){
+  if(tool==='scale'&&hasContour()){
    const b=wingBounds(design),w=canvas.width,h=canvas.height,r=canvas.getBoundingClientRect();
    const rx=6*w/Math.max(1,r.width),ry=6*h/Math.max(1,r.height);
    ctx.save();ctx.strokeStyle='#087df5';ctx.fillStyle='#fff';ctx.lineWidth=2*w/Math.max(1,r.width);
@@ -148,7 +154,7 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   return [clamp(.5+((event.clientX-rect.left)/rect.width-.5-(design.offsetX||0))/(design.scaleX||1),0,1),clamp(.5+((event.clientY-rect.top)/rect.height-.5-(design.offsetY||0))/(design.scaleY||1),0,1)];
  };
  const viewPoint=e=>{const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height];};
- draw();
+ syncTools();draw();
  root.addEventListener('click',event=>{
   const b=event.target.closest('button');if(!b)return;
   if(b.dataset.wingSide){
@@ -161,14 +167,12 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   }
   if(b.dataset.wingZoom){if(b.dataset.wingZoom==='reset'){zoom=1;pan=[0,0];}else zoom=clamp(zoom*(b.dataset.wingZoom==='in'?1.25:.8),.65,5);draw();return;}
   if(b.dataset.wingTool){
-   if(!design.outline?.length&&b.dataset.wingTool!=='outline'&&b.dataset.wingTool!=='pan'){
-    report('請先使用「自由畫輪廓」在畫布上繪製完整輪廓');return;
-   }
-   tool=b.dataset.wingTool;root.querySelectorAll('[data-wing-tool]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.wingTool===tool)));draw();return;
+   if(!hasContour()&&['brush','eraser','scale'].includes(b.dataset.wingTool)){hint();return;}
+   tool=b.dataset.wingTool;syncTools();draw();return;
   }
   if(b.hasAttribute('data-wing-clear-outline')){
-   snapshot();design.outline=[];design.shape='freehand';tool='outline';
-   root.querySelectorAll('[data-wing-tool]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.wingTool===tool)));
+   snapshot();design.outline=[];design.contours=[];design.strokes=[];design.shape='freehand';tool='outline';
+   syncTools();
    report('輪廓已清除，按住並拖曳畫出新輪廓');draw();return;
   }
   if(b.hasAttribute('data-wing-undo')){if(!history.length)return;redo.push(artState());restore(history.pop());return;}
@@ -185,7 +189,7 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
    if(isGm)for(const field of ['impulse','gravity','flapMs'])input[field]=Number(root.querySelector(`[data-wing-field="${field}"]`).value);
     else Object.assign(input,{impulse:10.15,gravity:.585,flapMs:300});
    if(input.name.length<1)return report('請先命名翅膀');
-   if(!input.outline||input.outline.length<3)return report('必須先繪製封閉輪廓');
+   if(!wingContours(input).length)return hint();
    if(!Number.isFinite(input.drawRatePct)||input.drawRatePct<0||input.drawRatePct>100)
     return report('中獎率必須為 0–100%');
    if(input.strokes.length>90)return report('筆畫超出 90 筆，請使用 Undo 減少筆畫');
@@ -221,9 +225,9 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
  });
  root.addEventListener('input',event=>{
   const el=event.target;
-  if(el.hasAttribute('data-wing-size')){size=+el.value;root.querySelector('[data-wing-size-label]').textContent=size+'px';}
+  if(el.hasAttribute('data-wing-size')){if(tool==='outline')outlineSize=+el.value;else size=+el.value;root.querySelector('[data-wing-size-label]').textContent=el.value+'px';}
   if(el.hasAttribute('data-wing-opacity'))opacity=+el.value;
-  if(el.hasAttribute('data-wing-pen'))pen=el.value;
+  if(el.hasAttribute('data-wing-pen')){if(tool==='outline')outlinePen=el.value;else pen=el.value;}
   if(el.dataset.wingField==='name')design.name=el.value;
   if(el.hasAttribute('data-wing-ability')){design.abilities=[...root.querySelectorAll('[data-wing-ability]:checked')].map(e=>e.value);design.ability=design.abilities[0]||'glide';}
   if(el.dataset.wingField==='color'){design.color=el.value;draw();}
@@ -233,9 +237,10 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   if(pointerId!==null)return;pointerId=e.pointerId;try{checker.setPointerCapture(e.pointerId);}catch{};strokeBefore=artState();
   if(tool==='pan'){active={start:[e.clientX,e.clientY],pan:[...pan]};return;}
   if(tool==='scale'){const r=canvas.getBoundingClientRect(),point=viewPoint(e),b=wingBounds(design);const q=wingHandles(b).map(h=>({...h,dist:Math.hypot((h.x-point[0])*r.width,(h.y-point[1])*r.height)})).sort((a,b)=>a.dist-b.dist)[0];if(!q||q.dist>22)return;snapshot();active={tool,handle:q,bounds:b,original:artState(),start:point};return;}
-  if(!design.outline?.length&&tool!=='outline'){report('請先畫出封閉輪廓');return;}
+  if(!hasContour()&&tool!=='outline'){hint();return;}
+  if(tool==='outline'&&design.contours.length>=MAX_WING_CONTOURS){report('輪廓上限 24 個');return;}
   snapshot();const point=imagePoint(e);
-  if(tool==='outline')active={tool,points:[point]};
+  if(tool==='outline')active={tool,points:[point],color:outlinePen,size:outlineSize};
   else {const stroke={tool,color:pen,size,opacity,material:'ink',points:[point]};active=stroke;design.strokes.push(stroke);}
   draw();
  };
@@ -270,12 +275,13 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   if(e.type==='pointercancel'){cancelStroke();draw();return;}
   if(tool==='outline'){
    if(active?.points.length>=3){
-    design.outline=simplifyFreehandOutline(active.points,96);
+    const points=simplifyFreehandOutline(active.points,96);
+    design.contours.push({points,color:active.color,size:active.size});
+    design.outline=design.contours[0].points;
     design.shape='freehand';
-    tool='brush';
-    root.querySelectorAll('[data-wing-tool]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.wingTool===tool)));
-    report('已完成自由輪廓（'+design.outline.length+' 個節點），可以開始上色或重新繪製');
-   }else report('輪廓過短，請按住並拖曳畫出完整外形');
+    syncTools();
+    report('已完成 '+design.contours.length+' 個輪廓；可繼續新增輪廓或切換紋路畫筆');
+   }else if(active){history.pop();report('輪廓過短，請按住並拖曳畫出完整外形');}
   }
   active=null;pointerId=null;strokeBefore=null;draw();
  };

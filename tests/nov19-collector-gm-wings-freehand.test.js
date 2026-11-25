@@ -116,7 +116,8 @@ test('GM wing painter starts blank, accepts fully freehand contours and simplifi
  assert.match(editor,/shape:'freehand'/);
  assert.match(editor,/outline:\[\]/);
  assert.match(editor,/data-wing-clear-outline/);
- assert.match(editor,/design\.outline=simplifyFreehandOutline\(active\.points,96\)/);
+ assert.match(editor,/simplifyFreehandOutline\(active\.points,96\)/);
+ assert.match(editor,/design\.contours\.push\(/);
  assert.match(renderer,/item\.shape==='freehand'\?null/);
  const points=Array.from({length:900},(_,i)=>[
   .5+.38*Math.cos(2*Math.PI*i/899)*(1+.12*Math.sin(9*i/899*Math.PI*2)),

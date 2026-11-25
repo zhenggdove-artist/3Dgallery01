@@ -117,7 +117,7 @@ export class ReletterPresentation{
       }const flying=d.current==='jump'||d.current==='fall'||d.current==='fly';
       if(d.wings&&!animateFlightVehicle(d.wings,time,flying))for(let i=0;i<Math.min(2,d.wings.children.length);i++)d.wings.children[i].rotation.y=Math.sin(time*(flying?11:2))*.24*(i?-1:1);
       if(flying&&['pedal-helicopter','zeppelin'].includes(d.wings?.userData.flightVehicle)){for(const side of ['Left','Right'])for(const [part,angle] of [['UpLeg',-1.05],['Leg',1.30]]){const bone=d.bones?.get(side+part);if(!bone)continue;this.restore.push([bone,'quaternion',bone.quaternion.clone()]);const pedal=d.wings.userData.flightVehicle==='pedal-helicopter'?Math.sin(time*8+(side==='Left'?0:Math.PI))*.32:0;bone.rotateX(angle+pedal);}}
-      if(d.wings)animateEpicDust(d.wings,time);
+      if(d.wings)animateEpicDust(d.wings,time,time*(flying?11:2));
     }
     this.vfx.update(dt,camera,world);
   }

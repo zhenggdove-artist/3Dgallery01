@@ -17,7 +17,13 @@ export function totalCustomWingRates(wings=[]){
  return wings.filter(wing=>wing&&wing.retired!==true)
   .reduce((total,wing)=>total+wingDrawRatePercent(wing),0);
 }
-export function normalizePaintedWing(raw,id){
+export const MAX_WING_CONTOURS=24;
+ // Legacy single-outline designs keep their original black 8px border.
+ export function wingContours(art){
+  if(Array.isArray(art?.contours))return art.contours;
+  return art?.outline?.length>=3?[{points:art.outline,color:'#26242a',size:8}]:[];
+ }
+ export function normalizePaintedWing(raw,id){
  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Invalid wing');
  const name=String(raw.name||'').trim();
  if(!name||name.length>50||/[<>\x00-\x1f]/.test(name))throw Error('Wing name must be 1–50 characters');
@@ -28,12 +34,16 @@ export function normalizePaintedWing(raw,id){
  if(!Array.isArray(abilities)||abilities.length>ALLOWED_ABILITIES.size||abilities.some(a=>!ALLOWED_ABILITIES.has(a)))throw Error('Invalid wing ability');
  const cleanAbilities=[...new Set(abilities)];
  for(const field of ['offsetX','offsetY'])if(!finite(Number(raw[field]??0),-1.5,1.5))throw Error('Invalid wing offset');
- const outline=raw.outline;
- if(!Array.isArray(outline)||outline.length<3||outline.length>96)throw Error('Draw a closed wing outline');
  const normalizePoint=p=>{
   if(!Array.isArray(p)||p.length!==2||!p.every(n=>finite(n,0,1)))throw Error('Invalid paint coordinate');
   return p.map(n=>Math.round(n*10000)/10000);
  };
+ const contours=wingContours(raw);
+ if(!contours.length||contours.length>MAX_WING_CONTOURS)throw Error('Draw a closed wing outline (maximum 24 contours)');
+ const cleanContours=contours.map(contour=>{
+  if(!Array.isArray(contour?.points)||contour.points.length<3||contour.points.length>96||!hex(contour.color)||!finite(Number(contour.size),1,90))throw Error('Invalid wing contour');
+  return {points:contour.points.map(normalizePoint),color:contour.color,size:Number(contour.size)};
+ });
  const strokes=raw.strokes||[];
  if(!Array.isArray(strokes)||strokes.length>90)throw Error('Maximum 90 brush strokes');
  const clean=strokes.map(stroke=>{
@@ -52,7 +62,7 @@ export function normalizePaintedWing(raw,id){
  return {id,name,tier,slot:'wings',family:'wings',design:'painted-wing',
   premiumWing:true,gmWingExclusive:true,notForSale:true,price:0,
   color:raw.color,ability:cleanAbilities[0]||'glide',abilities:cleanAbilities,drawRatePct,retired:false,
-  outline:outline.map(normalizePoint),strokes:clean,shape:String(raw.shape||'freehand').slice(0,20),
+  outline:cleanContours[0].points,contours:cleanContours,strokes:clean,shape:String(raw.shape||'freehand').slice(0,20),
   scaleX:Number(raw.scaleX),scaleY:Number(raw.scaleY),offsetX:Number(raw.offsetX??0),offsetY:Number(raw.offsetY??0),
   impulse:Number(raw.impulse),gravity:Number(raw.gravity),flapMs:Number(raw.flapMs),
   visualComplexity:clean.length,description:'GM-painted original collectible'};
