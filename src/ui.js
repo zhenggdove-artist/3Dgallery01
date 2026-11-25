@@ -598,6 +598,7 @@ export class TempleUI extends EventTarget{
     const slider=(key,label)=>{const value=Math.max(0,Math.min(2,Number(volumes[key]??1)));return `<label style="display:grid;grid-template-columns:minmax(90px,1fr) minmax(80px,2fr) 3em;align-items:center;gap:10px;padding:3px 0"><span>${escape(label)}</span><input data-gm-volume="${escape(key)}" type="range" min="0" max="2" step=".05" value="${value}" aria-label="${escape(label)}"><output>${Math.round(value*100)}%</output></label>`;};
     const soundControls=['master','music',...Object.keys(SOUND_PROFILES)].map(key=>slider(key,key==='master'?'總音量':key==='music'?'背景音樂':key)).join('');
     const weaponControls=ITEMS.filter(item=>item.slot==='weapon').map(item=>slider('weapon-'+item.id,item.name||item.id)).join('');
+    const selectedTarget=this.content.querySelector('[data-gm-player]')?.value||this.self.key,selectedLevel=this.content.querySelector('[data-gm-level]')?.value;
     const targets=new Map([[this.self.key,{key:this.self.key,name:this.self.name,level:this.world?.profile?.level}],...this.players.filter(p=>p.key).map(p=>[p.key,{...p,level:p.profile?.level}]),...online.filter(p=>p.key).map(p=>[p.key,p])]);
     this.content.innerHTML=`<section class="gm-admin">
       <h3>GM 功能</h3><div class="gm-tools">
@@ -614,8 +615,8 @@ export class TempleUI extends EventTarget{
       </div>
       <p><strong>作品位置復原：</strong>當僅有一件作品的 XYZ 數值被誤設為 -100，將其恢復至原始展示座標；其他位置、縮放、旋轉、外觀保留。</p>
       <p><strong>GM 指令：</strong><code>/recoverposition</code> 找回座標 -100 的作品 · <code>/reset building</code> 復原房屋（保留塗鴉） · <code>/clean graffic</code> 清除塗鴉 · <code>/reset message</code> 清空留言 · <code>/reset</code> 清空玩家作品 · <code>/recovery</code> 還原藝術品</p>
-      <h3>GM 玩家測試</h3><label>Player <select data-gm-player>${[...targets.values()].map(p=>`<option value="${escape(p.key)}">${escape(p.name)} · LV ${p.level??'?'}</option>`).join('')}</select></label>
-      <label>Level <input data-gm-level type="number" min="1" max="999" step="1" value="${this.world?.profile?.level||1}"></label>
+      <h3>GM 玩家測試</h3><label>Player <select data-gm-player>${[...targets.values()].map(p=>`<option value="${escape(p.key)}" ${p.key===selectedTarget?'selected':''}>${escape(p.name)} · LV ${p.level??'?'}</option>`).join('')}</select></label>
+      <label>Level <input data-gm-level type="number" min="1" max="999" step="1" value="${escape(selectedLevel??this.world?.profile?.level??1)}"></label>
       <button type="button" data-gm-action="player-level">SET LEVEL</button> <button type="button" data-gm-action="player-canvas">GIFT WING CANVAS ×1</button>
       <h3>GM 個人設定</h3>
        <label style="display:flex;gap:10px;align-items:center"><input data-gm-invincible type="checkbox" ${this.world?.profile?.gmInvincible!==false?'checked':''}>自身無敵（可關閉以接受正常傷害）</label>

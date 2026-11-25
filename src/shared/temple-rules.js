@@ -121,6 +121,7 @@ export function migrateWorld(raw,now=Date.now()){
    owner.collectorSoldArtworks[oldSale.artworkId]??=oldSale.time||now;
   }
   world.nextGroundDropAt??=now+ECONOMY.groundSpawnMinMs;
+  if(!world.restorativePricesV042){for(const key of ['comfort-dollar-20','comfort-dollar-50','comfort-dollar-100'])if(world.shopPrices)delete world.shopPrices[key];world.restorativePricesV042=true;}
   // Purge persisted deprecated material loot immediately, even if its
   // original drop lifetime has not expired.
   world.groundDrops=world.groundDrops.filter(drop=>
@@ -1070,6 +1071,8 @@ function attack(world,profile,actor,body,context,now){
     // once the ORIGINAL charge request has reached the weapon's full time.
     if(!profile.chargeStartedAt||now-profile.chargeStartedAt<(weapon.chargeMs||1500))
       return {error:'Charge must reach 100% before channeling'};
+    refreshMana(profile,now);
+    if(profile.mana<30)return {error:'Not enough mana'};
     profile.channelWeapon=weapon.id;profile.manaChannelPaid=false;
     profile.channelStartedAt=profile.chargeStartedAt;
     profile.lastChannelPulseAt=now;
@@ -1546,7 +1549,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   const liveKeys=new Set(actors.map(a=>a.key));
   for(const profile of Object.values(world.profiles||{})){
    if(liveKeys.has(profile.key))changed=refreshMana(profile,now)||changed;
-   if(profile.channelWeapon&&!isLiveStaffChannel(profile,now)){
+   if(profile.channelWeapon&&(!isLiveStaffChannel(profile,now)||(profile.manaChannelPaid===true&&profile.mana<2))){
     // Clear orphaned continuous-cast state before validating later movement.
     profile.channelWeapon=null;profile.channelStartedAt=0;
     profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
@@ -1558,7 +1561,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
      !(fx.owner===profile.key&&fx.channel));
     changed=true;
    }
-   changed=tickBloomChannelHeal(profile,now)>0||changed;
+   if(profile.manaChannelPaid!==false)changed=tickBloomChannelHeal(profile,now)>0||changed;
   }
   changed=tickPersistentAttacks(world,actors,now,rng)||changed;
   changed=tickPrismChannels(world,actors,now,rng)||changed;
@@ -1993,7 +1996,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       {...enemy,island:true,visualScale:isPlayer?1:ENEMY_HEIGHT/1.575},position,now,rng);
     const power=isPlayer?fx.pvpDamage:fx.damage;
     const critical=isPlayer?Math.min(1.14,modifiers.multiplier):modifiers.multiplier;
-    const proximity=clamp(1-along/Math.max(1,fx.range),0,1);
+    const proximity=clamp(1-along/Math.max(.001,fx.range),0,1);
     const spread=pellet===null?1:(isPlayer?(.76+.48*proximity)*(.28+1.12*rng()):1.35*(1+1.7*proximity)*(.55+2.45*rng()));
     // The first eligible frost strike freezes for 3s and hits 1.5x.
     // Subsequent ice circles during the target's 6s freeze immunity

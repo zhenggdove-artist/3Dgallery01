@@ -71,7 +71,7 @@ export function renderOriginalBag(ui,profile){
  const rank=row=>({common:1,uncommon:2,rare:3,relic:4,epic:5})[row.item.rarity]||1;
  if(ui.bagSort!=='manual')grouped.sort((a,b)=>
    (ui.bagSort==='quality'?rank(b)-rank(a):0)||recent(b)-recent(a)||b.index-a.index);
- body=(['all','wings'].includes(tab)&&profile.wingDesignCredits>0?`<button class="bag-cell wing-canvas-note" data-wing-canvas title="Double tap to draw wings"><span>WING<br>CANVAS</span><b>×${profile.wingDesignCredits}</b></button>`:'')+grouped.map(({item,index,count})=>cell(item,index,count)).join('')+
+ body=(['all','wings'].includes(tab)&&profile.wingDesignCredits>0?`<button class="bag-cell wing-canvas-note" data-wing-canvas title="Double tap to draw wings"><svg viewBox="0 0 100 64" width="100%" height="100%" aria-hidden="true"><rect x="4" y="8" width="92" height="48" rx="4" fill="#fff8ca" fill-opacity=".48" stroke="#624f80" stroke-width="2"/><rect x="8" y="12" width="84" height="40" rx="3" fill="none" stroke="#624f80"/><ellipse cx="50" cy="32" rx="21" ry="17" fill="#fff" fill-opacity=".4" stroke="#624f80"/><path d="M49 39C25 37 24 18 26 18c11 1 21 10 23 19m2 2c24-2 25-21 23-21-11 1-21 10-23 19" fill="#bba6ff" stroke="#624f80"/><text x="50" y="51" font-size="7" text-anchor="middle" fill="#49365e">WING CANVAS</text></svg><b>×${profile.wingDesignCredits}</b></button>`:'')+grouped.map(({item,index,count})=>cell(item,index,count)).join('')+
   '<div class="bag-cell" aria-hidden="true"></div>'.repeat(Math.max(0,42-grouped.length));}
  if(tab==='equipment'){
   const quick=Array.isArray(profile.quickSlots)?profile.quickSlots:[null,null,null];

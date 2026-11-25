@@ -5,7 +5,7 @@ import {COMFORT_ITEMS,itemById} from '../src/shared/catalog.js';
 import {groupInventoryStacks} from '../src/shared/inventory-stacks.js';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('English comfort metadata',()=>{
- assert.deepEqual(COMFORT_ITEMS.map(v=>v.healFraction),[.3,.5,1]);
+ assert.deepEqual(COMFORT_ITEMS.map(v=>v.healFraction||v.manaFraction),[.3,.5,1]);
  assert.ok(COMFORT_ITEMS.every(v=>v.name.startsWith('Comfort Cash')&&v.category==='Comfort for the Soul'&&v.description==='Give me more!'));
  const text=[read('src/ui.js'),read('src/bag-view.js'),read('index.html'),read('src/shared/catalog.js')].join('\n');
  assert.doesNotMatch(text,/撫慰心靈的物品|撫慰美金|再給我來多一點吧/);

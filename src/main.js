@@ -181,7 +181,7 @@ function beginStaffChannel(){
    if(['lightning','beam'].includes(item.family)&&!staffChannelBusy){
     staffChannelShotAt=performance.now();
     staffChannelBusy=true;
-    void Promise.resolve(performAttack(1,'channel')).then(result=>{if(!result&&staffChannel&&Number(world?.profile?.mana)<12){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);void sendAction('attack',{phase:'channel-stop'});}}).finally(()=>{staffChannelBusy=false;});
+    void Promise.resolve(performAttack(1,'channel')).catch(error=>{if(/not enough mana|channel is not active/i.test(error.message||'')&&staffChannel){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}}).finally(()=>{staffChannelBusy=false;});
    }
   }else if(staffChannel?.serial===serial){
    staffChannel=null;
@@ -967,7 +967,7 @@ function performAttack(charge=0,phase=null){
   ...(item.id==='black-cat'?{
    scoped:gun.mode===2,aimMode:gun.mode===1?'shoulder':'scope',viewportHeight:innerHeight
   }:{}),
-  ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})});
+  ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})},{throwOnError:phase==='channel'});
 }
 function performInteract(target=null){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=target||arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
 

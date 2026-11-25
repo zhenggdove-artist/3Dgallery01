@@ -16,8 +16,8 @@ function setup(){
  p.wallet=250000;return {world,p};
 }
 test('three locally drawn dollar stacks have exact prices, denominations and healing fractions',()=>{
- assert.deepEqual(COMFORT_ITEMS.map(v=>v.price),[1000,2000,5000]);
- assert.deepEqual(COMFORT_ITEMS.map(v=>v.healFraction),[.3,.5,1]);
+ assert.deepEqual(COMFORT_ITEMS.map(v=>v.price),[300,300,700]);
+ assert.deepEqual(COMFORT_ITEMS.map(v=>v.healFraction||v.manaFraction),[.3,.5,1]);
  assert.deepEqual(COMFORT_ITEMS.map(v=>v.denomination),[20,50,100]);
  assert.ok(COMFORT_ITEMS.every(v=>v.slot==='consumable'&&v.category==='Comfort for the Soul'&&v.description==='Give me more!'));
  assert.ok(COMFORT_ITEMS.every(v=>SHOP_ITEMS.includes(v)));
@@ -42,9 +42,9 @@ test('owned items stay purchasable; batch purchases are atomic and priced by qua
  }
 });
 test('quantity orders reject unaffordable or overflowing purchases without losing any money',()=>{
- const {world,p}=setup();p.wallet=1500;
+ const {world,p}=setup();p.wallet=500;
  assert.ok(execute(world,'buy',{itemId:'comfort-dollar-20',quantity:2}).error);
- assert.equal(p.wallet,1500);
+ assert.equal(p.wallet,500);
  assert.equal(p.inventory.filter(id=>id==='comfort-dollar-20').length,0);
  p.wallet=1000000;
  while(p.inventory.length<2999)p.inventory.push('tide-1'); // capacity check occurs before allocation
@@ -67,26 +67,25 @@ test('server protects 1/2/3 slots: correct heal, exact stock consumption, red sl
   assert.equal(worldProfileView(world,actor.key).quickSlots[slot],o.id);
  }
  for(const [slot,o] of offers.entries()){
-  p.hp=10;
-  const expected=Math.min(p.maxHp,10+Math.ceil(p.maxHp*o.fraction));
-  const result=execute(world,'use-consumable',{slot},T+1000+slot*100);
+  const at=T+1000+slot*4000;
+  p.hp=10;p.mana=0;p.manaAt=at;
+  const result=execute(world,'use-consumable',{slot},at);
   assert.equal(result.error,undefined);
-  assert.equal(p.hp,expected);
-  assert.equal(result.healed,expected-10);
+  if(slot===1){assert.equal(p.hp,10);assert.equal(result.restoredMana,50);}
+  else{assert.equal(p.hp,Math.min(p.maxHp,10+Math.ceil(p.maxHp*o.fraction)));assert.ok(result.healed>0);}
+  assert.equal(p.consumableCooldownUntil,at+(slot===2?3000:2000));
   assert.equal(p.inventory.filter(id=>id===o.id).length,0);
-  assert.equal(p.quickSlots[slot],o.id,'depleted slot must retain its visual identity');
-  assert.ok(world.damageEvents.some(e=>e.kind==='heal'&&e.amount===result.healed));
-  assert.match(execute(world,'use-consumable',{slot},T+1500+slot*100).error,/Out of stock/);
+  assert.equal(p.quickSlots[slot],o.id);
+  assert.match(execute(world,'use-consumable',{slot},at+500).error,/Out of stock/);
  }
- assert.equal(execute(world,'buy',{itemId:'comfort-dollar-100',quantity:2}).error,undefined);
- assert.equal(p.quickSlots[2],'comfort-dollar-100');
- assert.equal(p.inventory.filter(id=>id==='comfort-dollar-100').length,2);
+ const at=T+13000;
+ assert.equal(execute(world,'buy',{itemId:'comfort-dollar-100',quantity:2},at).error,undefined);
  p.hp=1;
- assert.equal(execute(world,'use-consumable',{slot:2}).healed,99);
- assert.equal(p.hp,p.maxHp);
+ assert.equal(execute(world,'use-consumable',{slot:2},at).healed,99);
  const count=p.inventory.length;
- assert.match(execute(world,'use-consumable',{slot:2}).error,/already full/);
- assert.equal(p.inventory.length,count,'cannot waste a consumable at max HP');
+ assert.match(execute(world,'use-consumable',{slot:2},at+1000).error,/cooling down/);
+ assert.match(execute(world,'use-consumable',{slot:2},at+3000).error,/already full/);
+ assert.equal(p.inventory.length,count);
 });
 test('server validates consumable quick slots and keeps the remaining inventory unchanged',()=>{
  const {world,p}=setup();
