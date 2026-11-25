@@ -63,7 +63,7 @@ test('only short taps create single spells; a partially charged long hold must s
 test('charge is zero before 500ms and reaches full only after threshold plus item charge duration',async()=>{
  const {chargeProgress,STAFF_TAP_MAX_MS}=await import('../src/shared/weapon-abilities.js');
  assert.equal(STAFF_TAP_MAX_MS,500);
- for(const id of ['clam','tide-1','frost-1','ember-1','black-cat']){
+ for(const id of ['clam','tide-1','frost-1','ember-1']){
   const ms=itemById(id).chargeMs;
   for(const held of [0,100,498,500])assert.equal(chargeProgress(held,ms),0,id);
   assert.ok(chargeProgress(501,ms)>0,id);

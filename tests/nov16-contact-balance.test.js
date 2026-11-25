@@ -22,11 +22,11 @@ function fire(w,caster,time,extra={}){
 function advance(w,time,actors,rng=()=>.94){
  tickWorld(w,{now:time,actors,activeFighters:0,rng});
 }
-test('each weapon has its own full-charge duration, with the sniper slowest and longest cooldown',()=>{
- const durations=WEAPONS.map(w=>w.chargeMs);
+test('charge-capable weapons have distinct charge durations; sniper has no charge and a long cooldown',()=>{
+ const durations=WEAPONS.filter(w=>w.id!=='black-cat').map(w=>w.chargeMs);
  assert.ok(durations.every(t=>t>=700&&Number.isFinite(t)));
  assert.equal(new Set(durations).size,durations.length);
- assert.ok(itemById('black-cat').chargeMs>itemById('white-cat').chargeMs*2);
+ assert.equal(itemById('black-cat').chargeMs,0);
  assert.ok(itemById('black-cat').cooldown>=3000);
 });
 test('PvP power is weighted by range, radius, cooldown and charging duration',()=>{
@@ -130,9 +130,10 @@ test('black-cat rifle retains slow high-damage long-range shots unlike regular 8
  assert.equal(fire(w,caster,at+3700).error,undefined);
  const {w:charged,caster:c,victim:v,b:target}=scenario('black-cat',[75,0,30]);
  const initialChargedHp=target.hp;
- assert.ok(applyAction(charged,c,{action:'attack',phase:'charge',scoped:true},{now:T+1000}).charging);
- const ultimate=fire(charged,c,T+4000,{charge:1});
- assert.equal(ultimate.attackEvent.ultimate,true);
+ assert.match(applyAction(charged,c,{action:'attack',phase:'charge',scoped:true},{now:T+1000}).error,/scoped normal attacks only/);
+ assert.match(fire(charged,c,T+4000,{charge:1}).error,/scoped normal attacks only/);
+ assert.match(fire(charged,c,T+4000,{scoped:false}).error,/requires scope/);
+ assert.match(fire(charged,c,T+4000,{aimMode:'shoulder'}).error,/requires scope/);
  advance(charged,T+4500,[c,v]);
- assert.ok(initialChargedHp-target.hp>35,'longer charge increases black-cat ultimate damage');
+ assert.equal(target.hp,initialChargedHp);
 });

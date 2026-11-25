@@ -211,7 +211,7 @@ test('all cat guns keep their advertised normal and charged range and deal PvP d
     assert.equal(!!weapon?.firstPerson,id!=='calico-cat',id+' only calico fires without shoulder camera');
     assert.equal(attackStats(weapon,0).range,range,id+' normal range');
     assert.equal(attackStats(weapon,1).range,chargedRange,id+' charged range');
-    for(const [charge,distance] of [[0,normalDistance],[1,chargedDistance]]){
+    for(const [charge,distance] of (id==='black-cat'?[[0,normalDistance]]:[[0,normalDistance],[1,chargedDistance]])){
       // Charged collision/preview now share 60% of the catalog reach.
       const actualDistance=charge?Math.min(distance,chargedRange*ULTIMATE_FOOTPRINT_SCALE*.75):distance;
       const world=createInitialWorld(1000),shooter=actor('shooter',[0,0,-35]),target=actor('target',[0,0,-35+actualDistance]);

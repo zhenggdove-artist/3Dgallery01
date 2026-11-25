@@ -14,6 +14,7 @@ test('ultimate footprint ratios: bloom reach doubled and other weapon-specific m
  assert.equal(ULTIMATE_FOOTPRINT_SCALE,.6);
  for(const weapon of WEAPONS){
   const normal=attackStats(weapon,1);
+  if(weapon.id==='black-cat'){assert.equal(normal.ultimate,false);continue;}
   assert.ok(normal.ultimate,weapon.id);
   const stats={...normal};
   scaleUltimateFootprint(stats,weapon);

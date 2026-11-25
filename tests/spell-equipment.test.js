@@ -30,7 +30,7 @@ test('all weapons have a readable near/mid/far classification and exact combat s
  for(const item of WEAPONS){
   assert.ok(['near','mid','far'].includes(weaponClass(item)),item.id);
   const text=explainWeapon(item);
-  assert.match(text,/Full charge/);
+  assert.match(text,item.id==='black-cat'?/No charge or ultimate/:/Full charge/);
   assert.match(text,/m/);
   assert.ok(text.length>50,item.id);
  }

@@ -38,7 +38,7 @@ test('goldfish 115ms water orbs, shoulder aim and exactly half Cat SMG normal ra
  const gun=source('src/gun-controller.js'),main=source('src/main.js'),
   effect=source('src/weapon-signature-effects.js');
  assert.match(gun,/weapon\(\)\.id==='white-cat'\|\|weapon\(\)\.id==='goldfish'/);
- assert.match(gun,/\['goldfish','black-cat'\]\.includes\(weapon\(\)\?\.id\)/);
+ assert.match(gun,/this\.mode===1&&weapon\(\)\?\.id==='goldfish'/);
  assert.match(main,/if\(weapon\?\.id==='goldfish'\)\{/);
  assert.match(effect,/goldfishBubble\(event\)/);
 });

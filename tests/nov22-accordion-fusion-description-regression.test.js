@@ -94,7 +94,7 @@ test('outfit fusion grants 30% of source HP and attack to actual playerStats',()
 
 test('descriptions and visual implementation correspond to updated mechanics',()=>{
  assert.match(explainWeapon(itemById('accordion')),/once per second/);
- assert.match(explainWeapon(itemById('black-cat')),/sniper scope/);
+ assert.match(explainWeapon(itemById('black-cat')),/Scope-only single shots.*No charge or ultimate/);
  assert.match(explainWeapon(itemById('bloom-1')),/restores 1 HP per second/);
  assert.match(explainEquipment(itemById('hat-hockey')),/Maximum HP/);
  assert.match(explainEquipment(itemById('shield-1')),/absorbs/);
