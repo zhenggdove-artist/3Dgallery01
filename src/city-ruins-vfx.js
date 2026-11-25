@@ -287,7 +287,8 @@ float cityNoise(vec2 x){
   shader.fragmentShader=header+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
 if(vCityLot>=0.){
- if(vCityTile.z>.5){vec3 tile=texture2D(uHouseTile,vCityTile.xy).rgb;diffuseColor.rgb=mix(diffuseColor.rgb,tile,.83);}
+ // Texture modulates luminance; never replace the lot's original vertex color.
+ if(vCityTile.z>.5){float tile=texture2D(uHouseTile,vCityTile.xy).r;diffuseColor.rgb*=mix(1.,tile,.85);}
  float damage=texture2D(uCityDamage,vec2((floor(vCityLot+.5)+.5)/512.,.5)).r;
  if(damage>.001){
   vec2 p=abs(vCitySurface.z)>abs(vCitySurface.x)?vCitySurface.xy:vCitySurface.zy;
@@ -309,7 +310,7 @@ if(vCityLot>=0.){
  diffuseColor.rgb=mix(diffuseColor.rgb,vec3(1.,.014,.025),hitTint*.93);
 }`);
  };
- mesh.material.customProgramCacheKey=()=> 'city-facade-cracks-tiles-v070';
+ mesh.material.customProgramCacheKey=()=> 'city-facade-cracks-tiles-v072';
  mesh.material.needsUpdate=true;
  return {texture:map,set(index,hp,maxHp=CITY_MAX_HP){
   if(index<0||index>=width)return;

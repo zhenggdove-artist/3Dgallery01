@@ -10,7 +10,8 @@ export function houseTileTexture(){
  // Deterministic shared RGBA texture; no DOM, canvas or platform-specific
  // drawing API is needed, so CI and browsers use exactly the same texture.
  const w=512,h=256,data=new Uint8Array(w*h*4);
- const shades=[[180,163,149],[182,160,149],[193,179,165],[172,153,138],[189,168,154],[201,188,176]];
+ // Neutral luminance only: the original wall/instance color supplies all hue.
+ const shades=[249,244,253,246,251,248];
  const hash=(x,y)=>{let n=Math.imul(x+70219,374761393)^Math.imul(y+931,668265263);n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967295;};
  const noise=(x,y,sx,sy)=>{const a=Math.floor(x/sx),b=Math.floor(y/sy),u=x/sx-a,v=y/sy-b;const k=u*u*(3-2*u),l=v*v*(3-2*v);const ix=i=>((i%(w/sx))+(w/sx))%(w/sx),iy=i=>((i%(h/sy))+(h/sy))%(h/sy);return (hash(ix(a),iy(b))*(1-k)+hash(ix(a+1),iy(b))*k)*(1-l)+(hash(ix(a),iy(b+1))*(1-k)+hash(ix(a+1),iy(b+1))*k)*l;};
  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
@@ -20,7 +21,8 @@ export function houseTileTexture(){
   const vein=(noise((x+y*4)%w,y,32,8)-.5)*12;
   const edge=localY===1||localX===1?13:localY===62||localX===254?-8:0;
   const i=(y*w+x)*4;
-  for(let k=0;k<3;k++)data[i+k]=Math.max(0,Math.min(255,Math.round((seam?[103,93,84][k]:base[k])+grain*(seam?.18:1)+(seam?0:vein+edge))));
+  const tone=Math.max(0,Math.min(255,Math.round((seam?158:base)+grain*(seam?.18:.64)+(seam?0:vein*.65+edge))));
+  data[i]=data[i+1]=data[i+2]=tone;
   data[i+3]=255;
  }
  wallTile=new THREE.DataTexture(data,w,h,THREE.RGBAFormat,THREE.UnsignedByteType);
@@ -28,10 +30,10 @@ export function houseTileTexture(){
  wallTile.magFilter=THREE.LinearFilter;wallTile.minFilter=THREE.LinearMipmapLinearFilter;wallTile.generateMipmaps=true;wallTile.anisotropy=4;wallTile.needsUpdate=true;
  return wallTile;
 }
-export function houseWallMaterial(){return new THREE.MeshStandardMaterial({color:'#ffffff',map:houseTileTexture(),roughness:.96});}
+export function houseWallMaterial(color='#ffffff'){return new THREE.MeshStandardMaterial({color,map:houseTileTexture(),roughness:.96});}
 export function createGmHouseMesh(spec,{preview=false}={}){
  const root=new THREE.Group(),{width:w,depth:d,height:h,floors,windows,signs,pipes,metal}=spec;
- const tile=houseWallMaterial(),trim=new THREE.MeshStandardMaterial({color:'#8b8073',roughness:.96}),glass=new THREE.MeshStandardMaterial({color:'#465c60',roughness:.42,metalness:.12}),steel=new THREE.MeshStandardMaterial({color:'#83837e',roughness:.78,metalness:.25}),sign=new THREE.MeshStandardMaterial({color:'#964b42',roughness:.8}),black=new THREE.MeshStandardMaterial({color:'#292b2b'});
+ const tile=houseWallMaterial('#b4a395'),trim=new THREE.MeshStandardMaterial({color:'#8b8073',roughness:.96}),glass=new THREE.MeshStandardMaterial({color:'#465c60',roughness:.42,metalness:.12}),steel=new THREE.MeshStandardMaterial({color:'#83837e',roughness:.78,metalness:.25}),sign=new THREE.MeshStandardMaterial({color:'#964b42',roughness:.8}),black=new THREE.MeshStandardMaterial({color:'#292b2b'});
  const materials=[tile,trim,glass,steel,sign,black],box=(x,y,z,a,b,c,m)=>{const geo=new THREE.BoxGeometry(a,b,c);if(m===tile){const uv=geo.attributes.uv;for(let face=0;face<6;face++){const su=(face<2?c:a)/2.4,sv=(face<4?b:c)/1.2;for(let k=0;k<4;k++){const i=face*4+k;uv.setXY(i,uv.getX(i)*su,uv.getY(i)*sv);}}}const mesh=new THREE.Mesh(geo,m);mesh.position.set(x,y,z);root.add(mesh);return mesh;};
  box(0,h/2,0,w,h,d,tile);box(0,h+.07,0,w+.18,.14,d+.18,trim);box(0,Math.min(1,h*.24),d/2+.04,Math.min(1.4,w*.24),Math.min(2,h*.48),.10,black);
  for(let level=0;level<floors;level++){const y=(level+.53)*h/floors;for(let i=0;i<windows;i++){const x=(i-(windows-1)/2)*w/(windows+1),ww=Math.min(1.45,w/(windows+2)),wh=Math.min(1.35,h/floors*.46);for(const z of [-d/2-.035,d/2+.035]){box(x,y,z,ww+.12,wh+.12,.075,trim);box(x,y,z+Math.sign(z)*.055,ww,wh,.045,glass);box(x,y,z+Math.sign(z)*.085,.045,wh,.04,trim);}}}

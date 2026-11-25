@@ -14,3 +14,10 @@ test('facade cracks retain old invocation and bind shared tile material in shade
  assert.equal(shader.uniforms.uHouseTile.value,houseTileTexture());assert.equal(shader.uniforms.uCityDamage.value,facade.texture);assert.match(shader.vertexShader,/vCityTile=cityTile/);assert.match(shader.fragmentShader,/texture2D\(uHouseTile/);
  m.dispose();facade.texture.dispose();
 });
+test('tile luminance preserves each original facade hue and house instance tint',()=>{
+ const texture=houseTileTexture(),data=texture.image.data;for(let i=0;i<data.length;i+=4){assert.equal(data[i],data[i+1]);assert.equal(data[i],data[i+2]);}
+ const a=houseWallMaterial('#a56854'),b=houseWallMaterial('#687676');assert.equal(a.map,b.map);assert.equal(a.color.getHexString(),'a56854');assert.equal(b.color.getHexString(),'687676');
+ const material=new T.MeshStandardMaterial(),facade=installFacadeCracks({material}),shader={uniforms:{},vertexShader:'#include <begin_vertex>',fragmentShader:'#include <color_fragment>'};material.onBeforeCompile(shader);
+ assert.ok(shader.fragmentShader.includes('diffuseColor.rgb*=mix(1.,tile,.85)'));assert.ok(!shader.fragmentShader.includes('mix(diffuseColor.rgb,tile'));
+ a.dispose();b.dispose();material.dispose();facade.texture.dispose();
+});
