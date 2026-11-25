@@ -112,7 +112,8 @@ const savedArtist=await call('/api/wanted',{action:'save',name:'Smoke Artist',we
 assert.equal(savedArtist.name,'Smoke Artist');assert.equal(savedArtist.self.avatar,avatar.id);
 const list=await call('/api/wanted?page=0',undefined,token);assert.ok(list.entries.some(a=>a.key===join.self.key&&a.hasArtwork&&a.name==='Smoke Artist'));
 const avatarResponse=await fetch(base+'/api/wanted/media/'+avatar.id);assert.equal(avatarResponse.status,200);assert.deepEqual(Buffer.from(await avatarResponse.arrayBuffer()),Buffer.from(png));
-await call('/api/wanted',{action:'settings',label:'Unauthorized'},token,{expectedStatus:400});
+await call('/api/wanted',{action:'settings',label:'Unauthorized',color:'#ffffff',fontSize:18},token,{expectedStatus:400});
+const jump=await call('/api/wanted',{action:'jump',key:join.self.key},token);assert.equal(jump.destination.id,build.artwork.id);assert.ok(jump.destination.position.every(Number.isFinite));
 await call('/api/wanted',{action:'save',name:'Smoke Artist',website:'javascript:alert(1)'},token,{expectedStatus:400});
 await call('/api/wanted',{action:'save',name:'Smoke Artist',website:'https://example.com',quote:'Art',crop:{x:20,y:80},useName:false},token);
 assert.equal((await call('/api/world',undefined,token)).self.name,guest);

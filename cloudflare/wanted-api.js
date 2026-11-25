@@ -51,14 +51,14 @@ export async function wantedApi(room,request,session,url){
    oldMedia=old?.avatar!==next.avatar?old?.avatar:null;p.wanted=next;
   }else if(body.action==='settings'){
    if(!isGM)throw Error('GM only');const label=String(body.label||'').trim();if(!label||label.length>32||!owns(body.background))throw Error('Invalid button settings');
-   const old=wantedSettings(live);live.wantedSettings={label,background:body.background??old.background};oldMedia=old.background!==live.wantedSettings.background?old.background:null;
+   const old=wantedSettings(live),color=body.color??old.color,fontSize=body.fontSize??old.fontSize;if(!/^#[0-9a-f]{6}$/i.test(color)||!Number.isInteger(fontSize)||fontSize<8||fontSize>30)throw Error('Invalid text color or size (8–30 px)');live.wantedSettings={label,background:body.background??old.background,color,fontSize};oldMedia=old.background!==live.wantedSettings.background?old.background:null;
   }else if(body.action==='moderate'){
    if(!isGM)throw Error('GM only');const target=live.profiles[String(body.key||'')];if(!target?.wanted)throw Error('Artist not found');target.wanted.hidden=body.hidden!==false;
   }else if(body.action==='jump'){
    if(!live.profiles[String(body.key||'')]?.wanted||live.profiles[String(body.key||'')].wanted.hidden)throw Error('Artist not listed');
    if(session.role==='fighter'&&(p.hp<=0||p.deadUntil>now||p.channelWeapon||p.writeJourney||p.effects?.freeze?.until>now||p.effects?.root?.until>now||p.vortexSpin?.until>now||Object.values(live.artworks||{}).some(a=>a.holder===p.key)))throw Error('Cannot jump while dead, casting, immobilized or carrying artwork');
    if(now-(p.wantedJumpAt||0)<5000)throw Error('Wait 5 seconds between jumps');
-   destination=wantedDestination(live,String(body.key));if(!destination)throw Error('No available artwork for this artist');
+   destination=wantedDestination(live,String(body.key),now);if(!destination)throw Error('No available artwork for this artist');
    p.wantedJumpAt=now;
    if(session.role==='fighter'){
     // Update the authoritative pose before acknowledging the navigation.

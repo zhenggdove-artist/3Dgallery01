@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {wantedProfile,wantedPage,wantedDestination,countWantedDeath} from '../src/shared/wanted-list.js';
+import {wantedProfile,wantedPage,wantedDestination,countWantedDeath,wantedArtworks,wantedSettings} from '../src/shared/wanted-list.js';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('Wanted profile validates links, names, crop and preserves a single avatar',()=>{
  const previous=wantedProfile({name:'Artist',website:'https://example.com',quote:'Hello',avatar:'one',crop:{x:25,y:75},useName:true},null,100);
@@ -30,4 +30,16 @@ test('entry awaits uploaded art and texture upload before exposing HUD; paper do
  const main=read('src/main.js');const start=main.indexOf("enterButton.textContent='Loading gallery"),end=main.indexOf('ui.enter(data)',start);
  assert.ok(start>=0&&end>start);const gate=main.slice(start,end);assert.ok(gate.includes('await arena.loadCustomArtworks'));assert.ok(gate.includes('renderer.initTexture(texture)'));assert.ok(gate.includes('await renderer.compileAsync'));
  const worker=read('cloudflare/wanted-api.js');assert.ok(worker.includes("if(!isGM)throw Error('GM only')"));assert.ok(worker.includes('SELECT id FROM wanted_media WHERE id=? AND owner=?'));
+});
+
+test('V057 explicit artist credit includes original exhibits and overrides uploader identity',()=>{
+ const world={profiles:{gm:{key:'gm',admin:true,wanted:{name:'Ely'}},artist:{key:'artist',wanted:{name:'Artist A'}}},customArtworks:[{id:'a',owner:'gm',author:' Artist A ',position:[65,2,0]},{id:'b',owner:'artist',author:'Other',position:[75,2,0]}],artworkLayout:{'platform-01':{author:'ELY',position:[-12,0,-12]},'platform-02':{author:'Artist A',position:[40,4,0]}},artworks:{},cityDamage:{}};
+ assert.equal(wantedArtworks(world,'gm')[0].id,'platform-01');assert.equal(wantedArtworks(world,'artist')[0].id,'platform-02');assert.ok(wantedArtworks(world,'artist').some(a=>a.id==='a'));assert.ok(!wantedArtworks(world,'artist').some(a=>a.id==='b'));
+ assert.equal(wantedDestination(world,'gm',100).id,'platform-01');assert.equal(wantedDestination(world,'artist',100).id,'platform-02');
+ world.artworks['platform-02']={availableAt:200,throwEvent:{}};assert.equal(wantedDestination(world,'artist',100).id,'a');world.artworks['platform-02'].availableAt=0;assert.equal(wantedDestination(world,'artist',100).id,'platform-02');
+ assert.ok(wantedPage(world).entries.every(a=>a.hasArtwork));
+});
+test('V057 button style defaults and legacy saves are compatible',()=>{
+ assert.deepEqual(wantedSettings({}),{label:'Wanted List',background:null,color:'#422943',fontSize:13});assert.equal(wantedSettings({wantedSettings:{label:'Artists',color:'#ff0022',fontSize:20}}).fontSize,20);
+ assert.ok(read('index.html').includes('id="wanted-button"><span>Wanted List</span>'));assert.ok(read('wanted-list.css').includes('repeat(2,minmax(0,1fr))'));assert.ok(read('src/wanted-list.js').includes('previewCount-previewPage*12'));assert.ok(read('src/main.js').includes('controller.yaw=destination.rotation+Math.PI'));
 });
