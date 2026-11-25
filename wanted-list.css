@@ -44,3 +44,40 @@
 /* Six artist profiles per page; the title animation uses CSS only. */
 #panel .wanted-app .wanted-title{display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden}.wanted-ascii{flex:1;min-width:0;overflow:hidden;color:#a9c7ff;opacity:.9;font:11px monospace}.wanted-ascii>span{display:inline-block;white-space:nowrap;animation:wanted-ascii-scroll 7s linear infinite}@keyframes wanted-ascii-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}@media(prefers-reduced-motion:reduce){.wanted-ascii>span{animation:none}}.wanted-card{grid-template-columns:64px minmax(0,1fr);min-height:96px;gap:6px}.wanted-avatar{width:64px;height:64px}@media(min-width:900px){.wanted-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wanted-card{grid-template-columns:88px minmax(0,1fr);min-height:108px}.wanted-avatar{width:88px;height:88px}}@media(max-width:380px){.wanted-card{grid-template-columns:52px minmax(0,1fr)}.wanted-avatar{width:52px;height:52px}}
 [data-wanted-save-status]{display:block;min-height:1em;color:#000080;font-weight:bold}
+
+/* Wanted-only compositing. Scale the cover layer about its crop anchor, so
+   x/y percentages still mean the same thing at every zoom. Original GIFs stay live. */
+#hud.functions-open #dock #wanted-button,.wanted-button-preview{isolation:isolate;background-image:none!important}
+.wanted-button-preview{position:relative}
+#hud.functions-open #dock #wanted-button::before,.wanted-button-preview::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:var(--wanted-bg,none);background-size:cover;background-repeat:no-repeat;background-position:inherit;transform:scale(var(--wanted-zoom,1));transform-origin:inherit}
+#hud.functions-open #dock #wanted-button,.wanted-button-preview{transform-origin:50% 50%}
+#hud.functions-open #dock #wanted-button::before,.wanted-button-preview::before{transform-origin:var(--wanted-origin,50% 50%)}
+#hud.functions-open #dock #wanted-button span,.wanted-button-preview span{position:relative;z-index:1;color:var(--wanted-active-color,var(--wanted-color,#422943))!important}
+#hud.functions-open #dock #wanted-button.wanted-flashing span,.wanted-button-preview.wanted-flashing span{animation:wanted-text-flash var(--wanted-flash-period,1s) steps(1,end) infinite}
+@keyframes wanted-text-flash{0%,100%{--wanted-active-color:var(--wanted-color)}50%{--wanted-active-color:var(--wanted-flash-color)}}
+@media(prefers-reduced-motion:reduce){#hud.functions-open #dock #wanted-button.wanted-flashing span,.wanted-button-preview.wanted-flashing span{animation:none}}
+/* Replace the OUTER pink glass shell, not just the nested artist list. */
+#panel .wanted-zalgo-band:not(.wanted-ascii){display:none}
+#panel.wanted-window{--wanted-edge:18px;background:#c0c0c0!important;background-image:none!important;backdrop-filter:none!important;border:3px outset #eee!important;border-radius:0!important;box-shadow:3px 3px 0 #3338!important;padding:0!important;gap:0!important;overflow:hidden!important;color:#111;font-family:Tahoma,Arial,sans-serif;display:flex;flex-direction:column;box-sizing:border-box}
+#panel.wanted-window[hidden]{display:none!important}
+#panel.wanted-window>header{position:relative;flex:0 0 auto;min-height:34px;height:34px!important;padding:2px 4px!important;gap:6px;background:#000080!important;color:white;border:0;overflow:hidden;box-sizing:border-box}
+#panel.wanted-window>header>div{display:flex;align-items:center;flex:none;min-width:0}
+#panel.wanted-window>header #panel-kicker{display:none}
+#panel.wanted-window>header #panel-title{font:bold 13px/1.1 Tahoma,Arial,sans-serif!important;color:white;margin:0;white-space:nowrap}
+#panel.wanted-window #panel-close{width:27px;height:25px;min-height:0;flex:none;padding:0;background:#c0c0c0!important;border:2px outset #eee!important;border-radius:0!important;color:#111!important;font:bold 19px/1 monospace!important;z-index:2}
+#panel.wanted-window #panel-content{position:relative;flex:1 1 auto;min-height:0;height:auto!important;margin:0 var(--wanted-edge) var(--wanted-edge);padding:4px!important;background:#c0c0c0!important;overflow:auto;touch-action:pan-y;box-sizing:border-box}
+#panel.wanted-window .wanted-app{border:0;padding:2px;background:#c0c0c0}
+#panel.wanted-window .wanted-zalgo-band{display:flex;align-items:center;overflow:hidden;background:#000080;color:#c3d2ff;pointer-events:none;user-select:none;line-height:1;font:12px/1 monospace}
+#panel.wanted-window .wanted-zalgo-top{position:relative;flex:1 1 auto;min-width:0;height:100%}
+#panel.wanted-window .wanted-zalgo-left,#panel.wanted-window .wanted-zalgo-right{position:absolute;top:34px;bottom:var(--wanted-edge);width:var(--wanted-edge);z-index:1;writing-mode:vertical-rl}
+#panel.wanted-window .wanted-zalgo-left{left:0}
+#panel.wanted-window .wanted-zalgo-right{right:0}
+#panel.wanted-window .wanted-zalgo-bottom{position:absolute;bottom:0;left:0;right:0;height:var(--wanted-edge);z-index:1}
+#panel .wanted-zalgo-track{display:block;flex:none;white-space:nowrap;letter-spacing:2px;text-shadow:1px 0 #f5a4c9,-1px 0 #74b9ff;animation:wanted-zalgo-horizontal 15s linear infinite}
+#panel .wanted-zalgo-left .wanted-zalgo-track,#panel .wanted-zalgo-right .wanted-zalgo-track{animation-name:wanted-zalgo-vertical}
+#panel .wanted-zalgo-right .wanted-zalgo-track,#panel .wanted-zalgo-bottom .wanted-zalgo-track{animation-direction:reverse}
+#panel .wanted-zalgo-bottom .wanted-zalgo-track{animation-duration:20s}
+@keyframes wanted-zalgo-horizontal{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes wanted-zalgo-vertical{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+@media(max-width:640px){#panel.wanted-window{--wanted-edge:13px}}
+@media(prefers-reduced-motion:reduce){#panel .wanted-zalgo-track{animation:none}}

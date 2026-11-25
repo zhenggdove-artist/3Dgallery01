@@ -2,7 +2,9 @@ import {insideArena,PLATFORMS} from './arena.js';
 import {cityBlocked,cityGroundHeight} from './city-layout.js';
 export const WANTED_PAGE_SIZE=6;
 export function normalizeWantedBackgroundCrop(value){const axis=v=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(100,v)):50;return {x:axis(value?.x),y:axis(value?.y)};}
-export function wantedSettings(world){const s=world.wantedSettings||{};return {label:s.label||'Wanted List',background:s.background||null,color:/^#[0-9a-f]{6}$/i.test(s.color||'')?s.color:'#422943',fontSize:Math.max(8,Math.min(30,Number(s.fontSize)||13)),backgroundCrop:normalizeWantedBackgroundCrop(s.backgroundCrop),revision:Math.max(0,Number(s.revision)||0)};}
+export function normalizeWantedZoom(v){return typeof v==='number'&&Number.isFinite(v)?Math.max(1,Math.min(3,Math.round(v*100)/100)):1;}
+export function normalizeWantedFlash(v){return {enabled:v?.enabled===true,color:/^#[0-9a-f]{6}$/i.test(v?.color||'')?v.color.toLowerCase():'#ffffff',hz:typeof v?.hz==='number'&&Number.isFinite(v.hz)?Math.max(.25,Math.min(2,Math.round(v.hz*100)/100)):1};}
+export function wantedSettings(world){const s=world.wantedSettings||{};return {label:s.label||'Wanted List',background:s.background||null,color:/^#[0-9a-f]{6}$/i.test(s.color||'')?s.color:'#422943',fontSize:Math.max(8,Math.min(30,Number(s.fontSize)||13)),backgroundCrop:normalizeWantedBackgroundCrop(s.backgroundCrop),backgroundZoom:normalizeWantedZoom(s.backgroundZoom),flash:normalizeWantedFlash(s.flash),revision:Math.max(0,Number(s.revision)||0)};}
 const authorKey=v=>String(v||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
 export function wantedArtworks(world,key){
  const profile=world.profiles?.[key],name=authorKey(profile?.wanted?.name),removed=new Set(world.removedArtworkIds||[]);
