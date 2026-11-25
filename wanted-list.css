@@ -50,9 +50,8 @@
    x/y percentages still mean the same thing at every zoom. Original GIFs stay live. */
 #hud.functions-open #dock #wanted-button,.wanted-button-preview{isolation:isolate;background-image:none!important}
 .wanted-button-preview{position:relative}
-#hud.functions-open #dock #wanted-button::before,.wanted-button-preview::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:var(--wanted-bg,none);background-size:cover;background-repeat:no-repeat;background-position:inherit;transform:scale(var(--wanted-zoom,1));transform-origin:inherit}
+#hud.functions-open #dock #wanted-button::before,.wanted-button-preview::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:var(--wanted-bg,none);background-size:cover;background-repeat:no-repeat;background-position:var(--wanted-origin,50% 50%);transform:scale(var(--wanted-zoom,1));transform-origin:var(--wanted-origin,50% 50%)}
 #hud.functions-open #dock #wanted-button,.wanted-button-preview{transform-origin:50% 50%}
-#hud.functions-open #dock #wanted-button::before,.wanted-button-preview::before{transform-origin:var(--wanted-origin,50% 50%)}
 #hud.functions-open #dock #wanted-button span,.wanted-button-preview span{position:relative;z-index:1;color:var(--wanted-active-color,var(--wanted-color,#422943))!important}
 #hud.functions-open #dock #wanted-button.wanted-flashing span,.wanted-button-preview.wanted-flashing span{animation:wanted-text-flash var(--wanted-flash-period,1s) steps(1,end) infinite}
 @keyframes wanted-text-flash{0%,100%{--wanted-active-color:var(--wanted-color)}50%{--wanted-active-color:var(--wanted-flash-color)}}

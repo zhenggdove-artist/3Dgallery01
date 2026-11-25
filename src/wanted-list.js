@@ -3,6 +3,13 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const url=(base,id)=>base+'/api/wanted/media/'+encodeURIComponent(id);
 const clampPercent=v=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(100,v)):50;
 const cropPosition=c=>clampPercent(c?.x)+'% '+clampPercent(c?.y)+'%';
+// The button's !important background shorthand resets its computed position.
+// The actual image layer must use the crop variable directly, never inherit it.
+export function applyWantedCrop(el,crop){
+ const position=cropPosition(crop);
+ el.style.setProperty('--wanted-origin',position);
+ el.style.backgroundPosition=position;
+}
 // CSS cover positions are percentages of the *overflow*, not frame dimensions.
 const zoomValue=v=>Number.isFinite(Number(v))?Math.max(1,Math.min(3,Number(v))):1;
 export function dragBackgroundCrop(start,dx,dy,w,h,iw,ih,zoom=1){
@@ -13,7 +20,7 @@ export function dragBackgroundCrop(start,dx,dy,w,h,iw,ih,zoom=1){
 function applyWantedStyle(el,s,source){
  el.style.setProperty('--wanted-align',normalizeWantedAlign(s.align));el.style.setProperty('--wanted-color',s.color||'#422943');el.style.setProperty('--wanted-size',(Number(s.fontSize)||13)+'px');
  el.style.setProperty('--wanted-flash-color',s.flash?.color||'#ffffff');el.style.setProperty('--wanted-flash-period',(1/Math.max(.25,Math.min(2,Number(s.flash?.hz)||1)))+'s');el.classList.toggle('wanted-flashing',s.flash?.enabled===true);
- el.style.setProperty('--wanted-zoom',String(zoomValue(s.backgroundZoom)));el.style.backgroundPosition=cropPosition(s.backgroundCrop);el.style.setProperty('--wanted-origin',cropPosition(s.backgroundCrop));
+ el.style.setProperty('--wanted-zoom',String(zoomValue(s.backgroundZoom)));applyWantedCrop(el,s.backgroundCrop);
  const image=source?'url("'+source+'")':'none';if(el.style.getPropertyValue('--wanted-bg')!==image){el.style.setProperty('--wanted-bg',image);el.style.backgroundImage=image;}
 }
 // One canvas, one continuous clockwise stream. Glyphs mutate independently;
@@ -101,10 +108,10 @@ export function bindWantedList(ui,network,jump,action){
    form.querySelector('[data-zalgo-reset]').onclick=()=>{for(const [key] of ZALGO_FIELDS)v['zalgo_'+key].value=ZALGO_DEFAULTS[key];v.zalgo_color.value=ZALGO_DEFAULTS.color;previewZalgo();};
    v.background.onchange=()=>{if(backgroundPreview)URL.revokeObjectURL(backgroundPreview);backgroundPreview=v.background.files[0]?URL.createObjectURL(v.background.files[0]):null;backgroundCrop=backgroundPreview?{x:50,y:50}:{x:clampPercent(data.settings.backgroundCrop?.x),y:clampPercent(data.settings.backgroundCrop?.y)};if(backgroundPreview){v.clear.checked=false;v.backgroundZoom.value='1';}else v.backgroundZoom.value=String(zoomValue(data.settings.backgroundZoom));update();};
    sample.addEventListener('pointerdown',event=>{if(event.button!==0||!source||!size||drag)return;event.preventDefault();event.stopPropagation();drag={id:event.pointerId,startX:event.clientX,startY:event.clientY,crop:{...backgroundCrop},w:sample.clientWidth,h:sample.clientHeight,iw:size.width,ih:size.height,zoom:backgroundZoom};try{sample.setPointerCapture(event.pointerId);}catch{}sample.classList.add('is-dragging');});
-   sample.addEventListener('pointermove',event=>{if(!drag||drag.id!==event.pointerId)return;event.preventDefault();event.stopPropagation();backgroundCrop=dragBackgroundCrop(drag.crop,event.clientX-drag.startX,event.clientY-drag.startY,drag.w,drag.h,drag.iw,drag.ih,drag.zoom);sample.style.backgroundPosition=cropPosition(backgroundCrop);sample.style.setProperty('--wanted-origin',cropPosition(backgroundCrop));});
+   sample.addEventListener('pointermove',event=>{if(!drag||drag.id!==event.pointerId)return;event.preventDefault();event.stopPropagation();backgroundCrop=dragBackgroundCrop(drag.crop,event.clientX-drag.startX,event.clientY-drag.startY,drag.w,drag.h,drag.iw,drag.ih,drag.zoom);applyWantedCrop(sample,backgroundCrop);});
    const finish=event=>{if(drag?.id!==event.pointerId)return;drag=null;sample.classList.remove('is-dragging');try{if(sample.hasPointerCapture(event.pointerId))sample.releasePointerCapture(event.pointerId);}catch{}};
    for(const type of ['pointerup','pointercancel','lostpointercapture'])sample.addEventListener(type,finish);
-   sample.addEventListener('keydown',event=>{const directions={ArrowLeft:[-5,0],ArrowRight:[5,0],ArrowUp:[0,-5],ArrowDown:[0,5]};if(!source||!size||!directions[event.key])return;event.preventDefault();event.stopPropagation();const [dx,dy]=directions[event.key];backgroundCrop=dragBackgroundCrop(backgroundCrop,dx,dy,sample.clientWidth,sample.clientHeight,size.width,size.height,backgroundZoom);sample.style.backgroundPosition=cropPosition(backgroundCrop);sample.style.setProperty('--wanted-origin',cropPosition(backgroundCrop));});
+   sample.addEventListener('keydown',event=>{const directions={ArrowLeft:[-5,0],ArrowRight:[5,0],ArrowUp:[0,-5],ArrowDown:[0,5]};if(!source||!size||!directions[event.key])return;event.preventDefault();event.stopPropagation();const [dx,dy]=directions[event.key];backgroundCrop=dragBackgroundCrop(backgroundCrop,dx,dy,sample.clientWidth,sample.clientHeight,size.width,size.height,backgroundZoom);applyWantedCrop(sample,backgroundCrop);});
    form.querySelector('[data-wanted-center]').onclick=()=>{backgroundCrop={x:50,y:50};update();};form.querySelector('[data-wanted-zoom-reset]').onclick=()=>{v.backgroundZoom.value='1';update();};
    update();
   }
