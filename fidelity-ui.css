@@ -1136,3 +1136,13 @@ body.panel-open #panel.gallery-guide-floating{
 .canvas-grant-celebration{position:fixed;z-index:10000;left:50%;top:43%;transform:translate(-50%,-50%);display:grid;text-align:center;gap:9px;min-width:220px;padding:24px;border:3px double #ffeb9b;border-radius:12px;background:linear-gradient(130deg,#fff2a8,#ffd1e4,#b8eaff);color:#56336e;box-shadow:0 0 45px #ffdb69a0;pointer-events:none;animation:canvas-grant-pop 3.6s both}
 .canvas-grant-celebration strong{font:bold 25px Arial}.canvas-grant-celebration span{font:bold 17px Arial}.canvas-grant-celebration small{font:12px Arial}
 @keyframes canvas-grant-pop{0%{opacity:0;scale:.75}10%,85%{opacity:1;scale:1}100%{opacity:0;scale:1.05}}
+
+/* V043 — player tools first, compact and touch-friendly. */
+#panel .gm-player-controls{display:grid;gap:5px;margin:0 0 14px;padding:10px;border:2px solid #9c76bb;border-radius:8px;background:#f5ebfc;min-width:0}
+#panel .gm-player-controls h3{margin:0 0 3px;font-size:16px;color:#4c306c}
+#panel .gm-player-controls label{margin:0;font-size:12px;font-weight:700}
+#panel .gm-player-controls select,#panel .gm-player-controls input{width:100%;min-width:0;box-sizing:border-box;margin:0;min-height:36px;font-size:14px}
+#panel .gm-player-row{display:grid;grid-template-columns:minmax(54px,1fr) minmax(126px,2fr);gap:6px;align-items:center}
+#panel .gm-player-controls button{min-height:38px;padding:6px;border:1px solid #9e80bb;background:#e6d7f5;color:#40295d;font-weight:700;border-radius:5px;font-size:13px;touch-action:manipulation}
+#panel .gm-player-controls .gm-canvas-gift{background:#d4ecff;border-color:#6496c6;color:#204e77}
+#panel .gm-player-controls small{font-size:11px;line-height:1.3;overflow-wrap:anywhere}

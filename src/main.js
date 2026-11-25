@@ -720,6 +720,14 @@ ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;
   if(ui.bagFusionPending)return;
   ui.bagFusionPending=true;
   void sendAction(action,data).finally(()=>{ui.bagFusionPending=false;});
+ }else if(['gm-player-level','gm-wing-canvas'].includes(action)){
+  if(ui.gmPlayerActionPending)return;
+  ui.setGmPlayerActionState(true,'正在儲存…');
+  void sendAction(action,data,{throwOnError:true}).then(result=>{
+   if(!result)throw Error('伺服器未確認');
+   ui.setGmPlayerActionState(false,action==='gm-player-level'?'等級已更新':'翅膀畫布已贈送');
+   if(ui.panelName==='gm'){ui.renderGm();ui.refreshGmPlayerTargets();}
+  }).catch(error=>{ui.setGmPlayerActionState(false,error.message||'操作失敗');ui.toast(error.message||'操作失敗');});
  }else if(['buy','sell','sell-bulk'].includes(action)){
   if(ui.shopPurchasePending)return;
   ui.setShopPurchasePending(true);
@@ -1104,7 +1112,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V042',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V043',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

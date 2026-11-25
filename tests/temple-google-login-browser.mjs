@@ -85,6 +85,25 @@ try{
    assert.equal(joins.length,1,'existing GM/player must join after explicit Google selection');
    assert.equal(joins[0].body.name,'ExistingGMProfile');
    assert.equal(joins[0].body.color,'#b58bb5');
+   await page.evaluate(()=>{
+    const ui=templeTest.ui;
+    ui.setSelf({...ui.self,profile:{...ui.self.profile,admin:true}});
+    ui.setPlayers([{key:'test-recipient',name:'Gift recipient',profile:{level:7},role:'fighter'}]);
+    window.__gmUiActions=[];
+    ui.addEventListener('server-action',e=>window.__gmUiActions.push(e.detail));
+   });
+   await page.locator('#gm-menu').click();
+   const controls=page.locator('.gm-player-controls');
+   await controls.waitFor({state:'visible'});
+   assert.equal(await page.locator('#panel-content').evaluate(el=>el.scrollTop),0);
+   for(const action of ['self-level','player-level','player-canvas']){
+    const button=controls.locator('[data-gm-action="'+action+'"]');
+    assert.ok(await button.isVisible(),action+' must be visible inside S');
+    const rect=await button.boundingBox();
+    assert.ok(rect&&rect.y>=0&&rect.y+rect.height<=844,action+' must fit the mobile viewport');
+   }
+   await page.screenshot({path:'output-gm-player-controls.png'});
+   await page.evaluate(()=>templeTest.ui.closePanel());
   }else{
    await page.locator('#entry-form').waitFor({state:'visible'});
    assert.equal(await page.locator('#guest-form').isVisible(),false,

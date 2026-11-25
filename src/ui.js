@@ -248,17 +248,25 @@ export class TempleUI extends EventTarget{
  });
  this.content.addEventListener('change',event=>{
   if(!this.self?.profile?.admin)return;
+  if(event.target.matches('[data-gm-player]')){
+   const target=this.gmPlayerTargets().find(p=>p.key===event.target.value),field=this.content.querySelector('[data-gm-level]');
+   if(field)field.value=target?.level||1;
+   return;
+  }
   const chance=event.target.closest('[data-gm-fusion-chance]');
   if(chance){this.emit('gm-fusion-chance',{percent:Number(chance.value)});return;}
   const invincible=event.target.closest('[data-gm-invincible]');
   if(invincible)this.emit('gm-invincible',{enabled:invincible.checked});
  });
      this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');else if(action==='wing-painter')this.openPanel('wing-painter');else if(action==='wing-player-preview')this.openPanel('wing-player-preview');else if(action==='wing-manage')this.openPanel('wing-manage');
-      else if(action==='player-level'||action==='player-canvas'){
-       const targetKey=this.content.querySelector('[data-gm-player]')?.value;
-       if(!targetKey)return this.toast('SELECT PLAYER');
+      else if(['self-level','player-level','player-canvas'].includes(action)){
+       if(this.gmPlayerActionPending)return;
+       const selfOnly=action==='self-level',targetKey=selfOnly?this.self.key:this.content.querySelector('[data-gm-player]')?.value;
+       if(!targetKey)return this.toast('請選擇玩家');
+       const target=this.gmPlayerTargets().find(p=>p.key===targetKey);
+       if(!target)return this.toast('玩家已離線');
        if(action==='player-canvas')this.emit('server-action',{action:'gm-wing-canvas',targetKey});
-       else{const level=Number(this.content.querySelector('[data-gm-level]')?.value);if(!Number.isInteger(level)||level<1||level>999)return this.toast('LEVEL 1–999');this.emit('server-action',{action:'gm-player-level',targetKey,level});}
+       else{const level=Number(this.content.querySelector(selfOnly?'[data-gm-self-level]':'[data-gm-level]')?.value);if(!Number.isInteger(level)||level<1||level>999)return this.toast('等級須為 1–999');this.emit('server-action',{action:'gm-player-level',targetKey,level});}
       }
       else if(action==='chat-position-edit'){this.closePanel();this.chatLayout?.prepare();this.toast('拖曳 CHAT 的 ＋ 至指定位置，再開啟 GM 控制中心儲存');}
       else if(action==='chat-position-save'){this.closePanel();requestAnimationFrame(()=>{const position=this.chatLayout?.position();if(position)this.emit('server-action',{action:'gm-chat-default',...position});});}
@@ -358,7 +366,7 @@ export class TempleUI extends EventTarget{
    }
    enter(data){document.activeElement?.blur();this.self=data.self;this.refreshGalleryGuideAttention();this.authMode=data.authMode||'firebase';this.world=data.world;this.chatLayout?.applyDefault(data.world?.chatDefault);this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;$('gm-menu').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;$('gm-menu').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();if(this.panelName&&this.panelName!=='bag')this.renderPanel();}
-  setPlayers(players){this.players=players||[];this.refreshHUD();}
+  setPlayers(players){this.players=players||[];this.refreshHUD();if(this.panelName==='gm')this.refreshGmPlayerTargets();}
   setWorld(world){this.world=world;this.chatLayout?.applyDefault(world.chatDefault);this.refreshHUD();if(['bag','shop','shop-prices','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(['shop','shop-prices'].includes(this.panelName)&&this.shopPriceSignature!==JSON.stringify(world.shopPrices||{})))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
   refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);
  const mp=$('mana-bar'),mpLabel=$('mana-label');if(mp&&mpLabel){mp.max=profile.maxMana||100;mp.value=profile.mana??mp.max;mpLabel.textContent=Math.floor(mp.value)+'/'+mp.max;}
@@ -543,7 +551,7 @@ export class TempleUI extends EventTarget{
      if(name==='sky-color'&&!this.self.profile?.admin)return;
     if(name==='wing-personal-painter'&&!(this.world?.profile?.wingDesignCredits>0))return;if(name==='social'&&!fromJourney&&this.self.role!=='spectator'){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');if(name==='shop'&&this.panelName!=='shop'){this.shopTab='head';this.shopSelectedKey=null;}this.panelName=name;document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',['wing-painter','wing-personal-painter','wing-player-preview'].includes(name));document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.panel.classList.toggle('build-floating',['build','sky-color','gallery-guide'].includes(name));this.panel.classList.toggle('sky-color-floating',name==='sky-color');this.panel.classList.toggle('gallery-guide-floating',name==='gallery-guide');if(['build','sky-color','gallery-guide'].includes(name)){this.buildFloat.open();this.buildFloat.setCollapsed(false);}else{this.buildFloat.mobile=false;this.panel.classList.remove('gm-mobile-floating');}this.renderPanel();this.emit('panel',{open:true,name});
     if(name==='wing-shop'){$('panel-close').focus({preventScroll:true});this.emit('wing-payment-status-request');}
-    if(name==='gm')this.requestGmPresence();}
+    if(name==='gm'){this.content.scrollTop=0;this.requestGmPresence();this.content.scrollTop=0;}}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;this.buildFloat.mobile=false;this.panel.classList.remove('build-floating','gm-mobile-floating','sky-color-floating','gallery-guide-floating');document.body.classList.remove('panel-open','panel-wing-painter','panel-wing-shop');this.wingGalleryObserver?.disconnect();this.panelName='';this.emit('panel',{open:false});}
   renderPanel(){this.panelSignature=inventoryPanelSignature(this.world?.profile);const profile=this.world?.profile;if(!profile)return;const titles={'sky-color':'星空底色','gallery-guide':'GGTEMPLE · 操作說明',bag:'BAG',shop:'TEMPLE SHOP','shop-prices':'GM · SHOP PRICES','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-personal-painter':'翅膀繪圖工作室','wing-player-preview':'翅膀繪圖工作室 · GM TEST','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
     if(this.panelName==='sky-color'){this.renderSkyColor();return;}
@@ -590,6 +598,27 @@ export class TempleUI extends EventTarget{
     this.gmPresenceLoading=false;this.gmPresenceError=String(message||'無法讀取上下線紀錄');
     if(this.panelName==='gm')this.renderGm();
   }
+  gmPlayerTargets(){
+   const own={key:this.self.key,name:this.self.name,level:this.world?.profile?.level||this.self.profile?.level||1};
+   const others=(this.players||[]).filter(p=>p.key&&p.key!==own.key).map(p=>({key:p.key,name:p.name,level:p.profile?.level||1}));
+   return [...new Map([own,...others].map(p=>[p.key,p])).values()];
+  }
+  refreshGmPlayerTargets(){
+   const select=this.content.querySelector('[data-gm-player]');if(!select)return;
+   const targets=this.gmPlayerTargets(),signature=JSON.stringify(targets);
+   if(select.dataset.rosterSignature===signature)return;
+   const previous=select.value;
+   select.innerHTML=targets.map(p=>`<option value="${escape(p.key)}">${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level}</option>`).join('');
+   select.value=targets.some(p=>p.key===previous)?previous:this.self.key;
+   select.dataset.rosterSignature=signature;
+   if(select.value!==previous){const field=this.content.querySelector('[data-gm-level]');if(field)field.value=targets.find(p=>p.key===select.value)?.level||1;}
+  }
+  setGmPlayerActionState(pending,message=''){
+   this.gmPlayerActionPending=pending;this.gmPlayerActionMessage=message;
+   const card=this.content.querySelector('.gm-player-controls');if(!card)return;
+   for(const button of card.querySelectorAll('button'))button.disabled=pending;
+   const status=card.querySelector('[data-gm-player-status]');if(status)status.textContent=message;
+  }
   renderGm(){
     if(!this.self?.profile?.admin){this.content.textContent='GM only';return;}
     const data=this.gmPresenceData,online=data?.online||this.players||[],events=data?.events||[];
@@ -598,9 +627,19 @@ export class TempleUI extends EventTarget{
     const slider=(key,label)=>{const value=Math.max(0,Math.min(2,Number(volumes[key]??1)));return `<label style="display:grid;grid-template-columns:minmax(90px,1fr) minmax(80px,2fr) 3em;align-items:center;gap:10px;padding:3px 0"><span>${escape(label)}</span><input data-gm-volume="${escape(key)}" type="range" min="0" max="2" step=".05" value="${value}" aria-label="${escape(label)}"><output>${Math.round(value*100)}%</output></label>`;};
     const soundControls=['master','music',...Object.keys(SOUND_PROFILES)].map(key=>slider(key,key==='master'?'總音量':key==='music'?'背景音樂':key)).join('');
     const weaponControls=ITEMS.filter(item=>item.slot==='weapon').map(item=>slider('weapon-'+item.id,item.name||item.id)).join('');
-    const selectedTarget=this.content.querySelector('[data-gm-player]')?.value||this.self.key,selectedLevel=this.content.querySelector('[data-gm-level]')?.value;
-    const targets=new Map([[this.self.key,{key:this.self.key,name:this.self.name,level:this.world?.profile?.level}],...this.players.filter(p=>p.key).map(p=>[p.key,{...p,level:p.profile?.level}]),...online.filter(p=>p.key).map(p=>[p.key,p])]);
+    const selectedTarget=this.content.querySelector('[data-gm-player]')?.value||this.self.key,selectedLevel=this.content.querySelector('[data-gm-level]')?.value,selfLevel=this.content.querySelector('[data-gm-self-level]')?.value;
+    const targets=this.gmPlayerTargets(),target=targets.find(p=>p.key===selectedTarget)||targets[0],disabled=this.gmPlayerActionPending?'disabled':'';
     this.content.innerHTML=`<section class="gm-admin">
+      <section class="gm-player-controls" aria-label="GM 玩家測試與贈送">
+       <h3>GM 玩家測試與贈送</h3>
+       <label for="gm-self-level">自身等級 · LV ${targets[0].level}</label>
+       <div class="gm-player-row"><input id="gm-self-level" data-gm-self-level type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(selfLevel??targets[0].level)}"><button type="button" data-gm-action="self-level" ${disabled}>調整自身等級</button></div>
+       <label for="gm-target-player">指定玩家</label>
+       <select id="gm-target-player" data-gm-player>${targets.map(p=>`<option value="${escape(p.key)}" ${p.key===target.key?'selected':''}>${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level}</option>`).join('')}</select>
+       <div class="gm-player-row"><input data-gm-level aria-label="指定玩家等級" type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(target.key===selectedTarget?(selectedLevel??target.level):target.level)}"><button type="button" data-gm-action="player-level" ${disabled}>調整玩家等級</button></div>
+       <button class="gm-canvas-gift" type="button" data-gm-action="player-canvas" ${disabled}>贈送翅膀畫布 ×1</button>
+       <small data-gm-player-status role="status">${escape(this.gmPlayerActionMessage||'選擇玩家後即可贈送可自行繪製的翅膀畫布。')}</small>
+      </section>
       <h3>GM 功能</h3><div class="gm-tools">
         <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-gm-action="chat-position-edit">調整全服 CHAT 預設位置</button><button type="button" data-gm-action="chat-position-save">儲存目前 CHAT 位置為全服預設</button><button type="button" data-open-shop-prices>商品售價編輯</button>
          <button type="button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button>
@@ -615,9 +654,6 @@ export class TempleUI extends EventTarget{
       </div>
       <p><strong>作品位置復原：</strong>當僅有一件作品的 XYZ 數值被誤設為 -100，將其恢復至原始展示座標；其他位置、縮放、旋轉、外觀保留。</p>
       <p><strong>GM 指令：</strong><code>/recoverposition</code> 找回座標 -100 的作品 · <code>/reset building</code> 復原房屋（保留塗鴉） · <code>/clean graffic</code> 清除塗鴉 · <code>/reset message</code> 清空留言 · <code>/reset</code> 清空玩家作品 · <code>/recovery</code> 還原藝術品</p>
-      <h3>GM 玩家測試</h3><label>Player <select data-gm-player>${[...targets.values()].map(p=>`<option value="${escape(p.key)}" ${p.key===selectedTarget?'selected':''}>${escape(p.name)} · LV ${p.level??'?'}</option>`).join('')}</select></label>
-      <label>Level <input data-gm-level type="number" min="1" max="999" step="1" value="${escape(selectedLevel??this.world?.profile?.level??1)}"></label>
-      <button type="button" data-gm-action="player-level">SET LEVEL</button> <button type="button" data-gm-action="player-canvas">GIFT WING CANVAS ×1</button>
       <h3>GM 個人設定</h3>
        <label style="display:flex;gap:10px;align-items:center"><input data-gm-invincible type="checkbox" ${this.world?.profile?.gmInvincible!==false?'checked':''}>自身無敵（可關閉以接受正常傷害）</label>
        <label style="display:grid;grid-template-columns:7em 1fr 4em;align-items:center;gap:8px">合成成功率
