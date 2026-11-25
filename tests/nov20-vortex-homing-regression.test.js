@@ -154,7 +154,7 @@ test('White Cat charged shots retain physical muzzle and reticle endpoints',()=>
 
 test('lost channel-stop cannot permanently freeze ordinary server movement to 5% speed',()=>{
  const w=createInitialWorld(NOW),p=ensureProfile(w,'channel-test','Channel','#ffffff',NOW);
- p.channelWeapon='nova-1';p.channelStartedAt=NOW;p.lastChannelPulseAt=NOW;
+ p.equipment.weapon='nova-1';p.channelWeapon='nova-1';p.channelStartedAt=NOW;p.lastChannelPulseAt=NOW;
  assert.equal(isLiveStaffChannel(p,NOW+200),true);
  assert.equal(isLiveStaffChannel(p,NOW+6000),false);
  tickWorld(w,{now:NOW+6000,actors:[],activeFighters:0,rng:()=>.5});

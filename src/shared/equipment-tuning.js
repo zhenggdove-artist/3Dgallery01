@@ -1,4 +1,4 @@
-import {weaponQuality,forwardCastRadius,channelReachMultiplier,isChannelStaff,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
+import {weaponQuality,forwardCastRadius,channelReachMultiplier,isChannelStaff,GOLDFISH_SWIM_RADIUS,sustainedSpellBalance,channelInterval} from './weapon-abilities.js';
 import {scaleUltimateFootprint} from './charge-area.js';
 import {GOLDFISH_TRAVEL_SCALE,GOLDFISH_SCHOOL_RADIUS} from './goldfish-school.js';
 import {SNIPER_RANGE} from './combat-balance.js';
@@ -123,6 +123,11 @@ export function linkedEquipmentTuning(world,item,values){
 }
 export function manaCostFromStats(weapon,stats,quality,channel=false,fusionCount=0){
  if(!stats.ultimate)return 0;
+ const sustained=sustainedSpellBalance(weapon);
+ if(sustained){
+  const initial=weapon.gmTuning?.manaCost??sustained.initial;
+  return channel?+(sustained.mpPerSecond*channelInterval(weapon)/1000*initial/sustained.initial).toFixed(2):initial;
+ }
  const tier=Math.max(1,quality?.tier||weapon.tier||1);
  const power=Math.max(0,Number(stats.damage)||0),range=Math.max(0,Number(stats.range)||0),radius=Math.max(0,Number(stats.radius)||0);
  const cost=weapon.gmTuning?.manaCost??Math.min(75,Math.round(30+(tier-1)*4+Math.max(0,power-12)*.28+Math.max(0,range-30)*.10+Math.max(0,radius-6)*.55+fusionCount*4));

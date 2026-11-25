@@ -26,8 +26,10 @@ test('mana regenerates by level, water adds 50%, normal guns are free',()=>{
  for(const id of ['white-cat','calico-cat','black-cat','tide-1']){
   const w=itemById(id);assert.equal(ultimateManaCost(w,attackStats(w,0),{tier:1}),0);
  }
- const w=itemById('tide-1');assert.ok(ultimateManaCost(w,attackStats(w,1),{tier:1})>=30);
- assert.ok(ultimateManaCost(w,{ultimate:true,damage:80,range:60,radius:20},{tier:5})>50);
+ const w=itemById('tide-1');assert.equal(ultimateManaCost(w,attackStats(w,1),{tier:1}),20);
+ // Sustained spells now use the family budget, while a release-only ultimate
+ // keeps the original power/area-scaled mana formula.
+ const frost=itemById('frost-5');assert.ok(ultimateManaCost(frost,{ultimate:true,damage:80,range:60,radius:20},{tier:5})>50);
 });
 test('restorative loot includes all three cash colours',()=>{
  for(const r of [.1,.6,.99]){let i=0;const roll=groundDropRoll(()=>i++===0?.95:r);assert.equal(roll.kind,'consumable');assert.ok(itemById(roll.itemId).slot==='consumable');}

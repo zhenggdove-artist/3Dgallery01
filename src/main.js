@@ -180,7 +180,7 @@ function beginStaffChannel(){
    staffChannel.ready=true;
    // The player has ALREADY fully charged. Trigger one server-owned effect
    // now rather than rendering another empty frame before the next rAF.
-   if(['lightning','beam','fire'].includes(item.family)&&!staffChannelBusy){
+   if(!staffChannelBusy){
     staffChannelShotAt=performance.now();
     staffChannelBusy=true;
     void Promise.resolve(performAttack(1,'channel')).catch(error=>{if(/not enough mana|channel is not active/i.test(error.message||'')&&staffChannel){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}}).finally(()=>{staffChannelBusy=false;});
@@ -190,7 +190,7 @@ function beginStaffChannel(){
    // Server charge start can lag the client clock. Retry the actual state
    // transition without depending on rendering/fps; never fake an attack.
    if(Number(world?.profile?.mana)<weaponManaQuote(world,equippedItem(world.profile,itemById(item.id)||item),world?.profile?.fusion?.[item.id]).initial){attackHeld=false;chargeStarted=null;ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}
-   else if(attackHeld&&['lightning','beam'].includes(item.family))
+   else if(attackHeld)
     scheduleBeamChannelStart(260);
   }
   return result;
@@ -1079,8 +1079,12 @@ function update(dt,time,movementDt=dt){
     const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;
     void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});
    }else if(staffChannel.ready&&!staffChannelBusy&&performance.now()-staffChannelShotAt>=channelInterval(heldItem)+45){
+    const cost=weaponManaQuote(world,equippedItem(world.profile,itemById(heldItem.id)||heldItem),world.profile?.fusion?.[heldItem.id]).pulse;
+    if(Number(world?.profile?.mana)+1e-6<cost){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}
+    else{
     staffChannelShotAt=performance.now();staffChannelBusy=true;
     void Promise.resolve(performAttack(1,'channel')).catch(error=>{if(/not enough mana|channel is not active/i.test(error.message||'')&&staffChannel){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}}).finally(()=>{staffChannelBusy=false;});
+    }
    }
   }
    // Show +1 on every frame-clock second of a server-approved flower
@@ -1117,7 +1121,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V052',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V053',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

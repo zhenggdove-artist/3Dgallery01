@@ -17,18 +17,23 @@ let renderer,scene,camera,queue=Promise.resolve();
 let previewCharacterSource=null,previewIdleEnabled=false,previewIdleTimer=null,warmingPreviews=false;
 export function setOutfitPreviewCharacter(source){previewCharacterSource=source||null;}
 
-const keyOf=item=>item.id+':'+(item.updatedAt||0);
+const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0);
 // Exact release-scoped PNGs: same resolution, no second WebGL render.
 const previewRelease=new URL(import.meta.url).searchParams.get('temple-release');
-const previewCacheName=previewRelease?'ggtemple-preview-'+previewRelease:null;
+// V053 changes combat billing, not the authored models or portrait renderer.
+// Reuse V052's identical full-resolution PNGs; later art releases invalidate normally.
+const previewArtRelease=previewRelease==='20261125-v053-r125'?'20261125-v052-r124':previewRelease;
+const previewCacheName=previewArtRelease?'ggtemple-preview-'+previewArtRelease:null;
 let previewCachePromise;
 function previewCache(){
  if(!previewCacheName||!globalThis.caches)return Promise.resolve(null);
  return previewCachePromise??=globalThis.caches.open(previewCacheName).catch(()=>null);
 }
-const previewCacheKey=item=>new URL('./__temple_preview__/'+encodeURIComponent(keyOf(item))+'.png',import.meta.url).href;
+const previewCacheKey=(item,key=keyOf(item))=>new URL('./__temple_preview__/'+encodeURIComponent(key)+'.png',import.meta.url).href;
 async function cachedPreview(item){
- try{const cache=await previewCache(),response=await cache?.match(previewCacheKey(item));return response?await response.blob():null;}catch{return null;}
+ try{const cache=await previewCache();let response=await cache?.match(previewCacheKey(item));
+  if(!response&&item.family==='saber')response=await cache?.match(previewCacheKey(item,item.id+':'+(item.updatedAt||0)));
+  return response?await response.blob():null;}catch{return null;}
 }
 async function storePreview(item,blob){
  try{const cache=await previewCache();if(cache)await cache.put(previewCacheKey(item),new Response(blob,{headers:{'Content-Type':'image/png'}}));}catch{}
@@ -84,7 +89,7 @@ export async function warmItemPreviews(items,onProgress=()=>{}){
  try{for(let i=0;i<unique.length;i++){
   await itemPreview(unique[i]);
   onProgress(i+1,unique.length);
-  if(i%3===2)await new Promise(resolve=>requestAnimationFrame(resolve));
+  if(renderer&&i%3===2)await new Promise(resolve=>requestAnimationFrame(resolve));
  }}finally{warmingPreviews=false;}
  // Product images are encoded blobs; they do not depend on the preview GL context.
  // Release its framebuffer, program cache and GPU allocations before gameplay.

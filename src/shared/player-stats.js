@@ -16,7 +16,8 @@ export function refreshMana(profile,now,world){
  const max=manaCapacity(profile.level),before=Number.isFinite(profile.mana)?profile.mana:max;
  const elapsed=Math.max(0,now-(profile.manaAt??now));
  profile.maxMana=max;profile.manaAt=Math.max(now,profile.manaAt||0);
- profile.mana=Math.min(max,Math.max(0,before)+(profile.hp>0?elapsed/1000*manaRegen(profile,world):0));
+ const canRegenerate=profile.hp>0&&!(profile.channelWeapon&&profile.manaChannelPaid===true);
+ profile.mana=Math.min(max,Math.max(0,before)+(canRegenerate&&before<max&&elapsed>0?elapsed/1000*manaRegen(profile,world):0));
  return Math.floor(before)!==Math.floor(profile.mana);
 }
 export function ultimateManaCost(weapon,stats,quality,channel=false,fusionCount=0){return manaCostFromStats(weapon,stats,quality,channel,fusionCount);}

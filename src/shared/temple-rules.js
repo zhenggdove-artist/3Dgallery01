@@ -26,7 +26,7 @@ import {calicoPellets,shotgunDistanceScale} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
-import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs,sustainedSpellBalance,channelInterval} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS,vortexSegmentDistance} from './vortex-flight.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
@@ -312,7 +312,7 @@ function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>
 // validation forever. Movement and attack ticks use the same expiry window.
 export function isLiveStaffChannel(profile,now=Date.now(),world){
  const base=profile?.channelWeapon&&itemById(profile.channelWeapon),staff=base&&tunedEquipment(world,equippedItem(profile,base));
- if(!staff||!isChannelStaff(staff))return false;
+ if(!staff||!isChannelStaff(staff)||profile.equipment?.weapon!==staff.id||profile.hp<=0||profile.deadUntil>now||effectActive(profile,'freeze',now)||effectActive(profile,'paralysis',now))return false;
  const latest=Number(profile.lastChannelPulseAt||profile.channelStartedAt)||0;
  const grace=staff.family==='ice'?8500:Math.max(1900,Math.min(staff.gmTuning?.cooldown!==undefined?8500:4500,(staff.cooldown||700)*2+500));
  return latest>0&&now-latest<=grace;
@@ -1055,7 +1055,7 @@ function attack(world,profile,actor,body,context,now){
   // or inside the previous hit-reaction recovery window.
   if(body.phase==='channel-stop'){
    profile.channelWeapon=null;profile.manaChannelPaid=false;profile.channelStartedAt=0;profile.chargeStartedAt=0;
-   profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
+   profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;delete profile.channelManaNextAt;
    delete profile.prismChannelStats;
    delete profile.tidalChannelStats;
    if(world.prismLocks)delete world.prismLocks[actor.key];
@@ -1083,6 +1083,8 @@ function attack(world,profile,actor,body,context,now){
     // once the ORIGINAL charge request has reached the weapon's full time.
     if(!profile.chargeStartedAt||now-profile.chargeStartedAt<(weapon.chargeMs||1500))
       return {error:'Charge must reach 100% before channeling'};
+    // An already-live start retry cannot reset its mana billing state.
+    if(profile.channelWeapon===weapon.id&&isLiveStaffChannel(profile,now,world))return {channeling:true};
     refreshMana(profile,now,world);
     if(profile.mana<weaponManaQuote(world,weapon,profile.fusion?.[weapon.id]).initial)return {error:'Not enough mana'};
     profile.channelWeapon=weapon.id;profile.manaChannelPaid=false;
@@ -1096,13 +1098,19 @@ function attack(world,profile,actor,body,context,now){
   if(channel&&(!isChannelStaff(weapon)||weapon.family==='ice'||profile.channelWeapon!==weapon.id||
      !profile.channelStartedAt||now-(profile.lastChannelPulseAt||profile.channelStartedAt)>(weapon.family==='ice'?8500:6000)))
     return {error:'Staff channel is not active'};
-  if(body.phase==='charge'){profile.chargeStartedAt=now;return {charging:true};}
-  if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};
+  if(body.phase==='charge'){
+   if(profile.channelWeapon&&isLiveStaffChannel(profile,now,world))return {charging:true};
+   profile.chargeStartedAt=now;return {charging:true};
+  }
+  if(now-profile.lastAttackAt<(channel?channelInterval(weapon):weapon.cooldown))return {error:'Weapon is recovering'};
   let direction=normalDirection(body.direction);
   if(!direction)return {error:'Invalid attack direction'};
   const charge=weapon.id==='black-cat'?0:channel?1:Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
-  const enchants=weaponAffixTotals(weapon);
+  const enchants=weaponAffixTotals(weapon),sustained=channel?sustainedSpellBalance(weapon):null;
+  // Retain quality, affixes, fusion bonuses and GM ratios; only replace the
+  // primary sustained hit's authored base power. Normal/release casts stay intact.
+  if(sustained)stats.damage=sustained.hit*10;
   stats.damage=+(stats.damage*quality.damage*(1+enchants.damage/100)*
    (stats.ultimate?1+enchants.charge/100:1)).toFixed(3);
   // A held staff actually projects forward. Its visual spray and authoritative
@@ -1154,7 +1162,7 @@ function attack(world,profile,actor,body,context,now){
   refreshMana(profile,now,world);
   if(manaCost>profile.mana+1e-6)return {error:'Not enough mana'};
   profile.mana=Math.max(0,profile.mana-manaCost);
-  if(channel){profile.manaChannelPaid=true;profile.channelManaPulseCost=quote.pulse;}
+  if(channel){profile.manaChannelPaid=true;profile.channelManaPulseCost=quote.pulse;profile.channelManaNextAt=now+channelInterval(weapon);}
   profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
   if(!channel)profile.chargeStartedAt=0;
   const origin=[actor.position[0],actor.position[1]+1.16,actor.position[2]],combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;if((weapon.firstPerson||weapon.id==='calico-cat'||isChannelStaff(weapon)||weapon.family==='saber')&&Array.isArray(body.origin)&&body.origin.length===3&&body.origin.every(Number.isFinite)&&Math.hypot(...body.origin.map((v,i)=>v-actor.position[i]))<=3)origin.splice(0,3,...body.origin);stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
@@ -1168,17 +1176,17 @@ function attack(world,profile,actor,body,context,now){
   const fusionEchoes=[];
   const sniperMaterialBonus=(profile.fusion?.[weapon.id]?.sources||[]).filter(s=>s.id==='black-cat'&&!s.echo).reduce((sum,s)=>sum+sniperMaterialStat(itemById('black-cat'),stats.ultimate?'chargeDamage':'damage')*.3,0);
   const sniperMaterialRatio=1+sniperMaterialBonus/Math.max(1,Number(itemById(weapon.id)?.[stats.ultimate?'chargeDamage':'damage'])||1);
-  const pvpDamage=pvpShotDamage(weapon,stats,quality)*tuningRatio*sniperMaterialRatio;
+  const pvpDamage=(sustained?sustained.hit*quality.damage*(1+(enchants.damage+enchants.attack)/100)*(1+enchants.charge/100):pvpShotDamage(weapon,stats,quality))*tuningRatio*sniperMaterialRatio;
   if(tidalChannel){
    // Three authenticated homing streams, each intentionally weaker than the
    // single-target prism; regular water taps still use their original ray.
    profile.tidalChannelStats={range:stats.range,
-    monsterDps:stats.damage*.30,pvpDps:pvpDamage*.35,direction:[...direction]};
+    monsterDps:sustained?stats.damage*1000/TIDE_DAMAGE_TICK_MS:stats.damage*.30,pvpDps:sustained?pvpDamage*1000/TIDE_DAMAGE_TICK_MS:pvpDamage*.35,direction:[...direction]};
   }
   if(prismChannel){
    // Damage and direction are server-owned; each channel pulse renews
    // this source without restarting the current target's power ramp.
-   profile.prismChannelStats={range:stats.range,monsterDps:stats.damage,pvpDps:pvpDamage,
+   profile.prismChannelStats={range:stats.range,monsterDps:sustained?stats.damage*1000/PRISM_DAMAGE_TICK_MS:stats.damage,pvpDps:sustained?pvpDamage*1000/PRISM_DAMAGE_TICK_MS:pvpDamage,
     direction:[...direction]};
   }
   const returningGiraffe=weapon.id==='giraffe'&&stats.ultimate;
@@ -1198,7 +1206,7 @@ function attack(world,profile,actor,body,context,now){
       id:attackId,kind:waveVortex?'vortex':swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
       origin:[...goldfishOrigin],direction:[...goldfishDirection],launchDirection:[...goldfishDirection],range:stats.range,position:[...goldfishOrigin],travelled:0,hitTimes:{},
       damage:stats.damage+bonus*.1*tuningRatio,pvpDamage,gmTuning:tuning,damageRatio:tuningRatio,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
-      createdAt:now,lastAt:now,expiresAt:now+duration,
+      createdAt:now,lastAt:now,expiresAt:now+duration,channel:!!channel,
       outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[]
     });
     if(world.persistentAttacks.length>32)world.persistentAttacks.splice(0,world.persistentAttacks.length-32);
@@ -1554,10 +1562,10 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   const liveKeys=new Set(actors.map(a=>a.key));
   for(const profile of Object.values(world.profiles||{})){
    if(liveKeys.has(profile.key))changed=refreshMana(profile,now,world)||changed;
-   if(profile.channelWeapon&&(!isLiveStaffChannel(profile,now,world)||(profile.manaChannelPaid===true&&profile.mana<(profile.channelManaPulseCost??2)))){
+   if(profile.channelWeapon&&(!liveKeys.has(profile.key)||!isLiveStaffChannel(profile,now,world)||(profile.manaChannelPaid===true&&now>=(profile.channelManaNextAt??0)&&profile.mana+1e-6<(profile.channelManaPulseCost??2)))){
     // Clear orphaned continuous-cast state before validating later movement.
-    profile.channelWeapon=null;profile.channelStartedAt=0;
-    profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
+    profile.channelWeapon=null;profile.channelStartedAt=0;profile.manaChannelPaid=false;profile.chargeStartedAt=0;
+    profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;delete profile.channelManaNextAt;
     delete profile.prismChannelStats;
     delete profile.tidalChannelStats;
     if(world.prismLocks?.[profile.key])delete world.prismLocks[profile.key];
@@ -1975,6 +1983,8 @@ function tickPersistentAttacks(world,actors,now,rng){
   // The primary cast owns the endpoint; each borrowed skill retains its own
   // area, directional collider, and independently applied damage rules.
   const targets=potentialTargets;
+  // A cleared or expired channel may not damage anything on a late tick.
+  if(fx.channel&&!world.profiles[fx.owner]?.channelWeapon){fx.expiresAt=now;fx.lastAt=now;continue;}
   // Persistent hazards must not cause a final phantom hit AFTER the visual
   // has vanished. Ordinary short projectiles still sweep on a late tick.
   if(fx.kind==='projectile'&&fx.flightMs&&
@@ -2292,14 +2302,17 @@ function tickPersistentAttacks(world,actors,now,rng){
    for(const target of candidates){
     const victim=target.value,key=victim.id||victim.key;
     const victimRadius=target.kind==='monster'?(victim.bodyRadius||ENEMY_RADIUS):1.02;
+    const channelKey=fx.owner+':'+fx.weapon+':'+(fx.echo?'echo'+(fx.fusionSlot??0):'main')+':'+key;
     if(vortexSegmentDistance(start,fx.position,victim.position)>radius+victimRadius||
-     Math.abs(victim.position[1]-fx.position[1])>8||(fx.hitTimes?.[key]||0)>now)continue;
+     Math.abs(victim.position[1]-fx.position[1])>8||(fx.hitTimes?.[key]||0)>now||
+     (fx.channel&&(world.channelContactLocks?.[channelKey]||0)>now))continue;
     const point=[victim.position[0],victim.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),victim.position[2]];
     const hit=target.kind==='monster'?
-     damageMonster(world,owner,fx.damage*.12*1.5,now,rng,'vortex',victim,point):
-     damagePlayer(world,owner,victim,(fx.pvpDamage??12)*.18*1.5,now,'vortex',fx.origin,'vortex',point);
+     damageMonster(world,owner,fx.channel&&!fx.echo?fx.damage:fx.damage*.12*1.5,now,rng,'vortex',victim,point):
+     damagePlayer(world,owner,victim,fx.channel&&!fx.echo?(fx.pvpDamage??3):(fx.pvpDamage??12)*.18*1.5,now,'vortex',fx.origin,'vortex',point);
     if(!hit||hit.immune)continue;
     fx.hitTimes??={};fx.hitTimes[key]=now+VORTEX_DAMAGE_INTERVAL_MS;
+    if(fx.channel){world.channelContactLocks??={};world.channelContactLocks[channelKey]=now+VORTEX_DAMAGE_INTERVAL_MS;}
     changed=true;
     if(!fx.locked){
      // Capture the first real hit once. The vortex remains the fixed orbit center.

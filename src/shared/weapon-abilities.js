@@ -37,6 +37,20 @@ export function chargeProgress(heldMs,weaponChargeMs){return Math.max(0,Math.min
 export function isStaffTap(item,heldMs){
  return isChannelStaff(item)&&Number.isFinite(heldMs)&&heldMs>=0&&heldMs<=STAFF_TAP_MAX_MS;
 }
+// Sustained spells only. Lightning and wind share the second-shortest mana budget.
+// Hit power is per native damage contact, before quality, equipment and target effects.
+const CHANNEL_BALANCE=Object.freeze({
+ fire:Object.freeze({initial:20,mpPerSecond:20,hit:16}),
+ lightning:Object.freeze({initial:20,mpPerSecond:13,hit:12}),
+ wave:Object.freeze({initial:20,mpPerSecond:13,hit:3}),
+ beam:Object.freeze({initial:20,mpPerSecond:10,hit:4}),
+ water:Object.freeze({initial:20,mpPerSecond:7,hit:1.5}),
+ petal:Object.freeze({initial:20,mpPerSecond:9,hit:3.5})
+});
+export function sustainedSpellBalance(item){
+ if(!isChannelStaff(item)||item.family==='ice')return null;
+ return CHANNEL_BALANCE[item.id==='clam'?'water':item.family]||null;
+}
 export const ICE_FREEZE_INTERVAL_MS=6000;
 export function channelInterval(item){return item?.family==='ice'?ICE_FREEZE_INTERVAL_MS:Math.max(260,Number(item?.cooldown)||700);}
 // One shared duration/radius for the visible giant fish and server-owned swept hitbox.
