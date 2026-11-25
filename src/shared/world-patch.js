@@ -34,7 +34,7 @@ export function mergeWingCatalog(previous=[],incoming=[]){
  const time=w=>Math.max(w?.createdAt||0,w?.updatedAt||0,w?.retiredAt||0);
  for(const item of incoming){
   if(!item?.id)continue;
-  const old=map.get(item.id);
+  const old=map.get(item.id);if(old===item)continue;
   if(!old||time(item)>=time(old)&&JSON.stringify(old)!==JSON.stringify(item)){
    map.set(item.id,item);changed=true;
   }

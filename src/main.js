@@ -333,8 +333,7 @@ function acceptWorldView(next){
   if(wings!==existing){registerCustomWings(wings);world={...world,customWings:wings};syncWorld();if(ui.panelName==='bag')ui.renderPanel();}
   return false;
  }
- if(wings!==existing)registerCustomWings(wings);
- world={...next,customWings:wings};syncWorld();return true;
+ if(wings!==existing)registerCustomWings(wings);world={...next,customWings:wings};syncWorld();return true;
 }
 network.addEventListener('welcome',event=>{const data=event.detail;self={...self,...data.self};players=data.players;syncPlayers();acceptWorldView(data.world);});
 // Coalesce high-frequency Worker snapshots: a busy attack can deliver many
