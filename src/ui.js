@@ -37,7 +37,7 @@ export class TempleUI extends EventTarget{
   constructor(){
     super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.wingPaymentStatus=null;this.firebaseIdToken='';this.googleAuthenticated=false;this.authMode='firebase';this.pendingLoginMode='firebase';this.joining=false;this.selectedQuickSlot=null;this.quickBarSignature='';this.shopQuantities={};
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');this.buildFloat=new FloatingGmEditorPanel(this.panel,{force:true,storageKey:'temple-build-floating-v1'});this.buildTab='upload';
-    bindBagDrag(this);bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
+    bindBagDrag(this);this.chatLayout=bindChatLayout();addEventListener('resize',()=>this.scheduleRosterLayout());
     this.bind();
     const hotbar=$('comfort-hotbar');
     const quickUse=event=>{
@@ -254,6 +254,8 @@ export class TempleUI extends EventTarget{
   if(invincible)this.emit('gm-invincible',{enabled:invincible.checked});
  });
      this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='help')this.openPanel('help');else if(action==='wing-painter')this.openPanel('wing-painter');else if(action==='wing-player-preview')this.openPanel('wing-player-preview');else if(action==='wing-manage')this.openPanel('wing-manage');
+      else if(action==='chat-position-edit'){this.closePanel();this.chatLayout?.prepare();this.toast('拖曳 CHAT 的 ＋ 至指定位置，再開啟 GM 控制中心儲存');}
+      else if(action==='chat-position-save'){this.closePanel();requestAnimationFrame(()=>{const position=this.chatLayout?.position();if(position)this.emit('server-action',{action:'gm-chat-default',...position});});}
       else if(action==='recover-misplaced-artwork')this.emit('server-action',{action:'recover-misplaced-artwork'});
       else if(action==='reset-buildings')this.emit('server-action',{action:'reset-buildings'});
        else if(action==='clean-graffiti'&&window.confirm('確定清除全部永久保存的房屋塗鴉？這個操作無法復原。'))this.emit('server-action',{action:'clean-graffiti'});
@@ -348,10 +350,10 @@ export class TempleUI extends EventTarget{
      $('spectator-fly-controls').hidden=!isViewer;
      $('gm-spectator-test-exit').hidden=!(this.self?.profile?.admin&&this.self?.gmSpectatorPreview);
    }
-   enter(data){document.activeElement?.blur();this.self=data.self;this.refreshGalleryGuideAttention();this.authMode=data.authMode||'firebase';this.world=data.world;this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;$('gm-menu').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.joinBusy(false);}
+   enter(data){document.activeElement?.blur();this.self=data.self;this.refreshGalleryGuideAttention();this.authMode=data.authMode||'firebase';this.world=data.world;this.chatLayout?.applyDefault(data.world?.chatDefault);this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;$('gm-menu').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;$('gm-menu').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();if(this.panelName&&this.panelName!=='bag')this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();}
-  setWorld(world){this.world=world;this.refreshHUD();if(['bag','shop','shop-prices','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(['shop','shop-prices'].includes(this.panelName)&&this.shopPriceSignature!==JSON.stringify(world.shopPrices||{})))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
+  setWorld(world){this.world=world;this.chatLayout?.applyDefault(world.chatDefault);this.refreshHUD();if(['bag','shop','shop-prices','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(['shop','shop-prices'].includes(this.panelName)&&this.shopPriceSignature!==JSON.stringify(world.shopPrices||{})))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
   refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);
  const shieldItem=itemById(profile.equipment?.shield),shieldDisplay=$('shield-readout');
  if(shieldDisplay){
@@ -575,7 +577,7 @@ export class TempleUI extends EventTarget{
     const weaponControls=ITEMS.filter(item=>item.slot==='weapon').map(item=>slider('weapon-'+item.id,item.name||item.id)).join('');
     this.content.innerHTML=`<section class="gm-admin">
       <h3>GM 功能</h3><div class="gm-tools">
-        <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-open-shop-prices>商品售價編輯</button>
+        <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-gm-action="chat-position-edit">調整全服 CHAT 預設位置</button><button type="button" data-gm-action="chat-position-save">儲存目前 CHAT 位置為全服預設</button><button type="button" data-open-shop-prices>商品售價編輯</button>
          <button type="button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button>
         <button type="button" data-gm-action="help" aria-label="GM instructions and shortcuts">！ GM 說明與快捷鍵</button>
         <button type="button" data-gm-action="wing-painter">畫翅膀／上架翅膀</button><button type="button" data-gm-action="wing-player-preview">測試玩家已開通的繪圖介面</button>

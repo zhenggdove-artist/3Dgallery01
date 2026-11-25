@@ -576,7 +576,8 @@ export class NumberedWeaponEffects {
   if(synced&&Array.isArray(synced.position)){
    const stamp=synced.sampledAt??synced.position.join(',');
    if(motion.sample?.stamp!==stamp){
-    const sample=motion.sample={stamp,age:entry.age,position:new THREE.Vector3(...synced.position),travelled:Math.max(0,Number(synced.travelled)||0),range:Math.max(.5,Number(synced.range)||entry.range),flight:Math.max(1,Number(synced.flightMs)||VORTEX_FLIGHT_MS)};
+    const sample=motion.sample={stamp,age:entry.age,position:new THREE.Vector3(...synced.position),travelled:Math.max(0,Number(synced.travelled)||0),range:Math.max(.5,Number(synced.range)||entry.range),flight:Math.max(1,Number(synced.flightMs)||VORTEX_FLIGHT_MS),locked:!!synced.locked};
+    if(synced.locked)entry.duration=Math.max(entry.duration,entry.age+Math.max(0,(synced.expiresAt-synced.sampledAt)/1000)+.25);
     if(Array.isArray(synced.direction)){motion.direction.fromArray(synced.direction).setY(0);if(motion.direction.lengthSq()>1e-8)motion.direction.normalize();else motion.direction.set(0,0,1);}
    }
   }else if(motion.sample&&Array.isArray(world?.vortexes)){
@@ -587,9 +588,9 @@ export class NumberedWeaponEffects {
   const sample=motion.sample;
   if(sample){
    const extrapolate=Math.min(.12,Math.max(0,entry.age-sample.age));
-   const step=Math.min(Math.max(0,sample.range-sample.travelled),sample.range*extrapolate/(sample.flight/1000));
+   const step=sample.locked?0:Math.min(Math.max(0,sample.range-sample.travelled),sample.range*extrapolate/(sample.flight/1000));
    motion.predicted.copy(sample.position).addScaledVector(motion.direction,step);
-   motion.position.lerp(motion.predicted,1-Math.exp(-dt*22));
+   if(sample.locked)motion.position.copy(motion.predicted);else motion.position.lerp(motion.predicted,1-Math.exp(-dt*22));
   }else{
    motion.position.copy(entry.origin).addScaledVector(motion.direction,entry.range*Math.min(1,entry.age/(VORTEX_FLIGHT_MS/1000)));
   }
@@ -597,7 +598,7 @@ export class NumberedWeaponEffects {
   // Apply the authoritative translation AFTER native update. Never apply a
   // pitch, roll, camera aim quaternion or the player's animation rotation.
   fx.group.position.copy(motion.position);fx.group.quaternion.identity();
-  if(entry.age>=entry.duration||fx.finished)this.remove(entry);
+  if(entry.age>=entry.duration)this.remove(entry);else if(fx.finished){fx.reset();fx.update((fx.lifecycle?.start||1.1)+.02);}
  }
  update(dt,camera=null,world=null){
   if(camera)this.camera=camera;

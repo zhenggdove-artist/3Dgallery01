@@ -285,7 +285,7 @@ export class TempleRoom extends DurableObject{
      const spectatorWrite=session.role==='spectator'&&body.action==='plant';
      // Public spectators do not transmit a player pose. Only WRITE is allowed
      // to use the fixed central plant position, never combat or BUILD actions.
-     const noPoseAction=['buy','equip','unequip','sell','sell-bulk','inspect-item','assign-consumable','swap-inventory','gm-shop-price'].includes(body.action);
+     const noPoseAction=['buy','equip','unequip','sell','sell-bulk','inspect-item','assign-consumable','swap-inventory','gm-shop-price','gm-chat-default'].includes(body.action);
      if(!state?.position&&!spectatorWrite&&!noPoseAction)return json({error:'Connect and enter the Temple first'},409);
      const world=this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:spectatorWrite||!state?.position?[0,0,0]:state.position},actors=this.actors();
     delete body.verifiedArtMedia;if(body.action==='add-artwork'||body.action==='publish-art-bomb'){const media=this.sql.exec('SELECT id,type,owner FROM art_media WHERE id=?',String(body.artwork?.mediaId||'')).toArray()[0];if(!media||media.owner!==session.profile_key||body.action==='add-artwork'&&!actor.admin||body.action==='publish-art-bomb'&&session.role!=='fighter')return json({error:'Upload your own validated artwork with the required role first'},403);body.verifiedArtMedia={id:media.id,type:media.type};}

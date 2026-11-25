@@ -278,7 +278,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
       key,{targetKey:lock.targetKey,kind:lock.kind,position:clone(lock.position),since:lock.since,
         multiplier:prismDamageMultiplier(now-lock.since),range:lock.range}
     ])),
-    vortexes:(world.persistentAttacks||[]).filter(v=>v.kind==='vortex').map(v=>({id:v.id,position:clone(v.position||v.origin),owner:v.owner,direction:clone(v.direction),travelled:v.travelled||0,range:v.range,flightMs:v.expiresAt-v.createdAt,sampledAt:v.lastAt})),
+    vortexes:(world.persistentAttacks||[]).filter(v=>v.kind==='vortex').map(v=>({id:v.id,position:clone(v.position||v.origin),owner:v.owner,direction:clone(v.direction),travelled:v.travelled||0,range:v.range,flightMs:VORTEX_FLIGHT_MS,locked:!!v.locked,expiresAt:v.expiresAt,sampledAt:v.lastAt})),
     tidalLocks:Object.fromEntries(Object.entries(world.tidalLocks||{}).map(([key,lock])=>[
       key,{targets:(lock.targets||[]).map(t=>({targetKey:t.targetKey,kind:t.kind,position:clone(t.position)}))}
     ])),
@@ -290,7 +290,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
        consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    shopPrices:clone(world.shopPrices||{}),profile:worldProfileView(world,actorKey,now),
+    chatDefault:clone(world.chatDefault||null),shopPrices:clone(world.shopPrices||{}),profile:worldProfileView(world,actorKey,now),
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -385,6 +385,14 @@ export function applyAction(world,actor,body,context={}){
    wingDrawAdmin=['gm-wing-draw','gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate'].includes(body.action)?world.profiles?.[actor.key]?.admin===true:null,
    profile=ensureProfile(world,actor.key,actor.name,actor.color,now,
     ['gm-wing-draw','gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate'].includes(body.action)?wingDrawAdmin:actor.admin);
+  if(body.action==='gm-chat-default'){
+   if(!profile.admin||actor.admin!==true)return {error:'GM only'};
+   const {x,y}=body;
+   if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>1||y<0||y>1)return {error:'Invalid chat position'};
+   world.chatDefault={x,y,revision:(world.chatDefault?.revision||0)+1};
+   world.revision=(world.revision||0)+1;
+   return {notice:'全服 CHAT 預設位置已儲存'};
+  }
   if(body.action==='gm-shop-price'){
    // Role is obtained from the authenticated server session, not the request payload.
    if(!profile.admin||actor.admin!==true)return {error:'GM only'};
@@ -1165,7 +1173,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
-      radius:stats.radius,area,damage:stats.damage+bonus*.1,pvpDamage,charge,critChance:weapon.critChance,
+      radius:stats.radius,area,damage:stats.damage+bonus*.1*(weapon.id==='jellybrella'?.5:1),pvpDamage,charge,critChance:weapon.critChance,
       qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,iceGround,
       shoulderSpread:shoulderSniper,
       flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
@@ -2210,7 +2218,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       Math.hypot(b.value.position[0]-fx.position[0],b.value.position[2]-fx.position[2]))[0];
    if(aim)fx.targetId=aim.value.id||aim.value.key;
    const start=[...fx.position],elapsed=Math.max(0,Math.min(now,fx.expiresAt)-fx.lastAt);
-   advanceHomingVortex(fx,aim?.value,elapsed,flight);
+   advanceHomingVortex(fx,aim?.value,elapsed,VORTEX_FLIGHT_MS);
    if(Math.hypot(fx.position[0]-start[0],fx.position[2]-start[2])>.001)changed=true;
    const radius=Math.max(2.1,Math.min(7,fx.radius*.5));
    for(const target of candidates){
@@ -2220,14 +2228,19 @@ function tickPersistentAttacks(world,actors,now,rng){
      Math.abs(victim.position[1]-fx.position[1])>8||(fx.hitTimes?.[key]||0)>now)continue;
     const point=[victim.position[0],victim.position[1]+(target.kind==='monster'?ENEMY_HEIGHT*.5:1),victim.position[2]];
     const hit=target.kind==='monster'?
-     damageMonster(world,owner,fx.damage*.12,now,rng,'vortex',victim,point):
-     damagePlayer(world,owner,victim,(fx.pvpDamage||12)*.18,now,'vortex',fx.origin,'vortex',point);
+     damageMonster(world,owner,fx.damage*.12*1.5,now,rng,'vortex',victim,point):
+     damagePlayer(world,owner,victim,(fx.pvpDamage||12)*.18*1.5,now,'vortex',fx.origin,'vortex',point);
     if(!hit||hit.immune)continue;
     fx.hitTimes??={};fx.hitTimes[key]=now+VORTEX_DAMAGE_INTERVAL_MS;
     changed=true;
+    if(!fx.locked){
+     // Capture the first real hit once. The vortex remains the fixed orbit center.
+     fx.locked=true;fx.position=[victim.position[0],fx.position[1],victim.position[2]];
+     fx.lockedAt=now;fx.expiresAt=Math.max(fx.expiresAt,now+VORTEX_SPIN_MS);
+    }
     if(hit.defeated)continue;
     const status=target.kind==='monster'?victim:world.profiles[victim.key];
-    if(status&&now>=(status.vortexSpinCooldownUntil||0)){
+    if(status&&now>=(status.vortexSpinCooldownUntil||0)&&now+VORTEX_SPIN_MS<=fx.expiresAt){
      status.vortexSpin={id:id(),time:now,durationMs:VORTEX_SPIN_MS,
       center:[fx.position[0],fx.position[2]],start:[...victim.position]};
      status.vortexSpinCooldownUntil=now+VORTEX_SPIN_LOCK_MS;

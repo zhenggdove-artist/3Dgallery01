@@ -124,7 +124,7 @@ export function attackStats(item,charge=0){
  const result=reletterAttackStats(item,charge);
  // Only the giant swimming fish receives triple damage, never ordinary bubbles.
  if(item.id==='goldfish'&&result.ultimate)result.damage*=3;
- if(item.id==='jellybrella'&&result.ultimate)result.damage*=JELLYBRELLA_ULTIMATE_DAMAGE_SCALE;
+ if(item.id==='jellybrella')result.damage*=result.ultimate?JELLYBRELLA_ULTIMATE_DAMAGE_SCALE:.5;
  if(item.id==='water')result.damage*=10;
  if(item.id==='black-cat'){result.range=SNIPER_RANGE;
    // Preserve precise ordinary shots; cut charged multi-target monster damage.

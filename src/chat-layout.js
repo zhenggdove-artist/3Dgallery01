@@ -14,57 +14,69 @@ export function bindChatLayout(){
  const DRAG_HOLD_MS=1000;
  const MINI_DRAG_HOLD_MS=180,MINI_DRAG_SLOP=5;
  const sizes=['max','medium','min'];
- let size='medium',active=null,timer=null,toggleTimer=null,ignoreClickUntil=0,manualPosition=false;
+ let size='medium',active=null,timer=null,toggleTimer=null,ignoreClickUntil=0,manualPosition=false,manualAnchor=null,globalDefault=null,globalRevision=-1;
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
  const mediumHeight=92;
  const maxHeight=()=>Math.min(220,Math.max(114,innerHeight*.42));
- const blocking=()=>['#attack-button','#mobile-stick','#dock [data-action=jump]',
-   '#dock [data-action=interact]','#dock #aim-button']
-  .map(q=>document.querySelector(q))
+ const obstacleSelector='#dock button,#mobile-stick,#comfort-hotbar,#map-cluster,#gm-menu,#gm-help,#gm-spectator-test-exit,#identity,#player-roster,#vitals,#shield-readout,#spectator-controls,#build-mode';
+ const blocking=()=>[...document.querySelectorAll(obstacleSelector)]
   .filter(el=>el&&el.isConnected&&getComputedStyle(el).display!=='none'&&getComputedStyle(el).visibility!=='hidden')
   .map(el=>el.getBoundingClientRect()).filter(r=>r.width>0&&r.height>0);
  const collide=(a,b)=>a.left<b.right+8&&a.right>b.left-8&&a.top<b.bottom+8&&a.bottom>b.top-8;
  const clearInline=()=>{for(const property of ['left','top','right','bottom','transform'])panel.style.removeProperty(property);};
  const resetPosition=()=>{
-  manualPosition=false;clearInline();
+  manualPosition=false;manualAnchor=null;clearInline();
   try{localStorage.removeItem(STORAGE_KEY);}catch{}
  };
+ function bounds(){
+  const v=window.visualViewport;
+  const left=(v?.offsetLeft||0)+8,top=(v?.offsetTop||0)+8;
+  return {left,top,right:Math.max(left,(v?.offsetLeft||0)+(v?.width||innerWidth)-panel.offsetWidth-8),
+   bottom:Math.max(top,(v?.offsetTop||0)+(v?.height||innerHeight)-panel.offsetHeight-8)};
+ }
+ function anchorAt(left,top){
+  const b=bounds();return {x:limit((left-b.left)/Math.max(1,b.right-b.left),0,1),y:limit((top-b.top)/Math.max(1,b.bottom-b.top),0,1)};
+ }
  function relocate(left,top){
-  const viewport=window.visualViewport,width=viewport?.width||innerWidth,height=viewport?.height||innerHeight;
-  const yMin=viewport?.offsetTop||0;
-  const x=limit(left,4,width-panel.offsetWidth-4),y=limit(top,yMin+4,yMin+height-panel.offsetHeight-4);
-  const r={left:x,top:y,right:x+panel.offsetWidth,bottom:y+panel.offsetHeight};
-  // Explicit user drags may position CHAT anywhere within the viewport.
-  panel.style.left=x+'px';panel.style.top=y+'px';panel.style.right='auto';
+  if(!panel.offsetWidth||!panel.offsetHeight)return false;
+  const b=bounds(),w=panel.offsetWidth,h=panel.offsetHeight,obs=blocking();
+  const x=limit(left,b.left,b.right),y=limit(top,b.top,b.bottom);
+  const xs=[x,b.left,b.right],ys=[y,b.top,b.bottom];
+  for(const o of obs){xs.push(limit(o.left-w-9,b.left,b.right),limit(o.right+9,b.left,b.right));ys.push(limit(o.top-h-9,b.top,b.bottom),limit(o.bottom+9,b.top,b.bottom));}
+  let best=null,distance=Infinity;
+  for(const px of xs)for(const py of ys){
+   const r={left:px,top:py,right:px+w,bottom:py+h};
+   if(obs.some(o=>collide(r,o)))continue;
+   const d=(px-x)**2+(py-y)**2;if(d<distance){best=r;distance=d;}
+  }
+  if(!best)return false;
+  panel.style.setProperty('left',best.left+'px','important');panel.style.setProperty('top',best.top+'px','important');panel.style.right='auto';
   panel.style.setProperty('bottom','auto','important');panel.style.transform='none';
   return true;
  }
  const save=()=>{if(!manualPosition)return;try{const r=panel.getBoundingClientRect();
-  localStorage.setItem(STORAGE_KEY,JSON.stringify({left:r.left,top:r.top}));}catch{}};
- // Shift only as far upward as necessary when an on-screen A, jump or stick
- // would otherwise intersect the chat. On resizing, first restore CSS's
- // lower anchor instead of inheriting a previous, unnecessarily high offset.
+  manualAnchor=anchorAt(r.left,r.top);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify({...manualAnchor,revision:globalRevision}));}catch{}};
  function fitSafely(){
-  if(manualPosition){const r=panel.getBoundingClientRect();relocate(r.left,r.top);return;}
-  clearInline();
-  let rect=panel.getBoundingClientRect();if(!rect.width||!rect.height)return;
-  const obstacles=blocking(),viewTop=(window.visualViewport?.offsetTop||0)+6;
-  if(!obstacles.some(b=>collide(rect,b)))return;
-  for(let step=0;step<80;step++){
-   const intersect=obstacles.filter(b=>collide(rect,b));
-   if(!intersect.length)break;
-   const nextTop=Math.max(viewTop,Math.min(...intersect.map(b=>b.top-rect.height-10),rect.top-8));
-   if(nextTop>=rect.top-1)break;
-   if(!relocate(rect.left,nextTop)){
-    // relocate rejects overlap; use the geometry of the next candidate
-    // rather than leaving a previous save at an unsafe position.
-    const candidate={left:rect.left,right:rect.right,top:nextTop,bottom:nextTop+rect.height};
-    if(obstacles.some(b=>collide(candidate,b))){rect=candidate;continue;}
-   }
-   rect=panel.getBoundingClientRect();
-  }
-  // A temporary small viewport may leave overlap; never erase a stored
-  // manual preference or move the default back down into combat controls.
+  if(!panel.offsetWidth||!panel.offsetHeight||panel.closest('[hidden]')||getComputedStyle(panel).visibility==='hidden')return;
+  if(active?.mode==='move'||miniDrag?.mode==='move')return;
+  const anchor=manualPosition?manualAnchor:globalDefault;
+  let left,top;
+  if(anchor){const b=bounds();left=b.left+(b.right-b.left)*anchor.x;top=b.top+(b.bottom-b.top)*anchor.y;}
+  else{clearInline();const r=panel.getBoundingClientRect();left=r.left;top=r.top;}
+  if(!relocate(left,top)&&size!=='min')setSize(size==='max'?'medium':'min');
+ }
+ function applyDefault(value){
+  const revision=Number(value?.revision)||0;
+  if(revision===globalRevision)return;
+  globalRevision=revision;
+  globalDefault=value&&Number.isFinite(value.x)&&Number.isFinite(value.y)?{x:limit(value.x,0,1),y:limit(value.y,0,1)}:null;
+  try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
+   manualPosition=!!saved&&saved.revision===revision&&Number.isFinite(saved.x)&&Number.isFinite(saved.y);
+   manualAnchor=manualPosition?{x:limit(saved.x,0,1),y:limit(saved.y,0,1)}:null;
+   if(!manualPosition)localStorage.removeItem(STORAGE_KEY);
+  }catch{manualPosition=false;manualAnchor=null;}
+  requestAnimationFrame(fitSafely);
  }
  function setSize(next,{hold=false}={}){
   size=next;
@@ -125,7 +137,7 @@ export function bindChatLayout(){
   if(!miniDrag||miniDrag.id!==e.pointerId)return;
   const mode=miniDrag.mode;clearTimeout(miniTimer);miniDrag=null;
   if(mode!=='pending')ignoreClickUntil=performance.now()+350;
-  if(mode==='move')save();
+  if(mode==='move'){save();requestAnimationFrame(fitSafely);}
   panel.classList.remove('chat-dragging');
   try{if(toggle.hasPointerCapture(e.pointerId))toggle.releasePointerCapture(e.pointerId);}catch{}
  };
@@ -207,14 +219,7 @@ export function bindChatLayout(){
  window.visualViewport?.addEventListener('resize',onViewportResize);
  // The HUD starts hidden at login. Refit only when layout dimensions change,
  // not on world snapshots or game frames.
- if(typeof ResizeObserver==='function'){const observer=new ResizeObserver(()=>requestAnimationFrame(fitSafely));observer.observe(panel);const quickbar=document.getElementById('comfort-hotbar');if(quickbar)observer.observe(quickbar);}
- try{
-  const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
-  if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top)){
-   requestAnimationFrame(()=>{
-    manualPosition=true;
-    if(!relocate(saved.left,saved.top)){resetPosition();fitSafely();}
-   });
-  }
- }catch{resetPosition();}
+ if(typeof ResizeObserver==='function'){const observer=new ResizeObserver(()=>requestAnimationFrame(fitSafely));observer.observe(panel);for(const el of document.querySelectorAll(obstacleSelector))observer.observe(el);}
+ if(typeof MutationObserver==='function'){const observer=new MutationObserver(()=>requestAnimationFrame(fitSafely));for(const el of [document.body,document.getElementById('hud'),...document.querySelectorAll(obstacleSelector)])if(el)observer.observe(el,{attributes:true,attributeFilter:['hidden','class']});}
+ return {applyDefault,position:()=>{const r=panel.getBoundingClientRect();return anchorAt(r.left,r.top);},prepare:()=>{setSize('medium');}};
 }

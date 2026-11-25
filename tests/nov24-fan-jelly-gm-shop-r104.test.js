@@ -21,16 +21,16 @@ test('fan is retired, cannot be purchased, and old fan gear and echoes are remov
  assert.equal(w.persistentAttacks.length,0);
  assert.equal(applyAction(w,user,{action:'buy',itemId:'fan',qualityTier:3},{now:now+2}).error,'Item is not sold');
 });
-test('all five jellyfish qualities deal exactly 70% of previous monster and PvP ultimate damage; normals unchanged',()=>{
- assert.equal(JELLYBRELLA_ULTIMATE_DAMAGE_SCALE,.7);
+test('all five jellyfish qualities deal half of V040 monster and PvP normal and ultimate damage',()=>{
+ assert.equal(JELLYBRELLA_ULTIMATE_DAMAGE_SCALE,.35);
  const original=itemById('jellybrella');
  for(let tier=1;tier<=5;tier++){
   const w=shopWeaponVariant(original,tier),normal=attackStats(w,0),full=attackStats(w,1);
-  assert.equal(normal.damage,oddAttackStats(w,0).damage);
-  assert.ok(Math.abs(full.damage-oddAttackStats(w,1).damage*.7)<1e-8);
+  assert.equal(normal.damage,oddAttackStats(w,0).damage*.5);
+  assert.ok(Math.abs(full.damage-oddAttackStats(w,1).damage*.35)<1e-8);
   const reference={...w,id:'jelly-reference'};
-  assert.equal(pvpShotDamage(w,normal,{tier}),pvpShotDamage(reference,normal,{tier}));
-  assert.ok(Math.abs(pvpShotDamage(w,full,{tier})-pvpShotDamage(reference,full,{tier})*.7)<.001);
+  assert.ok(Math.abs(pvpShotDamage(w,normal,{tier})-pvpShotDamage(reference,normal,{tier})*.5)<.001);
+  assert.ok(Math.abs(pvpShotDamage(w,full,{tier})-pvpShotDamage(reference,full,{tier})*.35)<.001);
  }
 });
 test('authenticated GM can bulk buy above 600 with no wallet debit and keeps instances on rejoin; normal player has the same 3000 cap',()=>{

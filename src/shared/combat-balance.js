@@ -1,5 +1,5 @@
 import {weaponAffixTotals} from './weapon-affixes.js';
-export const JELLYBRELLA_ULTIMATE_DAMAGE_SCALE=.70;
+export const JELLYBRELLA_ULTIMATE_DAMAGE_SCALE=.35;
 export const PALM_STORM_DURATION_MS=3000;
 export const PALM_STORM_TICK_MS=2000;
 export const SNIPER_RANGE=256; // Entire 184m-diameter arena from either edge, with margin.
@@ -58,7 +58,7 @@ export function pvpShotDamage(weapon,stats,quality={tier:1}){
  // this multiplier for PvP as well as monster and structural damage.
  if(weapon.id==='giraffe'&&stats?.ultimate)base*=3;
  if(weapon.id==='goldfish'&&stats?.ultimate)base*=3;
- if(weapon.id==='jellybrella'&&stats?.ultimate)base*=JELLYBRELLA_ULTIMATE_DAMAGE_SCALE;
+ if(weapon.id==='jellybrella')base*=stats?.ultimate?JELLYBRELLA_ULTIMATE_DAMAGE_SCALE:.5;
  const enchant=weaponAffixTotals(weapon);
  // The per-instance bonus applies to PvP as well as the server's monster
  // damage, without changing the weapon's physical reach or collision shape.
