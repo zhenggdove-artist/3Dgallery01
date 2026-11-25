@@ -46,7 +46,7 @@ test('mobile simultaneous healing and shoulder desktop charging route separately
  const controller=read('src/player-controller.js'),main=read('src/main.js');
  assert.match(ui,/hotbar\?\.addEventListener\('touchstart'/);
  assert.match(controller,/reconcileTouches/);
- assert.match(gun,/shoulderPress/);
- assert.match(gun,/canShoulderCharge/);
- assert.match(main,/shoulderMouse\)startHeldCharge\(\)/);
+ assert.doesNotMatch(gun,/shoulderPress/);
+ assert.match(gun,/this\.mode=w\.id==='black-cat'\?2:1/);
+ assert.doesNotMatch(main,/shoulderMouse/);
 });

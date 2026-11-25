@@ -58,7 +58,7 @@ export function equippedItem(profile,item,instanceRecord=null){
   }
   // An old save can contain a sniper added as a third+ material before the
   // balance change. Clamp only records that identify a stat-only sniper.
-  if(Array.isArray(record.sources)&&record.sources.some(v=>v.id==='black-cat'&&!v.echo))
+  if(!record.sniperStatOnlyV050&&Array.isArray(record.sources)&&record.sources.some(v=>v.id==='black-cat'&&!v.echo))
    for(const key of ['damage','chargeDamage']){
     const base=Math.max(0,Number(item[key])||0);
     const bonus=record.sources.filter(v=>!v.echo).reduce((sum,v)=>{

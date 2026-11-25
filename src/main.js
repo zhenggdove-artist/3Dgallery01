@@ -105,13 +105,7 @@ let healVisualSeq=0,lastHealVisualAt=0;
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
 let pendingAInteraction=null,chargeDelayTimer=null,beamStartTimer=null,nextChargeRetryAt=0;
-let sniperScopeAtPress=false; // Also permits fusion-enabled shoulder-only charged blasts.
-function hasBlackCatFusionUltimate(){
- return (world?.profile?.fusion?.['black-cat']?.effects||[]).some(id=>{
-  const source=itemById(id);
-  return source?.slot==='weapon'&&source.id!=='black-cat'&&Number(source.chargeMs)>0;
- });
-}
+let sniperScopeAtPress=false;
 // Begin charging after the 500ms tap threshold without relying on render FPS.
 // After a stun/rejected request, retry only while the A/Q button is still held.
 function clearChargeDelay(){
@@ -143,10 +137,10 @@ function startHeldCharge(){
  if(currentTunedWeapon()?.id==='goldfish'&&gun.mode!==0)return;
  // Never begin a Black Cat charge while outside the actual sniper scope.
  if(currentTunedWeapon()?.id==='black-cat'&&
-    (!sniperScopeAtPress||(gun.mode!==2&&!(gun.mode===1&&hasBlackCatFusionUltimate()))))return;
+    (!sniperScopeAtPress||gun.mode!==2))return;
  chargeStarted=performance.now();
  chargeRequest=sendAction('attack',{phase:'charge',...(sniperScopeAtPress?{
-  scoped:gun.mode===2,aimMode:gun.mode===1?'shoulder':'scope',viewportHeight:innerHeight
+  scoped:gun.mode===2,aimMode:'scope'
  }:{})}).then(result=>{
   if(!result?.charging&&attackHeld){
    chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;
@@ -202,7 +196,7 @@ function beginStaffChannel(){
 const writer=new WriteCinematic({scene,controller:()=>controller,arena,ui,send:sendAction,audio,bursts,upload:file=>uploadMedia(network,file)});
 const plantHover=bindPlantHover({canvas,camera,arena,controller:()=>controller,ui});
 ui.addEventListener('write-start',()=>writer.begin());
-const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>currentTunedWeapon(),ui,attack:performAttack,canShoulderCharge:()=>hasBlackCatFusionUltimate()});
+const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>currentTunedWeapon(),ui,attack:performAttack});
 const artEditor=new ArtworkEditor({scene,camera,canvas,arena,player:()=>localRoot,isGM:()=>!!self?.profile?.admin,ownerKey:()=>self?.key,focusArtwork:root=>{if(!controller)return;controller.artworkEditTarget=root;if(root){controller.target.copy(root.position);controller.yaw=root.rotation.y;controller.pitch=.05;controller.updateCamera(1,true);camera.updateMatrixWorld(true);}},send:sendAction,control:enabled=>{if(controller){controller.setEnabled(enabled&&!ui.panelName&&!wasDead);controller.cameraLocked=!!artEditor.mode&&artEditor.mode!=='follow';}},toast:text=>ui.toast(text)});
 const platformDelete=new PlatformDeleteEditor({canvas,camera,arena,ui,editor:artEditor,isGM:()=>!!self?.profile?.admin,send:sendAction,controller:()=>controller,cancelBuild:cancelBuildPlacement});
 const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>controller,
@@ -562,7 +556,6 @@ ui.addEventListener('quick-use',event=>{
 // camera: standard > shoulder > sniper scope > standard; canvas tap fires.
 ui.addEventListener('attack-start',event=>{
  if(wallPainter.active||!controller?.enabled||self?.role!=='fighter')return;
- const shoulderMouse=event.detail?.origin==='shoulder-mouse';
  if(coarse&&buildPlacement){confirmBuildPlacement();return;}
  // A held artwork overrides the currently equipped firearm/camera mode.
  // Query the live world as holdingArt can lag behind a pickup response.
@@ -579,11 +572,11 @@ ui.addEventListener('attack-start',event=>{
  const weapon=currentTunedWeapon();
  // Record scope at key-down, so holding A before aiming can never charge/fire.
  sniperScopeAtPress=weapon?.id==='black-cat'&&
-  (gun.mode===2||(gun.mode===1&&hasBlackCatFusionUltimate()));
+  gun.mode===2;
  // A tap picks up nearby items; holding must still charge any weapon except unscoped Black Cat.
  // For first-person guns a tap cycles the camera, while a hold charges.
  pendingAInteraction=null;
- if(!artworkThrow.started&&!shoulderMouse){
+ if(!artworkThrow.started){
    const nearbyArt=arena.nearest(controller.root.position.toArray());
   if(nearbyArt?.type==='artwork'||['coin','drop'].includes(nearbyArt?.type))
    pendingAInteraction=nearbyArt;
@@ -592,8 +585,7 @@ ui.addEventListener('attack-start',event=>{
  attackHoldStarted=performance.now();
  chargeStarted=null;chargeRequest=null;nextChargeRetryAt=0;
  clearChargeDelay();
- if(shoulderMouse)startHeldCharge();
-  else chargeDelayTimer=setTimeout(()=>{chargeDelayTimer=null;startHeldCharge();},STAFF_TAP_MAX_MS);
+ chargeDelayTimer=setTimeout(()=>{chargeDelayTimer=null;startHeldCharge();},STAFF_TAP_MAX_MS);
   if(isChannelStaff(weapon)&&localRoot)localRoot.userData.staffCastingUntil=attackHoldStarted+1800;
 });
 ui.addEventListener('attack-release',async()=>{
@@ -638,15 +630,6 @@ ui.addEventListener('attack-release',async()=>{
   return;
  }
  if(weapon?.id==='black-cat'&&!wasScopedAtPress){gun.cycle();return;}
- // A fused Black Cat can launch its rainbow spiral only after a complete
- // shoulder-view charge. Short taps still change camera; incomplete holds
- // cannot accidentally shoot a high-damage normal rifle round from A.
- if(weapon?.id==='black-cat'&&gun.mode===1&&heldMs>=STAFF_TAP_MAX_MS){
-  if(pending)await pending;
-  if(charge>=1&&hasBlackCatFusionUltimate())await performAttack(1);
-  else void sendAction('attack',{phase:'channel-stop'});
-  return;
- }
  if(weapon?.firstPerson&&heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
  if(heldMs>=STAFF_TAP_MAX_MS&&pending)await pending;
  if(isChannelStaff(weapon)){
@@ -985,7 +968,7 @@ function performAttack(charge=0,phase=null){
  const item=currentTunedWeapon()||itemById('water');
  // Centralized guard covers UI A/Q, canvas clicks, auto-charge and fusion.
  if(item.id==='black-cat'&&
-   (gun.mode===0||(gun.mode===1&&charge>=1&&!hasBlackCatFusionUltimate())))return;
+   gun.mode!==2)return;
  if(item.id==='goldfish'&&gun.mode!==1&&charge<1)return;
  // Unscoped goldfish ultimate follows the camera forward ray; an 11m
  // third-person muzzle intersection can otherwise aim behind the avatar.
@@ -996,7 +979,7 @@ function performAttack(charge=0,phase=null){
   shot?.direction||attackDirection(controller,camera,arena,roots,item,charge,muzzle);
  return sendAction('attack',{direction,charge,...(phase?{phase}:{}),
   ...(item.id==='black-cat'?{
-   scoped:gun.mode===2,aimMode:gun.mode===1?'shoulder':'scope',viewportHeight:innerHeight
+   scoped:gun.mode===2,aimMode:'scope'
   }:{}),
   ...(muzzle?{origin:muzzle.toArray()}:{}),...(shot||{})},{throwOnError:phase==='channel'});
 }
@@ -1134,7 +1117,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V049',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V050',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);
@@ -1154,7 +1137,7 @@ function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.
   if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}
   try{recordRenderHealth(now);}catch{}return;
  }
- refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);const shake=Math.max(0,(screenShakeUntil-performance.now())/350),savedPosition=shake>0?camera.position.clone():null;if(shake>0){camera.position.x+=(Math.random()-.5)*shake*.16;camera.position.y+=(Math.random()-.5)*shake*.10;}try{vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view));}catch(error){renderDiagnostics.renderFaults++;renderDiagnostics.lastError=String(error?.message||error);if(now-lastRenderFaultAt>2000){lastRenderFaultAt=now;console.error('Render fault',error);}}finally{if(savedPosition)camera.position.copy(savedPosition);gpuFrames.submitted();}const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}try{recordRenderHealth(now);}catch(error){console.warn('Render health sample failed',error);}}
+ refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);const shake=gun.mode===2?0:Math.max(0,(screenShakeUntil-performance.now())/350),savedPosition=shake>0?camera.position.clone():null;if(shake>0){camera.position.x+=(Math.random()-.5)*shake*.16;camera.position.y+=(Math.random()-.5)*shake*.10;}try{vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view));}catch(error){renderDiagnostics.renderFaults++;renderDiagnostics.lastError=String(error?.message||error);if(now-lastRenderFaultAt>2000){lastRenderFaultAt=now;console.error('Render fault',error);}}finally{if(savedPosition)camera.position.copy(savedPosition);gpuFrames.submitted();}const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}try{recordRenderHealth(now);}catch(error){console.warn('Render health sample failed',error);}}
 requestAnimationFrame(frame);
 
 const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),gain=event.owner===self?.key?1:.38;audio.playWeapon(item,gain,!!event.ultimate);if(event.owner===self?.key&&(item?.firstPerson||item?.id==='calico-cat'))gun.kick(item);if(event.ultimate&&item?.family!=='fire'){audio.play('ultimate',gain*.45);if(['pan','swatter','lightning','wave','beam','planter','palm'].includes(item?.family)||Number(event.area?.radius)>1.5)audio.play('explosion',gain*.95);}}arena.presentation.play(event,roots.get(event.owner));}

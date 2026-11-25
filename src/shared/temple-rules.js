@@ -18,12 +18,12 @@ import {playerStats,refreshStats,refreshMana,manaCapacity,ultimateManaCost} from
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
 import {fuseTemple} from './temple-fusion.js';
 import {ensureFusionIdentity,ensureWeaponAffixes,appendInventoryInstance,removeInventoryInstance,selectEquipmentInstance,swapInventoryInstances,removeInventoryInstances} from './fusion-instances.js';
-import {fusionSniperEchoDamage} from './fusion-balance.js';
+import {sniperMaterialStat} from './fusion-balance.js';
 import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './island-combat.js';
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
 import {patrolMonster} from './monster-patrol.js';
 import {calicoPellets,shotgunDistanceScale} from './calico-pellets.js';
-import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,shoulderSniperSpread,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
+import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
@@ -1069,20 +1069,9 @@ function attack(world,profile,actor,body,context,now){
 
   if(profile.hitReaction&&now-profile.hitReaction.time<profile.hitReaction.stunMs)return {error:'Recovering from hit'};
   const weapon=tunedEquipment(world,equippedItem(profile,itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon))),bonus=profile.fusion[weapon.id]?.bonus||0;
-  // Shoulder shots have deliberately poor server-owned accuracy; an A-hold
-  // charged blast is legal there only with a fused chargeable weapon.
-  const shoulderSniper=weapon.id==='black-cat'&&body.aimMode==='shoulder';
-  const blackCatFused=(profile.fusion?.['black-cat']?.effects||[]).some(sourceId=>{
-    const source=itemById(sourceId);
-    return source?.slot==='weapon'&&source.id!=='black-cat'&&Number(source.chargeMs)>0;
-  });
-  if(weapon.id==='black-cat'&&body.scoped!==true&&!shoulderSniper){
+  if(weapon.id==='black-cat'&&(body.scoped!==true||body.aimMode==='shoulder')){
     profile.chargeStartedAt=0;
-    return {error:'Black Cat sniper requires scope or shoulder aim'};
-  }
-  if(shoulderSniper&&body.phase==='charge'&&!blackCatFused){
-    profile.chargeStartedAt=0;
-    return {error:'Fuse a chargeable weapon to unlock the shoulder ultimate'};
+    return {error:'Black Cat sniper requires scope aim'};
   }
   if(body.phase==='channel-start'){
     if(!isChannelStaff(weapon)||weapon.family==='ice')return {error:'This staff casts its ultimate on release'};
@@ -1108,16 +1097,6 @@ function attack(world,profile,actor,body,context,now){
   let direction=normalDirection(body.direction);
   if(!direction)return {error:'Invalid attack direction'};
   const charge=channel?1:Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
-  if(shoulderSniper&&charge>=1&&!blackCatFused){
-    profile.chargeStartedAt=0;
-    return {error:'Shoulder ultimate requires a fused chargeable weapon'};
-  }
-  // Commit attack clocks only after authoritative mana validation below.
-  if(shoulderSniper){
-     // Server-owned drift stays inside the actual doubled 132px crosshair.
-     const random=typeof context?.rng==='function'?context.rng:Math.random;
-     direction=shoulderSniperSpread(direction,body.viewportHeight,random)||direction;
-   }
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
   const enchants=weaponAffixTotals(weapon);
   stats.damage=+(stats.damage*quality.damage*(1+enchants.damage/100)*
@@ -1127,8 +1106,7 @@ function attack(world,profile,actor,body,context,now){
   if(channel||(weapon.family==='ice'&&stats.ultimate))stats.range=Math.max(stats.range,weapon.id==='clam'?10:Math.min(18,weapon.range))*channelReachMultiplier(weapon);
   stats.range=+(stats.range*quality.range).toFixed(2);
   if(weapon.id==='black-cat'){
-    stats.range=SNIPER_RANGE; // Long-range ray for both shoulder and scope.
-    if(shoulderSniper&&stats.ultimate)stats.radius=Math.max(1.1,stats.radius);
+    stats.range=SNIPER_RANGE; // Exact scope ray.
   }
   // The narrow server collision tube must agree with the visible spray and
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
@@ -1184,7 +1162,9 @@ function attack(world,profile,actor,body,context,now){
   const area=stats.ultimate&&weapon.id!=='goldfish'&&!waveVortex?chargedArea(weapon,origin,direction,stats,groundForSpell,channel||(weapon.family==='ice'&&stats.ultimate)):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate,now):null;
   const fusionEchoes=[];
-  const pvpDamage=pvpShotDamage(weapon,stats,quality)*tuningRatio;
+  const sniperMaterialBonus=(profile.fusion?.[weapon.id]?.sources||[]).filter(s=>s.id==='black-cat'&&!s.echo).reduce((sum,s)=>sum+sniperMaterialStat(itemById('black-cat'),stats.ultimate?'chargeDamage':'damage')*.3,0);
+  const sniperMaterialRatio=1+sniperMaterialBonus/Math.max(1,Number(itemById(weapon.id)?.[stats.ultimate?'chargeDamage':'damage'])||1);
+  const pvpDamage=pvpShotDamage(weapon,stats,quality)*tuningRatio*sniperMaterialRatio;
   if(tidalChannel){
    // Three authenticated homing streams, each intentionally weaker than the
    // single-target prism; regular water taps still use their original ray.
@@ -1231,9 +1211,9 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
-      radius:stats.radius,area,damage:stats.damage+bonus*.1*tuningRatio*(weapon.id==='jellybrella'?.5:1),pvpDamage,gmTuning:tuning,damageRatio:tuningRatio,charge,critChance:weapon.critChance,
+      radius:stats.radius,area,damage:stats.damage+bonus*.1*tuningRatio*(weapon.id==='jellybrella'?.5:1),pvpDamage,gmTuning:tuning,damageRatio:tuningRatio*sniperMaterialRatio,charge,critChance:weapon.critChance,
       qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,iceGround,
-      shoulderSpread:shoulderSniper,
+      shoulderSpread:false,
       flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual*(stats.ultimate?(tuning.radiusScale??1):1)}))||null,
       hits:[],pelletHits:{},areaResolved:false,
       createdAt:now,lastAt:now,expiresAt:now+Math.max(duration,visualLifetime)
@@ -1242,7 +1222,7 @@ function attack(world,profile,actor,body,context,now){
   }
   if(stats.ultimate){
     const primaryFootprint=spellFootprint(weapon,origin,direction,stats,area,groundForSpell);
-    for(const [fusionSlot,sourceId] of (profile.fusion?.[weapon.id]?.effects||[]).slice(0,2).entries()){
+    for(const [fusionSlot,sourceId] of (profile.fusion?.[weapon.id]?.effects||[]).filter(id=>id!=='black-cat').slice(0,2).entries()){
       const source=tunedEquipment(world,itemById(sourceId));if(source?.slot!=='weapon')continue;
       const sourceQuality=weaponQuality(source),full=attackStats(source,1),echoTuning=equipmentTuning(world,source),echoRatio=tuningDamageRatio(world,source,true);
       full.damage*=echoRatio;
@@ -1268,14 +1248,9 @@ function attack(world,profile,actor,body,context,now){
       const duration=exotic==='vortex'?VORTEX_FLIGHT_MS:exotic==='goldfish'?Math.round(GOLDFISH_SWIM_MS*sourceQuality.duration):
         exotic==='giraffe'?2300:exotic==='fan'?Math.round((1400+sourceQuality.tier*850)*sourceQuality.duration):
         source.family==='ice'?ICE_ERUPTION_TRAVEL_MS+ICE_ERUPTION_VISIBLE_MS:Math.max(flight,visibleCollisionLifetimeMs(source,true));
-      // Borrowed sniper fusion deals only a small, per-target echo. It
-       // cannot transfer the original one-shot power to another weapon.
-       const balancedSniper=source.id==='black-cat'?fusionSniperEchoDamage(source):null;
-       // Sniper-as-primary borrows at most 8% of each fused ultimate: both
-       // echoes together must remain less powerful than a direct charged hit.
        const echoScale=weapon.id==='black-cat'?.08:.2;
-       const echoId=id(),echoDamage=balancedSniper?.damage??+Math.min(full.damage*echoScale,weapon.id==='black-cat'?32:Infinity).toFixed(3);
-      const echoPvP=balancedSniper?.pvpDamage??+Math.min(pvpShotDamage(source,full,sourceQuality)*echoRatio*echoScale,weapon.id==='black-cat'?3.5:Infinity).toFixed(3);
+       const echoId=id(),echoDamage=+Math.min(full.damage*echoScale,weapon.id==='black-cat'?32:Infinity).toFixed(3);
+       const echoPvP=+Math.min(pvpShotDamage(source,full,sourceQuality)*echoRatio*echoScale,weapon.id==='black-cat'?3.5:Infinity).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],launchDirection:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,
@@ -1318,8 +1293,8 @@ function attack(world,profile,actor,body,context,now){
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,
-    aimMode:shoulderSniper?'shoulder':body.aimMode==='scope'?'scope':null,
-    piercing:shoulderSniper&&charge>=1,qualityTier:quality.tier,qualityScale:quality.visual,skillRadiusScale:stats.ultimate?(tuning.radiusScale??1):1,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,manaCost,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+    aimMode:weapon.id==='black-cat'?'scope':null,
+    piercing:false,qualityTier:quality.tier,qualityScale:quality.visual,skillRadiusScale:stats.ultimate?(tuning.radiusScale??1):1,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:(profile.fusion[weapon.id]?.effects||[]).filter(id=>id!=='black-cat'),fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,manaCost,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){

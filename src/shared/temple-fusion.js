@@ -62,7 +62,7 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  const main=equippedItem(profile,target,old);
  const ingredientRecord=fusionRecordAt(profile,sourceIndex);
  const material=equippedItem(profile,source,ingredientRecord);
- const combinedEnchants=target.slot==='weapon'?mergeWeaponAffixes(old,ingredientRecord):null;
+ const combinedEnchants=target.slot==='weapon'?mergeWeaponAffixes(old,source.id==='black-cat'?{}:ingredientRecord):null;
  // Exactly one physical ingredient is consumed on success or failure.
  removeInventoryInstance(profile,sourceIndex,targetInstance.uid);
  if(source.id===(profile.starterWeaponId||'white-cat')&&!profile.inventory.includes(source.id))profile.spentStarterWeapon=true;
@@ -101,17 +101,15 @@ export function fuseTemple(world,profile,body,rng=Math.random){
   delete stats.range;delete stats.chargeRange;delete stats.radius;
  }
  // Affixes always accumulate; only ULTIMATE echoes have the two-source limit.
- const affixIds=[...new Set([...itemAffixes(main),...itemAffixes(material),
+ const affixIds=[...new Set([...itemAffixes(main),...(source.id==='black-cat'?[]:itemAffixes(material)),
   ...itemAffixes(old),...itemAffixes(old.original)])];
- const effects=(old.effects||[]).filter(id=>itemById(id)?.slot==='weapon').slice(0,2);
- const grantsEcho=target.slot==='weapon'&&source.slot==='weapon'&&effects.length<2;
+ const effects=(old.effects||[]).filter(id=>id!=='black-cat'&&itemById(id)?.slot==='weapon').slice(0,2);
+ const grantsEcho=target.slot==='weapon'&&source.slot==='weapon'&&source.id!=='black-cat'&&effects.length<2;
  const keys=['damage','chargeDamage','range','chargeRange','radius','defense','capacity','impulse','speed','jump'];
  for(const key of keys){
   const sniperPower=source.id==='black-cat'&&['damage','chargeDamage'].includes(key);
-  // A sniper source may contribute 30% of its original shot EITHER as
-  // its visible echo (first two slots) OR as stats (later slots), not both.
-  // Also ignore any previously inflated stats on the consumed sniper.
-  if(sniperPower&&grantsEcho)continue;
+  // Black Cat contributes damage only at any layer.
+  if(source.id==='black-cat'&&!sniperPower)continue;
   // Close-contact strikes retain the primary weapon's own contact reach.
   // Weapon reach is determined by the actual held model, not the ingredient.
   if(target.slot==='weapon'&&['range','chargeRange','radius'].includes(key))continue;
@@ -124,7 +122,7 @@ export function fuseTemple(world,profile,body,rng=Math.random){
   if(grantsEcho)effects.push(source.id);
  // A successful upgrade is the ONLY event advancing fusion progression.
  const attempts=layer;
- profile.fusionByInstance[targetInstance.uid]={...old,layer,attempts,bonus,templeStats:stats,effects,affixIds,affixId:affixIds[0]||null,
+ profile.fusionByInstance[targetInstance.uid]={...old,layer,attempts,bonus,templeStats:stats,effects,sniperStatOnlyV050:old.sniperStatOnlyV050||source.id==='black-cat',affixIds,affixId:affixIds[0]||null,
   ...(combinedEnchants?{weaponAffixes:combinedEnchants}:{}),
   sources:[...(old.sources||[]),{id:source.id,name:source.name,statPercent:30,echo:grantsEcho}]};
  projectFusionForInstance(profile,target.id,targetInstance.uid);

@@ -19,17 +19,15 @@ export function shoulderSniperSpread(direction,viewportHeight=720,rng=Math.rando
  const changed=d.map((v,i)=>v+right[i]*x+up[i]*y),n=Math.hypot(...changed);
  return changed.map(v=>v/n);
 }
-// The sniper head check is performed on the SERVER against the actual shot ray.
-// The fighter's combat capsule is 2.35m tall; the head is a small sphere near its top.
+// Overlapping head spheres cover the scaled avatar's face and crown.
 export function sniperHitsHead(origin,direction,range,position){
- if(![origin,direction,position].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite)))return false;
- if(!Number.isFinite(range)||range<=0)return false;
- const head=[position[0],position[1]+1.70,position[2]]; // Covers actual avatar face and top of the 2.35m capsule.
- const delta=head.map((v,i)=>v-origin[i]);
- const along=delta.reduce((n,v,i)=>n+v*direction[i],0);
- if(along<0||along>range)return false;
- const gap=Math.hypot(...delta.map((v,i)=>v-along*direction[i]));
- return gap<=.36;
+ if(![origin,direction,position].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||!Number.isFinite(range)||range<=0)return false;
+ const n=Math.hypot(...direction);if(n<1e-8)return false;const d=direction.map(v=>v/n);
+ return [1.72,2.04].some(y=>{
+  const delta=[position[0]-origin[0],position[1]+y-origin[1],position[2]-origin[2]];
+  const along=Math.max(0,Math.min(range,delta.reduce((s,v,i)=>s+v*d[i],0)));
+  return Math.hypot(...delta.map((v,i)=>v-along*d[i]))<=.36;
+ });
 }
 // Authoritative PvP balance independent from monster HP scaling (Temple uses
 // 100 HP per fighter; RELETTER's monster-scaled weapon numbers are far higher).

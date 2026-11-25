@@ -91,31 +91,21 @@ test('invincibility switch controls GM actual monster combat damage',()=>{
  assert.ok(profile.hp<profile.maxHp,'GM becomes vulnerable to ordinary monster attacks');
 });
 
-test('sniper as fusion material is capped to conventional same-tier echo damage, not lethal headshots',()=>{
+test('sniper material adds damage even in the first slot and never grants an echo',()=>{
  const gm=actor('sniper-fuser',true),world=createInitialWorld(T),p=ensureProfile(world,gm.key,gm.name,gm.color,T,true);
  p.inventory.push('ember-1','black-cat');
  const r=fuseTemple(world,p,{sourceId:'black-cat',targetId:'ember-1',requestId:'sniper-echo-1'},()=>.5);
  assert.equal(r.fusion.success,true);
  p.equipment.weapon='ember-1';
- assert.ok(p.fusion['ember-1'].effects.includes('black-cat'));
- assert.equal(p.fusion['ember-1'].templeStats.damage,undefined,
-  'a first-two-slot sniper material must not add another 30% main damage on top of its 30% echo');
+ assert.deepEqual(p.fusion['ember-1'].effects,[]);
+ assert.ok(Math.abs(p.fusion['ember-1'].templeStats.damage-(itemById('ember-1').damage+sniperMaterialStat(itemById('black-cat'),'damage')*.3))<.001);
  const ch=applyAction(world,gm,{action:'attack',phase:'charge'},{now:T+2000});
  assert.ok(ch.charging);
  const shot=applyAction(world,gm,{action:'attack',direction:[0,0,1],charge:1},{now:T+5000,rng:()=>.5,actors:[gm]});
- const echo=shot.attackEvent.fusionEchoes.find(e=>e.weapon==='black-cat');
- const fx=world.persistentAttacks.find(e=>e.id===echo.id);
- const sniper=itemById('black-cat'),full=attackStats(sniper,1),quality=weaponQuality(sniper);
- const reference=fusionSniperEchoDamage(sniper);
- assert.equal(fx.damage,reference.damage);
- assert.equal(fx.pvpDamage,reference.pvpDamage);
- assert.ok(fx.pvpDamage<6,'fused sniper should hit like other 20% echoes, not a standalone headshot');
- assert.ok(fx.damage<full.damage*.2);
- assert.equal(fx.echo,true);
- const server=readFileSync(new URL('../src/shared/temple-rules.js',import.meta.url),'utf8');
- assert.match(server,/lethalHeadshot=!fx\.echo&&/);
+ assert.equal(shot.error,undefined);
+ assert.equal(shot.attackEvent.fusionEchoes.length,0);
+ assert.ok(!world.persistentAttacks.some(e=>e.weapon==='black-cat'));
 });
-
 test('sniper material in third fusion slot transfers just 30% of a conventional weapon stat budget',()=>{
  const world=createInitialWorld(T),gm=ensureProfile(world,'late-sniper','late-sniper','#abcdee',T,true);
  gm.inventory.push('ember-1','black-cat');

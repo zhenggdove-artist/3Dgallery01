@@ -1,9 +1,25 @@
 // A BAG slot contains a real individual gear instance, not just a catalog ID.
 // Existing combat and UI continue to use profile.fusion[itemId] as a projected
 // equipped/selected view; the authoritative ledger is keyed by instance UID.
-import {itemById} from './catalog.js';
+import {itemById,shopWeaponVariant} from './catalog.js';
+import {sniperMaterialStat} from './fusion-balance.js';
 import {rollWeaponAffixes} from './weapon-affixes.js';
 const newUid=()=>crypto.randomUUID();
+function migrateSniperEcho(record,itemId){
+ if(!record||typeof record!=='object')return;
+ const effects=record.effects||[],oldSources=record.sources||[];
+ const count=Math.max(effects.filter(id=>id==='black-cat').length,oldSources.filter(s=>s.id==='black-cat'&&s.echo).length);
+ if(!count)return;
+ const item=itemById(itemId),base=Number.isInteger(record.shopTier)?shopWeaponVariant(item,record.shopTier)||item:item;
+ if(!base||base.slot!=='weapon')return;
+ record.templeStats??={};
+ for(const key of ['damage','chargeDamage'])record.templeStats[key]=+((Number(record.templeStats[key]??base[key])||0)+count*sniperMaterialStat(itemById('black-cat'),key)*.3).toFixed(3);
+ record.effects=effects.filter(id=>id!=='black-cat');
+ const converted=oldSources.filter(s=>s.id==='black-cat'&&s.echo).length;
+ record.sources=oldSources.map(s=>s.id==='black-cat'&&s.echo?{...s,echo:false}:s);
+ for(let i=converted;i<count;i++)record.sources.push({id:'black-cat',name:'Black Cat',statPercent:30,echo:false});
+ record.sniperStatOnlyV050=true;
+}
 // A legacy profile can still contain a pre-instance upgrade projection. Keep
 // it when converting a virgin enchant-only UID record, but NEVER transfer a
 // record already owned by another physical UID.
@@ -127,6 +143,8 @@ export function ensureFusionIdentity(profile){
    else delete profile.equippedInstanceIds[slot];
   }
  }
+ for(const row of current)migrateSniperEcho(profile.fusionByInstance[row.uid],row.itemId);
+ for(const [itemId,record] of Object.entries(profile.fusion))migrateSniperEcho(record,itemId);
  const valid=new Set(current.map(v=>v.uid));
  for(const uid of Object.keys(profile.fusionByInstance))if(!valid.has(uid))
   delete profile.fusionByInstance[uid];
