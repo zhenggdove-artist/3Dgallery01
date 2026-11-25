@@ -80,7 +80,8 @@ test('flower crown channel restores quality-scaled HP per second, capped, never 
  assert.ok(firstPulse.attackEvent,'healing requires the first mana-paid pulse');
  p.hp=91; // Equip refresh can add +20 max HP; set test damage afterward.
  assert.equal(tickBloomChannelHeal(p,started+999),0);
- tickWorld(world,{now:started+1000,actors:[],activeFighters:0,rng:()=>.5});
+ // A live channel has a connected actor; disconnected casters now stop.
+ tickWorld(world,{now:started+1000,actors:[a],activeFighters:1,rng:()=>.5});
  assert.ok(Math.abs(p.hp-91.6)<1e-8);
  assert.equal(tickBloomChannelHeal(p,started+1000),0,'repeat tick in same second cannot double heal');
  const heartbeat=applyAction(world,a,{action:'attack',phase:'channel',direction:[0,0,1]},
