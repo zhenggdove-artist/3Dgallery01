@@ -434,7 +434,7 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
     group.userData.gotServerTrack=true;
     for(const index of track.consumed||[])
      if(Number.isInteger(index)&&index>=0&&index<GOLDFISH_SCHOOL_COUNT){
-      const center=goldfishSchoolPosition(track.position,track.direction,index);
+      const center=goldfishSchoolPosition(track.position,track.direction,index,track.radiusScale??event.skillRadiusScale??1);
       capture(index,center);
      }
    }else if(group.userData.gotServerTrack){
@@ -484,11 +484,12 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
    const {base,combined,offset,rotation,scale,axis,transforms,tailTransforms}=group.userData.schoolScratch;
    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
     const [x,y,z]=GOLDFISH_SCHOOL_OFFSETS[i],phase=age*16+i*2.399963;
-    offset.set(x+Math.sin(phase)*.085,y+Math.sin(phase*.71)*.09,z+Math.cos(phase)*.025);
+    const gradeScale=track?.radiusScale??event.skillRadiusScale??1;
+    offset.set(x+Math.sin(phase)*.085,y+Math.sin(phase*.71)*.09,z+Math.cos(phase)*.025).multiplyScalar(gradeScale);
     rotation.setFromAxisAngle(axis,Math.sin(phase)*.19+Math.sin(i*3.17)*.14);
     // A collided fish collapses only its own instances; the other
     // twenty-nine continue swimming and retain independent tail motion.
-    scale.setScalar(group.userData.consumedFish.has(i)?0:.83+((i*11)%9)*.043);
+    scale.setScalar(group.userData.consumedFish.has(i)?0:(.83+((i*11)%9)*.043)*gradeScale);
     transforms[i].compose(offset,rotation,scale);
     tailTransforms[i].makeRotationY(Math.sin(age*38+i*2.399963)*.74);
     tailTransforms[i].premultiply(tail.matrix).premultiply(fish.matrix);

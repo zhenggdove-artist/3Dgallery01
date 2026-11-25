@@ -21,10 +21,10 @@ export const GOLDFISH_SCHOOL_OFFSETS=Object.freeze(Array.from({length:GOLDFISH_S
  const y=(fract((i+1)*.7548776662)-.5)*2*(.10+.54*envelope);
  return Object.freeze([x,y,longitudinal]);
 }));
-export function goldfishSchoolPosition(center,direction,index){
+export function goldfishSchoolPosition(center,direction,index,radiusScale=1){
  const o=GOLDFISH_SCHOOL_OFFSETS[index],length=Math.hypot(direction[0],direction[2])||1;
  const dx=direction[0]/length,dz=direction[2]/length;
- return [center[0]+dz*o[0]+dx*o[2],center[1]+o[1],center[2]-dx*o[0]+dz*o[2]];
+ return [center[0]+(dz*o[0]+dx*o[2])*radiusScale,center[1]+o[1]*radiusScale,center[2]+(-dx*o[0]+dz*o[2])*radiusScale];
 }
 
 // Home in all directions, including enemies to either side or behind the

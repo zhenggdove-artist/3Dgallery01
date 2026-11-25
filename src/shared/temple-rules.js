@@ -293,7 +293,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
     goldfishImpactEvents:clone((world.goldfishImpactEvents||[]).filter(v=>now-v.time<950)),
     goldfishFlights:(world.persistentAttacks||[]).filter(v=>v.kind==='goldfish').map(v=>({
       id:v.id,position:clone(v.position||v.origin),direction:clone(v.direction),owner:v.owner,
-       consumed:clone(v.fishConsumed||[])
+       radiusScale:v.gmTuning?.radiusScale??1,consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
     chatDefault:clone(world.chatDefault||null),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
@@ -1286,7 +1286,7 @@ function attack(world,profile,actor,body,context,now){
       fusionEchoes.push({id:echoId,persistentAttackId:echoId,owner:actor.key,fusionSlot,origin:[...origin],direction:[...direction],
         weapon:source.id,family:source.family,color:source.color,charge:1,ultimate:true,channel:echoChannel,
         range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,qualityTier:sourceQuality.tier,
-        qualityScale:sourceQuality.visual*.5,qualityDuration:sourceQuality.duration,
+        qualityScale:sourceQuality.visual*.5,skillRadiusScale:echoTuning.radiusScale??1,qualityDuration:sourceQuality.duration,
         pellets:secondaryPellets?.map(v=>v.direction)||null,
         fusionEcho:true,echoPower:echoScale,time:now});
     }
@@ -1318,7 +1318,7 @@ function attack(world,profile,actor,body,context,now){
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,
     aimMode:shoulderSniper?'shoulder':body.aimMode==='scope'?'scope':null,
-    piercing:shoulderSniper&&charge>=1,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,manaCost,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+    piercing:shoulderSniper&&charge>=1,qualityTier:quality.tier,qualityScale:quality.visual,skillRadiusScale:stats.ultimate?(tuning.radiusScale??1):1,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:profile.fusion[weapon.id]?.effects||[],fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,manaCost,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
@@ -2402,7 +2402,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     if(t.kind==='player'&&(!p||p===owner||p.hp<=0||p.deadUntil>now||p.spawnProtectedUntil>now||
       (p.admin&&p.gmInvincible!==false)||insideArtSanctuary(value.position)))return false;
     if(t.kind==='monster'&&(!value.active||value.hp<=0))return false;
-    return Math.hypot(value.position[0]-fx.position[0],value.position[2]-fx.position[2])<=fx.range+GOLDFISH_SCHOOL_RADIUS*2;
+    return Math.hypot(value.position[0]-fx.position[0],value.position[2]-fx.position[2])<=fx.range+GOLDFISH_SCHOOL_RADIUS*2*(fx.gmTuning?.radiusScale??1);
    });
    const players=nearby.filter(t=>t.kind==='player'),pool=players.length?players:nearby;
    const aim=pool.find(t=>(t.value.key||t.value.id)===fx.targetId)||
@@ -2425,11 +2425,12 @@ function tickPersistentAttacks(world,actors,now,rng){
      let contacts=0;
      for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
       if(fx.fishConsumed.includes(i))continue;
-      const a=goldfishSchoolPosition(previous,heading,i);
-      const b=goldfishSchoolPosition(fx.position,fx.direction,i);
+      const radiusScale=fx.gmTuning?.radiusScale??1;
+      const a=goldfishSchoolPosition(previous,heading,i,radiusScale);
+      const b=goldfishSchoolPosition(fx.position,fx.direction,i,radiusScale);
       const delta=b.map((v,j)=>v-a[j]),length=Math.hypot(...delta);
       if(length<.0001)continue;
-      const direction=delta.map(v=>v/length),radius=GOLDFISH_CONTACT_RADIUS*Math.max(.7,fx.tier*.15+.6);
+      const direction=delta.map(v=>v/length),radius=GOLDFISH_CONTACT_RADIUS*Math.max(.7,fx.tier*.15+.6)*radiusScale;
       const collision=target.kind==='monster'
        ?monsterRayDistance(a,direction,length,value,radius)
        :rayCylinderDistance(a,direction,length,value.position,1.02+radius,2.35+radius);

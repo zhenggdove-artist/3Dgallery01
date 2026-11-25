@@ -240,7 +240,7 @@ export class PlayerController{
      if(this.knockback.lengthSq()<.001)this.knockback=null;
     }
     if(this.vortexSpin){
-      const spin=this.vortexSpin,progress=(Date.now()-spin.time)/VORTEX_SPIN_MS;
+      const spin=this.vortexSpin,progress=(Date.now()-spin.time)/Math.max(1,spin.durationMs??VORTEX_SPIN_MS);
       if(progress>=1)this.vortexSpin=null;
       else{
        const point=vortexSpinPoint(spin,Date.now());

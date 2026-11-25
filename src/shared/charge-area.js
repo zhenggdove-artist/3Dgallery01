@@ -179,7 +179,7 @@ export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
  // Unlike chargedArea's bounded ground-explosion area, a channel has NO
  // 100m / 18m cosmetic clamp. Its #59 width must cover the entire hit tube.
  const range=Math.max(2,Number(stats?.range)||Number(item?.range)||8);
- const width=Math.max(.5,(Number(stats?.radius)||1)*2);
+ const width=Math.max(.1,(Number(stats?.radius)||1)*2);
  const [dx,dz]=flatDirection(direction);
  const yaw=Math.atan2(-dz,dx); // official effects face local +X
  const at=(x,z)=>Math.max(0,ground(x,z,origin[1]))+.16;

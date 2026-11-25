@@ -269,6 +269,7 @@ export class NumberedWeaponEffects {
   // Scale its world container to the server's range, not its actual props.
   if(spec.number===73||spec.asset==='energy-sword-wave')size=1;
   if(spec.number===31)size=Math.max(.25,Math.min(3.5,quality));
+  if(spec.number===20)size*=event.skillRadiusScale??1;
   if(event.ultimate&&!event.channel&&Number.isFinite(event.area?.radius)&&![26,29,31,38,70].includes(spec.number)){
    // Reconstruct the old vendor size first. Applying only the matching
    // outer world scale ensures identical proportional shrink at all tiers.
