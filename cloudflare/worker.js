@@ -21,7 +21,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
@@ -104,7 +104,8 @@ export class TempleRoom extends DurableObject{
       if(path==='/api/action'&&request.method==='POST')return withCors(request,await this.action(request,session),this.env);
       if(path==='/api/role'&&request.method==='POST')return withCors(request,await this.changeRole(request,session),this.env);
       if(path==='/api/save-code'&&request.method==='POST')return withCors(request,await this.saveCode(session),this.env);
-      if(path==='/api/chat'&&request.method==='GET')return withCors(request,json(this.sql.exec('SELECT id,name,text,time FROM chat_messages ORDER BY time DESC LIMIT 100').toArray().reverse()),this.env);
+      if(path==='/api/chat'&&request.method==='GET')return withCors(request,json([]),this.env);
+      if(path==='/api/gm/chat'&&request.method==='GET')return withCors(request,this.gmChatArchive(session,url),this.env);
       if(path==='/api/chat'&&request.method==='POST')return withCors(request,await this.chat(request,session),this.env);
       if(path==='/api/disconnect'&&request.method==='POST'){this.disconnectSession(session.id);return withCors(request,json({ok:true}),this.env);}
       return withCors(request,json({error:'API not found'},404),this.env);
@@ -290,7 +291,7 @@ export class TempleRoom extends DurableObject{
      const spectatorWrite=session.role==='spectator'&&body.action==='plant';
      // Public spectators do not transmit a player pose. Only WRITE is allowed
      // to use the fixed central plant position, never combat or BUILD actions.
-     const noPoseAction=['buy','equip','unequip','sell','sell-bulk','inspect-item','assign-consumable','swap-inventory','gm-shop-price','gm-shop-delist','gm-equipment-tuning','gm-chat-default','gm-player-level','gm-wing-canvas','gm-terrain-style'].includes(body.action);
+     const noPoseAction=['buy','equip','unequip','sell','sell-bulk','inspect-item','assign-consumable','swap-inventory','gm-shop-price','gm-shop-delist','gm-equipment-tuning','gm-chat-default','gm-artwork-prompt-position','gm-player-level','gm-wing-canvas','gm-terrain-style'].includes(body.action);
      if(!state?.position&&!spectatorWrite&&!noPoseAction)return json({error:'Connect and enter the Temple first'},409);
      const world=this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:spectatorWrite||!state?.position?[0,0,0]:state.position},actors=this.actors();
     delete body.verifiedArtMedia;if(body.action==='add-artwork'||body.action==='publish-art-bomb'){const media=this.sql.exec('SELECT id,type,owner FROM art_media WHERE id=?',String(body.artwork?.mediaId||'')).toArray()[0];if(!media||media.owner!==session.profile_key||body.action==='add-artwork'&&!actor.admin||body.action==='publish-art-bomb'&&session.role!=='fighter')return json({error:'Upload your own validated artwork with the required role first'},403);body.verifiedArtMedia={id:media.id,type:media.type};}
@@ -464,12 +465,20 @@ export class TempleRoom extends DurableObject{
       this.broadcastWorld(world);return json({ok:true,...result});
     }
     const recent=this.sql.exec('SELECT time FROM chat_messages WHERE profile_key=? ORDER BY time DESC LIMIT 1',session.profile_key).toArray()[0];if(recent&&Date.now()-recent.time<500)return json({error:'Please wait before sending again'},429);
-    const message={id:crypto.randomUUID(),profileKey:session.profile_key,name:session.name,text,time:Date.now()};this.sql.exec('INSERT INTO chat_messages VALUES(?,?,?,?,?)',message.id,message.profileKey,message.name,message.text,message.time);this.sql.exec('DELETE FROM chat_messages WHERE time<?',Date.now()-30*86_400_000);this.broadcast('chat',message);return json({ok:true,message});
+    const message={id:crypto.randomUUID(),profileKey:session.profile_key,name:session.name,text,time:Date.now()};this.sql.exec('INSERT INTO chat_messages VALUES(?,?,?,?,?)',message.id,message.profileKey,message.name,message.text,message.time);this.broadcast('chat',message);return json({ok:true,message});
   }
 
   recordPresence(session,event,time=Date.now()){
     this.sql.exec('INSERT INTO presence_events(name,role,event,time) VALUES(?,?,?,?)',session.name,session.role,event,time);
     this.sql.exec('DELETE FROM presence_events WHERE time<? OR id NOT IN (SELECT id FROM presence_events ORDER BY id DESC LIMIT 2000)',time-90*86_400_000);
+  }
+  gmChatArchive(session,url){
+    if(this.world().profiles?.[session.profile_key]?.admin!==true)return json({error:'GM only'},403);
+    const beforeTime=url.searchParams.get('beforeTime'),beforeId=url.searchParams.get('beforeId');
+    if((beforeTime===null)!==(beforeId===null)||beforeTime!==null&&(!/^\d{1,16}$/.test(beforeTime)||!Number.isSafeInteger(Number(beforeTime))||!beforeId||beforeId.length>100))return json({error:'Invalid archive cursor'},400);
+    const rows=beforeTime===null?this.sql.exec('SELECT id,name,text,time FROM chat_messages ORDER BY time DESC,id DESC LIMIT 101').toArray():this.sql.exec('SELECT id,name,text,time FROM chat_messages WHERE time<? OR (time=? AND id<?) ORDER BY time DESC,id DESC LIMIT 101',Number(beforeTime),Number(beforeTime),beforeId).toArray();
+    const messages=rows.slice(0,100),last=messages.at(-1);
+    return json({messages,next:rows.length>100&&last?{time:last.time,id:last.id}:null});
   }
   gmPresence(session){
     // Authentication must be enforced on the server, not only by hiding the S button.

@@ -303,7 +303,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
        radiusScale:v.gmTuning?.radiusScale??1,consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    delistedShopItems:clone(world.delistedShopItems||{}),discPaint:clone(world.discPaint||{}),pickupReceipts:clone(world.pickupReceipts||[]),wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
+    delistedShopItems:clone(world.delistedShopItems||{}),discPaint:clone(world.discPaint||{}),pickupReceipts:clone(world.pickupReceipts||[]),wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),artworkPromptPositions:clone(world.artworkPromptPositions||{}),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -413,6 +413,14 @@ export function applyAction(world,actor,body,context={}){
    }
    world.revision=(world.revision||0)+1;
    return {notice:body.action==='gm-player-level'?'LEVEL UPDATED · '+target.name:'WING CANVAS GRANTED · '+target.name};
+  }
+  if(body.action==='gm-artwork-prompt-position'){
+   if(!profile.admin||actor.admin!==true)return {error:'GM only'};
+   const {device,x,gap}=body;
+   if(!['mobile','desktop'].includes(device)||!Number.isFinite(x)||!Number.isFinite(gap)||x<-.4||x>.4||gap<0||gap>.6)return {error:'Invalid artwork prompt position'};
+   world.artworkPromptPositions={...(world.artworkPromptPositions||{}),[device]:{x,gap}};
+   world.revision=(world.revision||0)+1;
+   return {notice:'作品提示框位置已儲存'};
   }
   if(body.action==='gm-chat-default'){
    if(!profile.admin||actor.admin!==true)return {error:'GM only'};

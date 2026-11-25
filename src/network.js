@@ -114,7 +114,7 @@ export class TempleNetwork extends EventTarget{
    return result;
   }
   async chat(text){return this.request('/api/chat',{method:'POST',body:{text}});}
-  async chatHistory(){return this.request('/api/chat');}
+  async gmChatHistory(cursor){const params=new URLSearchParams();if(cursor){params.set('beforeTime',String(cursor.time));params.set('beforeId',cursor.id);}return this.request('/api/gm/chat'+(cursor?'?'+params:''));}
   async createSaveCode(){return this.request('/api/save-code',{method:'POST',body:{}});}
   async gmPresence(){return this.request('/api/gm/presence');}
   async changeRole(role){const body=typeof role==='string'?{role}:role;return this.request('/api/role',{method:'POST',body});}

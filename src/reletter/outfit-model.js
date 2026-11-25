@@ -125,6 +125,65 @@ export function disguiseFrame(T,model,bones,headHeight){
    }
   });
  }
+
+ // A padded mascot suit follows individual joints, unlike a rigid disguise.
+ export function attachPlushBear(T,model,bones,height,record,mat){
+  const frame=disguiseFrame(T,model,bones,height),u=frame.unit,head=bones.get('Head');
+  const pos=name=>model.worldToLocal((bones.get(name)||head).getWorldPosition(new T.Vector3()));
+  const front=new T.Vector3(0,0,1).applyQuaternion(frame.rotation),up=frame.up;
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=256;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#c5c5c5';ctx.fillRect(0,0,256,256);
+  let seed=2193;const rand=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+  for(let i=0;i<12500;i++){const x=rand()*256,y=rand()*256;ctx.strokeStyle=i%2?'#eeeeee':'#929292';ctx.lineWidth=.6+rand()*.7;ctx.beginPath();ctx.moveTo(x,y);ctx.quadraticCurveTo(x+rand()*2-1,y-1,x+rand()*2-1,y-2-rand()*2);ctx.stroke();}
+  const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.repeat.set(2,2);record.extraTextures??=[];record.extraTextures.push(tex);
+  const plush=(color,bump=.025)=>{const m=mat(color);m.roughness=1;m.metalness=0;m.map=tex;m.bumpMap=tex;m.bumpScale=bump;return m;};
+  const fur=plush('#efb94c'),red=plush('#d32735',.012),edge=plush('#b77b2a'),hoodFur=plush('#efb94c'),hoodMuzzle=plush('#efc36c'),hoodInside=plush('#bd832d'),dark=mat('#251b16');
+  const group=(boneName,p,q=frame.rotation)=>{const g=new T.Group();g.name='plush-bear:'+boneName;g.userData.outfit=record.id;model.add(g);g.position.copy(p);g.quaternion.copy(q);g.scale.setScalar(u);g.updateMatrixWorld(true);(bones.get(boneName)||head).attach(g);record.parts.push(g);return g;};
+  const puff=(g,p,s,m=fur,seed=0)=>{const geo=new T.SphereGeometry(1,24,16),a=geo.attributes.position;for(let i=0;i<a.count;i++){const x=a.getX(i),y=a.getY(i),z=a.getZ(i),v=1+.018*Math.sin(5*x+4*y+seed)*Math.cos(4*z-3*y);a.setXYZ(i,x*v,y*v,z*v);}a.needsUpdate=true;geo.computeVertexNormals();const mesh=new T.Mesh(geo,m);mesh.position.set(...p);mesh.scale.set(...s);g.add(mesh);return mesh;};
+  const hips=pos('Hips'),chest=pos('Spine2'),neck=pos('Neck');
+  const torsoLength=Math.max(1.25,neck.clone().sub(hips).dot(up)/u),body=group('Spine',hips.clone().lerp(neck,.43));
+  puff(body,[0,-.16,.08],[.92,torsoLength*.60,.62],fur,1);
+  const shirt=puff(body,[0,torsoLength*.19,.055],[.94,torsoLength*.42,.65],red,2);
+  // A slightly raised curved hem reads as sewn cloth, not armour.
+  const hem=new T.Mesh(new T.TorusGeometry(1,.035,8,36),red);hem.rotation.x=Math.PI/2;hem.scale.set(.84,.61,1);hem.position.set(0,-torsoLength*.12,.055);body.add(hem);
+  const pelvis=group('Hips',hips.clone().addScaledVector(up,-.16*u));puff(pelvis,[0,0,0],[.77,.55,.60],fur,3);
+  const tail=new T.Group();tail.position.set(0,-.12,-.49);pelvis.add(tail);puff(tail,[0,0,-.21],[.25,.23,.35],fur,4);
+  record.plushMotion={tail,pos:new T.Vector3(),last:null,energy:0,angle:0};
+  const axis=new T.Vector3(0,1,0);
+  const segment=(name,end,r,depth,m=fur)=>{if(!bones.has(name)||!bones.has(end))return;const a=pos(name),b=pos(end),delta=b.clone().sub(a),len=delta.length()/u;if(len<.05)return;const local=delta.normalize().applyQuaternion(frame.rotation.clone().invert());const q=frame.rotation.clone().multiply(new T.Quaternion().setFromUnitVectors(axis,local));const g=group(name,a.clone().lerp(b,.5),q);puff(g,[0,0,0],[r,len*.61,depth],m,len);return {g,len};};
+  for(const side of ['Left','Right']){
+   const upper=segment(side+'Arm',side+'ForeArm',.36,.35);
+   if(upper)puff(upper.g,[0,-upper.len*.26,0],[.41,upper.len*.34,.40],red);
+   segment(side+'ForeArm',side+'Hand',.31,.30);
+   if(bones.has(side+'Hand'))puff(group(side+'Hand',pos(side+'Hand')),[0,-.15,.03],[.34,.45,.30],fur);
+   segment(side+'UpLeg',side+'Leg',.43,.43);segment(side+'Leg',side+'Foot',.35,.37);
+   if(bones.has(side+'Foot'))puff(group(side+'Foot',pos(side+'Foot')),[0,-.06,.26],[.43,.29,.65],fur);
+  }
+  const hood=group('Head',frame.head.clone().addScaledVector(up,.42*u).addScaledVector(front,-.42*u));
+  puff(hood,[0,.10,0],[.94,1.01,.80],hoodFur);
+  puff(hood,[0,-.24,.46],[.64,.49,.43],hoodMuzzle);
+  for(const side of [-1,1]){
+   puff(hood,[side*.69,.86,-.03],[.32,.34,.25],hoodFur);
+   puff(hood,[side*.69,.88,.17],[.20,.22,.095],hoodInside);
+   puff(hood,[side*.37,.35,.71],[.075,.085,.04],dark);
+   const brow=puff(hood,[side*.38,.58,.64],[.13,.035,.04],dark);brow.rotation.z=side*.18;
+  }
+  // The real player's face remains visible through the nose/mouth aperture.
+  cutDisguiseOpening(T,hood,0,-.20,.61,.63,.83);
+  return record;
+ }
+ export function animatePlushBear(record,time,root,dt){
+  const d=record.plushMotion;if(!d||!root)return;
+  dt=Math.max(.001,Math.min(.1,dt));root.getWorldPosition(d.pos);
+  if(!d.last){d.last=d.pos.clone();return;}
+  const dx=d.pos.x-d.last.x,dz=d.pos.z-d.last.z;d.last.copy(d.pos);
+  const distance=Math.hypot(dx,dz),target=distance>3?0:Math.min(1,distance/dt/2);
+  d.energy+=(target-d.energy)*(1-Math.exp(-dt*9));
+  const desired=Math.sin(time*12)*.65*d.energy;
+  d.angle+=(desired-d.angle)*(1-Math.exp(-dt*15));
+  d.tail.rotation.y=d.angle;d.tail.rotation.x=Math.cos(time*12)*.14*d.energy;
+ }
+
  export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;model.updateMatrixWorld(true);const bones=new Map();model.traverse(o=>{if(o.isBone)bones.set(o.name.replace(/^mixamorig/,''),o);});const head=bones.get('Head');if(!head)return null;const top=bones.get('HeadTop_End'),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,forward=head.getWorldQuaternion(new T.Quaternion()),texture=fabric(T,item),record={id:item.id,parts:[],surfaces:[],texture};
  const meshes=[];model.traverse(o=>{if(o.isSkinnedMesh&&o.geometry.attributes.skinIndex)meshes.push(o);});
  for(const mesh of meshes){const originalGeometry=mesh.geometry,originalMaterial=mesh.material,geometry=originalGeometry.clone(),si=geometry.attributes.skinIndex,sw=geometry.attributes.skinWeight,mask=new Float32Array(si.count);for(let i=0;i<si.count;i++)for(let k=0;k<4;k++){const idx=si.array[i*si.itemSize+k],name=mesh.skeleton.bones[idx]?.name||'';if(/Hips|Spine|Arm|Leg|Foot|Toe/.test(name))mask[i]+=sw.array[i*sw.itemSize+k];}geometry.setAttribute('outfitMask',new T.BufferAttribute(mask,1));const mats=(Array.isArray(originalMaterial)?originalMaterial:[originalMaterial]).map(source=>{const m=source.clone(),before=source.onBeforeCompile,key=source.customProgramCacheKey();m.onBeforeCompile=function(shader){before.call(m,shader);shader.uniforms.outfitFabric={value:texture};shader.vertexShader='attribute float outfitMask;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvOutfitMask=outfitMask;vOutfitUV=uv*3.;');shader.fragmentShader='uniform sampler2D outfitFabric;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
@@ -132,6 +191,7 @@ export function disguiseFrame(T,model,bones,headHeight){
  const materials=[],mat=(color,metal=0)=>{const m=new T.MeshStandardMaterial({color,roughness:.72,metalness:metal});materials.push(m);return m;},main=mat(item.color),cream=mat('#e8dfcf'),dark=mat('#514b62'),trim=mat('#c9b58b',.3),pink=mat('#c597a2');record.materials=materials;
  function anchor(name){const bone=bones.get(name)||head,g=new T.Group(),scale=bone.getWorldScale(new T.Vector3());g.name=item.id;g.userData.outfit=item.id;bone.add(g);g.quaternion.copy(bone.getWorldQuaternion(new T.Quaternion()).invert().multiply(forward));g.scale.set(height/scale.x,height/scale.y,height/scale.z);record.parts.push(g);return g;}
  const add=(g,geo,p,scale,m=main)=>{const o=new T.Mesh(geo,m);o.position.set(...p);o.scale.set(...scale);g.add(o);return o;},ball=(g,p,s,m=main)=>add(g,new T.SphereGeometry(1,16,12),p,s,m),box=(g,p,s,m=main)=>add(g,new T.BoxGeometry(1,1,1),p,s,m),cone=(g,p,r,h,m=main)=>add(g,new T.ConeGeometry(r,h,12),p,[1,1,1],m),tube=(g,pts,r,m=main)=>add(g,new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>new T.Vector3(...p))),18,r,6,false),[0,0,0],[1,1,1],m);
+ if(item.creature==='pooh-plush-disguise')return attachPlushBear(T,model,bones,height,record,mat);
  const chest=anchor('Spine2'),hips=anchor('Hips'),d=item.design,t=item.tier;
  if(d==='disguise'){
   // Props are rigid avatar-local objects, not children of animated hips or
@@ -566,7 +626,7 @@ export function disguiseFrame(T,model,bones,headHeight){
  return record;}
 export function disposeOutfit(record){if(!record)return;for(const r of record.surfaces){r.mesh.geometry=r.originalGeometry;r.mesh.material=r.originalMaterial;r.geometry.dispose();r.mats.forEach(m=>m.dispose());}const geometries=new Set();for(const root of record.parts){root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});root.removeFromParent();}geometries.forEach(g=>g.dispose());record.materials.forEach(m=>m.dispose());record.extraTextures?.forEach(t=>t.dispose());record.texture.dispose();}
 
-export function animateOutfit(record,time,movingRoot=null,frameDt=1/60){if(!record)return;if(record.riceMotion||record.colaMotion||record.trafficLights)animateStreetOutfit(record,time,movingRoot,frameDt);if(record.teaMotion&&movingRoot)animateTeaMotion(record.teaMotion,time,movingRoot,frameDt);if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=q.userData.pipeBend||0;q.position.x=.48*v*v+Math.sin(time*3.2-i*.42)*v*.035;q.position.z=Math.cos(time*2.7-i*.35)*v*.025;q.rotation.z=-.43*v+Math.cos(time*3.2-i*.42)*v*.05;}if(record.blinkLight){const t=(time%5.6+5.6)%5.6;record.blinkLight.emissiveIntensity=t<.12||t>.31&&t<.43||t>2.8&&t<3.05?.04:t<.65?.35:1.35;}}
+export function animateOutfit(record,time,movingRoot=null,frameDt=1/60){if(!record)return;if(record.plushMotion)animatePlushBear(record,time,movingRoot,frameDt);if(record.riceMotion||record.colaMotion||record.trafficLights)animateStreetOutfit(record,time,movingRoot,frameDt);if(record.teaMotion&&movingRoot)animateTeaMotion(record.teaMotion,time,movingRoot,frameDt);if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=q.userData.pipeBend||0;q.position.x=.48*v*v+Math.sin(time*3.2-i*.42)*v*.035;q.position.z=Math.cos(time*2.7-i*.35)*v*.025;q.rotation.z=-.43*v+Math.cos(time*3.2-i*.42)*v*.05;}if(record.blinkLight){const t=(time%5.6+5.6)%5.6;record.blinkLight.emissiveIntensity=t<.12||t>.31&&t<.43||t>2.8&&t<3.05?.04:t<.65?.35:1.35;}}
 
 // Damped spring driven by acceleration, with bounded fixed-step particle pool.
 export function teaSloshStep(tilt,velocity,accelX,accelZ,dt){

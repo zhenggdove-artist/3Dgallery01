@@ -871,7 +871,9 @@ dialog.comfort-slot-dialog::backdrop{background:#0b0615b3;}
 
 /* Both hints are 30% smaller than their previous rendered size. */
 #prompt.artwork-pickup-hint,#prompt.artwork-throw-hint{
- transform:translate(-50%,clamp(28px,7vh,60px)) scale(.7) scale(var(--previous-prompt-scale,1));
+ position:fixed;left:var(--artwork-prompt-x,50%);top:var(--artwork-prompt-bottom,50%);bottom:auto;right:auto;max-width:calc(100vw - 12px);width:max-content;
+ transform:translate(-50%,-100%) scale(.7) scale(var(--previous-prompt-scale,1));
+ transition:opacity .15s;
  transform-origin:center bottom;
  pointer-events:none;
 }

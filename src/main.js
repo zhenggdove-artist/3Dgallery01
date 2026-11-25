@@ -330,8 +330,8 @@ ui.addEventListener('join',async event=>{
     if(world.customArtworks?.length){enterButton.textContent='Preparing artwork textures…';const textures=new Set();for(const art of world.customArtworks){const root=arena.artworks.get(art.id);if(!root)throw Error('Artwork not ready: '+art.title);root.traverse(o=>{for(const material of Array.isArray(o.material)?o.material:o.material?[o.material]:[])for(const value of Object.values(material))if(value?.isTexture)textures.add(value);});}for(const texture of textures)renderer.initTexture(texture);await renderer.compileAsync(scene,camera);}
     joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();audio.startMusic();
     void resumeWingCheckout(network,ui);
-    // syncWorld already schedules the exact same custom artwork load.
-    network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
+    // Chat starts empty on every login; only post-login realtime messages appear.
+    }
   catch(error){if(!joined&&network.token){network.close();network.token='';self=null;world=null;players=[];queuedWorld=null;}ui.joinError(error.message);}
 });
 
@@ -369,7 +369,7 @@ network.addEventListener('wing-catalog',event=>{
 network.addEventListener('wanted-settings',event=>{if(joined)syncWantedButton(event.detail,network.base);});
 network.addEventListener('players',event=>{if(!joined)return;players=event.detail;syncPlayers();});
 network.addEventListener('state',event=>{const data=event.detail;if(data.key===self?.key)return;let target=remoteTargets.get(data.key);if(!target){syncPlayers();target=remoteTargets.get(data.key);}if(target){target.position.fromArray(data.state.position);target.rotation=data.state.rotation;target.animation=data.state.animation;}});
-network.addEventListener('chat',event=>{ui.addChat(event.detail);showPlayerSpeech(event.detail);});
+network.addEventListener('chat',event=>{if(!joined)return;ui.addChat(event.detail);showPlayerSpeech(event.detail);});
 network.addEventListener('chat-reset',()=>{ui.clearChat();for(const entry of speechBubbles.values())entry.element.remove();speechBubbles.clear();});
 network.addEventListener('artwork-throw',event=>showThrowPulse(event.detail));
 network.addEventListener('attack',event=>showAttack(event.detail));
@@ -771,6 +771,7 @@ ui.addEventListener('plant',async event=>{
   finally{ui.spectatorPlantPending=false;}
  });
 ui.addEventListener('save-code',async()=>{try{const data=await network.createSaveCode();self.saveCode=data.code;ui.self=self;ui.showSaveCode(data.code);ui.toast('存檔代碼已產生 · 請保存');}catch(error){ui.toast(error.message);}});
+ui.addEventListener('gm-chat-history-request',async event=>{if(!self?.profile?.admin)return;try{ui.setGmChatHistory(await network.gmChatHistory(event.detail),!!event.detail);}catch(error){ui.setGmChatHistoryError(error.message);}});
 ui.addEventListener('gm-presence-request',async()=>{if(!self?.profile?.admin)return;try{ui.setGmPresence(await network.gmPresence());}catch(error){ui.setGmPresenceError(error.message);}});
 function applyRoleTransition(data){
    if(!data?.self||!data.world)throw Error('Role transition missing authoritative world');

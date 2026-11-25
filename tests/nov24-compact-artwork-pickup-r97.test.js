@@ -17,7 +17,7 @@ test('compact pickup hint is smaller and 50% opaque when shown',()=>{
  const compact=css.match(/#prompt\.artwork-pickup-hint,#prompt\.artwork-throw-hint\s*\{([^}]+)\}/)?.[1];
  const shown=css.match(/#prompt\.artwork-pickup-hint\.visible,#prompt\.artwork-throw-hint\.visible\s*\{([^}]+)\}/)?.[1];
  assert.ok(compact,'shared artwork-only CSS selector exists');
- assert.match(compact,/translate\(-50%,clamp\(28px,7vh,60px\)\)/);
+ assert.match(compact,/translate\(-50%,-100%\)/);assert.match(compact,/--artwork-prompt-bottom/);
  assert.match(compact,/scale\(\.7\)/);
  assert.match(css,/#prompt\.artwork-pickup-hint\{--previous-prompt-scale:\.82/);
  assert.match(shown||'',/opacity:\s*\.5/);
