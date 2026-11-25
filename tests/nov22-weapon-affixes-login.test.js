@@ -79,5 +79,5 @@ test('login completion no longer references the deleted previousHealHp variable'
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.match(main,/joined=true;lastHealVisualAt=0;ui\.enter\(data\)/);
  assert.doesNotMatch(main,/previousHealHp/);
- assert.match(main,/catch\(error\)\{ui\.joinError\(error\.message\);\}/);
+ assert.match(main,/catch\(error\)\{if\(!joined&&network\.token\)\{network\.close\(\);[^}]*\}ui\.joinError\(error\.message\);\}/);
 });
