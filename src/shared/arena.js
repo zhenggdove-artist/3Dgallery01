@@ -38,7 +38,7 @@ export function validateGmHouse(value){
  if(Math.hypot(p[0],p[2])+Math.hypot(s.width,s.depth)/2>ARENA_RADIUS||Math.hypot(p[0],p[2])-Math.hypot(s.width,s.depth)/2<SAFE_ZONE.radius+1)return null;
  const colors=['wallColor','roofColor','doorColor','bladeColor','roofSignColor'],extras={};
  for(const key of colors){const v=s[key]??GM_HOUSE_DEFAULT[key];if(typeof v!=='string'||!/^#[0-9a-f]{6}$/i.test(v))return null;extras[key]=v;}
- for(const key of ['bladeCount','roofCount']){const v=s[key]??0;if(!Number.isInteger(v)||v<0||v>(key==='bladeCount'?4:3))return null;extras[key]=v;}
+ for(const key of ['bladeCount','roofCount']){const v=s[key]??0;if(!Number.isInteger(v)||v<0||v>(key==='bladeCount'?4:3))return null;extras[key]=key==='bladeCount'&&s.floors>5?0:v;}
  for(const key of ['bladeSize','roofSize']){const v=s[key]??1;if(!range(v,.5,2.5))return null;extras[key]=v;}
  return {position:[...p],rotation:Math.atan2(Math.sin(yaw),Math.cos(yaw)),house:{width:s.width,depth:s.depth,height:s.height,floors:s.floors,windows:s.windows,signs:s.signs,pipes:s.pipes,metal:s.metal,...extras}};
 }

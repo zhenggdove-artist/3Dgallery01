@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {houseSignSpecs} from './shared/city-layout.js';
+import {drawSignArtwork} from './sign-art.js';
 export const originalBuildSizes={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4]};
 const textures=new Map();
 export function buildMaterial(surface){const material=new THREE.MeshStandardMaterial({color:'#c6a5dc',roughness:.72,metalness:.03});if(surface){if(!textures.has(surface)){const t=new THREE.TextureLoader().load(window.TEMPLE_CONFIG.backendUrl+'/api/media/'+surface);t.colorSpace=THREE.SRGBColorSpace;textures.set(surface,t);}material.map=textures.get(surface);material.color.set('#ffffff');}return material;}
@@ -47,11 +48,11 @@ export function createGmHouseMesh(spec,{preview=false}={}){
   const panel=new THREE.Mesh(new THREE.BoxGeometry(s.width,s.height,s.depth),mat);group.add(panel);
   const border=new THREE.Mesh(new THREE.BoxGeometry(s.blade?s.width+.025:s.width*.94,s.height*.93,s.blade?s.depth*.94:s.depth+.025),mat);group.add(border);
   if(typeof document!=='undefined'){
-   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d');ctx.fillStyle=s.color;ctx.fillRect(0,0,c.width,c.height);ctx.strokeStyle='#f1e1b9';ctx.lineWidth=5;ctx.strokeRect(5,5,c.width-10,c.height-10);ctx.fillStyle='#fff5d9';ctx.textAlign='center';ctx.font='bold 45px sans-serif';if(s.blade){['商','店'].forEach((v,i)=>ctx.fillText(v,64,90+i*85));}else ctx.fillText('商店',128,80);
+   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d');drawSignArtwork(ctx,0,0,c.width,c.height,{color:s.color,title:'商店',subtitle:'TEMPLE SHOP',vertical:s.blade,seed:Number(s.id.split('-').at(-1))+(s.blade?0:3)});
    const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const faceMat=new THREE.MeshStandardMaterial({map:tex,roughness:.8,side:THREE.DoubleSide});faceMat.userData.ownedSignMap=true;materials.push(faceMat);
    for(const side of [-1,1]){const face=new THREE.Mesh(new THREE.PlaneGeometry((s.blade?s.depth:s.width)*.92,s.height*.92),faceMat);if(s.blade){face.rotation.y=side*Math.PI/2;face.position.x=side*(s.width/2+.02);}else{face.rotation.y=side===1?0:Math.PI;face.position.z=side*(s.depth/2+.02);}group.add(face);}
   }
-  for(const side of [-1,1]){const support=new THREE.Mesh(new THREE.BoxGeometry(.11,s.blade?.11:.32,s.blade?.35:.14),steel);support.position.set(s.blade?0:side*s.width*.32,s.blade?side*s.height*.35:-s.height/2-.15,s.blade?-s.depth/2:0);group.add(support);}
+  for(const p of s.supports){const support=new THREE.Mesh(new THREE.BoxGeometry(p.width,p.height,p.depth),steel);support.position.set(p.x-s.x,p.y-s.y,p.z-s.z);group.add(support);}
  }
  if(preview)for(const m of materials){m.transparent=true;m.opacity=.86;}
  root.userData.gmHouseMaterials=materials;return root;

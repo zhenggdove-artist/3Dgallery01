@@ -95,7 +95,7 @@ export class PlatformDeleteEditor {
    else if(command==='place')void this.place();
    else if(command==='translate'||command==='scale'||command==='rotate')this.setGizmoMode(command);
   });
-  this.overlay.addEventListener('change',e=>{const key=e.target.dataset.houseField;if(this.kind!=='house'||!key||!this.draft)return;this.draft.house[key]=e.target.type==='checkbox'?e.target.checked:e.target.type==='color'?e.target.value:Number(e.target.value);this.rebuildHouseProxy();});
+  this.overlay.addEventListener('change',e=>{const key=e.target.dataset.houseField;if(this.kind!=='house'||!key||!this.draft)return;this.draft.house[key]=e.target.type==='checkbox'?e.target.checked:e.target.type==='color'?e.target.value:Number(e.target.value);if(this.draft.house.floors>5)this.draft.house.bladeCount=0;if(key==='floors')this.houseCommands();this.rebuildHouseProxy();});
   ui.addEventListener('panel',e=>{if(e.detail.open&&this.active)this.cancel();});
  }
  setStatus(message){
@@ -145,7 +145,7 @@ export class PlatformDeleteEditor {
    const s=this.draft.house;
    const field=(k,label,min,max,step=1)=>'<label style="display:grid;grid-template-columns:1fr 84px;gap:6px;margin:5px 0">'+label+'<input data-house-field="'+k+'" type="number" min="'+min+'" max="'+max+'" step="'+step+'" value="'+(s[k]??(k.endsWith('Count')?0:GM_HOUSE_DEFAULT[k]))+'"></label>';
    const color=(k,label)=>'<label style="display:grid;grid-template-columns:1fr 84px;gap:6px;margin:5px 0">'+label+'<input type="color" data-house-field="'+k+'" value="'+(s[k]||GM_HOUSE_DEFAULT[k])+'"></label>';
-   return color('wallColor','外牆顏色')+color('roofColor','屋頂顏色')+color('doorColor','大門顏色')+field('width','寬度',2,24,.1)+field('depth','深度',2,24,.1)+field('height','總樓高',2,40,.1)+field('floors','樓層數',1,12)+field('windows','每層每面窗戶數',0,8)+field('signs','原有橫向招牌數（0=無）',0,6)+field('bladeCount','外延直立招牌數',0,4)+color('bladeColor','直立招牌顏色')+field('bladeSize','直立招牌大小',.5,2.5,.1)+field('roofCount','屋頂招牌數',0,3)+color('roofSignColor','屋頂招牌顏色')+field('roofSize','屋頂招牌大小',.5,2.5,.1)+['pipes','metal'].map((k,i)=>'<label style="display:block"><input data-house-field="'+k+'" type="checkbox" '+(s[k]?'checked':'')+'>'+['外牆水管','鐵皮雨遮'][i]+'</label>').join('');
+   return color('wallColor','外牆顏色')+color('roofColor','屋頂顏色')+color('doorColor','大門顏色')+field('width','寬度',2,24,.1)+field('depth','深度',2,24,.1)+field('height','總樓高',2,40,.1)+field('floors','樓層數',1,12)+field('windows','每層每面窗戶數',0,8)+field('signs','原有橫向招牌數（0=無）',0,6)+(s.floors<=5?field('bladeCount','外延直立招牌數',0,4)+color('bladeColor','直立招牌顏色')+field('bladeSize','直立招牌大小',.5,2.5,.1):'<small>六樓以上建築不裝設外延直立招牌。</small>')+field('roofCount','屋頂招牌數',0,3)+color('roofSignColor','屋頂招牌顏色')+field('roofSize','屋頂招牌大小',.5,2.5,.1)+['pipes','metal'].map((k,i)=>'<label style="display:block"><input data-house-field="'+k+'" type="checkbox" '+(s[k]?'checked':'')+'>'+['外牆水管','鐵皮雨遮'][i]+'</label>').join('');
  }
  houseCommands(){
    this.overlay.innerHTML='<b>GM · 房屋 '+(this.mode==='place'?'放置':'編輯')+'</b><p>調整參數；'+(this.mode==='place'?'移動角色攜帶房屋，按 PLACE 固定。':'使用三軸 MOVE / RESIZE / ROTATE，按 SAVE 儲存。')+'</p>'+this.houseFields()+(this.mode==='place'?'<button data-platform-command="place">PLACE</button>':'<button data-platform-command="translate">MOVE</button> <button data-platform-command="scale">RESIZE</button> <button data-platform-command="rotate">ROTATE</button> <button data-platform-command="save">SAVE</button> <button data-platform-command="delete">DELETE</button>')+' <button data-platform-command="close">CLOSE</button><p data-platform-status role="status"></p>';

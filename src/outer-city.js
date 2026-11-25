@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
- cityLots,citySignSpecs,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
+ cityLots,citySignSpecs,cityShopSignSpec,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,CityImpactPlumes,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
+import {drawSignArtwork} from './sign-art.js';
 import {CityWallPaint} from './city-wall-paint.js';
 import {CityFireField} from './city-fire-field.js';
 import {CitySplinterField} from './city-splinter-field.js';
@@ -111,8 +112,7 @@ function batchGeometry(lots,mobile){
   }
   for(const sign of citySignSpecs(lot)){
    category=sign.id;box(lot,sign.x,sign.y,sign.z,sign.width,sign.height,sign.depth,sign.color);
-   if(sign.blade){for(const dy of [-.36,.36])box(lot,sign.x,sign.y+sign.height*dy,frontage+.16,.18,.10,.34,lot.trim);}
-   else for(const side of [-1,1])box(lot,sign.x+side*sign.width*.34,h+.15,sign.z,.11,.32,.14,lot.trim);
+   for(const p of sign.supports)box(lot,p.x,p.y,p.z,p.width,p.height,p.depth,lot.trim);
   }
   category='roof-clutter';
   for(let k=0;k<(mobile?2:5);k++){
@@ -174,40 +174,36 @@ function batchGeometry(lots,mobile){
  return mesh;
 }
 function signAtlas(lots){
- const columns=16,rows=Math.ceil(lots.length/columns),tile=128;
- const canvas=document.createElement('canvas');canvas.width=columns*tile*2;canvas.height=rows*tile;
+ // Three separately designed layouts, packed under the 4096px texture limit.
+ const columns=40,tile=96,rows=Math.ceil(lots.length*3/columns);
+ const canvas=document.createElement('canvas');canvas.width=columns*tile;canvas.height=rows*tile;
  const g=canvas.getContext('2d');
  for(const lot of lots){
-  const x=(lot.index%columns)*tile,y=Math.floor(lot.index/columns)*tile;
-  g.fillStyle=lot.style[3];g.fillRect(x,y,tile,tile);
-  g.fillStyle='#222425';g.globalAlpha=.58;g.fillRect(x+3,y+4,tile-6,tile-8);g.globalAlpha=1;
-  g.textAlign='center';g.fillStyle='#f9ead2';g.font='bold 15px sans-serif';
-  g.fillText(lot.shopName,x+tile/2,y+49,tile-10);
-  g.font='bold 10px sans-serif';g.fillText(lot.enName,x+tile/2,y+75,tile-10);
-  g.font='9px sans-serif';g.fillText('OPEN / 營業中',x+tile/2,y+94,tile-12);
-  const vx=x+columns*tile;g.fillStyle=lot.style[3];g.fillRect(vx,y,tile,tile);
-  g.strokeStyle='#e4d9bc';g.lineWidth=3;g.strokeRect(vx+5,y+5,tile-10,tile-10);
-  const label=Array.from(lot.shopName.split('・')[0]).slice(0,7);g.font='bold '+Math.min(24,Math.floor(110/label.length))+'px sans-serif';g.fillStyle='#fff4d7';label.forEach((ch,i)=>g.fillText(ch,vx+tile/2,y+15+i*(108/label.length)));
+  const sign=citySignSpecs(lot).find(v=>!v.blade);
+  for(let variant=0;variant<3;variant++){
+   const i=lot.index*3+variant,x=i%columns*tile,y=Math.floor(i/columns)*tile;
+   drawSignArtwork(g,x,y,tile,tile,{color:variant===2?sign?.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,vertical:variant===1,seed:lot.index+variant*3});
+  }
  }
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
- return {map,columns,rows};
+ return {map,columns,rows,tile};
 }
 function buildShopSigns(lots){
  const atlas=signAtlas(lots),p=[],uv=[],ids=[],lotIds=[],ranges=new Map(),partRanges=new Map();
- const quad=(lot,points,vertical)=>{
+ const quad=(lot,points,variant)=>{
   const base=p.length/3;for(const [x,y,z] of points){const q=localToWorld(lot,x,z);p.push(q[0],y,q[1]);lotIds.push(lot.index);}
-  const col=lot.index%atlas.columns+(vertical?atlas.columns:0),row=Math.floor(lot.index/atlas.columns),m=.0012;
-  const l=col/(atlas.columns*2)+m,r=(col+1)/(atlas.columns*2)-m,t=1-(row+1)/atlas.rows+m,b=1-row/atlas.rows-m;
+  const i=lot.index*3+variant,col=i%atlas.columns,row=Math.floor(i/atlas.columns),mx=.8/(atlas.columns*atlas.tile),my=.8/(atlas.rows*atlas.tile);
+  const l=col/atlas.columns+mx,r=(col+1)/atlas.columns-mx,t=1-(row+1)/atlas.rows+my,b=1-row/atlas.rows-my;
   uv.push(l,t,r,t,r,b,l,b);ids.push(base,base+1,base+2,base,base+2,base+3);
  };
  for(const lot of lots){
-  const begin=p.length/3,y=2.96,z=lot.depth/2+.62,w=lot.width*.45;
-  quad(lot,[[-w,y-.39,z],[w,y-.39,z],[w,y+.39,z],[-w,y+.39,z]],false);
+  const begin=p.length/3,flat=cityShopSignSpec(lot),y=flat.y,z=flat.z,w=flat.width/2;
+  quad(lot,[[-w,y-.39,z],[w,y-.39,z],[w,y+.39,z],[-w,y+.39,z]],0);
   partRanges.set(lot.index+':sign',[[begin,p.length/3]]);
   for(const s of citySignSpecs(lot)){
    const start=p.length/3,a=s.x-s.width/2,b=s.x+s.width/2,c=s.y-s.height/2+.035,d=s.y+s.height/2-.035,e=s.z-s.depth/2+.035,g=s.z+s.depth/2-.035;
-   if(s.blade)for(const x of [a-.008,b+.008])quad(lot,[[x,c,e],[x,c,g],[x,d,g],[x,d,e]],true);
-   else for(const z of [e-.044,g+.044])quad(lot,[[a+.035,c,z],[b-.035,c,z],[b-.035,d,z],[a+.035,d,z]],false);
+   if(s.blade){quad(lot,[[a-.008,c,e],[a-.008,c,g],[a-.008,d,g],[a-.008,d,e]],1);quad(lot,[[b+.008,c,g],[b+.008,c,e],[b+.008,d,e],[b+.008,d,g]],1);}
+   else{quad(lot,[[a+.035,c,g+.044],[b-.035,c,g+.044],[b-.035,d,g+.044],[a+.035,d,g+.044]],2);quad(lot,[[b-.035,c,e-.044],[a+.035,c,e-.044],[a+.035,d,e-.044],[b-.035,d,e-.044]],2);}
    partRanges.set(lot.index+':'+s.id,[[start,p.length/3]]);
   }
   ranges.set(lot.index,[begin,p.length/3]);

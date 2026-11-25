@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {CITY_MAX_HP,citySignSpecs} from './shared/city-layout.js';
+import {CITY_MAX_HP,citySignSpecs,cityShopSignSpec} from './shared/city-layout.js';
 import {houseTileTexture} from './build-style.js';
 
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -195,7 +195,7 @@ export function buildDetachableFixture(lot,part,seed=1){
     else box(group,(j-.5)*s.width/2,(i-1)*s.height/3,0,s.width/2*.94,s.height/3*.94,s.depth,s.color);
    }for(const side of [-1,1])box(group,0,side*s.height*.32,-s.depth*.45,.12,.10,.24,'#6b6961',.6);}
  }else if(part==='sign'){
-  group.position.set(0,2.96,front+.62);
+  const sign=cityShopSignSpec(lot);group.position.set(sign.x,sign.y,sign.z);
   signAssembly(group,lot);
  }else if(part==='pipes'){
   group.position.set(lot.width*.39,lot.height*.55,front+.22);

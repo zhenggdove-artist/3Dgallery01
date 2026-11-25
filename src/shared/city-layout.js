@@ -434,22 +434,90 @@ export function cityPaintHit(origin,direction,range=17,damage={}){
 }
 
 export const SIGN_HP=42;
+// The mounted panel is completely outside the real facade. Only the
+// two mounting brackets bridge the gap to the wall.
+function signFloor(s,y){
+ return Number.isFinite(s.silhouette)?cityFacadeFloor(s,Math.floor(y/(s.height/s.floors))):{shift:0,setback:0,w:s.width,d:s.depth};
+}
+function signFront(s,y,height){
+ const bottom=y-height/2,top=y+height/2,floors=s.floors||1;
+ let front=s.depth/2+.38;
+ for(let i=0;i<floors;i++)if((i+1)*s.height/floors>=bottom&&i*s.height/floors<=top){
+  const floor=signFloor(s,(i+.5)*s.height/floors);front=Math.max(front,floor.setback+floor.d/2+.38);
+ }
+ // The old facade's rain canopy crosses the full frontage at y=2.58.
+ // A sign spanning its height must sit beyond the canopy's outer lip.
+ const city=Number.isFinite(s.silhouette);
+ const awningY=city?2.58:Math.min(2.6,s.height-.2);
+ if((city||s.metal)&&bottom<awningY+.20&&top>awningY-.20)front=Math.max(front,s.depth/2+(city?1.22:.94));
+ return front;
+}
+function bladeMount(s,sign){
+ return [-.32,.32].map(dy=>{
+  const y=sign.y+sign.height*dy,f=signFloor(s,y),wall=f.setback+f.d/2-.025;
+  const rear=sign.z-sign.depth/2+.055;
+  return {x:sign.x,y,z:(wall+rear)/2,width:.12,height:.105,depth:Math.max(.08,rear-wall)};
+ });
+}
 export function houseSignSpecs(s){
- const w=s.width,d=s.depth,h=s.height,out=[];
- const blade=s.bladeCount??1,roof=s.roofCount??1;
+ const w=s.width,d=s.depth,h=s.height,out=[],floors=s.floors||1;
+ // Both existing city lots and GM-built houses use this same restriction.
+ const blade=floors<=5?(s.bladeCount??1):0,roof=s.roofCount??1;
  const bs=s.bladeSize??1,rs=s.roofSize??1;
  for(let i=0;i<blade;i++){
-  const side=i%2?1:-1,level=Math.floor(i/2),height=Math.min(h*.78,2.6*bs),depth=Math.min(d*.55,1.05*bs);
-  out.push({id:'sign-blade-'+i,x:side*w*.37,y:Math.min(h-height/2,Math.max(height/2,h*.68-level*(height+.16))),z:d/2+depth/2+.08,width:.17,height,depth,color:s.bladeColor||s.signColor||'#c84730',blade:true});
+  const side=i%2?1:-1,level=Math.floor(i/2),height=Math.min(h/(level?2.5:1.27),2.6*bs),depth=Math.min(d*.55,1.05*bs);
+  const y=Math.min(h-height/2-.04,Math.max(height/2+.08,h*.70-level*(height+.18)));
+  const floor=signFloor(s,y),x=floor.shift+side*floor.w*.36;
+  const z=signFront(s,y,height)+depth/2+.12;
+  const sign={id:'sign-blade-'+i,x,y,z,width:.17,height,depth,color:s.bladeColor||s.signColor||'#c84730',blade:true};
+  sign.supports=bladeMount(s,sign);out.push(sign);
  }
  for(let i=0;i<roof;i++){
   const width=Math.min(w/(roof+.12),3.6*rs),height=1.45*rs;
-  out.push({id:'sign-roof-'+i,x:(i-(roof-1)/2)*w/(roof+1),y:h+height/2+.30,z:d*.32,width,height,depth:.18,color:s.roofSignColor||s.signColor||'#4c9ea1',blade:false});
+  const sign={id:'sign-roof-'+i,x:(i-(roof-1)/2)*w/(roof+1),y:h+height/2+.32,z:d*.30,width,height,depth:.18,color:s.roofSignColor||s.signColor||'#4c9ea1',blade:false};
+  sign.supports=[-1,1].map(side=>({x:sign.x+side*width*.34,y:h+.20,z:sign.z,width:.11,height:.36,depth:.14}));out.push(sign);
  }
  return out;
 }
+export function cityShopSignSpec(lot){
+ const height=.78,y=2.96,width=lot.width*.90;
+ return {id:'sign',x:0,y,z:signFront(lot,y,height)+.12,width,height,depth:.10,color:lot.style[3],blade:false};
+}
+// Conservative intersection test using the real floor envelopes, in the
+// neighboring building's rotated coordinate system. No extra collider meshes.
+export function citySignClear(lot,sign){
+ const p=signWorldPosition(lot,sign),bottom=sign.y-sign.height/2,top=sign.y+sign.height/2;
+ for(const other of cityCollisionCandidates(p[0],p[2],Math.hypot(sign.width,sign.depth)/2+2)){
+  if(other.id===lot.id)continue;
+  const [x,z]=cityLocal(other,p[0],p[2]),a=lot.yaw-other.yaw,c=Math.abs(Math.cos(a)),sn=Math.abs(Math.sin(a));
+  const hx=(sign.width*c+sign.depth*sn)/2+.06,hz=(sign.width*sn+sign.depth*c)/2+.06;
+  for(let i=0;i<other.floors;i++){
+   const floor=cityFacadeFloor(other,i);
+   if(top<=floor.bottom||bottom>=floor.top)continue;
+   if(Math.abs(x-floor.shift)<floor.w/2+hx&&Math.abs(z-floor.setback)<floor.d/2+hz)return false;
+  }
+ }
+ return true;
+}
+const cachedCitySigns=new WeakMap();
 export function citySignSpecs(lot){
- return houseSignSpecs({...lot,bladeCount:1+(lot.index%3===0?1:0),roofCount:1,bladeSize:.8+(lot.index%5)*.16,roofSize:.85+(lot.index%4)*.18,bladeColor:lot.style[3],roofSignColor:CITY_SHOP_STYLES[(lot.index+5)%CITY_SHOP_STYLES.length][3]});
+ if(cachedCitySigns.has(lot))return cachedCitySigns.get(lot);
+ const source=houseSignSpecs({...lot,bladeCount:1+(lot.index%3===0?1:0),roofCount:1,bladeSize:.8+(lot.index%5)*.16,roofSize:.85+(lot.index%4)*.18,bladeColor:lot.style[3],roofSignColor:CITY_SHOP_STYLES[(lot.index+5)%CITY_SHOP_STYLES.length][3]});
+ const result=[];
+ for(const sign of source){
+  if(!sign.blade){result.push(sign);continue;}
+  const floor=signFloor(lot,sign.y);
+  // Search along the actual floor frontage and a short additional bracket
+  // extension. Omit a panel if no unobstructed mount is available.
+  let found=null;
+  for(const extension of [0,.30,.60]){for(const dx of [0,-.12,.12,-.24,.24]){
+   const x=sign.x+dx*floor.w;if(Math.abs(x-floor.shift)>floor.w*.44)continue;
+   const candidate={...sign,x,z:sign.z+extension};
+   if(citySignClear(lot,candidate)){candidate.supports=bladeMount(lot,candidate);found=candidate;break;}
+  }if(found)break;}
+  if(found)result.push(found);
+ }
+ cachedCitySigns.set(lot,result);return result;
 }
 export function structureSignSpecs(structure){
  if(structure.kind!=='house')return [];
