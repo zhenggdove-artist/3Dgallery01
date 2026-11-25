@@ -190,7 +190,7 @@ function signAtlas(lots){
  const g=canvas.getContext('2d');
  entries.forEach(({lot,variant,sign},i)=>{
   const x=i%columns*tile,y=Math.floor(i/columns)*tile;
-  drawSignArtwork(g,x,y,tile,tile,{color:variant===2?sign.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,vertical:variant===1,aspect:variant===1?.5:sign.width/sign.height,...citySignArtOptions(lot,variant)});
+  drawSignArtwork(g,x,y,tile,tile,{color:variant===2?sign.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,shopKind:lot.style[0],vertical:variant===1,aspect:variant===1?.5:sign.width/sign.height,...citySignArtOptions(lot,variant)});
  });
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
  return {map,columns,rows,tile,slots};
