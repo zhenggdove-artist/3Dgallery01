@@ -29,7 +29,10 @@ test('one shop card per native family, five selectable colors and native weapon 
   assert.ok(v.every((x,i)=>i===0||x.price>v[i-1].price));
  }
  const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
- assert.match(ui,/shopWeaponGroups\(SHOP_ITEMS\)/);
+ assert.match(ui,/shopWeaponGroups\(SHOP_ITEMS\.filter\(i=>!Object\.hasOwn\(this\.world\?\.delistedShopItems\|\|\{\},i\.id\)\)\)/);
+ const afterRecall=shopWeaponGroups(SHOP_ITEMS.filter(i=>i.id!=='tide-2'&&i.id!=='black-cat'));
+ assert.deepEqual(afterRecall.find(g=>g.key==='weapon:tide').variants.map(v=>v.shopTier),[1,3,4,5]);
+ assert.ok(!afterRecall.some(g=>g.key==='weapon:black-cat'));
  assert.doesNotMatch(ui,/· T\$\{v\.tier\}/);
  assert.match(ui,/data-shop-variant/);
 });

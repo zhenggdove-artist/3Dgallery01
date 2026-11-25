@@ -1,5 +1,5 @@
-import {ITEMS,SHOP_ITEMS,itemById} from './catalog.js';
-import {removeInventoryInstances,ensureFusionIdentity} from './fusion-instances.js';
+import {SHOP_ITEMS,itemById} from './catalog.js';
+import {removeInventoryInstances} from './fusion-instances.js';
 export const isDelisted=(world,id)=>!!id&&Object.hasOwn(world?.delistedShopItems||{},id);
 export function reclaimDelisted(world,profile){
  if(!Object.keys(world.delistedShopItems||{}).length)return 0;
