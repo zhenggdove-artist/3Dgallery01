@@ -1720,12 +1720,6 @@ export function tickPrismChannels(world,actors,now=Date.now(),rng=Math.random){
  let changed=false;
  // Every live caster has one channel and at most one locked target.
  const active=new Set();
- for(const {value} of monsterTargets){
-  const push=value.tidePush;if(!push)continue;
-  const progress=Math.min(1,Math.max(0,(now-push.time)/push.durationMs)),delta=Math.max(0,progress-(push.progress||0));
-  if(delta>0){const moved=[value.position[0]+push.vector[0]*push.distance*delta,value.position[1],value.position[2]+push.vector[2]*push.distance*delta];if(insideArena(moved,-2)&&!insideArtSanctuary(moved)&&!cityBlocked(moved[0],moved[2],moved[1],world.cityDamage||{},.5))value.position=moved;push.progress=progress;changed=true;}
-  if(progress>=1)delete value.tidePush;
- }
  for(const caster of actors){
   const profile=world.profiles[caster.key],weapon=itemById(profile?.channelWeapon);
   if(caster.role!=='fighter'||!profile||profile.hp<=0||profile.deadUntil>now||
@@ -1797,6 +1791,12 @@ export function tickTidalChannels(world,actors,now=Date.now(),rng=Math.random){
   ...(world.monster?.active&&world.monster.hp>0?[{kind:'monster',value:world.monster}]:[]),
   ...(world.monsters||[]).filter(m=>m.active&&m.hp>0).map(value=>({kind:'monster',value}))
  ];
+ for(const {value} of monsterTargets){
+  const push=value.tidePush;if(!push)continue;
+  const progress=Math.min(1,Math.max(0,(now-push.time)/push.durationMs)),delta=Math.max(0,progress-(push.progress||0));
+  if(delta>0){const moved=[value.position[0]+push.vector[0]*push.distance*delta,value.position[1],value.position[2]+push.vector[2]*push.distance*delta];if(insideArena(moved,-2)&&!insideArtSanctuary(moved)&&!cityBlocked(moved[0],moved[2],moved[1],world.cityDamage||{},.5))value.position=moved;push.progress=progress;changed=true;}
+  if(progress>=1)delete value.tidePush;
+ }
  for(const caster of actors){
   const profile=world.profiles[caster.key],weapon=itemById(profile?.channelWeapon);
   if(caster.role!=='fighter'||!profile||profile.hp<=0||profile.deadUntil>now||
