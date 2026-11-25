@@ -29,7 +29,7 @@ export function comfortCashImage(item){
    <text x="105" y="139" font-size="6.5" font-family="sans-serif" letter-spacing=".8" text-anchor="middle" fill="${p.ink}">FEDERAL RESERVE NOTE</text>
   </g>`;
  }).join('');
- const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 220" role="img" aria-label="Stack of ${den} dollar bills">
+ const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="230" height="220" viewBox="0 0 230 220" role="img" aria-label="Stack of ${den} dollar bills">
   <defs><filter id="shadow" x="-30%" y="-30%" width="170%" height="180%"><feDropShadow dx="1" dy="7" stdDeviation="6" flood-color="#0d2030" flood-opacity=".3"/></filter></defs>
   <g filter="url(#shadow)">${layers}</g>
   <rect x="32" y="174" width="158" height="15" rx="6" transform="rotate(-10 110 180)" fill="${p.ink}" opacity=".75"/>

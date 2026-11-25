@@ -67,7 +67,16 @@ arena.artFloat=settings.artFloat??.17;
 
 let lastAppliedRespawnAt=0;
 let vitalModels=null;
-function currentTunedWeapon(){const p=world?.profile,base=itemById(p?.equipment?.weapon);if(!base||!p)return base;const grade=p.fusion?.[base.id]?.shopTier??(base.exotic?Math.min(4,base.tier||3):base.tier||1);return tunedEquipment(world,equippedItem(p,base));}
+let tunedWeaponBase=null,tunedWeaponFusion=null,tunedWeaponOverrides=null,tunedWeaponValue=null;
+function currentTunedWeapon(){
+ const p=world?.profile,base=itemById(p?.equipment?.weapon);if(!base||!p)return base;
+ const fusion=p.fusion?.[base.id],overrides=world.equipmentTuning;
+ if(base!==tunedWeaponBase||fusion!==tunedWeaponFusion||overrides!==tunedWeaponOverrides){
+  tunedWeaponBase=base;tunedWeaponFusion=fusion;tunedWeaponOverrides=overrides;
+  tunedWeaponValue=tunedEquipment(world,equippedItem(p,base));
+ }
+ return tunedWeaponValue;
+}
 let artBombUploading=false;let assetsReady=false,joined=false,self=null,world=null,players=[],controller=null,localRoot=null,wasDead=false,last=performance.now(),externalUntil=0,toastErrorAt=0,lastAutoCoinAt=0,frameSamples=[],fps=0,fpsFrames=0,fpsAt=performance.now(),buildPlacement=null,spectatorFollowIndex=-1;
 const roots=new Map(),remoteTargets=new Map(),effects=[],pendingAutoPickups=new Set();
 let heldArtworkSource=null,heldArtworkOwner=null,heldArtworkCached=false;
@@ -171,7 +180,7 @@ function beginStaffChannel(){
    staffChannel.ready=true;
    // The player has ALREADY fully charged. Trigger one server-owned effect
    // now rather than rendering another empty frame before the next rAF.
-   if(['lightning','beam'].includes(item.family)&&!staffChannelBusy){
+   if(['lightning','beam','fire'].includes(item.family)&&!staffChannelBusy){
     staffChannelShotAt=performance.now();
     staffChannelBusy=true;
     void Promise.resolve(performAttack(1,'channel')).catch(error=>{if(/not enough mana|channel is not active/i.test(error.message||'')&&staffChannel){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}}).finally(()=>{staffChannelBusy=false;});
@@ -312,7 +321,7 @@ ui.addEventListener('join',async event=>{
    if(joined||ui.joining)return;
    if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.unlock(false);ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();audio.startMusic();
     void resumeWingCheckout(network,ui);
-    void arena.loadCustomArtworks(data.world.customArtworks,network.base).catch(error=>console.warn('Deferred artwork loading',error));
+    // syncWorld already schedules the exact same custom artwork load.
     network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
   catch(error){ui.joinError(error.message);}
 });
@@ -1004,7 +1013,7 @@ function update(dt,time,movementDt=dt){
     const substeps=Math.max(1,Math.ceil(simulationDt/(1/40)));
     let state;
     for(let step=0;step<substeps;step++)state=controller.update(simulationDt/substeps);
-    if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=hasHeldArtwork(world?.artworks,self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){const p=localRoot.position;const coin=PLATFORMS.find(c=>!pendingAutoPickups.has('pickup-coin:'+c.id)&&world?.coins?.[c.id]?.available&&(p.x-c.coinPosition[0])**2+(p.z-c.coinPosition[2])**2<2.8**2&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=coin?null:world?.groundDrops?.find(d=>!pendingAutoPickups.has('pickup-drop:'+d.id)&&(p.x-d.position[0])**2+(p.y-d.position[1])**2+(p.z-d.position[2])**2<2.2**2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&nowMs<d.ownerLockedUntil));if(coin||drop){lastAutoCoinAt=performance.now();if(coin)autoPickup('pickup-coin',coin.id,'platformId');else autoPickup('pickup-drop',drop.id,'dropId');}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
+    if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,1-Math.exp(-dt*11));root.rotation.y=lerpAngle(root.rotation.y,target.rotation,1-Math.exp(-dt*12));arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=hasHeldArtwork(world?.artworks,self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){lastAutoCoinAt=performance.now();const p=localRoot.position;const coin=PLATFORMS.find(c=>!pendingAutoPickups.has('pickup-coin:'+c.id)&&world?.coins?.[c.id]?.available&&(p.x-c.coinPosition[0])**2+(p.z-c.coinPosition[2])**2<2.8**2&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=coin?null:world?.groundDrops?.find(d=>!pendingAutoPickups.has('pickup-drop:'+d.id)&&(p.x-d.position[0])**2+(p.y-d.position[1])**2+(p.z-d.position[2])**2<2.2**2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&nowMs<d.ownerLockedUntil));if(coin||drop){if(coin)autoPickup('pickup-coin',coin.id,'platformId');else autoPickup('pickup-drop',drop.id,'dropId');}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
   platformDelete.update();
   collectorView.update(time,camera);
   statusVisuals.update(dt);
@@ -1013,11 +1022,12 @@ function update(dt,time,movementDt=dt){
    localRoot.userData.staffCasting=!!(attackHeld&&isChannelStaff(castingItem));
    // Render the live native #08 / #29 on the EXACT ray that the next
     // authoritative cast will transmit, not on the old screen-center ray.
-    const muzzle=castingItem&&isChannelStaff(castingItem)?arena.presentation.vfx.channelMuzzle(localRoot,castingItem):null;
-    localRoot.userData.staffAimDirection=castingItem&&isChannelStaff(castingItem)&&controller
+    const staffAimActive=!!(localRoot.userData.staffCasting||performance.now()<(localRoot.userData.staffCastingUntil||0));
+   const muzzle=staffAimActive&&castingItem&&isChannelStaff(castingItem)?arena.presentation.vfx.channelMuzzle(localRoot,castingItem):null;
+    localRoot.userData.staffAimDirection=staffAimActive&&castingItem&&isChannelStaff(castingItem)&&controller
      ?attackDirection(controller,camera,arena,roots,castingItem,1,muzzle)
      :cameraAimDirection(camera).toArray();
-    const curved=!!(castingItem&&['lightning','beam'].includes(castingItem.family)&&
+    const curved=!!(staffAimActive&&castingItem&&['lightning','beam'].includes(castingItem.family)&&
      isChannelStaff(castingItem)&&controller&&muzzle);
     if(curved){
      const forward=new THREE.Vector3(...localRoot.userData.staffAimDirection).normalize();
@@ -1070,7 +1080,7 @@ function update(dt,time,movementDt=dt){
     void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});
    }else if(staffChannel.ready&&!staffChannelBusy&&performance.now()-staffChannelShotAt>=channelInterval(heldItem)+45){
     staffChannelShotAt=performance.now();staffChannelBusy=true;
-    void Promise.resolve(performAttack(1,'channel')).finally(()=>{staffChannelBusy=false;});
+    void Promise.resolve(performAttack(1,'channel')).catch(error=>{if(/not enough mana|channel is not active/i.test(error.message||'')&&staffChannel){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}}).finally(()=>{staffChannelBusy=false;});
    }
   }
    // Show +1 on every frame-clock second of a server-approved flower
@@ -1107,7 +1117,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V051',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V052',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

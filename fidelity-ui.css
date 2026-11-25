@@ -1152,3 +1152,15 @@ body.panel-open #panel.gallery-guide-floating{
 
 #weapon-mana-cost{color:#89d9ff;font-size:10px;line-height:1.1;white-space:nowrap;text-shadow:0 1px 2px #000;font-weight:700}#weapon-mana-cost.mana-insufficient{color:#ff9ba8}.bag-mana-cost{color:#1958a9;font-weight:700;font-size:12px}
 body.chat-typing #comfort-hotbar{visibility:hidden!important;pointer-events:none!important}body.chat-typing #chat-hud{z-index:190!important}body.chat-typing #comfort-hotbar *{pointer-events:none!important}
+
+/* V052: independent backing for Safari gradient layers, unchanged geometry. */
+#mobile-stick{background-color:#f6b5da80}
+#mobile-stick i{background-color:#f6b5da}
+#dock [data-action=jump]{background-color:#f6b5da;-webkit-appearance:none;appearance:none}
+#comfort-hotbar .comfort-quick-slot{background-color:#fff9ed;-webkit-appearance:none;appearance:none}
+#comfort-hotbar .comfort-quick-slot.depleted{background-color:#f2a6ab}
+#comfort-hotbar .comfort-quick-slot svg{display:block;width:100%;height:100%;pointer-events:none}
+#comfort-hotbar .comfort-quick-slot.depleted svg{filter:grayscale(1) sepia(.8) hue-rotate(300deg) saturate(4) brightness(.75)}
+@media(max-width:720px),(any-pointer:coarse){
+ #mobile-stick,#dock [data-action=jump],#comfort-hotbar{isolation:isolate}
+}

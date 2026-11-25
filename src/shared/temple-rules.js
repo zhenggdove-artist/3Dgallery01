@@ -1210,8 +1210,11 @@ function attack(world,profile,actor,body,context,now){
   if(!persistentOnly){
     const duration=projectileFlightMs(weapon,stats.ultimate,stats.range);
     const iceGround=weapon.family==='ice'&&stats.ultimate&&area?.mode==='area';
-    const visualLifetime=iceGround?ICE_ERUPTION_TRAVEL_MS+ICE_ERUPTION_VISIBLE_MS:channel?duration:visibleCollisionLifetimeMs(weapon,stats.ultimate);
+    const fireStream=channel&&weapon.family==='fire'&&!weapon.exotic;
+     // Native #73 is a sustained full-length flame, not a short moving orb.
+     const visualLifetime=fireStream?Math.max(duration,weapon.cooldown+225):iceGround?ICE_ERUPTION_TRAVEL_MS+ICE_ERUPTION_VISIBLE_MS:channel?duration:visibleCollisionLifetimeMs(weapon,stats.ultimate);
     world.persistentAttacks??=[];
+     if(fireStream)world.persistentAttacks=world.persistentAttacks.filter(fx=>!(fx.channel&&!fx.echo&&fx.owner===actor.key&&fx.weapon===weapon.id));
     world.persistentAttacks.push({
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
@@ -2120,7 +2123,23 @@ function tickPersistentAttacks(world,actors,now,rng){
      if(outcome(target,center,impact,null,tail+distance))changed=true;
     }
    }
-   // Each travelling sphere uses its own independent ray. The server sweeps
+   // Native #73 flame contacts the full nozzle-to-tip ray. Reuse the
+    // existing per-target channel cooldown and authoritative damage pipeline.
+    if(fx.channel&&!fx.echo&&weapon.family==='fire'&&!weapon.exotic){
+     if(now<fx.expiresAt)for(const target of targets){
+      const enemy=target.value;
+      if(enemy.key===fx.owner)continue;
+      const distance=target.kind==='player'
+       ?rayCylinderDistance(fx.origin,fx.direction,fx.range,enemy.position,1.02+fx.radius,2.35)
+       :monsterRayDistance(fx.origin,fx.direction,fx.range,enemy,fx.radius);
+      if(distance===null)continue;
+      const center=[enemy.position[0],enemy.position[1]+(target.kind==='player'?1:ENEMY_HEIGHT*.5),enemy.position[2]];
+      const impact=fx.origin.map((v,i)=>v+fx.direction[i]*distance);
+      if(outcome(target,center,impact,null,distance))changed=true;
+     }
+     fx.lastAt=now;continue;
+    }
+    // Each travelling sphere uses its own independent ray. The server sweeps
    // all travelled segments, so no damage can occur before contact.
    const lanes=fx.pellets||[{direction:fx.direction,radius:fx.radius}];
    const segmentLength=Math.max(0,(next-prev)*fx.range);

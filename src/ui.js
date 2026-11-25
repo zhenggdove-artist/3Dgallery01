@@ -419,14 +419,14 @@ export class TempleUI extends EventTarget{
    });
    const until=slots.map(v=>v.item?restorativeCooldown(profile,v.item):0),remaining=until.some(v=>v>Date.now());
    const signature=JSON.stringify([slots.map(v=>[v.item?.id||null,v.count]),until]);
-   if(this.quickBarSignature===signature){this.updateQuickCooldown();return;}
+   if(this.quickBarSignature===signature&&root.children.length===3){this.updateQuickCooldown();return;}
    this.quickBarSignature=signature;this.quickCooldownUntil=until;clearInterval(this.quickCooldownTimer);
    root.innerHTML=slots.map(({item,count},i)=>{
     const empty=!item,depleted=!!item&&count===0;
     const label=item?`${item.name} · ${count} remaining`:`Quick slot ${i+1} · Empty`;
     return `<button type="button" class="comfort-quick-slot ${depleted?'depleted':''}" data-quick-use="${i}" ${empty||depleted||until[i]>Date.now()?'disabled':''}
      aria-label="${escape(label)}" title="${escape(label)}">
-     ${item?`<img src="${escape(comfortCashImage(item))}" alt="" draggable="false">`:''}
+     ${item?decodeURIComponent(comfortCashImage(item).split(',')[1]).replaceAll('id="shadow"',`id="quick-cash-shadow-${i}"`).replaceAll('url(#shadow)',`url(#quick-cash-shadow-${i})`):''}
      <span class="comfort-quick-key">${i+1}</span>${item?'<span class="comfort-cooldown" hidden></span>':''}
      ${item?`<span class="comfort-quick-count">×${count}</span>`:'<span class="comfort-quick-blank">+</span>'}
     </button>`;

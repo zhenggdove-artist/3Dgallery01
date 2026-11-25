@@ -18,6 +18,21 @@ let previewCharacterSource=null,previewIdleEnabled=false,previewIdleTimer=null,w
 export function setOutfitPreviewCharacter(source){previewCharacterSource=source||null;}
 
 const keyOf=item=>item.id+':'+(item.updatedAt||0);
+// Exact release-scoped PNGs: same resolution, no second WebGL render.
+const previewRelease=new URL(import.meta.url).searchParams.get('temple-release');
+const previewCacheName=previewRelease?'ggtemple-preview-'+previewRelease:null;
+let previewCachePromise;
+function previewCache(){
+ if(!previewCacheName||!globalThis.caches)return Promise.resolve(null);
+ return previewCachePromise??=globalThis.caches.open(previewCacheName).catch(()=>null);
+}
+const previewCacheKey=item=>new URL('./__temple_preview__/'+encodeURIComponent(keyOf(item))+'.png',import.meta.url).href;
+async function cachedPreview(item){
+ try{const cache=await previewCache(),response=await cache?.match(previewCacheKey(item));return response?await response.blob():null;}catch{return null;}
+}
+async function storePreview(item,blob){
+ try{const cache=await previewCache();if(cache)await cache.put(previewCacheKey(item),new Response(blob,{headers:{'Content-Type':'image/png'}}));}catch{}
+}
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const itemPreviewUrl=item=>item?finished.get(keyOf(item))||null:null;
 export const previewCount=()=>({ready:finished.size,pending:pending.size,failed:failed.size});
@@ -36,7 +51,12 @@ export function itemPreview(item){
  const job=queue.then(async()=>{
   try{
    let url;
-   url=await renderPreview(item);
+   const cached=await cachedPreview(item);
+   if(cached?.size){
+    url=URL.createObjectURL(cached);
+    if(!warmingPreviews)try{await preloadImage(url);}catch{URL.revokeObjectURL(url);url=null;}
+   }
+   if(!url)url=await renderPreview(item);
    finished.set(key,url);failed.delete(key);failUntil.delete(key);
    return url;
   }catch(error){
@@ -58,6 +78,9 @@ async function preloadImage(url){
 export async function warmItemPreviews(items,onProgress=()=>{}){
  const unique=[...new Map((items||[]).filter(Boolean).map(i=>[keyOf(i),i])).values()];
  warmingPreviews=true;
+ if(previewCacheName&&globalThis.caches)try{
+  for(const name of await globalThis.caches.keys())if(name.startsWith('ggtemple-preview-')&&name!==previewCacheName)await globalThis.caches.delete(name);
+ }catch{}
  try{for(let i=0;i<unique.length;i++){
   await itemPreview(unique[i]);
   onProgress(i+1,unique.length);
@@ -260,6 +283,7 @@ async function renderPreview(item){
   finally{if(portrait!==renderer.domElement)portrait.width=portrait.height=0;}
   if(!blob)throw Error('WebGL preview image encoding failed');
   // Decode during loading, not when the inventory is first opened.
+  void storePreview(item,blob);
   const url=URL.createObjectURL(blob);
   // Keep the same full-resolution encoded image; decoding an entire catalog
   // at boot leaves hundreds of MB of unused decoded bitmaps on mobile Safari.

@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createInitialWorld,ensureProfile,applyAction,tickWorld} from '../src/shared/temple-rules.js';
+import {itemById} from '../src/shared/catalog.js';
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const start=200000;
+const caster={key:'caster',name:'Caster',color:'#ffffff',role:'fighter',position:[75,0,0]};
+test('fire channel contacts a monster on the server tick and stops without leaving a hit volume',()=>{
+ const world=createInitialWorld(start),p=ensureProfile(world,caster.key,caster.name,caster.color,start);
+ const weapon=itemById('ember-1');p.inventory.push(weapon.id);p.equipment.weapon=weapon.id;
+ world.monster={id:'boss',active:true,variant:'uncle',model:'uncle',position:[75,0,4],hp:12000,maxHp:12000,skills:[],nextAttackAt:start+200000};
+ const action=(now,extra)=>applyAction(world,caster,{action:'attack',direction:[0,0,1],...extra},{now,actors:[caster],rng:()=>.5});
+ const castAt=start+1000+Math.max(weapon.chargeMs||1500,4000);
+ assert.equal(action(start+1000,{phase:'charge'}).charging,true);
+ assert.equal(action(castAt,{phase:'channel-start'}).channeling,true);
+ const shot=action(castAt+10,{phase:'channel'});assert.ok(shot.attackEvent,JSON.stringify(shot));
+ const before=world.monster.hp;
+ tickWorld(world,{now:castAt+11,actors:[caster],activeFighters:0,rng:()=>.5});
+ assert.ok(world.monster.hp<before,'full ray must contact a monster before a travelling orb could arrive');
+ assert.ok(world.damageEvents.some(e=>e.target==='boss'));
+ assert.equal(action(castAt+20,{phase:'channel-stop'}).channeling,false);
+ assert.ok(!world.persistentAttacks.some(f=>f.owner===caster.key&&f.channel));
+});
+test('touch controls retain solid backing and same bill art; inactive aim and duplicate loads are removed',()=>{
+ const css=read('fidelity-ui.css'),ui=read('src/ui.js'),main=read('src/main.js'),preview=read('src/item-preview.js');
+ assert.ok(css.includes('#mobile-stick{background-color:'));
+ assert.ok(css.includes('#dock [data-action=jump]{background-color:'));
+ assert.ok(ui.includes('quick-cash-shadow-'));
+ assert.ok(main.includes('staffAimActive&&castingItem'));
+ assert.ok(!main.includes('void arena.loadCustomArtworks(data.world.customArtworks'));
+ assert.ok(preview.includes('await cachedPreview(item)'));
+ assert.ok(main.includes('lastAutoCoinAt>300){lastAutoCoinAt='));
+});
