@@ -31,5 +31,5 @@ test('fusion area hits a building outside the primary warning if its own effect 
  world.persistentAttacks=[{id:'echo-test',kind:'projectile',echo:true,owner:actor.key,weapon:'pan-1',origin:[75,1,0],direction:[1,0,0],range:5,radius:4,area:{mode:'area',center:[80,.12,0],visualCenter:[80,.16,0],radius:4,travel:5,range:5},parentFootprint:{shape:'circle',position:[75,0,0],radius:.2},damage:10,pvpDamage:5,charge:1,flightMs:200,createdAt:time,lastAt:time,expiresAt:time+5000,hits:[],hitTimes:{},pelletHits:{}}];
  tickWorld(world,{now:time+300,actors:[],rng:()=>.5});
  assert.ok(!world.structures.some(s=>s.id===house.id));
- assert.ok(world.pendingArtworkVisualEvents.some(v=>v.kind==='structure-destroyed'&&v.event.structureId===house.id));
+ assert.ok(world.pendingArtworkVisualEvents.some(v=>v.kind==='structure-destroyed'&&v.event.id===house.id));
 });
