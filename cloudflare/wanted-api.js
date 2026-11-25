@@ -36,7 +36,7 @@ export async function wantedApi(room,request,session,url){
   const id=crypto.randomUUID();room.ctx.storage.transactionSync(()=>{sql.exec('INSERT INTO wanted_media VALUES(?,?,?,?,?)',id,profile.key,type,size,now);for(let i=0;i<size;i+=CHUNK)sql.exec('INSERT INTO wanted_chunks VALUES(?,?,?)',id,i/CHUNK,b.slice(i,i+CHUNK));});
   return json({id});
  }
- let body;try{const raw=await request.text();if(raw.length>4000)throw Error();body=JSON.parse(raw);}catch{return json({error:'Invalid request'},400);}
+ let body;try{if(Number(request.headers.get('Content-Length'))>4000)throw Error();const raw=await request.text();if(raw.length>4000)throw Error();body=JSON.parse(raw);}catch{return json({error:'Invalid request'},400);}
  // Re-read after asynchronous body handling; don't overwrite newer gameplay.
  const live=room.world(),p=live.profiles[session.profile_key],isGM=p.admin===true;
  const owns=id=>!id||sql.exec('SELECT id FROM wanted_media WHERE id=? AND owner=?',id,p.key).toArray().length>0;

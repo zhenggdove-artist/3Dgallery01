@@ -732,7 +732,7 @@ export function applyAction(world,actor,body,context={}){
   switch(body.action){
     case 'pickup-coin':result=pickupCoin(world,profile,actor,body,now);break;
     case 'pickup-drop':result=pickupDrop(world,profile,actor,body,now);break;
-    case 'publish-art-bomb':if(!canPlaceArtworkAt(world,actor.position,body.artwork?.position))return {error:'Move outside the central WRITE zone and place artwork within 12 metres'};result=publishArtBomb(world,profile,actor,body,now);break;
+    case 'publish-art-bomb':if(profile.wanted?.name&&body.artwork&&!String(body.artwork.author||'').trim())body.artwork.author=profile.wanted.name;if(!canPlaceArtworkAt(world,actor.position,body.artwork?.position))return {error:'Move outside the central WRITE zone and place artwork within 12 metres'};result=publishArtBomb(world,profile,actor,body,now);break;
     case 'resize-art-bomb':result=resizeArtBomb(world,actor,body,now);break;
     case 'update-art-bomb-appearance':result=updateArtBombAppearance(world,actor,body,now);break;
     case 'pickup-artwork':result=pickupArtwork(world,actor,body,now);break;

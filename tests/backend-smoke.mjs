@@ -106,6 +106,16 @@ assert.equal(resized.artworkLayout.scale[0],2);
 const final=await call('/api/world',undefined,token);
 assert.ok(final.world.customArtworks.some(a=>a.id===build.artwork.id));
 assert.ok(final.world.artworkLayout[build.artwork.id].scale[0]===2);
+// Wanted List uses authenticated media and a real persisted profile, not a client-only mock.
+const avatar=await call('/api/wanted/media',png,token,{raw:true,type:'image/png'});
+const savedArtist=await call('/api/wanted',{action:'save',name:'Smoke Artist',website:'https://example.com',quote:'Art',avatar:avatar.id,crop:{x:20,y:80},useName:true},token);
+assert.equal(savedArtist.name,'Smoke Artist');assert.equal(savedArtist.self.avatar,avatar.id);
+const list=await call('/api/wanted?page=0',undefined,token);assert.ok(list.entries.some(a=>a.key===join.self.key&&a.hasArtwork&&a.name==='Smoke Artist'));
+const avatarResponse=await fetch(base+'/api/wanted/media/'+avatar.id);assert.equal(avatarResponse.status,200);assert.deepEqual(Buffer.from(await avatarResponse.arrayBuffer()),Buffer.from(png));
+await call('/api/wanted',{action:'settings',label:'Unauthorized'},token,{expectedStatus:400});
+await call('/api/wanted',{action:'save',name:'Smoke Artist',website:'javascript:alert(1)'},token,{expectedStatus:400});
+await call('/api/wanted',{action:'save',name:'Smoke Artist',website:'https://example.com',quote:'Art',crop:{x:20,y:80},useName:false},token);
+assert.equal((await call('/api/world',undefined,token)).self.name,guest);
 // One room admits exactly 4 playable fighters and 100 camera-only viewers.
 // All 103 remaining entrants share the same simulated client IP, ensuring
 // the join throttle does not silently cap a school/gallery's shared network.

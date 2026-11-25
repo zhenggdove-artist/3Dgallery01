@@ -316,7 +316,7 @@ ui.addEventListener('firebase-login',async()=>{
     ui.setFirebaseLoginStatus(true,message);
   }
 });
-bindWantedList(ui,network,async destination=>{if(!controller)return;controller.teleport(destination.position);controller.yaw=destination.rotation;network.lastCorrectedSequence=network.stateSequence;network.sentStates.clear();network.lastStateAt=0;if(self?.role==='fighter')network.sendState(controller.state());ui.closePanel();});
+bindWantedList(ui,network,async destination=>{if(!controller)return;controller.teleport(destination.position);controller.yaw=destination.rotation;network.lastCorrectedSequence=network.stateSequence;network.sentStates.clear();network.lastStateAt=0;if(self?.role==='fighter')network.sendState(controller.state());ui.closePanel();},(action,data)=>sendAction(action,data,{throwOnError:true}));
 ui.addEventListener('join',async event=>{
    if(event.detail?.mode==='guest'&&ui.googleAuthenticated)
      return ui.joinError('Google account already selected. Enter with Google instead.');
