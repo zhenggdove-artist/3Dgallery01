@@ -47,6 +47,7 @@ test('every weapon receives a smaller warning with its quality multiplier',()=>{
    stats.range=+(item.chargedRange*q.range).toFixed(2);
    stats.radius=Math.max(stats.radius,5.9*q.visual);
   }
+  if(item.id==='goldfish')stats.range=+(stats.range*.5).toFixed(3);
   applySkillAreaScale(stats,item);
   assert.ok(Math.abs(v.footprint.range-stats.range)<.001,item.id);
   if(item.id.startsWith('pan-')||item.id.startsWith('whip-')){

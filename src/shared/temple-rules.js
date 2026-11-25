@@ -15,7 +15,7 @@ import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,shopPrice,shopPriceKey,shopPurchaseVariant,shopResalePrice,registerCustomWings,groundDropRoll,monsterDropRoll,isRestorativeDrop} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
-import {CITY_LOTS,CITY_MAX_HP,SIGN_HP,citySignSpecs,structureSignSpecs,signPaintWall,signPaintAvailable,signPaintPoint,structurePaintLot,signWorldPosition,signRayDistance,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
+import {CITY_LOTS,CITY_MAX_HP,SIGN_HP,citySignSpecs,structureSignSpecs,signPaintWall,signPaintAvailable,signPaintPoint,structurePaintLot,signWorldPosition,signRayDistance,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp,cityFacadeFloor} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
@@ -1149,6 +1149,10 @@ function attack(world,profile,actor,body,context,now){
     return {error:'Staff channel is not active'};
   if(body.phase==='charge'){
    if(profile.channelWeapon&&isLiveStaffChannel(profile,now,world))return {charging:true};
+   refreshMana(profile,now,world);
+   if(profile.mana+1e-6<weaponManaQuote(world,weapon,profile.fusion?.[weapon.id]).initial){
+    profile.chargeStartedAt=0;return {error:'Not enough mana'};
+   }
    profile.chargeStartedAt=now;return {charging:true};
   }
   if(now-profile.lastAttackAt<(channel?channelInterval(weapon):weapon.cooldown))return {error:'Weapon is recovering'};
@@ -1231,6 +1235,7 @@ function attack(world,profile,actor,body,context,now){
   const area=stats.ultimate&&weapon.id!=='goldfish'&&!waveVortex?chargedArea(weapon,origin,direction,stats,groundForSpell,channel||(weapon.family==='ice'&&stats.ultimate)):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate,now):null;
   const fusionEchoes=[];
+  const deferredStructures=stats.ultimate&&(weapon.id==='jellybrella'||weapon.id==='goldfish'||weapon.id==='fan'||returningStructureWeapon(weapon));
   const sniperMaterialBonus=(profile.fusion?.[weapon.id]?.sources||[]).filter(s=>s.id==='black-cat'&&!s.echo).reduce((sum,s)=>sum+sniperMaterialStat(itemById('black-cat'),stats.ultimate?'chargeDamage':'damage')*.3,0);
   const sniperMaterialRatio=1+sniperMaterialBonus/Math.max(1,Number(itemById(weapon.id)?.[stats.ultimate?'chargeDamage':'damage'])||1);
   const pvpDamage=(sustained?sustained.hit*quality.damage*(1+(enchants.damage+enchants.attack)/100)*(1+enchants.charge/100):pvpShotDamage(weapon,stats,quality))*tuningRatio*sniperMaterialRatio;
@@ -1345,14 +1350,16 @@ function attack(world,profile,actor,body,context,now){
   const structureHits=[],structureDestroyedEvents=[];
   // Evaluate builds regardless of hits on characters/monsters. Area attacks
   // reach every matching structure; directional attacks hit the nearest one.
-  if(!returningGiraffe&&!waveVortex&&tuningRatio!==0){
+  if(!deferredStructures&&!returningGiraffe&&!waveVortex&&tuningRatio!==0){
    const signHits=structureSignHits(world,origin,direction,stats.range,area,Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*.7)),now);
    for(const event of signHits){structureHit??=event;structureHits.push(event);}
   }
-  const candidates=(world.structures||[]).filter(v=>v.owner!=='temple').map(v=>{
-   const point=[v.position[0],v.position[1]+structureHeight(v)*.5,v.position[2]],along=project(origin,direction,point);
-   const inside=area&&['area','sector'].includes(area.mode)?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<(weapon.pattern==='scatter'?.65+along*(stats.ultimate?.56:.32):stats.radius)+structureRadius(v);
-   return {v,along,inside};
+  const candidates=deferredStructures?[]:(world.structures||[]).filter(destructibleStructure).map(v=>{
+   const boxes=structureBoxes(v),point=[v.position[0],v.position[1]+structureHeight(v)*.5,v.position[2]];
+   const along=project(origin,direction,point);
+   const radius=weapon.pattern==='scatter'?.65+Math.max(0,along)*(stats.ultimate?.56:.32):stats.radius;
+   const distance=area&&['area','sector'].includes(area.mode)?(boxes.some(b=>areaTouchesBox(area,b))?0:null):firstBoxContact(boxes,origin,direction,stats.range,radius);
+   return {v,along:distance??along,inside:distance!==null};
   }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
   for(const {v:structure,along} of (returningGiraffe||waveVortex?[]:area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
    const damage=tuningRatio===0?0:Math.round(Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*.7))*(weapon.pattern==='scatter'?shotgunDistanceScale(along,stats.range):1));if(damage<=0)continue;
@@ -1365,7 +1372,7 @@ function attack(world,profile,actor,body,context,now){
   // The city's structural impact follows weapon damage and charged strength,
   // without changing PvP damage or displaying health numbers on the building.
   const structuralDamage=tuningRatio===0?0:Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*(charge>=1?1.5:1.1)));
-  const city=returningGiraffe||waveVortex||!structuralDamage?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now,weapon.pattern==='scatter');
+  const city=deferredStructures||returningGiraffe||waveVortex||!structuralDamage?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now,weapon.pattern==='scatter',stats.radius);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,
@@ -1731,13 +1738,13 @@ function rayHitsMonster(origin,direction,range,monster,radius){
 function normalDirection(value){if(!Array.isArray(value)||value.length!==3||!value.every(Number.isFinite))return null;const length=Math.hypot(...value);if(length<.5||length>1.5)return null;return value.map(n=>n/length);}
 function project(origin,direction,point){return (point[0]-origin[0])*direction[0]+(point[1]-origin[1])*direction[1]+(point[2]-origin[2])*direction[2];}
 function perpendicular(origin,direction,point,along){return Math.hypot(point[0]-origin[0]-direction[0]*along,point[1]-origin[1]-direction[1]*along,point[2]-origin[2]-direction[2]*along);}
-export function structureSignHits(world,origin,direction,range,area,damage,now){
+export function structureSignHits(world,origin,direction,range,area,damage,now,due=()=>true,mark=()=>{}){
  const hits=[],candidates=[];
  for(const structure of world.structures||[]){
-  if(structure.kind!=='house'||structure.owner==='temple'||structure.hp<=0)continue;
+  if(structure.kind!=='house'||structure.hp<=0)continue;
   const lot={x:structure.position[0],y:structure.position[1],z:structure.position[2],yaw:structure.rotation||0};
   for(const sign of structureSignSpecs(structure)){
-   if((structure.signDamage?.[sign.id]??SIGN_HP)<=0)continue;
+   if((structure.signDamage?.[sign.id]??SIGN_HP)<=0||!due(structure.id+':'+sign.id))continue;
    const point=signWorldPosition(lot,sign),radius=Math.hypot(sign.width,sign.height,sign.depth)/2;
    const distance=area&&['area','sector'].includes(area.mode)?(insideChargedArea(area,point,radius)?0:null):signRayDistance(lot,sign,origin,direction,range);
    if(distance!==null)candidates.push({structure,sign,point,distance});
@@ -1745,7 +1752,7 @@ export function structureSignHits(world,origin,direction,range,area,damage,now){
  }
  candidates.sort((a,b)=>a.distance-b.distance);
  for(const {structure,sign,point} of (area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
-  structure.signDamage??={};const hp=Math.max(0,(structure.signDamage[sign.id]??SIGN_HP)-damage);structure.signDamage[sign.id]=hp;
+  mark(structure.id+':'+sign.id);structure.signDamage??={};const hp=Math.max(0,(structure.signDamage[sign.id]??SIGN_HP)-damage);structure.signDamage[sign.id]=hp;
   hits.push({id:id(),structureId:structure.id,kind:'house-sign',part:sign.id,partDestroyed:hp===0,position:point,signColor:sign.color,signSize:[sign.width,sign.height,sign.depth],rotation:structure.rotation||0,hp:structure.hp,maxHp:structure.maxHp,damage,time:now});
  }
  return hits;
@@ -1779,21 +1786,141 @@ function damageCityLot(world,lot,part,damage,now,position=null){
   hp:state.hp,maxHp:CITY_MAX_HP,damage,time:now};
  return {event,destroyed:stage===3?{...event,id:lot.id,rotation:lot.yaw}:null};
 }
-function cityWeaponHits(world,origin,direction,range,area,damage,now,scatter=false){
+
+// Buildings are tested against their actual rotated volume, not a single
+// midpoint at a fixed height. The spatial index bounds all city queries.
+const destructibleStructure=s=>s.hp>0&&(s.owner!=='temple'||s.kind==='house');
+const returningStructureWeapon=w=>w.id==='giraffe'||w.family==='wave';
+function structureBoxes(s){
+ const dims=s.gmHouse?[s.house.width,s.house.height,s.house.depth]:
+  ({house:[5,3.8,4],cube:[2,2,2],bar:[6,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4],tree:[2.8,4,2.8],cylinder:[2,2,2]}[s.kind]||[2,2,2]);
+ return [{x:s.position[0],z:s.position[2],bottom:s.position[1],top:s.position[1]+dims[1],w:dims[0],d:dims[2],yaw:s.rotation||0}];
+}
+function cityBoxes(lot,world){
+ const hp=world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP;if(hp<=0)return [];
+ const roof=cityRoofHeightAtHp(lot,hp),out=[],c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
+ for(let i=0;i<lot.floors;i++){
+  const f=cityFacadeFloor(lot,i);if(f.bottom>=roof)break;
+  out.push({x:lot.x+c*f.shift+s*f.setback,z:lot.z-s*f.shift+c*f.setback,
+   bottom:f.bottom,top:Math.min(roof,f.top),w:f.w,d:f.d,yaw:lot.yaw});
+ }
+ return out;
+}
+function boxLocal(b,p){
+ const x=p[0]-b.x,z=p[2]-b.z,c=Math.cos(b.yaw),s=Math.sin(b.yaw);
+ return [x*c-z*s,p[1],x*s+z*c];
+}
+function closestBoxPoint(b,p){
+ const [x,y,z]=boxLocal(b,p),u=clamp(x,-b.w/2,b.w/2),v=clamp(z,-b.d/2,b.d/2),c=Math.cos(b.yaw),s=Math.sin(b.yaw);
+ return [b.x+c*u+s*v,clamp(y,b.bottom,b.top),b.z-s*u+c*v];
+}
+function areaTouchesBox(area,b,elapsed=Infinity){
+ if(!area)return false;
+ if(area.shape==='ice-line'){
+  return area.segments.some(part=>{
+   if(elapsed<part.delayMs+280||elapsed!==Infinity&&elapsed>=part.delayMs+ICE_ERUPTION_VISIBLE_MS)return false;
+   const q=closestBoxPoint(b,part.position);
+   return Math.hypot(q[0]-part.position[0],q[2]-part.position[2])<=area.radius&&Math.abs(q[1]-part.position[1])<=Math.max(3,area.radius*.7);
+  });
+ }
+ const p=area.mode==='sector'?area.apex:area.center;
+ if(!p)return false;
+ if(area.mode==='sector'){
+  const y=clamp(p[1],b.bottom,b.top);
+  if(Math.abs(y-p[1])>Math.max(3,area.radius*.7))return false;
+  return insideChargedArea(area,[b.x,y,b.z],Math.hypot(b.w,b.d)/2);
+ }
+ const q=closestBoxPoint(b,p);
+ return insideChargedArea(area,q,0);
+}
+function firstBoxContact(boxes,origin,direction,range,radius=0){
+ let nearest=null;
+ for(const b of boxes){
+  const o=boxLocal(b,origin),c=Math.cos(b.yaw),s=Math.sin(b.yaw);
+  const d=[direction[0]*c-direction[2]*s,direction[1],direction[0]*s+direction[2]*c];
+  const mins=[-b.w/2-radius,b.bottom-radius,-b.d/2-radius],maxs=[b.w/2+radius,b.top+radius,b.d/2+radius];
+  let near=0,far=range;
+  for(let i=0;i<3;i++){
+   if(Math.abs(d[i])<1e-8){if(o[i]<mins[i]||o[i]>maxs[i]){near=Infinity;break;}continue;}
+   const a=(mins[i]-o[i])/d[i],z=(maxs[i]-o[i])/d[i];near=Math.max(near,Math.min(a,z));far=Math.min(far,Math.max(a,z));if(near>far)break;
+  }
+  if(near<=far&&near<=range&&(nearest===null||near<nearest))nearest=near;
+ }
+ return nearest;
+}
+function queueBuildingHit(world,event,destroyed=null){
+ world.pendingArtworkVisualEvents??=[];
+ world.pendingArtworkVisualEvents.push({kind:'structure-hit',event});
+ if(destroyed)world.pendingArtworkVisualEvents.push({kind:'structure-destroyed',event:destroyed});
+}
+function persistentBuildingContacts(world,fx,now,contact,damage,interval=Infinity){
+ if(!(damage>0)||now>=fx.expiresAt&&interval!==Infinity)return false;
+ const {origin,direction,range,radius,area}=contact;
+ const at=area?(area.mode==='sector'?area.apex:area.center):origin.map((v,i)=>v+direction[i]*range*.5);
+ const reach=area?(area.mode==='sector'||area.shape==='ice-line'?area.range:area.radius):range*.5+radius;
+ const intersects=boxes=>area?boxes.some(b=>areaTouchesBox(area,b,now-fx.createdAt)):firstBoxContact(boxes,origin,direction,range,radius)!==null;
+ fx.buildingHitTimes??={};
+ const due=key=>!(key in fx.buildingHitTimes)||now>=fx.buildingHitTimes[key];
+ const mark=key=>{fx.buildingHitTimes[key]=Number.isFinite(interval)?now+interval:1e15;};
+ const amount=Math.max(1,Math.round(damage));let changed=false;
+ for(const s of [...(world.structures||[])]){
+  if(!destructibleStructure(s)||!due(s.id)||!intersects(structureBoxes(s)))continue;
+  mark(s.id);s.maxHp??=s.kind==='house'?220:s.kind==='tree'?90:140;s.hp=Math.max(0,s.hp-amount);
+  const hit={id:id(),structureId:s.id,kind:s.kind,position:[...s.position],hp:s.hp,maxHp:s.maxHp,damage:amount,time:now};
+  queueBuildingHit(world,hit,s.hp===0?structureEvent(s,now):null);
+  if(s.hp===0)world.structures.splice(world.structures.indexOf(s),1);changed=true;
+ }
+ for(const lot of cityCollisionCandidates(at[0],at[2],reach+8)){
+  if((world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0||!due(lot.id)||!intersects(cityBoxes(lot,world)))continue;
+  mark(lot.id);const result=damageCityLot(world,lot,'masonry',amount,now);
+  if(result){queueBuildingHit(world,result.event,result.destroyed);changed=true;}
+ }
+ // Sign damage uses its own part HP and cooldown, so a sign cannot shield
+ // the masonry forever. Existing paint/removal events stay authoritative.
+ if(area){
+  for(const hit of structureSignHits(world,origin||at,direction||[0,0,1],range||0,area,amount,now, due,mark)){
+   queueBuildingHit(world,hit);changed=true;
+  }
+  for(const lot of cityCollisionCandidates(at[0],at[2],reach+8)){
+   if((world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
+   for(const sign of citySignSpecs(lot)){
+    const key=lot.id+':'+sign.id,point=signWorldPosition(lot,sign);
+    if(!due(key)||(world.cityDamage?.[lot.id]?.parts?.[sign.id]??SIGN_HP)<=0||!insideChargedArea(area,point,Math.hypot(sign.width,sign.height,sign.depth)/2))continue;
+    mark(key);const result=damageCityLot(world,lot,sign.id,amount,now,point);
+    if(result){queueBuildingHit(world,result.event);changed=true;}
+   }
+  }
+ }
+ return changed;
+}
+function sweptBuildingContacts(world,fx,now,a,b,radius,damage,interval=Infinity){
+ const delta=b.map((v,i)=>v-a[i]),range=Math.hypot(...delta),direction=range>1e-8?delta.map(v=>v/range):[0,0,1];
+ return persistentBuildingContacts(world,fx,now,{origin:a,direction,range,radius},damage,interval);
+}
+function cityWeaponHits(world,origin,direction,range,area,damage,now,scatter=false,radius=0){
  const impactDamage=point=>scatter?Math.round(damage*shotgunDistanceScale(Math.max(0,project(origin,direction,point)),range)):damage;
  const hits=[],destroyed=[];
  if(area&&['area','sector'].includes(area.mode)){
-  for(const lot of CITY_LOTS){
+  const center=area.mode==='sector'?area.apex:area.center;
+  for(const lot of cityCollisionCandidates(center[0],center[2],(area.mode==='sector'||area.shape==='ice-line'?area.range:area.radius)+8)){
    if((world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
    const point=[lot.x,Math.min(lot.height*.4,1.4),lot.z];
-   if(!insideChargedArea(area,point,Math.hypot(lot.width,lot.depth)*.43))continue;
+   if(!cityBoxes(lot,world).some(b=>areaTouchesBox(area,b)))continue;
    const result=damageCityLot(world,lot,'masonry',impactDamage(point),now,point);
    if(result){hits.push(result.event);if(result.destroyed)destroyed.push(result.destroyed);}
    if(result&&!result.destroyed)for(const sign of citySignSpecs(lot)){const p=signWorldPosition(lot,sign);if((world.cityDamage[lot.id]?.parts?.[sign.id]??SIGN_HP)>0&&insideChargedArea(area,p,Math.hypot(sign.width,sign.height,sign.depth)/2)){const hit=damageCityLot(world,lot,sign.id,impactDamage(p),now,p);if(hit)hits.push(hit.event);}}
-   if(hits.length>=24)break;
   }
  }else{
-  const target=cityRaycast(origin,direction,range,world.cityDamage);
+  let target=cityRaycast(origin,direction,range,world.cityDamage);
+  // Finite-width spells may graze a facade without their central ray
+  // crossing it. Preserve exact component hits when the central ray hits.
+  if(!target){
+   const at=origin.map((v,i)=>v+direction[i]*range*.5);
+   for(const lot of cityCollisionCandidates(at[0],at[2],range*.5+radius+8)){
+    const distance=firstBoxContact(cityBoxes(lot,world),origin,direction,range,radius);
+    if(distance!==null&&(!target||distance<target.distance))target={lot,distance,part:'masonry',position:origin.map((v,i)=>v+direction[i]*distance)};
+   }
+  }
   if(target){
    const result=damageCityLot(world,target.lot,target.part,impactDamage(target.position),now,target.position);
    if(result){hits.push(result.event);if(result.destroyed)destroyed.push(result.destroyed);}
@@ -2085,6 +2212,27 @@ function tickPersistentAttacks(world,actors,now,rng){
    const panBlast=!fx.echo&&/^pan-[1-5]$/.test(weapon.id)&&fx.charge>=1;
    const palmStorm=/^palm-[1-5]$/.test(weapon.id)&&fx.charge>=1&&fx.area?.mode==='area';
    const alreadyHit=new Set(fx.hits||[]);
+   if(fx.echo||weapon.id==='jellybrella'&&fx.charge>=1){
+    const damage=fx.damageRatio===0?0:fx.damage;
+    const area=fx.area,interval=palmStorm?PALM_STORM_TICK_MS:contactDamageIntervalMs(weapon);
+    if(area?.mode==='area'){
+     const ready=fx.iceGround?now>=fx.createdAt+280:weapon.id==='jellybrella'||palmStorm||next>=1;
+     if(ready&&now<fx.expiresAt&&now>=(fx.nextBuildingScanAt||0)){
+      fx.nextBuildingScanAt=now+(fx.iceGround?100:interval);
+      changed=persistentBuildingContacts(world,fx,now,{area},damage,fx.iceGround?Infinity:interval)||changed;
+     }
+    }else if(area?.mode==='sector'){
+     const crest=t=>weapon.family==='saber'?saberWaveCrest(fx.range,t):clamp((t*2.18-.2)/1.98,0,1)**2*(3-2*clamp((t*2.18-.2)/1.98,0,1))*fx.range;
+     const reach=crest(next);
+     if(reach>crest(prev))changed=persistentBuildingContacts(world,fx,now,{area:{...area,range:reach}},damage)||changed;
+    }else if(fx.channel||next>prev){
+     const a=fx.origin.map((v,i)=>v+fx.direction[i]*(fx.channel?0:prev*fx.range));
+     const b=fx.origin.map((v,i)=>v+fx.direction[i]*(fx.channel?fx.range:next*fx.range));
+     changed=sweptBuildingContacts(world,fx,now,a,b,fx.radius,damage,fx.channel?interval:Infinity)||changed;
+    }else if(area?.mode==='corridor'&&next>=1&&now<fx.expiresAt){
+     changed=sweptBuildingContacts(world,fx,now,fx.origin,fx.origin.map((v,i)=>v+fx.direction[i]*fx.range),fx.radius,damage,interval)||changed;
+    }
+   }
    const outcome=(target,position,impact,pellet=null,along=0)=>{
     const enemy=target.value,key=(enemy.id||enemy.key),isPlayer=target.kind==='player';
     if(enemy.key===fx.owner||(isPlayer&&insideSafeZone(enemy.position)))return false;
@@ -2185,7 +2333,7 @@ function tickPersistentAttacks(world,actors,now,rng){
       if(enemy.key===fx.owner||(target.kind==='player'&&insideSafeZone(enemy.position)))continue;
       const point=[enemy.position[0],enemy.position[1]+(target.kind==='player'?1:1.25),enemy.position[2]];
       if(!insideChargedArea(fx.area,point,target.kind==='player'?1.02:ENEMY_RADIUS))continue;
-      if(fx.echo&&fx.parentFootprint&&!insideSpellFootprint(fx.parentFootprint,point))continue;
+
       const center=[enemy.position[0],enemy.position[1]+(target.kind==='player'?1:ENEMY_HEIGHT*.5),enemy.position[2]];
       if(outcome(target,center,point,null,fx.area.travel))changed=true;
      }
@@ -2211,7 +2359,7 @@ function tickPersistentAttacks(world,actors,now,rng){
      const center=target.kind==='player'
       ?[enemy.position[0],enemy.position[1]+1,enemy.position[2]]
       :[enemy.position[0],enemy.position[1]+ENEMY_HEIGHT*.5,enemy.position[2]];
-     if(fx.echo&&fx.parentFootprint&&!insideSpellFootprint(fx.parentFootprint,center))continue;
+
      const impact=start.map((v,i)=>v+fx.direction[i]*distance);
      if(outcome(target,center,impact,null,tail+distance))changed=true;
     }
@@ -2313,7 +2461,7 @@ function tickPersistentAttacks(world,actors,now,rng){
      const groundContact=[pos[0],enemy.position[1]+(target.kind==='player'?1:1.25),pos[2]];
      const contactRadius=target.kind==='player'?1.02:ENEMY_RADIUS;
      if(!self&&!(fx.area.shape==='ice-line'?iceEruptionContact(fx.area,groundContact,contactRadius,now-fx.createdAt):insideChargedArea(fx.area,groundContact,contactRadius)))continue;
-     if(fx.echo&&fx.parentFootprint&&!insideSpellFootprint(fx.parentFootprint,groundContact))continue;
+
      if(fx.iceGround&&(fx.iceHits||[]).includes(key))continue;
      if(self){
       // Detonation always recoils back onto the caster, even when the
@@ -2381,6 +2529,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    advanceHomingVortex(fx,aim?.value,elapsed,VORTEX_FLIGHT_MS);
    if(Math.hypot(fx.position[0]-start[0],fx.position[2]-start[2])>.001)changed=true;
    const radius=Math.max(2.1*(fx.gmTuning?.radiusScale??1),Math.min(7*(fx.gmTuning?.radiusScale??1),fx.radius*.5));
+   changed=sweptBuildingContacts(world,fx,now,start,fx.position,radius,fx.damageRatio===0?0:fx.channel&&!fx.echo?fx.damage:fx.damage*.18,VORTEX_DAMAGE_INTERVAL_MS)||changed;
    const spinMs=Math.max(1,Math.round(VORTEX_SPIN_MS*(fx.gmTuning?.effectDuration??1)));
    for(const target of candidates){
     const victim=target.value,key=victim.id||victim.key;
@@ -2448,7 +2597,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     for(let j=0;j<=stepCount;j++){
      const t=j/stepCount,point=a.map((v,i)=>v+(b[i]-v)*t);
      for(const structure of [...(world.structures||[])]){
-      if(structure.owner==='temple'||structureSeen.includes(structure.id))continue;
+      if(!destructibleStructure(structure)||structureSeen.includes(structure.id))continue;
       if(Math.abs(point[1]-(structure.position[1]+structureHeight(structure)*.5))>
         structureHeight(structure)*.5+fx.radius)continue;
       if(Math.hypot(point[0]-structure.position[0],point[2]-structure.position[2])>
@@ -2507,7 +2656,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    const previous=[...fx.position],heading=[...fx.direction];
    advanceGoldfishSchool(fx,aim?.value,Math.max(0,Math.min(now,fx.expiresAt)-fx.lastAt),flight);
    const travelled=Math.hypot(fx.position[0]-previous[0],fx.position[1]-previous[1],fx.position[2]-previous[2]);
-   if(travelled>.001)changed=true;
+   if(travelled>.001){changed=true;changed=sweptBuildingContacts(world,fx,now,previous,fx.position,fx.radius,fx.damageRatio===0?0:fx.damage,contactDamageIntervalMs({id:'goldfish'}))||changed;}
    // One authoritative flight; thirty swept fish bodies with independent,
    // once-per-victim hit histories. Each body deals exactly 20% of the old
    // fish's hit damage. One knockback/status per victim avoids 30 teleports.
@@ -2599,6 +2748,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     const side=Math.sin(seed+progress*12)*2.8+Math.sin(seed*2.7+progress*27)*1.5;
     const right=[fx.direction[2],0,-fx.direction[0]];
     const p=fx.origin.map((v,j)=>v+fx.direction[j]*travel+right[j]*side);
+    changed=sweptBuildingContacts(world,fx,now,p,p,(fx.echo?1.2:2.4)+fx.radius*.48,fx.damageRatio===0?0:fx.damage*.18,contactDamageIntervalMs({id:'fan'}))||changed;
     for(const target of targets){
      const value=target.value;if(value.key===fx.owner)continue;
      if(target.kind==='player'&&insideArtSanctuary(value.position))continue;

@@ -144,7 +144,7 @@ test('warning circle includes fused original range/radius and authoritative chan
  root.position.set(3,0,4);preview.update(root,item,1,direction,{world},fusion);
  assert.equal(preview.footprint.shape,'rectangle');
  assert.ok(Math.abs(preview.rectangle.group.scale.x*preview.rectangle.settings.length-
-  ((stats.range)))<1e-7);
+  (stats.range/Math.hypot(...direction)))<1e-7);
  preview.dispose();
 });
 

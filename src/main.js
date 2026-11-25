@@ -140,6 +140,11 @@ function scheduleBeamChannelStart(delay){
    scheduleBeamChannelStart(260);
  },Math.max(0,delay));
 }
+function stopInsufficientCharge(){
+ attackHeld=false;attackHoldStarted=null;chargeStarted=null;chargeRequest=null;lastWarnedCast=null;clearChargeDelay();chargePreview.hide();
+ if(localRoot){localRoot.userData.staffCasting=false;localRoot.userData.staffCastingUntil=0;}
+ ui.toast('NOT ENOUGH MANA');
+}
 function startHeldCharge(){
  if(!attackHeld||attackHoldStarted===null||chargeStarted!==null||chargeRequest||staffChannel||
     !controller?.enabled||performance.now()<nextChargeRetryAt)return;
@@ -147,12 +152,22 @@ function startHeldCharge(){
  // ultimate must remain chargeable ONLY before entering shoulder mode.
  if(currentTunedWeapon()?.id==='goldfish'&&gun.mode!==0)return;
  if(currentTunedWeapon()?.id==='black-cat')return;
- chargeStarted=performance.now();
- chargeRequest=sendAction('attack',{phase:'charge'}).then(result=>{
-  if(!result?.charging&&attackHeld){
-   chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;
-  }
+ const item=currentTunedWeapon();
+ if(!item||!world?.profile)return;
+ const quote=weaponManaQuote(world,item,world.profile.fusion?.[item.id]);
+ if(Number(world.profile.mana)+1e-6<quote.initial){stopInsufficientCharge();return;}
+ const started=performance.now(),hold=attackHoldStarted;
+ // Do not render the warning until the server has approved charge.
+ chargeRequest=sendAction('attack',{phase:'charge'},{throwOnError:true}).then(result=>{
+  if(result?.charging&&attackHeld&&attackHoldStarted===hold)chargeStarted=started;
+  else if(attackHeld&&attackHoldStarted===hold){chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;}
   return result;
+ }).catch(error=>{
+  if(attackHeld&&attackHoldStarted===hold){
+   if(/not enough mana/i.test(error.message||''))stopInsufficientCharge();
+   else{chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;ui.toast(error.message);}
+  }
+  return null;
  });
  audio.play('charge',.62);
  // Original vendor #08 and #29 now become visible on the FIRST channel pulse.
@@ -639,14 +654,14 @@ ui.addEventListener('attack-release',async()=>{
  if(weapon?.id==='goldfish'){
   if(gun.mode===1){gun.cycle();return;} // scoped A remains camera-only
   if(heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
-  if(pending)await pending;
+  if(pending&&!(await pending)?.charging)return;
   if(charge>=1)await performAttack(1,null,releaseAim); // original full-size red fish
   else void sendAction('attack',{phase:'channel-stop'}); // clear interrupted charge
   return;
  }
  if(weapon?.id==='black-cat'){if(heldMs<STAFF_TAP_MAX_MS)gun.cycle();return;}
  if(weapon?.firstPerson&&heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
- if(heldMs>=STAFF_TAP_MAX_MS&&pending)await pending;
+ if(heldMs>=STAFF_TAP_MAX_MS&&pending&&!(await pending)?.charging)return;
  if(isChannelStaff(weapon)){
   if(isStaffTap(weapon,heldMs)){
    if(localRoot)localRoot.userData.staffCastingUntil=Infinity;
@@ -1115,6 +1130,7 @@ function update(dt,time,movementDt=dt){
   }
   updateKnockdowns();arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}updatePlayerSpeech();artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
   const heldItem=castingItem||itemById('clam');
+  if(chargeStarted!==null&&!staffChannel&&attackHeld&&world?.profile&&Number(world.profile.mana)+1e-6<weaponManaQuote(world,heldItem,world.profile.fusion?.[heldItem.id]).initial)stopInsufficientCharge();
   if(heldItem.id!=='black-cat'&&attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&
      performance.now()-attackHoldStarted>=STAFF_TAP_MAX_MS)startHeldCharge();
   const charge=heldItem.id==='black-cat'||chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
@@ -1148,7 +1164,7 @@ function update(dt,time,movementDt=dt){
    }else lastHealVisualAt=0;
   if(charge>=1&&!isChannelStaff(heldItem)&&heldItem?.autoCharge&&!autoChargeBusy){
    autoChargeBusy=true;const pending=chargeRequest,releaseAim=captureReleasedCast(heldItem,1);chargeStarted=null;
-   Promise.resolve(pending).then(async()=>{await performAttack(1,null,releaseAim);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeStarted=performance.now();chargeRequest=sendAction('attack',{phase:'charge'});}}).finally(()=>autoChargeBusy=false);
+   Promise.resolve(pending).then(async()=>{await performAttack(1,null,releaseAim);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeRequest=null;startHeldCharge();}}).finally(()=>autoChargeBusy=false);
   }
   arena.presentation.charging(localRoot,charge);
   const chargedWeapon=castingItem;

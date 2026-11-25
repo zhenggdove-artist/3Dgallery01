@@ -128,7 +128,7 @@ test('a single 100ms raise is continuous across tap release and server ack',()=>
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.match(main,/staffCastingUntil=Infinity/);
  assert.match(main,/STAFF_RAISE_SECONDS\*1000-heldMs/);
- assert.match(main,/await performAttack\(0\)/);
+ assert.match(main,/await performAttack\(0,null,releaseAim\)/);
  assert.match(main,/controller\.channelAiming=!!\(attackHeld&&isChannelStaff/);
 });
 

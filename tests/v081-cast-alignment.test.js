@@ -36,7 +36,7 @@ test('authoritative normal and charged attacks retain captured origin after move
   const item=itemById(id);assert.ok(item,id);
   for(const full of [false,true]){
    const world=createInitialWorld(now),p=ensureProfile(world,actor.key,actor.name,actor.color,now);
-   p.inventory.push(id);p.equipment.weapon=id;p.mana=10000;
+   p.inventory.push(id);p.equipment.weapon=id;p.mana=p.maxMana;
    const origin=[75.5,1.16,.5],direction=[0,0,1],ms=item.chargeMs||1500;
    if(full)assert.equal(applyAction(world,actor,{action:'attack',phase:'charge'},{now:now+1000}).charging,true,id);
    const time=now+1000+(full?ms+200:0);
