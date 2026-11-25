@@ -30,7 +30,8 @@ export async function wantedApi(room,request,session,url){
   const b=new Uint8Array(size);let at=0;for(const chunk of chunks){b.set(chunk,at);at+=chunk.length;}
   if(size<12||!magic(type,b))return json({error:'Invalid image bytes'},400);
   // One unpublished image per profile. Published avatar and GM background remain.
-  const keep=new Set([profile.wanted?.avatar,admin?world.wantedSettings?.background:null]);
+  const current=room.readWorld(),currentProfile=current.profiles[session.profile_key];
+  const keep=new Set([currentProfile?.wanted?.avatar,admin?current.wantedSettings?.background:null]);
   room.ctx.storage.transactionSync(()=>{for(const row of sql.exec('SELECT id FROM wanted_media WHERE owner=?',profile.key).toArray())if(!keep.has(row.id))removeMedia(sql,row.id);});
   const id=crypto.randomUUID();room.ctx.storage.transactionSync(()=>{sql.exec('INSERT INTO wanted_media VALUES(?,?,?,?,?)',id,profile.key,type,size,now);for(let i=0;i<size;i+=CHUNK)sql.exec('INSERT INTO wanted_chunks VALUES(?,?,?)',id,i/CHUNK,b.slice(i,i+CHUNK));});
   return json({id});
@@ -55,7 +56,7 @@ export async function wantedApi(room,request,session,url){
    if(!isGM)throw Error('GM only');const target=live.profiles[String(body.key||'')];if(!target?.wanted)throw Error('Artist not found');target.wanted.hidden=body.hidden!==false;
   }else if(body.action==='jump'){
    if(!live.profiles[String(body.key||'')]?.wanted||live.profiles[String(body.key||'')].wanted.hidden)throw Error('Artist not listed');
-   if(session.role==='fighter'&&(p.hp<=0||p.deadUntil>now||p.channelWeapon||p.writeJourney||p.effects?.freeze?.until>now||p.effects?.root?.until>now||p.vortexSpin?.until>now))throw Error('Cannot jump while dead, casting or immobilized');
+   if(session.role==='fighter'&&(p.hp<=0||p.deadUntil>now||p.channelWeapon||p.writeJourney||p.effects?.freeze?.until>now||p.effects?.root?.until>now||p.vortexSpin?.until>now||Object.values(live.artworks||{}).some(a=>a.holder===p.key)))throw Error('Cannot jump while dead, casting, immobilized or carrying artwork');
    if(now-(p.wantedJumpAt||0)<5000)throw Error('Wait 5 seconds between jumps');
    destination=wantedDestination(live,String(body.key));if(!destination)throw Error('No available artwork for this artist');
    p.wantedJumpAt=now;

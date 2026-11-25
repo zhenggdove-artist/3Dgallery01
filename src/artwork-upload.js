@@ -13,7 +13,7 @@ export async function prepareArtwork(files,{maxBytes=8*1024*1024}={}){
   try{
    if(!image.width||!image.height)throw Error('Image has no pixels.');
    const maxEdge=Math.max(image.width,image.height),keepPng=ext==='png';
-   // Preserve original PNG alpha/pixels if it already fits. JPEG/WebP stays
+   // Preserve small original PNG alpha/pixels. Larger stills use high-quality alpha-capable WebP. JPEG/WebP stays
    // efficiently compressed instead of expanding into a huge 4096px PNG.
    if(keepPng&&maxEdge<=4096&&file.size<=Math.min(maxBytes,2*1024*1024))blob=file;
    else{
@@ -29,6 +29,7 @@ export async function prepareArtwork(files,{maxBytes=8*1024*1024}={}){
      blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.92));
      if(!blob)throw Error('Image could not be encoded');
      if(blob.size<=targetBytes||blob.size<=maxBytes&&scale<=.75)break;
+     if(attempt===0&&scale===1&&file.size<=maxBytes&&blob.size>=file.size){blob=file;break;}
      scale*=Math.max(.65,Math.min(.9,Math.sqrt(targetBytes/blob.size)*.96));
     }
    }

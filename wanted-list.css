@@ -23,3 +23,5 @@
 .wanted-app .wanted-check{display:flex;align-items:center;gap:5px}
 .wanted-crop{width:112px;height:112px;touch-action:none;cursor:grab}
 .wanted-hidden{display:flex;flex-wrap:wrap;gap:3px}
+
+.wanted-art-row{display:flex;align-items:center;gap:4px;padding:5px;border-bottom:1px solid #888}.wanted-art-row>span{flex:1;min-width:0;overflow-wrap:anywhere}.wanted-art-row small{display:block}

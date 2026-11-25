@@ -324,12 +324,14 @@ ui.addEventListener('join',async event=>{
    if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.unlock(false);ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];
     // Keep login visible until every existing custom artwork is decoded and mounted.
     const enterButton=document.getElementById(ui.pendingLoginMode==='guest'?'guest-enter':'enter-button');enterButton.textContent='Loading gallery…';
-    let snapshot=data.world;for(let pass=0;pass<5;pass++){arena.world=snapshot;await arena.loadCustomArtworks(snapshot.customArtworks||[],network.base);const latest=await network.request('/api/world');if(JSON.stringify(latest.world.customArtworks||[])===JSON.stringify(snapshot.customArtworks||[])){data.world=latest.world;data.self=latest.self;data.players=latest.players;break;}if(pass===4)throw Error('Gallery changed during loading; enter again');snapshot=latest.world;}
-    world=data.world;self=data.self;players=data.players||[];arena.world=world;joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();audio.startMusic();
+    let snapshot=data.world;for(let pass=0;pass<5;pass++){arena.world=snapshot;await arena.loadCustomArtworks(snapshot.customArtworks||[],network.base);const latest=await network.request('/api/world',{timeoutMs:20000});if(JSON.stringify(latest.world.customArtworks||[])===JSON.stringify(snapshot.customArtworks||[])){data.world=latest.world;data.self=latest.self;data.players=latest.players;break;}if(pass===4)throw Error('Gallery changed during loading; enter again');snapshot=latest.world;}
+    world=data.world;self=data.self;players=data.players||[];arena.world=world;registerCustomWings(world.customWings||[]);
+    if(world.customArtworks?.length){enterButton.textContent='Preparing artwork textures…';const textures=new Set();for(const art of world.customArtworks){const root=arena.artworks.get(art.id);if(!root)throw Error('Artwork not ready: '+art.title);root.traverse(o=>{for(const material of Array.isArray(o.material)?o.material:o.material?[o.material]:[])for(const value of Object.values(material))if(value?.isTexture)textures.add(value);});}for(const texture of textures)renderer.initTexture(texture);await renderer.compileAsync(scene,camera);}
+    joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();audio.startMusic();
     void resumeWingCheckout(network,ui);
     // syncWorld already schedules the exact same custom artwork load.
     network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
-  catch(error){ui.joinError(error.message);}
+  catch(error){if(!joined&&network.token){network.close();network.token='';self=null;world=null;players=[];queuedWorld=null;}ui.joinError(error.message);}
 });
 
 function acceptWorldView(next){
@@ -355,6 +357,7 @@ network.addEventListener('world',event=>{
   queuedWorld=next;
 });
 network.addEventListener('wing-catalog',event=>{
+ if(!joined)return;
  const incoming=Array.isArray(event.detail?.wings)?event.detail.wings:[];
  const wings=mergeWingCatalog(world?.customWings||[],incoming);
  if(queuedWorld)queuedWorld={...queuedWorld,customWings:mergeWingCatalog(queuedWorld.customWings||[],wings)};
