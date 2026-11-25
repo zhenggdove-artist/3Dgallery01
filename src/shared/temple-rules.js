@@ -1,3 +1,4 @@
+import {wantedSettings,countWantedDeath} from './wanted-list.js';
 import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown,migrateSkillQuality,applySkillAreaScale,bloomHealRate} from './equipment-tuning.js';
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recovery.js';
@@ -274,7 +275,7 @@ export function publicProfile(profile){
 
 export function worldProfileView(world,actorKey,now){
  const profile=world.profiles[actorKey];
- return profile?{...publicProfile(profile),stats:playerStats(world,profile,now),starterWeaponId:profile.starterWeaponId,inventoryCapacity:inventoryCapacity(profile),inventoryCount:profile.inventory.length,inventory:clone(profile.inventory),quickSlots:clone(profile.quickSlots||[null,null,null]),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
+ return profile?{...publicProfile(profile),stats:playerStats(world,profile,now),wanted:clone(profile.wanted||null),starterWeaponId:profile.starterWeaponId,inventoryCapacity:inventoryCapacity(profile),inventoryCount:profile.inventory.length,inventory:clone(profile.inventory),quickSlots:clone(profile.quickSlots||[null,null,null]),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
 }
 
 export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true){
@@ -297,7 +298,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
        radiusScale:v.gmTuning?.radiusScale??1,consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    chatDefault:clone(world.chatDefault||null),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
+    wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -1352,6 +1353,7 @@ function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosit
   const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
   if(target.hp>0)return {target:targetActor.key,damage,defeated:false};
+  countWantedDeath(target,sourceProfile);
   target.deadUntil=now+5_000;target.lastKilledBy={key:sourceProfile?.key||null,name:cause==='monster'?'Art Master':sourceProfile?.name||(cause==='collector'?'COLLECTOR':'ENVIRONMENT'),time:now};
   world.killEvents??=[];world.killEvents.push({id:id(),time:now,killerKey:sourceProfile?.key||null,killerName:target.lastKilledBy.name,victimKey:target.key,victimName:target.name||targetActor.name||'PLAYER',cause});if(world.killEvents.length>24)world.killEvents.splice(0,world.killEvents.length-24);
   releasePlayerWorldState(world,targetActor.key,now);if(sourceProfile&&sourceProfile.key!==target.key)addXp(sourceProfile,60);const lost=Math.floor(target.wallet*ECONOMY.deathCoinFraction);target.wallet-=lost;

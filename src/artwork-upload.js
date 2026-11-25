@@ -15,10 +15,10 @@ export async function prepareArtwork(files,{maxBytes=8*1024*1024}={}){
    const maxEdge=Math.max(image.width,image.height),keepPng=ext==='png';
    // Preserve original PNG alpha/pixels if it already fits. JPEG/WebP stays
    // efficiently compressed instead of expanding into a huge 4096px PNG.
-   if(keepPng&&maxEdge<=4096&&file.size<=maxBytes)blob=file;
+   if(keepPng&&maxEdge<=4096&&file.size<=Math.min(maxBytes,2*1024*1024))blob=file;
    else{
     const canvas=document.createElement('canvas');
-    let scale=Math.min(1,4096/maxEdge);
+    let scale=Math.min(1,4096/maxEdge);const targetBytes=Math.min(maxBytes,3*1024*1024);
     for(let attempt=0;attempt<9;attempt++){
      canvas.width=Math.max(1,Math.round(image.width*scale));
      canvas.height=Math.max(1,Math.round(image.height*scale));
@@ -26,10 +26,10 @@ export async function prepareArtwork(files,{maxBytes=8*1024*1024}={}){
      if(!ctx)throw Error('Image conversion unavailable');
      ctx.clearRect(0,0,canvas.width,canvas.height);
      ctx.drawImage(image,0,0,canvas.width,canvas.height);
-     blob=await new Promise(resolve=>canvas.toBlob(resolve,keepPng?'image/png':'image/webp',.82));
+     blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.92));
      if(!blob)throw Error('Image could not be encoded');
-     if(blob.size<=maxBytes)break;
-     scale*=Math.max(.4,Math.min(.83,Math.sqrt(maxBytes/blob.size)*.88));
+     if(blob.size<=targetBytes||blob.size<=maxBytes&&scale<=.75)break;
+     scale*=Math.max(.65,Math.min(.9,Math.sqrt(targetBytes/blob.size)*.96));
     }
    }
   }finally{image.close();}

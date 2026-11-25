@@ -1,3 +1,4 @@
+import {bindWantedList,syncWantedButton} from './wanted-list.js';
 import {tunedEquipment,weaponManaQuote,restorativeCooldown} from './shared/equipment-tuning.js';
 import {equippedItem} from './shared/fusion-adapter.js';
 import {mergeWingCatalog} from './shared/world-patch.js';
@@ -315,11 +316,16 @@ ui.addEventListener('firebase-login',async()=>{
     ui.setFirebaseLoginStatus(true,message);
   }
 });
+bindWantedList(ui,network,async destination=>{if(!controller)return;controller.teleport(destination.position);controller.yaw=destination.rotation;network.lastCorrectedSequence=network.stateSequence;network.sentStates.clear();network.lastStateAt=0;if(self?.role==='fighter')network.sendState(controller.state());ui.closePanel();});
 ui.addEventListener('join',async event=>{
    if(event.detail?.mode==='guest'&&ui.googleAuthenticated)
      return ui.joinError('Google account already selected. Enter with Google instead.');
    if(joined||ui.joining)return;
-   if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.unlock(false);ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();audio.startMusic();
+   if(!assetsReady)return ui.joinError('Temple assets are still loading');audio.unlock(false);ui.joinBusy(true);try{network.setBackend(event.detail.backendUrl);const data=await network.join(event.detail);registerCustomWings(data.world?.customWings);arena.world=data.world;self=data.self;world=data.world;players=data.players||[];
+    // Keep login visible until every existing custom artwork is decoded and mounted.
+    const enterButton=document.getElementById(ui.pendingLoginMode==='guest'?'guest-enter':'enter-button');enterButton.textContent='Loading gallery…';
+    let snapshot=data.world;for(let pass=0;pass<5;pass++){arena.world=snapshot;await arena.loadCustomArtworks(snapshot.customArtworks||[],network.base);const latest=await network.request('/api/world');if(JSON.stringify(latest.world.customArtworks||[])===JSON.stringify(snapshot.customArtworks||[])){data.world=latest.world;data.self=latest.self;data.players=latest.players;break;}if(pass===4)throw Error('Gallery changed during loading; enter again');snapshot=latest.world;}
+    world=data.world;self=data.self;players=data.players||[];arena.world=world;joined=true;lastHealVisualAt=0;ui.enter(data);createLocalPlayer(data);syncPlayers();syncWorld();audio.startMusic();
     void resumeWingCheckout(network,ui);
     // syncWorld already schedules the exact same custom artwork load.
     network.chatHistory().then(history=>history.forEach(message=>ui.addChat(message))).catch(()=>{});}
@@ -327,7 +333,7 @@ ui.addEventListener('join',async event=>{
 });
 
 function acceptWorldView(next){
- if(!next)return false;
+ if(!next||!joined)return false;
  const existing=world?.customWings||[];
  const wings=mergeWingCatalog(existing,Array.isArray(next.customWings)?next.customWings:[]);
  if(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&next.revision<=world.revision){
@@ -336,7 +342,7 @@ function acceptWorldView(next){
  }
  if(wings!==existing)registerCustomWings(wings);world={...next,customWings:wings};syncWorld();return true;
 }
-network.addEventListener('welcome',event=>{const data=event.detail;self={...self,...data.self};players=data.players;syncPlayers();acceptWorldView(data.world);});
+network.addEventListener('welcome',event=>{if(!joined)return;const data=event.detail;self={...self,...data.self};players=data.players;syncPlayers();acceptWorldView(data.world);});
 // Coalesce high-frequency Worker snapshots: a busy attack can deliver many
 // world packets between animation frames. Only the freshest revision needs a
 // heavyweight UI/scene sync; the socket keeps receiving without blocking input.
@@ -356,7 +362,7 @@ network.addEventListener('wing-catalog',event=>{
  if(world){world={...world,customWings:wings};syncWorld();
   if(['wing-shop','wing-manage','bag'].includes(ui.panelName))ui.renderPanel();}
 });
-network.addEventListener('players',event=>{players=event.detail;syncPlayers();});
+network.addEventListener('players',event=>{if(!joined)return;players=event.detail;syncPlayers();});
 network.addEventListener('state',event=>{const data=event.detail;if(data.key===self?.key)return;let target=remoteTargets.get(data.key);if(!target){syncPlayers();target=remoteTargets.get(data.key);}if(target){target.position.fromArray(data.state.position);target.rotation=data.state.rotation;target.animation=data.state.animation;}});
 network.addEventListener('chat',event=>{ui.addChat(event.detail);showPlayerSpeech(event.detail);});
 network.addEventListener('chat-reset',()=>{ui.clearChat();for(const entry of speechBubbles.values())entry.element.remove();speechBubbles.clear();});
@@ -844,7 +850,7 @@ function syncPlayers(){
   // The authoritative private world is the ONLY owner of local equipment,
   // effects and impulses. A delayed cached roster can contain older combat
   // state even after the matching HTTP/WS world has been applied.
-  for(const player of players){if(player.role!=='fighter'||player.key===self.key)continue;const root=roots.get(player.key);if(root){arena.setPlayerEquipment(root,player.profile?.equipment);setHealthBar(root,player.profile?.hp,player.profile?.maxHp);root.userData.deadUntil=player.profile?.deadUntil||0;applyShieldHit(root,player.profile);applyHitReaction(root,player.profile);statusVisuals.sync(root,player.profile?.effects);}}
+  for(const player of players){if(player.role!=='fighter'||player.key===self.key)continue;const root=roots.get(player.key);if(root){arena.setPlayerName(root,player.name,player.profile?.admin);arena.setPlayerEquipment(root,player.profile?.equipment);setHealthBar(root,player.profile?.hp,player.profile?.maxHp);root.userData.deadUntil=player.profile?.deadUntil||0;applyShieldHit(root,player.profile);applyHitReaction(root,player.profile);statusVisuals.sync(root,player.profile?.effects);}}
   for(const [key,root] of roots)if(key!==self.key&&!live.has(key)){statusVisuals.clear(root);arena.removePlayer(root);roots.delete(key);remoteTargets.delete(key);}ui.setPlayers(players);
 }
 function applyShieldHit(root,profile){
@@ -901,7 +907,7 @@ function syncWorld(){if(!world)return;
  if(!previous||world.damageEvents!==previous.damageEvents)damageNumbers.receive(world.damageEvents);
  arena.sync(world,players);
  if(!previous||world.collector!==previous.collector)collectorView.sync(world.collector);
- ui.setWorld(world);ui.showCollectorSale(world.collectorSale,self?.key);ui.showKillEvents(world.killEvents);
+ syncWantedButton(world.wantedSettings,network.base);ui.setWorld(world);ui.showCollectorSale(world.collectorSale,self?.key);ui.showKillEvents(world.killEvents);
   // Monster deaths use the SAME purely visual golden burst as thrown artwork.
   // Server-issued IDs prevent repeats on sync/reconnect; no attack collider.
   for(const death of world.monsterDeathEvents||[]){
@@ -924,7 +930,7 @@ if(controller&&!dead&&Number(profile?.lastRespawnAt)>lastAppliedRespawnAt){
   if(self?.role==='fighter')network.sendState(controller.state());
  }
 }
-if(localRoot&&profile){arena.setPlayerEquipment(localRoot,profile.equipment);localRoot.userData.deadUntil=profile.deadUntil||0;applyShieldHit(localRoot,profile);applyHitReaction(localRoot,profile);
+if(localRoot&&profile){if(self.name!==profile.name){self.name=profile.name;ui.self.name=profile.name;document.getElementById('hud-name').textContent=profile.name;}arena.setPlayerName(localRoot,profile.name,profile.admin);arena.setPlayerEquipment(localRoot,profile.equipment);localRoot.userData.deadUntil=profile.deadUntil||0;applyShieldHit(localRoot,profile);applyHitReaction(localRoot,profile);
  if(profile.tidePush?.id&&profile.tidePush.id!==controller.lastTidePushId&&Date.now()-profile.tidePush.time<profile.tidePush.durationMs){
   controller.lastTidePushId=profile.tidePush.id;controller.tidePush={...profile.tidePush,progress:Math.max(0,(Date.now()-profile.tidePush.time)/profile.tidePush.durationMs)};
  }
@@ -1121,7 +1127,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V055',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V056',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

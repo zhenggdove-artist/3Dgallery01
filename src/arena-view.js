@@ -69,8 +69,9 @@ export class TempleArena{
   }
   createPlayer(color='#43b59a',admin=false,name='Pilgrim'){
     const root=new THREE.Group(),model=cloneSkeleton(this.characterAsset.scene);model.scale.setScalar(100);model.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(model);model.position.y=-bounds.min.y;tintCharacter(model,color,admin);root.add(model);
-    const ring=new THREE.Mesh(new THREE.RingGeometry(.46,.53,24),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.65,side:THREE.DoubleSide,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;root.add(ring);const label=makeNameSprite(name,admin);label.position.y=-.25;root.add(label);const weaponMount=new THREE.Group();weaponMount.position.set(.48,1.05,.1);weaponMount.rotation.set(0,0,-.55);root.add(weaponMount);const mixer=new THREE.AnimationMixer(model),actions={};for(const clip of this.characterAsset.animations)actions[clip.name]=mixer.clipAction(clip);actions.idle?.play();mixer.update(.001);model.updateMatrixWorld(true);model.position.y-=new THREE.Box3().setFromObject(model,true).min.y;model.updateMatrixWorld(true);const chatHeadY=new THREE.Box3().setFromObject(model,true).max.y+.4;root.userData={model,mixer,actions,current:'idle',ring,label,weaponMount,weaponId:null,chatHeadY,portraitBase:{position:model.position.clone(),quaternion:model.quaternion.clone(),scale:model.scale.clone()}};this.mixers.push(mixer);return root;
+    const ring=new THREE.Mesh(new THREE.RingGeometry(.46,.53,24),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.65,side:THREE.DoubleSide,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;root.add(ring);const label=makeNameSprite(name,admin);label.position.y=-.25;root.add(label);const weaponMount=new THREE.Group();weaponMount.position.set(.48,1.05,.1);weaponMount.rotation.set(0,0,-.55);root.add(weaponMount);const mixer=new THREE.AnimationMixer(model),actions={};for(const clip of this.characterAsset.animations)actions[clip.name]=mixer.clipAction(clip);actions.idle?.play();mixer.update(.001);model.updateMatrixWorld(true);model.position.y-=new THREE.Box3().setFromObject(model,true).min.y;model.updateMatrixWorld(true);const chatHeadY=new THREE.Box3().setFromObject(model,true).max.y+.4;root.userData={model,mixer,actions,current:'idle',ring,label,displayName:name,weaponMount,weaponId:null,chatHeadY,portraitBase:{position:model.position.clone(),quaternion:model.quaternion.clone(),scale:model.scale.clone()}};this.mixers.push(mixer);return root;
   }
+  setPlayerName(root,name,admin){if(!root||root.userData.displayName===name)return;const old=root.userData.label;if(old){const label=makeNameSprite(name,admin);label.position.copy(old.position);root.add(label);old.removeFromParent();old.material.map?.dispose();old.material.dispose();root.userData.label=label;}root.userData.displayName=name;}
   setPlayerEquipment(root,equipment){if(root)this.presentation.equipment(root,equipment);}
   removePlayer(root){
    const {model,mixer,ring,label}=root.userData;
@@ -210,8 +211,8 @@ export class TempleArena{
     }
     if(!this.customLoads.has(record.id)){
      const load=()=>this.expectedCustomIds?.has(record.id)?loadCustomArtwork(this,record,base):null;
-     const pending=touch?(this.customLoadQueue||Promise.resolve()).then(load):Promise.resolve().then(load);
-     if(touch)this.customLoadQueue=pending.catch(()=>{});
+     const lanes=this.customLoadLanes??=Array.from({length:touch?2:4},()=>Promise.resolve());const lane=(this.customLoadIndex=(this.customLoadIndex||0)+1)%lanes.length;
+     const pending=lanes[lane].then(load);lanes[lane]=pending.catch(()=>{});
      const task=pending.then(root=>{
       if(!root)return;
       if(!this.expectedCustomIds?.has(record.id)){disposeArtworkRoot(root);return;}

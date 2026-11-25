@@ -1,3 +1,4 @@
+import {initializeWanted,wantedApi,wantedMedia} from './wanted-api.js';
 import {initializeArtMedia,uploadArtMedia,getArtMedia} from './art-media.js';
 import {initializeWingOrders,wingPaymentStatus,wingCheckoutApi,wingOrderStatus,wingNotifyApi,paymentMode} from './ecpay-wing-payments.js';
 import {verifyFirebaseIdToken,firebaseWebConfig,firebaseProfileKey,isFirebaseGm} from './firebase-auth.js';
@@ -20,7 +21,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
@@ -46,7 +47,7 @@ export class TempleRoom extends DurableObject{
      // receive a nullable fighter-seat reservation for GM spectator testing.
      if(!this.sql.exec('PRAGMA table_info(sessions)').toArray().some(c=>c.name==='preview_seat'))
        this.sql.exec('ALTER TABLE sessions ADD COLUMN preview_seat INTEGER');
-     initializeArtMedia(this.sql);
+     initializeArtMedia(this.sql);initializeWanted(this.sql);
      initializeWingOrders(this.sql);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
@@ -85,7 +86,9 @@ export class TempleRoom extends DurableObject{
         const media=this.sql.exec('SELECT type,data FROM plant_media WHERE id=?',path.slice(11)).toArray()[0];
         return withCors(request,media?new Response(media.data,{headers:{'Content-Type':media.type,'X-Content-Type-Options':'nosniff','Cache-Control':'public,max-age=31536000,immutable'}}):json({error:'Media missing'},404),this.env);
       }
+      if(path.startsWith('/api/wanted/media/')&&request.method==='GET')return withCors(request,wantedMedia(this.sql,path.slice(18)),this.env);
       const token=this.token(request,url),session=this.session(token);if(!session)return withCors(request,json({error:'Session expired'},401),this.env);
+      if((path==='/api/wanted'||path==='/api/wanted/media')&&['GET','POST'].includes(request.method))return withCors(request,await wantedApi(this,request,session,url),this.env);
       if(path==='/api/wing-pay/status'&&request.method==='GET'){
        const profile=this.world().profiles[session.profile_key];
        return withCors(request,json(wingPaymentStatus(this.env,!!profile?.admin)),this.env);
@@ -159,7 +162,7 @@ export class TempleRoom extends DurableObject{
         existing=world.profiles[profileKey];
       }
     }
-    const name=admin?'Ely':existing?.name||body.name;
+    const name=existing?.wanted?.useName?existing.wanted.name:admin?'Ely':existing?.name||body.name;
     const color=existing?.color||body.color;
     if(!validName(name)||!validColor(color))
       return json({error:'首次登入請先設定角色名稱和顏色'},400);
@@ -176,7 +179,7 @@ export class TempleRoom extends DurableObject{
     const id=crypto.randomUUID(),expires=now+SESSION_MS;
     const profile=ensureProfile(world,profileKey,existing?null:name,
       existing?null:color,now,admin);
-    if(admin)profile.name='Ely';
+    if(admin&&!profile.wanted?.useName)profile.name='Ely';
     for(const row of this.sql.exec('SELECT id FROM sessions WHERE profile_key=?',profileKey).toArray())
       this.disconnectSession(row.id,false);
     this.ctx.storage.transactionSync(()=>{
@@ -251,7 +254,9 @@ export class TempleRoom extends DurableObject{
     // Spectators move their free camera locally; only four fighters send
     // authoritative pose streams. Do not fan out up to 100 viewer cameras.
     if(session.role!=='fighter')return;
-    const now=Date.now();if(now-meta.lastStateAt<70)return;const previous=session.state?JSON.parse(session.state):null,world=this.readWorld(),profile=world.profiles[session.profile_key],mobility=profile?{stats:playerStats(world,profile,now),channeling:isLiveStaffChannel(profile,now),effects:profile.effects,hitReaction:profile.hitReaction,impulse:profile.impulse,lastRespawnAt:profile.lastRespawnAt,lastWriteLanding:profile.lastWriteLanding,lastWriteLandingAt:profile.lastWriteLandingAt,cityDamage:world.cityDamage}:null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],profile?.writeJourney,now,mobility);
+    const now=Date.now();if(now-meta.lastStateAt<70)return;
+    if(meta.wantedJumpUntil>now&&Array.isArray(meta.wantedJumpPosition)){const pos=event.data?.position;if(!Array.isArray(pos)||Math.hypot(pos[0]-meta.wantedJumpPosition[0],pos[2]-meta.wantedJumpPosition[2])>8)return;delete meta.wantedJumpUntil;delete meta.wantedJumpPosition;ws.serializeAttachment(meta);}
+    const previous=session.state?JSON.parse(session.state):null,world=this.readWorld(),profile=world.profiles[session.profile_key],mobility=profile?{stats:playerStats(world,profile,now),channeling:isLiveStaffChannel(profile,now),effects:profile.effects,hitReaction:profile.hitReaction,impulse:profile.impulse,lastRespawnAt:profile.lastRespawnAt,lastWriteLanding:profile.lastWriteLanding,lastWriteLandingAt:profile.lastWriteLandingAt,cityDamage:world.cityDamage}:null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],profile?.writeJourney,now,mobility);
     const seq=Number.isSafeInteger(event.data?.seq)&&event.data.seq>0?event.data.seq:0;
     if(result.error){
       // Reject the specific input sample, not an unspecified older pose:
