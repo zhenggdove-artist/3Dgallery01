@@ -39,7 +39,7 @@ input,textarea,[contenteditable=true]{user-select:text;-webkit-user-select:text;
 #vitals #wallet{color:#ffe775;font-size:23px;font-weight:900;white-space:nowrap;text-shadow:0 1px #b69527,0 2px #9c741b,0 3px #705019,1px 4px 2px #000;animation:wallet-float 3s ease-in-out infinite}
 @keyframes wallet-float{50%{transform:translateY(-3px)}}
 #chat-hud{--chat-height:118px;bottom:max(7px,env(safe-area-inset-bottom) + 4px);height:var(--chat-height);width:clamp(150px,32vw,430px);display:flex;flex-direction:column}
-#chat-resize{display:flex;align-items:center;height:20px;min-height:20px;cursor:ns-resize;font-size:10px}
+#chat-resize{display:flex;align-items:center;height:20px;min-height:20px;cursor:grab;font-size:10px}
 #chat-toggle{width:26px;height:20px;padding:0;border:0;background:#edd3e5;color:#412d44}
 #chat-messages{height:auto!important;min-height:0;flex:1;padding:2px 5px;font-size:11px}
 #chat-form{padding:2px;flex:none;font-size:10px}#chat-form input{font-size:12px}
@@ -1032,7 +1032,7 @@ body.panel-open #panel:has(.shop-layout) #panel-content{display:flex!important;f
 @media(max-height:480px){#panel .shop-buy-controls{gap:2px;padding:2px 0 4px}#panel .shop-buy-controls .shop-purchase{gap:2px;padding:2px}#panel .shop-detail>.item>h3{font-size:12px;margin:0 0 2px}}
 
 /* Both CHAT + states must capture a drag before the browser starts scrolling. */
-#hud #chat-hud.chat-medium #chat-toggle,#hud #chat-hud.chat-minimized #chat-toggle{touch-action:none!important;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
+#hud #chat-hud.chat-max #chat-toggle,#hud #chat-hud.chat-medium #chat-toggle,#hud #chat-hud.chat-minimized #chat-toggle{touch-action:none!important;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
 #hud #chat-hud.chat-dragging #chat-toggle{cursor:grabbing}
 
 #entry [data-google-login][hidden],#entry #guest-form[hidden]{display:none!important}

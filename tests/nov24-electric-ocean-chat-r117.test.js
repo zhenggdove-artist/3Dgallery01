@@ -19,7 +19,7 @@ test('V035 grass meets the nebula with no ocean or extra ground annulus',()=>{
 test('CHAT plus starts moving on 5px motion or 180ms hold, rather than canceling the gesture',()=>{
  const s=read('src/chat-layout.js');assert.match(s,/MINI_DRAG_HOLD_MS=180,MINI_DRAG_SLOP=5/);
  assert.match(s,/Math.hypot\(dx,dy\)>=MINI_DRAG_SLOP\)\{\s*clearTimeout\(miniTimer\);miniDrag.mode='move'/);
- assert.match(s,/if\(size==='max'\|\|e.button!==0\|\|miniDrag\)return/);
+ assert.match(s,/if\(e.button!==0\|\|miniDrag\)return/);assert.match(s,/miniDrag.expanded\?DRAG_HOLD_MS:MINI_DRAG_HOLD_MS/);
  assert.match(s,/toggle.setPointerCapture\(e.pointerId\)/);
  assert.doesNotMatch(s,/miniDrag.mode='cancel'/);
 });

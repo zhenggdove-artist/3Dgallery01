@@ -14,7 +14,7 @@ export function bindChatLayout(){
  const DRAG_HOLD_MS=1000;
  const MINI_DRAG_HOLD_MS=180,MINI_DRAG_SLOP=5;
  const sizes=['max','medium','min'];
- let size='medium',active=null,timer=null,toggleTimer=null,ignoreClickUntil=0,manualPosition=false,manualAnchor=null,globalDefault=null,globalRevision=-1;
+ let size='medium',active=null,timer=null,ignoreClickUntil=0,manualPosition=false,manualAnchor=null,globalDefault=null,globalRevision=-1;
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
  const mediumHeight=92;
  const maxHeight=()=>Math.min(220,Math.max(114,innerHeight*.42));
@@ -62,10 +62,14 @@ export function bindChatLayout(){
   if(active?.mode==='move'||miniDrag?.mode==='move')return;
   if(document.body.classList.contains('chat-typing')){const b=bounds(),r=panel.getBoundingClientRect();panel.style.setProperty('left',limit(r.left,b.left,b.right)+'px','important');panel.style.setProperty('top',limit(r.top,b.top,b.bottom)+'px','important');panel.style.setProperty('bottom','auto','important');panel.style.right='auto';panel.style.transform='none';return;}
   const anchor=manualPosition?manualAnchor:globalDefault;
-  let left,top;
-  if(anchor){const b=bounds();left=b.left+(b.right-b.left)*anchor.x;top=b.top+(b.bottom-b.top)*anchor.y;}
-  else{clearInline();const r=panel.getBoundingClientRect();left=r.left;top=r.top;}
-  if(!relocate(left,top)&&size!=='min')setSize(size==='max'?'medium':'min');
+  // Fit must never change the selected size or search for a different HUD
+  // position. The saved GM/user anchor (or the original CSS default) wins.
+  // Obstacle avoidance remains available only during an explicit drag.
+  if(!anchor){clearInline();return;}
+  const b=bounds();
+  panel.style.setProperty('left',(b.left+(b.right-b.left)*anchor.x)+'px','important');
+  panel.style.setProperty('top',(b.top+(b.bottom-b.top)*anchor.y)+'px','important');
+  panel.style.right='auto';panel.style.setProperty('bottom','auto','important');panel.style.transform='none';
  }
  function applyDefault(value){
   const revision=Number(value?.revision)||0;
@@ -79,67 +83,64 @@ export function bindChatLayout(){
   }catch{manualPosition=false;manualAnchor=null;}
   requestAnimationFrame(fitSafely);
  }
- function setSize(next,{hold=false}={}){
+ function setSize(next){
   size=next;
   panel.classList.toggle('chat-minimized',size==='min');
   panel.classList.toggle('chat-medium',size==='medium');
   panel.classList.toggle('chat-max',size==='max');
   panel.dataset.chatSize=size;
   panel.style.setProperty('--chat-height',(size==='medium'?mediumHeight:maxHeight())+'px');
-  toggle.textContent=size==='max'?'−':'＋';
+  toggle.textContent='＋';
   toggle.setAttribute('aria-expanded',String(size!=='min'));
   toggle.setAttribute('aria-label',size==='min'?'Expand chat; hold to move':
-   size==='medium'?'Minimize chat; drag to move':'Show two chat lines (hold to minimize)');
-  toggle.title=size==='min'?'Open full chat; drag to move':size==='max'?'Show two lines':'Minimize chat; drag to move';
-  if(hold)ignoreClickUntil=performance.now()+800;
+   size==='medium'?'Minimize chat; drag to move':'Show two chat lines; hold to move');
+  toggle.title=size==='min'?'Open full chat; drag to move':size==='max'?'Show two lines; hold to move':'Minimize chat; drag to move';
   requestAnimationFrame(fitSafely);
  }
  setSize('medium');
- toggle.addEventListener('pointerdown',e=>{
-  if(!mobile||e.pointerType==='mouse'||size!=='max')return;
-  clearTimeout(toggleTimer);
-  toggleTimer=setTimeout(()=>setSize('min',{hold:true}),1000);
- });
- const clearToggle=()=>{clearTimeout(toggleTimer);toggleTimer=null;};
- for(const event of ['pointerup','pointercancel','pointerleave'])toggle.addEventListener(event,clearToggle);
+ const cycleSize=()=>setSize(sizes[(sizes.indexOf(size)+1)%sizes.length]);
  toggle.addEventListener('contextmenu',e=>e.preventDefault());
+ // A captured pointer release is the only pointer activation. Suppress its
+ // later synthetic click, which can otherwise advance a second time on iOS.
+ // Keyboard/assistive clicks without a pointer still work.
  toggle.addEventListener('click',e=>{
   if(performance.now()<ignoreClickUntil){e.preventDefault();return;}
-  const index=sizes.indexOf(size);
-  setSize(sizes[(index+1)%sizes.length]);
+  cycleSize();
  });
- // Both + states can be dragged. Motion immediately activates dragging;
- // a stationary 180ms hold also arms it. A quick tap still changes size.
+ // The same + control works at all three sizes. The compact states retain
+ // their quick drag response; the expanded state retains its one-second hold.
  let miniDrag=null,miniTimer=null;
  toggle.addEventListener('pointerdown',e=>{
-  if(size==='max'||e.button!==0||miniDrag)return;
-  ignoreClickUntil=0;
-  e.stopPropagation();
+  if(e.button!==0||miniDrag)return;
+  e.preventDefault();e.stopPropagation();
   const r=panel.getBoundingClientRect();
-  miniDrag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,mode:'pending'};
+  miniDrag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,mode:'pending',expanded:size==='max',startedAt:performance.now(),moved:false};
   try{toggle.setPointerCapture(e.pointerId);}catch{}
   miniTimer=setTimeout(()=>{
    if(!miniDrag||miniDrag.id!==e.pointerId||miniDrag.mode!=='pending')return;
    miniDrag.mode='move';panel.classList.add('chat-dragging');
-  },MINI_DRAG_HOLD_MS);
+  },miniDrag.expanded?DRAG_HOLD_MS:MINI_DRAG_HOLD_MS);
  });
  toggle.addEventListener('pointermove',e=>{
   if(!miniDrag||miniDrag.id!==e.pointerId)return;
   const dx=e.clientX-miniDrag.x,dy=e.clientY-miniDrag.y;
-  if(miniDrag.mode==='pending'&&Math.hypot(dx,dy)>=MINI_DRAG_SLOP){
+  if(Math.hypot(dx,dy)>=MINI_DRAG_SLOP)miniDrag.moved=true;
+  if(!miniDrag.expanded&&miniDrag.mode==='pending'&&Math.hypot(dx,dy)>=MINI_DRAG_SLOP){
    clearTimeout(miniTimer);miniDrag.mode='move';panel.classList.add('chat-dragging');
   }
-  if(miniDrag.mode==='move'){
+  if(miniDrag.mode==='move'&&miniDrag.moved){
    e.preventDefault();e.stopPropagation();
    if(relocate(miniDrag.left+dx,miniDrag.top+dy))manualPosition=true;
   }
  });
  const finishMini=e=>{
   if(!miniDrag||miniDrag.id!==e.pointerId)return;
-  const mode=miniDrag.mode;clearTimeout(miniTimer);miniDrag=null;
-  if(mode!=='pending')ignoreClickUntil=performance.now()+350;
-  if(mode==='move')save();
-  if(mode==='move')requestAnimationFrame(fitSafely);
+  const drag=miniDrag;clearTimeout(miniTimer);miniDrag=null;
+  ignoreClickUntil=performance.now()+800;
+  // A normal tap can last longer than the 180ms drag-arm timer. Only actual
+  // movement or a one-second hold should consume it without changing size.
+  if(e.type==='pointerup'&&!drag.moved&&performance.now()-drag.startedAt<DRAG_HOLD_MS)cycleSize();
+  if(drag.mode==='move'&&drag.moved){save();requestAnimationFrame(fitSafely);}
   panel.classList.remove('chat-dragging');
   try{if(toggle.hasPointerCapture(e.pointerId))toggle.releasePointerCapture(e.pointerId);}catch{}
  };
@@ -179,7 +180,7 @@ export function bindChatLayout(){
       e.target.closest('button,input,textarea,select,form'))return;
    const r=panel.getBoundingClientRect();
    active={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,
-    height:r.height,onHandle:handle.contains(e.target),mode:'pending'};
+    mode:'pending'};
    try{panel.setPointerCapture(e.pointerId);}catch{}
    clearTimeout(timer);
    timer=setTimeout(()=>{if(active?.id===e.pointerId&&active.mode==='pending'){
@@ -196,13 +197,9 @@ export function bindChatLayout(){
    }
    if(active.mode==='pending'&&Math.hypot(dx,dy)>8){
     clearTimeout(timer);
-    // Preserve immediate vertical resizing from the small CHAT header.
-    if(!active.onHandle){active=null;return;}
-    active.mode='resize';
-   }
-   if(active?.mode==='resize'){
-    setSize('max');panel.style.setProperty('--chat-height',
-     limit(active.height-dy,112,Math.min(350,innerHeight*.5))+'px');
+    // Resizing is exclusively the three-step + button. A short header
+    // drag must not change size or position before the long-press threshold.
+    active=null;return;
    }
   });
   const finish=e=>{
