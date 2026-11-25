@@ -7,6 +7,7 @@ import {weaponPresentation} from './shared/weapon-presentation.js';
 import {fusionChance} from './shared/temple-fusion.js';
 import {fusionRecordAt} from './shared/fusion-instances.js';
 import {groupInventoryStacks} from './shared/inventory-stacks.js';
+import {patchBagNode,reconcileBagGrid} from './bag-dom.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tabs=[[['all','Items'],['equipment','Equip'],['weapons','Weapons'],['near','Near'],['mid','Mid'],['far','Far']],[['head','Headwear'],['outfit','Outfits'],['wings','Wings'],['shields','Shields'],['comfort','Comfort']]];
 // An explicit three-way choice replaces automatic placement.
@@ -66,7 +67,7 @@ export function renderOriginalBag(ui,profile){
    profile.equippedInstanceIds[i.slot]===profile.inventoryInstances?.[index]?.uid),
   recordAt=(i,index)=>Number.isInteger(index)?fusionRecordAt(profile,index):profile.fusion?.[i.id];
  const unseenIds=new Set((profile.inventoryInstances||[]).filter(row=>row.viewed===false).map(row=>row.itemId));
- const cell=(item,index=null,count=1)=>{const f=weaponPresentation(item,recordAt(item,index));return `<button class="bag-cell ${equipped(item,index)?'equipped':''}" data-bag-item="${item.id}" ${Number.isInteger(index)?`data-inventory-index="${index}"`:``} data-rarity="${item.rarity}" style="--rarity:${RARITIES.find(r=>r.id===item.rarity)?.color||'#eadcf4'}" draggable="true" title="${esc(f.title)}" aria-label="${esc(f.title)}${count>1?' ×'+count:''}">${previewMarkup(item)}${item.slot==='weapon'?`<small class="range-mark">${({near:'C',mid:'M',far:'L'})[weaponClass(item)]||''}</small>`:''}${f.level?`<small class="fusion-level">+${f.level}</small>`:''}${count>1?`<span class="bag-stack-count" aria-hidden="true">×${count}</span>`:''}${unseenIds.has(item.id)?'<small class="bag-new-mark" aria-label="New item">NEW</small>':''}</button>`;};
+ const cell=(item,index=null,count=1)=>{const f=weaponPresentation(item,recordAt(item,index));return `<button class="bag-cell ${equipped(item,index)?'equipped':''}" data-bag-item="${item.id}" data-bag-key="${esc(profile.inventoryInstances?.[index]?.uid||item.id+':'+String(index))}" ${Number.isInteger(index)?`data-inventory-index="${index}"`:``} data-rarity="${item.rarity}" style="--rarity:${RARITIES.find(r=>r.id===item.rarity)?.color||'#eadcf4'}" draggable="true" title="${esc(f.title)}" aria-label="${esc(f.title)}${count>1?' ×'+count:''}">${previewMarkup(item)}${item.slot==='weapon'?`<small class="range-mark">${({near:'C',mid:'M',far:'L'})[weaponClass(item)]||''}</small>`:''}${f.level?`<small class="fusion-level">+${f.level}</small>`:''}${count>1?`<span class="bag-stack-count" aria-hidden="true">×${count}</span>`:''}${unseenIds.has(item.id)?'<small class="bag-new-mark" aria-label="New item">NEW</small>':''}</button>`;};
  let body='';if(tab==='equipment'){const slot=s=>{const base=itemById(profile.equipment?.[s]),index=profile.inventoryInstances?.findIndex(v=>v.uid===profile.equippedInstanceIds?.[s]&&v.itemId===base?.id)??-1,i=tieredItem(base?.id,index);return `<div class="equip-position"><b>${s.toUpperCase()}${i?.slot==='weapon'?' · '+({near:'Close Range',mid:'Mid Range',far:'Long Range'}[weaponClass(i)]||''):''}</b>${i?cell(i,index>=0?index:null):'<div class="bag-cell"></div>'}<span>${esc(i?weaponPresentation(i,recordAt(i,index>=0?index:null)).title:'Empty')}</span></div>`;};body=`<div class="equipment-layout"><div class="equip-column">${['head','outfit','weapon'].map(slot).join('')}</div><div id="bag-portrait-frame"><canvas id="bag-portrait" role="img" aria-label="Front-facing full 3D character wearing current equipment"></canvas></div><div class="equip-column">${['wings','shield'].map(slot).join('')}</div></div>`;}else{const filter={weapons:['weapon'],head:['head'],outfit:['outfit'],wings:['wings'],shields:['shield'],comfort:['consumable']}[tab];const list=items.filter(({item:i})=>['near','mid','far'].includes(tab)?i.slot==='weapon'&&weaponClass(i)===tab:!filter||filter.includes(i.slot));
  const grouped=groupInventoryStacks(list,recordAt);
  const recent=row=>Math.max(...row.indices.map(i=>profile.inventoryInstances?.[i]?.acquiredAt??i));
@@ -108,19 +109,25 @@ export function renderOriginalBag(ui,profile){
  const used=profile.inventory?.length||0,capacity=inventoryCapacity(profile);
  const bagStatus=`<div class="bag-capacity"><strong>BAG · ${used.toLocaleString('en-US')} / ${capacity.toLocaleString('en-US')}</strong><span>${Math.max(0,capacity-used).toLocaleString('en-US')} FREE</span></div><div class="bag-inventory-status" data-inventory-error role="status" aria-live="polite" ${ui.inventoryActionError||ui.inventoryActionNotice?'':'hidden'}>${esc(ui.inventoryActionError||ui.inventoryActionNotice||'')}</div>`;
  const keepPortrait=tab==='equipment'&&ui.content.querySelector('.equipment-view');
+ const keepGrid=tab!=='equipment'&&ui.bagLastCategory===tab&&ui.content.querySelector('.original-bag #bag-items:not(.equipment-view)');
  if(keepPortrait){
   // Keep the actual canvas connected during equipment changes. Detaching
   // and recreating it invalidates all GL state, textures and programs.
   const fresh=document.createElement('template');fresh.innerHTML=body;
   keepPortrait.querySelectorAll('.equip-column').forEach((column,i)=>{
    const next=fresh.content.querySelectorAll('.equip-column')[i];
-   const top=column.scrollTop;column.replaceChildren(...next.childNodes);column.scrollTop=top;
+   const top=column.scrollTop;patchBagNode(column,next);column.scrollTop=top;
   });
-  const nextStats=fresh.content.querySelector('.equip-stat-summary'),currentStats=keepPortrait.querySelector('.equip-stat-summary');if(nextStats&&currentStats)currentStats.replaceWith(nextStats);
+  const nextStats=fresh.content.querySelector('.equip-stat-summary'),currentStats=keepPortrait.querySelector('.equip-stat-summary');if(nextStats&&currentStats)patchBagNode(currentStats,nextStats);
   const nextCash=fresh.content.querySelector('.comfort-bag-gear');
   const currentCash=keepPortrait.querySelector('.comfort-bag-gear');
-  if(nextCash&&currentCash)currentCash.replaceWith(nextCash);
+  if(nextCash&&currentCash)patchBagNode(currentCash,nextCash);
   else if(nextCash)keepPortrait.append(nextCash);
+ }else if(keepGrid){
+  const fresh=document.createElement('template');fresh.innerHTML=body;
+  reconcileBagGrid(keepGrid,fresh.content);
+  ui.content.querySelector('#bag-detail').textContent='Tap to inspect · Double tap to equip / remove';
+  ui.content.querySelector('#bag-sort').value=ui.bagSort||'recent';
  }else{
   ui.content.innerHTML=`<div class="original-bag">${bagStatus}<nav id="bag-tabs">${tabs.map(row=>`<div class="bag-tab-row">${row.map(([id,label])=>`<button data-category="${id}" aria-pressed="${id===tab}">${label}</button>`).join('')}</div>`).join('')}</nav><div class="bag-toolbar"><label class="bag-sort-control">SORT <select id="bag-sort"><option value="recent" ${!ui.bagSort||ui.bagSort==='recent'?'selected':''}>Newest first</option><option value="quality" ${ui.bagSort==='quality'?'selected':''}>Quality ↓</option><option value="manual" ${ui.bagSort==='manual'?'selected':''}>Manual order</option></select></label><button id="fusion-toggle" aria-pressed="${!!ui.bagFusionMode}">FUSION: ${ui.bagFusionMode?'ON':'OFF'}</button><button type="button" id="bag-sale-toggle" aria-expanded="${!!ui.bagSaleOpen}" aria-controls="bag-sale-tools">SELL</button></div>${bulkMarkup}<div id="bag-items" class="${tab==='equipment'?'equipment-view':''}">${body}</div><div id="bag-detail">Tap to inspect · Double tap to equip / remove</div><p id="bag-feedback">${ui.bagFusionMode?'Drag same-category gear to fuse.':''}</p></div>`;
   if(tab==='equipment'){
@@ -129,7 +136,6 @@ export function renderOriginalBag(ui,profile){
    else ui.bagPortraitCanvas=fresh;
   }
  }
- // The content node is replaced on each authoritative inventory update.
  // Restore both nested grid and outer panel positions after each fusion.
  if(ui.bagLastCategory===tab){
   ui.content.scrollTop=scroll.content;
@@ -137,8 +143,15 @@ export function renderOriginalBag(ui,profile){
   ui.content.querySelector('#bag-tabs').scrollLeft=scroll.tabs;
  }
  ui.bagLastCategory=tab;
- const oldSale=ui.content.querySelector('.bag-sale-tools');if(keepPortrait&&oldSale)oldSale.outerHTML=bulkMarkup;
- if(keepPortrait){const old=ui.content.querySelector('.bag-capacity'),status=ui.content.querySelector('.bag-inventory-status');if(status)status.remove();if(old)old.outerHTML=bagStatus;}
+ if(keepPortrait||keepGrid){
+  const fresh=document.createElement('template');fresh.innerHTML=bagStatus+bulkMarkup;
+  for(const selector of ['.bag-capacity','.bag-inventory-status','.bag-sale-tools']){
+   const old=ui.content.querySelector(selector),next=fresh.content.querySelector(selector);
+   if(old&&next)patchBagNode(old,next);
+  }
+  ui.content.querySelector('#bag-sale-slot').value=saleSlot;
+  ui.content.querySelector('#bag-sale-rarity').value=saleRarity;
+ }
  ui.content.querySelector('#bag-sale-toggle').onclick=e=>{ui.bagSaleOpen=!ui.bagSaleOpen;e.currentTarget.setAttribute('aria-expanded',String(ui.bagSaleOpen));ui.content.querySelector('.bag-sale-tools').hidden=!ui.bagSaleOpen;};
  ui.content.querySelector('#bag-sale-slot').onchange=e=>{ui.bagSaleSlot=e.target.value;renderOriginalBag(ui,ui.world.profile);};
  ui.content.querySelector('#bag-sale-rarity').onchange=e=>{ui.bagSaleRarity=e.target.value;renderOriginalBag(ui,ui.world.profile);};

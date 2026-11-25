@@ -29,7 +29,7 @@ const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(
 // cell and open description while NEW is removed in place.
 export function inventoryPanelSignature(profile){
  return JSON.stringify([
-  profile?.inventory,profile?.equipment,profile?.wallet,profile?.fusion,profile?.inventoryCapacity,profile?.admin,
+  profile?.inventory,profile?.equipment,profile?.equippedInstanceIds,profile?.wallet,profile?.fusion,profile?.fusionByInstance,profile?.inventoryCapacity,profile?.admin,
   profile?.wingDesignCredits,profile?.quickSlots,profile?.level,
   (profile?.inventoryInstances||[]).map(row=>[row.uid,row.itemId,row.shopTier])
  ]);
@@ -688,6 +688,12 @@ export class TempleUI extends EventTarget{
     const code=this.saveCode||this.self?.saveCode||'';this.content.innerHTML=`<h3>MEMORY CODE</h3><p>將目前的等級、裝備、背包與遊戲進度儲存至伺服器。重新進入遊戲時，在 Memorycode 欄位輸入代碼恢復。</p><label for="save-code-output">存檔代碼<input id="save-code-output" readonly autocomplete="off" spellcheck="false" class="panel-input" value="${escape(code)}" placeholder="尚未產生代碼"></label><button type="button" class="panel-button" data-save-code>產生／重新取得代碼</button><button type="button" class="panel-button" data-copy-save-code ${code?'':'disabled'}>複製存檔代碼</button><p>請妥善保管代碼。擁有代碼的人可能存取你的存檔。</p>`;}
   showSaveCode(code){this.saveCode=String(code||'');this.openPanel('save');this.content.querySelector('#save-code-output')?.select();}
   renderBag(profile){renderOriginalBag(this,profile);}
+  refreshBagAfterAction(){
+   // HTTP action and WebSocket world revisions can describe the same change.
+   if(this.panelSignature!==inventoryPanelSignature(this.world?.profile)||!this.content.querySelector('.original-bag')){this.renderPanel();return;}
+   const status=this.content.querySelector('[data-inventory-error]');
+   if(status){const message=this.inventoryActionError||this.inventoryActionNotice||'';if(status.textContent!==message)status.textContent=message;status.hidden=!message;}
+  }
   renderShop(profile){
     this.shopPriceSignature=JSON.stringify([this.world?.shopPrices||{},this.world?.equipmentTuning||{}]);
     const editing=this.panelName==='shop-prices'&&!!(profile.admin||this.self?.profile?.admin),prices=this.world?.shopPrices||{};
