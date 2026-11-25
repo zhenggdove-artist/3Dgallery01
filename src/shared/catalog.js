@@ -220,7 +220,13 @@ export function weightedChoice(entries,rng=Math.random){
   return entries.at(-1);
 }
 
-export function groundDropRoll(rng=Math.random,excluded={}){
+// Only explicitly relisted products may extend the preexisting loot pools.
+// Keep the original category odds and native weights for every other item.
+const withRelisted=(pool,relisted,slots)=>{
+ const ids=new Set(pool.map(item=>item.id));
+ return [...pool,...SHOP_ITEMS.filter(item=>Object.hasOwn(relisted,item.id)&&slots.includes(item.slot)&&!ids.has(item.id))];
+};
+export function groundDropRoll(rng=Math.random,excluded={},relisted={}){
  const allowed=item=>!Object.hasOwn(excluded,item.id);
  // Only coins and equippable gear may spawn. Former material weight is
  // redistributed to the gear categories rather than creating dead pickups.
@@ -231,11 +237,13 @@ export function groundDropRoll(rng=Math.random,excluded={}){
  if(kind==='consumable'){const pool=COMFORT_ITEMS.map((item,i)=>({id:item.id,weight:[45,40,15][i]})).filter(allowed);return pool.length?{kind,itemId:weightedChoice(pool,rng).id}:{kind:'coin',amount:20};}
  const pool=kind==='weapon'?WEAPONS.filter(item=>item.tier>0&&item.tier<=3&&!item.notForSale):
   RELETTER_ITEMS.filter(item=>['head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier<=3);
- const weighted=pool.filter(allowed).map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));
+ const weighted=withRelisted(pool,relisted,kind==='weapon'?['weapon']:['head','outfit','shield','wings']).filter(allowed).map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));
  return weighted.length?{kind,itemId:weightedChoice(weighted,rng).id}:{kind:'coin',amount:20};
 }
 
-export function monsterDropRoll(rng=Math.random,excluded={}){
-  const pool=RELETTER_ITEMS.filter(item=>['weapon','head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier>0&&!Object.hasOwn(excluded,item.id)).map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
-  return pool.length?{kind:'equipment',itemId:weightedChoice(pool,rng).id}:{kind:'coin',amount:20};
+export function monsterDropRoll(rng=Math.random,excluded={},relisted={}){
+  const native=RELETTER_ITEMS.filter(item=>['weapon','head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier>0);
+  const pool=withRelisted(native,relisted,['weapon','head','outfit','shield','wings','consumable']).filter(item=>!Object.hasOwn(excluded,item.id)).map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
+  if(!pool.length)return {kind:'coin',amount:20};
+  const item=weightedChoice(pool,rng);return {kind:item.slot==='consumable'?'consumable':'equipment',itemId:item.id};
 }

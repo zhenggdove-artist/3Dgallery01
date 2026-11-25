@@ -1,4 +1,4 @@
-import {isDelisted,reclaimDelisted,retireShopItem} from './shop-retirement.js';
+import {isDelisted,reclaimDelisted,retireShopItem,relistShopItem} from './shop-retirement.js';
 import {validateDiscPaint} from './disc-paint.js';
 import {setTerrainStyle} from './terrain-style.js';
 import {wantedSettings,countWantedDeath} from './wanted-list.js';
@@ -61,7 +61,7 @@ const initialStructures=now=>[
 export function createInitialWorld(now=Date.now()){
   return {
     version:WORLD_VERSION,revision:1,createdAt:now,
-    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},discPaint:{},pickupReceipts:[],equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
+    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},relistedShopItems:{},discPaint:{},pickupReceipts:[],equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},tidalLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
@@ -131,10 +131,10 @@ export function migrateWorld(raw,now=Date.now()){
   // original drop lifetime has not expired.
   world.groundDrops=world.groundDrops.filter(drop=>
    drop.kind!=='material'&&(drop.kind!=='consumable'||isRestorativeDrop(drop))&&(!drop.itemId||
-    (itemById(drop.itemId)&&!['material','wings'].includes(itemById(drop.itemId).slot))));
+    (itemById(drop.itemId)&&(itemById(drop.itemId).slot!=='material'&&(itemById(drop.itemId).slot!=='wings'||Object.hasOwn(world.relistedShopItems||{},drop.itemId))))));
   for(const drop of world.groundDrops)if(isRestorativeDrop(drop))drop.kind='consumable';
   world.persistentAttacks=world.persistentAttacks.filter(fx=>fx.weapon!=='fan'&&fx.kind!=='fan');
-  world.delistedShopItems??={};world.discPaint??={};world.pickupReceipts??=[];world.groundDrops=world.groundDrops.filter(d=>!isDelisted(world,d.itemId));
+  world.delistedShopItems??={};world.relistedShopItems??={};world.discPaint??={};world.pickupReceipts??=[];world.groundDrops=world.groundDrops.filter(d=>!isDelisted(world,d.itemId));
   return cleanLegacyScene(world);
 }
 
@@ -194,7 +194,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
     const owned=new Set(current.inventory);
     for(const item of ITEMS){
      if(current.inventory.length>=inventoryCapacity(current))break;
-     if(item.slot!=='armor'&&!isRetiredHeadgear(item)&&!isDelisted(world,item.id)&&!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}
+     if(item.slot!=='armor'&&!isRetiredHeadgear(item)&&!isDelisted(world,item.id)&&!Object.hasOwn(world.relistedShopItems||{},item.id)&&!owned.has(item.id)){current.inventory.push(item.id);owned.add(item.id);}
     }
     current.gmAllItemsGranted=true;
    }
@@ -249,16 +249,16 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
      item.id.startsWith('outfit-creature-'));
    for(const item of additions){
     if(current.inventory.length>=inventoryCapacity(current))break;
-    if(!isDelisted(world,item.id)&&!current.inventory.includes(item.id))appendInventoryInstance(current,item.id,'grant');
+    if(!isDelisted(world,item.id)&&!Object.hasOwn(world.relistedShopItems||{},item.id)&&!current.inventory.includes(item.id))appendInventoryInstance(current,item.id,'grant');
    }
-   current.gmCreatureGearGrantedV2=additions.every(item=>isDelisted(world,item.id)||current.inventory.includes(item.id));
+   current.gmCreatureGearGrantedV2=additions.every(item=>isDelisted(world,item.id)||Object.hasOwn(world.relistedShopItems||{},item.id)||current.inventory.includes(item.id));
   }
   if(current.admin&&!current.gmR106WearablesGranted){
    for(const item of ITEMS.filter(i=>i.r106Wearable)){
     if(current.inventory.length>=inventoryCapacity(current))break;
-    if(!isDelisted(world,item.id)&&!current.inventory.includes(item.id))appendInventoryInstance(current,item.id,'grant');
+    if(!isDelisted(world,item.id)&&!Object.hasOwn(world.relistedShopItems||{},item.id)&&!current.inventory.includes(item.id))appendInventoryInstance(current,item.id,'grant');
    }
-   current.gmR106WearablesGranted=ITEMS.filter(i=>i.r106Wearable).every(i=>isDelisted(world,i.id)||current.inventory.includes(i.id));
+   current.gmR106WearablesGranted=ITEMS.filter(i=>i.r106Wearable).every(i=>isDelisted(world,i.id)||Object.hasOwn(world.relistedShopItems||{},i.id)||current.inventory.includes(i.id));
   }
   reclaimDelisted(world,current);
   ensureWeaponAffixes(current); // Server-owned one-time roll, persisted on join.
@@ -439,6 +439,11 @@ export function applyAction(world,actor,body,context={}){
    for(const target of Object.values(world.profiles))if(Object.values(target.equipment||{}).some(id=>ids.has(id)))refreshStats(world,target,now);
    world.revision=(world.revision||0)+1;
    return {notice:'裝備數值已更新 · '+item.name+' · '+change.variants.length+' 款品質',tuningKey:shopPriceKey(item),tuningCount:change.variants.length};
+  }
+  if(body.action==='gm-shop-relist'){
+   if(!profile.admin||actor.admin!==true)return {error:'GM only'};
+   const result=relistShopItem(world,String(body.itemId||''),now);if(result.error)return result;
+   world.revision=(world.revision||0)+1;return result;
   }
   if(body.action==='gm-shop-delist'){
    if(!profile.admin||actor.admin!==true)return {error:'GM only'};
@@ -826,7 +831,7 @@ function pickupDrop(world,profile,actor,body,now){
   const drop=world.groundDrops[index];if(isDelisted(world,drop.itemId))return {error:'Item is delisted'};if(drop.expiresAt<=now)return {error:'Drop expired'};
    if(drop.kind==='material'||drop.itemId&&!itemById(drop.itemId))
     return {error:'Obsolete material drops can no longer be collected'};
-   if(drop.itemId&&itemById(drop.itemId)?.slot==='wings')
+   if(drop.itemId&&itemById(drop.itemId)?.slot==='wings'&&!Object.hasOwn(world.relistedShopItems||{},drop.itemId))
     return {error:'Wings are exclusive to premium shop; ground pickup disabled'};
    if(drop.itemId&&profile.inventory.length>=inventoryCapacity(profile))return {error:'Inventory full'};
    if(!near(actor,drop.position,3.2))return {error:'Move closer to the drop'};
@@ -1617,7 +1622,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
     (owner==='monster'||world.monster?.id===owner||(world.monsters||[]).some(m=>m.id===owner))?'monster':'status',target.position))||changed;}
   world.groundDrops=world.groundDrops.filter(drop=>drop.expiresAt>now);if(world.groundDrops.length>ECONOMY.maxGroundDrops)world.groundDrops.splice(0,world.groundDrops.length-ECONOMY.maxGroundDrops);
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
-  if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng,world.delistedShopItems);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
+  if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng,world.delistedShopItems,world.relistedShopItems);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
   if(activeFighters>0&&!world.monster.active&&now>=world.monster.nextSpawnAt){const spawn=MONSTER_SPAWNS[Math.floor(rng()*MONSTER_SPAWNS.length)],variant=['warden','drowned','signal'][Math.floor(rng()*3)],maxHp={warden:420,drowned:520,signal:360}[variant];world.monster={active:true,id:id(),variant,position:[...spawn],hp:maxHp,maxHp,generation:(world.monster.generation||0)+1,spawnedAt:now,nextAttackAt:now+2_000,nextSpawnAt:now+ECONOMY.monsterIntervalMs};changed=true;}
   if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!monster.panBlastFlight||!!monster.whipPull||!!monster.vortexSpin&&now<monster.vortexSpin.time+VORTEX_SPIN_MS||!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),silenced:!!effectActive(monster,'paralysis',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
  const confused=effectActive(monster,'confuse',now);
@@ -2575,7 +2580,7 @@ function tickPersistentAttacks(world,actors,now,rng){
  return changed||world.persistentAttacks.length!==old;
 }
 
-function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount*=1+(effectActive(monster,'soaked',now)?.power||0);const hpLost=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-hpLost);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng,world.delistedShopItems);world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=2;
+function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount*=1+(effectActive(monster,'soaked',now)?.power||0);const hpLost=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-hpLost);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng,world.delistedShopItems,world.relistedShopItems);world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=2;
  world.monsterDeathEvents??=[];
  world.monsterDeathEvents.push({id:id(),monsterId:monster.id,time:now,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]]});
  if(world.monsterDeathEvents.length>48)world.monsterDeathEvents.splice(0,world.monsterDeathEvents.length-48);

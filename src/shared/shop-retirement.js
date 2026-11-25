@@ -20,3 +20,14 @@ export function retireShopItem(world,id,now){
  world.persistentAttacks=(world.persistentAttacks||[]).filter(a=>a.weapon!==id&&a.weaponId!==id);
  return {reclaimed,removedDrops:before-world.groundDrops.length,delistedItemId:id,notice:'DELISTED · '+itemById(id).name+' · '+reclaimed+' reclaimed'};
 }
+
+// Relisting restores availability, never any recalled inventory or drop.
+export function relistShopItem(world,id,now){
+ if(!SHOP_ITEMS.some(i=>i.id===id))return {error:'Invalid shop item'};
+ if(!isDelisted(world,id))return {error:'Item is already listed'};
+ // Defensive sweep while still excluded, including any legacy saved copies.
+ for(const p of Object.values(world.profiles||{}))reclaimDelisted(world,p);
+ world.relistedShopItems??={};world.relistedShopItems[id]=now;
+ delete world.delistedShopItems[id];
+ return {relistedItemId:id,notice:'RELISTED · '+itemById(id).name};
+}
