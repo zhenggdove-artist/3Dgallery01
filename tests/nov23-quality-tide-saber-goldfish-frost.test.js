@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createInitialWorld,ensureProfile,applyAction,tickTidalChannels,worldView} from '../src/shared/temple-rules.js';
 import {itemById,attackStats} from '../src/shared/catalog.js';
-import {chargedArea,scaleUltimateFootprint} from '../src/shared/charge-area.js';
+import {chargedArea,scaleUltimateFootprint,spellFootprint,iceEruptionContact} from '../src/shared/charge-area.js';
 import {weaponQuality,forwardCastRadius,channelVisualRadius} from '../src/shared/weapon-abilities.js';
 import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,
  GOLDFISH_T1_DAMAGE_PER_FISH,GOLDFISH_T1_TOTAL_MAX} from '../src/shared/goldfish-school.js';
@@ -52,7 +52,7 @@ test('three separate tide targets receive server-owned sustained damage, fourth 
  assert.equal(attack(T+4600,{phase:'channel-stop'}).channeling,false);
  assert.equal(world.tidalLocks[actor.key],undefined);
 });
-test('frost ultimate circle is one-third the previous diameter, shifted two new diameters',()=>{
+test('frost ultimate retains width and erupts from the caster to the full endpoint',()=>{
  const frost=itemById('frost-2'),quality=weaponQuality(frost),
   raw=attackStats(frost,1);
  const radius=forwardCastRadius(frost,quality,raw.radius,true);
@@ -61,9 +61,13 @@ test('frost ultimate circle is one-third the previous diameter, shifted two new 
  const origin=[75,1.16,0],direction=[0,0,1];
  const area=chargedArea(frost,origin,direction,stats,()=>0,true);
  assert.equal(area.mode,'area');
- const distanceWithoutFrostOffset=area.travel-stats.radius*4;
- assert.ok(Math.abs(area.center[2]-(distanceWithoutFrostOffset+stats.radius*4))<.002);
- assert.ok(area.center[2]>stats.radius*4);
+ assert.equal(area.shape,'ice-line');assert.equal(area.segments[0].position[2],0);
+ assert.ok(Math.abs(area.segments.at(-1).position[2]-stats.range)<.001);
+ const warning=spellFootprint(frost,origin,direction,stats,area,()=>0);
+ assert.equal(warning.shape,'rectangle');assert.equal(warning.length,stats.range);
+ assert.ok(iceEruptionContact(area,[75,1,0],0,300));
+ assert.ok(!iceEruptionContact(area,[75,1,stats.range],0,300));
+ assert.ok(iceEruptionContact(area,[75,1,stats.range],0,1600));
 });
 test('five-wave yellow saber keeps its half-size ray with all native CPU debris disabled',()=>{
  const saber=itemById('saber-3'),base=attackStats(saber,1);

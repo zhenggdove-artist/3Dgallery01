@@ -496,7 +496,7 @@ export class NumberedWeaponEffects {
    fx.group.position.copy(start);
    fx.group.quaternion.setFromUnitVectors(entry.spec.number===70?X_FORWARD:FORWARD,direction);
   }else this.align(entry,fx);
-  return {fx,age:0,start,direction,stopping:false,rainbowPhase:Math.floor(entry.age*17)%7};
+  return {fx,age:0,start,direction,range:entry.range,stopping:false,rainbowPhase:Math.floor(entry.age*17)%7};
  }
  discardCycle(entry,copy){
   const index=entry.cycles.indexOf(copy);
@@ -522,7 +522,7 @@ export class NumberedWeaponEffects {
     const duration=travelLifetime(number);
     const t=Math.min(1,copy.age/duration);
     const progress=t*t*(3-2*t);
-    const advance=number===43?entry.range*t:number===70?entry.range*progress:Math.min(entry.range,Math.max(4,entry.range*.72))*progress;
+    const advance=number===43?copy.range*t:number===70?entry.range*progress:Math.min(entry.range,Math.max(4,entry.range*.72))*progress;
     copy.fx.group.position.copy(copy.start).addScaledVector(copy.direction,advance);
     if(number===20&&copy.age>=duration-.9&&!copy.stopping){
      copy.stopping=true;
@@ -530,7 +530,7 @@ export class NumberedWeaponEffects {
     }
    }else this.align(entry,copy.fx);
    copy.fx.update(dt);
-   if(number===43&&moving){copy.fx.group.position.copy(copy.start).addScaledVector(copy.direction,entry.range*Math.min(1,copy.age/travelLifetime(43)));rainbowFlower(copy.fx,copy.age,copy.rainbowPhase);}
+   if(number===43&&moving){copy.fx.group.position.copy(copy.start).addScaledVector(copy.direction,copy.range*Math.min(1,copy.age/travelLifetime(43)));rainbowFlower(copy.fx,copy.age,copy.rainbowPhase);}
    if(number===70&&moving){
     // Position after the source update as well: its internal animation must
     // never rewind the world-space forward travel of the ice fragments.

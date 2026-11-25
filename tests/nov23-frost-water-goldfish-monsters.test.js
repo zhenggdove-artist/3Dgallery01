@@ -82,15 +82,17 @@ test('frost status is exactly 3000ms long, with 6000ms reapplication lock',()=>{
  assert.equal(target.effects.freeze.until,109000);
 });
 
-test('original Ice Shatter appears on the server-owned circle, not the old lancing beam',()=>{
+test('original Ice Shatter appears sequentially at server-owned ground positions',()=>{
  const scene=new THREE.Scene(),vfx=new WeaponVFX(scene),root=new THREE.Group();
- const area={mode:'area',center:[1,.12,12],visualCenter:[1,.16,12],radius:3.9,travel:12,range:20};
+ const area={mode:'area',shape:'ice-line',center:[1,.12,12],visualCenter:[1,.16,12],radius:3.9,travel:20,range:20,spacing:20,forward:[0,1],segments:[{position:[1,.16,0],delayMs:0},{position:[1,.16,20],delayMs:1260}]};
  vfx.play({origin:[0,1,0],direction:[0,0,1],area,range:20,
   charge:1,ultimate:true,channel:true,owner:'frost',qualityScale:1},itemById('frost-1'),root);
  const ice=vfx.active.find(e=>e.id==='ice-shatter');
  assert.ok(ice);
- assert.equal(ice.fx.group.position.x,area.visualCenter[0]);
- assert.equal(ice.fx.group.position.z,area.visualCenter[2]);
+ assert.equal(ice.fx.group.position.x,1);
+ assert.equal(ice.fx.group.position.z,0);
+ assert.equal(vfx.active.filter(e=>e.id==='ice-shatter').length,1);
+ vfx.advanceIceEruptions(1.26);assert.ok(vfx.active.some(e=>e.id==='ice-shatter'&&e.fx.group.position.z===20));
  assert.equal(vfx.numberedEffects.active.length,0,'retired travelling native ice-lance must not play');
  vfx.dispose();
 });

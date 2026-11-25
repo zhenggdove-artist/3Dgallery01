@@ -69,7 +69,7 @@ test('frost proc freeze lasts three seconds; subsequent hit is 30% slow and stil
  assert.equal(victim.effects.freeze.until,10000);
 });
 
-test('charged frost circle damages on contact rather than using the retired straight ice ray',()=>{
+test('charged frost eruptions damage only after the ground segment appears',()=>{
  const T=900000,world=createInitialWorld(T),actor={
   key:'caster',name:'Caster',color:'#ffffff',role:'fighter',position:[75,0,0]
  };
@@ -80,7 +80,7 @@ test('charged frost circle damages on contact rather than using the retired stra
  const cast=applyAction(world,actor,{action:'attack',charge:1,direction:[0,0,1]},
   {now:at,actors:[actor],rng:()=>.5});
  assert.equal(cast.attackEvent.area.mode,'area');
- const [x,,z]=cast.attackEvent.area.center;
+ const [x,,z]=cast.attackEvent.area.segments[0].position;
  world.monster={id:'frost-target',active:true,model:'uncle',position:[x,0,z],
   hp:100000,maxHp:100000,skills:[],nextAttackAt:T+999999};
  const hp=world.monster.hp;
@@ -95,7 +95,7 @@ test('charged frost circle damages on contact rather than using the retired stra
  const followup=applyAction(world,actor,{action:'attack',charge:1,direction:[0,0,1]},
   {now:secondAt,actors:[actor],rng:()=>.5});
  assert.ok(followup.attackEvent?.ultimate);
- world.monster.position=[...followup.attackEvent.area.center];world.monster.position[1]=0;
+ world.monster.position=[...followup.attackEvent.area.segments[0].position];world.monster.position[1]=0;
  const prior=world.monster.hp;
  tickWorld(world,{now:secondAt+450,actors:[actor],activeFighters:0,rng:()=>.5});
  assert.ok(world.monster.hp<prior,'second ice blast still damages before six seconds');

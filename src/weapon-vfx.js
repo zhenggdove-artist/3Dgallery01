@@ -181,7 +181,7 @@ export class WeaponVFX{
  alignWaterStream(entry,world=null,dt=0){
   if(!this.active.includes(entry))return;
   const rawSource=entry.host?this.channelMuzzle(entry.host,entry.waterWeapon,entry.waterOrigin.clone()):entry.waterOrigin.clone();
-  entry.waterSmooth??={source:rawSource.clone(),ends:new Map(),x:new THREE.Vector3(),y:new THREE.Vector3(),z:new THREE.Vector3(),basis:new THREE.Matrix4(),heading:new THREE.Vector3(0,0,1)};
+  entry.waterSmooth??={source:rawSource.clone(),ends:new Map(),x:new THREE.Vector3(),y:new THREE.Vector3(),z:new THREE.Vector3(),basis:new THREE.Matrix4(),heading:new THREE.Vector3(-1,0,0)};
   const smooth=entry.waterSmooth,alpha=1-Math.exp(-Math.max(.001,dt)*22);
   const source=smooth.source.lerp(rawSource,alpha);
   const ray=entry.host?.userData?.staffAimDirection;
@@ -237,7 +237,7 @@ export class WeaponVFX{
  orientWaterStream(entry,source,end){
   const s=entry.waterSmooth;if(!s)return;
   s.x.copy(end).sub(source);if(s.x.lengthSq()<1e-8)return;s.x.normalize();
-  s.z.set(s.x.z,0,-s.x.x);if(s.z.lengthSq()<1e-6)s.z.copy(s.heading);else{s.z.normalize();s.heading.copy(s.z);}
+  s.z.set(-s.x.z,0,s.x.x);if(s.z.lengthSq()<1e-6)s.z.copy(s.heading);else{s.z.normalize();s.heading.copy(s.z);}
   s.y.crossVectors(s.z,s.x).normalize();s.z.crossVectors(s.x,s.y).normalize();
   entry.fx.group.quaternion.setFromRotationMatrix(s.basis.makeBasis(s.x,s.y,s.z));
  }

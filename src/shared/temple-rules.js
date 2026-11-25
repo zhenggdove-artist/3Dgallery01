@@ -2019,8 +2019,8 @@ function tickPersistentAttacks(world,actors,now,rng){
     }
     return !!applied;
    };
-   // Fixed six-second Coconut Palm hazard: one server-owned collision pulse
-   // at cast/2s/4s, no fourth hit at 6s. Inherited fusion palm echoes use
+   // Fixed three-second Coconut Palm hazard: one server-owned collision pulse
+   // at cast/2s, no late hit after 3s. Inherited fusion palm echoes use
    // their existing reduced damage. Skip moving ray and one-shot detonation.
    if(palmStorm){
     fx.pulseCount??=0;

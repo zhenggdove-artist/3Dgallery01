@@ -8,7 +8,7 @@ test('goldfish acquires a player behind launch, changes elevation and travels tw
  assert.equal(GOLDFISH_SWIM_MS,2400);assert.ok(fx.position[2]<-4.9);assert.ok(fx.position[1]<3.5);assert.equal(fx.travelled,5);
 });
 test('tide uses an independent one-second push every three seconds',()=>{
- assert.equal(TIDE_PUSH_INTERVAL_MS,3000);assert.equal(TIDE_PUSH_DURATION_MS,1000);assert.equal(TIDE_PUSH_DISTANCE,1.5);
+ assert.equal(TIDE_PUSH_INTERVAL_MS,3000);assert.equal(TIDE_PUSH_DURATION_MS,1000);assert.equal(TIDE_PUSH_DISTANCE,3);
  const code=readFileSync(new URL('../src/shared/temple-rules.js',import.meta.url),'utf8');
  assert.match(code,/victim\.tidePush=\{id:id\(\),time:now,durationMs:TIDE_PUSH_DURATION_MS/);
  assert.match(code,/nextPushAt:pushNow\?now\+TIDE_PUSH_INTERVAL_MS:nextPushAt/);
@@ -34,7 +34,7 @@ test('tide locks keep a three-second push schedule and a one-second monster disp
  assert.equal(world.monster.tidePush?.durationMs,1000);
  const z=world.monster.position[2];
  tickTidalChannels(world,[],T+7650,()=>.5);
- assert.ok(Math.abs(world.monster.position[2]-z-.75)<1e-6);
- tickTidalChannels(world,[],T+8150,()=>.5);
  assert.ok(Math.abs(world.monster.position[2]-z-1.5)<1e-6);
+ tickTidalChannels(world,[],T+8150,()=>.5);
+ assert.ok(Math.abs(world.monster.position[2]-z-3)<1e-6);
 });

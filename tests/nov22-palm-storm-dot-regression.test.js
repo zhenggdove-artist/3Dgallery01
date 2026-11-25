@@ -20,7 +20,7 @@ function castPalm(tier=1){
  return {world,palm,castAt,result};
 }
 test('five rarities share rebalanced proportional radius and identical VFX, warning and collision geometry',()=>{
- assert.equal(PALM_STORM_DURATION_MS,6000);assert.equal(PALM_STORM_TICK_MS,2000);
+ assert.equal(PALM_STORM_DURATION_MS,3000);assert.equal(PALM_STORM_TICK_MS,2000);
  for(let tier=1;tier<=5;tier++){
   const palm=itemById('palm-'+tier),q=weaponQuality(palm),stats=attackStats(palm,1);
   stats.range=+(stats.range*q.range).toFixed(2);
@@ -28,7 +28,7 @@ test('five rarities share rebalanced proportional radius and identical VFX, warn
   const former=stats.radius*.6*2.5;
   scaleUltimateFootprint(stats,palm,q);
   assert.ok(Math.abs(stats.radius-former*(PALM_ULTIMATE_RADIUS_MULTIPLIER/2.5))<.002,palm.id);
-  assert.equal(visibleCollisionLifetimeMs(palm,true),6000);
+  assert.equal(visibleCollisionLifetimeMs(palm,true),3000);
   const area=chargedArea(palm,[65,1.16,0],[0,0,1],stats,()=>0);
   const warning=spellFootprint(palm,[65,1.16,0],[0,0,1],stats,area,()=>0);
   assert.equal(area.mode,'area');assert.equal(warning.radius,area.radius);
@@ -38,14 +38,15 @@ test('five rarities share rebalanced proportional radius and identical VFX, warn
   const scene=new THREE.Scene(),vfx=new PlantUltimateEffects(scene);
   assert.ok(vfx.play({ultimate:true,area,origin:[65,1.16,0],direction:[0,0,1]},palm));
   assert.ok(Math.abs(vfx.active[0].group.scale.x*4.3-warning.radius)<.001);
-  assert.equal(vfx.active[0].duration,6);
+  assert.equal(vfx.active[0].duration,3);
   assert.equal(vfx.active[0].group.position.z,area.center[2]);
   vfx.dispose();
  }
 });
-test('server enforces exactly three storm pulses at 0, 2 and 4 seconds during six-second effect',()=>{
+test('server enforces exactly two storm pulses at 0 and 2 seconds during three-second effect',()=>{
  const {world,castAt}=castPalm(1),fx=world.persistentAttacks.find(v=>v.weapon==='palm-1');
- assert.ok(fx);assert.equal(fx.expiresAt-castAt,6000);
+ assert.ok(fx);assert.equal(fx.expiresAt-castAt,3000);
+ world.monster.position=[fx.area.center[0],0,fx.area.center[2]];
  const hp=world.monster.hp;
  tick(world,castAt+30);
  assert.ok(world.monster.hp<hp);assert.equal(fx.pulseCount,1);
@@ -54,13 +55,10 @@ test('server enforces exactly three storm pulses at 0, 2 and 4 seconds during si
  assert.equal(world.monster.hp,one);
  tick(world,castAt+2030);assert.equal(fx.pulseCount,2);
  const two=world.monster.hp;assert.ok(two<one);
- tick(world,castAt+3950);assert.equal(world.monster.hp,two);
- tick(world,castAt+4030);assert.equal(fx.pulseCount,3);
- const three=world.monster.hp;assert.ok(three<two);
- tick(world,castAt+5500);assert.equal(world.monster.hp,three);
- tick(world,castAt+6010);assert.equal(world.monster.hp,three);
+ tick(world,castAt+2990);assert.equal(world.monster.hp,two);
+ tick(world,castAt+3010);assert.equal(world.monster.hp,two);
  assert.equal(world.persistentAttacks.some(v=>v.id===fx.id),false);
- assert.equal((world.damageEvents||[]).filter(v=>v.target==='coconut-target').length,3);
+ assert.equal((world.damageEvents||[]).filter(v=>v.target==='coconut-target').length,2);
 });
 test('targets outside the true circle cannot be hit by the retired travelling projectile ray',()=>{
  const {world,castAt,result}=castPalm(1);
