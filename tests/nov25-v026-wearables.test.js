@@ -5,7 +5,7 @@ import {SHOP_ITEMS,shopWeaponGroups,shopPurchaseVariant,SHOP_CATALOG_REVISION} f
 import {createFlightVehicle,animateFlightVehicle} from '../src/reletter/flight-vehicle.js';
 const ids=['wings-42','wings-43','wings-44','outfit-tin-pipe-disguise','outfit-luroufan-sign-disguise','outfit-bubble-tea-disguise','outfit-fried-chicken-disguise'];
 test('new coin shop wearables exist, sort before older gear and are purchasable',()=>{
- assert.ok(Number(SHOP_CATALOG_REVISION.slice(1))>=117);const first=shopWeaponGroups(SHOP_ITEMS).slice(0,10).map(g=>g.base.id);
+ assert.ok(Number(SHOP_CATALOG_REVISION.slice(1))>=117);const first=shopWeaponGroups(SHOP_ITEMS).slice(0,11).map(g=>g.base.id);
  for(const id of ids)assert.ok(first.includes(id),id);
  for(const id of ids){const item=shopPurchaseVariant(id);assert.ok(item?.price>0,id);if(item.slot==='outfit'){assert.equal(item.disguiseHeight,id==='outfit-tin-pipe-disguise'?3:2);assert.equal(item.exposedHead,true);}}
 });

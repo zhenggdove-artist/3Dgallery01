@@ -31,10 +31,10 @@ test('tide locks keep a three-second push schedule and a one-second monster disp
  tickTidalChannels(world,[caster],T+4150,()=>.5);
  // Renew the existing live channel without resetting locks.
  for(let time=T+4400;time<=T+7150;time+=250){attack(time,{phase:'channel',charge:1});tickTidalChannels(world,[caster],time,()=>.5);}
- assert.equal(world.monster.tidePush?.durationMs,1000);
+ assert.equal(world.monster.tidePush?.durationMs,600);
  const z=world.monster.position[2];
- tickTidalChannels(world,[],T+7650,()=>.5);
- assert.ok(Math.abs(world.monster.position[2]-z-1.5)<1e-6);
- tickTidalChannels(world,[],T+8150,()=>.5);
- assert.ok(Math.abs(world.monster.position[2]-z-3)<1e-6);
+ tickTidalChannels(world,[],T+7450,()=>.5);
+ assert.ok(Math.abs(world.monster.position[2]-z-.9)<1e-6);
+ tickTidalChannels(world,[],T+7750,()=>.5);
+ assert.ok(Math.abs(world.monster.position[2]-z-1.8)<1e-6);
 });

@@ -86,7 +86,7 @@ test('charged frost eruptions damage only after the ground segment appears',()=>
  const hp=world.monster.hp;
  tickWorld(world,{now:at+450,actors:[actor],activeFighters:0,rng:()=>.5});
  assert.ok(world.monster.hp<hp,'damage occurs while Ice Shatter is still visibly active');
- assert.equal(world.monster.effects.freeze.until,at+3450);
+ assert.equal(world.monster.effects.freeze.until,at+2250);
  const firstHit=hp-world.monster.hp;
  const secondChargeAt=at+2100;
  assert.equal(applyAction(world,actor,{action:'attack',phase:'charge'},
@@ -99,6 +99,6 @@ test('charged frost eruptions damage only after the ground segment appears',()=>
  const prior=world.monster.hp;
  tickWorld(world,{now:secondAt+450,actors:[actor],activeFighters:0,rng:()=>.5});
  assert.ok(world.monster.hp<prior,'second ice blast still damages before six seconds');
- assert.equal(world.monster.effects.slow.power,.3);
+ assert.equal(world.monster.effects.slow.power,.18);
  assert.ok(firstHit>prior-world.monster.hp,'first freezing hit is stronger than subsequent slowing hit');
 });

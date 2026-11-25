@@ -1,3 +1,4 @@
+import {applySkillAreaScale} from '../src/shared/equipment-tuning.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -45,6 +46,7 @@ test('every weapon receives a smaller warning with its quality multiplier',()=>{
    stats.range=+(item.chargedRange*q.range).toFixed(2);
    stats.radius=Math.max(stats.radius,5.9*q.visual);
   }
+  applySkillAreaScale(stats,item);
   assert.ok(Math.abs(v.footprint.range-stats.range)<.001,item.id);
   if(item.id.startsWith('pan-')||item.id.startsWith('whip-')){
    assert.equal(v.footprint.shape,'circle',item.id+' blast telegraph');

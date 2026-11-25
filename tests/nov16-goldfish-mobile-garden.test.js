@@ -59,7 +59,7 @@ test('goldfish collision damages and knocks back other players, but not its cast
  const hp=p.hp;
  tickWorld(world,{now:NOW+4300,actors:[actor,victim],activeFighters:0,rng:()=>.5});
  assert.ok(p.hp<hp);
- assert.equal(p.hitReaction.knockback,14);
+ assert.ok(Math.abs(p.hitReaction.knockback-14*.8)<1e-8);
  assert.equal(world.profiles.caster.hp,100);
 });
 

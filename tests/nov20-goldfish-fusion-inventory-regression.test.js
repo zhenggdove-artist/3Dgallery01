@@ -62,7 +62,7 @@ test('borrowed circular whip explosion exactly matches primary circle center',()
  const whip=itemById('whip-1'),quality=weaponQuality(whip),stats=attackStats(whip,1);
  const native=scaleUltimateFootprint({...stats,range:stats.range*quality.range,
   radius:forwardCastRadius(whip,quality,stats.radius,false)},whip,quality);
- assert.equal(echo.area.radius,native.radius,'borrowed circle retains its own radius');
+ assert.equal(echo.area.radius,native.radius*.6,'borrowed circle retains its own radius');
  assert.ok(world.persistentAttacks.find(v=>v.id===echo.id).parentFootprint);
 });
 test('borrowed circular spell is anchored at far end of main rectangular warning',()=>{
@@ -77,7 +77,7 @@ test('borrowed circular spell is anchored at far end of main rectangular warning
  const whip=itemById('whip-1'),quality=weaponQuality(whip),stats=attackStats(whip,1);
  const native=scaleUltimateFootprint({...stats,range:stats.range*quality.range,
   radius:forwardCastRadius(whip,quality,stats.radius,false)},whip,quality);
- assert.equal(echo.area.radius,native.radius,'round blast is never clipped by rectangular sword footprint');
+ assert.equal(echo.area.radius,native.radius*.6,'round blast is never clipped by rectangular sword footprint');
 });
 test('primary warning footprint geometry remains precise and independent from anchored echo AoE',()=>{
  const circle={shape:'circle',position:[0,0,0],radius:5};

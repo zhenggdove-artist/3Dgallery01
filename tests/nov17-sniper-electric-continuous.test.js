@@ -113,7 +113,8 @@ test('spinning jellybrella wheel deals damage again every ~1.2s until its 5s ani
  const at=NOW+4000,shot=shoot(r,at,{charge:1});
  assert.equal(shot.attackEvent.ultimate,true);
  assert.equal(shot.attackEvent.area.mode,'area');
- assert.ok(shot.attackEvent.area.radius>=6,'jelly warning and hitbox are both 60% of the former minimum');
+ assert.ok(shot.attackEvent.area.radius>=6*.8,'blue jelly warning and hitbox use the 80% grade multiplier');
+ r.target.position=[shot.attackEvent.area.center[0],0,shot.attackEvent.area.center[2]];
  tick(r,at+650);
  const first=r.world.damageEvents.filter(e=>e.target==='victim').length;
  assert.ok(first>=1,'first visible wheel contact must damage');

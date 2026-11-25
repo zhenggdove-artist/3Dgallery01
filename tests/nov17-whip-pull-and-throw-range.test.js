@@ -1,3 +1,4 @@
+import {skillGradeScale} from '../src/shared/equipment-tuning.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -59,8 +60,8 @@ test('whip applies all quality-based pull durations on server-confirmed contact'
   victim.position=[center[0]+.2,center[1]-.12,center[2]];
   tickWorld(world,{now:at+650,actors:[caster,victim],activeFighters:0,rng:()=>.5});
   assert.ok(target.hitReaction?.whipPull,weaponId+' actually pulls target: '+JSON.stringify({area:attack.attackEvent.area,attacks:world.persistentAttacks,position:victim.position,hp:target.hp,reaction:target.hitReaction}));
-  assert.equal(target.hitReaction.whipPull.durationMs,whipPullDurationMs(tier),weaponId);
-  assert.equal(target.hitReaction.whipPull.speed,WHIP_PULL_SPEED);
+  assert.equal(target.hitReaction.whipPull.durationMs,Math.round(whipPullDurationMs(tier)*skillGradeScale({slot:'weapon',tier})),weaponId);
+  assert.equal(target.hitReaction.whipPull.speed,WHIP_PULL_SPEED*skillGradeScale({slot:'weapon',tier}));
   assert.deepEqual(target.hitReaction.whipPull.center,[center[0],center[2]]);
   assert.equal(target.hitReaction.stunMs,0,'pull allows steering immediately');
   assert.equal(target.effects?.root,undefined,'no root may prevent resisting the suction');
@@ -130,8 +131,8 @@ test('whip ultimate pulls both the boss and the five-monster pack toward its cen
   const victims=[world.monster,world.monsters[0]];
   for(const monster of victims){
    assert.ok(monster.whipPull,'monster must gain a server-owned suction window');
-   assert.equal(monster.whipPull.durationMs,whipPullDurationMs(tier));
-   assert.equal(monster.whipPull.speed,WHIP_PULL_SPEED);
+   assert.equal(monster.whipPull.durationMs,Math.round(whipPullDurationMs(tier)*skillGradeScale({slot:'weapon',tier})));
+   assert.equal(monster.whipPull.speed,WHIP_PULL_SPEED*skillGradeScale({slot:'weapon',tier}));
    assert.deepEqual(monster.whipPull.center,[cx,cz]);
   }
   const started=victims.map(monster=>monster.whipPull.id);

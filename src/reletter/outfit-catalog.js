@@ -70,7 +70,7 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   ['987-sign-disguise','987 Convenience Store Sign','#d32b35',3,2950,2,{hp:1.5,defense:.10}],
   ['bubble-tea-disguise','Giant Bubble Milk Tea','#c99b68',3,2950,2,{hp:1.5,speed:.08}],
   ['fried-chicken-disguise','Giant Taiwanese Fried Chicken Cutlet','#bd792e',3,2950,2,{hp:1.2,attack:.10}],
-  ['mutton-sign-disguise','老家羊肉爐招牌','#f1d626',3,2950,2.5,{hp:1.5,defense:.10}]
+  ['mutton-sign-disguise','Old Home Mutton Hot Pot Sign','#f1d626',3,2950,2.5,{hp:1.5,defense:.10}]
  ];
  OUTFITS.push(...disguises.map(([creature,name,color,tier,templePrice,disguiseHeight,bonuses])=>({
   id:'outfit-'+creature,name,color,tier,price:templePrice,templePrice,slot:'outfit',family:'outfit',

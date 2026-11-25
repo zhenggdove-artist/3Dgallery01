@@ -1,3 +1,4 @@
+import {applySkillAreaScale} from '../src/shared/equipment-tuning.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -115,7 +116,7 @@ test('saber ultimate warns with a sword-origin 60-degree sector, matching five n
  const quality=weaponQuality(item,fusion),stats=attackStats(item,1);
  stats.range=+(stats.range*quality.range).toFixed(2);
  stats.radius=+(stats.radius*quality.radius).toFixed(2);
- scaleUltimateFootprint(stats,item);
+ scaleUltimateFootprint(stats,item);applySkillAreaScale(stats,item);
  const world={floatingPlatforms:[]};
  const area=chargedArea(item,[5,1,9],direction,stats,(x,z,y)=>spellGroundHeight(world,x,z,y));
  preview.update(root,item,1,direction,{world},fusion);
@@ -301,7 +302,7 @@ test('charged sword warning and radius follow the halved saber collision reach',
  assert.equal(fx.sector.group.userData.vfxNumber,58);
  assert.equal(fx.footprint.shape,'sector');
  const expected=scaleUltimateFootprint({...stats,radius:+(stats.radius*weaponQuality(item).radius).toFixed(2)},item);
- assert.ok(Math.abs(fx.footprint.radius-expected.range)<1e-8);
+ applySkillAreaScale(expected,item);assert.ok(Math.abs(fx.footprint.radius-expected.range)<1e-8);
  assert.equal(fx.footprint.angleDeg,60);
  assert.ok(Math.abs(fx.footprint.position[2]-muzzle[2])<1e-8);
  fx.dispose();

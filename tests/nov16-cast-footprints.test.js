@@ -1,3 +1,4 @@
+import {applySkillAreaScale} from '../src/shared/equipment-tuning.js';
 import {GOLDFISH_SCHOOL_RADIUS} from '../src/shared/goldfish-school.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,7 +39,7 @@ test('original #58 points its apex from the actual clam muzzle and exactly spans
  const stats=attackStats(item,1),q=weaponQuality(item);
  stats.range=+(Math.max(stats.range,10)*q.range).toFixed(2);
  stats.radius=channelVisualRadius(item,q,stats.range);
- scaleUltimateFootprint(stats,item);
+ scaleUltimateFootprint(stats,item);applySkillAreaScale(stats,item);
  const area=chargedArea(item,muzzle,direction,stats,()=>0,true);
  assert.equal(area.mode,'sector');
  assert.equal(insideChargedArea(area,[3.6,1,4.7+area.range*.8]),true);
@@ -57,7 +58,7 @@ test('original #59 is a full-length blue forward strip with exact server range a
  const q=weaponQuality(item),stats=attackStats(item,1);
  stats.range=+(Math.max(stats.range,Math.min(18,item.range))*q.range).toFixed(2);
  stats.radius=channelVisualRadius(item,q,stats.range);
- scaleUltimateFootprint(stats,item);
+ scaleUltimateFootprint(stats,item);applySkillAreaScale(stats,item);
  nearly(fx.rectangle.settings.length*fx.rectangle.group.scale.x,stats.range,'full rectangle length');
  nearly(fx.rectangle.settings.width*fx.rectangle.group.scale.z,stats.radius*2,'full rectangle width');
  nearly(fx.rectangle.group.position.z,muzzle[2]+stats.range/2,'forward center');
@@ -85,6 +86,8 @@ test('all weapons have dimensional warning contracts derived from identical atta
    stats.radius=Math.max(stats.radius,5.9*quality.visual);
   }
   if(item.id==='goldfish'&&stats.ultimate)stats.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
+  // Apply after the returning giraffe and goldfish geometry overrides.
+  applySkillAreaScale(stats,item);
   if(item.id==='clam'||item.family==='saber'){
    assert.equal(a.shape,'sector',item.id);
    nearly(preview.sector.settings.size*preview.sector.group.scale.x,stats.range,item.id);
@@ -129,7 +132,7 @@ test('the blue #59 strip is narrower than old charged AoE and matches each staff
    stat.range=+(stat.range*q.range).toFixed(2);
    stat.radius=family==='ice'?forwardCastRadius(item,q,stat.radius,true):channelVisualRadius(item,q,stat.range);
 
-   scaleUltimateFootprint(stat,item);
+   scaleUltimateFootprint(stat,item);applySkillAreaScale(stat,item);
 
    if(family==='ice'){
     assert.equal(v.footprint.shape,'rectangle',item.id+' is a forward frost eruption strip');

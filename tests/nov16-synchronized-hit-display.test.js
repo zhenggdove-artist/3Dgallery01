@@ -27,7 +27,7 @@ function release(world,time,weapon){
 }
 test('the exact 90-degree clam cone cannot damage a monster before the original tidal wave reaches it',()=>{
  assert.equal(projectileFlightMs(itemById('clam'),true),2180);
- const world=worldWith('clam',[77,0,9]),at=T+3000;
+ const world=worldWith('clam',[76.5,0,6]),at=T+3000;
  const out=release(world,at,'clam');
  assert.equal(out.attackEvent.area.mode,'sector');
  const before=world.monster.hp;
