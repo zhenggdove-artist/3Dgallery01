@@ -33,7 +33,7 @@ test('ten outfit collections each expose five individual styles and eleven creat
  const groups=shopWeaponGroups(SHOP_ITEMS).filter(g=>g.base.slot==='outfit');
  assert.equal(groups.filter(g=>!g.base.r113Wearable).length,28);
  const disguises=groups.filter(g=>g.base.r113Wearable);
- const expectedDisguises=['chimney','cardboard','garbage-bag','trash-can','postbox','wooden-horse','water-tower','utility-pole','tin-pipe','luroufan-sign','luroufan-bowl','notok-sign','987-sign','bubble-tea','fried-chicken','mutton-sign','ggcola','bei7-road','traffic-light','taipower-box'].map(name=>'outfit-'+name+'-disguise');
+ const expectedDisguises=['chimney','cardboard','garbage-bag','trash-can','postbox','wooden-horse','water-tower','utility-pole','tin-pipe','luroufan-sign','luroufan-bowl','notok-sign','987-sign','bubble-tea','fried-chicken','mutton-sign','ggcola','bei7-road','traffic-light','taipower-box','pooh-plush'].map(name=>'outfit-'+name+'-disguise');
  assert.deepEqual(disguises.map(g=>g.base.id).sort(),expectedDisguises.sort());
  for(const g of disguises){assert.equal(g.variants.length,1);assert.ok(g.base.price>0);}
  for(const g of groups.filter(g=>shopOutfitCollection(g.base))){

@@ -1,3 +1,4 @@
+import {disposeGardenModel} from './reletter/garden-art.js';
 import * as THREE from 'three';
 import {GrassField} from './grass-field.js';
 import {OuterCity} from './outer-city.js';
@@ -236,7 +237,7 @@ export class TempleArena{
   if(!previous||previous.groundDrops!==world.groundDrops){
    const active=new Set((world.groundDrops||[]).map(d=>d.id));
    for(const prior of previous?.groundDrops||[]){
-    if(prior.kind==='coin'&&!active.has(prior.id))this.spawnDropCoinFlight(prior);
+    if(!active.has(prior.id)&&(world.pickupReceipts||[]).some(r=>r.id===prior.id))this.spawnDropCoinFlight(prior);
    }
    this.syncHearts();this.syncDrops();
   }
@@ -246,19 +247,21 @@ export class TempleArena{
     previous.customPedestals!==world.customPedestals||previous.platformOverrides!==world.platformOverrides||
     previous.artworkLayout!==world.artworkLayout||previous.customArtworks!==world.customArtworks||
     previous.removedPlatformIds!==world.removedPlatformIds)this.displayPlatforms.sync();
+  if(!previous||previous.discPaint!==world.discPaint)this.displayPlatforms.paint.sync(world.discPaint);
   if(!previous||previous.structures!==world.structures)this.syncStructures();
   this.adventure.sync(world);this.syncMonster();
   }
   spawnDropCoinFlight(drop){
    if(!this.coinMesh||!Array.isArray(drop.position))return;
-   if(this.dropCoinFlights.length>=40){const old=this.dropCoinFlights.shift();old.mesh.removeFromParent();}
-   // The coin geometry and material are shared, so do not dispose them.
-   const mesh=new THREE.Mesh(this.coinMesh.geometry,this.coinMesh.material);
-   mesh.name='Collected coin ascension';
-   mesh.position.fromArray(drop.position);mesh.position.y+=.55;
-   mesh.scale.setScalar(1.6);
-   this.scene.add(mesh);
-   this.dropCoinFlights.push({mesh,age:0,startY:mesh.position.y,spin:Math.random()*Math.PI*2});
+   const kind=groundDropVisualKind(drop);let mesh,dispose=()=>{},scale=1;
+   if(kind==='heart'){mesh=this.heartDrops.get(drop.id);if(mesh){this.heartDrops.delete(drop.id);dispose=()=>{mesh.geometry.dispose();mesh.material.dispose();};}}
+   else if(kind==='equipment'){mesh=this.adventure.takeLoot(drop.id);if(mesh)dispose=()=>disposeGardenModel(mesh);}
+   else if(kind==='cash'){mesh=new THREE.Mesh(createCashDropGeometry(THREE),cashDropMaterial(THREE,itemById(drop.itemId)));mesh.position.fromArray(drop.position);mesh.position.y+=.85;dispose=()=>{mesh.geometry.dispose();mesh.material.dispose();};}
+   else if(kind==='coin'){mesh=new THREE.Mesh(this.coinMesh.geometry,this.coinMesh.material);mesh.position.fromArray(drop.position);mesh.position.y+=.55;mesh.scale.setScalar(1.6);}
+   if(!mesh)return;
+   if(this.dropCoinFlights.length>=40){const old=this.dropCoinFlights.shift();old.mesh.removeFromParent();old.dispose();}
+   mesh.name='Collected '+kind+' ascension';this.scene.add(mesh);
+   this.dropCoinFlights.push({mesh,age:0,startY:mesh.position.y,spin:mesh.rotation.y,scale:mesh.scale.clone(),dispose});
   }
   syncHearts(){
     const live=new Set();
@@ -369,8 +372,8 @@ export class TempleArena{
      const t=Math.min(1,fly.age/.8),ease=1-(1-t)*(1-t);
      fly.mesh.position.y=fly.startY+5*ease;
      fly.mesh.rotation.set(0,fly.spin+fly.age*13,fly.age*2.5);
-     fly.mesh.scale.setScalar(1.6*(1-t)**1.25);
-     if(t>=1){fly.mesh.removeFromParent();this.dropCoinFlights.splice(i,1);}
+     fly.mesh.scale.copy(fly.scale).multiplyScalar((1-t)**1.25);
+     if(t>=1){fly.mesh.removeFromParent();fly.dispose();this.dropCoinFlights.splice(i,1);}
     }
     for(const id of this.world?.removedArtworkIds||[]){const gone=this.artworks.get(id);if(gone)gone.visible=false;}
     for(const p of this.artworkRenderDefinitions()){const root=this.artworks.get(p.id),state=this.world?.artworks?.[p.id];if(!root||!state||root.userData.editing)continue;const layout=this.world?.artworkLayout?.[p.id]||this.defaultLayout[p.id]||{position:p.artPosition,rotation:[0,p.artYaw,0],scale:[1,1,1]};root.userData.titleOverride=layout.title;root.userData.authorOverride=layout.author;const d=root.userData,prior=d.frameAppearanceInputs;if(!prior||prior.appearance!==layout.appearance||prior.preview!==d.previewAppearance||prior.title!==layout.title||prior.author!==layout.author||prior.record!==d.record||prior.recordTitle!==d.record?.title||prior.draft!==d.editTitleDraft||prior.applied!==d.appearanceSignature||prior.plate!==d.titlePlateSignature){applyArtworkAppearance(root,layout.appearance);d.frameAppearanceInputs={appearance:layout.appearance,preview:d.previewAppearance,title:layout.title,author:layout.author,record:d.record,recordTitle:d.record?.title,draft:d.editTitleDraft,applied:d.appearanceSignature,plate:d.titlePlateSignature};}const now=wallNow,visual=artworkRenderFlight(state,this.localArtworkFlights.get(p.id),now);if(!visual.local)this.localArtworkFlights.delete(p.id);if(visual.waiting){root.visible=false;continue;}const holder=state.holder&&playerRoots.get(state.holder);if(holder&&!visual.local){root.visible=true;root.position.copy(holder.position);root.position.y+=1.6;root.rotation.set(0,holder.rotation.y+Math.PI,Math.sin(time*2)*.05);root.scale.fromArray(layout.scale).multiplyScalar(.48);continue;}root.scale.fromArray(layout.scale);const flight=visual.event;if(flight&&root.userData.flightId!==flight.id){root.userData.flightId=flight.id;root.userData.flightLanding=artworkLanding(flight,(x,z,y)=>this.groundHeight(x,z,y));}if(flight&&now-flight.time<root.userData.flightLanding.time*1000){const age=Math.max(0,(now-flight.time)/1000);root.visible=true;root.position.fromArray(artworkPosition(flight,age));root.rotation.set(...layout.rotation);continue;}const available=Date.now()>=(state.availableAt||0);root.visible=available;if(available){root.position.fromArray(layout.position);root.position.y+=Math.sin(time*.72+p.index)*(this.artFloat??.17);root.rotation.set(...layout.rotation);}}

@@ -173,7 +173,7 @@ export const isRestorativeDrop=drop=>itemById(drop?.itemId)?.slot==='consumable'
 export function groundDropVisualKind(drop){if(isRestorativeDrop(drop))return 'cash';if(drop?.kind==='consumable')return null;if(drop?.kind==='coin'||drop?.kind==='heart')return drop.kind;return itemById(drop?.itemId)?'equipment':null;}
 
 export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>!['material','armor'].includes(item.slot)&&!item.notForSale&&!isRetiredHeadgear(item)&&item.price>0));
-export const SHOP_CATALOG_REVISION='r122';
+export const SHOP_CATALOG_REVISION='r123';
 export const SHOP_CATALOG_IDS=Object.freeze(SHOP_ITEMS.map(item=>item.id).sort());
 // Canonical price keys distinguish every weapon quality, including exotics.
 export const shopPriceKey=item=>item.id+(item.slot==='weapon'?':'+(item.shopTier??(item.tier||1)):'');
@@ -220,21 +220,22 @@ export function weightedChoice(entries,rng=Math.random){
   return entries.at(-1);
 }
 
-export function groundDropRoll(rng=Math.random){
+export function groundDropRoll(rng=Math.random,excluded={}){
+ const allowed=item=>!Object.hasOwn(excluded,item.id);
  // Only coins and equippable gear may spawn. Former material weight is
  // redistributed to the gear categories rather than creating dead pickups.
  const kind=weightedChoice([
   {id:'coin',weight:34},{id:'weapon',weight:26},{id:'equipment',weight:20},{id:'consumable',weight:20}
  ],rng).id;
  if(kind==='coin')return {kind,amount:20+Math.floor(rng()*41)};
- if(kind==='consumable')return {kind,itemId:weightedChoice(COMFORT_ITEMS.map((item,i)=>({id:item.id,weight:[45,40,15][i]})),rng).id};
+ if(kind==='consumable'){const pool=COMFORT_ITEMS.map((item,i)=>({id:item.id,weight:[45,40,15][i]})).filter(allowed);return pool.length?{kind,itemId:weightedChoice(pool,rng).id}:{kind:'coin',amount:20};}
  const pool=kind==='weapon'?WEAPONS.filter(item=>item.tier>0&&item.tier<=3&&!item.notForSale):
   RELETTER_ITEMS.filter(item=>['head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier<=3);
- const weighted=pool.map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));
- return {kind,itemId:weightedChoice(weighted,rng).id};
+ const weighted=pool.filter(allowed).map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));
+ return weighted.length?{kind,itemId:weightedChoice(weighted,rng).id}:{kind:'coin',amount:20};
 }
 
-export function monsterDropRoll(rng=Math.random){
-  const pool=RELETTER_ITEMS.filter(item=>['weapon','head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier>0).map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
-  return {kind:'equipment',itemId:weightedChoice(pool,rng).id};
+export function monsterDropRoll(rng=Math.random,excluded={}){
+  const pool=RELETTER_ITEMS.filter(item=>['weapon','head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier>0&&!Object.hasOwn(excluded,item.id)).map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
+  return pool.length?{kind:'equipment',itemId:weightedChoice(pool,rng).id}:{kind:'coin',amount:20};
 }

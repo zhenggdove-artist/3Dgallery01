@@ -11,7 +11,7 @@ export function softPorkGeometry(T,seed=0){
 function random(seed){return ()=>{seed=(1664525*seed+1013904223)>>>0;return seed/4294967296;};}
 function texture(T,record,w,h,paint){const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;paint(canvas.getContext('2d'),w,h);const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);return tex;}
 function mesh(T,g,geo,mat,p=[0,0,0],s=[1,1,1]){const m=new T.Mesh(geo,mat);m.position.set(...p);m.scale.set(...s);g.add(m);return m;}
-const STREET_KINDS=new Set(['ggcola-disguise','bei7-road-disguise','traffic-light-disguise','taipower-box-disguise']);
+const STREET_KINDS=new Set(['ggcola-disguise','bei7-road-disguise','traffic-light-disguise','taipower-box-disguise','pooh-plush-disguise']);
 export function buildStreetOutfit(T,g,kind,record,mat){
  if(!STREET_KINDS.has(kind))return null;
  const b=(p,s,m)=>mesh(T,g,new T.BoxGeometry(1,1,1),m,p,s);
@@ -19,6 +19,23 @@ export function buildStreetOutfit(T,g,kind,record,mat){
  const ring=(p,r,t,m)=>mesh(T,g,new T.TorusGeometry(r,t,8,40),m,p);
  const lathe=(profile,m)=>mesh(T,g,new T.LatheGeometry(profile.map(p=>new T.Vector2(...p)),48),m);
  const rng=random(7823),steel=mat('#a6ada9',.65),black=mat('#262b29');
+ if(kind==='pooh-plush-disguise'){
+  const fur=mat('#c68c2b'),muzzle=mat('#dba144'),shirt=mat('#bd202c'),inside=mat('#a66c23');
+  const o=(p,s,m=fur)=>mesh(T,g,new T.SphereGeometry(1,24,16),m,p,s);
+  const fuzz=texture(T,record,256,256,(x,w,h)=>{x.fillStyle='#ffffff';x.fillRect(0,0,w,h);for(let i=0;i<14000;i++){x.fillStyle=i%2?'rgba(81,49,13,.16)':'rgba(255,244,196,.24)';const a=rng()*w,b=rng()*h;x.fillRect(a,b,1+rng()*2,1+rng()*3);}});fuzz.wrapS=fuzz.wrapT=T.RepeatWrapping;fuzz.repeat.set(3,3);fur.map=fuzz;muzzle.map=fuzz;
+  o([0,.90,0],[.45,.56,.31]);o([0,1.80,0],[.47,.47,.36]);o([0,1.66,.24],[.29,.22,.23],muzzle);
+  for(const side of [-1,1]){
+   o([side*.34,2.13,-.015],[.18,.17,.13]);o([side*.34,2.14,.075],[.11,.10,.055],inside);
+   o([side*.16,1.83,.31],[.043,.051,.028],black);
+   const brow=o([side*.16,1.99,.30],[.075,.021,.026],black);brow.rotation.z=side*.15;
+   const arm=o([side*.53,.92,0],[.12,.38,.13]);arm.rotation.z=side*.17;
+   const sleeve=o([side*.43,1.24,0],[.20,.20,.22],shirt);sleeve.rotation.z=-side*.25;
+   o([side*.22,.34,0],[.19,.36,.19]);o([side*.22,.09,.12],[.22,.12,.29]);
+  }
+  lathe([[.35,.83],[.47,.86],[.48,1.08],[.45,1.25],[.34,1.40],[.30,1.43]],shirt).material.side=T.DoubleSide;
+  // The muzzle is deliberately open at the actual wearer's head, not a second bear face.
+  return {openingY:1.66,frontZ:.47};
+ }
  if(kind==='ggcola-disguise'){
   const cola=mat('#6c240f'),pet=mat('#a95a2f'),red=mat('#d91622'),foam=mat('#e7ba79');cola.roughness=.22;pet.roughness=.2;red.roughness=.38;
   const profile=[[.10,.02],[.31,.02],[.39,.10],[.41,.25],[.36,.49],[.33,.69],[.39,.86],[.40,1.20],[.34,1.42],[.25,1.60],[.14,1.77],[.12,1.88],[.12,1.95]];

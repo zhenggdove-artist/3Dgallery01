@@ -1,3 +1,5 @@
+import {isDelisted,reclaimDelisted,retireShopItem} from './shop-retirement.js';
+import {validateDiscPaint} from './disc-paint.js';
 import {setTerrainStyle} from './terrain-style.js';
 import {wantedSettings,countWantedDeath} from './wanted-list.js';
 import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown,migrateSkillQuality,applySkillAreaScale,bloomHealRate} from './equipment-tuning.js';
@@ -59,7 +61,7 @@ const initialStructures=now=>[
 export function createInitialWorld(now=Date.now()){
   return {
     version:WORLD_VERSION,revision:1,createdAt:now,
-    profiles:{},customWings:[],shopPrices:{},equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
+    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},discPaint:{},pickupReceipts:[],equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},tidalLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
@@ -132,6 +134,7 @@ export function migrateWorld(raw,now=Date.now()){
     (itemById(drop.itemId)&&!['material','wings'].includes(itemById(drop.itemId).slot))));
   for(const drop of world.groundDrops)if(isRestorativeDrop(drop))drop.kind='consumable';
   world.persistentAttacks=world.persistentAttacks.filter(fx=>fx.weapon!=='fan'&&fx.kind!=='fan');
+  world.delistedShopItems??={};world.discPaint??={};world.pickupReceipts??=[];world.groundDrops=world.groundDrops.filter(d=>!isDelisted(world,d.itemId));
   return cleanLegacyScene(world);
 }
 
@@ -210,7 +213,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
   }
   // Repair a player's own original starter weapon unless it was deliberately
   // fused away. Never convert or overwrite a returning player's saved choice.
-  if(!current.inventory.includes(current.starterWeaponId)&&!current.spentStarterWeapon)
+  if(!isDelisted(world,current.starterWeaponId)&&!current.inventory.includes(current.starterWeaponId)&&!current.spentStarterWeapon)
    current.inventory.unshift(current.starterWeaponId);
   current.equipment??={...STARTER_LOADOUT,weapon:current.starterWeaponId};
    if(current.admin&&!current.gmWingsInitialized)current.gmWingsInitialized=true;
@@ -257,6 +260,7 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
    }
    current.gmR106WearablesGranted=ITEMS.filter(i=>i.r106Wearable).every(i=>current.inventory.includes(i.id));
   }
+  reclaimDelisted(world,current);
   ensureWeaponAffixes(current); // Server-owned one-time roll, persisted on join.
   refreshStats(world,current,now);
   if(current.deadUntil>0&&current.deadUntil<=now&&current.hp<=0)
@@ -299,7 +303,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true)
        radiusScale:v.gmTuning?.radiusScale??1,consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
+    delistedShopItems:clone(world.delistedShopItems||{}),discPaint:clone(world.discPaint||{}),pickupReceipts:clone(world.pickupReceipts||[]),wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -428,6 +432,12 @@ export function applyAction(world,actor,body,context={}){
    world.revision=(world.revision||0)+1;
    return {notice:'裝備數值已更新 · '+item.name+' · '+change.variants.length+' 款品質',tuningKey:shopPriceKey(item),tuningCount:change.variants.length};
   }
+  if(body.action==='gm-shop-delist'){
+   if(!profile.admin||actor.admin!==true)return {error:'GM only'};
+   const result=retireShopItem(world,String(body.itemId||''),now);if(result.error)return result;
+   for(const p of Object.values(world.profiles))refreshStats(world,p,now);
+   world.revision++;return result;
+  }
   if(body.action==='gm-shop-price'){
    // Role is obtained from the authenticated server session, not the request payload.
    if(!profile.admin||actor.admin!==true)return {error:'GM only'};
@@ -538,9 +548,16 @@ export function applyAction(world,actor,body,context={}){
    if(!profile.admin)return {error:'GM only'};
    const count=Object.values(world.wallPaint||{}).reduce((total,walls)=>
     total+Object.values(walls||{}).reduce((n,strokes)=>n+(Array.isArray(strokes)?strokes.length:0),0),0);
-   world.wallPaint={};world.wallPaintRevision=(world.wallPaintRevision||0)+1;
+   world.wallPaint={};world.discPaint={};world.wallPaintRevision=(world.wallPaintRevision||0)+1;
    world.revision=(world.revision||0)+1;
    return {notice:'已清除全部 '+count+' 筆建築塗鴉',cleanGraffiti:true,removedStrokes:count};
+  }
+  if(body.action==='paint-disc'){
+   if(actor.role!=='fighter'||profile.hp<=0||profile.deadUntil>now)return {error:'Cannot paint'};
+   const s=body.stroke||{},v=validateDiscPaint(world,actor,s);if(v.error)return v;
+   world.discPaint??={};const list=world.discPaint[s.lotId]??=[];
+   if(list.length>=100||Object.values(world.discPaint).reduce((n,a)=>n+a.length,0)>=2000)return {error:'Disc graffiti archive full'};
+   const stroke={id:'paint-'+id(),owner:actor.key,lotId:s.lotId,wall:'top',tool:s.tool,color:s.color,size:s.size,points:v.points,time:now,...(typeof s.clientId==='string'&&/^[a-zA-Z0-9-]{1,80}$/.test(s.clientId)?{clientId:s.clientId}:{})};list.push(stroke);world.revision++;return {paintStroke:stroke};
   }
   if(body.action==='paint-building'){
    if(actor.role!=='fighter')return {error:'Spectators cannot paint'};
@@ -700,7 +717,7 @@ export function applyAction(world,actor,body,context={}){
       if(world.removedPlatformIds.includes(key))return {error:'圓盤已被刪除'};
       world.removedPlatformIds.push(key);
     }
-    if(world.platformOverrides)delete world.platformOverrides[key];
+    if(world.platformOverrides)delete world.platformOverrides[key];if(world.discPaint)delete world.discPaint[key];
     world.revision++;
     return {notice:'圓盤已刪除 · 所有玩家同步',platformId:key};
   }
@@ -798,7 +815,7 @@ function pickupCoin(world,profile,actor,body,now){
 
 function pickupDrop(world,profile,actor,body,now){
   const index=world.groundDrops.findIndex(drop=>drop.id===body.dropId);if(index<0)return {error:'Drop is gone'};
-  const drop=world.groundDrops[index];if(drop.expiresAt<=now)return {error:'Drop expired'};
+  const drop=world.groundDrops[index];if(isDelisted(world,drop.itemId))return {error:'Item is delisted'};if(drop.expiresAt<=now)return {error:'Drop expired'};
    if(drop.kind==='material'||drop.itemId&&!itemById(drop.itemId))
     return {error:'Obsolete material drops can no longer be collected'};
    if(drop.itemId&&itemById(drop.itemId)?.slot==='wings')
@@ -807,7 +824,7 @@ function pickupDrop(world,profile,actor,body,now){
    if(!near(actor,drop.position,3.2))return {error:'Move closer to the drop'};
   if(drop.owner===actor.key&&now<drop.ownerLockedUntil)return {error:'Drop is still settling'};
   world.groundDrops.splice(index,1);if(drop.kind==='coin')earn(profile,drop.amount,world);else if(drop.kind==='heart'){if(profile.hp>=profile.maxHp){world.groundDrops.splice(index,0,drop);return {error:'Health is full'};}profile.hp=Math.min(profile.maxHp,profile.hp+(drop.amount||25));}else{addItem(profile,drop.itemId);const item=itemById(drop.itemId);if(item&&EQUIPPABLE_SLOTS.includes(item.slot)&&!profile.equipment[item.slot])selectEquipmentInstance(profile,item.slot,profile.inventory.length-1);}
-  if(drop.itemId){profile.itemOrigins??={};profile.itemOrigins[drop.itemId]='monster';}world.activity.itemsClaimed++;return {notice:drop.kind==='coin'?`+${drop.amount} coins`:drop.kind==='heart'?'Health restored':`Picked up ${itemById(drop.itemId)?.name}`};
+  if(drop.itemId){profile.itemOrigins??={};profile.itemOrigins[drop.itemId]='monster';}world.pickupReceipts??=[];world.pickupReceipts.push({id:drop.id,time:now});if(world.pickupReceipts.length>64)world.pickupReceipts.shift();world.activity.itemsClaimed++;return {notice:drop.kind==='coin'?`+${drop.amount} coins`:drop.kind==='heart'?'Health restored':`Picked up ${itemById(drop.itemId)?.name}`};
 }
 
 function pickupArtwork(world,actor,body,now){
@@ -850,7 +867,7 @@ function throwArtwork(world,profile,actor,body,context,now){
 }
 
 function buy(world,profile,body){
- const base=SHOP_ITEMS.find(entry=>entry.id===body.itemId);
+ const base=SHOP_ITEMS.find(entry=>entry.id===body.itemId&&!isDelisted(world,entry.id));
  if(!base)return {error:'Item is not sold'};
  const weaponChoice=base.slot==='weapon';
   const qualityTier=body.qualityTier;
@@ -1591,7 +1608,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
     (owner==='monster'||world.monster?.id===owner||(world.monsters||[]).some(m=>m.id===owner))?'monster':'status',target.position))||changed;}
   world.groundDrops=world.groundDrops.filter(drop=>drop.expiresAt>now);if(world.groundDrops.length>ECONOMY.maxGroundDrops)world.groundDrops.splice(0,world.groundDrops.length-ECONOMY.maxGroundDrops);
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
-  if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
+  if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng,world.delistedShopItems);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
   if(activeFighters>0&&!world.monster.active&&now>=world.monster.nextSpawnAt){const spawn=MONSTER_SPAWNS[Math.floor(rng()*MONSTER_SPAWNS.length)],variant=['warden','drowned','signal'][Math.floor(rng()*3)],maxHp={warden:420,drowned:520,signal:360}[variant];world.monster={active:true,id:id(),variant,position:[...spawn],hp:maxHp,maxHp,generation:(world.monster.generation||0)+1,spawnedAt:now,nextAttackAt:now+2_000,nextSpawnAt:now+ECONOMY.monsterIntervalMs};changed=true;}
   if(world.monster.active){const monster=world.monster;monster.model=ISLAND_ENEMIES.includes(monster.model)?monster.model:ISLAND_ENEMIES[(monster.generation||0)%ISLAND_ENEMIES.length];if(insideArtSanctuary(monster.position)){monster.position=[...MONSTER_SPAWNS[(monster.generation||0)%MONSTER_SPAWNS.length]];monster.skills=[];}monster.attackStyles=true;monster.level??=1+(monster.generation||0)%12;monster.damage=12+monster.level*2;monster.bodyHeight=ENEMY_HEIGHT;monster.bodyRadius=ENEMY_RADIUS;monster.position[1]=0;const fighters=actors.filter(a=>a.role==='fighter'&&world.profiles[a.key]?.hp>0&&!insideArtSanctuary(a.position));monster.lastPosition=[...monster.position];advanceIslandEnemy(monster,fighters,now,{disabled:!!monster.panBlastFlight||!!monster.whipPull||!!monster.vortexSpin&&now<monster.vortexSpin.time+VORTEX_SPIN_MS||!!effectActive(monster,'stun',now)||!!effectActive(monster,'root',now)||!!effectActive(monster,'freeze',now),silenced:!!effectActive(monster,'paralysis',now),slow:effectActive(monster,'root',now)?1:effectActive(monster,'slow',now)?.power||0,move:(target,distance)=>{
  const confused=effectActive(monster,'confuse',now);
@@ -2549,7 +2566,7 @@ function tickPersistentAttacks(world,actors,now,rng){
  return changed||world.persistentAttacks.length!==old;
 }
 
-function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount*=1+(effectActive(monster,'soaked',now)?.power||0);const hpLost=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-hpLost);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng);world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=2;
+function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.monster,hitPosition=null){if(!monster?.active)return null;amount*=1+(effectActive(monster,'expose',now)?.power||0);amount*=1+(effectActive(monster,'soaked',now)?.power||0);const hpLost=Math.min(monster.hp,amount);monster.hp=Math.max(0,monster.hp-hpLost);recordTempleDamage(world,{amount,kind,position:hitPosition||[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.6,monster.position[2]],owner:profile?.key,target:monster.id},now);monster.lastHitAt=now;if(profile?.key){monster.aggroTarget=profile.key;monster.aggroUntil=now+26000;}if(monster.hp>0)return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:monster.hp,defeated:false};const coin=Math.floor(ECONOMY.monsterCoinMin+rng()*(ECONOMY.monsterCoinMax-ECONOMY.monsterCoinMin+1)),gear=monsterDropRoll(rng,world.delistedShopItems);world.groundDrops.push({id:id(),kind:'coin',amount:coin,position:[monster.position[0]-1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs},{id:id(),...gear,position:[monster.position[0]+1,.4,monster.position[2]],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});monster.active=false;monster.defeatedAt=now;monster.nextSpawnAt=now+ECONOMY.monsterIntervalMs;world.activity.itemsSpawned+=2;
  world.monsterDeathEvents??=[];
  world.monsterDeathEvents.push({id:id(),monsterId:monster.id,time:now,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]]});
  if(world.monsterDeathEvents.length>48)world.monsterDeathEvents.splice(0,world.monsterDeathEvents.length-48);

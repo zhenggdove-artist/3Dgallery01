@@ -1,3 +1,4 @@
+import {DiscPaintView} from './disc-paint-view.js';
 import * as THREE from 'three';
 import {artworkDefinitions} from './shared/artwork-library.js';
 
@@ -5,7 +6,7 @@ import {artworkDefinitions} from './shared/artwork-library.js';
 // Player uploads have no surrounding discs, staircases or cone bases.
 export class DisplayPlatforms{
  constructor(arena){
-  this.arena=arena;this.discs=[];this.cones=[];this.lastFloatAt=-Infinity;
+  this.arena=arena;this.paint=new DiscPaintView(this);this.discs=[];this.cones=[];this.lastFloatAt=-Infinity;
   this.floatMatrix=new THREE.Matrix4();this.floatPosition=new THREE.Vector3();
   this.floatScale=new THREE.Vector3();this.floatQuaternion=new THREE.Quaternion();
   this.geometry=new THREE.CylinderGeometry(1,1.06,.4,48);
@@ -97,7 +98,7 @@ export class DisplayPlatforms{
    return (hash>>>0)/4294967296;
   };
   for(const d of [...discs,...cones])d.floatPhase=seedPhase(d.key);
-  this.discs=discs;this.cones=cones;this.select(this.selectedKey);
+  this.discs=discs;this.cones=cones;this.paint.sync(a.world?.discPaint);this.select(this.selectedKey);
   this.lastFloatAt=-Infinity;this.update(a.clock||0);
  }
  // Cosmetic motion only: physics uses the fixed deck surface to avoid
@@ -118,7 +119,7 @@ export class DisplayPlatforms{
     const edited=this.editPreview?.key===d.key?this.editPreview:null;
     this.floatPosition.set(d.position[0]+dx,d.position[1]+dy,d.position[2]+dz);
     this.floatScale.set(edited?0:d.radius,edited?0:(d.height||1),edited?0:d.radius);
-    mesh.setMatrixAt(i,this.floatMatrix.compose(this.floatPosition,this.floatQuaternion,this.floatScale));
+    mesh.setMatrixAt(i,this.floatMatrix.compose(this.floatPosition,this.floatQuaternion,this.floatScale));if(mesh===this.mesh)this.paint.transform(d.key,this.floatPosition,d.radius,!edited);
     if(d.key===this.selectedKey){
       const visual=mesh===this.pedestals?this.coneHighlight:this.highlight;
       if(edited){

@@ -78,7 +78,9 @@ export class CityWallPainter{
   const origin=this.camera.position.toArray();
   const direction=new THREE.Vector3(x,y,.5).unproject(this.camera)
    .sub(this.camera.position).normalize().toArray();
-  return cityPaintHit(origin,direction,18,this.arena.world?.cityDamage||{});
+  const wall=cityPaintHit(origin,direction,18,this.arena.world?.cityDamage||{}),disc=this.arena.displayPlatforms?.paint.pick(origin,direction);const player=this.controller()?.root?.position;
+  const near=disc&&player&&disc.point.distanceTo(player.clone().add(new THREE.Vector3(0,1.4,0)))<=19;
+  return near&&(!wall||disc.distance<(wall.distance??Infinity))?disc:wall;
  }
  consume(event){
   event.preventDefault();event.stopImmediatePropagation();
@@ -89,7 +91,7 @@ export class CityWallPainter{
   if(event.button!==0&&event.pointerType==='mouse')return;
   this.consume(event);
   const hit=this.pick(event);
-  if(!hit){this.ui.toast('Aim at a nearby building wall');return;}
+  if(!hit){this.ui.toast('Aim at a nearby wall or pink disc');return;}
   this.pointer=event.pointerId;
   this.canvas.setPointerCapture(event.pointerId);
   this.start(hit);
@@ -115,7 +117,7 @@ export class CityWallPainter{
       +(last[1]+(p[1]-last[1])*t).toFixed(4)]);
    }
   }else pts.push(p);
-  this.arena.outerCity.wallPaint.preview(this.stroke);
+  (this.stroke.wall==='top'?this.arena.displayPlatforms.paint:this.arena.outerCity.wallPaint).preview(this.stroke);
   return true;
  }
  move(event){
@@ -147,12 +149,12 @@ export class CityWallPainter{
   if(!this.stroke)return;
   const stroke=this.stroke;this.stroke=null;
   if(stroke.points.length>130)stroke.points=stroke.points.slice(0,130);
-  const paint=this.arena.outerCity?.wallPaint;
+  const paint=stroke.wall==='top'?this.arena.displayPlatforms?.paint:this.arena.outerCity?.wallPaint;
   // Move the finished segment into a local pending layer before starting
   // the next segment. Keep it visible throughout HTTP and snapshot latency.
   paint?.queuePreview(stroke);
   this.pending=this.pending.catch(()=>{}).then(async()=>{
-   try{const result=await this.send('paint-building',{stroke});if(!result?.paintStroke)throw Error('Paint could not be saved');paint?.ackPreview(stroke,result.paintStroke);}
+   try{const result=await this.send(stroke.wall==='top'?'paint-disc':'paint-building',{stroke});if(!result?.paintStroke)throw Error('Paint could not be saved');paint?.ackPreview(stroke,result.paintStroke);}
    catch(error){paint?.rejectPreview(stroke);this.ui.toast(error?.message||'Paint could not be saved');}
   });
  }
