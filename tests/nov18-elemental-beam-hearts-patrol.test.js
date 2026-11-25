@@ -76,7 +76,7 @@ test('heart pickups render once and never overlap, including older persisted dup
   assert.ok(Math.hypot(hearts[i].position[0]-hearts[j].position[0],hearts[i].position[2]-hearts[j].position[2])>=4);
  assert.ok(!hearts.some(h=>Math.hypot(h.position[0]+12,h.position[2])<4));
  const adventure=readFileSync(new URL('../src/adventure-view.js',import.meta.url),'utf8');
- assert.match(adventure,/d\.kind!=='heart'/);
+ assert.match(adventure,/groundDropVisualKind\(d\)==='equipment'/);
  assert.doesNotMatch(adventure,/d\.kind==='heart'\?createHeart/);
  const arena=readFileSync(new URL('../src/arena-view.js',import.meta.url),'utf8');
  assert.match(arena,/syncHearts\(\)/);
