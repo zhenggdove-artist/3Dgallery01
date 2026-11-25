@@ -80,7 +80,7 @@ export function createCashDropGeometry(T){
  // Box face UV groups are ordered +X,-X,+Y,-Y,+Z,-Z. The atlas is
  // authored in canvas top-down coordinates; WebGL V is bottom-up.
  function part(x,y,z,w,h,d,angle=0,band=false){
-  const source=new T.BoxGeometry(w,h,d).toNonIndexed(),p=source.attributes.position,n=source.attributes.normal,u=source.attributes.uv;
+  const box=new T.BoxGeometry(w,h,d),source=box.toNonIndexed();box.dispose();const p=source.attributes.position,n=source.attributes.normal,u=source.attributes.uv;
   const c=Math.cos(angle),s=Math.sin(angle);
   for(let i=0;i<p.count;i++){const face=Math.floor(i/6),a=p.getX(i),b=p.getZ(i),nx=n.getX(i),nz=n.getZ(i);
    pos.push(x+c*a+s*b,y+p.getY(i),z-s*a+c*b);norm.push(c*nx+s*nz,n.getY(i),-s*nx+c*nz);

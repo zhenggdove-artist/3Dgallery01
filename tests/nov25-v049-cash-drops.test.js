@@ -23,7 +23,7 @@ test('persisted misclassified restorative loot is corrected, invalid legacy entr
  world.groundDrops=COMFORT_ITEMS.map((item,i)=>({id:'cash-'+i,kind:'equipment',itemId:item.id,position:[75,0,0],expiresAt:now+10000}));
  world.groundDrops.push({id:'bad',kind:'consumable',itemId:'tide-1',position:[75,0,0],expiresAt:now+10000});
  migrateWorld(world,now);assert.equal(world.groundDrops.length,3);assert.ok(world.groundDrops.every(d=>d.kind==='consumable'));
- for(let i=0;i<3;i++){const r=applyAction(world,actor,{action:'pickup',dropId:'cash-'+i},{now:now+100+i,actors:[actor],rng:()=>.5});assert.equal(r.error,undefined);assert.ok(p.inventory.includes(COMFORT_ITEMS[i].id));}
+ for(let i=0;i<3;i++){const r=applyAction(world,actor,{action:'pickup-drop',dropId:'cash-'+i},{now:now+100+i,actors:[actor],rng:()=>.5});assert.equal(r.error,undefined);assert.ok(p.inventory.includes(COMFORT_ITEMS[i].id));}
 });
 test('cash geometry contains layered bills and wrap with finite atlas UVs',()=>{
  const geo=createCashDropGeometry(THREE),p=geo.attributes.position,u=geo.attributes.uv;

@@ -262,7 +262,7 @@ export class TempleArena{
   syncHearts(){
     const live=new Set();
     for(const drop of this.world?.groundDrops||[]){
-     if(drop.kind!=='heart')continue;
+     if(groundDropVisualKind(drop)!=='heart')continue;
      live.add(drop.id);
      if(this.heartDrops.has(drop.id))continue;
      const mesh=createHeart();mesh.name='Floating rotating healing heart '+drop.id;
