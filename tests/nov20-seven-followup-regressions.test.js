@@ -94,8 +94,8 @@ test('all non-saber melee swings recover rapidly and music note particles are vi
  assert.match(main,/if\(weapon\?\.id==='goldfish'\)\{/);
  assert.match(main,/if\(charge>=1\)await performAttack\(1\)/);
  const css=source('fidelity-ui.css');
- assert.match(css,/#hud #chat-hud\{bottom:max\(163px/);
- assert.match(css,/bottom:max\(133px,env\(safe-area-inset-bottom\) \+ 119px\)/);
+ assert.ok(css.includes('bottom:calc(var(--comfort-bottom) + var(--comfort-slot-size) + var(--chat-gap))!important'));
+ assert.ok(css.includes('--comfort-bottom:max(143px,env(safe-area-inset-bottom) + 133px);--comfort-slot-size:43px'));
 });
 
 test('wide city sweep still uses spatial candidates, without losing distant houses',()=>{

@@ -10,10 +10,10 @@ import {CITY_LOTS,CITY_MAX_HP,cityBlocked} from '../src/shared/city-layout.js';
 import {moveMonster} from '../src/shared/temple-rules.js';
 import {PlantUltimateEffects} from '../src/plant-ultimate-effects.js';
 const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
-test('equipped marker, 3px chat lift, GM help inside S and opaque clean paper doll',()=>{
+test('equipped marker, stable quickbar-anchored chat, GM help inside S and opaque clean paper doll',()=>{
  const css=source('fidelity-ui.css'),ui=source('src/ui.js'),portrait=source('src/equipment-portrait-view.js');
  assert.match(css,/\.bag-cell\.equipped::after\{top:1px!important;bottom:auto!important/);
- assert.match(css,/#hud #chat-hud\{bottom:max\(163px/);
+ assert.ok(css.includes('bottom:calc(var(--comfort-bottom) + var(--comfort-slot-size) + var(--chat-gap))!important'));
  assert.match(css,/#gm-help\{display:none!important\}/);
  assert.match(ui,/data-gm-action="help" aria-label="GM instructions and shortcuts"/);
  assert.match(css,/#panel #bag-portrait-frame::after\{display:none!important\}/);
