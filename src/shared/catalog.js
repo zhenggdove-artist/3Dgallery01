@@ -173,7 +173,7 @@ export const isRestorativeDrop=drop=>itemById(drop?.itemId)?.slot==='consumable'
 export function groundDropVisualKind(drop){if(isRestorativeDrop(drop))return 'cash';if(drop?.kind==='consumable')return null;if(drop?.kind==='coin'||drop?.kind==='heart')return drop.kind;return itemById(drop?.itemId)?'equipment':null;}
 
 export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>!['material','armor'].includes(item.slot)&&!item.notForSale&&!isRetiredHeadgear(item)&&item.price>0));
-export const SHOP_CATALOG_REVISION='r121';
+export const SHOP_CATALOG_REVISION='r122';
 export const SHOP_CATALOG_IDS=Object.freeze(SHOP_ITEMS.map(item=>item.id).sort());
 // Canonical price keys distinguish every weapon quality, including exotics.
 export const shopPriceKey=item=>item.id+(item.slot==='weapon'?':'+(item.shopTier??(item.tier||1)):'');

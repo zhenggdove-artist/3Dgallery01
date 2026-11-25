@@ -1,3 +1,4 @@
+import {softPorkGeometry,buildStreetOutfit,animateStreetOutfit} from './street-outfits.js';
 import {createHeadgear} from './headgear-model.js';
 // Clothing uses the original skinned surface, preserving animation and exposed face/hands.
 function fabric(T,item){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');x.fillStyle=item.color;x.fillRect(0,0,512,512);
@@ -146,7 +147,9 @@ export function disguiseFrame(T,model,bones,headHeight){
   const c=(p,r1,r2,h,m=main,n=20)=>add(g,new T.CylinderGeometry(r1,r2,h,n),p,[1,1,1],m);
   const slit=(y,z,w=.25)=>{b([0,y,z],[w,.073,.022],black);b([0,y+.045,z],[w+.04,.018,.04],soot);};
   const mark=(p,s,m)=>{const q=b(p,s,m);q.rotation.z=.16*Math.sin(p[0]*43+p[1]*31);return q;};
-  if(kind==='chimney-disguise'){
+  const street=buildStreetOutfit(T,g,kind,record,mat);
+  if(street){/* constructed using the same avatar-local prop frame */}
+  else if(kind==='chimney-disguise'){
    const mortar=mat('#938078'),bricks=['#98513d','#ad6349','#7e4737','#b16d53','#864836'].map(v=>mat(v));
    b([0,1.50,0],[.64,2.88,.60],mortar);
    // Instanced brick courses keep the tall disguise inexpensive to render.
@@ -268,10 +271,11 @@ export function disguiseFrame(T,model,bones,headHeight){
    o([0,.76,0],[.65,.17,.65],rice);
    const dummy=new T.Object3D(),grainGeo=new T.SphereGeometry(1,6,4),grains=new T.InstancedMesh(grainGeo,rice,180);
    for(let i=0;i<180;i++){const a=i*2.39996,r=.64*Math.sqrt((i+.5)/180);dummy.position.set(Math.cos(a)*r,.87+.035*Math.cos(r*2),Math.sin(a)*r);dummy.rotation.set(.1,i*.77,.3);dummy.scale.set(.034,.016,.018);dummy.updateMatrix();grains.setMatrixAt(i,dummy.matrix);}g.add(grains);
-   const porkGeo=new T.BoxGeometry(1,1,1);
-   for(let k=0;k<3;k++){const pieces=new T.InstancedMesh(porkGeo,[pork,fat,sauce][k],35);for(let i=0;i<35;i++){const a=(i*3+k)*2.39996,r=.30+.27*Math.sqrt((i+.5)/35);dummy.position.set(Math.cos(a)*r,.94+(i%4)*.024,Math.sin(a)*r);dummy.rotation.set(.12*Math.sin(i),i*.83,.12*Math.cos(i));dummy.scale.set(.075+(i%4)*.012,.048+(i%3)*.013,.06+(i%5)*.009);dummy.updateMatrix();pieces.setMatrixAt(i,dummy.matrix);}g.add(pieces);}
+   const groups=[];
+   for(let k=0;k<3;k++){const pieces=new T.InstancedMesh(softPorkGeometry(T,k+1),[pork,fat,sauce][k],35),rest=[];pieces.frustumCulled=false;for(let i=0;i<35;i++){const a=(i*3+k)*2.39996,r=.49*Math.sqrt((i+.5)/35),x=Math.cos(a)*r,z=Math.sin(a)*r,y=.92+.19*(1-r/.55)+(i%4)*.026,sx=.045+(i%4)*.013,sy=.035+(i%3)*.014,sz=.046+(i%5)*.01;rest.push([x,y,z,sx,sy,sz,i*.83]);dummy.position.set(x,y,z);dummy.rotation.set(0,i*.83,0);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();pieces.setMatrixAt(i,dummy.matrix);}g.add(pieces);groups.push({mesh:pieces,rest});}
+   record.riceMotion={groups,dummy,pos:new T.Vector3(),delta:new T.Vector3(),last:null,energy:0,resting:true};
    const scallion=mat('#4a823e');for(let i=0;i<12;i++){const a=i*2.4,r=.34+i%4*.06;const ring=add(g,new T.TorusGeometry(.029,.011,5,8),[Math.cos(a)*r,1.025,Math.sin(a)*r],[1,1,1],scallion);ring.rotation.x=Math.PI/2;}
-   const egg=mat('#e9d8b1'),yolk=mat('#da8d26');o([.49,.98,.08],[.16,.07,.12],egg);o([.49,1.035,.08],[.09,.025,.072],yolk);
+   const herb=mat('#438c35'),leaf=new T.InstancedMesh(new T.SphereGeometry(1,7,4),herb,60);for(let i=0;i<60;i++){const a=i*2.39996,r=.18*Math.sqrt((i+.5)/60);dummy.position.set(.40+Math.cos(a)*r,.94+(i%5)*.018,.20+Math.sin(a)*r);dummy.rotation.set(.2*Math.sin(i),a,.5*Math.cos(i));dummy.scale.set(.045,.012,.019);dummy.updateMatrix();leaf.setMatrixAt(i,dummy.matrix);}g.add(leaf);
   }else if(kind==='mutton-sign-disguise'){
    // Vertical Taiwanese street lightbox, manually redrawn from the reference.
    const canvas=document.createElement('canvas');canvas.width=512;canvas.height=864;const ctx=canvas.getContext('2d');
@@ -352,7 +356,7 @@ export function disguiseFrame(T,model,bones,headHeight){
   }
   g.updateMatrixWorld(true);
   const bounds=new T.Box3().setFromObject(g,true),extent=bounds.getSize(new T.Vector3());
-  const giant=['chimney-disguise','cardboard-disguise','water-tower-disguise','utility-pole-disguise','tin-pipe-disguise','luroufan-sign-disguise','luroufan-bowl-disguise','bubble-tea-disguise','fried-chicken-disguise','notok-sign-disguise','987-sign-disguise','mutton-sign-disguise'].includes(kind);
+  const giant=!!street||['chimney-disguise','cardboard-disguise','water-tower-disguise','utility-pole-disguise','tin-pipe-disguise','luroufan-sign-disguise','luroufan-bowl-disguise','bubble-tea-disguise','fried-chicken-disguise','notok-sign-disguise','987-sign-disguise','mutton-sign-disguise'].includes(kind);
   const widest=kind==='luroufan-bowl-disguise';
   const factor=frame.height*item.disguiseHeight/Math.max(.001,widest?Math.max(extent.x,extent.y,extent.z):extent.y);
   g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);
@@ -361,11 +365,11 @@ export function disguiseFrame(T,model,bones,headHeight){
    const front=new T.Vector3(0,0,1).applyQuaternion(frame.rotation);
    const headCenter=frame.head.clone().addScaledVector(frame.up,frame.unit*.42);
    const headY=headCenter.clone().sub(frame.base).dot(frame.up)/factor+bounds.min.y;
-   const preferred=kind==='luroufan-bowl-disguise'? .46:kind==='bubble-tea-disguise'? .68:kind==='tin-pipe-disguise'? .55:kind==='cardboard-disguise'? .52:kind==='mutton-sign-disguise'?1.42:kind.endsWith('sign-disguise')? .56:headY;
+   const preferred=street?(street.openingY??headY):kind==='luroufan-bowl-disguise'? .46:kind==='bubble-tea-disguise'? .68:kind==='tin-pipe-disguise'? .55:kind==='cardboard-disguise'? .52:kind==='mutton-sign-disguise'?1.42:kind.endsWith('sign-disguise')? .56:headY;
    const y=T.MathUtils.clamp(preferred,bounds.min.y+extent.y*.17,bounds.max.y-extent.y*.17);
    // One uniform scale for the entire prop, including the opening. The head
    // projects from the front wall instead of being moved above a squashed prop.
-   const frontZ=kind==='bubble-tea-disguise'?.39+.20*(y/1.50):kind==='luroufan-bowl-disguise'?.59:kind==='tin-pipe-disguise'?.43:kind==='water-tower-disguise'?.53:kind==='utility-pole-disguise'?.19:bounds.max.z;
+   const frontZ=street?street.frontZ:kind==='bubble-tea-disguise'?.39+.20*(y/1.50):kind==='luroufan-bowl-disguise'?.59:kind==='tin-pipe-disguise'?.43:kind==='water-tower-disguise'?.53:kind==='utility-pole-disguise'?.19:bounds.max.z;
    g.position.copy(headCenter).addScaledVector(frame.up,-y*factor).addScaledVector(front,-frontZ*factor+frame.unit*.10);
    cutDisguiseOpening(T,g,0,y,frame.unit*.82/factor,frame.unit*.95/factor,frontZ);
   }else if(item.exposedHead){
@@ -562,7 +566,7 @@ export function disguiseFrame(T,model,bones,headHeight){
  return record;}
 export function disposeOutfit(record){if(!record)return;for(const r of record.surfaces){r.mesh.geometry=r.originalGeometry;r.mesh.material=r.originalMaterial;r.geometry.dispose();r.mats.forEach(m=>m.dispose());}const geometries=new Set();for(const root of record.parts){root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});root.removeFromParent();}geometries.forEach(g=>g.dispose());record.materials.forEach(m=>m.dispose());record.extraTextures?.forEach(t=>t.dispose());record.texture.dispose();}
 
-export function animateOutfit(record,time,movingRoot=null,frameDt=1/60){if(!record)return;if(record.teaMotion&&movingRoot)animateTeaMotion(record.teaMotion,time,movingRoot,frameDt);if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=q.userData.pipeBend||0;q.position.x=.48*v*v+Math.sin(time*3.2-i*.42)*v*.035;q.position.z=Math.cos(time*2.7-i*.35)*v*.025;q.rotation.z=-.43*v+Math.cos(time*3.2-i*.42)*v*.05;}if(record.blinkLight){const t=(time%5.6+5.6)%5.6;record.blinkLight.emissiveIntensity=t<.12||t>.31&&t<.43||t>2.8&&t<3.05?.04:t<.65?.35:1.35;}}
+export function animateOutfit(record,time,movingRoot=null,frameDt=1/60){if(!record)return;if(record.riceMotion||record.colaMotion||record.trafficLights)animateStreetOutfit(record,time,movingRoot,frameDt);if(record.teaMotion&&movingRoot)animateTeaMotion(record.teaMotion,time,movingRoot,frameDt);if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=q.userData.pipeBend||0;q.position.x=.48*v*v+Math.sin(time*3.2-i*.42)*v*.035;q.position.z=Math.cos(time*2.7-i*.35)*v*.025;q.rotation.z=-.43*v+Math.cos(time*3.2-i*.42)*v*.05;}if(record.blinkLight){const t=(time%5.6+5.6)%5.6;record.blinkLight.emissiveIntensity=t<.12||t>.31&&t<.43||t>2.8&&t<3.05?.04:t<.65?.35:1.35;}}
 
 // Damped spring driven by acceleration, with bounded fixed-step particle pool.
 export function teaSloshStep(tilt,velocity,accelX,accelZ,dt){

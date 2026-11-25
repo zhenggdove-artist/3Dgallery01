@@ -17,12 +17,12 @@ let renderer,scene,camera,queue=Promise.resolve();
 let previewCharacterSource=null,previewIdleEnabled=false,previewIdleTimer=null,warmingPreviews=false;
 export function setOutfitPreviewCharacter(source){previewCharacterSource=source||null;}
 
-const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0);
+const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0)+(item.id==='outfit-luroufan-bowl-disguise'?':v065':'');
 // Exact release-scoped PNGs: same resolution, no second WebGL render.
 const previewRelease=new URL(import.meta.url).searchParams.get('temple-release');
 // V053 changes combat billing, not the authored models or portrait renderer.
 // Reuse V052's identical full-resolution PNGs; later art releases invalidate normally.
-const previewArtRelease=['20261125-v053-r125','20261125-v054-r126','20261125-v055-r127','20261125-v055-r128','20261126-v056-r129','20261126-v056-r130','20261126-v056-r131','20261126-v057-r132','20261126-v057-r133','20261126-v058-r134','20261126-v059-r135','20261126-v059-r136','20261126-v060-r137','20261126-v061-r138','20261126-v061-r139','20261126-v061-r140','20261126-v062-r141','20261126-v062-r142','20261126-v063-r143','20261126-v064-r144'].includes(previewRelease)?'20261125-v052-r124':previewRelease;
+const previewArtRelease=['20261125-v053-r125','20261125-v054-r126','20261125-v055-r127','20261125-v055-r128','20261126-v056-r129','20261126-v056-r130','20261126-v056-r131','20261126-v057-r132','20261126-v057-r133','20261126-v058-r134','20261126-v059-r135','20261126-v059-r136','20261126-v060-r137','20261126-v061-r138','20261126-v061-r139','20261126-v061-r140','20261126-v062-r141','20261126-v062-r142','20261126-v063-r143','20261126-v064-r144','20261126-v065-r145'].includes(previewRelease)?'20261125-v052-r124':previewRelease;
 const previewCacheName=previewArtRelease?'ggtemple-preview-'+previewArtRelease:null;
 let previewCachePromise;
 function previewCache(){

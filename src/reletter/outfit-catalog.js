@@ -70,7 +70,11 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   ['987-sign-disguise','987 Convenience Store Sign','#d32b35',3,2950,2,{hp:1.5,defense:.10}],
   ['bubble-tea-disguise','Giant Bubble Milk Tea','#c99b68',3,2950,2,{hp:1.5,speed:.08}],
   ['fried-chicken-disguise','Giant Taiwanese Fried Chicken Cutlet','#bd792e',3,2950,2,{hp:1.2,attack:.10}],
-  ['mutton-sign-disguise','Old Home Mutton Hot Pot Sign','#f1d626',3,2950,2.5,{hp:1.5,defense:.10}]
+  ['mutton-sign-disguise','Old Home Mutton Hot Pot Sign','#f1d626',3,2950,2.5,{hp:1.5,defense:.10}],
+  ['ggcola-disguise','GGcola Bottle','#a63922',3,2950,2,{hp:1.5,speed:.08}],
+  ['bei7-road-disguise','北七路 / Bei 7th Rd.','#168b66',3,2950,3,{hp:1.5,defense:.10}],
+  ['traffic-light-disguise','Traffic Light','#216253',3,2950,1.6,{hp:1.5,defense:.10}],
+  ['taipower-box-disguise','Taiwan Power Utility Box','#488da9',3,2950,1.7,{hp:1.5,defense:.10}]
  ];
  OUTFITS.push(...disguises.map(([creature,name,color,tier,templePrice,disguiseHeight,bonuses])=>({
   id:'outfit-'+creature,name,color,tier,price:templePrice,templePrice,slot:'outfit',family:'outfit',
@@ -78,6 +82,7 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   ...(['tin-pipe-disguise','luroufan-sign-disguise','bubble-tea-disguise','fried-chicken-disguise'].includes(creature)?{shopRelease:117}:{}),
   ...(!['wooden-horse-disguise'].includes(creature)?{exposedHead:true}:{}),
   ...(creature==='mutton-sign-disguise'?{shopRelease:121}:{}),
+  ...(['ggcola-disguise','bei7-road-disguise','traffic-light-disguise','taipower-box-disguise'].includes(creature)?{shopRelease:122}:{}),
   ...(['luroufan-sign-disguise','luroufan-bowl-disguise','notok-sign-disguise','987-sign-disguise'].includes(creature)?{shopRelease:118}:{}),
   description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed'}[k]||k)).join(' · ')
  })));
