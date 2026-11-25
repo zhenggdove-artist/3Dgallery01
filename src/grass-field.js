@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS} from './shared/city-layout.js';
+import {TERRAIN_DEFAULTS,terrainStyle,terrainColorDelta} from './shared/terrain-style.js';
 
 // Single GPU draw call for thousands of slender segmented grass blades.
 // All meshes and wind/trample rules are generated in JS; no external assets.
@@ -44,6 +45,7 @@ attribute float aAngle;
 attribute float aPhase;
 attribute float aShade;
 uniform float uTime;
+uniform float uGrassLength;
 uniform vec3 uPlayers[6];
 uniform float uPlayerCount;
 varying float vHeight;
@@ -64,7 +66,7 @@ void main(){
   trample+=push/max(.15,dist)*press*1.05;
  }
  vec2 bend=(wind+trample)*t*t;
- vec3 p=vec3(aOffset.x+blade.x+bend.x,.014+t*aHeight,aOffset.y+blade.y+bend.y);
+ vec3 p=vec3(aOffset.x+blade.x+bend.x,.014+t*aHeight*uGrassLength,aOffset.y+blade.y+bend.y);
  vHeight=t;vShade=aShade;vWind=length(wind+trample);
  gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);
 }`;
@@ -73,12 +75,13 @@ precision mediump float;
 varying float vHeight;
 varying float vShade;
 varying float vWind;
+uniform vec3 uGrassDelta;
 void main(){
  vec3 dark=vec3(.11,.29,.12),green=vec3(.29,.54,.22),straw=vec3(.53,.59,.28);
  vec3 tone=mix(dark,green,clamp(vHeight*.8+vShade*.3,0.,1.));
  tone=mix(tone,straw,vShade*.24*vHeight);
  tone+=vec3(.06,.08,.02)*clamp(vWind*.3,0.,1.)*vHeight;
- gl_FragColor=vec4(tone,1.);
+ gl_FragColor=vec4(clamp(tone+uGrassDelta,0.,1.),1.);
 }`;
 export class GrassField{
  constructor(scene,{mobile=false,count}={}){
@@ -92,7 +95,7 @@ export class GrassField{
   geo.instanceCount=this.count;
   const positions=Array.from({length:6},()=>new THREE.Vector3(10000,0,10000));
   const material=new THREE.ShaderMaterial({vertexShader:vertex,fragmentShader:fragment,side:THREE.DoubleSide,depthWrite:true,
-   uniforms:{uTime:{value:0},uPlayers:{value:positions},uPlayerCount:{value:0}}});
+   uniforms:{uTime:{value:0},uPlayers:{value:positions},uPlayerCount:{value:0},uGrassLength:{value:1},uGrassDelta:{value:new THREE.Vector3()}}});
   this.mesh=new THREE.Mesh(geo,material);this.mesh.name='JS procedural wind and footsteps grass';this.mesh.frustumCulled=false;
   scene.add(this.mesh);
   // Match central grass with living wind/trample blades across every street,
@@ -113,16 +116,21 @@ export class GrassField{
   // Continuous fine-blade grass canopy covers every small gap between tufts;
   // no bare underlying meadow plane is visible while walking or looking down.
   this.canopy=new THREE.Mesh(new THREE.CircleGeometry(CITY_INNER_RADIUS,128),new THREE.ShaderMaterial({
+   uniforms:{uMeadowDelta:{value:new THREE.Vector3()},uFloorDelta:{value:new THREE.Vector3()}},
    vertexShader:`varying vec2 grassPoint;void main(){grassPoint=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-   fragmentShader:`precision mediump float;varying vec2 grassPoint;
+   fragmentShader:`precision mediump float;varying vec2 grassPoint;uniform vec3 uMeadowDelta;uniform vec3 uFloorDelta;
     float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
     void main(){vec2 p=grassPoint*28.;vec2 g=floor(p);vec2 f=fract(p);
      float n=hash(g),n2=hash(g+vec2(17.,47.));
      float stripe=sin((f.x+n*.7)*28.+sin(f.y*17.+n*6.)*1.7);
      vec3 dark=vec3(.085,.20,.069),mid=vec3(.16,.32,.093),bright=vec3(.27,.44,.15);
+     // The visible ground between the textured grass strokes follows the
+     // floor color, independently of the grass canopy's own color.
+     dark+=uFloorDelta;
+     mid+=uMeadowDelta;bright+=uMeadowDelta;
      vec3 col=mix(dark,mid,.26+.6*n);
      col=mix(col,bright,clamp(stripe*.18+n2*.24,0.,.45));
-     gl_FragColor=vec4(col,1.);
+     gl_FragColor=vec4(clamp(col,0.,1.),1.);
     }`,side:THREE.DoubleSide,depthWrite:true}));
   this.canopy.name='Continuous dense grass canopy';
   this.canopy.rotation.x=-Math.PI/2;this.canopy.position.y=.006;scene.add(this.canopy);
@@ -131,6 +139,14 @@ export class GrassField{
   this.outerCanopy.rotation.x=-Math.PI/2;this.outerCanopy.position.y=.007;scene.add(this.outerCanopy);
   // The grass edge meets the full-sphere nebula directly. No ocean or horizon mesh.
 
+ }
+ setTerrainStyle(environment){
+  const s=terrainStyle(environment),key=JSON.stringify(s);if(key===this.terrainSignature)return;this.terrainSignature=key;
+  const grass=this.mesh.material.uniforms,canopy=this.canopy.material.uniforms;
+  grass.uGrassLength.value=s.grassLength;
+  grass.uGrassDelta.value.fromArray(terrainColorDelta(s.grassColor,TERRAIN_DEFAULTS.grassColor));
+  canopy.uMeadowDelta.value.fromArray(terrainColorDelta(s.meadowColor,TERRAIN_DEFAULTS.meadowColor));
+  canopy.uFloorDelta.value.fromArray(terrainColorDelta(s.floorColor,TERRAIN_DEFAULTS.floorColor));
  }
  update(time,roots){
   const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;

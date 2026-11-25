@@ -1,3 +1,4 @@
+import {setTerrainStyle} from './terrain-style.js';
 import {wantedSettings,countWantedDeath} from './wanted-list.js';
 import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown,migrateSkillQuality,applySkillAreaScale,bloomHealRate} from './equipment-tuning.js';
 import {journeyPose,journeyAction} from './write-journey.js';
@@ -599,6 +600,7 @@ export function applyAction(world,actor,body,context={}){
   if(body.action==='recover-artworks')return recoverArtworks(world,profile.admin);
   if(body.action==='recover-misplaced-artwork')return recoverMisplacedArtworkPosition(world,profile.admin,body.platformId,now);
   if(body.action==='gm-sky-color')return setSkyBaseColor(world,profile.admin&&actor.admin===true,body.color);
+  if(body.action==='gm-terrain-style')return setTerrainStyle(world,profile.admin&&actor.admin===true,body.terrain);
   if(body.action==='gm-remove-artworks')return removeSelectedArtworks(world,profile.admin&&actor.admin===true,body.ids);
   if(body.action==='reset-player-artworks')return resetPlayerArtworks(world,profile.admin,now);
    if(body.action==='gm-audio-setting'){

@@ -1164,3 +1164,15 @@ body.chat-typing #comfort-hotbar{visibility:hidden!important;pointer-events:none
 @media(max-width:720px),(any-pointer:coarse){
  #mobile-stick,#dock [data-action=jump],#comfort-hotbar{isolation:isolate}
 }
+
+/* V061 terrain controls use the same floating editor and color tools as sky. */
+body.panel-open #panel.terrain-style-floating{width:min(300px,calc(100vw - 16px))!important;height:min(310px,calc(100dvh - 16px))!important}
+#panel.terrain-style-floating .build-resize{display:none}
+#panel .terrain-style-tools{gap:5px}
+#panel .terrain-color-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+#panel .terrain-color-tabs button{display:flex;align-items:center;justify-content:center;gap:3px;min-height:28px;padding:3px;font-size:11px;white-space:nowrap}
+#panel .terrain-color-tabs button[aria-pressed=true]{background:#bcd6f8;border-color:#487bb9;color:#163969}
+#panel .terrain-color-tabs i{width:12px;height:12px;border:1px solid #777;display:inline-block;flex:none}
+#panel .terrain-length-row{grid-template-columns:40px minmax(0,1fr) 36px!important}
+#panel .terrain-length-row output{font-size:11px;text-align:right}
+#panel [data-terrain-status]{font-size:10px;line-height:1.2;overflow-wrap:anywhere}

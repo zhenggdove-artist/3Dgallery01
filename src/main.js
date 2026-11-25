@@ -1,3 +1,4 @@
+import {terrainStyle,TERRAIN_DEFAULTS} from './shared/terrain-style.js';
 import {bindWantedList,syncWantedButton} from './wanted-list.js';
 import {tunedEquipment,weaponManaQuote,restorativeCooldown} from './shared/equipment-tuning.js';
 import {equippedItem} from './shared/fusion-adapter.js';
@@ -816,6 +817,22 @@ ui.addEventListener('sky-color-save',async event=>{
  try{const result=await sendAction('gm-sky-color',{color:event.detail.color},{throwOnError:true});if(!result?.environment)throw Error('Server did not confirm sky color');skyColorPreview=null;applySkyColor(result.environment.skyBaseColor);ui.toast('星空底色已儲存');}catch(error){ui.toast(error.message);}
 });
 ui.addEventListener('panel',event=>{if(ui.panelName!=='sky-color'&&skyColorPreview!==null){skyColorPreview=null;applySkyColor(savedSkyColor());}});
+let terrainPreview=null,terrainSaving=false;
+const savedTerrain=()=>terrainStyle(world?.environment);
+function applyTerrain(style){
+ arena.grass?.setTerrainStyle({terrain:style});
+ const ground=scene.userData.terrainGround?.material;
+ if(ground){ground.color.set(style.floorColor);if(style.floorColor===TERRAIN_DEFAULTS.floorColor)ground.emissive.set('#0c302b');else ground.emissive.set(style.floorColor).multiplyScalar(.18);}
+}
+ui.addEventListener('terrain-preview',event=>{if(!self?.profile?.admin||self.gmSpectatorPreview)return;terrainPreview=terrainStyle({terrain:event.detail});applyTerrain(terrainPreview);});
+ui.addEventListener('terrain-save',async event=>{
+ if(!self?.profile?.admin||self.gmSpectatorPreview||terrainSaving)return;terrainSaving=true;
+ const button=ui.content.querySelector('[data-terrain-save]'),status=ui.content.querySelector('[data-terrain-status]');if(button)button.disabled=true;if(status)status.textContent='儲存中…';
+ const draft=terrainStyle({terrain:event.detail});
+ try{const result=await sendAction('gm-terrain-style',{terrain:draft},{throwOnError:true});if(!result?.environment?.terrain||JSON.stringify(terrainStyle(result.environment))!==JSON.stringify(draft))throw Error('Server did not confirm terrain settings');terrainPreview=null;applyTerrain(terrainStyle(result.environment));if(status)status.textContent='已儲存並同步全服';ui.toast('草地環境已儲存');}
+ catch(error){if(status)status.textContent=error.message;ui.toast(error.message);}finally{terrainSaving=false;if(button)button.disabled=false;}
+});
+ui.addEventListener('panel',()=>{if(ui.panelName!=='terrain-style'&&terrainPreview!==null){terrainPreview=null;applyTerrain(savedTerrain());}});
 ui.addEventListener('gm-remove-artworks',async event=>{
  if(!self?.profile?.admin)return;
  if(artEditor.selected&&event.detail.ids.includes(artEditor.selected.userData.platformId))artEditor.close();
@@ -903,6 +920,7 @@ let lastSyncedWorld=null;
 function syncWorld(){if(!world)return;
  const previous=lastSyncedWorld;lastSyncedWorld=world;
  if(skyColorPreview===null&&(!previous||world.environment!==previous.environment))applySkyColor(savedSkyColor());
+ if(terrainPreview===null&&(!previous||world.environment!==previous.environment))applyTerrain(savedTerrain());
  if(artEditor.selected&&!world.artworks?.[artEditor.selected.userData.platformId])artEditor.close();
  if(!previous||world.audioSettings!==previous.audioSettings)audio.setVolumes(world.audioSettings||{});
  if(world.musicVersion&&world.musicVersion!==previous?.musicVersion)audio.setUploadedMusic(network.base,world.musicVersion);
@@ -1131,7 +1149,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V060',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V061',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);
