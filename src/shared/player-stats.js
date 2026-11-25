@@ -8,7 +8,7 @@ import {weaponAffixTotals} from './weapon-affixes.js';
 // Mana is authoritative; ordinary attacks never consume it.
 export function manaCapacity(level=1){return 100+4*Math.max(0,(Number(level)||1)-1);}
 export function manaRegen(profile,world){
- const base=itemById(profile.equipment?.weapon),weapon=base&&equippedItem(profile,base);
+ const base=itemById(profile.equipment?.weapon),weapon=base&&{...base,shopTier:profile.fusion?.[base.id]?.shopTier??(base.exotic?Math.min(4,base.tier||3):base.tier||1)};
  const water=weapon&&(['goldfish','clam','jellybrella'].includes(weapon.id)||(!weapon.exotic&&['water','ice','wave'].includes(weapon.family)));
  return (3+.25*Math.max(0,(profile.level||1)-1))*(equipmentTuning(world,weapon).manaRegenScale??(water?1.5:1));
 }
@@ -56,7 +56,7 @@ export function refreshStats(world,profile,now=Date.now()){
   if(!shield)profile.shield=null;
   else if(profile.shield?.item!==shield.id)profile.shield={item:shield.id,hp:shield.capacity*10,maxHp:shield.capacity*10,lastHit:0};
   else{
-   profile.shield.maxHp=shield.capacity*10;profile.shield.hp=Math.min(profile.shield.hp,profile.shield.maxHp);
+   profile.shield.maxHp=shield.capacity*10;if(equipmentTuning(world,shield).capacity!==undefined)profile.shield.hp=Math.min(profile.shield.hp,profile.shield.maxHp);
    if(now-profile.shield.lastHit>=shield.recharge*1000)profile.shield.hp=profile.shield.maxHp;
   }
   return stats;

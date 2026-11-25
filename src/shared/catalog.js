@@ -39,6 +39,7 @@ export function shopWeaponGroups(items){
   if(!groups.has(key))groups.set(key,{key,variants:[],base:item});
   const group=groups.get(key);
   if(item.slot!=='weapon'){group.variants.push(item);continue;}
+  if(item.id==='water'){group.variants.push({...item,shopTier:1});continue;}
   const native=/^([a-z]+)-([1-5])$/.exec(item.id);
   if(native&&SHOP_NATIVE_FAMILIES.has(native[1])){
    group.variants.push(shopWeaponVariant(item,Number(native[2])));
@@ -173,7 +174,7 @@ export const SHOP_ITEMS = Object.freeze(ITEMS.filter(item=>!['material','armor']
 export const SHOP_CATALOG_REVISION='r120';
 export const SHOP_CATALOG_IDS=Object.freeze(SHOP_ITEMS.map(item=>item.id).sort());
 // Canonical price keys distinguish every weapon quality, including exotics.
-export const shopPriceKey=item=>item.id+(item.slot==='weapon'?':'+(item.shopTier??item.tier??3):'');
+export const shopPriceKey=item=>item.id+(item.slot==='weapon'?':'+(item.shopTier??(item.tier||1)):'');
 export function shopPrice(item,overrides={}){
  const amount=overrides?.[shopPriceKey(item)];
  return Number.isSafeInteger(amount)&&amount>=1&&amount<=100000000?amount:item.price;

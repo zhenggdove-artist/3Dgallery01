@@ -4,7 +4,7 @@ const field=(key,label,value,min,max,step=.01)=>({key,label,value,min,max,step})
 export function tuningVariant(id,tier){
  const item=itemById(id);if(!item||!['weapon','head','outfit','shield','wings','consumable'].includes(item.slot))return null;
  if(item.slot!=='weapon')return tier===undefined?item:null;
- const rank=tier??(item.exotic?3:item.tier||1);
+ const rank=tier??(item.exotic?3:item.tier||1);if(item.id==='water')return rank===1?{...item,shopTier:1}:null;
  if(!item.exotic&&rank!==(item.tier||1))return null;
  return shopWeaponVariant(item,rank);
 }
@@ -13,15 +13,17 @@ export function tuningFields(item){
  const f=field,one=(k,l)=>f(k,l,1,0,10);
  if(item.slot==='weapon'){
   const a=attackStats(item,0),b=attackStats(item,1);
-  const fields=[f('damage','普通攻擊基礎傷害',a.damage,0,100000),f('ultimateDamage','大絕基礎傷害',b.damage,0,100000),f('cooldown','普攻冷卻 (ms)',item.cooldown||800,70,60000,1),f('chargeMs','蓄力時間 (ms)',item.chargeMs||1500,100,60000,1),one('rangeScale','射程倍率'),one('radiusScale','技能範圍倍率'),one('effectPower','特殊效果強度倍率'),one('effectDuration','特殊效果持續時間倍率')];
+  const fields=[f('damage','普通攻擊基礎傷害',a.damage,0,100000),f('ultimateDamage','大絕基礎傷害',b.damage,0,100000),f('cooldown','普攻冷卻 (ms)',item.cooldown||800,70,4000,1),f('chargeMs','蓄力時間 (ms)',item.chargeMs||1500,100,60000,1),one('rangeScale','射程倍率'),one('radiusScale','技能範圍倍率'),one('effectPower','特殊效果強度倍率'),one('effectDuration','特殊效果持續時間倍率')];
   if(item.family==='petal'&&!item.exotic)fields.push(f('healPerSecond','花冠每秒回血',1,0,100));
   if(/^whip-/.test(item.id))fields.push(f('pullSpeed','牽引速度 (m/s)',4.32,0,50));
+  if(item.family==='beam'&&!item.exotic)fields.push(f('ramp','每秒增傷倍率',1.2,1,3),f('rampCap','累積增傷上限',5,1,30));
+  if(/^tide-/.test(item.id))fields.push(f('pushDistance','擊退距離 (m)',3,0,20));
   if(['goldfish','clam','jellybrella'].includes(item.id)||(!item.exotic&&['water','ice','wave'].includes(item.family)))fields.push(f('manaRegenScale','魔力回復倍率',1.5,0,10));
   return fields;
  }
  if(item.slot==='head'||item.slot==='outfit')return ['hp','attack','defense','speed','jump'].map(k=>f('bonus_'+k,k==='hp'?'生命加成 (每單位 10 HP)':({attack:'攻擊加成',defense:'防禦加成',speed:'移速加成',jump:'跳躍加成'})[k]+' (1 = 100%)',Number(item.bonuses?.[k])||0,0,k==='hp'?100:k==='defense'?.95:10));
  if(item.slot==='shield')return [f('capacity','護盾容量 (每單位 10 HP)',item.capacity||0,0,10000),f('recharge','護盾恢復秒數',item.recharge||0,0,600)];
- if(item.slot==='wings')return [f('impulse','跳躍推力',item.impulse||0,0,100),f('gravity','重力係數',item.gravity||1,.05,5),f('flapMs','拍動間隔 (ms)',item.flapMs||300,100,10000,1),f('swiftScale','移速倍率',1.1,0,10),f('aerialScale','跳躍倍率',1.15,0,10),f('guardianScale','承傷倍率',.9,0,10),f('glideScale','滑翔重力倍率',.85,.05,5)];
+ if(item.slot==='wings'){const a=item.design==='painted-wing'?(item.abilities??[item.ability]):[];return [f('impulse','跳躍推力',item.impulse||0,0,100),f('gravity','重力係數',item.gravity||1,.05,5),f('flapMs','拍動間隔 (ms)',item.flapMs||300,100,10000,1),...(a.includes('swift')?[f('swiftScale','移速倍率',1.1,0,10)]:[]),...(a.includes('aerial')?[f('aerialScale','跳躍倍率',1.15,0,10)]:[]),...(a.includes('guardian')?[f('guardianScale','承傷倍率',.9,0,10)]:[]),...(a.includes('glide')?[f('glideScale','滑翔重力倍率',.85,.05,5)]:[])];}
  if(item.slot==='consumable')return [f(item.manaFraction!==undefined?'manaFraction':'healFraction','恢復比例 (1 = 100%)',item.manaFraction??item.healFraction??0,0,1),f('cooldownMs','冷卻 (ms)',item.cooldownMs||2000,0,60000,1)];
  return [];
 }

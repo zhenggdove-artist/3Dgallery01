@@ -58,7 +58,7 @@ test('GM panel and chat provide a server-authoritative lost-artwork recovery act
  const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const rules=readFileSync(new URL('../src/shared/temple-rules.js',import.meta.url),'utf8');
- assert.match(ui,/data-gm-action="recover-misplaced-artwork"/);
+ assert.doesNotMatch(ui,/data-gm-action="recover-misplaced-artwork"/);
  assert.match(ui,/this\.emit\('server-action',\{action:'recover-misplaced-artwork'\}\)/);
  assert.match(main,/recoverposition/);
  assert.match(rules,/if\(body\.action==='recover-misplaced-artwork'\)/);

@@ -308,11 +308,11 @@ function addItem(profile,itemId){if(!itemById(itemId)||profile.inventory.length>
 
 // A channel interrupted by a lost stop packet MUST NOT impose 5%-speed
 // validation forever. Movement and attack ticks use the same expiry window.
-export function isLiveStaffChannel(profile,now=Date.now()){
- const staff=profile?.channelWeapon&&itemById(profile.channelWeapon);
+export function isLiveStaffChannel(profile,now=Date.now(),world){
+ const base=profile?.channelWeapon&&itemById(profile.channelWeapon),staff=base&&tunedEquipment(world,equippedItem(profile,base));
  if(!staff||!isChannelStaff(staff))return false;
  const latest=Number(profile.lastChannelPulseAt||profile.channelStartedAt)||0;
- const grace=staff.family==='ice'?8500:Math.max(1900,Math.min(4500,(staff.cooldown||700)*2+500));
+ const grace=staff.family==='ice'?8500:Math.max(1900,Math.min(staff.gmTuning?.cooldown!==undefined?8500:4500,(staff.cooldown||700)*2+500));
  return latest>0&&now-latest<=grace;
 }
 export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,journey=null,now=Date.now(),mobility=null){
@@ -1208,7 +1208,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:attackId,kind:waveVortex?'vortex':swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
       origin:[...goldfishOrigin],direction:[...goldfishDirection],launchDirection:[...goldfishDirection],range:stats.range,position:[...goldfishOrigin],travelled:0,hitTimes:{},
-      damage:stats.damage+bonus*.1*tuningRatio,pvpDamage,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
+      damage:stats.damage+bonus*.1*tuningRatio,pvpDamage,gmTuning:tuning,damageRatio:tuningRatio,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
       createdAt:now,lastAt:now,expiresAt:now+duration,
       outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[]
     });
@@ -1229,7 +1229,7 @@ function attack(world,profile,actor,body,context,now){
       radius:stats.radius,area,damage:stats.damage+bonus*.1*tuningRatio*(weapon.id==='jellybrella'?.5:1),pvpDamage,gmTuning:tuning,damageRatio:tuningRatio,charge,critChance:weapon.critChance,
       qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,iceGround,
       shoulderSpread:shoulderSniper,
-      flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual}))||null,
+      flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual*(tuning.radiusScale??1)}))||null,
       hits:[],pelletHits:{},areaResolved:false,
       createdAt:now,lastAt:now,expiresAt:now+Math.max(duration,visualLifetime)
     });
@@ -1298,8 +1298,8 @@ function attack(world,profile,actor,body,context,now){
    const inside=area&&['area','sector'].includes(area.mode)?insideChargedArea(area,point,structureRadius(v)):along>0&&along<stats.range&&perpendicular(origin,direction,point,along)<(weapon.pattern==='scatter'?.65+along*(stats.ultimate?.56:.32):stats.radius)+structureRadius(v);
    return {v,along,inside};
   }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
-  for(const {v:structure} of (returningGiraffe||waveVortex?[]:area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
-   const damage=Math.round(Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*.7))*(weapon.pattern==='scatter'?.7:1));
+  for(const {v:structure,along} of (returningGiraffe||waveVortex?[]:area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
+   const damage=tuningRatio===0?0:Math.round(Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*.7))*(weapon.pattern==='scatter'?shotgunDistanceScale(along,stats.range):1));if(damage<=0)continue;
    structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
    structure.hp=Math.max(0,structure.hp-damage);
    const event={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
@@ -1308,8 +1308,8 @@ function attack(world,profile,actor,body,context,now){
   }
   // The city's structural impact follows weapon damage and charged strength,
   // without changing PvP damage or displaying health numbers on the building.
-  const structuralDamage=Math.round(Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*(charge>=1?1.5:1.1)))*(weapon.pattern==='scatter'?.7:1));
-  const city=returningGiraffe||waveVortex?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now);
+  const structuralDamage=tuningRatio===0?0:Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*(charge>=1?1.5:1.1)));
+  const city=returningGiraffe||waveVortex||!structuralDamage?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now,weapon.pattern==='scatter');
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,
@@ -1416,7 +1416,7 @@ function validBuildPosition(world,actor,position){return canBuildAt(world,actor.
 // is active. No free HP from ordinary attacks, inactive/expired channels,
 // repeated network packets, or from visuals and client-side clocks.
 export function tickBloomChannelHeal(profile,now,world){
- const item=itemById(profile?.channelWeapon);
+ const base=itemById(profile?.channelWeapon),item=base&&tunedEquipment(world,equippedItem(profile,base));
  if(!item||item.family!=='petal'||!isChannelStaff(item)||
     profile.equipment?.weapon!==item.id||
     !profile.channelStartedAt||now-(profile.lastChannelPulseAt||0)>Math.max(2100,item.cooldown*2+200)||
@@ -1567,7 +1567,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   const liveKeys=new Set(actors.map(a=>a.key));
   for(const profile of Object.values(world.profiles||{})){
    if(liveKeys.has(profile.key))changed=refreshMana(profile,now,world)||changed;
-   if(profile.channelWeapon&&(!isLiveStaffChannel(profile,now)||(profile.manaChannelPaid===true&&profile.mana<2))){
+   if(profile.channelWeapon&&(!isLiveStaffChannel(profile,now,world)||(profile.manaChannelPaid===true&&profile.mana<2))){
     // Clear orphaned continuous-cast state before validating later movement.
     profile.channelWeapon=null;profile.channelStartedAt=0;
     profile.lastChannelPulseAt=0;profile.lastBloomHealAt=0;
@@ -1702,21 +1702,22 @@ function damageCityLot(world,lot,part,damage,now,position=null){
   hp:state.hp,maxHp:CITY_MAX_HP,damage,time:now};
  return {event,destroyed:stage===3?{...event,id:lot.id,rotation:lot.yaw}:null};
 }
-function cityWeaponHits(world,origin,direction,range,area,damage,now){
+function cityWeaponHits(world,origin,direction,range,area,damage,now,scatter=false){
+ const impactDamage=point=>scatter?Math.round(damage*shotgunDistanceScale(Math.max(0,project(origin,direction,point)),range)):damage;
  const hits=[],destroyed=[];
  if(area&&['area','sector'].includes(area.mode)){
   for(const lot of CITY_LOTS){
    if((world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)<=0)continue;
    const point=[lot.x,Math.min(lot.height*.4,1.4),lot.z];
    if(!insideChargedArea(area,point,Math.hypot(lot.width,lot.depth)*.43))continue;
-   const result=damageCityLot(world,lot,'masonry',damage,now,point);
+   const result=damageCityLot(world,lot,'masonry',impactDamage(point),now,point);
    if(result){hits.push(result.event);if(result.destroyed)destroyed.push(result.destroyed);}
    if(hits.length>=24)break;
   }
  }else{
   const target=cityRaycast(origin,direction,range,world.cityDamage);
   if(target){
-   const result=damageCityLot(world,target.lot,target.part,damage,now,target.position);
+   const result=damageCityLot(world,target.lot,target.part,impactDamage(target.position),now,target.position);
    if(result){hits.push(result.event);if(result.destroyed)destroyed.push(result.destroyed);}
   }
  }
@@ -1788,7 +1789,7 @@ export function tickPrismChannels(world,actors,now=Date.now(),rng=Math.random){
   const profile=world.profiles[caster.key],weapon=itemById(profile?.channelWeapon);
   if(caster.role!=='fighter'||!profile||profile.hp<=0||profile.deadUntil>now||
      !weapon||weapon.family!=='beam'||weapon.exotic||
-     profile.equipment.weapon!==weapon.id||!isLiveStaffChannel(profile,now))continue;
+     profile.equipment.weapon!==weapon.id||!isLiveStaffChannel(profile,now,world))continue;
   active.add(caster.key);
   const params=profile.prismChannelStats;
   if(!params)continue; // A charged channel must emit its first authenticated pulse.
@@ -1826,7 +1827,8 @@ export function tickPrismChannels(world,actors,now=Date.now(),rng=Math.random){
   // seconds of invisible retroactive damage on a single frame.
   const sample=Math.min(elapsed,500);
   lock.lastHitAt=now;
-  const multiplier=prismDamageMultiplier(now-lock.since);
+  const t=equipmentTuning(world,tunedEquipment(world,equippedItem(profile,weapon)));
+  const multiplier=t.ramp===undefined&&t.rampCap===undefined?prismDamageMultiplier(now-lock.since):Math.min(t.rampCap??5,(t.ramp??1.2)**Math.max(0,Math.floor((now-lock.since)/1000)));
   const base=target.kind==='monster'?params.monsterDps:params.pvpDps;
   const dps=Math.max(0,Number(base)||0)*multiplier;
   if(dps<=0)continue;
@@ -1865,7 +1867,7 @@ export function tickTidalChannels(world,actors,now=Date.now(),rng=Math.random){
   const profile=world.profiles[caster.key],weapon=itemById(profile?.channelWeapon);
   if(caster.role!=='fighter'||!profile||profile.hp<=0||profile.deadUntil>now||
      !weapon||!/^tide-[1-5]$/.test(weapon.id)||
-     profile.equipment.weapon!==weapon.id||!isLiveStaffChannel(profile,now))continue;
+     profile.equipment.weapon!==weapon.id||!isLiveStaffChannel(profile,now,world))continue;
   active.add(caster.key);
   const stats=profile.tidalChannelStats;
   if(!stats)continue;
@@ -1913,7 +1915,8 @@ export function tickTidalChannels(world,actors,now=Date.now(),rng=Math.random){
     const victim=t.kind==='player'?world.profiles[t.value.key]:t.value;
     if(!victim||victim.hp<=0||(t.kind==='player'&&(victim.spawnProtectedUntil>now||(victim.admin&&victim.gmInvincible!==false))))continue;
     const dx=t.value.position[0]-caster.position[0],dz=t.value.position[2]-caster.position[2],len=Math.hypot(dx,dz);if(len<.001)continue;
-    victim.tidePush={id:id(),time:now,durationMs:TIDE_PUSH_DURATION_MS,distance:TIDE_PUSH_DISTANCE,vector:[dx/len,0,dz/len]};changed=true;
+    const t=equipmentTuning(world,equippedItem(profile,weapon));
+    victim.tidePush={id:id(),time:now,durationMs:Math.max(1,Math.round(TIDE_PUSH_DURATION_MS*(t.effectDuration??1))),distance:(t.pushDistance??TIDE_PUSH_DISTANCE)*(t.effectPower??1),vector:[dx/len,0,dz/len]};changed=true;
    }
   }
   for(let i=0;i<targets.length;i++){
