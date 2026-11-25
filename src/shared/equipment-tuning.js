@@ -41,6 +41,7 @@ export function tuningFields(item,world){
  const f=field,defaults=qualitySkillDefaults(item),one=(k,l)=>f(k,l,defaults[k]??1,0,10);
  if(item.slot==='weapon'){
   const a=attackStats(item,0),b=attackStats(item,1);
+  if(item.id==='black-cat')return [f('damage','普通攻擊基礎傷害',a.damage,0,100000),f('cooldown','普攻冷卻 (ms)',item.cooldown||800,70,4000,1),one('rangeScale','射程倍率')];
   const fields=[f('damage','普通攻擊基礎傷害',a.damage,0,100000),f('ultimateDamage','大絕基礎傷害',b.damage,0,100000),f('manaCost','大絕單次魔力消耗 (MP)',weaponManaQuote(world,item).initial,0,10000,1),f('cooldown','普攻冷卻 (ms)',item.cooldown||800,70,4000,1),f('chargeMs','蓄力時間 (ms)',item.chargeMs||1500,100,60000,1),one('rangeScale','射程倍率'),one('radiusScale','技能範圍倍率'),one('effectPower','特殊效果強度倍率'),one('effectDuration','特殊效果持續時間倍率')];
   if(item.family==='petal'&&!item.exotic)fields.push(f('healPerSecond','花冠每秒回血',defaults.healPerSecond,0,100));
   if(/^whip-/.test(item.id))fields.push(f('pullSpeed','牽引速度 (m/s)',4.32,0,50));
@@ -73,6 +74,7 @@ export function tunedEquipment(world,item){
  const t=equipmentTuning(world,item);if(!Object.keys(t).length)return item;
  const next={...item,gmTuning:t};
  for(const k of ['cooldown','chargeMs','capacity','recharge','impulse','gravity','flapMs','manaFraction','healFraction','cooldownMs'])if(t[k]!==undefined)next[k]=t[k];
+ if(item.id==='black-cat'){next.chargeMs=0;next.autoCharge=false;}
  if(item.slot==='head'||item.slot==='outfit'){
   next.bonuses={...item.bonuses};for(const k of ['hp','attack','defense','speed','jump'])if(t['bonus_'+k]!==undefined)next.bonuses[k]=t['bonus_'+k];
  }
@@ -127,7 +129,7 @@ export function manaCostFromStats(weapon,stats,quality,channel=false,fusionCount
  return channel?(cost===0?0:Math.max(2,Math.ceil(cost*.28*Math.max(260,weapon.cooldown||700)/1000))):cost;
 }
 export function weaponManaQuote(world,item,record=null){
- if(item?.slot!=='weapon')return {initial:0,pulse:0,channel:false};
+ if(item?.slot!=='weapon'||item.id==='black-cat')return {initial:0,pulse:0,channel:false};
  const w=tunedEquipment(world,item),q=weaponQuality(w,record),stats=attackStats(w,1),en=weaponAffixTotals(w);
  const channel=isChannelStaff(w)&&w.family!=='ice';
  stats.damage=+(stats.damage*q.damage*(1+en.damage/100)*(1+en.charge/100)).toFixed(3);

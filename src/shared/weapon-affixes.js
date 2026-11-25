@@ -29,7 +29,8 @@ export function normalizedWeaponAffixes(record){
 export function rollWeaponAffixes(item,rng=Math.random){
  if(item?.slot!=='weapon')return [];
  const draw=()=>clamp(Number(rng())||0,0,.999999);
- const id=WEAPON_AFFIXES[Math.floor(draw()*WEAPON_AFFIXES.length)].id;
+ const pool=item.id==='black-cat'?WEAPON_AFFIXES.filter(a=>a.stat!=='charge'):WEAPON_AFFIXES;
+ const id=pool[Math.floor(draw()*pool.length)].id;
  return [{id,percent:3+Math.floor(draw()*13)}];
 }
 export function mergeWeaponAffixes(main,material){

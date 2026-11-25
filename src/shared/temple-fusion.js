@@ -62,7 +62,7 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  const main=equippedItem(profile,target,old);
  const ingredientRecord=fusionRecordAt(profile,sourceIndex);
  const material=equippedItem(profile,source,ingredientRecord);
- const combinedEnchants=target.slot==='weapon'?mergeWeaponAffixes(old,source.id==='black-cat'?{}:ingredientRecord):null;
+ const combinedEnchants=target.slot==='weapon'?mergeWeaponAffixes(old,source.id==='black-cat'?{}:ingredientRecord).filter(e=>target.id!=='black-cat'||e.id!=='surging'):null;
  // Exactly one physical ingredient is consumed on success or failure.
  removeInventoryInstance(profile,sourceIndex,targetInstance.uid);
  if(source.id===(profile.starterWeaponId||'white-cat')&&!profile.inventory.includes(source.id))profile.spentStarterWeapon=true;
@@ -103,8 +103,8 @@ export function fuseTemple(world,profile,body,rng=Math.random){
  // Affixes always accumulate; only ULTIMATE echoes have the two-source limit.
  const affixIds=[...new Set([...itemAffixes(main),...(source.id==='black-cat'?[]:itemAffixes(material)),
   ...itemAffixes(old),...itemAffixes(old.original)])];
- const effects=(old.effects||[]).filter(id=>id!=='black-cat'&&itemById(id)?.slot==='weapon').slice(0,2);
- const grantsEcho=target.slot==='weapon'&&source.slot==='weapon'&&source.id!=='black-cat'&&effects.length<2;
+ const effects=(target.id==='black-cat'?[]:old.effects||[]).filter(id=>id!=='black-cat'&&itemById(id)?.slot==='weapon').slice(0,2);
+ const grantsEcho=target.id!=='black-cat'&&target.slot==='weapon'&&source.slot==='weapon'&&source.id!=='black-cat'&&effects.length<2;
  const keys=['damage','chargeDamage','range','chargeRange','radius','defense','capacity','impulse','speed','jump'];
  for(const key of keys){
   const sniperPower=source.id==='black-cat'&&['damage','chargeDamage'].includes(key);

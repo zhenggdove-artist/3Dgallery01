@@ -28,7 +28,7 @@ const specials={
  goldfish:'Goldfish Water Cannon — Normal: launch water jets. Ultimate: summon a three-dimensional school of goldfish that swim forward and damage enemies on contact.',
  clam:'Giant Clam — Normal: swing a snapping shell. Ultimate: fire spinning clams forward.',
  'white-cat':'White Cat SMG — Rapid-fire colorful bullets using the first-person reticle. Charge for a continuous rainbow barrage.',
- 'black-cat':'Black Cat Sniper Rifle — Fire only while aiming through the sniper scope. Ultimate: launch a powerful long-range energy round.',
+ 'black-cat':'Black Cat Sniper Rifle — Scope-only single shots. Verified headshots are lethal. No charge or ultimate.',
  'calico-cat':'Calico Cat Shotgun — Scatter independently colliding pellets. Ultimate: increase the spread and power.',
  fan:'Rampaging Electric Fan — Normal: swing to generate gusts. Ultimate: unleash moving tornadoes that slow enemies.',
  telephone:'Screaming Telephone — Normal: swing the coiled handset cord. Ultimate: emit weakening rings of sound.',
@@ -61,6 +61,7 @@ export function explainWeapon(item,fusion=null){
  effective.chargeRange=item.chargeRange;
  const quality=weaponQuality(effective,fusion);
  const normal=attackStats(effective,0),charged=attackStats(effective,1);
+ if(item.id==='black-cat')return [specials[item.id],'Normal effective range: '+num(normal.range)+' m','Approximate PvP base damage: '+num(pvpShotDamage(effective,normal,quality),2),'Attack interval: '+num(effective.cooldown/1000,3)+' s',...(enchants.length?['Random affixes: '+enchants.filter(e=>e.id!=='surging').map(weaponAffixLabel).join(', ')]:[])].join(' · ');
  charged.range=+(charged.range*quality.range).toFixed(2);
  charged.radius=forwardCastRadius(effective,quality,charged.radius,false);
  if(item.id==='black-cat')charged.range=SNIPER_RANGE;

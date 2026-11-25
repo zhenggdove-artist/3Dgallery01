@@ -31,7 +31,7 @@ export function weaponPresentation(item,record={}){
  const level=Math.max(0,Math.min(99,Math.floor(count)));
  const affixIds=[...new Set([...(origin.affixIds||[]),origin.affixId,...(record?.affixIds||[]),record?.affixId].filter(Boolean))];
  const prefixes=affixIds.map(id=>affixById(id)?.name).filter(Boolean);
- const enchantList=item.slot==='weapon'?normalizedWeaponAffixes(record):[];
+ const enchantList=item.slot==='weapon'?normalizedWeaponAffixes(record).filter(e=>item.id!=='black-cat'||e.id!=='surging'):[];
  const enchantPrefixes=enchantList.map(x=>weaponAffixById(x.id)?.name||'').filter(Boolean);
  const prefix=[...prefixes,...enchantPrefixes].filter(Boolean).join(' ');
  const title=[prefix,item.name].filter(Boolean).join(' ')+(level?' (+'+level+')':'');
@@ -62,7 +62,7 @@ export function weaponPresentation(item,record={}){
   const difference=(record.templeStats?stats.damage:stats.damage*10)-item.damage;
   if(difference>0.05)bonuses.push('Damage +'+round(difference));
  }
- if(Number.isFinite(stats.chargeDamage)&&Number.isFinite(item.chargeDamage)){
+ if(item.id!=='black-cat'&&Number.isFinite(stats.chargeDamage)&&Number.isFinite(item.chargeDamage)){
   const difference=(record.templeStats?stats.chargeDamage:stats.chargeDamage*10)-item.chargeDamage;
   if(difference>0.05)bonuses.push('Charged Damage +'+round(difference));
  }
@@ -77,7 +77,7 @@ export function weaponPresentation(item,record={}){
   const extra=(Number(value)||0)-(Number(item.bonuses?.[ability])||0);
   if(extra>.000001)bonuses.push((labels[ability]||ability)+' +'+(ability==='hp'?round(extra*10,2)+' HP':round(extra*100,2)+'%'));
  }
- for(const id of (record.effects||[]).slice(0,2))bonuses.push('Additional Ultimate: '+id+' · 20% damage / 50% area');
+ for(const id of (item.id==='black-cat'?[]:(record.effects||[]).filter(id=>id!=='black-cat')).slice(0,2))bonuses.push('Additional Ultimate: '+id+' · 20% damage / 50% area');
  if(level&&!bonuses.length)bonuses.push('Fusion Level +'+level);
  return {title,level,traits,bonuses};
 }

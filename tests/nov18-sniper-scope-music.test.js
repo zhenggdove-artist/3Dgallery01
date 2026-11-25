@@ -35,23 +35,22 @@ test('server rejects unscoped Black Cat ordinary hits, charges and fused ultimat
  }
 });
 
-test('scoped Black Cat still fires, and scoped full charges preserve intentional ultimates',()=>{
- const {world,profile}=setup(true),first=NOW+4000;
- const fired=act(world,first,{direction:[0,0,1],scoped:true,charge:0});
- assert.equal(fired.error,undefined);
- assert.equal(fired.attackEvent.ultimate,false);
- assert.equal(fired.attackEvent.fusionEchoes.length,0);
- assert.equal(act(world,first+3000,{phase:'charge',scoped:true}).charging,true);
- const chargedAt=first+3000+itemById('black-cat').chargeMs+150;
- const charged=act(world,chargedAt,{direction:[0,0,1],scoped:true,charge:1});
- assert.equal(charged.error,undefined);
- assert.equal(charged.attackEvent.ultimate,true);
- assert.ok(charged.attackEvent.fusionEchoes.length>0);
- // Leaving scope cancels an in-progress charged sniper rather than firing it.
- assert.equal(act(world,chargedAt+2500,{phase:'charge',scoped:true}).charging,true);
- const blocked=act(world,chargedAt+2500+itemById('black-cat').chargeMs+150,{direction:[0,0,1],charge:1});
- assert.match(blocked.error,/scope/i);
- assert.equal(profile.chargeStartedAt,0);
+test('scoped Black Cat fires only normal attacks, even with legacy ultimate fusion or a stale charge',()=>{
+ for(const fused of [false,true]){
+  const {world,profile}=setup(fused),first=NOW+4000;
+  for(const body of [{phase:'charge'},{phase:'channel-start'},{direction:[0,0,1],charge:1},{direction:[0,0,1],charge:.5}]){
+   assert.match(act(world,first,{...body,scoped:true}).error,/normal attacks only/);
+   assert.equal(profile.chargeStartedAt,0);
+  }
+  profile.chargeStartedAt=first-5000;
+  const fired=act(world,first,{direction:[0,0,1],scoped:true,charge:0});
+  assert.equal(fired.error,undefined);
+  assert.equal(fired.attackEvent.ultimate,false);
+  assert.equal(fired.attackEvent.charge,0);
+  assert.equal(fired.attackEvent.manaCost,0);
+  assert.equal(fired.attackEvent.fusionEchoes.length,0);
+  assert.equal(fired.attackEvent.fusionEffects.length,0);
+ }
 });
 
 test('shoulder attacks are rejected even with fused gear',()=>{

@@ -7,6 +7,12 @@ import {rollWeaponAffixes} from './weapon-affixes.js';
 const newUid=()=>crypto.randomUUID();
 function migrateSniperEcho(record,itemId){
  if(!record||typeof record!=='object')return;
+ if(itemId==='black-cat'){
+  record.effects=[];
+  if(Array.isArray(record.sources))record.sources=record.sources.map(s=>s.echo?{...s,echo:false}:s);
+  if(Array.isArray(record.weaponAffixes))record.weaponAffixes=record.weaponAffixes.map(e=>e.id==='surging'?{...e,id:'ferocious'}:e);
+  return;
+ }
  const effects=record.effects||[],oldSources=record.sources||[];
  const count=Math.max(effects.filter(id=>id==='black-cat').length,oldSources.filter(s=>s.id==='black-cat'&&s.echo).length);
  if(!count)return;

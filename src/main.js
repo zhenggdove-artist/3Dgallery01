@@ -105,7 +105,6 @@ let healVisualSeq=0,lastHealVisualAt=0;
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
 let pendingAInteraction=null,chargeDelayTimer=null,beamStartTimer=null,nextChargeRetryAt=0;
-let sniperScopeAtPress=false;
 // Begin charging after the 500ms tap threshold without relying on render FPS.
 // After a stun/rejected request, retry only while the A/Q button is still held.
 function clearChargeDelay(){
@@ -135,13 +134,9 @@ function startHeldCharge(){
  // Goldfish changes camera on a tap, but its original giant red fish
  // ultimate must remain chargeable ONLY before entering shoulder mode.
  if(currentTunedWeapon()?.id==='goldfish'&&gun.mode!==0)return;
- // Never begin a Black Cat charge while outside the actual sniper scope.
- if(currentTunedWeapon()?.id==='black-cat'&&
-    (!sniperScopeAtPress||gun.mode!==2))return;
+ if(currentTunedWeapon()?.id==='black-cat')return;
  chargeStarted=performance.now();
- chargeRequest=sendAction('attack',{phase:'charge',...(sniperScopeAtPress?{
-  scoped:gun.mode===2,aimMode:'scope'
- }:{})}).then(result=>{
+ chargeRequest=sendAction('attack',{phase:'charge'}).then(result=>{
   if(!result?.charging&&attackHeld){
    chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;
   }
@@ -564,17 +559,13 @@ ui.addEventListener('attack-start',event=>{
  // lingered. Do not let that stale preview block pickup of a respawned work.
  if(!carryingArtwork&&artworkThrow.started!==null)artworkThrow.cancel();
  if(carryingArtwork){
-  clearChargeDelay();pendingAInteraction=null;attackHeld=false;sniperScopeAtPress=false;
+  clearChargeDelay();pendingAInteraction=null;attackHeld=false;
   attackHoldStarted=null;chargeStarted=null;chargeRequest=null;
   artworkThrow.begin();return;
  }
  if(attackHeld||staffChannel)return;
  const weapon=currentTunedWeapon();
- // Record scope at key-down, so holding A before aiming can never charge/fire.
- sniperScopeAtPress=weapon?.id==='black-cat'&&
-  gun.mode===2;
- // A tap picks up nearby items; holding must still charge any weapon except unscoped Black Cat.
- // For first-person guns a tap cycles the camera, while a hold charges.
+ // Black Cat uses A/Q solely to toggle the scope (or interact with nearby items).
  pendingAInteraction=null;
  if(!artworkThrow.started){
    const nearbyArt=arena.nearest(controller.root.position.toArray());
@@ -585,7 +576,7 @@ ui.addEventListener('attack-start',event=>{
  attackHoldStarted=performance.now();
  chargeStarted=null;chargeRequest=null;nextChargeRetryAt=0;
  clearChargeDelay();
- chargeDelayTimer=setTimeout(()=>{chargeDelayTimer=null;startHeldCharge();},STAFF_TAP_MAX_MS);
+ if(weapon?.id!=='black-cat')chargeDelayTimer=setTimeout(()=>{chargeDelayTimer=null;startHeldCharge();},STAFF_TAP_MAX_MS);
   if(isChannelStaff(weapon)&&localRoot)localRoot.userData.staffCastingUntil=attackHoldStarted+1800;
 });
 ui.addEventListener('attack-release',async()=>{
@@ -613,7 +604,7 @@ ui.addEventListener('attack-release',async()=>{
  const weapon=currentTunedWeapon()||itemById('clam');
  const heldMs=performance.now()-attackHoldStarted;
  const charge=chargeProgress(heldMs,weapon?.chargeMs||1500);
- const wasScopedAtPress=sniperScopeAtPress;sniperScopeAtPress=false;
+
  attackHoldStarted=null;chargeStarted=null;
  const pending=chargeRequest;chargeRequest=null;
  if(heldMs<STAFF_TAP_MAX_MS&&tapInteraction){
@@ -629,7 +620,7 @@ ui.addEventListener('attack-release',async()=>{
   else void sendAction('attack',{phase:'channel-stop'}); // clear interrupted charge
   return;
  }
- if(weapon?.id==='black-cat'&&!wasScopedAtPress){gun.cycle();return;}
+ if(weapon?.id==='black-cat'){if(heldMs<STAFF_TAP_MAX_MS)gun.cycle();return;}
  if(weapon?.firstPerson&&heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
  if(heldMs>=STAFF_TAP_MAX_MS&&pending)await pending;
  if(isChannelStaff(weapon)){
@@ -652,7 +643,7 @@ ui.addEventListener('attack-release',async()=>{
 });
 ui.addEventListener('attack-cancel',()=>{
  gun.held=false;
- attackHeld=false;sniperScopeAtPress=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();artworkThrow.cancel();
+ attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();artworkThrow.cancel();
  if(localRoot)localRoot.userData.staffCastingUntil=0;
  if(staffChannel){
   const pending=staffChannelPromise;
@@ -967,8 +958,7 @@ function performAttack(charge=0,phase=null){
  if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
  const item=currentTunedWeapon()||itemById('water');
  // Centralized guard covers UI A/Q, canvas clicks, auto-charge and fusion.
- if(item.id==='black-cat'&&
-   gun.mode!==2)return;
+ if(item.id==='black-cat'&&(gun.mode!==2||charge!==0||phase))return;
  if(item.id==='goldfish'&&gun.mode!==1&&charge<1)return;
  // Unscoped goldfish ultimate follows the camera forward ray; an 11m
  // third-person muzzle intersection can otherwise aim behind the avatar.
@@ -1067,9 +1057,9 @@ function update(dt,time,movementDt=dt){
   }
   updateKnockdowns();arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}updatePlayerSpeech();artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
   const heldItem=castingItem||itemById('clam');
-  if(attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&
+  if(heldItem.id!=='black-cat'&&attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&
      performance.now()-attackHoldStarted>=STAFF_TAP_MAX_MS)startHeldCharge();
-  const charge=chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
+  const charge=heldItem.id==='black-cat'||chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
   // First 500ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
   // the charging window; the very first sustained pulse is the ultimate.
   if(attackHeld&&charge>=1&&isChannelStaff(heldItem)&&heldItem?.family!=='ice'&&!staffChannel)
@@ -1117,7 +1107,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V050',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V051',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

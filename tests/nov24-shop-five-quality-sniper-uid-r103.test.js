@@ -63,34 +63,24 @@ test('shoulder shot server RNG is contained by visible 132px circle for every te
  const css=readFileSync(new URL('../fidelity-ui.css',import.meta.url),'utf8');
  assert.match(css,/width:132px;height:132px;top:calc\(50% - 30px\)/);
 });
-test('Black Cat charged full hit cannot exceed 42 HP; normal precision stays distinct',()=>{
- const sniper=itemById('black-cat');
- assert.equal(pvpShotDamage(sniper,attackStats(sniper,0),{tier:1}),81);
- const full=attackStats(sniper,1);
- assert.ok(pvpShotDamage(sniper,full,{tier:5})<=42);
- assert.ok(full.damage<attackStats(sniper,0).damage*5);
- const echo=fusionSniperEchoDamage(sniper);
- assert.ok(echo.damage>0&&echo.pvpDamage>0&&echo.pvpDamage<=2.5);
- assert.ok(echo.damage<full.damage*.2);
- assert.ok(sniperMaterialStat(sniper,'chargeDamage')<sniper.chargeDamage);
- const server=readFileSync(new URL('../src/shared/temple-rules.js',import.meta.url),'utf8');
- assert.match(server,/fx\.charge<1&&!fx\.shoulderSpread/);
+test('Black Cat catalog cannot generate ultimate damage even with charge input',()=>{
+ const sniper=itemById('black-cat'),normal=attackStats(sniper,0);
+ assert.equal(pvpShotDamage(sniper,normal,{tier:1}),81);
+ assert.deepEqual(attackStats(sniper,1),normal);
+ assert.equal(sniper.chargeMs,0);
+ assert.ok(sniperMaterialStat(sniper,'damage')<sniper.damage);
 });
-test('Black Cat as primary inherits no more than 3.5 PvP per fused ultimate echo',()=>{
+test('Black Cat as primary cannot activate inherited ultimate effects',()=>{
  const w=createInitialWorld(now+10_000),p=ensureProfile(w,user.key,user.name,user.color,now+10_000);
  p.inventory.push('black-cat');p.equipment.weapon='black-cat';
  p.fusion['black-cat']={layer:2,effects:['ember-3','frost-2']};
- const charge=applyAction(w,user,{action:'attack',phase:'charge',scoped:true},
-  {now:now+11_000,rng:()=>.5});
- assert.equal(charge.charging,true);
- const fired=applyAction(w,user,{action:'attack',direction:[0,0,1],charge:1,scoped:true},
-  {now:now+15_000,rng:()=>.5});
+ const charge=applyAction(w,user,{action:'attack',phase:'charge',scoped:true},{now:now+11_000,rng:()=>.5});
+ assert.match(charge.error,/normal attacks only/);
+ const fired=applyAction(w,user,{action:'attack',direction:[0,0,1],charge:0,scoped:true},{now:now+15_000,rng:()=>.5});
  assert.equal(fired.error,undefined);
- assert.equal(fired.attackEvent.fusionEchoes.length,2);
- for(const fx of w.persistentAttacks.filter(fx=>fx.echo)){
-  assert.ok(fx.pvpDamage<=3.5,fx.weapon+' echo PvP '+fx.pvpDamage);
-  assert.ok(fx.damage<=32,fx.weapon+' echo monster '+fx.damage);
- }
+ assert.equal(fired.attackEvent.fusionEchoes.length,0);
+ assert.equal(fired.attackEvent.fusionEffects.length,0);
+ assert.ok(!w.persistentAttacks.some(fx=>fx.echo));
 });
 
 test('fusing one folded target leaves every other physical UID untouched, even after JSON reload',()=>{

@@ -1073,6 +1073,10 @@ function attack(world,profile,actor,body,context,now){
     profile.chargeStartedAt=0;
     return {error:'Black Cat sniper requires scope aim'};
   }
+  if(weapon.id==='black-cat'){
+    profile.chargeStartedAt=0;
+    if(body.phase||Number(body.charge||0)!==0)return {error:'Black Cat supports scoped normal attacks only'};
+  }
   if(body.phase==='channel-start'){
     if(!isChannelStaff(weapon)||weapon.family==='ice')return {error:'This staff casts its ultimate on release'};
     // A staff is silent during a hold. Continuous magic only becomes legal
@@ -1096,7 +1100,7 @@ function attack(world,profile,actor,body,context,now){
   if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};
   let direction=normalDirection(body.direction);
   if(!direction)return {error:'Invalid attack direction'};
-  const charge=channel?1:Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
+  const charge=weapon.id==='black-cat'?0:channel?1:Math.min(clamp(Number(body.charge)||0,0,1),profile.chargeStartedAt?clamp((now-profile.chargeStartedAt)/(weapon.chargeMs||1500),0,1):0);
   const stats=attackStats(weapon,charge),quality=weaponQuality(weapon,profile.fusion?.[weapon.id]);
   const enchants=weaponAffixTotals(weapon);
   stats.damage=+(stats.damage*quality.damage*(1+enchants.damage/100)*
@@ -1294,7 +1298,7 @@ function attack(world,profile,actor,body,context,now){
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
  return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,
     aimMode:weapon.id==='black-cat'?'scope':null,
-    piercing:false,qualityTier:quality.tier,qualityScale:quality.visual,skillRadiusScale:stats.ultimate?(tuning.radiusScale??1):1,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:(profile.fusion[weapon.id]?.effects||[]).filter(id=>id!=='black-cat'),fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,manaCost,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
+    piercing:false,qualityTier:quality.tier,qualityScale:quality.visual,skillRadiusScale:stats.ultimate?(tuning.radiusScale??1):1,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:weapon.id==='black-cat'?[]:(profile.fusion[weapon.id]?.effects||[]).filter(id=>id!=='black-cat'),fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,manaCost,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }
 
 function applyMonsterImpactReaction(player,target,skill,now){
