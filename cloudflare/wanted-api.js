@@ -50,7 +50,7 @@ export async function wantedApi(room,request,session,url){
    else if(old?.useName&&p.wantedOriginalName){p.name=p.wantedOriginalName;delete p.wantedOriginalName;rename=true;}
    oldMedia=old?.avatar!==next.avatar?old?.avatar:null;p.wanted=next;
   }else if(body.action==='settings'){
-   if(!isGM)throw Error('GM only');const label=String(body.label||'').trim();if(!label||label.length>32||!owns(body.background))throw Error('Invalid button settings');
+   if(!isGM)throw Error('GM only');const label=String(body.label||'').trim();if(!label||label.length>32||(body.background!==live.wantedSettings?.background&&!owns(body.background)))throw Error('Invalid button settings');
    const old=wantedSettings(live),color=body.color??old.color,fontSize=body.fontSize??old.fontSize;if(!/^#[0-9a-f]{6}$/i.test(color)||!Number.isInteger(fontSize)||fontSize<8||fontSize>30)throw Error('Invalid text color or size (8–30 px)');const background=body.background??old.background;const backgroundCrop=normalizeWantedBackgroundCrop(background?(body.backgroundCrop??(background===old.background?old.backgroundCrop:null)):null);live.wantedSettings={label,background,color,fontSize,backgroundCrop,revision:old.revision+1};oldMedia=old.background!==live.wantedSettings.background?old.background:null;
   }else if(body.action==='moderate'){
    if(!isGM)throw Error('GM only');const target=live.profiles[String(body.key||'')];if(!target?.wanted)throw Error('Artist not found');target.wanted.hidden=body.hidden!==false;
@@ -70,6 +70,6 @@ export async function wantedApi(room,request,session,url){
  }catch(e){return json({error:e.message},400);}
  live.revision=(live.revision||0)+1;
  room.ctx.storage.transactionSync(()=>{room.save(live);if(rename)sql.exec('UPDATE sessions SET name=? WHERE profile_key=?',p.name,p.key);if(oldMedia&&oldMedia!==p.wanted?.avatar&&oldMedia!==live.wantedSettings?.background)removeMedia(sql,oldMedia);});
- room.broadcastWorld(live);if(rename||destination)room.broadcastRoster();
+ room.broadcastWorld(live);if(body.action==='settings')room.broadcast('wanted-settings',wantedSettings(live));if(rename||destination)room.broadcastRoster();
  return json({ok:true,self:p.wanted||null,name:p.name,settings:wantedSettings(live),destination});
 }

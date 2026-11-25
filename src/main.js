@@ -316,7 +316,7 @@ ui.addEventListener('firebase-login',async()=>{
     ui.setFirebaseLoginStatus(true,message);
   }
 });
-bindWantedList(ui,network,async destination=>{if(!controller||!destination?.position)throw Error('Artwork navigation unavailable');controller.setFollowTarget(null);controller.artworkEditTarget=null;controller.teleport(destination.position);controller.root.rotation.y=destination.rotation;controller.yaw=destination.rotation+Math.PI;controller.pitch=.2;controller.target.copy(controller.root.position);const exhibit=arena.artworks.get(destination.id);const bounds=new THREE.Box3();if(exhibit)bounds.setFromObject(exhibit);if(bounds.isEmpty()){const p=new THREE.Vector3(...destination.lookAt);bounds.set(p.clone().addScalar(-2),p.clone().addScalar(2));}controller.frameWantedArtwork(bounds,destination.rotation);controller.updateCamera(1,true);network.lastCorrectedSequence=network.stateSequence;network.sentStates.clear();network.lastStateAt=0;if(self?.role==='fighter')network.sendState(controller.state());},(action,data)=>sendAction(action,data,{throwOnError:true}));
+bindWantedList(ui,network,async destination=>{if(!controller||!destination?.position)throw Error('Artwork navigation unavailable');controller.setFollowTarget(null);controller.artworkEditTarget=null;controller.teleport(destination.position);controller.root.rotation.y=destination.rotation;controller.yaw=destination.rotation+Math.PI;controller.pitch=.2;controller.target.copy(controller.root.position);const exhibit=arena.artworks.get(destination.id);const bounds=new THREE.Box3();if(exhibit){exhibit.updateMatrixWorld(true);bounds.setFromObject(exhibit);}if(bounds.isEmpty()){const p=new THREE.Vector3(...destination.lookAt);bounds.set(p.clone().addScalar(-2),p.clone().addScalar(2));}controller.frameWantedArtwork(bounds,destination.rotation);controller.updateCamera(1,true);network.lastCorrectedSequence=network.stateSequence;network.sentStates.clear();network.lastStateAt=0;if(self?.role==='fighter')network.sendState(controller.state());},(action,data)=>sendAction(action,data,{throwOnError:true}));
 ui.addEventListener('join',async event=>{
    if(event.detail?.mode==='guest'&&ui.googleAuthenticated)
      return ui.joinError('Google account already selected. Enter with Google instead.');
@@ -365,6 +365,7 @@ network.addEventListener('wing-catalog',event=>{
  if(world){world={...world,customWings:wings};syncWorld();
   if(['wing-shop','wing-manage','bag'].includes(ui.panelName))ui.renderPanel();}
 });
+network.addEventListener('wanted-settings',event=>{if(joined)syncWantedButton(event.detail,network.base);});
 network.addEventListener('players',event=>{if(!joined)return;players=event.detail;syncPlayers();});
 network.addEventListener('state',event=>{const data=event.detail;if(data.key===self?.key)return;let target=remoteTargets.get(data.key);if(!target){syncPlayers();target=remoteTargets.get(data.key);}if(target){target.position.fromArray(data.state.position);target.rotation=data.state.rotation;target.animation=data.state.animation;}});
 network.addEventListener('chat',event=>{ui.addChat(event.detail);showPlayerSpeech(event.detail);});

@@ -14,7 +14,7 @@ try{
    const {bindWantedList,syncWantedButton,dragBackgroundCrop}=await import('data:text/javascript;charset=utf-8,'+encodeURIComponent(source));
    const ui=new EventTarget();ui.panelName='wanted-gm';ui.content=document.getElementById('panel-content');ui.world={profile:{name:'Artist'}};ui.toast=console.error;
    const settings={label:'Artists',color:'#ff0022',fontSize:20,background:null,backgroundCrop:{x:21,y:73},revision:1};
-   const calls=[];const network={base:'https://example.com',request:async(...args)=>{calls.push(args);if(args[1]?.body?.action==='settings'){const {action,...draft}=args[1].body;Object.assign(settings,draft,{revision:settings.revision+1});return {ok:true,settings:{...settings}};}return {settings:{...settings},self:{name:'Artist'},total:1,pages:1,page:0,entries:[{key:'one',name:'Artist',quote:'Hello',level:1,kills:0,deaths:0,hasArtwork:true}]};}};
+   const calls=[];const network={base:'https://example.com',request:async(...args)=>{calls.push(args);if(args[1]?.body?.action==='settings'){const {action,...draft}=args[1].body;Object.assign(settings,draft,{background:draft.background||null,backgroundCrop:draft.background?draft.backgroundCrop:{x:50,y:50},revision:settings.revision+1});return {ok:true,settings:{...settings}};}return {settings:{...settings},self:{name:'Artist'},total:1,pages:1,page:0,entries:[{key:'one',name:'Artist',quote:'Hello',level:1,kills:0,deaths:0,hasArtwork:true}]};}};
    syncWantedButton(settings,network.base);bindWantedList(ui,network,()=>{},()=>{});
    ui.dispatchEvent(new CustomEvent('wanted-open',{detail:{admin:true}}));
    await Promise.resolve();await Promise.resolve();

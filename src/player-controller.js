@@ -13,7 +13,7 @@ export class PlayerController{
     root.position.fromArray(PLAYER_SPAWNS[seat]||PLAYER_SPAWNS[0]);root.position.y=arena.groundHeight(root.position.x,root.position.z);this.bind(mobileStick);this.updateCamera(1);
   }
   bind(stick){
-    addEventListener('keydown',e=>{if(!this.enabled||/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName))return;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();this.keys.add(e.code);if(e.code==='Space'&&!e.repeat)this.jump();});
+    addEventListener('keydown',e=>{if(!this.enabled||/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName))return;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))this.wantedArtworkView=null;this.keys.add(e.code);if(e.code==='Space'&&!e.repeat)this.jump();});
     addEventListener('keyup',e=>this.keys.delete(e.code));addEventListener('blur',()=>{this.keys.clear();this.move.set(0,0);this.drag=null;this.pinch=null;this.pointers.clear();this.channelAiming=false;this.channelMouseLast=null;});
      // A-button pointer capture delivers mouse movement to the document,
      // NOT to the game canvas. Listen in CAPTURE phase even when LMB is held.
@@ -52,7 +52,7 @@ export class PlayerController{
       this.drag=point?{id,x:point.x,y:point.y,yaw:this.yaw,pitch:this.pitch}:null;
     };
     this.canvas.addEventListener('pointerdown',e=>{
-      if(!this.enabled||this.status.freeze||e.button>0)return;
+      if(!this.enabled||this.status.freeze||e.button>0)return;this.wantedArtworkView=null;
       if(this.pointers.has(e.pointerId)||(e.pointerType==='touch'&&this.pointers.size>=2))return;
       this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
       try{this.canvas.setPointerCapture(e.pointerId);}catch{}
@@ -103,14 +103,14 @@ export class PlayerController{
     };
     for(const event of ['touchend','touchcancel'])
       addEventListener(event,reconcileTouches,{capture:true,passive:true});
-    this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
-    if(stick)this.mobileStick=bindMobileStick(stick,{enabled:()=>this.enabled,write:(x,y)=>this.move.set(x,y)});
+    this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.wantedArtworkView=null;this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
+    if(stick)this.mobileStick=bindMobileStick(stick,{enabled:()=>this.enabled,write:(x,y)=>{if(Math.hypot(x,y)>.1)this.wantedArtworkView=null;this.move.set(x,y);}});
   }
   jump(){if(this.awaitingSpawn||this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;this.onJump?.();return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
   setEnabled(value){this.enabled=value;if(!value){this.mobileStick?.reset();this.keys.clear();this.move.set(0,0);this.drag=null;this.pinch=null;this.pointers.clear();}}
-  setRole(role){if(this.role!==role)this.mobileStick?.reset();this.role=role;this.root.visible=role==='fighter';this.followTarget=null;this.spectatorLift=0;this.cameraLocked=false;this.authorityHoldUntil=0;this.stunUntil=0;}
+  setRole(role){if(this.role!==role){this.mobileStick?.reset();this.wantedArtworkView=null;}this.role=role;this.root.visible=role==='fighter';this.followTarget=null;this.spectatorLift=0;this.cameraLocked=false;this.authorityHoldUntil=0;this.stunUntil=0;}
   setFollowTarget(root=null){this.followTarget=root;}
-  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;this.vortexSpin=null;this.tidePush=null;}
+  teleport(position){this.wantedArtworkView=null;this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;this.vortexSpin=null;this.tidePush=null;}
   beginPanBlast(hit){
     if(!hit?.panBlast||!(Number(hit.knockbackDistance)>0))return false;
     const d=new THREE.Vector3(...hit.vector);d.y=0;
@@ -300,7 +300,7 @@ export class PlayerController{
   // are disabled by TransformControls / artwork or platform edit modes.
   orbitEditCamera(deltaX,deltaY){
    if(!Number.isFinite(deltaX)||!Number.isFinite(deltaY))return;
-   this.yaw-=deltaX/innerWidth*4;
+   this.wantedArtworkView=null;this.yaw-=deltaX/innerWidth*4;
    this.pitch=THREE.MathUtils.clamp(this.pitch+deltaY/innerHeight*2,-1.15,1.4);
    this.updateCamera(1,true);
   }
@@ -311,10 +311,10 @@ export class PlayerController{
     const halfVertical=THREE.MathUtils.degToRad(this.camera.fov||50)/2,halfHorizontal=Math.atan(Math.tan(halfVertical)*Math.max(.15,this.camera.aspect||1)),half=Math.min(halfVertical,halfHorizontal);
     const distance=Math.max(7,radius/Math.sin(half)*1.18),back=new THREE.Vector3(-Math.sin(heading),0,-Math.cos(heading));
     const offset=Math.max(distance,center.clone().sub(this.root.position).dot(back)+5);const position=center.clone().addScaledVector(back,offset);position.y+=Math.max(2,Math.min(10,radius*.25));
-    this.distance=THREE.MathUtils.clamp(position.distanceTo(this.root.position),3,50);this.pitch=.15;this.wantedArtworkView={position,center};
+    this.distance=THREE.MathUtils.clamp(position.distanceTo(this.root.position),3,50);this.pitch=.15;this.wantedArtworkView={position,center,anchor:this.root.position.clone()};
   }
   updateCamera(dt,force=false){
-    if(this.wantedArtworkView){if(!this.enabled){this.camera.position.copy(this.wantedArtworkView.position);this.camera.lookAt(this.wantedArtworkView.center);return;}this.wantedArtworkView=null;}
+    if(this.wantedArtworkView){const view=this.wantedArtworkView;if(this.root.position.distanceToSquared(view.anchor)<.16&&!this.artworkEditTarget&&!this.followTarget&&!this.channelAiming){this.camera.position.copy(view.position);this.camera.lookAt(view.center);return;}this.wantedArtworkView=null;}
     if(this.cameraLocked&&!force)return;
     if(this.role==='spectator'&&!this.followTarget){
       // One invisible free camera for public spectators and GM test.

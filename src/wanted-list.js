@@ -80,13 +80,13 @@ export function bindWantedList(ui,network,jump,action){
     const draftCrop={...backgroundCrop},old=data.settings,file=form.elements.background.files[0];
     const background=values.has('clear')?'':file?await upload(file):old.background;
     const draft={action:'settings',label:String(values.get('label')).trim(),color:values.get('color'),fontSize:Number(values.get('fontSize')),background,backgroundCrop:draftCrop};
-    const result=await api(draft),saved=result.settings;
-    if(!result.ok||!saved||saved.label!==draft.label||saved.color!==draft.color||saved.fontSize!==draft.fontSize||saved.background!==(background||null)||Number(saved.revision)<=Number(old.revision||0))throw Error('Button save not confirmed by server');
+    const result=await api(draft),saved=result.settings,expectedCrop=background?draftCrop:{x:50,y:50};
+    if(!result.ok||!saved||saved.label!==draft.label||saved.color!==draft.color||saved.fontSize!==draft.fontSize||saved.background!==(background||null)||Number(saved.revision)<=Number(old.revision||0)||Math.abs((saved.backgroundCrop?.x??NaN)-expectedCrop.x)>.001||Math.abs((saved.backgroundCrop?.y??NaN)-expectedCrop.y)>.001)throw Error('Button save not confirmed by server');
     // Apply the receipt immediately. A delayed world snapshot cannot undo it.
     syncWantedButton(saved,network.base);data.settings=saved;
     if(ui.world)ui.world.wantedSettings=saved;
     const check=await network.request('/api/wanted?page='+page+'&seed='+listSeed,{timeoutMs:15000});
-    if(Number(check.settings?.revision)<saved.revision)throw Error('Saved, but server readback is not current');
+    if(!check.settings||Number(check.settings.revision)<saved.revision||(check.settings.revision===saved.revision&&JSON.stringify(check.settings)!==JSON.stringify(saved)))throw Error('Saved, but server readback is not current');
     syncWantedButton(check.settings,network.base);data=check;page=check.page;
     if(backgroundPreview)URL.revokeObjectURL(backgroundPreview);backgroundPreview=null;
     if(active()){render();const receipt=ui.content.querySelector('[data-wanted-save-status]');if(receipt)receipt.textContent='Saved · synced to all players';}
