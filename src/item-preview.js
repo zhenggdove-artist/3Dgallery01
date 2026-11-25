@@ -22,7 +22,7 @@ const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(
 const previewRelease=new URL(import.meta.url).searchParams.get('temple-release');
 // V053 changes combat billing, not the authored models or portrait renderer.
 // Reuse V052's identical full-resolution PNGs; later art releases invalidate normally.
-const previewArtRelease=['20261125-v053-r125','20261125-v054-r126','20261125-v055-r127'].includes(previewRelease)?'20261125-v052-r124':previewRelease;
+const previewArtRelease=['20261125-v053-r125','20261125-v054-r126','20261125-v055-r127','20261125-v055-r128'].includes(previewRelease)?'20261125-v052-r124':previewRelease;
 const previewCacheName=previewArtRelease?'ggtemple-preview-'+previewArtRelease:null;
 let previewCachePromise;
 function previewCache(){

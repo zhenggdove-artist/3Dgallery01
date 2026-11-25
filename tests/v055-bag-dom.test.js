@@ -35,5 +35,5 @@ test('BAG action acknowledgement is deduplicated without modifying paper doll re
  assert.ok(bag.includes('reconcileBagGrid(keepGrid,fresh.content)'));assert.ok(bag.includes('patchBagNode(column,next)'));
  assert.ok(bag.includes('fresh.replaceWith(ui.bagPortraitCanvas)'));
  assert.ok(ui.includes('refreshBagAfterAction()'));assert.ok(ui.includes('this.panelSignature!==inventoryPanelSignature(this.world?.profile)'));
- assert.ok(main.includes("if(ui.panelName==='bag')ui.refreshBagAfterAction();else ui.renderPanel()"));
+ assert.ok(main.includes("if(ui.panelName==='bag'&&['equip','unequip','inspect-item'].includes(action))ui.refreshBagAfterAction();else ui.renderPanel()"));
 });
