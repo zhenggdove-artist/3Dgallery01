@@ -57,7 +57,6 @@
 @keyframes wanted-text-flash{0%,100%{--wanted-active-color:var(--wanted-color)}50%{--wanted-active-color:var(--wanted-flash-color)}}
 @media(prefers-reduced-motion:reduce){#hud.functions-open #dock #wanted-button.wanted-flashing span,.wanted-button-preview.wanted-flashing span{animation:none}}
 /* Replace the OUTER pink glass shell, not just the nested artist list. */
-#panel .wanted-zalgo-band:not(.wanted-ascii){display:none}
 #panel.wanted-window{--wanted-edge:18px;background:#c0c0c0!important;background-image:none!important;backdrop-filter:none!important;border:3px outset #eee!important;border-radius:0!important;box-shadow:3px 3px 0 #3338!important;padding:0!important;gap:0!important;overflow:hidden!important;color:#111;font-family:Tahoma,Arial,sans-serif;display:flex;flex-direction:column;box-sizing:border-box}
 #panel.wanted-window[hidden]{display:none!important}
 #panel.wanted-window>header{position:relative;flex:0 0 auto;min-height:34px;height:34px!important;padding:2px 4px!important;gap:6px;background:#000080!important;color:white;border:0;overflow:hidden;box-sizing:border-box}
@@ -67,17 +66,32 @@
 #panel.wanted-window #panel-close{width:27px;height:25px;min-height:0;flex:none;padding:0;background:#c0c0c0!important;border:2px outset #eee!important;border-radius:0!important;color:#111!important;font:bold 19px/1 monospace!important;z-index:2}
 #panel.wanted-window #panel-content{position:relative;flex:1 1 auto;min-height:0;height:auto!important;margin:0 var(--wanted-edge) var(--wanted-edge);padding:4px!important;background:#c0c0c0!important;overflow:auto;touch-action:pan-y;box-sizing:border-box}
 #panel.wanted-window .wanted-app{border:0;padding:2px;background:#c0c0c0}
-#panel.wanted-window .wanted-zalgo-band{display:flex;align-items:center;overflow:hidden;background:#000080;color:#c3d2ff;pointer-events:none;user-select:none;line-height:1;font:12px/1 monospace}
-#panel.wanted-window .wanted-zalgo-top{position:relative;flex:1 1 auto;min-width:0;height:100%}
-#panel.wanted-window .wanted-zalgo-left,#panel.wanted-window .wanted-zalgo-right{position:absolute;top:34px;bottom:var(--wanted-edge);width:var(--wanted-edge);z-index:1;writing-mode:vertical-rl}
-#panel.wanted-window .wanted-zalgo-left{left:0}
-#panel.wanted-window .wanted-zalgo-right{right:0}
-#panel.wanted-window .wanted-zalgo-bottom{position:absolute;bottom:0;left:0;right:0;height:var(--wanted-edge);z-index:1}
-#panel .wanted-zalgo-track{display:block;flex:none;white-space:nowrap;letter-spacing:2px;text-shadow:1px 0 #f5a4c9,-1px 0 #74b9ff;animation:wanted-zalgo-horizontal 15s linear infinite}
-#panel .wanted-zalgo-left .wanted-zalgo-track,#panel .wanted-zalgo-right .wanted-zalgo-track{animation-name:wanted-zalgo-vertical}
-#panel .wanted-zalgo-right .wanted-zalgo-track,#panel .wanted-zalgo-bottom .wanted-zalgo-track{animation-direction:reverse}
-#panel .wanted-zalgo-bottom .wanted-zalgo-track{animation-duration:20s}
-@keyframes wanted-zalgo-horizontal{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-@keyframes wanted-zalgo-vertical{from{transform:translateY(0)}to{transform:translateY(-50%)}}
 @media(max-width:640px){#panel.wanted-window{--wanted-edge:13px}}
-@media(prefers-reduced-motion:reduce){#panel .wanted-zalgo-track{animation:none}}
+
+
+/* Same native button, exact pixel geometry and typography in both contexts.
+   Scoped !important rules intentionally neutralize generic HUD/panel styles. */
+#hud.functions-open #dock #wanted-button,#panel .wanted-app button.wanted-button-preview{
+ box-sizing:border-box!important;width:108px!important;height:48px!important;min-width:108px!important;max-width:108px!important;min-height:48px!important;max-height:48px!important;
+ display:grid!important;place-items:center!important;place-content:stretch!important;grid-template:1fr/1fr!important;gap:0!important;padding:3px!important;margin:0!important;
+ border:1px solid #977f99!important;border-radius:8px!important;background:#f9e6f1ed!important;background-image:none!important;overflow:hidden!important;
+ font:normal 700 13px/1.08 Arial,sans-serif!important;letter-spacing:0!important;text-transform:none!important;box-shadow:none!important;appearance:none!important;-webkit-appearance:none!important;
+}
+#hud.functions-open #dock #wanted-button>span,#panel .wanted-app .wanted-button-preview>span{
+ box-sizing:border-box!important;display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;margin:0!important;padding:0!important;
+ font-family:Arial,sans-serif!important;font-size:var(--wanted-size,13px)!important;font-weight:700!important;font-style:normal!important;line-height:1.08!important;letter-spacing:0!important;
+ text-align:var(--wanted-align,center)!important;white-space:break-spaces!important;overflow-wrap:anywhere!important;word-break:normal!important;text-transform:none!important;text-shadow:none!important;
+ color:var(--wanted-active-color,var(--wanted-color,#422943))!important;-webkit-text-fill-color:currentColor!important;
+}
+#panel .wanted-app textarea[name=label]{box-sizing:border-box;width:100%;resize:vertical;white-space:pre-wrap;font:14px/1.25 monospace;color:#111;background:#fff;border:2px inset #eee;border-radius:0}
+#panel .wanted-app select[name=align]{color:#111;background:white;border:2px inset #eee;border-radius:0}
+#panel .wanted-zalgo-controls{margin:4px 0;padding:5px;min-width:0;border:2px groove #eee}
+#panel .wanted-zalgo-controls label{display:grid;grid-template-columns:minmax(0,1fr) minmax(60px,1fr) 2.5em;align-items:center;gap:4px;font-size:11px}
+#panel .wanted-zalgo-controls output{text-align:right;font-variant-numeric:tabular-nums}
+#panel.wanted-window{background:#000080!important}
+#panel.wanted-window>header{background:#000080!important}
+#panel.wanted-window>header>div,#panel.wanted-window #panel-close{position:relative;z-index:4;background:#000080}
+#panel.wanted-window>header>div{padding:1px 3px}
+#panel.wanted-window .wanted-app .wanted-title{background:#c0c0c0;color:#111;border:1px inset #eee}
+#panel .wanted-perimeter{display:none;position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3}
+#panel.wanted-window .wanted-perimeter{display:block}

@@ -1,3 +1,4 @@
+import {normalizeZalgo,normalizeWantedLabel,validWantedLabel,normalizeWantedAlign} from '../src/shared/wanted-style.js';
 import {wantedPage,wantedProfile,wantedDestination,wantedSettings,normalizeWantedBackgroundCrop,normalizeWantedZoom,normalizeWantedFlash} from '../src/shared/wanted-list.js';
 const json=(v,status=200)=>Response.json(v,{status,headers:{'Cache-Control':'no-store, private'}});
 const CHUNK=512*1024,MAX=5*1024*1024;
@@ -50,8 +51,8 @@ export async function wantedApi(room,request,session,url){
    else if(old?.useName&&p.wantedOriginalName){p.name=p.wantedOriginalName;delete p.wantedOriginalName;rename=true;}
    oldMedia=old?.avatar!==next.avatar?old?.avatar:null;p.wanted=next;
   }else if(body.action==='settings'){
-   if(!isGM)throw Error('GM only');const label=String(body.label||'').trim();if(!label||label.length>32||(body.background!==live.wantedSettings?.background&&!owns(body.background)))throw Error('Invalid button settings');
-   const old=wantedSettings(live),color=body.color??old.color,fontSize=body.fontSize??old.fontSize;if(!/^#[0-9a-f]{6}$/i.test(color)||!Number.isInteger(fontSize)||fontSize<8||fontSize>30)throw Error('Invalid text color or size (8–30 px)');const background=body.background??old.background;const backgroundCrop=normalizeWantedBackgroundCrop(background?(body.backgroundCrop??(background===old.background?old.backgroundCrop:null)):null);const backgroundZoom=normalizeWantedZoom(background?(body.backgroundZoom??(background===old.background?old.backgroundZoom:1)):1),flash=normalizeWantedFlash(body.flash??old.flash);live.wantedSettings={label,background,color,fontSize,backgroundCrop,backgroundZoom,flash,revision:old.revision+1};oldMedia=old.background!==live.wantedSettings.background?old.background:null;
+   if(!isGM)throw Error('GM only');const label=normalizeWantedLabel(body.label);if(!validWantedLabel(label)||(body.background!==live.wantedSettings?.background&&!owns(body.background)))throw Error('Invalid button settings');
+   const old=wantedSettings(live),color=body.color??old.color,fontSize=body.fontSize??old.fontSize;if(!/^#[0-9a-f]{6}$/i.test(color)||!Number.isInteger(fontSize)||fontSize<8||fontSize>30)throw Error('Invalid text color or size (8–30 px)');const background=body.background??old.background;const backgroundCrop=normalizeWantedBackgroundCrop(background?(body.backgroundCrop??(background===old.background?old.backgroundCrop:null)):null);const backgroundZoom=normalizeWantedZoom(background?(body.backgroundZoom??(background===old.background?old.backgroundZoom:1)):1),flash=normalizeWantedFlash(body.flash??old.flash);const align=normalizeWantedAlign(body.align??old.align),zalgo=normalizeZalgo(body.zalgo??old.zalgo);live.wantedSettings={label,background,color,fontSize,backgroundCrop,backgroundZoom,flash,align,zalgo,revision:old.revision+1};oldMedia=old.background!==live.wantedSettings.background?old.background:null;
   }else if(body.action==='moderate'){
    if(!isGM)throw Error('GM only');const target=live.profiles[String(body.key||'')];if(!target?.wanted)throw Error('Artist not found');target.wanted.hidden=body.hidden!==false;
   }else if(body.action==='jump'){

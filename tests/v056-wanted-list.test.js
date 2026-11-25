@@ -40,7 +40,7 @@ test('V057 explicit artist credit includes original exhibits and overrides uploa
  assert.ok(wantedPage(world).entries.every(a=>a.hasArtwork));
 });
 test('V057 button style defaults and legacy saves are compatible',()=>{
- assert.deepEqual(wantedSettings({}),{label:'Wanted List',background:null,color:'#422943',fontSize:13,backgroundCrop:{x:50,y:50},backgroundZoom:1,flash:{enabled:false,color:'#ffffff',hz:1},revision:0});assert.equal(wantedSettings({wantedSettings:{label:'Artists',color:'#ff0022',fontSize:20}}).fontSize,20);
+ assert.deepEqual(wantedSettings({}),{label:'Wanted List',background:null,color:'#422943',fontSize:13,backgroundCrop:{x:50,y:50},backgroundZoom:1,flash:{enabled:false,color:'#ffffff',hz:1},align:'center',zalgo:{speed:42,mutation:5,marks:5,size:13,spacing:11,radius:8,squeeze:45,color:'#c3d2ff'},revision:0});assert.equal(wantedSettings({wantedSettings:{label:'Artists',color:'#ff0022',fontSize:20}}).fontSize,20);
  assert.ok(read('index.html').includes('id="wanted-button"><span>Wanted List</span>'));assert.ok(read('wanted-list.css').includes('repeat(2,minmax(0,1fr))'));assert.ok(read('src/wanted-list.js').includes('previewCount-previewPage*PAGE_SIZE'));assert.ok(read('src/main.js').includes('controller.yaw=destination.rotation+Math.PI'));
 });
 
