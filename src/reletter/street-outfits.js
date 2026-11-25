@@ -11,7 +11,9 @@ export function softPorkGeometry(T,seed=0){
 function random(seed){return ()=>{seed=(1664525*seed+1013904223)>>>0;return seed/4294967296;};}
 function texture(T,record,w,h,paint){const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;paint(canvas.getContext('2d'),w,h);const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);return tex;}
 function mesh(T,g,geo,mat,p=[0,0,0],s=[1,1,1]){const m=new T.Mesh(geo,mat);m.position.set(...p);m.scale.set(...s);g.add(m);return m;}
+const STREET_KINDS=new Set(['ggcola-disguise','bei7-road-disguise','traffic-light-disguise','taipower-box-disguise']);
 export function buildStreetOutfit(T,g,kind,record,mat){
+ if(!STREET_KINDS.has(kind))return null;
  const b=(p,s,m)=>mesh(T,g,new T.BoxGeometry(1,1,1),m,p,s);
  const c=(p,r1,r2,h,m,n=28)=>mesh(T,g,new T.CylinderGeometry(r1,r2,h,n),m,p);
  const ring=(p,r,t,m)=>mesh(T,g,new T.TorusGeometry(r,t,8,40),m,p);
@@ -32,7 +34,7 @@ export function buildStreetOutfit(T,g,kind,record,mat){
   for(let i=0;i<4;i++){const q=ring([0,1.84+i*.024,0],.127,.008,pet);q.rotation.x=Math.PI/2;}
   const cap=new T.Group();cap.position.set(0,1.97,-.14);g.add(cap);
   mesh(T,cap,new T.CylinderGeometry(.155,.155,.105,36),red,[0,.05,.14]);
-  for(let i=0;i<30;i++){const a=i*TAU/30;mesh(T,cap,new T.BoxGeometry(.016,.085,.018),red,[Math.sin(a)*.151,.05,.14+Math.cos(a)*.151]).rotation.y=a;}
+  const ridges=new T.InstancedMesh(new T.BoxGeometry(.016,.085,.018),red,30),capDummy=new T.Object3D();for(let i=0;i<30;i++){const a=i*TAU/30;capDummy.position.set(Math.sin(a)*.151,.05,.14+Math.cos(a)*.151);capDummy.rotation.y=a;capDummy.updateMatrix();ridges.setMatrixAt(i,capDummy.matrix);}cap.add(ridges);
   const bubbles=new T.InstancedMesh(new T.SphereGeometry(1,7,5),foam,80),dummy=new T.Object3D();
   for(let i=0;i<80;i++){const a=rng()*TAU,y=.18+rng()*1.48,r=y>1.40?.25:.345;dummy.position.set(Math.sin(a)*r,y,Math.cos(a)*r);dummy.scale.setScalar(.005+rng()*.012);dummy.updateMatrix();bubbles.setMatrixAt(i,dummy.matrix);}g.add(bubbles);
   const droplets=new T.InstancedMesh(new T.SphereGeometry(1,8,6),cola,72),froth=new T.InstancedMesh(new T.SphereGeometry(1,6,4),foam,24);
@@ -61,7 +63,7 @@ export function buildStreetOutfit(T,g,kind,record,mat){
    const outer=ring([0,y,.32],.31,.037,rim),inner=ring([0,y,.36],.274,.025,m);
    // Open-ended semicircular sun visor, extending out from the lamp.
    const hood=new T.CylinderGeometry(.32,.32,.24,36,1,true,Math.PI/2,Math.PI);
-   const visor=mesh(T,g,hood,housing,[0,y,.47]);visor.rotation.x=Math.PI/2;visor.rotation.z=Math.PI/2;housing.side=T.DoubleSide;
+   const visor=mesh(T,g,hood,housing,[0,y,.47]);visor.name='signal-visor';visor.rotation.x=Math.PI/2;housing.side=T.DoubleSide;
    if(i!==1){
     const lens=mesh(T,g,new T.CircleGeometry(.267,40),m,[0,y,.345]);
     const leds=new T.InstancedMesh(new T.SphereGeometry(1,6,4),m,81),dummy=new T.Object3D();let k=0;
