@@ -42,6 +42,10 @@ assert.match(deniedGmHistory.error,/GM only/i,'regular players may not view priv
 if(process.env.TEMPLE_TEST_ADMIN_KEY){
  const gm=await call('/api/join',{name:'Ely',color:'#43b59a',memoryCode:process.env.TEMPLE_TEST_ADMIN_KEY});
  assert.equal(gm.self.profile.admin,true);
+ const configured=await call('/api/wanted',{action:'settings',label:'Wanted List',color:'#123456',fontSize:16,backgroundCrop:{x:22,y:71}},gm.token);assert.deepEqual(configured.settings.backgroundCrop,{x:50,y:50});
+ const backgroundPng=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9kAAAAASUVORK5CYII=','base64');const background=await call('/api/wanted/media',backgroundPng,gm.token,{raw:true,type:'image/png'});
+ const cropped=await call('/api/wanted',{action:'settings',label:'Wanted List',background:background.id,backgroundCrop:{x:22,y:71}},gm.token);assert.deepEqual(cropped.settings.backgroundCrop,{x:22,y:71});assert.deepEqual((await call('/api/wanted?page=0',undefined,token)).settings.backgroundCrop,{x:22,y:71});assert.deepEqual((await call('/api/world',undefined,token)).world.wantedSettings.backgroundCrop,{x:22,y:71});
+ const recropped=await call('/api/wanted',{action:'settings',label:'Wanted List',backgroundCrop:{x:-5,y:120}},gm.token);assert.deepEqual(recropped.settings.backgroundCrop,{x:0,y:100});assert.equal(recropped.settings.background,background.id);
  const history=await call('/api/gm/presence',undefined,gm.token);
  assert.ok(history.online.some(p=>p.name===guest));
  assert.ok(history.events.some(e=>e.name===guest&&e.event==='online'));

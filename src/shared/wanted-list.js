@@ -1,7 +1,8 @@
 import {insideArena,PLATFORMS} from './arena.js';
 import {cityBlocked,cityGroundHeight} from './city-layout.js';
 export const WANTED_PAGE_SIZE=12;
-export function wantedSettings(world){const s=world.wantedSettings||{};return {label:s.label||'Wanted List',background:s.background||null,color:/^#[0-9a-f]{6}$/i.test(s.color||'')?s.color:'#422943',fontSize:Math.max(8,Math.min(30,Number(s.fontSize)||13))};}
+export function normalizeWantedBackgroundCrop(value){const axis=v=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(100,v)):50;return {x:axis(value?.x),y:axis(value?.y)};}
+export function wantedSettings(world){const s=world.wantedSettings||{};return {label:s.label||'Wanted List',background:s.background||null,color:/^#[0-9a-f]{6}$/i.test(s.color||'')?s.color:'#422943',fontSize:Math.max(8,Math.min(30,Number(s.fontSize)||13)),backgroundCrop:normalizeWantedBackgroundCrop(s.backgroundCrop)};}
 const authorKey=v=>String(v||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
 export function wantedArtworks(world,key){
  const profile=world.profiles?.[key],name=authorKey(profile?.wanted?.name),removed=new Set(world.removedArtworkIds||[]);

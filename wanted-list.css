@@ -37,3 +37,6 @@
 @media(max-width:640px){#hud.functions-open #dock #paint-button,#hud.functions-open #dock [data-panel=social],#hud.functions-open #dock #wanted-button{right:136px}#panel .wanted-app{padding:3px}.wanted-grid{gap:3px}}
 
 #panel:has(.wanted-app) #panel-content{padding:4px;overflow:auto}#panel .wanted-app .wanted-title{min-height:0;box-sizing:border-box}#panel .wanted-info details[open]{overflow-wrap:anywhere}.wanted-info p{display:block;overflow:visible}
+
+/* Only GM background preview handles image dragging; the live menu is unchanged. */
+.wanted-button-preview{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;background-repeat:no-repeat;background-origin:padding-box}.wanted-button-preview span{pointer-events:none}.wanted-button-preview.has-background{cursor:grab}.wanted-button-preview.is-dragging{cursor:grabbing}#dock #wanted-button{background-repeat:no-repeat;background-origin:padding-box}

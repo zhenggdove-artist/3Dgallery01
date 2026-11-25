@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {wantedProfile,wantedPage,wantedDestination,countWantedDeath,wantedArtworks,wantedSettings} from '../src/shared/wanted-list.js';
+import {wantedProfile,wantedPage,wantedDestination,countWantedDeath,wantedArtworks,wantedSettings,normalizeWantedBackgroundCrop} from '../src/shared/wanted-list.js';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('Wanted profile validates links, names, crop and preserves a single avatar',()=>{
  const previous=wantedProfile({name:'Artist',website:'https://example.com',quote:'Hello',avatar:'one',crop:{x:25,y:75},useName:true},null,100);
@@ -40,6 +40,8 @@ test('V057 explicit artist credit includes original exhibits and overrides uploa
  assert.ok(wantedPage(world).entries.every(a=>a.hasArtwork));
 });
 test('V057 button style defaults and legacy saves are compatible',()=>{
- assert.deepEqual(wantedSettings({}),{label:'Wanted List',background:null,color:'#422943',fontSize:13});assert.equal(wantedSettings({wantedSettings:{label:'Artists',color:'#ff0022',fontSize:20}}).fontSize,20);
+ assert.deepEqual(wantedSettings({}),{label:'Wanted List',background:null,color:'#422943',fontSize:13,backgroundCrop:{x:50,y:50}});assert.equal(wantedSettings({wantedSettings:{label:'Artists',color:'#ff0022',fontSize:20}}).fontSize,20);
  assert.ok(read('index.html').includes('id="wanted-button"><span>Wanted List</span>'));assert.ok(read('wanted-list.css').includes('repeat(2,minmax(0,1fr))'));assert.ok(read('src/wanted-list.js').includes('previewCount-previewPage*12'));assert.ok(read('src/main.js').includes('controller.yaw=destination.rotation+Math.PI'));
 });
+
+test('V058 background crop is centered for legacy settings and clamped on both axes',()=>{assert.deepEqual(normalizeWantedBackgroundCrop({x:-20,y:200}),{x:0,y:100});assert.deepEqual(normalizeWantedBackgroundCrop({x:null,y:'12'}),{x:50,y:50});assert.deepEqual(wantedSettings({wantedSettings:{background:'a',backgroundCrop:{x:25,y:75}}}).backgroundCrop,{x:25,y:75});});

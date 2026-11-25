@@ -1,4 +1,4 @@
-import {wantedPage,wantedProfile,wantedDestination,wantedSettings} from '../src/shared/wanted-list.js';
+import {wantedPage,wantedProfile,wantedDestination,wantedSettings,normalizeWantedBackgroundCrop} from '../src/shared/wanted-list.js';
 const json=(v,status=200)=>Response.json(v,{status});
 const CHUNK=512*1024,MAX=5*1024*1024;
 const types=new Set(['image/png','image/jpeg','image/webp','image/gif','image/avif','image/bmp']);
@@ -51,7 +51,7 @@ export async function wantedApi(room,request,session,url){
    oldMedia=old?.avatar!==next.avatar?old?.avatar:null;p.wanted=next;
   }else if(body.action==='settings'){
    if(!isGM)throw Error('GM only');const label=String(body.label||'').trim();if(!label||label.length>32||!owns(body.background))throw Error('Invalid button settings');
-   const old=wantedSettings(live),color=body.color??old.color,fontSize=body.fontSize??old.fontSize;if(!/^#[0-9a-f]{6}$/i.test(color)||!Number.isInteger(fontSize)||fontSize<8||fontSize>30)throw Error('Invalid text color or size (8–30 px)');live.wantedSettings={label,background:body.background??old.background,color,fontSize};oldMedia=old.background!==live.wantedSettings.background?old.background:null;
+   const old=wantedSettings(live),color=body.color??old.color,fontSize=body.fontSize??old.fontSize;if(!/^#[0-9a-f]{6}$/i.test(color)||!Number.isInteger(fontSize)||fontSize<8||fontSize>30)throw Error('Invalid text color or size (8–30 px)');const background=body.background??old.background;const backgroundCrop=normalizeWantedBackgroundCrop(background?(body.backgroundCrop??(background===old.background?old.backgroundCrop:null)):null);live.wantedSettings={label,background,color,fontSize,backgroundCrop};oldMedia=old.background!==live.wantedSettings.background?old.background:null;
   }else if(body.action==='moderate'){
    if(!isGM)throw Error('GM only');const target=live.profiles[String(body.key||'')];if(!target?.wanted)throw Error('Artist not found');target.wanted.hidden=body.hidden!==false;
   }else if(body.action==='jump'){
