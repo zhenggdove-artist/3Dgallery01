@@ -89,7 +89,7 @@ test('all weapons have dimensional warning contracts derived from identical atta
    assert.equal(a.shape,'sector',item.id);
    nearly(preview.sector.settings.size*preview.sector.group.scale.x,stats.range,item.id);
    assert.equal(preview.sector.settings.angleDeg,item.family==='saber'?60:90,item.id);
-  }else if((item.id==='giraffe'&&stats.ultimate)||(isChannelStaff(item)&&item.family!=='ice')||(item.id==='accordion'&&stats.ultimate)||item.firstPerson||item.family==='saber'||(item.family==='palm'&&!stats.ultimate)||item.pattern==='scatter'||item.id==='goldfish'){
+  }else if((item.id==='giraffe'&&stats.ultimate)||isChannelStaff(item)||(item.id==='accordion'&&stats.ultimate)||item.firstPerson||item.family==='saber'||(item.family==='palm'&&!stats.ultimate)||item.pattern==='scatter'||item.id==='goldfish'){
    assert.equal(a.shape,'rectangle',item.id);
    nearly(preview.rectangle.settings.length*preview.rectangle.group.scale.x,stats.range,item.id);
    nearly(preview.rectangle.settings.width*preview.rectangle.group.scale.z,stats.radius*2,item.id);
@@ -132,8 +132,9 @@ test('the blue #59 strip is narrower than old charged AoE and matches each staff
    scaleUltimateFootprint(stat,item);
 
    if(family==='ice'){
-    assert.equal(v.footprint.shape,'circle',item.id+' is a forward frost magic circle');
-    nearly(v.footprint.radius,stat.radius,item.id+' frozen AoE radius');
+    assert.equal(v.footprint.shape,'rectangle',item.id+' is a forward frost eruption strip');
+    nearly(v.footprint.width,stat.radius*2,item.id+' frozen strip width');
+    nearly(v.footprint.length,stat.range,item.id+' full frost reach');
    }else{
     const width=2*stat.radius;
     nearly(v.footprint.width,width,item.id+' width');

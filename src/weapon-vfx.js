@@ -175,8 +175,9 @@ export class WeaponVFX{
   entry.waterDirection.copy(direction);
   entry.waterRange=range;
   entry.lastWaterPulseAt=performance.now();
-  // Network pulses renew lifetime and desired direction only. Do not align
-  // with an empty world here; that used to flash the stream toward the camera.
+  // Initialize the first frame immediately. Subsequent network pulses renew
+  // lifetime without aligning to an empty world and flashing toward the camera.
+  if(!entry.waterSmooth)this.alignWaterStream(entry,null,0);
  }
  alignWaterStream(entry,world=null,dt=0){
   if(!this.active.includes(entry))return;

@@ -14,15 +14,15 @@ function palmRadius(tier){
  scaleUltimateFootprint(stats,item,quality);
  return {item,quality,stats,radius:stats.radius};
 }
-test('gold Coconut Palm AoE equals precisely the previous green quality circle',()=>{
+test('gold Coconut Palm AoE is half the previous green quality radius',()=>{
  const green=palmRadius(2),gold=palmRadius(4);
  assert.equal(green.item.rarity,'uncommon');
  assert.equal(gold.item.rarity,'relic');
  const previousGreen=+(forwardCastRadius(green.item,green.quality,attackStats(green.item,1).radius,false)*
   ULTIMATE_FOOTPRINT_SCALE*10).toFixed(3);
  assert.equal(previousGreen,11.34);
- assert.equal(gold.radius,previousGreen);
- assert.equal(PALM_ULTIMATE_RADIUS_MULTIPLIER,10*(1.4/2.4));
+ assert.equal(gold.radius,previousGreen/2);
+ assert.equal(PALM_ULTIMATE_RADIUS_MULTIPLIER,5*(1.4/2.4));
 });
 test('lower Coconut Palm quality radii scale down proportionally without affecting range or duration',()=>{
  const grades=[1,2,3,4,5].map(palmRadius);
