@@ -72,7 +72,7 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   ['fried-chicken-disguise','Giant Taiwanese Fried Chicken Cutlet','#bd792e',3,2950,2,{hp:1.2,attack:.10}],
   ['mutton-sign-disguise','Old Home Mutton Hot Pot Sign','#f1d626',3,2950,2.5,{hp:1.5,defense:.10}],
   ['ggcola-disguise','GGcola Bottle','#a63922',3,2950,2,{hp:1.5,speed:.08}],
-  ['bei7-road-disguise','北七路 / Bei 7th Rd.','#168b66',3,2950,3,{hp:1.5,defense:.10}],
+  ['bei7-road-disguise','Bei 7th Rd. Sign','#168b66',3,2950,3,{hp:1.5,defense:.10}],
   ['traffic-light-disguise','Traffic Light','#216253',3,2950,1.6,{hp:1.5,defense:.10}],
   ['taipower-box-disguise','Taiwan Power Utility Box','#488da9',3,2950,1.7,{hp:1.5,defense:.10}]
  ];
