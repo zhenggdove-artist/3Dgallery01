@@ -198,7 +198,7 @@ export class TempleUI extends EventTarget{
     const charge=$('attack-button');let attackPointer=null;charge.onpointerdown=event=>{event.preventDefault();if(attackPointer!==null)return;attackPointer=event.pointerId;charge.setPointerCapture(event.pointerId);this.emit('attack-start');};const endAttack=(event,cancel=false)=>{if(event.pointerId!==attackPointer)return;attackPointer=null;this.emit(cancel?'attack-cancel':'attack-release');};charge.onpointerup=e=>endAttack(e);charge.onpointercancel=charge.onlostpointercapture=e=>endAttack(e,true);const jump=document.querySelector('[data-action=jump]');jump.onpointerdown=e=>{e.preventDefault();jump.setPointerCapture(e.pointerId);this.emit('jump');};jump.onclick=e=>{if(e.detail===0)this.emit('jump');e.stopPropagation();};
     addEventListener('keydown',event=>{if(this.self&&!this.panelName&&event.code==='KeyQ'&&!event.repeat&&!/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)){event.preventDefault();this.emit('attack-start');}});
     addEventListener('keyup',event=>{if(event.code==='KeyQ')this.emit('attack-release');});addEventListener('blur',()=>this.emit('attack-cancel'));
-    $('gallery-guide').onclick=()=>this.openPanel('gallery-guide');$('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.id==='wing-gift-button')this.openPanel('wing-personal-painter');else if(button.dataset.action)this.emit(button.dataset.action);});
+    $('gallery-guide').onclick=()=>this.openPanel('gallery-guide');$('wing-gift-button').onclick=()=>this.openPanel('wing-personal-painter');$('panel-close').onclick=()=>this.closePanel();document.getElementById('dock').addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.panel)this.openPanel(button.dataset.panel);else if(button.id==='wing-gift-button')this.openPanel('wing-personal-painter');else if(button.dataset.action)this.emit(button.dataset.action);});
     $('build-confirm').onclick=()=>this.emit('build-confirm');$('build-rotate').onclick=()=>this.emit('build-rotate');$('build-cancel').onclick=()=>this.emit('build-cancel');
     this.content.addEventListener('click',event=>this.panelClick(event));this.content.addEventListener('submit',event=>this.panelSubmit(event));
     // Native color inputs dispatch 'input' continuously while the picker
@@ -264,7 +264,7 @@ export class TempleUI extends EventTarget{
        const selfOnly=action==='self-level',targetKey=selfOnly?this.self.key:this.content.querySelector('[data-gm-player]')?.value;
        if(!targetKey)return this.toast('請選擇玩家');
        const target=this.gmPlayerTargets().find(p=>p.key===targetKey);
-       if(!target)return this.toast('玩家已離線');
+       if(!target)return this.toast('找不到玩家資料');
        if(action==='player-canvas')this.emit('server-action',{action:'gm-wing-canvas',targetKey});
        else{const level=Number(this.content.querySelector(selfOnly?'[data-gm-self-level]':'[data-gm-level]')?.value);if(!Number.isInteger(level)||level<1||level>999)return this.toast('等級須為 1–999');this.emit('server-action',{action:'gm-player-level',targetKey,level});}
       }
@@ -391,7 +391,7 @@ export class TempleUI extends EventTarget{
    if(this.seenCanvasGrant===grant.id)return;
    try{if(localStorage.getItem(key)===grant.id)return;localStorage.setItem(key,grant.id);}catch{}
    this.seenCanvasGrant=grant.id;
-   if(Date.now()-grant.time>86400000)return;
+   if(!(profile.wingDesignCredits>0))return;
    document.querySelector('.canvas-grant-celebration')?.remove();
    const el=document.createElement('div');el.className='canvas-grant-celebration';el.setAttribute('role','status');
    el.innerHTML=`<strong>THANK YOU!</strong><span>WING CANVAS ×${Number(grant.quantity)||1}</span><small>${grant.source==='gm'?'A gift from GGTEMPLE':'Thank you for supporting GGTEMPLE'}</small>`;
@@ -590,7 +590,7 @@ export class TempleUI extends EventTarget{
   }
   setGmPresence(data){
     if(!this.self?.profile?.admin)return;
-    this.gmPresenceData={online:Array.isArray(data?.online)?data.online:[],events:Array.isArray(data?.events)?data.events:[]};
+    this.gmPresenceData={online:Array.isArray(data?.online)?data.online:[],events:Array.isArray(data?.events)?data.events:[],knownPlayers:Array.isArray(data?.knownPlayers)?data.knownPlayers:[]};
     this.gmPresenceLoading=false;this.gmPresenceError='';
     if(this.panelName==='gm')this.renderGm();
   }
@@ -599,16 +599,19 @@ export class TempleUI extends EventTarget{
     if(this.panelName==='gm')this.renderGm();
   }
   gmPlayerTargets(){
-   const own={key:this.self.key,name:this.self.name,level:this.world?.profile?.level||this.self.profile?.level||1};
-   const others=(this.players||[]).filter(p=>p.key&&p.key!==own.key).map(p=>({key:p.key,name:p.name,level:p.profile?.level||1}));
-   return [...new Map([own,...others].map(p=>[p.key,p])).values()];
+   const own={key:this.self.key,name:this.self.name,level:this.world?.profile?.level||this.self.profile?.level||1,online:true};
+   const known=(this.gmPresenceData?.knownPlayers||[]).filter(p=>p.key&&p.key!==own.key).map(p=>({...p,online:false}));
+   const online=(this.players||[]).filter(p=>p.key&&p.key!==own.key).map(p=>({key:p.key,name:p.name,level:p.profile?.level||1,online:true}));
+   const merged=[...new Map([...known,...online].map(p=>[p.key,p])).values()];
+   merged.sort((a,b)=>Number(b.online)-Number(a.online)||String(a.name).localeCompare(String(b.name)));
+   return [own,...merged];
   }
   refreshGmPlayerTargets(){
    const select=this.content.querySelector('[data-gm-player]');if(!select)return;
    const targets=this.gmPlayerTargets(),signature=JSON.stringify(targets);
    if(select.dataset.rosterSignature===signature)return;
    const previous=select.value;
-   select.innerHTML=targets.map(p=>`<option value="${escape(p.key)}">${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level}</option>`).join('');
+   select.innerHTML=targets.map(p=>`<option value="${escape(p.key)}">${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':'離線'}</option>`).join('');
    select.value=targets.some(p=>p.key===previous)?previous:this.self.key;
    select.dataset.rosterSignature=signature;
    if(select.value!==previous){const field=this.content.querySelector('[data-gm-level]');if(field)field.value=targets.find(p=>p.key===select.value)?.level||1;}
@@ -635,10 +638,10 @@ export class TempleUI extends EventTarget{
        <label for="gm-self-level">自身等級 · LV ${targets[0].level}</label>
        <div class="gm-player-row"><input id="gm-self-level" data-gm-self-level type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(selfLevel??targets[0].level)}"><button type="button" data-gm-action="self-level" ${disabled}>調整自身等級</button></div>
        <label for="gm-target-player">指定玩家</label>
-       <select id="gm-target-player" data-gm-player>${targets.map(p=>`<option value="${escape(p.key)}" ${p.key===target.key?'selected':''}>${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level}</option>`).join('')}</select>
+       <select id="gm-target-player" data-gm-player>${targets.map(p=>`<option value="${escape(p.key)}" ${p.key===target.key?'selected':''}>${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':'離線'}</option>`).join('')}</select>
        <div class="gm-player-row"><input data-gm-level aria-label="指定玩家等級" type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(target.key===selectedTarget?(selectedLevel??target.level):target.level)}"><button type="button" data-gm-action="player-level" ${disabled}>調整玩家等級</button></div>
        <button class="gm-canvas-gift" type="button" data-gm-action="player-canvas" ${disabled}>贈送翅膀畫布 ×1</button>
-       <small data-gm-player-status role="status">${escape(this.gmPlayerActionMessage||'選擇玩家後即可贈送可自行繪製的翅膀畫布。')}</small>
+       <small data-gm-player-status role="status">${escape(this.gmPlayerActionMessage||'可贈送曾登入的玩家（包含離線）。')}</small>
       </section>
       <h3>GM 功能</h3><div class="gm-tools">
         <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-gm-action="chat-position-edit">調整全服 CHAT 預設位置</button><button type="button" data-gm-action="chat-position-save">儲存目前 CHAT 位置為全服預設</button><button type="button" data-open-shop-prices>商品售價編輯</button>

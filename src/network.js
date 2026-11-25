@@ -97,7 +97,7 @@ export class TempleNetwork extends EventTarget{
    const compactCombat=action==='attack'&&this.compactCombat&&this.socket?.readyState===WebSocket.OPEN;
    const result=await this.request('/api/action',{
     method:'POST',body:{action,requestId:crypto.randomUUID(),...data,...(compactCombat?{compactCombat:true}:{})},
-    timeoutMs:action==='gm-wing-publish'?30000:0
+    timeoutMs:['gm-wing-publish','gm-wing-update','redeem-wing-design'].includes(action)?30000:0
    });
    if(result.worldRevision>(this.wireWorld?.revision??-1)){
     // Stream interruptions must not strand a completed action. This is a

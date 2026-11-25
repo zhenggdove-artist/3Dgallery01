@@ -5,7 +5,7 @@ import {createHeadgear} from './reletter/headgear-model.js';
 import {attachOutfit,disposeOutfit} from './reletter/outfit-model.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {orientPortraitModel} from './equipment-portrait.js';
-import {createWings} from './reletter/garden-art.js';
+import {wingIcon,createWings} from './reletter/garden-art.js';
 import {itemById} from './shared/catalog.js';
 import {comfortCashImage} from './comfort-cash-art.js';
 
@@ -24,6 +24,7 @@ export const previewCount=()=>({ready:finished.size,pending:pending.size,failed:
 export function itemPreview(item){
  if(!item)return Promise.resolve(null);
  const key=keyOf(item);
+ if(item.design==='painted-wing'){const image=wingIcon(item);finished.set(key,image);return Promise.resolve(image);}
  if(item.slot==='consumable'){
   const image=comfortCashImage(item);
   finished.set(key,image);
@@ -71,7 +72,7 @@ export async function warmItemPreviews(items,onProgress=()=>{}){
 // Always creates the actual detailed preview. Entire sets are updated in one
 // DOM turn after the required assets resolve, never as a visible glyph cascade.
 export function previewMarkup(item){
- const url=item?.slot==='consumable'?comfortCashImage(item):itemPreviewUrl(item);
+ const url=item?.design==='painted-wing'?wingIcon(item):item?.slot==='consumable'?comfortCashImage(item):itemPreviewUrl(item);
  return url?'<img data-preview="'+escape(item.id)+'" src="'+escape(url)+'" alt="" decoding="async" loading="lazy">':
   '<span class="equipment-preview-pending" data-preview="'+escape(item.id)+'" aria-label="Loading full equipment model"></span>';
 }

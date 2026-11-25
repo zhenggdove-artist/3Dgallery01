@@ -152,6 +152,7 @@ function reviveProfile(profile,now,seatIndex=0){
 }
 
 export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
+  if((world.customWings||[]).some(wing=>!itemById(wing.id)))registerCustomWings(world.customWings);
   const current=world.profiles[key]??=createProfile(key,name,color,now,admin);
   // Existing players retain their previous White Cat starter identity and
   // any personally chosen weapon. Only NEW profiles begin with green saber-2.
@@ -441,18 +442,18 @@ export function applyAction(world,actor,body,context={}){
    // tampered client fields from awarding extra stats.
    Object.assign(wing,{
     tier:3,ability:'glide',abilities:['glide','sparkle'],impulse:10.15,gravity:.585,flapMs:300,
-    personalWing:true,ownerKey:actor.key,drawRatePct:0,
+    personalWing:true,ownerKey:actor.key,drawRatePct:0,createdAt:now,
     gmWingExclusive:false,description:'Private commissioned wing · not listed for sale'
    });
    world.customWings.push(wing);
    registerCustomWings(world.customWings);
-   appendInventoryInstance(profile,wing.id);
-   selectEquipmentInstance(profile,'wings',profile.inventory.length-1);
+   appendInventoryInstance(profile,wing.id,'grant');
+   if(!selectEquipmentInstance(profile,'wings',profile.inventory.length-1)||!profile.inventory.includes(wing.id))throw Error('Wing inventory transaction failed');
    profile.wingDesignCredits--;
    if(actor.key.startsWith('guest:'))profile.gmGuestWingCredits--;
    profile.itemOrigins??={};profile.itemOrigins[wing.id]='paid-personal-design';
    profile.updatedAt=now;refreshStats(world,profile,now);world.revision=(world.revision||0)+1;
-   return {personalWingId:wing.id,equippedWingId:wing.id,
+   return {personalWingId:wing.id,equippedWingId:wing.id,savedWing:clone(wing),
     notice:'自製翅膀已存入背包並自動裝備：'+wing.name,profile:publicProfile(profile)};
   }
   if(body.action==='gm-wing-publish'){

@@ -56,6 +56,16 @@ export function wingScaleFromDrag(art,b,h,start,point){
  }
  return {scaleX:sx*fx,scaleY:sy*fy,offsetX:h.hx?ax+(.5+ox-ax)*fx-.5:ox,offsetY:h.hy?ay+(.5+oy-ay)*fy-.5:oy};
 }
+// Display-side reflection is reversible and includes offsets, contours and ink.
+export function reflectWingArtwork(art){
+ const flip=points=>(points||[]).map(([x,y])=>[1-x,y]);
+ return {...art,outline:flip(art.outline),strokes:(art.strokes||[]).map(stroke=>({...stroke,points:flip(stroke.points)})),offsetX:-(art.offsetX||0)};
+}
+export function pinchWingView(start,mid,distance,baseCenter){
+ const zoom=clamp(start.zoom*distance/Math.max(1,start.distance),.65,5);
+ const ratio=zoom/start.zoom;
+ return {zoom,pan:[mid[0]-baseCenter[0]-(start.mid[0]-baseCenter[0]-start.pan[0])*ratio,mid[1]-baseCenter[1]-(start.mid[1]-baseCenter[1]-start.pan[1])*ratio]};
+}
 export function mountWingPainter(ui,{personal=false,preview=false}={}){
  const admin=ui.self?.profile?.admin===true;
  if(preview&&!admin)return;
@@ -69,14 +79,20 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
  };
  ui[draftKey]=design;let tool=design.outline?.length>=3?'brush':'outline',pen='#1b1b22',
   size=12,opacity=1,
-  pan=[0,0],active=null,pointerId=null,history=[],redo=[];
+  pan=[0,0],zoom=1,side=design.editorSide==='right'?'right':'left',active=null,pointerId=null,history=[],redo=[],touches=new Map(),pinch=null,gestureConsumed=false,strokeBefore=null;
  ui.content.innerHTML=`<section class="wing-painter" aria-label="wing painting editor">
   <div class="wing-painter-tools">
    <label>翅膀名稱<input data-wing-field="name" value="${safe(design.name)}" maxlength="50" placeholder="請命名翅膀"></label>
-   ${isGm?`<label>品質<select data-wing-field="tier">${['White','Green','Blue','Purple · Epic','Gold'].map((s,i)=>`<option value="${i+1}" ${design.tier===i+1?'selected':''}>${s}</option>`).join('')}</select></label>
+   <div class="wing-outline-note">繪製左翅或右翅後系統會自動鏡像</div>
+   <div class="wing-side-switch"><button type="button" data-wing-side="left" aria-pressed="${side==='left'}">左翅</button><button type="button" data-wing-side="right" aria-pressed="${side==='right'}">右翅</button></div>
+   <div class="wing-view-tools"><button type="button" data-wing-zoom="out">−</button><button type="button" data-wing-zoom="reset">100%</button><button type="button" data-wing-zoom="in">＋</button></div>
+   ${isGm?`<details class="wing-gm-options"><summary>GM 屬性設定</summary><div class="wing-gm-options-body"><label>品質<select data-wing-field="tier">${['White','Green','Blue','Purple · Epic','Gold'].map((s,i)=>`<option value="${i+1}" ${design.tier===i+1?'selected':''}>${s}</option>`).join('')}</select></label>
    <label>單次中獎率（%）<input data-wing-field="drawRatePct" type="number" min="0" max="100" step=".001" value="${design.drawRatePct??1}"></label>
-   <small>此為全服每次抽獎的絕對機率；所有自訂翅膀合計不得超過 100%。0% 代表不會抽中。剩餘機率按基本品質抽取。</small>`:'<small>個人翅膀固定使用平衡的裝飾數值，並自帶粒子粉塵；儲存一件消耗一次已付款權限，永不公開販售。</small>'}
-   <div class="wing-outline-note">左翅專用畫布：從角色背後觀看，繪製畫面原圖會顯示在角色左翅；右翅由系統自動左右鏡像。按住滑鼠左鍵或手指自由畫出輪廓，放開後自動閉合。</div>
+   <small>所有自訂翅膀機率合計不得超過 100%。</small>
+   <fieldset class="wing-ability-options"><legend>附加能力（可複選）</legend>${[['glide','滑翔'],['swift','移速'],['aerial','跳躍'],['guardian','防護'],['sparkle','粉塵']].map(([value,label])=>`<label><input type="checkbox" data-wing-ability value="${value}" ${(design.abilities??[design.ability||'glide']).includes(value)?'checked':''}> ${label}</label>`).join('')}</fieldset>
+   <label>跳躍推力<input data-wing-field="impulse" type="number" step=".1" min="5" max="18" value="${design.impulse}"></label>
+   <label>重力係數<input data-wing-field="gravity" type="number" step=".01" min=".2" max="1" value="${design.gravity}"></label>
+   <label>拍動間隔<input data-wing-field="flapMs" type="number" min="180" max="900" step="10" value="${design.flapMs}"></label></div></details>`:'<small class="wing-personal-note" hidden>個人翅膀固定使用平衡的裝飾數值，並自帶粒子粉塵；儲存一件消耗一次權限。</small>'}
    <button type="button" class="wing-clear-outline" data-wing-clear-outline>清除輪廓／重新繪製</button>
    <div class="wing-tools-row" role="toolbar" aria-label="畫筆工具">
     <button type="button" data-wing-tool="outline" aria-pressed="${tool==='outline'}">編輯翅膀輪廓</button>
@@ -91,17 +107,12 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
    <label>畫筆尺寸<input data-wing-size type="range" min="1" max="90" value="12"><output data-wing-size-label>12px</output></label>
    <label>不透明度<input data-wing-opacity type="range" min=".1" max="1" step=".05" value="1"></label>
    <label>基底色<input data-wing-field="color" type="color" value="${design.color}"></label>
-   ${isGm?`<fieldset class="wing-ability-options"><legend>附加能力（可複選）</legend>${[['glide','滑翔減緩落下'],['swift','移動速度提升'],['aerial','跳躍能力提升'],['guardian','防護力提升'],['sparkle','魔法粉塵']].map(([value,label])=>`<label><input type="checkbox" data-wing-ability value="${value}" ${(design.abilities??[design.ability||'glide']).includes(value)?'checked':''}> ${label}</label>`).join('')}</fieldset>
-   <label>跳躍推力<input data-wing-field="impulse" type="number" step=".1" min="5" max="18" value="${design.impulse}"></label>
-   <label>重力係數<input data-wing-field="gravity" type="number" step=".01" min=".2" max="1" value="${design.gravity}"></label>
-   <label>翅膀拍動間隔（ms）<input data-wing-field="flapMs" type="number" min="180" max="900" step="10" value="${design.flapMs}"></label>
-   `:``}
-    <button type="button" class="panel-button" data-wing-publish>${isGm?(design.id?'儲存修改並重新上架':'儲存、上架並自動裝備'):'儲存至 BAG 並自動裝備 · 消耗一次權限'}</button>
-   <small>以「編輯翅膀輪廓」一筆畫出外形並放開自動閉合。縮放模式：四角等比例、中點單軸，拖曳時固定對側。使用「移動翅膀輪廓圖」調整檢視位置。玩家儲存後直接加入自己的背包並裝備，不會公開販售。</small>
+    <button type="button" class="panel-button" data-wing-publish>${isGm?(design.id?'儲存修改並重新上架':'儲存、上架並自動裝備'):'儲存至 BAG'}</button>
+
   </div>
-  <div class="wing-painter-stage"><div class="wing-left-wing-label"><strong>LEFT WING · 左翅原圖</strong><span>RIGHT WING · 自動鏡像</span></div><div class="wing-painter-checker">
+  <div class="wing-painter-stage"><div class="wing-left-wing-label"><strong data-wing-side-label>${side==='left'?'LEFT WING · 左翅':'RIGHT WING · 右翅'}</strong><span>雙指縮放</span></div><div class="wing-painter-checker">
    <canvas class="wing-painter-canvas" width="768" height="640" aria-label="可繪畫的翅膀畫布"></canvas>
-   <span class="wing-attachment-note">右側：翅膀與手臂接合處</span>
+   <span class="wing-attachment-note" data-wing-attachment style="right:${side==='left'?'5px':'auto'};left:${side==='right'?'5px':'auto'}">接合處</span>
   </div><small data-wing-status>畫布 768 × 640 · 操作記錄上限 60 步</small></div>
  </section>`;
  const root=ui.content.querySelector('.wing-painter'),canvas=root.querySelector('canvas'),ctx=canvas.getContext('2d');
@@ -120,7 +131,8 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
    for(const [x,y] of active.points){ctx.beginPath();ctx.arc((.5+(design.offsetX||0)+(x-.5)*(design.scaleX||1))*canvas.width,(.5+(design.offsetY||0)+(y-.5)*(design.scaleY||1))*canvas.height,2.5,0,Math.PI*2);ctx.fill();}
    ctx.restore();
   }
-  canvas.style.transform=`translate(${pan[0]}px,${pan[1]}px)`;
+  canvas.style.transform=`translate(${pan[0]}px,${pan[1]}px) scale(${zoom})`;
+  root.querySelector('[data-wing-zoom=reset]').textContent=Math.round(zoom*100)+'%';
   canvas.style.cursor=tool==='pan'?'move':tool==='scale'?'default':'crosshair';
   if(tool==='scale'&&design.outline?.length>=3){
    const b=wingBounds(design),w=canvas.width,h=canvas.height,r=canvas.getBoundingClientRect();
@@ -139,6 +151,15 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
  draw();
  root.addEventListener('click',event=>{
   const b=event.target.closest('button');if(!b)return;
+  if(b.dataset.wingSide){
+   const next=b.dataset.wingSide;if(next===side)return;
+   Object.assign(design,reflectWingArtwork(design));history=history.map(reflectWingArtwork);redo=redo.map(reflectWingArtwork);
+   side=design.editorSide=next;
+   root.querySelectorAll('[data-wing-side]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.wingSide===side)));
+   root.querySelector('[data-wing-side-label]').textContent=side==='left'?'LEFT WING · 左翅':'RIGHT WING · 右翅';
+   const note=root.querySelector('[data-wing-attachment]');note.style.right=side==='left'?'5px':'auto';note.style.left=side==='right'?'5px':'auto';draw();return;
+  }
+  if(b.dataset.wingZoom){if(b.dataset.wingZoom==='reset'){zoom=1;pan=[0,0];}else zoom=clamp(zoom*(b.dataset.wingZoom==='in'?1.25:.8),.65,5);draw();return;}
   if(b.dataset.wingTool){
    if(!design.outline?.length&&b.dataset.wingTool!=='outline'&&b.dataset.wingTool!=='pan'){
     report('請先使用「自由畫輪廓」在畫布上繪製完整輪廓');return;
@@ -154,7 +175,7 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   if(b.hasAttribute('data-wing-redo')){if(!redo.length)return;history.push(artState());restore(redo.pop());return;}
   if(b.hasAttribute('data-wing-publish')){
    if(publishing)return;
-   const input=copy(design);
+   const input=side==='right'?reflectWingArtwork(copy(design)):copy(design);delete input.editorSide;
    input.name=String(root.querySelector('[data-wing-field=name]').value||'').trim();
    input.tier=isGm?Number(root.querySelector('[data-wing-field=tier]').value):3;
    input.color=root.querySelector('[data-wing-field=color]').value;
@@ -180,14 +201,15 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
     publishing=false;b.disabled=false;
     report('儲存回覆逾時；請先檢查 BAG，再決定是否重新送出');
    },35000);
+   const payload=JSON.stringify(input);if(ui.wingSaveAttempt?.payload!==payload)ui.wingSaveAttempt={payload,requestId:crypto.randomUUID()};
    ui.emit('wing-publish-request',{
-    wing:input,wingId:isGm?design.id||null:null,personal:!isGm,
+    requestId:ui.wingSaveAttempt.requestId,wing:input,wingId:isGm?design.id||null:null,personal:!isGm,
     resolve:result=>{
      clearTimeout(timeout);
      if(!publishing)return;
      publishing=false;b.disabled=false;
      report((isGm?(design.id?'已更新並上架：':'已上架並自動裝備：'):'已存入背包並裝備：')+(result?.wingName||input.name));
-     ui[draftKey]=null;
+     ui[draftKey]=null;ui.wingSaveAttempt=null;
     },
     reject:error=>{
      clearTimeout(timeout);
@@ -208,7 +230,7 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
  });
  // No predefined shapes: freehand vertices are the authoritative silhouette.
  const start=e=>{
-  if(pointerId!==null)return;pointerId=e.pointerId;canvas.setPointerCapture(e.pointerId);
+  if(pointerId!==null)return;pointerId=e.pointerId;try{checker.setPointerCapture(e.pointerId);}catch{};strokeBefore=artState();
   if(tool==='pan'){active={start:[e.clientX,e.clientY],pan:[...pan]};return;}
   if(tool==='scale'){const r=canvas.getBoundingClientRect(),point=viewPoint(e),b=wingBounds(design);const q=wingHandles(b).map(h=>({...h,dist:Math.hypot((h.x-point[0])*r.width,(h.y-point[1])*r.height)})).sort((a,b)=>a.dist-b.dist)[0];if(!q||q.dist>22)return;snapshot();active={tool,handle:q,bounds:b,original:artState(),start:point};return;}
   if(!design.outline?.length&&tool!=='outline'){report('請先畫出封閉輪廓');return;}
@@ -217,8 +239,22 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   else {const stroke={tool,color:pen,size,opacity,material:'ink',points:[point]};active=stroke;design.strokes.push(stroke);}
   draw();
  };
- canvas.addEventListener('pointerdown',e=>{e.preventDefault();start(e);});
- canvas.addEventListener('pointermove',e=>{
+ const checker=root.querySelector('.wing-painter-checker');
+ const pair=()=>{const [a,b]=[...touches.values()];return {mid:[(a[0]+b[0])/2,(a[1]+b[1])/2],distance:Math.hypot(a[0]-b[0],a[1]-b[1])};};
+ const cancelStroke=()=>{if(active&&strokeBefore&&tool!=='pan'){Object.assign(design,strokeBefore);history.pop();}active=null;pointerId=null;strokeBefore=null;};
+ checker.addEventListener('pointerdown',e=>{
+  e.preventDefault();if(e.pointerType==='touch'){
+   touches.set(e.pointerId,[e.clientX,e.clientY]);try{checker.setPointerCapture(e.pointerId);}catch{}
+   if(touches.size>=2){cancelStroke();pinch={...pair(),zoom,pan:[...pan]};gestureConsumed=true;draw();return;}
+   if(gestureConsumed)return;
+  }
+  start(e);
+ });
+ checker.addEventListener('pointermove',e=>{
+  if(touches.has(e.pointerId)){touches.set(e.pointerId,[e.clientX,e.clientY]);
+   if(pinch&&touches.size>=2){const r=checker.getBoundingClientRect(),v=pair(),next=pinchWingView(pinch,v.mid,v.distance,[r.left+r.width/2,r.top+r.height/2]);zoom=next.zoom;pan=next.pan;draw();return;}
+   if(gestureConsumed)return;
+  }
   if(e.pointerId!==pointerId||!active)return;
   if(tool==='pan'){pan=[active.pan[0]+e.clientX-active.start[0],active.pan[1]+e.clientY-active.start[1]];}
   else if(active.tool==='scale'){Object.assign(design,wingScaleFromDrag(active.original,active.bounds,active.handle,active.start,viewPoint(e)));}
@@ -229,7 +265,9 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   draw();
  });
  const stop=e=>{
+  if(touches.has(e.pointerId)){touches.delete(e.pointerId);if(gestureConsumed){pinch=null;if(!touches.size)gestureConsumed=false;return;}}
   if(e.pointerId!==pointerId)return;
+  if(e.type==='pointercancel'){cancelStroke();draw();return;}
   if(tool==='outline'){
    if(active?.points.length>=3){
     design.outline=simplifyFreehandOutline(active.points,96);
@@ -239,8 +277,8 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
     report('已完成自由輪廓（'+design.outline.length+' 個節點），可以開始上色或重新繪製');
    }else report('輪廓過短，請按住並拖曳畫出完整外形');
   }
-  active=null;pointerId=null;draw();
+  active=null;pointerId=null;strokeBefore=null;draw();
  };
- canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);canvas.addEventListener('lostpointercapture',stop);
+ checker.addEventListener('pointerup',stop);checker.addEventListener('pointercancel',stop);checker.addEventListener('lostpointercapture',stop);
 
 }

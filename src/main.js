@@ -328,8 +328,11 @@ function acceptWorldView(next){
  // A successful attack delivers the same revision in its HTTP response AND
  // in a WebSocket world broadcast. Rebuilding the complete gallery/UI twice
  // on that same hit was one of the repeatable browser frame spikes.
- if(!next||(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&
-    next.revision<=world.revision))return false;
+ if(!next)return false;
+ if(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&next.revision<=world.revision){
+  if(Array.isArray(next.customWings)){const known=new Map((world.customWings||[]).map(w=>[w.id,w]));let changed=false;for(const wing of next.customWings){if(!known.has(wing.id)){known.set(wing.id,wing);changed=true;}}if(changed){const wings=[...known.values()];registerCustomWings(wings);world={...world,customWings:wings};syncWorld();if(ui.panelName==='bag')ui.renderPanel();}}
+  return false;
+ }
  const wings=Array.isArray(next.customWings)?next.customWings:(world?.customWings||[]);
  if(wings!==world?.customWings)registerCustomWings(wings);world={...next,customWings:wings};syncWorld();return true;
 }
@@ -349,7 +352,7 @@ network.addEventListener('wing-catalog',event=>{
  const wings=Array.isArray(event.detail?.wings)?event.detail.wings:[];
  registerCustomWings(wings);
  if(world){world={...world,customWings:wings};arena.world=world;ui.setWorld(world);
-  if(['wing-shop','wing-manage'].includes(ui.panelName))ui.renderPanel();}
+  if(['wing-shop','wing-manage','bag'].includes(ui.panelName))ui.renderPanel();}
 });
 network.addEventListener('players',event=>{players=event.detail;syncPlayers();});
 network.addEventListener('state',event=>{const data=event.detail;if(data.key===self?.key)return;let target=remoteTargets.get(data.key);if(!target){syncPlayers();target=remoteTargets.get(data.key);}if(target){target.position.fromArray(data.state.position);target.rotation=data.state.rotation;target.animation=data.state.animation;}});
@@ -671,20 +674,36 @@ ui.addEventListener('attack-cancel',()=>{
   void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});
  }
 });
+async function confirmSavedWing(result,wingId){
+ const snapshot=result.world;
+ const receipt=snapshot?.profile;
+ const catalog=snapshot?.customWings;
+ // The HTTP receipt is authoritative even if a newer combat patch arrived first.
+ // Preserve the latest profile; only merge the confirmed catalog entry.
+ const saved=catalog?.find(w=>w.id===wingId)||result.savedWing;
+ if(saved&&world&&!world.customWings?.some(w=>w.id===wingId)){
+  const wings=[...(world.customWings||[]),saved];registerCustomWings(wings);world={...world,customWings:wings};syncWorld();
+ }
+ const ready=()=>world?.profile?.inventory?.includes(wingId)&&!!itemById(wingId);
+ if(!ready()){
+  const data=await network.world();acceptWorldView(data.world);
+  if(!ready()&&data.world?.revision===world?.revision){const wings=data.world.customWings||world.customWings;registerCustomWings(wings);world={...world,customWings:wings,profile:data.world.profile};syncWorld();}
+ }
+ if(!ready())throw Error(receipt?.inventory?.includes(wingId)?'翅膀已儲存，背包同步未完成；請重新開啟 BAG':'伺服器未確認背包內的翅膀');
+}
 ui.addEventListener('wing-publish-request',async event=>{
- const {wing,wingId,personal,resolve,reject}=event.detail;
+ const {wing,wingId,personal,resolve,reject,requestId}=event.detail;
  if(!personal&&!self?.profile?.admin){reject(new Error('僅 GM 可以上架翅膀'));return;}
  if(personal&&!world?.profile?.wingDesignCredits){reject(new Error('未取得已付款的繪圖權限'));return;}
  try{
   const updating=!!wingId&&!personal;
-  const result=await sendAction(personal?'redeem-wing-design':updating?'gm-wing-update':'gm-wing-publish',{wing,wingId},{throwOnError:true});
+  const result=await sendAction(personal?'redeem-wing-design':updating?'gm-wing-update':'gm-wing-publish',{wing,wingId,...(requestId?{requestId}:{})},{throwOnError:true});
   if(personal){
    if(!result?.personalWingId||result.equippedWingId!==result.personalWingId)
     throw new Error('伺服器尚未確認個人翅膀已儲存');
-   if(world?.profile?.equipment?.wings!==result.personalWingId)
-    throw new Error('個人翅膀已存入背包，裝備資料仍在同步中');
+   await confirmSavedWing(result,result.personalWingId);
    resolve({...result,wingName:wing.name});
-   ui.wingPersonalDraft=null;ui.bagCategory='equipment';ui.openPanel('bag');
+   ui.wingPersonalDraft=null;ui.bagCategory='wings';ui.openPanel('bag');
    ui.toast('翅膀已存入 BAG 並自動裝備：'+wing.name);return;
   }
   if(updating){
@@ -694,10 +713,9 @@ ui.addEventListener('wing-publish-request',async event=>{
   }
   if(!result?.publishedWingId||result.equippedWingId!==result.publishedWingId)
    throw new Error('伺服器沒有確認翅膀已上架並自動裝備');
-  if(world?.profile?.equipment?.wings!==result.publishedWingId)
-   throw new Error('翅膀已上架，但裝備狀態尚未同步；請重新進入 BAG 確認');
+  await confirmSavedWing(result,result.publishedWingId);
   resolve({...result,wingName:wing.name});
-  ui.bagCategory='equipment';
+  ui.bagCategory='wings';
   ui.openPanel('bag');
   ui.toast('翅膀已上架、加入背包並自動裝備：'+wing.name);
  }catch(error){
@@ -1112,7 +1130,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V043',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V044',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

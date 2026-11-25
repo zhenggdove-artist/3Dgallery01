@@ -711,3 +711,29 @@ body.panel-wing-shop .wing-design-support .y2k-taskbar{justify-content:space-bet
 /* V029: selected tool state must override the classic GM skin as well. */
 .wing-painter .wing-tools-row button[data-wing-tool][aria-pressed="true"],body.panel-wing-painter .wing-tools-row button[data-wing-tool][aria-pressed="true"]{background:#087df5!important;color:#fff!important;border-color:#005cc1!important;box-shadow:inset 0 0 0 1px #a9d4ff!important}
 .wing-ability-options{min-width:0;border:1px solid #aaa;padding:6px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.wing-ability-options label{display:flex!important;align-items:center;gap:5px;justify-content:flex-start!important}.wing-ability-options input{width:auto!important;accent-color:#087df5}
+
+/* V044 compact paint toolbar, pinned save, independently zoomable canvas. */
+body.panel-wing-painter .wing-painter{grid-template-columns:clamp(118px,24vw,250px) minmax(0,1fr)!important;grid-template-rows:minmax(0,1fr)!important;gap:4px!important}
+body.panel-wing-painter .wing-painter-tools{box-sizing:border-box;display:flex;flex-direction:column;gap:4px!important;padding:5px!important;overflow:visible!important;position:relative;min-height:0;z-index:3}
+body.panel-wing-painter .wing-painter-tools>label{display:grid;grid-template-columns:1fr;gap:1px;min-height:0!important;margin:0!important;font-size:10px;line-height:1.1}
+body.panel-wing-painter .wing-painter-tools>label input{width:100%!important;max-width:none!important;min-height:0!important;height:22px;box-sizing:border-box;padding:1px}
+body.panel-wing-painter .wing-painter-tools>label input[type=color]{height:23px}
+body.panel-wing-painter .wing-painter-tools>label input[type=range]{height:16px}
+body.panel-wing-painter .wing-outline-note{padding:3px;font-size:10px;line-height:1.2}
+.wing-side-switch,.wing-view-tools{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px}
+.wing-side-switch button,.wing-view-tools button{min-width:0;padding:3px;font:11px Tahoma,sans-serif;border:1px solid #999;color:#222;background:#eee}
+.wing-side-switch button[aria-pressed=true]{background:#087df5;color:white}
+body.panel-wing-painter .wing-tools-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px}
+body.panel-wing-painter .wing-tools-row button{min-width:0;min-height:24px;padding:3px 1px;font-size:10px;line-height:1.05}
+body.panel-wing-painter .wing-clear-outline{min-height:23px!important;padding:2px;font-size:10px}
+body.panel-wing-painter [data-wing-publish]{min-height:30px!important;margin-top:auto!important;padding:4px!important;font-size:11px!important;background:#155fae!important;color:white!important;white-space:normal}
+body.panel-wing-painter .wing-painter-stage{min-height:0!important;display:flex;justify-content:center;overflow:hidden}
+body.panel-wing-painter .wing-painter-checker{touch-action:none;width:min(100%,calc((100dvh - 110px)*1.2))!important;height:auto!important;max-height:calc(100dvh - 110px)!important;aspect-ratio:768/640}
+.wing-gm-options{font-size:10px;position:relative}.wing-gm-options summary{cursor:pointer;padding:3px;background:#eee;border:1px solid #aaa}
+.wing-gm-options-body{position:absolute;left:100%;top:0;width:clamp(145px,35vw,260px);max-height:70dvh;overflow:auto;background:#e9e9e9;padding:8px;border:2px outset white;box-shadow:2px 4px 8px #0004;z-index:12;display:grid;gap:4px}
+.wing-gm-options-body label{display:flex;justify-content:space-between;gap:3px;align-items:center}.wing-gm-options-body input,.wing-gm-options-body select{max-width:75px}
+body.panel-wing-painter .wing-left-wing-label{font-size:10px;display:flex;gap:4px;flex-wrap:wrap}
+@media(max-height:540px){body.panel-wing-painter .wing-painter-tools{gap:2px!important;padding:3px!important}body.panel-wing-painter .wing-tools-row button{min-height:18px}body.panel-wing-painter .wing-painter-tools>label input{height:17px}body.panel-wing-painter .wing-painter-tools>label{grid-template-columns:40px 1fr;align-items:center}body.panel-wing-painter .wing-painter-tools>label output{display:none}body.panel-wing-painter .wing-outline-note{font-size:9px}}
+#map-cluster #wing-gift-button{position:absolute;top:34px;right:calc(100% + 7px);width:26px;height:26px;padding:0;display:grid;place-items:center;background:transparent;border:0;pointer-events:auto;filter:drop-shadow(0 0 5px #ff354a);animation:tiny-gift-glow 1.5s ease-in-out infinite alternate;z-index:4}
+#map-cluster #wing-gift-button[hidden]{display:none!important}#map-cluster #wing-gift-button svg{width:25px;height:25px}
+@keyframes tiny-gift-glow{to{filter:drop-shadow(0 0 8px #ff304e) brightness(1.24)}}
