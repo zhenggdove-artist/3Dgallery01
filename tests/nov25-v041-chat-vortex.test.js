@@ -18,4 +18,8 @@ test('captured vortex stops homing while victim orbits fixed center',()=>{
  const spin={time:1000,start:[4,0,4],center:[3,4]};
  assert.notDeepEqual(vortexSpinPoint(spin,1250),vortexSpinPoint(spin,1500));
  assert.deepEqual(fx.position,[3,1,4]);
+ const centered={time:1000,start:[3,0,4],center:[3,4]};
+ const midpoint=vortexSpinPoint(centered,2000);
+ assert.ok(Math.abs(Math.hypot(midpoint[0]-3,midpoint[2]-4)-1.65)<1e-6);
+ assert.deepEqual(vortexSpinPoint(centered,1000),[3,0,4]);
 });
