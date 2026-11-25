@@ -76,6 +76,8 @@ test('flower crown channel restores one HP per second, capped, never on tap or a
  const started=NOW+500+(weapon.chargeMs||1500)+50;
  const active=applyAction(world,a,{action:'attack',phase:'channel-start'},{now:started});
  assert.equal(active.channeling,true);
+ const firstPulse=applyAction(world,a,{action:'attack',phase:'channel',direction:[0,0,1]},{now:started+100,actors:[a],rng:()=>.5});
+ assert.ok(firstPulse.attackEvent,'healing requires the first mana-paid pulse');
  p.hp=91; // Equip refresh can add +20 max HP; set test damage afterward.
  assert.equal(tickBloomChannelHeal(p,started+999),0);
  tickWorld(world,{now:started+1000,actors:[],activeFighters:0,rng:()=>.5});
