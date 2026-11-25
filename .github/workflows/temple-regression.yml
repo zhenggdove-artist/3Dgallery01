@@ -108,6 +108,8 @@ jobs:
           npm run start > /tmp/temple-browser-static.log 2>&1 &
       - name: Verify terrain editor controls and live WebGL uniforms
         run: node tests/v061-terrain-browser.mjs
+      - name: Verify SHOP visible and clickable in production HUD on desktop and mobile
+        run: node tests/v064-shop-button-browser.mjs
       - name: Verify Wanted List actual menu CSS, text styling and preview pagination
         run: node tests/v057-wanted-browser.mjs
       - name: Verify BAG image node identity and EQUIP canvas preservation
