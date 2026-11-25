@@ -386,6 +386,7 @@ export class TempleUI extends EventTarget{
  }
  const held=itemById(profile.equipment?.weapon);
  $('weapon').textContent=(held?weaponPresentation(held,profile.fusion?.[held.id]).title:'UNARMED').toUpperCase();
+}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();this.renderQuickBar(profile);
     const gift=$('wing-gift-button');
     if(gift)gift.hidden=!(Number(profile?.wingDesignCredits)||0);
      this.showCanvasGrant(profile);

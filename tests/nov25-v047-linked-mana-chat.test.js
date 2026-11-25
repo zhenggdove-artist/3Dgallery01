@@ -10,7 +10,7 @@ test('linked native weapon grades preserve current ratios and other families',()
  const first=weaponManaQuote(world,a).initial,second=weaponManaQuote(world,b).initial;
  const change=linkedEquipmentTuning(world,a,{manaCost:first*2});world.equipmentTuning=change.overrides;
  assert.equal(change.variants.length,5);assert.equal(weaponManaQuote(world,a).initial,first*2);assert.equal(weaponManaQuote(world,b).initial,second*2);
- assert.deepEqual(equipmentTuning(world,tuningVariant('tide-2',2)),{});
+ assert.deepEqual(equipmentTuning(world,tuningVariant('tide-2',2)),{radiusScale:.7,effectPower:.7,effectDuration:.7});
  const reset=linkedEquipmentTuning(world,b,null);assert.equal(Object.keys(reset.overrides).length,0);
 });
 test('GM set ultimate cost actually debits exact quoted MP, ordinary attack stays free',()=>{

@@ -50,7 +50,6 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
  id:'outfit-'+creature,name,slot:'outfit',family:'outfit',
  design:creature==='formal-suit'?'suit':creature==='leather'?'leather':'creature',creature,pattern:0,tier,color,
  price:templePrice,templePrice,bonuses,r106Wearable:true,
- ...(creature==='mutton-sign-disguise'?{shopRelease:121}:{}),
   description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed',jump:'jump height',attack:'attack'}[k]||k)).join(' · ')
 })));
 
@@ -78,6 +77,7 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   design:'disguise',creature,disguiseHeight,pattern:0,bonuses,r113Wearable:true,
   ...(['tin-pipe-disguise','luroufan-sign-disguise','bubble-tea-disguise','fried-chicken-disguise'].includes(creature)?{shopRelease:117}:{}),
   ...(!['wooden-horse-disguise'].includes(creature)?{exposedHead:true}:{}),
+  ...(creature==='mutton-sign-disguise'?{shopRelease:121}:{}),
   ...(['luroufan-sign-disguise','luroufan-bowl-disguise','notok-sign-disguise','987-sign-disguise'].includes(creature)?{shopRelease:118}:{}),
   description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed'}[k]||k)).join(' · ')
  })));
