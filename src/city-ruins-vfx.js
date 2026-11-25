@@ -195,8 +195,7 @@ export function buildDetachableFixture(lot,part,seed=1){
     else box(group,(j-.5)*s.width/2,(i-1)*s.height/3,0,s.width/2*.94,s.height/3*.94,s.depth,s.color);
    }for(const side of [-1,1])box(group,0,side*s.height*.32,-s.depth*.45,.12,.10,.24,'#6b6961',.6);}
  }else if(part==='sign'){
-  const sign=cityShopSignSpec(lot);group.position.set(sign.x,sign.y,sign.z);
-  signAssembly(group,lot);
+  const sign=cityShopSignSpec(lot);if(sign){group.position.set(sign.x,sign.y,sign.z);signAssembly(group,lot);group.scale.set(sign.width/Math.min(4.5,lot.width*.85),sign.height/1.15,1);}
  }else if(part==='pipes'){
   group.position.set(lot.width*.39,lot.height*.55,front+.22);
   pipeAssembly(group);

@@ -110,6 +110,7 @@ function batchGeometry(lots,mobile){
   for(let k=0;k<(mobile?4:8);k++){
    box(lot,-w*.44+k*w*.12,2.52,frontage+1.04,w*.11,.12,.24,k%2?lot.detail:lot.style[3]);
   }
+  const flatSign=cityShopSignSpec(lot);if(flatSign){category='sign';box(lot,flatSign.x,flatSign.y,flatSign.z,flatSign.width,flatSign.height,flatSign.depth,flatSign.color);for(const p of flatSign.supports)box(lot,p.x,p.y,p.z,p.width,p.height,p.depth,lot.trim);}
   for(const sign of citySignSpecs(lot)){
    category=sign.id;box(lot,sign.x,sign.y,sign.z,sign.width,sign.height,sign.depth,sign.color);
    for(const p of sign.supports)box(lot,p.x,p.y,p.z,p.width,p.height,p.depth,lot.trim);
@@ -179,10 +180,10 @@ function signAtlas(lots){
  const canvas=document.createElement('canvas');canvas.width=columns*tile;canvas.height=rows*tile;
  const g=canvas.getContext('2d');
  for(const lot of lots){
-  const sign=citySignSpecs(lot).find(v=>!v.blade);
+  const sign=citySignSpecs(lot).find(v=>!v.blade),flat=cityShopSignSpec(lot);
   for(let variant=0;variant<3;variant++){
    const i=lot.index*3+variant,x=i%columns*tile,y=Math.floor(i/columns)*tile;
-   drawSignArtwork(g,x,y,tile,tile,{color:variant===2?sign?.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,vertical:variant===1,seed:lot.index+variant*3});
+   drawSignArtwork(g,x,y,tile,tile,{color:variant===2?sign?.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,vertical:variant===1,aspect:variant===2?(sign?sign.width/sign.height:2):variant===0?(flat?flat.width/flat.height:5):.5,seed:lot.index+variant*3});
   }
  }
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
@@ -197,9 +198,8 @@ function buildShopSigns(lots){
   uv.push(l,t,r,t,r,b,l,b);ids.push(base,base+1,base+2,base,base+2,base+3);
  };
  for(const lot of lots){
-  const begin=p.length/3,flat=cityShopSignSpec(lot),y=flat.y,z=flat.z,w=flat.width/2;
-  quad(lot,[[-w,y-.39,z],[w,y-.39,z],[w,y+.39,z],[-w,y+.39,z]],0);
-  partRanges.set(lot.index+':sign',[[begin,p.length/3]]);
+  const begin=p.length/3,flat=cityShopSignSpec(lot);
+  if(flat){const y=flat.y,z=flat.z+flat.depth/2+.008,a=flat.x-flat.width/2,b=flat.x+flat.width/2;quad(lot,[[a,y-.39,z],[b,y-.39,z],[b,y+.39,z],[a,y+.39,z]],0);partRanges.set(lot.index+':sign',[[begin,p.length/3]]);}
   for(const s of citySignSpecs(lot)){
    const start=p.length/3,a=s.x-s.width/2,b=s.x+s.width/2,c=s.y-s.height/2+.035,d=s.y+s.height/2-.035,e=s.z-s.depth/2+.035,g=s.z+s.depth/2-.035;
    if(s.blade){quad(lot,[[a-.008,c,e],[a-.008,c,g],[a-.008,d,g],[a-.008,d,e]],1);quad(lot,[[b+.008,c,g],[b+.008,c,e],[b+.008,d,e],[b+.008,d,g]],1);}

@@ -479,9 +479,20 @@ export function houseSignSpecs(s){
  }
  return out;
 }
+const cachedCityFlatSigns=new WeakMap();
 export function cityShopSignSpec(lot){
+ if(cachedCityFlatSigns.has(lot))return cachedCityFlatSigns.get(lot);
  const height=.78,y=2.96,width=lot.width*.90;
- return {id:'sign',x:0,y,z:signFront(lot,y,height)+.12,width,height,depth:.10,color:lot.style[3],blade:false};
+ const original={id:'sign',x:0,y,z:signFront(lot,y,height)+.12,width,height,depth:.10,color:lot.style[3],blade:false};
+ let result=null;
+ outer:for(const scale of [1,.86,.72,.58,.46])for(const dz of [0,.25,.50,.75])for(const dx of [0,-.10,.10,-.20,.20,-.3,.3]){
+  const q={...original,x:dx*lot.width,z:original.z+dz,width:original.width*scale};
+  if(Math.abs(q.x)+q.width/2>lot.width/2-.04||!citySignClear(lot,q))continue;
+  const floor=signFloor(lot,y),wall=floor.setback+floor.d/2-.025,rear=q.z-q.depth/2+.025;
+  q.supports=[-1,1].map(side=>({x:q.x+side*q.width*.31,y:q.y,z:(wall+rear)/2,width:.10,height:.10,depth:Math.max(.08,rear-wall)}));
+  result=q;break outer;
+ }
+ cachedCityFlatSigns.set(lot,result);return result;
 }
 // Conservative intersection test using the real floor envelopes, in the
 // neighboring building's rotated coordinate system. No extra collider meshes.
@@ -505,7 +516,16 @@ export function citySignSpecs(lot){
  const source=houseSignSpecs({...lot,bladeCount:1+(lot.index%3===0?1:0),roofCount:1,bladeSize:.8+(lot.index%5)*.16,roofSize:.85+(lot.index%4)*.18,bladeColor:lot.style[3],roofSignColor:CITY_SHOP_STYLES[(lot.index+5)%CITY_SHOP_STYLES.length][3]});
  const result=[];
  for(const sign of source){
-  if(!sign.blade){result.push(sign);continue;}
+  if(!sign.blade){
+   let found=null;
+   roofSearch:for(const scale of [1,.85,.7,.55])for(const dz of [0,-.18,-.36,.12])for(const dx of [0,-.18,.18,-.32,.32]){
+    const q={...sign,x:sign.x+dx*lot.width,z:sign.z+dz*lot.depth,width:sign.width*scale};
+    if(Math.abs(q.x)+q.width/2>lot.width/2-.08||Math.abs(q.z)+q.depth/2>lot.depth/2-.08||!citySignClear(lot,q))continue;
+    q.supports=[-1,1].map(side=>({x:q.x+side*q.width*.34,y:lot.height+.20,z:q.z,width:.11,height:.36,depth:.14}));
+    found=q;break roofSearch;
+   }
+   if(found)result.push(found);continue;
+  }
   const floor=signFloor(lot,sign.y);
   // Search along the actual floor frontage and a short additional bracket
   // extension. Omit a panel if no unobstructed mount is available.

@@ -15,8 +15,8 @@ function pictogram(ctx,kind){
   case 7:for(let i=0;i<5;i++){const t=i*Math.PI*2/5;ring(Math.cos(t)*10,Math.sin(t)*10,6);}ring(0,0,3);break;
  }
 }
-export function drawSignArtwork(ctx,x,y,w,h,{color='#965044',title='商店',subtitle='',vertical=false,seed=0}={}){
- const W=vertical?96:192,H=vertical?192:96,accent=palettes[Math.abs(seed)%palettes.length],mode=Math.abs(seed)%3;
+export function drawSignArtwork(ctx,x,y,w,h,{color='#965044',title='商店',subtitle='',vertical=false,aspect=2,seed=0}={}){
+ const W=vertical?96:Math.max(144,Math.min(960,96*aspect)),H=vertical?192:96,accent=palettes[Math.abs(seed)%palettes.length],mode=Math.abs(seed)%3;
  ctx.save();ctx.translate(x,y);ctx.scale(w/W,h/H);
  ctx.fillStyle=color;ctx.fillRect(0,0,W,H);
  ctx.fillStyle=mode===0?'#17292b':mode===1?'#24364e':'#392d31';
@@ -29,6 +29,6 @@ export function drawSignArtwork(ctx,x,y,w,h,{color='#965044',title='商店',subt
  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff6df';ctx.strokeStyle='#152327';ctx.lineWidth=1.1;
  const text=(value,tx,ty,max)=>{ctx.strokeText(value,tx,ty,max);ctx.fillText(value,tx,ty,max);};
  if(vertical){const glyphs=Array.from(title.split('・')[0]).slice(0,7);const step=Math.min(25,121/Math.max(1,glyphs.length));ctx.font='bold '+Math.max(14,Math.min(22,step*.93))+'px sans-serif';glyphs.forEach((ch,i)=>text(ch,48,59+(i+.5)*step,75));}
- else{ctx.font='bold 20px sans-serif';text(title,123,36,118);ctx.fillStyle=accent;ctx.font='bold 10px sans-serif';text(subtitle||'SHOP',123,62,117);}
+ else{ctx.font='bold 20px sans-serif';const center=(62+W)/2;ctx.font='bold '+(W>300?34:20)+'px sans-serif';text(title,center,35,W-74);ctx.fillStyle=accent;ctx.font='bold '+(W>300?16:10)+'px sans-serif';text(subtitle||'SHOP',center,64,W-74);}
  ctx.restore();
 }
