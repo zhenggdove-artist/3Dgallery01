@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'index.html'
       - 'tests/**'
       - 'cloudflare/**'
       - 'wrangler.jsonc'
