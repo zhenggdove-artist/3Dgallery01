@@ -42,5 +42,6 @@ export function channelInterval(item){return item?.family==='ice'?ICE_FREEZE_INT
 // One shared duration/radius for the visible giant fish and server-owned swept hitbox.
 // Triple duration keeps the original swimming speed over the tripled reach.
 export const GOLDFISH_SWIM_MS=2400; // Twice the swimming speed, unchanged travel budget.
-export const TIDE_PUSH_INTERVAL_MS=3000,TIDE_PUSH_DURATION_MS=1000,TIDE_PUSH_DISTANCE=1.5;
+export const TIDE_PUSH_INTERVAL_MS=3000,TIDE_PUSH_DURATION_MS=1000,TIDE_PUSH_DISTANCE=3;
+export const TIDE_DAMAGE_TICK_MS=200;
 export const GOLDFISH_SWIM_RADIUS=1.05; // Halved to follow the halved fish mesh, including collision.

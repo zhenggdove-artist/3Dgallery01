@@ -42,7 +42,9 @@ export const ULTIMATE_FOOTPRINT_SCALE=.6;
 // ultimate radius. The common quality curve remains proportional: all five
 // tiers are scaled by the same factor, without touching cast reach/damage.
 // Original green/purple visual ratios = 1.4/2.4.
-export const PALM_ULTIMATE_RADIUS_MULTIPLIER=10*(1.4/2.4);
+export const PALM_ULTIMATE_RADIUS_MULTIPLIER=5*(1.4/2.4);
+export const ICE_ERUPTION_TRAVEL_MS=1260,ICE_ERUPTION_CONTACT_MS=280,ICE_ERUPTION_VISIBLE_MS=2800;
+export const BLOOM_TRAVEL_MS=2200;
 // Authoritative damage geometry and warning VFX always use identical dimensions.
 export function scaleUltimateFootprint(stats,item=null,quality=null){
  if(stats?.ultimate){
@@ -61,7 +63,7 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
   // Cast reach remains unchanged. Whip retains its 1.5x multiplier.
   // Goldfish retains its narrow physical collision width.
   const radiusFactor=(item?.id==='goldfish'||saber?ULTIMATE_FOOTPRINT_SCALE:rangeFactor)*(whip?1.5:palm?PALM_ULTIMATE_RADIUS_MULTIPLIER:1);
-  stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor).toFixed(3);
+  stats.range=+(Math.max(.5,Number(stats.range)||0)*rangeFactor*(item?.family==='petal'?2:1)).toFixed(3);
   stats.radius=+(Math.max(.1,Number(stats.radius)||0)*radiusFactor*(item?.family==='ice'?1/3:1)).toFixed(3);
   if(item?.id==='telephone'){
    // The screaming handset's ultimate warning AND hit area are exactly
@@ -79,6 +81,17 @@ export function scaleUltimateFootprint(stats,item=null,quality=null){
 
 export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=false,fusionEcho=false){
  const dir=safeDirection(direction);
+ if(item?.family==='ice'&&stats?.ultimate){
+  const range=Math.max(2,Number(stats.range)||8),radius=Math.max(.1,Number(stats.radius)||1);
+  const forward=flatDirection(direction),apex=[origin[0],Math.max(0,ground(origin[0],origin[2],origin[1]))+.12,origin[2]];
+  const count=Math.max(4,Math.min(10,Math.ceil(range/Math.max(1,radius*2))+1)),spacing=range/(count-1);
+  const segments=Array.from({length:count},(_,i)=>{
+   const x=apex[0]+forward[0]*spacing*i,z=apex[2]+forward[1]*spacing*i;
+   return {position:[x,Math.max(0,ground(x,z,origin[1]))+.16,z],delayMs:Math.round(ICE_ERUPTION_TRAVEL_MS*i/(count-1))};
+  });
+  const center=[apex[0]+forward[0]*range*.5,Math.max(0,ground(apex[0]+forward[0]*range*.5,apex[2]+forward[1]*range*.5,origin[1]))+.12,apex[2]+forward[1]*range*.5];
+  return {mode:'area',shape:'ice-line',apex,forward,center,visualCenter:[center[0],center[1]+.04,center[2]],radius,range,travel:range,spacing,segments};
+ }
  const range=clamp(Number(stats?.range)||Number(item?.range)||8,2,100);
  const radius=clamp(Number(stats?.radius)||2,.1,50);
  // Staff/clam streams are fired from the weapon, not an unrelated distant
@@ -94,12 +107,9 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
  // Shift pan and whip centres forward by one CURRENT blast radius. This
  // single coordinate drives the warning, authoritative hitbox and VFX.
  const blastOffset=stats?.ultimate&&/^(?:pan|whip|swatter)-[1-5]$/.test(item?.id||'')?radius:0;
- // Move Frost's reduced circle ahead by TWO of its NEW diameters.
- // The same center drives both the warning and the authoritative hitbox.
- const frostOffset=stats?.ultimate&&item?.family==='ice'?radius*4:0;
- const centerDistance=travel+blastOffset+frostOffset;
- const x=origin[0]+(blastOffset||frostOffset?dx:dir[0])*centerDistance,
-  z=origin[2]+(blastOffset||frostOffset?dz:dir[2])*centerDistance;
+ const centerDistance=travel+blastOffset;
+ const x=origin[0]+(blastOffset?dx:dir[0])*centerDistance,
+  z=origin[2]+(blastOffset?dz:dir[2])*centerDistance;
  const floor=Math.max(0,ground(x,z,origin[1]));
  const nearFloor=Math.max(0,ground(origin[0],origin[2],origin[1]));
  return {
@@ -114,6 +124,7 @@ export function chargedArea(item,origin,direction,stats,ground=()=>0,channel=fal
 
 export function insideChargedArea(area,target,actorRadius=1){
  if(!area)return false;
+ if(area.shape==='ice-line')return iceEruptionContact(area,target,actorRadius,Infinity);
  if(area.mode==='sector'){
   const dx=target[0]-area.apex[0],dz=target[2]-area.apex[2];
   const along=dx*area.forward[0]+dz*area.forward[1];
@@ -125,6 +136,17 @@ export function insideChargedArea(area,target,actorRadius=1){
  if(area.mode!=='area')return false;
  return Math.hypot(target[0]-area.center[0],target[2]-area.center[2])<=area.radius+actorRadius&&
   Math.abs(target[1]-area.center[1])<=Math.max(3,area.radius*.7);
+}
+
+// Each native burst is collidable only after its own reveal.
+export function iceEruptionContact(area,target,actorRadius,elapsedMs){
+ const dx=target[0]-area.apex[0],dz=target[2]-area.apex[2];
+ const along=dx*area.forward[0]+dz*area.forward[1],side=Math.abs(dx*area.forward[1]-dz*area.forward[0]);
+ if(along< -actorRadius||along>area.range+actorRadius||side>area.radius+actorRadius)return false;
+ const i=clamp(Math.round(along/area.spacing),0,area.segments.length-1),part=area.segments[i];
+ return elapsedMs>=part.delayMs+ICE_ERUPTION_CONTACT_MS&&
+  (elapsedMs===Infinity||elapsedMs<part.delayMs+ICE_ERUPTION_VISIBLE_MS)&&
+  Math.abs(target[1]-part.position[1])<=Math.max(3,area.radius*.7);
 }
 
 // Clip fused damage to the MAIN weapon's displayed warning, not to an
@@ -167,7 +189,7 @@ export function spellFootprint(item,origin,direction,stats,area,ground=()=>0){
  }
  // The returning giraffe sweeps the entire outbound ray (then retraces it):
  // show the same full-length corridor instead of a tiny remote AoE circle.
- if((item?.id==='giraffe'&&stats?.ultimate)||(isChannelStaff(item)&&!(item?.family==='ice'&&stats?.ultimate))||(item?.id==='accordion'&&stats?.ultimate)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||item?.id==='goldfish'){
+ if((item?.id==='giraffe'&&stats?.ultimate)||isChannelStaff(item)||(item?.id==='accordion'&&stats?.ultimate)||item?.firstPerson||item?.family==='saber'||(item?.family==='palm'&&!stats?.ultimate)||item?.pattern==='scatter'||item?.id==='goldfish'){
   const x=origin[0]+dx*range*.5,z=origin[2]+dz*range*.5;
   return {shape:'rectangle',position:[x,at(x,z),z],yaw,length:range,width,range};
  }

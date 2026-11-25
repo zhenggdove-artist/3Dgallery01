@@ -41,7 +41,7 @@ export const WEAPON_VFX=Object.freeze({
 });
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
- constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.waterStreams=new Map();this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.plantUltimates=new PlantUltimateEffects(scene);}
+ constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.waterStreams=new Map();this.iceEruptions=[];this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.plantUltimates=new PlantUltimateEffects(scene);}
  create(id){this.created++;const fx=factories[id]();const dispose=fx.dispose.bind(fx);let disposed=false;fx.dispose=()=>{if(disposed)return;disposed=true;fx.group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});dispose();};fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
@@ -175,23 +175,32 @@ export class WeaponVFX{
   entry.waterDirection.copy(direction);
   entry.waterRange=range;
   entry.lastWaterPulseAt=performance.now();
-  this.alignWaterStream(entry);
+  // Network pulses renew lifetime and desired direction only. Do not align
+  // with an empty world here; that used to flash the stream toward the camera.
  }
- alignWaterStream(entry,world=null){
+ alignWaterStream(entry,world=null,dt=0){
   if(!this.active.includes(entry))return;
-  const source=entry.host?this.channelMuzzle(entry.host,entry.waterWeapon,entry.waterOrigin.clone()):entry.waterOrigin.clone();
+  const rawSource=entry.host?this.channelMuzzle(entry.host,entry.waterWeapon,entry.waterOrigin.clone()):entry.waterOrigin.clone();
+  entry.waterSmooth??={source:rawSource.clone(),ends:new Map(),x:new THREE.Vector3(),y:new THREE.Vector3(),z:new THREE.Vector3(),basis:new THREE.Matrix4(),heading:new THREE.Vector3(0,0,1)};
+  const smooth=entry.waterSmooth,alpha=1-Math.exp(-Math.max(.001,dt)*22);
+  const source=smooth.source.lerp(rawSource,alpha);
   const ray=entry.host?.userData?.staffAimDirection;
   const dir=Array.isArray(ray)&&ray.length===3&&ray.every(Number.isFinite)?
    new THREE.Vector3(...ray).normalize():entry.waterDirection;
   const straight=source.clone().addScaledVector(dir,entry.waterRange);
   const lock=entry.waterOwner&&world?.tidalLocks?.[entry.waterOwner];
-  const ends=(lock?.targets||[]).slice(0,3).filter(t=>
-   Array.isArray(t.position)&&t.position.length===3&&t.position.every(Number.isFinite))
-   .map(t=>new THREE.Vector3(...t.position));
-  if(!ends.length)ends.push(straight);
+  const live=(lock?.targets||[]).slice(0,3).filter(t=>Array.isArray(t.position)&&t.position.length===3&&t.position.every(Number.isFinite));
+  const ids=live.length?live.map(t=>t.targetKey):['forward'];
+  const ends=ids.map((key,i)=>{const target=live.length?new THREE.Vector3(...live[i].position):straight;
+   let value=smooth.ends.get(key);if(!value){value=(smooth.primary||target).clone();smooth.ends.set(key,value);}
+   return value.lerp(target,alpha);
+  });
+  for(const key of smooth.ends.keys())if(!ids.includes(key))smooth.ends.delete(key);
+  smooth.primary=ends[0];
   // Retain one native blue Venom Stream, connected to the closest locked
   // target. Two additional guided rays share ONE buffered 128-point cloud.
   entry.fx.setEndpoints(source,ends[0]);
+  this.orientWaterStream(entry,source,ends[0]);
   if(entry.tideCores){
    const {m,pos,dir,q,scale,up}=entry.tideScratch;
    entry.tideCores.count=Math.min(3,ends.length);
@@ -224,6 +233,26 @@ export class WeaponVFX{
    a[i*3+2]=source.z+dz*progress+sz*curve;
   }
   buffer.needsUpdate=true;
+ }
+ orientWaterStream(entry,source,end){
+  const s=entry.waterSmooth;if(!s)return;
+  s.x.copy(end).sub(source);if(s.x.lengthSq()<1e-8)return;s.x.normalize();
+  s.z.set(s.x.z,0,-s.x.x);if(s.z.lengthSq()<1e-6)s.z.copy(s.heading);else{s.z.normalize();s.heading.copy(s.z);}
+  s.y.crossVectors(s.z,s.x).normalize();s.z.crossVectors(s.x,s.y).normalize();
+  entry.fx.group.quaternion.setFromRotationMatrix(s.basis.makeBasis(s.x,s.y,s.z));
+ }
+ advanceIceEruptions(dt){
+  for(const cast of this.iceEruptions){cast.age+=dt*1000;
+   while(cast.next<cast.segments.length&&cast.segments[cast.next].delayMs<=cast.age){
+    const segment=cast.segments[cast.next++],spell=this.acquire('ice-shatter',{color:'#a7e4ff',size:1,density:.65,quantity:9,speed:1});
+    spell.fx.group.position.fromArray(segment.position);spell.fx.group.position.y+=.28;
+    spell.fx.group.rotation.set(0,Math.atan2(cast.forward[0],cast.forward[1]),0);
+    spell.fx.update(.02);spell.iceRadius=Math.max(.35,cast.radius/2.5);
+    spell.iceScale=new THREE.Vector3(spell.iceRadius,spell.iceRadius,Math.max(spell.iceRadius,cast.spacing/5));
+    spell.fx.group.scale.copy(spell.iceScale);spell.stopAt=3;
+   }
+  }
+  this.iceEruptions=this.iceEruptions.filter(c=>c.next<c.segments.length);
  }
  stopChannel(root){
   this.restoration.stop(root);
@@ -344,18 +373,13 @@ export class WeaponVFX{
   if(isChannelStaff(item)&&item.id!=='clam'&&!data.channel&&(!data.ultimate||['lightning','beam'].includes(item.family))){
    this.staffOrb(data,item,origin,direction);return;
   }
-  // Ice staff summons the original Shattering Frostburst at the exact
-  // server-owned forward circle; never release the old travelling ice spear.
+  // Reuse the original Shattering Frostburst at every server-authored
+  // floor point, in order. No synthetic ice geometry or replacement art.
   if(item.family==='ice'&&data.ultimate&&impactArea?.mode==='area'){
-   const spell=this.acquire('ice-shatter',{
-    color:'#a7e4ff',size:1,density:.65,quantity:9,speed:1
-   });
-   spell.fx.group.position.fromArray(impactArea.visualCenter||impactArea.center||origin.toArray());
-   spell.fx.group.position.y+=.28;
-   spell.fx.update(.02);
-   spell.iceRadius=Math.max(.35,(Number(impactArea.radius)||2)/2.5);
-   spell.fx.group.scale.setScalar(spell.iceRadius);
-   spell.stopAt=3;
+   const segments=impactArea.segments||[{position:impactArea.visualCenter||impactArea.center||origin.toArray(),delayMs:0}];
+   const cast={age:0,next:0,segments,radius:Math.max(.1,Number(impactArea.radius)||2),
+    spacing:Number(impactArea.spacing)||0,forward:impactArea.forward||[direction.x,direction.z]};
+   this.iceEruptions.push(cast);this.advanceIceEruptions(0);
    return;
   }
   // Water staff projects the actual 00GameDevs Corrosive Venom Jet in blue.
@@ -515,13 +539,14 @@ export class WeaponVFX{
     this.reportAnimationFailure('sniper',error);
    }
   }
+  this.advanceIceEruptions(dt);
   for(const e of [...this.active]){
    try{
     if(e.waterChannel){
      if((e.host&&!e.host.parent)||performance.now()-e.lastWaterPulseAt>Math.max(3100,Number(e.waterWeapon?.cooldown||650)*2+650)){
       this.release(e);continue;
      }
-     this.alignWaterStream(e,world);
+     this.alignWaterStream(e,world,dt);
     }
     e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
     if(e.start&&!e.stopped)e.fx.group.position.lerpVectors(e.start,e.end,Math.min(1,e.age/e.travel));
@@ -531,7 +556,8 @@ export class WeaponVFX{
      e.stopped=true;
     }
     e.fx.update(dt);
-    if(e.iceRadius)e.fx.group.scale.setScalar(e.iceRadius);
+    if(e.waterChannel&&e.waterSmooth?.primary)this.orientWaterStream(e,e.waterSmooth.source,e.waterSmooth.primary);
+    if(e.iceScale)e.fx.group.scale.copy(e.iceScale);else if(e.iceRadius)e.fx.group.scale.setScalar(e.iceRadius);
     if(e.fx.finished||(!e.waterChannel&&e.age>12))this.release(e);
    }catch(error){
     // The failed native instance cannot go back to the reusable GPU pool.

@@ -1,6 +1,6 @@
 import {weaponAffixTotals} from './weapon-affixes.js';
 export const JELLYBRELLA_ULTIMATE_DAMAGE_SCALE=.70;
-export const PALM_STORM_DURATION_MS=6000;
+export const PALM_STORM_DURATION_MS=3000;
 export const PALM_STORM_TICK_MS=2000;
 export const SNIPER_RANGE=256; // Entire 184m-diameter arena from either edge, with margin.
 export const SNIPER_SHOULDER_RETICLE_DIAMETER_PX=132;
@@ -81,7 +81,8 @@ export function projectileFlightMs(weapon,charged=false,range=null){
  if(charged&&weapon.id==='clam')return 2180; // original #33 crest full eased path
  if(charged&&weapon.family==='palm')return 1650; // triple #31 tower
  if(charged&&weapon.family==='saber')return 1550; // official five-wave native cast
- if(charged&&weapon.family==='ice')return 1260;  // doubled #70 reach
+ if(charged&&weapon.family==='ice')return 1260;  // sequential ground eruption
+ if(charged&&weapon.family==='petal')return 2200; // native #43 flower traverses its full doubled reach
  if(weapon.pattern==='scatter')return charged?530:360;
  if(weapon.id==='black-cat')return charged?450:310;
  if(weapon.firstPerson)return charged?460:330;

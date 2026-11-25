@@ -79,6 +79,12 @@ const CLAM_WAVE_LIFETIME=2.18;
 const CYCLE_INTERVAL=Object.freeze({20:1.35,43:1.08,70:.76});
 const TRAVELLING_NATIVE=new Set([20,43,70]);
 const travelLifetime=number=>number===70?1.26:number===43?2.2:4.2;
+const rainbowPalette=['#ff234f','#ff9900','#fff000','#28ff64','#20d9ff','#4464ff','#e337ff'].map(c=>new THREE.Color(c));
+function rainbowFlower(fx,age,phase){
+ if(!fx._templeRainbowUniforms){const set=new Set();fx.group.traverse(o=>{for(const mat of Array.isArray(o.material)?o.material:[o.material])if(mat?.uniforms?.uColor?.value?.isColor)set.add(mat.uniforms.uColor.value);});fx._templeRainbowUniforms=[...set];}
+ const color=rainbowPalette[Math.floor(age*12+phase)%rainbowPalette.length];
+ for(const value of fx._templeRainbowUniforms)value.copy(color);
+}
 const vector=(value,fallback)=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite)?
  new THREE.Vector3(...value):fallback.clone();
 const channelColors=Object.freeze({
@@ -490,7 +496,7 @@ export class NumberedWeaponEffects {
    fx.group.position.copy(start);
    fx.group.quaternion.setFromUnitVectors(entry.spec.number===70?X_FORWARD:FORWARD,direction);
   }else this.align(entry,fx);
-  return {fx,age:0,start,direction,stopping:false};
+  return {fx,age:0,start,direction,stopping:false,rainbowPhase:Math.floor(entry.age*17)%7};
  }
  discardCycle(entry,copy){
   const index=entry.cycles.indexOf(copy);
@@ -508,7 +514,7 @@ export class NumberedWeaponEffects {
   for(const copy of [...entry.cycles]){
    copy.age+=dt;
    if(moving){
-    if(entry.channel){
+    if(entry.channel&&number!==43){
      copy.direction.lerp(entry.visualDirection,1-Math.exp(-dt*18)).normalize();
      copy.fx.group.quaternion.setFromUnitVectors(
       number===70?X_FORWARD:FORWARD,copy.direction);
@@ -516,7 +522,7 @@ export class NumberedWeaponEffects {
     const duration=travelLifetime(number);
     const t=Math.min(1,copy.age/duration);
     const progress=t*t*(3-2*t);
-    const advance=number===70?entry.range*progress:Math.min(entry.range,Math.max(4,entry.range*.72))*progress;
+    const advance=number===43?entry.range*t:number===70?entry.range*progress:Math.min(entry.range,Math.max(4,entry.range*.72))*progress;
     copy.fx.group.position.copy(copy.start).addScaledVector(copy.direction,advance);
     if(number===20&&copy.age>=duration-.9&&!copy.stopping){
      copy.stopping=true;
@@ -524,6 +530,7 @@ export class NumberedWeaponEffects {
     }
    }else this.align(entry,copy.fx);
    copy.fx.update(dt);
+   if(number===43&&moving){copy.fx.group.position.copy(copy.start).addScaledVector(copy.direction,entry.range*Math.min(1,copy.age/travelLifetime(43)));rainbowFlower(copy.fx,copy.age,copy.rainbowPhase);}
    if(number===70&&moving){
     // Position after the source update as well: its internal animation must
     // never rewind the world-space forward travel of the ice fragments.
@@ -628,7 +635,7 @@ export class NumberedWeaponEffects {
     const ease=t*t*(3-2*t);
     // The travelling #20/#43/#70 original must traverse the ENTIRE warned
     // ray; the former 72% cap stopped visibly short of the blue #59 footprint.
-    const delta=e.range*ease;
+    const delta=e.range*(e.spec.number===43?t:ease);
     e.fx.group.position.copy(e.origin).addScaledVector(e.direction,delta);
     if(e.spec.number===20&&e.age>3.45&&!e.stopping){
      e.stopping=true;e.fx.stop?.();
@@ -638,6 +645,7 @@ export class NumberedWeaponEffects {
     e.stopping=true;e.fx.stop();
    }
    e.fx.update(dt); // native yellow blades now animate smoothly without CPU particle loops
+   if(e.spec.number===43){e.fx.group.position.copy(e.origin).addScaledVector(e.direction,e.range*Math.min(1,e.age/travelLifetime(43)));rainbowFlower(e.fx,e.age,Math.floor(e.origin.x*7+e.origin.z*11+70000)%7);}
    if(e.spec.number===20&&e.attackId){
     const synced=world?.vortexes?.find(v=>v.id===e.attackId);
     if(synced?.position)e.fx.group.position.lerp(new THREE.Vector3(...synced.position),Math.min(1,dt*18));

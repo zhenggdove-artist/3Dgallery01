@@ -532,7 +532,7 @@ export class TempleRoom extends DurableObject{
     if(now-(this.lastRosterAt||0)>=800)this.broadcastRoster();
   }
   async tick(fromState=false){
-   const now=Date.now(),current=this.readWorld(),movingEffects=(current.persistentAttacks||[]).length>0||(current.pendingArtworkFlights||[]).length>0||Object.keys(current.prismLocks||{}).length>0;
+   const now=Date.now(),current=this.readWorld(),movingEffects=(current.persistentAttacks||[]).length>0||(current.pendingArtworkFlights||[]).length>0||Object.keys(current.prismLocks||{}).length>0||Object.keys(current.tidalLocks||{}).length>0||Object.values(current.profiles||{}).some(p=>p.tidalChannelStats)||(current.monster?.tidePush!=null)||(current.monsters||[]).some(m=>m.tidePush);
    if(fromState&&now-this.lastTick<(movingEffects?70:500))return;
    const world=this.world();
    this.lastTick=now;

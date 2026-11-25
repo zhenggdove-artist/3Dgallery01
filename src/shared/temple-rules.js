@@ -1,6 +1,6 @@
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recovery.js';
-import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor} from './charge-area.js';
+import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,fusionEchoAnchor,iceEruptionContact,ICE_ERUPTION_TRAVEL_MS,ICE_ERUPTION_VISIBLE_MS} from './charge-area.js';
 import {GOLDFISH_TRAVEL_SCALE,GOLDFISH_SCHOOL_COUNT,GOLDFISH_DAMAGE_PER_FISH,GOLDFISH_SCHOOL_RADIUS,GOLDFISH_CONTACT_RADIUS,GOLDFISH_T1_DAMAGE_PER_FISH,goldfishDirectHitBudget,goldfishSchoolPosition,advanceGoldfishSchool} from './goldfish-school.js';
 import {discGroundHeight} from './artwork-discs.js';
 import {saberWaveCrest} from './saber-wave.js';
@@ -25,7 +25,7 @@ import {calicoPellets} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,shoulderSniperSpread,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
-import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS} from './vortex-flight.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
@@ -1160,7 +1160,7 @@ function attack(world,profile,actor,body,context,now){
   if(!persistentOnly){
     const duration=projectileFlightMs(weapon,stats.ultimate,stats.range);
     const iceGround=weapon.family==='ice'&&stats.ultimate&&area?.mode==='area';
-    const visualLifetime=iceGround?Math.max(2800,visibleCollisionLifetimeMs(weapon,true)):channel?duration:visibleCollisionLifetimeMs(weapon,stats.ultimate);
+    const visualLifetime=iceGround?ICE_ERUPTION_TRAVEL_MS+ICE_ERUPTION_VISIBLE_MS:channel?duration:visibleCollisionLifetimeMs(weapon,stats.ultimate);
     world.persistentAttacks??=[];
     world.persistentAttacks.push({
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
@@ -1188,7 +1188,7 @@ function attack(world,profile,actor,body,context,now){
       const secondary={...native,range:source.id==='goldfish'?anchor.distance*GOLDFISH_TRAVEL_SCALE:anchor.distance};
       const echoArea=source.id==='goldfish'||source.family==='wave'?null:
        chargedArea(source,origin,direction,secondary,groundForSpell,echoChannel,true);
-      if(echoArea?.mode==='area'){
+      if(echoArea?.mode==='area'&&echoArea.shape!=='ice-line'){
        const y=Math.max(0,groundForSpell(anchor.x,anchor.z,origin[1]));
        echoArea.center=[anchor.x,y+.12,anchor.z];
        echoArea.visualCenter=[anchor.x,y+.16,anchor.z];
@@ -1200,7 +1200,7 @@ function attack(world,profile,actor,body,context,now){
       const flight=projectileFlightMs(source,true);
       const duration=exotic==='vortex'?VORTEX_FLIGHT_MS:exotic==='goldfish'?Math.round(GOLDFISH_SWIM_MS*sourceQuality.duration):
         exotic==='giraffe'?2300:exotic==='fan'?Math.round((1400+sourceQuality.tier*850)*sourceQuality.duration):
-        Math.max(flight,visibleCollisionLifetimeMs(source,true));
+        source.family==='ice'?ICE_ERUPTION_TRAVEL_MS+ICE_ERUPTION_VISIBLE_MS:Math.max(flight,visibleCollisionLifetimeMs(source,true));
       // Borrowed sniper fusion deals only a small, per-target echo. It
        // cannot transfer the original one-shot power to another weapon.
        const balancedSniper=source.id==='black-cat'?fusionSniperEchoDamage(source):null;
@@ -1213,7 +1213,7 @@ function attack(world,profile,actor,body,context,now){
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],launchDirection:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,
         damage:echoDamage,pvpDamage:echoPvP,charge:1,qualityDuration:sourceQuality.duration*echoScale,
-        tier:sourceQuality.tier,flightMs:flight,hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
+        tier:sourceQuality.tier,flightMs:flight,iceGround:source.family==='ice',hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5}))||null,
         outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[],
         createdAt:now,lastAt:now,expiresAt:now+duration});
@@ -1855,18 +1855,24 @@ export function tickTidalChannels(world,actors,now=Date.now(),rng=Math.random){
   for(let i=0;i<targets.length;i++){
    const target=selected[i],lock=targets[i];
    const elapsed=now-lock.lastHitAt;
-   if(elapsed<PRISM_DAMAGE_TICK_MS)continue;
-   const sample=Math.min(elapsed,500);
-   lock.lastHitAt=now;
+   if(elapsed<TIDE_DAMAGE_TICK_MS)continue;
+   const count=Math.min(2,Math.floor(elapsed/TIDE_DAMAGE_TICK_MS));
+   // Advance by exact 200ms increments instead of accumulating packet jitter.
+   lock.lastHitAt=elapsed>400?now-(elapsed%TIDE_DAMAGE_TICK_MS):lock.lastHitAt+count*TIDE_DAMAGE_TICK_MS;
    const dps=Math.max(0,Number(target.kind==='monster'?stats.monsterDps:stats.pvpDps)||0);
-   const amount=dps*sample/1000;
+   const amount=dps*TIDE_DAMAGE_TICK_MS/1000;
    if(amount<=0)continue;
-   if(target.kind==='monster')
-    damageMonster(world,profile,amount,now,rng,'tidal-lock',target.value,target.point);
-   else
-    damagePlayer(world,profile,target.value,amount,now,'tide',caster.position,
-     'tidal-lock',target.point,false,false,true);
-   changed=true;
+   for(let pulse=0;pulse<count;pulse++){
+    if(target.kind==='monster'){
+     if(!target.value.active||target.value.hp<=0)break;
+     damageMonster(world,profile,amount,now,rng,'tidal-lock',target.value,target.point);
+    }else{
+     if(world.profiles[target.value.key]?.hp<=0)break;
+     damagePlayer(world,profile,target.value,amount,now,'tide',caster.position,
+      'tidal-lock',target.point,false,false,true);
+    }
+    changed=true;
+   }
   }
  }
  for(const key of Object.keys(locks))if(!active.has(key)){
@@ -2018,7 +2024,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    // their existing reduced damage. Skip moving ray and one-shot detonation.
    if(palmStorm){
     fx.pulseCount??=0;
-    if(now>=fx.createdAt&&now<fx.expiresAt&&fx.pulseCount<PALM_STORM_DURATION_MS/PALM_STORM_TICK_MS&&
+    if(now>=fx.createdAt&&now<fx.expiresAt&&fx.pulseCount<Math.ceil(PALM_STORM_DURATION_MS/PALM_STORM_TICK_MS)&&
        now>=(fx.nextPulseAt??fx.createdAt)){
      fx.pulseCount++;
      fx.nextPulseAt=now+PALM_STORM_TICK_MS;
@@ -2137,7 +2143,9 @@ function tickPersistentAttacks(world,actors,now,rng){
      // its legs first; testing only the torso centre at y=4.725 wrongly
      // rejects valid visible contact. Display digits on the torso instead.
      const groundContact=[pos[0],enemy.position[1]+(target.kind==='player'?1:1.25),pos[2]];
-     if(!self&&!insideChargedArea(fx.area,groundContact,target.kind==='player'?1.02:ENEMY_RADIUS))continue;
+     const contactRadius=target.kind==='player'?1.02:ENEMY_RADIUS;
+     if(!self&&!(fx.area.shape==='ice-line'?iceEruptionContact(fx.area,groundContact,contactRadius,now-fx.createdAt):insideChargedArea(fx.area,groundContact,contactRadius)))continue;
+     if(fx.echo&&fx.parentFootprint&&!insideSpellFootprint(fx.parentFootprint,groundContact))continue;
      if(fx.iceGround&&(fx.iceHits||[]).includes(key))continue;
      if(self){
       // Detonation always recoils back onto the caster, even when the
