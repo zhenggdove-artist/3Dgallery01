@@ -1,3 +1,4 @@
+import {mergeWingCatalog} from './shared/world-patch.js';
 import {registerCustomWings,SHOP_CATALOG_REVISION} from './shared/catalog.js';
 import {beginWingCheckout,resumeWingCheckout} from './wing-payment-client.js';
 import {prepareFirebase,signInWithGoogle} from './firebase-login.js';
@@ -325,16 +326,15 @@ ui.addEventListener('join',async event=>{
 });
 
 function acceptWorldView(next){
- // A successful attack delivers the same revision in its HTTP response AND
- // in a WebSocket world broadcast. Rebuilding the complete gallery/UI twice
- // on that same hit was one of the repeatable browser frame spikes.
  if(!next)return false;
+ const existing=world?.customWings||[];
+ const wings=mergeWingCatalog(existing,Array.isArray(next.customWings)?next.customWings:[]);
  if(world&&Number.isFinite(world.revision)&&Number.isFinite(next.revision)&&next.revision<=world.revision){
-  if(Array.isArray(next.customWings)){const known=new Map((world.customWings||[]).map(w=>[w.id,w]));let changed=false;for(const wing of next.customWings){if(!known.has(wing.id)){known.set(wing.id,wing);changed=true;}}if(changed){const wings=[...known.values()];registerCustomWings(wings);world={...world,customWings:wings};syncWorld();if(ui.panelName==='bag')ui.renderPanel();}}
+  if(wings!==existing){registerCustomWings(wings);world={...world,customWings:wings};syncWorld();if(ui.panelName==='bag')ui.renderPanel();}
   return false;
  }
- const wings=Array.isArray(next.customWings)?next.customWings:(world?.customWings||[]);
- if(wings!==world?.customWings)registerCustomWings(wings);world={...next,customWings:wings};syncWorld();return true;
+ if(wings!==existing)registerCustomWings(wings);
+ world={...next,customWings:wings};syncWorld();return true;
 }
 network.addEventListener('welcome',event=>{const data=event.detail;self={...self,...data.self};players=data.players;syncPlayers();acceptWorldView(data.world);});
 // Coalesce high-frequency Worker snapshots: a busy attack can deliver many
@@ -349,9 +349,11 @@ network.addEventListener('world',event=>{
   queuedWorld=next;
 });
 network.addEventListener('wing-catalog',event=>{
- const wings=Array.isArray(event.detail?.wings)?event.detail.wings:[];
+ const incoming=Array.isArray(event.detail?.wings)?event.detail.wings:[];
+ const wings=mergeWingCatalog(world?.customWings||[],incoming);
+ if(queuedWorld)queuedWorld={...queuedWorld,customWings:mergeWingCatalog(queuedWorld.customWings||[],wings)};
  registerCustomWings(wings);
- if(world){world={...world,customWings:wings};arena.world=world;ui.setWorld(world);
+ if(world){world={...world,customWings:wings};syncWorld();
   if(['wing-shop','wing-manage','bag'].includes(ui.panelName))ui.renderPanel();}
 });
 network.addEventListener('players',event=>{players=event.detail;syncPlayers();});
@@ -687,7 +689,7 @@ async function confirmSavedWing(result,wingId){
  const ready=()=>world?.profile?.inventory?.includes(wingId)&&!!itemById(wingId);
  if(!ready()){
   const data=await network.world();acceptWorldView(data.world);
-  if(!ready()&&data.world?.revision===world?.revision){const wings=data.world.customWings||world.customWings;registerCustomWings(wings);world={...world,customWings:wings,profile:data.world.profile};syncWorld();}
+  if(!ready()&&data.world?.revision===world?.revision){const wings=mergeWingCatalog(world.customWings||[],data.world.customWings||[]);registerCustomWings(wings);world={...world,customWings:wings,profile:data.world.profile};syncWorld();}
  }
  if(!ready())throw Error(receipt?.inventory?.includes(wingId)?'翅膀已儲存，背包同步未完成；請重新開啟 BAG':'伺服器未確認背包內的翅膀');
 }

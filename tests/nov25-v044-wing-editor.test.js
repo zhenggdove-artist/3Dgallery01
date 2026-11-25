@@ -24,3 +24,15 @@ test('offline account receives GM canvas and saved wing persists across a fresh 
  assert.ok(p.inventory.includes(result.personalWingId));assert.equal(p.equipment.wings,result.personalWingId);
  assert.equal(worldProfileView(reload,user.key,now+2000).wingDesignCredits,0);assert.equal(itemById(result.personalWingId).name,'Saved Wing');
 });
+
+import {mergeWingCatalog,applyWorldPatch} from '../src/shared/world-patch.js';
+test('queued combat world cannot erase a recently saved wing or revert its edits',()=>{
+ const older=[{id:'a',name:'original',createdAt:1}];
+ const saved=[...older,{id:'b',name:'new',createdAt:2}];
+ const wire={revision:1,customWings:mergeWingCatalog(older,saved)};
+ const patch=applyWorldPatch(wire,{base:1,revision:2,serverTime:3,fields:{}});
+ assert.equal(patch.customWings.length,2);
+ assert.equal(mergeWingCatalog(saved,older),saved);
+ const edited=mergeWingCatalog(saved,[{id:'b',name:'edited',createdAt:2,updatedAt:4}]);
+ assert.equal(mergeWingCatalog(edited,saved).find(w=>w.id==='b').name,'edited');
+});

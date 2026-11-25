@@ -17,8 +17,9 @@ test('GM hand-painted canvas is mapped to actual left side; right is mirrored',(
  assert.match(art,/face\.scale\.x=wingTextureScaleX\(side,item\)/);
  assert.match(art,/wingSide=side<0\?'left':'right'/);
  const painter=read('src/gm-wing-painter.js');
- assert.match(painter,/LEFT WING · 左翅原圖/);
- assert.match(painter,/右翅由系統自動左右鏡像/);
+ assert.match(painter,/LEFT WING · 左翅/);
+ assert.match(painter,/RIGHT WING · 右翅/);
+ assert.match(painter,/繪製左翅或右翅後系統會自動鏡像/);
 });
 
 test('public SUPPORT never includes GM design/management controls or GM-facing descriptions',()=>{

@@ -468,8 +468,8 @@ export function applyAction(world,actor,body,context={}){
     return {error:'Wing name already exists'};
    if(totalCustomWingRates(world.customWings)+wing.drawRatePct>100+1e-8)
     return {error:'所有上架翅膀的個別中獎率合計不可超過 100%'};
-   world.customWings.push(wing);registerCustomWings(world.customWings);
-   appendInventoryInstance(profile,wing.id);
+   wing.createdAt=now;world.customWings.push(wing);registerCustomWings(world.customWings);
+   appendInventoryInstance(profile,wing.id,'grant');
    // Grant AND equip in the same authoritative state transaction: no
    // intermediate inventory state that the client could lose on disconnect.
    selectEquipmentInstance(profile,'wings',profile.inventory.length-1);
@@ -513,7 +513,7 @@ export function applyAction(world,actor,body,context={}){
    if(!validWingDrawRate(drawRatePct))return {error:'中獎率必須為 0–100%，最多 3 位小數'};
    const sum=totalCustomWingRates(world.customWings)-Number(target.drawRatePct??1)+drawRatePct;
    if(sum>100+1e-8)return {error:'所有上架翅膀的個別中獎率合計不可超過 100%'};
-   target.drawRatePct=drawRatePct;registerCustomWings(world.customWings);
+   target.drawRatePct=drawRatePct;target.updatedAt=now;registerCustomWings(world.customWings);
    world.revision=(world.revision||0)+1;
    return {updatedWingId:target.id,notice:'已更新「'+target.name+'」中獎率為 '+drawRatePct+'%'};
   }

@@ -1,4 +1,4 @@
-import {applyWorldPatch} from './shared/world-patch.js';
+import {applyWorldPatch,mergeWingCatalog} from './shared/world-patch.js';
 import {CITY_LAYOUT_SIGNATURE} from './shared/city-layout.js';
 import {SHOP_CATALOG_REVISION} from './shared/catalog.js';
 
@@ -45,7 +45,8 @@ export class TempleNetwork extends EventTarget{
       if(message.type==='state-ack')this.acknowledgeState(message.data);
       if(message.type==='state-rejected')this.rejectedState(message.data);
       if(message.type==='welcome'){this.wireWorld=message.data.world;this.compactCombat=message.data.compactCombat===true;}
-      if(message.type==='world')this.wireWorld=message.data;
+      if(message.type==='world'){const wings=mergeWingCatalog(this.wireWorld?.customWings||[],message.data.customWings||[]);this.wireWorld={...message.data,customWings:wings};message.data=this.wireWorld;}
+      if(message.type==='wing-catalog'&&this.wireWorld){this.wireWorld={...this.wireWorld,customWings:mergeWingCatalog(this.wireWorld.customWings||[],message.data?.wings||[])};}
       if(message.type==='world-patch'){
        const next=applyWorldPatch(this.wireWorld,message.data);
        if(next){this.wireWorld=next;this.dispatch('world',next);}

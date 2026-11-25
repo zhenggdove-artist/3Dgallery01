@@ -473,7 +473,7 @@ export class TempleRoom extends DurableObject{
     const events=this.sql.exec('SELECT name,role,event,time FROM presence_events ORDER BY id DESC LIMIT 200').toArray();
     const online=this.roster().map(({key,name,role,profile})=>({key,name,role,level:profile?.level||1}));
     const activeKeys=new Set(online.map(p=>p.key));
-    const knownPlayers=Object.values(this.world().profiles||{}).filter(p=>p?.key&&p?.name).map(p=>({key:p.key,name:p.name,level:p.level||1,online:activeKeys.has(p.key),lastSeen:p.updatedAt||p.createdAt||0})).sort((a,b)=>Number(b.online)-Number(a.online)||b.lastSeen-a.lastSeen);
+    const knownPlayers=Object.values(this.world().profiles||{}).filter(p=>p?.key&&p?.name).map(p=>({key:p.key,name:p.name,level:p.level||1,online:activeKeys.has(p.key),persistent:!p.key.startsWith('guest:'),lastSeen:p.updatedAt||p.createdAt||0})).sort((a,b)=>Number(b.online)-Number(a.online)||b.lastSeen-a.lastSeen);
     return json({ok:true,online,events,knownPlayers});
   }
   roster(){this.prune();const world=this.readWorld();return this.sql.exec('SELECT id,profile_key,name,color,role,seat,state FROM sessions WHERE expires>? ORDER BY seat',Date.now()).toArray().map(row=>({id:row.id,key:row.profile_key,name:row.name,color:row.color,role:row.role,seat:row.seat,state:row.state?JSON.parse(row.state):null,profile:world.profiles[row.profile_key]?publicProfile(world.profiles[row.profile_key]):null}));}

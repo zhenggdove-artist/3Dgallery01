@@ -26,3 +26,18 @@ export function applyWorldPatch(previous,patch){
   Object.hasOwn(patch.fields,'profile')?patch.fields.profile:previous.profile;
  return {...previous,...patch.fields,profile,cityDamage,revision:patch.revision,serverTime:patch.serverTime};
 }
+
+// Catalog updates are independent of combat revisions. A previously queued
+// world packet may contain an older full catalog; never drop newer definitions.
+export function mergeWingCatalog(previous=[],incoming=[]){
+ const map=new Map(previous.map(w=>[w.id,w]));let changed=false;
+ const time=w=>Math.max(w?.createdAt||0,w?.updatedAt||0,w?.retiredAt||0);
+ for(const item of incoming){
+  if(!item?.id)continue;
+  const old=map.get(item.id);
+  if(!old||time(item)>=time(old)&&JSON.stringify(old)!==JSON.stringify(item)){
+   map.set(item.id,item);changed=true;
+  }
+ }
+ return changed?[...map.values()]:previous;
+}

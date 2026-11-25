@@ -265,7 +265,7 @@ export class TempleUI extends EventTarget{
        if(!targetKey)return this.toast('請選擇玩家');
        const target=this.gmPlayerTargets().find(p=>p.key===targetKey);
        if(!target)return this.toast('找不到玩家資料');
-       if(action==='player-canvas')this.emit('server-action',{action:'gm-wing-canvas',targetKey});
+       if(action==='player-canvas'){if(!target.online&&target.persistent===false)return this.toast('訪客帳號不保留登入身分，請待玩家上線後贈送');this.emit('server-action',{action:'gm-wing-canvas',targetKey});}
        else{const level=Number(this.content.querySelector(selfOnly?'[data-gm-self-level]':'[data-gm-level]')?.value);if(!Number.isInteger(level)||level<1||level>999)return this.toast('等級須為 1–999');this.emit('server-action',{action:'gm-player-level',targetKey,level});}
       }
       else if(action==='chat-position-edit'){this.closePanel();this.chatLayout?.prepare();this.toast('拖曳 CHAT 的 ＋ 至指定位置，再開啟 GM 控制中心儲存');}
@@ -611,7 +611,7 @@ export class TempleUI extends EventTarget{
    const targets=this.gmPlayerTargets(),signature=JSON.stringify(targets);
    if(select.dataset.rosterSignature===signature)return;
    const previous=select.value;
-   select.innerHTML=targets.map(p=>`<option value="${escape(p.key)}">${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':'離線'}</option>`).join('');
+   select.innerHTML=targets.map(p=>`<option value="${escape(p.key)}">${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':p.persistent===false?'離線訪客（無法領取）':'離線'}</option>`).join('');
    select.value=targets.some(p=>p.key===previous)?previous:this.self.key;
    select.dataset.rosterSignature=signature;
    if(select.value!==previous){const field=this.content.querySelector('[data-gm-level]');if(field)field.value=targets.find(p=>p.key===select.value)?.level||1;}
@@ -638,7 +638,7 @@ export class TempleUI extends EventTarget{
        <label for="gm-self-level">自身等級 · LV ${targets[0].level}</label>
        <div class="gm-player-row"><input id="gm-self-level" data-gm-self-level type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(selfLevel??targets[0].level)}"><button type="button" data-gm-action="self-level" ${disabled}>調整自身等級</button></div>
        <label for="gm-target-player">指定玩家</label>
-       <select id="gm-target-player" data-gm-player>${targets.map(p=>`<option value="${escape(p.key)}" ${p.key===target.key?'selected':''}>${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':'離線'}</option>`).join('')}</select>
+       <select id="gm-target-player" data-gm-player>${targets.map(p=>`<option value="${escape(p.key)}" ${p.key===target.key?'selected':''}>${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':p.persistent===false?'離線訪客（無法領取）':'離線'}</option>`).join('')}</select>
        <div class="gm-player-row"><input data-gm-level aria-label="指定玩家等級" type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(target.key===selectedTarget?(selectedLevel??target.level):target.level)}"><button type="button" data-gm-action="player-level" ${disabled}>調整玩家等級</button></div>
        <button class="gm-canvas-gift" type="button" data-gm-action="player-canvas" ${disabled}>贈送翅膀畫布 ×1</button>
        <small data-gm-player-status role="status">${escape(this.gmPlayerActionMessage||'可贈送曾登入的玩家（包含離線）。')}</small>
