@@ -39,7 +39,6 @@ export function createGmHouseMesh(spec,{preview=false}={}){
  const materials=[tile,roofMat,trim,glass,steel,sign,black],box=(x,y,z,a,b,c,m)=>{const geo=new THREE.BoxGeometry(a,b,c);if(m===tile){const uv=geo.attributes.uv;for(let face=0;face<6;face++){const su=(face<2?c:a)/2.4,sv=(face<4?b:c)/1.2;for(let k=0;k<4;k++){const i=face*4+k;uv.setXY(i,uv.getX(i)*su,uv.getY(i)*sv);}}}const mesh=new THREE.Mesh(geo,m);mesh.position.set(x,y,z);root.add(mesh);return mesh;};
  box(0,h/2,0,w,h,d,tile);box(0,h+.07,0,w+.18,.14,d+.18,roofMat);box(0,Math.min(1,h*.24),d/2+.04,Math.min(1.4,w*.24),Math.min(2,h*.48),.10,black);
  for(let level=0;level<floors;level++){const y=(level+.53)*h/floors;for(let i=0;i<windows;i++){const x=(i-(windows-1)/2)*w/(windows+1),ww=Math.min(1.45,w/(windows+2)),wh=Math.min(1.35,h/floors*.46);for(const z of [-d/2-.035,d/2+.035]){box(x,y,z,ww+.12,wh+.12,.075,trim);box(x,y,z+Math.sign(z)*.055,ww,wh,.045,glass);box(x,y,z+Math.sign(z)*.085,.045,wh,.04,trim);}}}
- for(let i=0;i<signs;i++){const x=(i-(signs-1)/2)*w/(signs+1),y=Math.min(h-.35,2.35);box(x,y,d/2+.15,Math.min(w/(signs+1),2.5),.46,.25,sign);box(x,y,d/2+.29,Math.min(w/(signs+1),2.5)*.72,.055,.02,trim);}
  if(pipes)for(const side of [-1,1]){box(side*(w/2-.16),h*.47,d/2+.17,.12,h*.88,.12,steel);box(side*(w/2-.29),h*.9,d/2+.17,.38,.12,.12,steel);}
  if(metal){box(0,Math.min(2.6,h-.2),d/2+.45,w+.12,.12,.85,steel);const count=Math.min(32,Math.ceil(w*4));for(let i=0;i<count;i++)box(-w/2+(i+.5)*w/count,Math.min(2.67,h-.13),d/2+.45,.045,.065,.86,trim);}
  for(const s of houseSignSpecs({...spec,bladeCount:spec.bladeCount??0,roofCount:spec.roofCount??0})){
@@ -48,7 +47,7 @@ export function createGmHouseMesh(spec,{preview=false}={}){
   const panel=new THREE.Mesh(new THREE.BoxGeometry(s.width,s.height,s.depth),mat);group.add(panel);
   const border=new THREE.Mesh(new THREE.BoxGeometry(s.blade?s.width+.025:s.width*.94,s.height*.93,s.blade?s.depth*.94:s.depth+.025),mat);group.add(border);
   if(typeof document!=='undefined'){
-   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d');drawSignArtwork(ctx,0,0,c.width,c.height,{color:s.color,title:'商店',subtitle:'TEMPLE SHOP',vertical:s.blade,aspect:s.blade?s.depth/s.height:s.width/s.height,seed:Number(s.id.split('-').at(-1))+(s.blade?0:3)});
+   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d');drawSignArtwork(ctx,0,0,c.width,c.height,{color:s.color,title:'商店',subtitle:'TEMPLE SHOP',vertical:s.blade,aspect:s.blade?s.depth/s.height:s.width/s.height,seed:s.seed,style:s.style,font:s.font,saturation:s.saturation});
    const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const faceMat=new THREE.MeshStandardMaterial({map:tex,roughness:.8,side:THREE.DoubleSide});faceMat.userData.ownedSignMap=true;materials.push(faceMat);
    for(const side of [-1,1]){const face=new THREE.Mesh(new THREE.PlaneGeometry((s.blade?s.depth:s.width)*.92,s.height*.92),faceMat);if(s.blade){face.rotation.y=side*Math.PI/2;face.position.x=side*(s.width/2+.02);}else{face.rotation.y=side===1?0:Math.PI;face.position.z=side*(s.depth/2+.02);}group.add(face);}
   }

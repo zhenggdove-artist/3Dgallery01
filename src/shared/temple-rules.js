@@ -15,7 +15,7 @@ import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,shopPrice,shopPriceKey,shopPurchaseVariant,shopResalePrice,registerCustomWings,groundDropRoll,monsterDropRoll,isRestorativeDrop} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
-import {CITY_LOTS,CITY_MAX_HP,SIGN_HP,citySignSpecs,structureSignSpecs,signWorldPosition,signRayDistance,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
+import {CITY_LOTS,CITY_MAX_HP,SIGN_HP,citySignSpecs,structureSignSpecs,signPaintWall,signPaintAvailable,signPaintPoint,structurePaintLot,signWorldPosition,signRayDistance,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
@@ -578,8 +578,10 @@ export function applyAction(world,actor,body,context={}){
    if(actor.role!=='fighter')return {error:'Spectators cannot paint'};
    if(profile.hp<=0||profile.deadUntil>now)return {error:'Cannot paint while defeated'};
    const bodyStroke=body.stroke||{};
-   const lot=CITY_LOTS.find(item=>item.id===bodyStroke.lotId);
-   if(!lot||!CITY_PAINT_WALLS.includes(bodyStroke.wall))return {error:'Invalid building wall'};
+   const signSurface=signPaintWall(bodyStroke.wall),structure=signSurface?(world.structures||[]).find(s=>s.id===bodyStroke.lotId&&s.kind==='house'):null;
+   const lot=structure?structurePaintLot(structure):CITY_LOTS.find(item=>item.id===bodyStroke.lotId);
+   if(!lot||(!signSurface&&!CITY_PAINT_WALLS.includes(bodyStroke.wall)))return {error:'Invalid building wall'};
+   if(signSurface&&!signPaintAvailable(lot,bodyStroke.wall,world.cityDamage||{}))return {error:'Sign is missing or detached'};
    if(cityStage(world.cityDamage?.[lot.id]?.hp??CITY_MAX_HP)===3)
     return {error:'Restore the damaged building before painting again'};
    if(!['brush','eraser'].includes(bodyStroke.tool))return {error:'Invalid painting tool'};
@@ -594,7 +596,7 @@ export function applyAction(world,actor,body,context={}){
     if(!Array.isArray(p)||p.length!==2||!p.every(x=>Number.isFinite(x)&&x>=0&&x<=1))
      return {error:'Invalid paint coordinates'};
     const u=+p[0].toFixed(4),v=+p[1].toFixed(4);
-    const location=cityWallPoint(lot,bodyStroke.wall,u,v);
+    const location=signSurface?signPaintPoint(lot,bodyStroke.wall,u,v):cityWallPoint(lot,bodyStroke.wall,u,v);
     if(!location||Math.hypot(location[0]-actor.position[0],
       location[1]-(actor.position[1]+1.4),location[2]-actor.position[2])>19)
      return {error:'Paint within reach of your character'};
@@ -661,7 +663,7 @@ export function applyAction(world,actor,body,context={}){
   if(['gm-create-house','gm-update-house','gm-delete-house'].includes(body.action)){
    if(!profile.admin||actor.admin!==true)return {error:'GM only'};
    const existing=(world.structures||[]).find(s=>s.id===body.structureId&&s.gmHouse===true);
-   if(body.action==='gm-delete-house'){if(!existing)return {error:'House not found'};world.structures.splice(world.structures.indexOf(existing),1);world.revision++;return {structureId:existing.id,notice:'房屋已刪除'};}
+   if(body.action==='gm-delete-house'){if(!existing)return {error:'House not found'};world.structures.splice(world.structures.indexOf(existing),1);if(world.wallPaint?.[existing.id]){delete world.wallPaint[existing.id];world.wallPaintRevision=(world.wallPaintRevision||0)+1;}world.revision++;return {structureId:existing.id,notice:'房屋已刪除'};}
    const draft=validateGmHouse(body);if(!draft)return {error:'Invalid house dimensions or position'};
    if(body.action==='gm-update-house'&&!existing)return {error:'House not found'};
    if(body.action==='gm-create-house'&&world.structures.filter(s=>s.gmHouse).length>=64)return {error:'GM house limit 64'};

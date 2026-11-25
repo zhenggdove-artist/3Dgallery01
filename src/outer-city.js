@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
- cityLots,citySignSpecs,cityShopSignSpec,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
+ cityLots,citySignSpecs,cityShopSignSpec,citySignArtOptions,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,CityImpactPlumes,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
 import {drawSignArtwork} from './sign-art.js';
@@ -183,7 +183,7 @@ function signAtlas(lots){
   const sign=citySignSpecs(lot).find(v=>!v.blade),flat=cityShopSignSpec(lot);
   for(let variant=0;variant<3;variant++){
    const i=lot.index*3+variant,x=i%columns*tile,y=Math.floor(i/columns)*tile;
-   drawSignArtwork(g,x,y,tile,tile,{color:variant===2?sign?.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,vertical:variant===1,aspect:variant===2?(sign?sign.width/sign.height:2):variant===0?(flat?flat.width/flat.height:5):.5,seed:lot.index+variant*3});
+   drawSignArtwork(g,x,y,tile,tile,{color:variant===2?sign?.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,vertical:variant===1,aspect:variant===2?(sign?sign.width/sign.height:2):variant===0?(flat?flat.width/flat.height:5):.5,...citySignArtOptions(lot,variant)});
   }
  }
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
@@ -651,7 +651,7 @@ export class OuterCity{
  hidePart(index,part){
   const key=index+':'+part;
   this.partsHidden??=new Set();if(this.partsHidden.has(key))return;
-  this.partsHidden.add(key);
+  this.partsHidden.add(key);this.wallPaint?.hideSign(index,part);
   for(const [a,b] of this.walls.userData.partRanges?.get(key)||[])this.hideRange(this.walls,a,b);
   for(const [a,b] of this.signs.userData.partRanges?.get(key)||[])this.hideRange(this.signs,a,b);
   // Independent street signs and painted wall grime must survive the loss of

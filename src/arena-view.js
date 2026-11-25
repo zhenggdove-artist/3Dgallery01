@@ -242,8 +242,8 @@ export class TempleArena{
    }
    this.syncHearts();this.syncDrops();
   }
-  if(!previous||previous.wallPaintRevision!==world.wallPaintRevision)
-   this.outerCity?.wallPaint?.sync(world.wallPaint||{},world.wallPaintRevision||0);
+  if(!previous||previous.wallPaintRevision!==world.wallPaintRevision||previous.structures!==world.structures)
+   this.outerCity?.wallPaint?.sync(world.wallPaint||{},world.wallPaintRevision||0,world.structures||[]);
   if(!previous||previous.floatingPlatforms!==world.floatingPlatforms||
     previous.customPedestals!==world.customPedestals||previous.platformOverrides!==world.platformOverrides||
     previous.artworkLayout!==world.artworkLayout||previous.customArtworks!==world.customArtworks||

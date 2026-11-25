@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {cityPaintHit} from './shared/city-layout.js';
+import {cityPaintHit,structureSignPaintHit} from './shared/city-layout.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 export class CityWallPainter{
@@ -78,7 +78,7 @@ export class CityWallPainter{
   const origin=this.camera.position.toArray();
   const direction=new THREE.Vector3(x,y,.5).unproject(this.camera)
    .sub(this.camera.position).normalize().toArray();
-  const wall=cityPaintHit(origin,direction,18,this.arena.world?.cityDamage||{}),disc=this.arena.displayPlatforms?.paint.pick(origin,direction);const player=this.controller()?.root?.position;
+  const cityWall=cityPaintHit(origin,direction,18,this.arena.world?.cityDamage||{}),builtSign=structureSignPaintHit(this.arena.world?.structures,origin,direction,18),wall=builtSign&&(!cityWall||builtSign.distance<cityWall.distance)?builtSign:cityWall,disc=this.arena.displayPlatforms?.paint.pick(origin,direction);const player=this.controller()?.root?.position;
   const near=disc&&player&&disc.point.distanceTo(player.clone().add(new THREE.Vector3(0,1.4,0)))<=19;
   return near&&(!wall||disc.distance<(wall.distance??Infinity))?disc:wall;
  }
@@ -91,7 +91,7 @@ export class CityWallPainter{
   if(event.button!==0&&event.pointerType==='mouse')return;
   this.consume(event);
   const hit=this.pick(event);
-  if(!hit){this.ui.toast('Aim at a nearby wall or pink disc');return;}
+  if(!hit){this.ui.toast('Aim at a nearby wall, sign or pink disc');return;}
   this.pointer=event.pointerId;
   this.canvas.setPointerCapture(event.pointerId);
   this.start(hit);

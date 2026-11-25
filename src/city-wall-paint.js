@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {CITY_LOTS,cityFacadeFloor,cityCollapsePosition} from './shared/city-layout.js';
+import {CITY_LOTS,cityFacadeFloor,cityCollapsePosition,signPaintWall,signPaintDescriptor,signPaintPoint,signPaintAvailable,structurePaintLot} from './shared/city-layout.js';
 
 const WALLS=['front','back','left','right'];
 const SIZE=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches?256:512;
@@ -15,6 +15,10 @@ function panelPoint(lot,wall,floor,u,y){
 }
 function paintGeometry(lot,wall){
  const positions=[],uv=[],indices=[];
+ if(signPaintWall(wall)){
+  for(const [u,v] of [[0,1],[1,1],[1,0],[0,0]]){const p=signPaintPoint(lot,wall,u,v);if(!p)return null;positions.push(...p);uv.push(u,1-v);}
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex([0,1,2,0,2,3]);geometry.computeVertexNormals();return geometry;
+ }
  for(let floor=0;floor<lot.floors;floor++){
   const g=cityFacadeFloor(lot,floor),base=positions.length/3;
   const topV=1-g.top/lot.height,bottomV=1-g.bottom/lot.height;
@@ -33,7 +37,7 @@ function paintGeometry(lot,wall){
 }
 function strokeOnCanvas(ctx,stroke,lot,wall){
  if(!Array.isArray(stroke?.points)||!stroke.points.length)return;
- const points=stroke.points,sideWidth=['front','back'].includes(wall)?lot.width:lot.depth;
+ const points=stroke.points,sign=signPaintDescriptor(lot,wall),sideWidth=sign?.width||(['front','back'].includes(wall)?lot.width:lot.depth);
  const radius=Math.max(.8,Number(stroke.size||.14)*SIZE/Math.max(1,sideWidth));
  ctx.save();
  ctx.globalCompositeOperation=stroke.tool==='eraser'?'destination-out':'source-over';
@@ -55,18 +59,19 @@ function strokeOnCanvas(ctx,stroke,lot,wall){
  */
 export class CityWallPaint{
  constructor(root,city){
-  this.root=root;this.city=city;this.surfaces=new Map();this.revision=-1;this.archive={};
+  this.root=root;this.city=city;this.surfaces=new Map();this.revision=-1;this.archive={};this.structures=[];
  }
  key(lotId,wall){return lotId+'/'+wall;}
  slot(lotId,wall){
   const key=this.key(lotId,wall);if(this.surfaces.has(key))return this.surfaces.get(key);
-  const lot=CITY_LOTS.find(x=>x.id===lotId);
-  if(!lot||!WALLS.includes(wall))return null;
+  const structure=signPaintWall(wall)?this.structures.find(x=>x.id===lotId&&x.kind==='house'):null;
+  const lot=structure?structurePaintLot(structure):CITY_LOTS.find(x=>x.id===lotId);
+  if(!lot||(!WALLS.includes(wall)&&!signPaintDescriptor(lot,wall)))return null;
   const canvas=document.createElement('canvas');canvas.width=canvas.height=SIZE;
   const ctx=canvas.getContext('2d');if(!ctx)return null;
   const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
   texture.anisotropy=2;
-  const geometry=paintGeometry(lot,wall);
+  const geometry=paintGeometry(lot,wall);if(!geometry){texture.dispose();return null;}
   const original=geometry.attributes.position.array.slice();
   const material=new THREE.MeshBasicMaterial({
    map:texture,transparent:true,depthWrite:false,side:THREE.DoubleSide,
@@ -77,7 +82,8 @@ export class CityWallPaint{
   const slot={lot,wall,mesh,canvas,ctx,texture,original,strokes:[],stamp:'',preview:null,pending:[]};
   this.surfaces.set(key,slot);
   const tier=this.city.renderedTiers?.get(lot.index)??this.city.damage[lot.id]?.tier??0;
-  if(tier>0)this.deform(slot,tier);
+  if(!lot.structure&&tier>0)this.deform(slot,tier);
+  this.updateSignVisibility(slot);
   return slot;
  }
  draw(slot){
@@ -113,13 +119,21 @@ export class CityWallPaint{
   const slot=this.surfaces.get(this.key(lotId,wall));
   if(slot&&(!stroke||slot.preview===stroke)){slot.preview=null;this.draw(slot);}
  }
- sync(data={},revision=0){
-  if(revision===this.revision)return;
+ sync(data={},revision=0,structures=this.structures){
+  const old=this.structures;this.structures=structures||[];
+  if(old!==this.structures){
+   for(const [key,slot] of this.surfaces){if(!slot.lot.structure)continue;const current=this.structures.find(s=>s.id===slot.lot.id);if(!current){this.disposeSlot(slot);this.surfaces.delete(key);continue;}
+    const lot=structurePaintLot(current),previous=slot.lot.structure;slot.lot=lot;
+    if(JSON.stringify([previous.position,previous.rotation,previous.house])!==JSON.stringify([current.position,current.rotation,current.house])){const geometry=paintGeometry(lot,slot.wall);if(!geometry){this.disposeSlot(slot);this.surfaces.delete(key);continue;}slot.mesh.geometry.dispose();slot.mesh.geometry=geometry;slot.original=geometry.attributes.position.array.slice();}
+    this.updateSignVisibility(slot);
+   }
+  }
+  if(revision===this.revision&&old===this.structures)return;
   this.revision=revision;this.archive=data||{};
   const seen=new Set();
   for(const [lotId,walls] of Object.entries(this.archive)){
    for(const [wall,strokes] of Object.entries(walls||{})){
-    if(!WALLS.includes(wall)||!Array.isArray(strokes)||!strokes.length)continue;
+    if((!WALLS.includes(wall)&&!signPaintWall(wall))||!Array.isArray(strokes)||!strokes.length)continue;
     const key=this.key(lotId,wall);seen.add(key);
     const slot=this.slot(lotId,wall);if(!slot)continue;
     const stamp=strokes.length+':'+(strokes.at(-1)?.id||'');
@@ -132,12 +146,14 @@ export class CityWallPaint{
    this.disposeSlot(slot);this.surfaces.delete(key);
   }
  }
+ updateSignVisibility(slot){if(!signPaintWall(slot.wall))return;const part=slot.wall.split(':')[0];slot.mesh.visible=signPaintAvailable(slot.lot,slot.wall,this.city.damage||{})&&(slot.lot.structure||!this.city.partsHidden?.has(slot.lot.index+':'+part));}
+ hideSign(index,part){for(const slot of this.surfaces.values())if(!slot.lot.structure&&slot.lot.index===index&&slot.wall.startsWith(part+':'))slot.mesh.visible=false;}
  disposeSlot(slot){
   slot.mesh.removeFromParent();slot.mesh.geometry.dispose();
   slot.mesh.material.dispose();slot.texture.dispose();slot.canvas.width=slot.canvas.height=0;
  }
  deform(slot,tier=10,shakeX=0,shakeZ=0){
-  const lot=slot.lot,attr=slot.mesh.geometry.attributes.position,arr=attr.array;
+  const lot=slot.lot,attr=slot.mesh.geometry.attributes.position,arr=attr.array;if(lot.structure)return;this.updateSignVisibility(slot);
   const original=slot.original;
   for(let i=0;i<arr.length;i+=3){
    const p=cityCollapsePosition(lot,original[i],original[i+1],original[i+2],tier);
@@ -155,7 +171,7 @@ export class CityWallPaint{
   for(const slot of this.surfaces.values()){
    const attr=slot.mesh.geometry.attributes.position;
    attr.array.set(slot.original);attr.needsUpdate=true;
-   slot.mesh.geometry.computeBoundingSphere();
+   slot.mesh.geometry.computeBoundingSphere();this.updateSignVisibility(slot);
   }
  }
 }

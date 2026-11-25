@@ -15,20 +15,60 @@ function pictogram(ctx,kind){
   case 7:for(let i=0;i<5;i++){const t=i*Math.PI*2/5;ring(Math.cos(t)*10,Math.sin(t)*10,6);}ring(0,0,3);break;
  }
 }
-export function drawSignArtwork(ctx,x,y,w,h,{color='#965044',title='商店',subtitle='',vertical=false,aspect=2,seed=0}={}){
- const W=vertical?96:Math.max(144,Math.min(960,96*aspect)),H=vertical?192:96,accent=palettes[Math.abs(seed)%palettes.length],mode=Math.abs(seed)%3;
- ctx.save();ctx.translate(x,y);ctx.scale(w/W,h/H);
- ctx.fillStyle=color;ctx.fillRect(0,0,W,H);
- ctx.fillStyle=mode===0?'#17292b':mode===1?'#24364e':'#392d31';
- ctx.fillRect(4,4,W-8,H-8);
- ctx.fillStyle=color;
- if(vertical){ctx.fillRect(6,6,84,H-12);ctx.fillStyle=accent;ctx.fillRect(7,7,82,43);ctx.fillRect(7,H-14,82,7);}
- else{ctx.fillRect(6,6,W-12,H-12);ctx.fillStyle=accent;ctx.fillRect(7,7,51,H-14);ctx.fillRect(62,H-15,W-69,8);}
- ctx.strokeStyle=accent;ctx.lineWidth=2;ctx.strokeRect(4,4,W-8,H-8);
- ctx.save();ctx.translate(vertical?48:32,vertical?29:47);pictogram(ctx,Math.abs(seed)%8);ctx.restore();
- ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff6df';ctx.strokeStyle='#152327';ctx.lineWidth=1.1;
- const text=(value,tx,ty,max)=>{ctx.strokeText(value,tx,ty,max);ctx.fillText(value,tx,ty,max);};
- if(vertical){const glyphs=Array.from(title.split('・')[0]).slice(0,7);const step=Math.min(25,121/Math.max(1,glyphs.length));ctx.font='bold '+Math.max(14,Math.min(22,step*.93))+'px sans-serif';glyphs.forEach((ch,i)=>text(ch,48,59+(i+.5)*step,75));}
- else{ctx.font='bold 20px sans-serif';const center=(62+W)/2;ctx.font='bold '+(W>300?34:20)+'px sans-serif';text(title,center,35,W-74);ctx.fillStyle=accent;ctx.font='bold '+(W>300?16:10)+'px sans-serif';text(subtitle||'SHOP',center,64,W-74);}
- ctx.restore();
+
+const FONTS={
+ hei:'"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif',
+ ming:'"Noto Serif TC","PMingLiU","Songti TC","MingLiU",serif',
+ kai:'"DFKai-SB","BiauKai","KaiTi","Kaiti TC",cursive',
+ rounded:'"GenSenRounded TW","Yuanti TC","Microsoft JhengHei",sans-serif'
+};
+function saturated(hex,saturation){
+ const c=hex.match(/[0-9a-f]{2}/gi)?.map(v=>parseInt(v,16)/255)||[.6,.3,.2],max=Math.max(...c),min=Math.min(...c),d=max-min,l=(max+min)/2;
+ let h=d===0?0:max===c[0]?((c[1]-c[2])/d+6)%6:max===c[1]?(c[2]-c[0])/d+2:(c[0]-c[1])/d+4;
+ return 'hsl('+Math.round(h*60)+' '+Math.round(saturation*100)+'% '+Math.round(Math.max(.26,Math.min(.68,l))*100)+'%)';
+}
+function portrait(ctx,seed){
+ const skin=['#eeb67e','#cc8861','#f7d2ad'][seed%3];
+ ctx.fillStyle='#252633';ctx.beginPath();ctx.ellipse(0,13,18,19,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle=skin;ctx.beginPath();ctx.ellipse(0,-3,13,18,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#29272b';ctx.beginPath();ctx.ellipse(-2,-15,15,8,-.18,0,Math.PI*2);ctx.fill();
+ for(const x of [-5,5]){ctx.beginPath();ctx.arc(x,-4,1.6,0,Math.PI*2);ctx.fill();}
+ ctx.strokeStyle='#963c38';ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(0,2,5,.2,Math.PI-.2);ctx.stroke();
+ if(seed%2){ctx.strokeStyle='#293b43';ctx.lineWidth=2;ctx.strokeRect(-11,-8,9,7);ctx.strokeRect(2,-8,9,7);ctx.beginPath();ctx.moveTo(-2,-5);ctx.lineTo(2,-5);ctx.stroke();}
+}
+export function drawSignArtwork(ctx,x,y,w,h,{color='#965044',title='商店',subtitle='',vertical=false,aspect=2,seed=0,style='wild',font='hei',saturation=1}={}){
+ seed=Math.abs(seed|0);const W=vertical?96:Math.max(144,Math.min(960,96*aspect)),H=vertical?192:96;
+ const accent=palettes[seed%palettes.length],base=saturated(color,saturation),family=FONTS[font]||FONTS.hei;
+ const box=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);};
+ const circle=(x,y,r,c)=>{ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();};
+ ctx.save();ctx.translate(x,y);ctx.scale(w/W,h/H);box(0,0,W,H,base);
+ ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
+ const text=(value,tx,ty,max,size,ink,weight='700',stroke=null)=>{ctx.font=weight+' '+size+'px '+family;ctx.fillStyle=ink;if(stroke){ctx.lineWidth=style==='wild'?3:1;ctx.strokeStyle=stroke;ctx.strokeText(value,tx,ty,max);}ctx.fillText(value,tx,ty,max);};
+ const label=(area,ink,stroke=null,weight='700')=>{
+  if(vertical){const glyphs=Array.from(title.split('・')[0]).slice(0,7),step=Math.min(29,area.h/Math.max(1,glyphs.length));glyphs.forEach((ch,i)=>text(ch,area.x+area.w/2,area.y+(i+.5)*step,area.w,Math.min(step*.94,area.w*.9),ink,weight,stroke));}
+  else{text(title,area.x+area.w/2,area.y+area.h*.39,area.w,Math.min(area.h*.66,area.w*.32),ink,weight,stroke);if(subtitle)text(subtitle,area.x+area.w/2,area.y+area.h*.82,area.w,Math.min(13,area.h*.23),ink,'500');}
+ };
+ const graphic=(cx,cy,scale,face=false)=>{ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);if(face)portrait(ctx,seed);else pictogram(ctx,seed);ctx.restore();};
+ if(style==='icon'){
+  const r=Math.min(W,H)*.40;circle(W/2,H/2,r,accent);graphic(W/2,H/2,r/23);ctx.restore();return;
+ }
+ if(style==='portrait'){
+  const cx=vertical?W/2:W*.20,cy=vertical?49:H/2,r=Math.min(W,H)*.42;circle(cx,cy,r,'#f5dfb7');graphic(cx,cy,r/22,true);
+  label(vertical?{x:8,y:94,w:W-16,h:91}:{x:W*.40,y:5,w:W*.57,h:H-10},'#fff4d7','#252633');ctx.restore();return;
+ }
+ if(style==='cute'){
+  box(5,5,W-10,H-10,'#fff1d5');for(let i=0;i<5;i++)circle((i*31+seed*11)%W,(i*37+seed*7)%H,7+(i%3)*3,accent);
+  const cx=vertical?W/2:W*.15,cy=vertical?35:H/2;circle(cx,cy,Math.min(W,H)*.24,base);graphic(cx,cy,.85);
+  label(vertical?{x:9,y:65,w:W-18,h:120}:{x:W*.30,y:10,w:W*.66,h:H-20},'#3a3037',null,'600');ctx.restore();return;
+ }
+ if(style==='handwritten'){
+  box(5,5,W-10,H-10,'#eee2bb');ctx.strokeStyle=base;ctx.lineWidth=3;ctx.strokeRect(9,9,W-18,H-18);
+  ctx.save();ctx.translate(W/2,H/2);ctx.transform(1,0,-.06,1,0,0);ctx.translate(-W/2,-H/2);
+  label(vertical?{x:10,y:12,w:W-20,h:H-48}:{x:12,y:10,w:W-65,h:H-20},'#602c26',null,'700');ctx.restore();
+  box(vertical?W-29:W-43,H-38,23,23,base);graphic(vertical?W-17:W-31,H-26,.40);ctx.restore();return;
+ }
+ // Wild type: high-contrast diagonal bands, outlined oversized Chinese lettering.
+ ctx.fillStyle='#141820';ctx.beginPath();ctx.moveTo(0,H*.72);ctx.lineTo(W,0);ctx.lineTo(W,H*.26);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+ const cx=vertical?W/2:W*.12,cy=vertical?25:H/2;circle(cx,cy,Math.min(W,H)*.19,accent);graphic(cx,cy,.72);
+ label(vertical?{x:6,y:48,w:W-12,h:H-54}:{x:W*.24,y:3,w:W*.73,h:H-6},'#fff5d0','#17191d','900');ctx.restore();
 }
