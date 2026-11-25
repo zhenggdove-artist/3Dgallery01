@@ -3,7 +3,6 @@ import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
  cityLots,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,CityImpactPlumes,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
-import {houseTileTexture} from './build-style.js';
 import {CityWallPaint} from './city-wall-paint.js';
 import {CityFireField} from './city-fire-field.js';
 import {CitySplinterField} from './city-splinter-field.js';
@@ -426,7 +425,7 @@ export class OuterCity{
    batch.count=0;batch.visible=false;this.scrapBatches.push(batch);template.userData.batch=batch;this.root.add(batch);
   }
   // Outer district is covered by GrassField's continuous living grass canopy.
-  this.walls=batchGeometry(this.lots,mobile);this.facade=installFacadeCracks(this.walls,houseTileTexture());
+  this.walls=batchGeometry(this.lots,mobile);this.facade=installFacadeCracks(this.walls);
   this.signs=buildShopSigns(this.lots);this.graffiti=buildWallGraffiti(this.lots);
    installAttachedFlash(this.signs,this.facade.texture);installAttachedFlash(this.graffiti,this.facade.texture);
   this.gpuPose=cityDeformationTexture(this.lots);

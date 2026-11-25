@@ -7,17 +7,26 @@ export function buildGeometry(kind){return kind==='cylinder'?new THREE.CylinderG
 let wallTile;
 export function houseTileTexture(){
  if(wallTile)return wallTile;
- const c=document.createElement('canvas');c.width=512;c.height=256;const g=c.getContext('2d');
- let seed=70219;const rand=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
- g.fillStyle='#675d54';g.fillRect(0,0,512,256);
- const shades=['#b4a395','#b6a095','#c1b3a5','#ac998a','#bda89a','#c9bcb0'];
- for(let row=0;row<4;row++)for(let col=-1;col<3;col++){
-  const x=col*256+(row%2)*128,y=row*64;g.fillStyle=shades[(row*3+col+12)%shades.length];g.fillRect(x+1,y+1,254,62);
-  g.save();g.beginPath();g.rect(x+2,y+2,252,60);g.clip();
-  for(let i=0;i<450;i++){g.globalAlpha=.04+rand()*.13;g.fillStyle=i%2?'#f5e9dc':'#766556';g.fillRect(x+rand()*256,y+rand()*64,1+rand()*11,.5+rand()*2);}
-  for(let i=0;i<18;i++){g.globalAlpha=.065;g.strokeStyle=i%2?'#f4e7dc':'#78675c';g.beginPath();const px=x+rand()*256,py=y+rand()*64;g.moveTo(px,py);g.lineTo(px+30+rand()*55,py-4-rand()*18);g.stroke();}
-  g.restore();g.globalAlpha=1;g.fillStyle='#e2d2c1';g.fillRect(x+1,y+1,254,1);
- }wallTile=new THREE.CanvasTexture(c);wallTile.colorSpace=THREE.SRGBColorSpace;wallTile.wrapS=wallTile.wrapT=THREE.RepeatWrapping;wallTile.anisotropy=4;return wallTile;
+ // Deterministic shared RGBA texture; no DOM, canvas or platform-specific
+ // drawing API is needed, so CI and browsers use exactly the same texture.
+ const w=512,h=256,data=new Uint8Array(w*h*4);
+ const shades=[[180,163,149],[182,160,149],[193,179,165],[172,153,138],[189,168,154],[201,188,176]];
+ const hash=(x,y)=>{let n=Math.imul(x+70219,374761393)^Math.imul(y+931,668265263);n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967295;};
+ const noise=(x,y,sx,sy)=>{const a=Math.floor(x/sx),b=Math.floor(y/sy),u=x/sx-a,v=y/sy-b;const k=u*u*(3-2*u),l=v*v*(3-2*v);const ix=i=>((i%(w/sx))+(w/sx))%(w/sx),iy=i=>((i%(h/sy))+(h/sy))%(h/sy);return (hash(ix(a),iy(b))*(1-k)+hash(ix(a+1),iy(b))*k)*(1-l)+(hash(ix(a),iy(b+1))*(1-k)+hash(ix(a+1),iy(b+1))*k)*l;};
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+  const row=Math.floor(y/64),localX=(x+(row%2)*128)%256,localY=y%64,col=Math.floor((x+(row%2)*128)/256)%2,base=shades[(row*3+col)%shades.length];
+  const seam=localX<1||localX>=255||localY<1||localY>=63;
+  const grain=(hash(x,y)-.5)*17+(noise(x,y,8,2)-.5)*14+(noise(x,y,64,32)-.5)*13;
+  const vein=(noise((x+y*4)%w,y,32,8)-.5)*12;
+  const edge=localY===1||localX===1?13:localY===62||localX===254?-8:0;
+  const i=(y*w+x)*4;
+  for(let k=0;k<3;k++)data[i+k]=Math.max(0,Math.min(255,Math.round((seam?[103,93,84][k]:base[k])+grain*(seam?.18:1)+(seam?0:vein+edge))));
+  data[i+3]=255;
+ }
+ wallTile=new THREE.DataTexture(data,w,h,THREE.RGBAFormat,THREE.UnsignedByteType);
+ wallTile.colorSpace=THREE.SRGBColorSpace;wallTile.wrapS=wallTile.wrapT=THREE.RepeatWrapping;
+ wallTile.magFilter=THREE.LinearFilter;wallTile.minFilter=THREE.LinearMipmapLinearFilter;wallTile.generateMipmaps=true;wallTile.anisotropy=4;wallTile.needsUpdate=true;
+ return wallTile;
 }
 export function houseWallMaterial(){return new THREE.MeshStandardMaterial({color:'#ffffff',map:houseTileTexture(),roughness:.96});}
 export function createGmHouseMesh(spec,{preview=false}={}){

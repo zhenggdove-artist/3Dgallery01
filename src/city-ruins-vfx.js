@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {CITY_MAX_HP} from './shared/city-layout.js';
+import {houseTileTexture} from './build-style.js';
 
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const random=seed=>{let s=seed>>>0;return ()=>((s=(Math.imul(s,1664525)+1013904223)>>>0)/4294967296);};
@@ -262,7 +263,7 @@ export function buildBrokenStructure(lot,index,w,h,d,color){
  }
  return group;
 }
-export function installFacadeCracks(mesh,tileMap){
+export function installFacadeCracks(mesh,tileMap=houseTileTexture()){
  const width=512,bytes=new Uint8Array(width*4);
  const map=new THREE.DataTexture(bytes,width,1,THREE.RGBAFormat,THREE.UnsignedByteType);
  map.minFilter=map.magFilter=THREE.NearestFilter;map.wrapS=THREE.ClampToEdgeWrapping;
