@@ -1,6 +1,5 @@
 import {insideArena,PLATFORMS} from './arena.js';
 import {cityBlocked,cityGroundHeight} from './city-layout.js';
-import {discGroundHeight} from './artwork-discs.js';
 export const WANTED_PAGE_SIZE=12;
 export function wantedSettings(world){const s=world.wantedSettings||{};return {label:s.label||'Wanted List',background:s.background||null,color:/^#[0-9a-f]{6}$/i.test(s.color||'')?s.color:'#422943',fontSize:Math.max(8,Math.min(30,Number(s.fontSize)||13))};}
 const authorKey=v=>String(v||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
@@ -41,8 +40,10 @@ export function wantedDestination(world,key,now=Date.now()){
   const reach=Math.max(4,Math.min(12,3+Math.abs(layout?.scale?.[2]||1)));
   for(const distance of [reach,reach+2,reach+4])for(const angle of [yaw,yaw+Math.PI/4,yaw-Math.PI/4,yaw+Math.PI/2,yaw-Math.PI/2,yaw+Math.PI]){
    const x=p[0]+Math.sin(angle)*distance,z=p[2]+Math.cos(angle)*distance;
-   let y=Math.max(discGroundHeight(x,z,p[1]+.5),cityGroundHeight(x,z,p[1]+.5,world.cityDamage||{}));
-   if(art.original&&art.platform&&Math.hypot(x-p[0],z-p[2])<(layout?.platformRadius??art.platform.size[0]/2)&&!(world.removedPlatformIds||[]).includes('display:'+art.id))y=Math.max(y,Math.max(0,p[1]-2.4));
+   let y=cityGroundHeight(x,z,p[1]+.5,world.cityDamage||{});
+   // Exhibition decks are fixed fixtures, not attached to a moved artwork.
+   // Respect the current GM overrides and never use the old procedural discs.
+   for(const deck of PLATFORMS){const k='display:'+deck.id;if((world.removedPlatformIds||[]).includes(k)||(world.removedArtworkIds||[]).includes(deck.id))continue;const override=world.platformOverrides?.[k],center=override?.position||[deck.position[0],deck.size[1],deck.position[2]],radius=override?.radius??world.artworkLayout?.[deck.id]?.platformRadius??4.8;if(center[1]<=p[1]+.5&&Math.hypot(x-center[0],z-center[2])<radius)y=Math.max(y,center[1]);}
    for(const d of world.floatingPlatforms||[])if(Math.hypot(x-d.position[0],z-d.position[2])<d.radius*2&&d.position[1]<=p[1]+.5)y=Math.max(y,d.position[1]);
    const pos=[x,y,z];
    if(!insideArena(pos,-2)||cityBlocked(x,z,y+.002,world.cityDamage||{},.5))continue;

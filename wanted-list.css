@@ -33,5 +33,7 @@
 
 .wanted-art-row{display:flex;align-items:center;gap:4px;padding:5px;border-bottom:1px solid #888}.wanted-art-row>span{flex:1;min-width:0;overflow-wrap:anywhere}.wanted-art-row small{display:block}
 
-@media(min-width:900px){body.panel-wanted #panel{width:min(650px,calc(100vw - 36px))}.wanted-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:900px){body.panel-open #panel:has(.wanted-app){width:min(650px,calc(100vw - 36px))}.wanted-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:640px){#hud.functions-open #dock #paint-button,#hud.functions-open #dock [data-panel=social],#hud.functions-open #dock #wanted-button{right:136px}#panel .wanted-app{padding:3px}.wanted-grid{gap:3px}}
+
+#panel:has(.wanted-app) #panel-content{padding:4px;overflow:auto}#panel .wanted-app .wanted-title{min-height:0;box-sizing:border-box}#panel .wanted-info details[open]{overflow-wrap:anywhere}.wanted-info p{display:block;overflow:visible}
