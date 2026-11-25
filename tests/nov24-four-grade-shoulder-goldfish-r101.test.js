@@ -34,15 +34,12 @@ test('server persists each non-exotic shop grade and applies its combat stats',(
  assert.equal(equippedItem(p,itemById(high.id)).shopTier,4);
  assert.equal(equippedItem(p,itemById(high.id)).damage,high.damage);
 });
-test('goldfish pursuit cannot reverse back toward its own player',()=>{
+test('goldfish can turn toward a valid target behind it without extending travel budget',()=>{
  const fx={origin:[0,2,0],launchDirection:[0,0,1],direction:[0,0,1],position:[0,2,5],range:25,travelled:5};
- for(let i=0;i<14;i++){
-  const previous=fx.position[2];
-  advanceGoldfishSchool(fx,{position:[0,0,-20]},160,4800);
-  assert.ok(fx.position[2]>=previous);
-  assert.ok(fx.direction[2]>=.70-1e-9);
- }
- assert.ok(fx.travelled<=fx.range);
+ for(let i=0;i<14;i++)advanceGoldfishSchool(fx,{position:[0,0,-20]},160,2400);
+ assert.ok(fx.direction[2]<-.95);
+ assert.ok(fx.position[2]<5);
+ assert.ok(fx.travelled<=fx.range+1e-9);
 });
 test('mobile simultaneous healing and shoulder desktop charging route separately',()=>{
  const ui=read('src/ui.js'),gun=read('src/gun-controller.js');

@@ -16,7 +16,7 @@ test('ordinary player buys every displayed variant and sells its exact instance,
  }
  assert.equal(inventoryCapacity(profile),3000);
 });
-test('shop tabs keep exactly two ordered rows and high-resolution outfit output',()=>{
+test('shop tabs nest weapon ranges under Weapons and preserve high-resolution outfit output',()=>{
  const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8'),preview=readFileSync(new URL('../src/item-preview.js',import.meta.url),'utf8');
- assert(ui.includes("[['near','mid','far','mystery'],['head','outfit','wings','shield','comfort']]"));assert(preview.includes('creatureSuit?768'));assert(preview.includes("portrait.toBlob(resolve,'image/png')"));
+ assert(ui.includes("[['head','outfit','wings'],['weapons','shield','comfort'],...(weaponActive?[weaponTabs]:[])]"));assert(ui.includes("weaponTabs=['near','mid','far','mystery']"));assert(preview.includes('creatureSuit?768'));assert(preview.includes("portrait.toBlob(resolve,'image/png')"));
 });
