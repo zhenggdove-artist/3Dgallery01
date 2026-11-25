@@ -26,5 +26,5 @@ test('portrait sculpts have individual geometry and full facial surfaces',()=>{
 test('minimized button owns a captured pointer, persists drag and suppresses click',()=>{
  const s=readFileSync(new URL('../src/chat-layout.js',import.meta.url),'utf8');
  assert.match(s,/let miniDrag=null/);assert.match(s,/toggle\.setPointerCapture\(e\.pointerId\)/);
- assert.match(s,/if\(mode!=='pending'\)ignoreClickUntil/);assert.match(s,/if\(mode==='move'\)save\(\)/);
+ assert.match(s,/ignoreClickUntil=performance\.now\(\)\+800/);assert.match(s,/if\(drag\.mode==='move'&&drag\.moved\)\{save\(\)/);
 });

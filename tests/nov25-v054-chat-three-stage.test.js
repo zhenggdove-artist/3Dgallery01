@@ -5,7 +5,7 @@ import {bindChatLayout} from '../src/chat-layout.js';
 
 test('chat button cycles once per pointer tap on desktop and touch even with no collision-free placement',()=>{
  for(const mobile of [false,true]){
-  const values=new Map(),classes=new Set(),raf=[];
+  const values=new Map(),classes=new Set(),raf=[];let blocked=true,saved=null;
   function element(){
    const listeners=new Map();
    return {dataset:{},isConnected:true,
@@ -20,9 +20,9 @@ test('chat button cycles once per pointer tap on desktop and touch even with no 
   Object.defineProperties(panel,{offsetWidth:{get:()=>panel.dataset.chatSize==='min'?42:320},offsetHeight:{get:()=>panel.dataset.chatSize==='min'?42:panel.dataset.chatSize==='medium'?92:220}});
   panel.getBoundingClientRect=()=>({left:parseFloat(values.get('left')||'30'),top:parseFloat(values.get('top')||'390'),width:panel.offsetWidth,height:panel.offsetHeight});
   const obs={isConnected:true,getBoundingClientRect:()=>({left:0,top:0,right:390,bottom:780,width:390,height:780})};
-  const mock={document:{body,getElementById:id=>({'chat-hud':panel,'chat-resize':handle,'chat-toggle':toggle}[id]),querySelectorAll:()=>[obs]},
+  const mock={document:{body,getElementById:id=>({'chat-hud':panel,'chat-resize':handle,'chat-toggle':toggle}[id]),querySelectorAll:()=>blocked?[obs]:[]},
    window:{},innerWidth:390,innerHeight:780,matchMedia:()=>({matches:mobile}),getComputedStyle:()=>({display:'block',visibility:'visible'}),
-   localStorage:{getItem:()=>null,setItem(){throw Error('tap cannot save a new position');},removeItem(){}},requestAnimationFrame:fn=>raf.push(fn),addEventListener(){},ResizeObserver:undefined,MutationObserver:undefined};
+   localStorage:{getItem:()=>null,setItem(k,v){saved=JSON.parse(v);},removeItem(){saved=null;}},requestAnimationFrame:fn=>raf.push(fn),addEventListener(){},ResizeObserver:undefined,MutationObserver:undefined};
   const before=Object.fromEntries(Object.keys(mock).map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
   for(const [k,v] of Object.entries(mock))Object.defineProperty(globalThis,k,{configurable:true,writable:true,value:v});
   const flush=()=>{let n=0;while(raf.length){assert.ok(++n<20,'refit must not recurse into size changes');raf.shift()();}};
@@ -32,7 +32,7 @@ test('chat button cycles once per pointer tap on desktop and touch even with no 
    for(const expected of ['min','max','medium','min','max','medium']){
     toggle.fire('pointerdown');toggle.fire('pointerup');toggle.fire('click');flush();
     assert.equal(panel.dataset.chatSize,expected);
-    assert.equal(toggle.textContent,'＋');assert.equal(values.has('left'),false);assert.equal(values.has('top'),false);
+    assert.equal(toggle.textContent,'＋');assert.equal(values.has('left'),false);assert.equal(values.has('top'),false);assert.equal(saved,null);
    }
    layout.applyDefault({revision:9,x:.25,y:.8});flush();
    const expectedTop=8+(780-panel.offsetHeight-16)*.8;
@@ -41,6 +41,11 @@ test('chat button cycles once per pointer tap on desktop and touch even with no 
    assert.equal(panel.dataset.chatSize,'min');
    assert.equal(parseFloat(values.get('top')),8+(780-42-16)*.8);
    assert.equal(parseFloat(values.get('left')),8+(390-42-16)*.25);
+   blocked=false;
+   toggle.fire('pointerdown');toggle.fire('pointermove',{clientX:120,clientY:180});toggle.fire('pointerup');toggle.fire('click');flush();
+   assert.equal(panel.dataset.chatSize,'min','drag must not change size');
+   assert.ok(saved&&saved.revision===9,'drag persists the position and GM revision');
+   assert.ok(saved.x>.25&&saved.y<.8);
   }finally{for(const [k,v] of Object.entries(before)){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
  }
 });
