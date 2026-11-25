@@ -1114,3 +1114,6 @@ body.panel-open #panel.gallery-guide-floating{
  line-height:1.48;margin:4px 3px 5px;overflow-wrap:anywhere;
 }
 #panel.gallery-guide-floating #panel-content{padding-bottom:4px}
+
+/* V038: compact nested weapons categories; main shop defaults to Headwear. */
+.shop-tabs .shop-tab-row{display:flex;gap:3px;flex-wrap:nowrap}.shop-tabs .shop-tab-row button{min-width:0;flex:1;font-size:11px;padding:5px 3px;white-space:normal}

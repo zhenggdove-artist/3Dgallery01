@@ -25,7 +25,7 @@ import {calicoPellets} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,shoulderSniperSpread,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
-import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,WHIP_PULL_SPEED,whipPullDurationMs} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS} from './vortex-flight.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
@@ -262,7 +262,7 @@ export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
     level:profile.level,xp:profile.xp,wingTrialDraws:profile.wingTrialDraws||0,wingPaidDraws:Math.max(0,Number(profile.wingPaidDraws)||0),wingDesignCredits:Math.max(0,Number(profile.wingDesignCredits)||0),deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
     respawnPosition:clone(profile.respawnPosition||null),
-    spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),shield:clone(profile.shield||null),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
+    spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),shield:clone(profile.shield||null),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,tidePush:profile.tidePush||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
 
 export function worldProfileView(world,actorKey,now){
@@ -1720,6 +1720,12 @@ export function tickPrismChannels(world,actors,now=Date.now(),rng=Math.random){
  let changed=false;
  // Every live caster has one channel and at most one locked target.
  const active=new Set();
+ for(const {value} of monsterTargets){
+  const push=value.tidePush;if(!push)continue;
+  const progress=Math.min(1,Math.max(0,(now-push.time)/push.durationMs)),delta=Math.max(0,progress-(push.progress||0));
+  if(delta>0){const moved=[value.position[0]+push.vector[0]*push.distance*delta,value.position[1],value.position[2]+push.vector[2]*push.distance*delta];if(insideArena(moved,-2)&&!insideArtSanctuary(moved)&&!cityBlocked(moved[0],moved[2],moved[1],world.cityDamage||{},.5))value.position=moved;push.progress=progress;changed=true;}
+  if(progress>=1)delete value.tidePush;
+ }
  for(const caster of actors){
   const profile=world.profiles[caster.key],weapon=itemById(profile?.channelWeapon);
   if(caster.role!=='fighter'||!profile||profile.hp<=0||profile.deadUntil>now||
@@ -1835,7 +1841,17 @@ export function tickTidalChannels(world,actors,now=Date.now(),rng=Math.random){
   });
   if(prior.length!==targets.length||targets.some((t,i)=>
    t.targetKey!==prior[i]?.targetKey||t.position.some((v,j)=>Math.abs(v-(prior[i]?.position?.[j]??v))>.02)))changed=true;
-  locks[caster.key]={targets};
+  const nextPushAt=locks[caster.key]?.nextPushAt??now+TIDE_PUSH_INTERVAL_MS;
+  const pushNow=now>=nextPushAt;
+  locks[caster.key]={targets,nextPushAt:pushNow?now+TIDE_PUSH_INTERVAL_MS:nextPushAt};
+  if(pushNow){
+   for(const t of selected.slice(0,3)){
+    const victim=t.kind==='player'?world.profiles[t.value.key]:t.value;
+    if(!victim||victim.hp<=0||(t.kind==='player'&&(victim.spawnProtectedUntil>now||(victim.admin&&victim.gmInvincible!==false))))continue;
+    const dx=t.value.position[0]-caster.position[0],dz=t.value.position[2]-caster.position[2],len=Math.hypot(dx,dz);if(len<.001)continue;
+    victim.tidePush={id:id(),time:now,durationMs:TIDE_PUSH_DURATION_MS,distance:TIDE_PUSH_DISTANCE,vector:[dx/len,0,dz/len]};changed=true;
+   }
+  }
   for(let i=0;i<targets.length;i++){
    const target=selected[i],lock=targets[i];
    const elapsed=now-lock.lastHitAt;
@@ -2288,36 +2304,24 @@ function tickPersistentAttacks(world,actors,now,rng){
     }
    }
   }else if(fx.kind==='goldfish'){
-   // Exclude the caster and everything behind the ORIGINAL launch ray.
-   // A U-turn toward a nearby fighter used to make the goldfish appear
-   // to chase its own owner instead of pursuing forward enemies.
-   const launch=fx.launchDirection||fx.direction;
-   const candidates=targets.filter(t=>{
-    const value=t.value;
-    if(value.key===fx.owner||value.id===fx.owner||value.hp===0||
-        (t.kind==='player'&&(world.profiles[value.key]===owner||insideArtSanctuary(value.position))))return false;
-    const x=value.position[0]-fx.origin[0],z=value.position[2]-fx.origin[2];
-    const along=x*launch[0]+z*launch[2];
-    return along>0.5&&along<=fx.range+GOLDFISH_SCHOOL_RADIUS*2;
+   // Prioritize real living players, not the shooter, even off-axis/behind.
+   // Once acquired, keep a valid target until it dies or leaves homing reach.
+   const nearby=targets.filter(t=>{
+    const value=t.value,p=t.kind==='player'?world.profiles[value.key]:null;
+    if(value.key===fx.owner||value.id===fx.owner)return false;
+    if(t.kind==='player'&&(!p||p===owner||p.hp<=0||p.deadUntil>now||p.spawnProtectedUntil>now||
+      (p.admin&&p.gmInvincible!==false)||insideArtSanctuary(value.position)))return false;
+    if(t.kind==='monster'&&(!value.active||value.hp<=0))return false;
+    return Math.hypot(value.position[0]-fx.position[0],value.position[2]-fx.position[2])<=fx.range+GOLDFISH_SCHOOL_RADIUS*2;
    });
-   const nearby=candidates.filter(t=>{
-    const dx=t.value.position[0]-fx.position[0],dz=t.value.position[2]-fx.position[2];
-    // Pursue only bodies ahead of the moving fish; never U-turn into the caster.
-    return dx*launch[0]+dz*launch[2]>GOLDFISH_SCHOOL_RADIUS*.45&&
-      Math.hypot(dx,dz)<fx.range*.9+6;
-   });
-   const aim=nearby.find(t=>(t.value.id||t.value.key)===fx.targetId)||
-    nearby.sort((a,b)=>Math.hypot(a.value.position[0]-fx.position[0],a.value.position[2]-fx.position[2])-
+   const players=nearby.filter(t=>t.kind==='player'),pool=players.length?players:nearby;
+   const aim=pool.find(t=>(t.value.key||t.value.id)===fx.targetId)||
+    pool.sort((a,b)=>Math.hypot(a.value.position[0]-fx.position[0],a.value.position[2]-fx.position[2])-
      Math.hypot(b.value.position[0]-fx.position[0],b.value.position[2]-fx.position[2]))[0];
-   if(aim)fx.targetId=aim.value.id||aim.value.key;
-   else delete fx.targetId;
+   if(aim)fx.targetId=aim.value.key||aim.value.id;else delete fx.targetId;
    const previous=[...fx.position],heading=[...fx.direction];
-   // Retain at least a forward component if a former homing target dashed
-   // behind the fish between server ticks.
-   if(fx.direction[0]*launch[0]+fx.direction[2]*launch[2]<.35)
-    fx.direction=[...launch];
    advanceGoldfishSchool(fx,aim?.value,Math.max(0,Math.min(now,fx.expiresAt)-fx.lastAt),flight);
-   const travelled=Math.hypot(fx.position[0]-previous[0],fx.position[2]-previous[2]);
+   const travelled=Math.hypot(fx.position[0]-previous[0],fx.position[1]-previous[1],fx.position[2]-previous[2]);
    if(travelled>.001)changed=true;
    // One authoritative flight; thirty swept fish bodies with independent,
    // once-per-victim hit histories. Each body deals exactly 20% of the old
@@ -2327,7 +2331,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     for(const target of targets){
      const value=target.value,key=value.key||value.id;
      if(value.key===fx.owner||value.id===fx.owner||value.hp===0||
-         (target.kind==='player'&&(world.profiles[value.key]===owner||insideArtSanctuary(value.position))))continue;
+         (target.kind==='player'&&(!world.profiles[value.key]||world.profiles[value.key]===owner||world.profiles[value.key].hp<=0||world.profiles[value.key].deadUntil>now||world.profiles[value.key].spawnProtectedUntil>now||(world.profiles[value.key].admin&&world.profiles[value.key].gmInvincible!==false)||insideArtSanctuary(value.position))))continue;
      let contacts=0;
      for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
       if(fx.fishConsumed.includes(i))continue;

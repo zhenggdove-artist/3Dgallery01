@@ -110,7 +110,7 @@ export class PlayerController{
   setEnabled(value){this.enabled=value;if(!value){this.mobileStick?.reset();this.keys.clear();this.move.set(0,0);this.drag=null;this.pinch=null;this.pointers.clear();}}
   setRole(role){if(this.role!==role)this.mobileStick?.reset();this.role=role;this.root.visible=role==='fighter';this.followTarget=null;this.spectatorLift=0;this.cameraLocked=false;this.authorityHoldUntil=0;this.stunUntil=0;}
   setFollowTarget(root=null){this.followTarget=root;}
-  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;this.vortexSpin=null;}
+  teleport(position){this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;this.vortexSpin=null;this.tidePush=null;}
   beginPanBlast(hit){
     if(!hit?.panBlast||!(Number(hit.knockbackDistance)>0))return false;
     const d=new THREE.Vector3(...hit.vector);d.y=0;
@@ -219,6 +219,11 @@ export class PlayerController{
       // Hit stun cannot cancel the launch: steer/jump return only after
       // one big parabola and precisely three successively lower bounces.
       this.advancePanBlast(dt);this.updateCamera(dt);return this.state();
+    }
+    if(this.tidePush){
+     const push=this.tidePush,progress=Math.min(1,Math.max(0,(Date.now()-push.time)/push.durationMs)),delta=Math.max(0,progress-push.progress);
+     if(delta>0){this.stepHorizontal(push.vector[0]*push.distance*delta,push.vector[2]*push.distance*delta);push.progress=progress;}
+     if(progress>=1)this.tidePush=null;
     }
     if(this.knockback&&this.knockbackRemaining>0){
      // Pan recoil follows the explosion radius unless a real obstacle

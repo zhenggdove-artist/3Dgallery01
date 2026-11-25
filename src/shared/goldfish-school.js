@@ -27,38 +27,31 @@ export function goldfishSchoolPosition(center,direction,index){
  return [center[0]+dz*o[0]+dx*o[2],center[1]+o[1],center[2]-dx*o[0]+dz*o[2]];
 }
 
-// Goldfish can home toward enemies, but must retain a strong component of
-// its ORIGINAL launch vector. Never allow a U-turn toward the caster.
+// Home in all directions, including enemies to either side or behind the
+// launch. Caster exclusion and safe-zone rules are enforced by the Worker.
 export function advanceGoldfishSchool(fx,target,elapsedMs,flightMs){
  if(!Array.isArray(fx.position))fx.position=[...fx.origin];
  const dt=Math.max(0,Math.min(2500,Number(elapsedMs)||0))/1000;
- const launch=fx.launchDirection||fx.direction;
- const launchLength=Math.hypot(launch[0],launch[2])||1;
- const forward=[launch[0]/launchLength,launch[2]/launchLength];
- let dx=fx.direction[0],dz=fx.direction[2];
+ let dx=fx.direction[0],dz=fx.direction[2],dy=0;
  const length=Math.hypot(dx,dz)||1;dx/=length;dz/=length;
+ const remaining=Math.max(0,fx.range-(fx.travelled||0));
+ const step=Math.min(remaining,Math.max(0,fx.range)*dt/(Math.max(1,flightMs)/1000));
  if(Array.isArray(target?.position)){
   const tx=target.position[0]-fx.position[0],tz=target.position[2]-fx.position[2];
   const distance=Math.hypot(tx,tz);
-  if(distance>.001&&tx*forward[0]+tz*forward[1]>0){
-   const steer=1-Math.exp(-3.5*dt);
-   dx=dx*(1-steer)+tx/distance*steer;
-   dz=dz*(1-steer)+tz/distance*steer;
-   const n=Math.hypot(dx,dz)||1;dx/=n;dz/=n;
+  // Angle interpolation handles a target directly behind without a zero-vector
+  // singularity. First acquisition aims immediately; later turns stay smooth.
+  if(distance>.001){
+   const from=Math.atan2(dx,dz),to=Math.atan2(tx,tz);
+   const delta=Math.atan2(Math.sin(to-from),Math.cos(to-from));
+   const angle=from+delta*(fx.travelled?1-Math.exp(-12*dt):1);
+   dx=Math.sin(angle);dz=Math.cos(angle);
   }
+  const targetY=target.position[1]+(target.bodyHeight?target.bodyHeight*.5:1.05);
+  dy=Math.max(-step,Math.min(step,(targetY-fx.position[1])*(1-Math.exp(-10*dt))));
  }
- // Constrain the heading to +/-45.57 degrees from launch.
- const dot=dx*forward[0]+dz*forward[1];
- if(dot<.70){
-  const sideX=-forward[1],sideZ=forward[0];
-  const sign=Math.sign(dx*sideX+dz*sideZ)||1;
-  dx=forward[0]*.70+sideX*sign*Math.sqrt(1-.70**2);
-  dz=forward[1]*.70+sideZ*sign*Math.sqrt(1-.70**2);
- }
- const remaining=Math.max(0,fx.range-(fx.travelled||0));
- const step=Math.min(remaining,Math.max(0,fx.range)*dt/(Math.max(1,flightMs)/1000));
  fx.direction=[dx,0,dz];
- fx.position=[fx.position[0]+dx*step,fx.position[1],fx.position[2]+dz*step];
+ fx.position=[fx.position[0]+dx*step,fx.position[1]+dy,fx.position[2]+dz*step];
  fx.travelled=(fx.travelled||0)+step;
  return fx.position;
 }

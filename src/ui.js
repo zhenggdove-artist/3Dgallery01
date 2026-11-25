@@ -516,7 +516,7 @@ export class TempleUI extends EventTarget{
      if(['gm','wing-manage','shop-prices','wing-player-preview','wing-painter'].includes(name)&&!this.self.profile?.admin)return;
      // Sky editing is a separate GM capability; retain the existing SUPPORT access contract.
      if(name==='sky-color'&&!this.self.profile?.admin)return;
-    if(name==='wing-personal-painter'&&!(this.world?.profile?.wingDesignCredits>0))return;if(name==='social'&&!fromJourney&&this.self.role!=='spectator'){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');this.panelName=name;document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',['wing-painter','wing-personal-painter','wing-player-preview'].includes(name));document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.panel.classList.toggle('build-floating',['build','sky-color','gallery-guide'].includes(name));this.panel.classList.toggle('sky-color-floating',name==='sky-color');this.panel.classList.toggle('gallery-guide-floating',name==='gallery-guide');if(['build','sky-color','gallery-guide'].includes(name)){this.buildFloat.open();this.buildFloat.setCollapsed(false);}else{this.buildFloat.mobile=false;this.panel.classList.remove('gm-mobile-floating');}this.renderPanel();this.emit('panel',{open:true,name});
+    if(name==='wing-personal-painter'&&!(this.world?.profile?.wingDesignCredits>0))return;if(name==='social'&&!fromJourney&&this.self.role!=='spectator'){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');if(name==='shop'&&this.panelName!=='shop'){this.shopTab='head';this.shopSelectedKey=null;}this.panelName=name;document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',['wing-painter','wing-personal-painter','wing-player-preview'].includes(name));document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.panel.classList.toggle('build-floating',['build','sky-color','gallery-guide'].includes(name));this.panel.classList.toggle('sky-color-floating',name==='sky-color');this.panel.classList.toggle('gallery-guide-floating',name==='gallery-guide');if(['build','sky-color','gallery-guide'].includes(name)){this.buildFloat.open();this.buildFloat.setCollapsed(false);}else{this.buildFloat.mobile=false;this.panel.classList.remove('gm-mobile-floating');}this.renderPanel();this.emit('panel',{open:true,name});
     if(name==='wing-shop'){$('panel-close').focus({preventScroll:true});this.emit('wing-payment-status-request');}
     if(name==='gm')this.requestGmPresence();}
   closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;this.buildFloat.mobile=false;this.panel.classList.remove('build-floating','gm-mobile-floating','sky-color-floating','gallery-guide-floating');document.body.classList.remove('panel-open','panel-wing-painter','panel-wing-shop');this.wingGalleryObserver?.disconnect();this.panelName='';this.emit('panel',{open:false});}
@@ -616,7 +616,8 @@ export class TempleUI extends EventTarget{
   renderShop(profile){
     this.shopPriceSignature=JSON.stringify(this.world?.shopPrices||{});
     const editing=this.panelName==='shop-prices'&&!!(profile.admin||this.self?.profile?.admin),prices=this.world?.shopPrices||{};
-    const tab=['owned','armor'].includes(this.shopTab)?'near':this.shopTab||'near',tabs={
+    const tab=['owned','armor'].includes(this.shopTab)?'head':this.shopTab||'head',weaponTabs=['near','mid','far','mystery'],weaponActive=weaponTabs.includes(tab),tabs={
+     weapons:'Weapons',
      near:'Near',mid:'Mid',far:'Far',mystery:'Mystery Weapons',
      comfort:'Comfort for the Soul',shield:'Shields',head:'Headwear',
      outfit:'Outfits',wings:'Wings'};
@@ -679,7 +680,7 @@ export class TempleUI extends EventTarget{
      return itemCard({...selected,name:selected.name},selection+(editing?edit:actions));
     });
     this.content.innerHTML=`<div class="armory-balance"><span>Equipment · ${(profile.inventory?.length||0).toLocaleString('en-US')}/${inventoryCapacity(profile).toLocaleString('en-US')} BAG</span><b>${profile.admin?'∞':profile.wallet} coins</b></div>
-     <div data-inventory-error role="alert" ${this.inventoryActionError?'':'hidden'} style="color:#9c2740;font-size:12px;overflow-wrap:anywhere">${escape(this.inventoryActionError||'')}</div><nav class="shop-tabs">${[['near','mid','far','mystery'],['head','outfit','wings','shield','comfort']].map(row=>`<div class="shop-tab-row">${row.map(id=>`<button data-shop-tab="${id}" aria-pressed="${tab===id}">${tabs[id]}</button>`).join('')}</div>`).join('')}</nav>
+     <div data-inventory-error role="alert" ${this.inventoryActionError?'':'hidden'} style="color:#9c2740;font-size:12px;overflow-wrap:anywhere">${escape(this.inventoryActionError||'')}</div><nav class="shop-tabs">${[['head','outfit','wings'],['weapons','shield','comfort'],...(weaponActive?[weaponTabs]:[])].map(row=>`<div class="shop-tab-row">${row.map(id=>`<button data-shop-tab="${id}" aria-pressed="${tab===id||(id==='weapons'&&weaponActive)}">${tabs[id]}</button>`).join('')}</div>`).join('')}</nav>
      <div class="shop-layout ${chosen?'has-selection':''}"><div class="shop-grid" role="group" aria-label="Shop items">${visible.map(g=>{
       const item=g.variants.find(v=>String(v.shopTier??v.id)===this.shopVariantChoice[g.key])||g.variants.find(v=>v.shopTier===3)||g.base;
       const label=shopOutfitCollection(item)||g.base.name;
@@ -916,7 +917,7 @@ export class TempleUI extends EventTarget{
      this.emit('server-action',{action:'gm-wing-remove',wingId});return;
     }
     if(button.hasAttribute('data-draw-wing')){if(this.beginWingDraw())this.emit('server-action',{action:this.self?.profile?.admin?'gm-wing-draw':'wing-draw'});return;}
-    if(button.dataset.bagTab){this.bagTab=button.dataset.bagTab;this.renderPanel();return;}if(button.dataset.shopTab){this.shopTab=button.dataset.shopTab;this.shopSelectedKey=null;this.renderPanel();return;}try{if(button.dataset.buy){
+    if(button.dataset.bagTab){this.bagTab=button.dataset.bagTab;this.renderPanel();return;}if(button.dataset.shopTab){this.shopTab=button.dataset.shopTab==='weapons'?(this.shopWeaponTab||'near'):button.dataset.shopTab;if(['near','mid','far','mystery'].includes(this.shopTab))this.shopWeaponTab=this.shopTab;this.shopSelectedKey=null;this.renderPanel();return;}try{if(button.dataset.buy){
      const quantity=Number(button.closest('.item')?.querySelector('[data-shop-quantity]')?.value??1);
      if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)return this.toast('QUANTITY 1–99');
      button.blur();

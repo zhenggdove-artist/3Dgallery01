@@ -474,23 +474,23 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
    group.quaternion.slerp(qdir(desired),1-Math.exp(-Math.max(0,dt)*12));
    // The fish is authored facing local +Z; qdir already maps +Z to travel.
    // Any additional 90-degree yaw makes the nose point LEFT. Keep only swim sway.
-   const yaw=Math.sin(age*8)*.045;
+   const yaw=Math.sin(age*16)*.045;
    fish.rotation.y=yaw;
-   fish.rotation.z=Math.sin(age*7)*.035;
+   fish.rotation.z=Math.sin(age*14)*.035;
    // Apply a separate tail wag to EACH instanced fish, phase-staggered.
    // The previous tail.rotation affected the hidden source fish identically.
    tail.rotation.y=0;
    fish.updateMatrixWorld(true);
    const {base,combined,offset,rotation,scale,axis,transforms,tailTransforms}=group.userData.schoolScratch;
    for(let i=0;i<GOLDFISH_SCHOOL_COUNT;i++){
-    const [x,y,z]=GOLDFISH_SCHOOL_OFFSETS[i],phase=age*8+i*2.399963;
+    const [x,y,z]=GOLDFISH_SCHOOL_OFFSETS[i],phase=age*16+i*2.399963;
     offset.set(x+Math.sin(phase)*.085,y+Math.sin(phase*.71)*.09,z+Math.cos(phase)*.025);
     rotation.setFromAxisAngle(axis,Math.sin(phase)*.19+Math.sin(i*3.17)*.14);
     // A collided fish collapses only its own instances; the other
     // twenty-nine continue swimming and retain independent tail motion.
     scale.setScalar(group.userData.consumedFish.has(i)?0:.83+((i*11)%9)*.043);
     transforms[i].compose(offset,rotation,scale);
-    tailTransforms[i].makeRotationY(Math.sin(age*19+i*2.399963)*.74);
+    tailTransforms[i].makeRotationY(Math.sin(age*38+i*2.399963)*.74);
     tailTransforms[i].premultiply(tail.matrix).premultiply(fish.matrix);
    }
    // Bubble rings remain at the actual WORLD-SPACE enemy contact point,
