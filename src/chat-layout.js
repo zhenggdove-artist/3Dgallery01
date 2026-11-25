@@ -137,7 +137,8 @@ export function bindChatLayout(){
   if(!miniDrag||miniDrag.id!==e.pointerId)return;
   const mode=miniDrag.mode;clearTimeout(miniTimer);miniDrag=null;
   if(mode!=='pending')ignoreClickUntil=performance.now()+350;
-  if(mode==='move'){save();requestAnimationFrame(fitSafely);}
+  if(mode==='move')save();
+  if(mode==='move')requestAnimationFrame(fitSafely);
   panel.classList.remove('chat-dragging');
   try{if(toggle.hasPointerCapture(e.pointerId))toggle.releasePointerCapture(e.pointerId);}catch{}
  };
