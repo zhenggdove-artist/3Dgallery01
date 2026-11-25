@@ -17,8 +17,9 @@ body.panel-open #hud{visibility:hidden}body.panel-open #panel{visibility:visible
 #loading{display:grid;place-items:center;background:#008080!important;color:#111!important}.loading-window{width:min(480px,calc(100vw - 36px));padding:3px;background:#c0c0c0;box-shadow:inset 1px 1px white,inset -1px -1px #000,3px 3px 0 #004c4c}.loading-body{display:grid;justify-items:center;gap:10px;padding:24px 16px;font:13px Tahoma,sans-serif}.loading-body .loading-track{width:100%;height:20px;border:2px inset #ddd;background:#ddd}.loading-body .loading-track i{background:repeating-linear-gradient(90deg,#000080 0 8px,#c0c0c0 8px 10px)}#loading-detail{overflow-wrap:anywhere;text-align:center}
 #vitals{padding-left:52px;min-height:96px;top:80px}#vital-models{position:absolute;left:0;top:0;width:48px;height:96px;pointer-events:none}#vitals #player-level{position:absolute;left:0;top:-18px}#vitals label{position:absolute;top:12px;left:52px}#vitals #hp{display:none}#vitals #wallet{position:absolute;top:61px;left:52px}#gm-help{top:184px}#vitals #hp-label{font:13px Arial,sans-serif;color:#493653}
 #gm-help{left:90px;top:178px}
-#gm-menu{position:fixed;left:134px;top:178px;z-index:12;width:36px;height:36px;border:1px solid #c5b6d2;border-radius:50%;background:#f9efff;color:#705380;font:bold 18px Arial,sans-serif;pointer-events:auto;touch-action:manipulation;cursor:pointer;box-shadow:0 2px 6px #47325433}
-#gm-menu[hidden]{display:none!important}
+#identity>#gm-title{pointer-events:none}
+#identity>#gm-title[role=button]{pointer-events:auto;touch-action:manipulation;cursor:pointer}
+#identity>#gm-title[role=button]:focus-visible{outline:2px solid #f2b7cf;outline-offset:3px}
 #panel .gm-tools{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px}
 #panel .gm-tools button{flex:1 1 130px;padding:9px;min-height:40px;border:1px solid #b9a4ca;border-radius:8px;background:#f6f0fa;color:#402a53;font-weight:700}
 #panel .gm-presence-list{display:grid;gap:4px;max-height:46dvh;overflow-y:auto;overscroll-behavior:contain;padding:4px 0}
@@ -27,7 +28,7 @@ body.panel-open #hud{visibility:hidden}body.panel-open #panel{visibility:visible
 #panel .gm-presence-row time{font-variant-numeric:tabular-nums;color:#66566f}
 #panel .gm-presence-live{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0 12px;font-size:12px}
 #panel .gm-presence-live span{padding:4px 7px;border:1px solid #b6d8c0;background:#eff9f1;color:#23513a;border-radius:6px}
-@media(max-width:600px){#gm-menu{left:134px;top:178px}#panel .gm-presence-list{max-height:40dvh}}
+@media(max-width:600px){#panel .gm-presence-list{max-height:40dvh}}
 .loading-body p{letter-spacing:normal!important}.loading-body .loading-track i{box-shadow:none!important}
 #entry .notepad-page h1{font-size:clamp(20px,3vw,36px)!important;letter-spacing:.14em!important;color:#ffc9e8!important;max-width:100%;white-space:nowrap}
 /* Gameplay gestures belong to independent pointers, never browser selection. */
