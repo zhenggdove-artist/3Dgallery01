@@ -111,14 +111,14 @@ test('prism casts a smooth signed S-curve, never a semicircular middle bulge',()
  assert.ok(curvePoint(a,b,2.5,1,'s').distanceTo(b)<1e-9);
  assert.match(source('src/numbered-weapon-effects.js'),/entry\.item\?\.family==='beam'\?'s':'bow'/);
 });
-test('goldfish giant ultimate triples ONLY reach and damage, retaining hitbox width and 3x swimming time',()=>{
+test('goldfish giant ultimate triples ONLY reach and damage, retaining hitbox width and doubling swimming speed',()=>{
  const item=itemById('goldfish'),basic=attackStats(item,0),charged=attackStats(item,1);
  assert.equal(charged.damage,item.chargeDamage*3);
  assert.equal(basic.damage,item.damage);
  const size=scaleUltimateFootprint({...charged},item);
  assert.ok(Math.abs(size.range-charged.range*.6*3)<.001);
  assert.ok(Math.abs(size.radius-charged.radius*.6)<.001);
- assert.equal(GOLDFISH_SWIM_MS,4800);
+ assert.equal(GOLDFISH_SWIM_MS,2400);
 });
 test('goldfish seeks off-axis target from elevated swimming position and syncs visual position',()=>{
  const {world,actor,result,start}=cast('goldfish',12);
@@ -136,7 +136,7 @@ test('goldfish seeks off-axis target from elevated swimming position and syncs v
  assert.equal(effects.play(result.attackEvent,itemById('goldfish')),true);
  effects.update(.08,worldView(world,actor.key,start+700));
  const visual=effects.active.at(-1).obj;
- assert.ok(visual.position.y>2);
+ assert.ok(Math.abs(visual.position.y-fx.position[1])<Math.abs(fx.origin[1]-fx.position[1])+1e-6,'visual converges toward authoritative swim height');
  const fish=visual.userData.fish;
  const mats=[];fish.traverse(node=>{if(node.material)mats.push(node.material);});
  assert.ok(mats.some(mat=>mat.opacity===.30),'translucent VHS goldfish have increased transparency');
