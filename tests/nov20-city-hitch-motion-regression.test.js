@@ -79,7 +79,7 @@ test('unchanged cloned city snapshots skip expensive damage reapplication',()=>{
 
 test('Worker decouples combat tick rate from heavy full-world broadcasts',()=>{
  const worker=read('cloudflare/worker.js');
- assert.match(worker,/this\.scheduleCombatWorld\(Math\.max\(8,180-\(now-\(this\.lastCombatWorldAt\|\|0\)\)\)\)/);
+ assert.match(worker,/now-\(this\.lastCombatWorldAt\|\|0\)>=180/);
  assert.match(worker,/this\.installCombat\(world,encoded,rows\)/);
  assert.match(worker,/createWorldPatch\(previous,common,true,serializeCityRecord\)/);
  assert.match(worker,/commonPatches\.set\(baselineKey,patch\)/);
