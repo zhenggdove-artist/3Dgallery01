@@ -51,5 +51,5 @@ test('shield and health readouts have separate rows; purchase popup remains visi
  assert.match(css,/#purchase-notice\.leaving\{animation:purchase-confirm-fade 250ms/); assert.match(ui,/\},3500\);/);
  assert.match(ui,/purchaseNotice\(itemName,quantity\)/);
  assert.match(ui,/PURCHASE SUCCESSFUL/);
- assert.match(main,/if\(result\.purchased\)/); assert.ok(main.indexOf('ui.purchaseNotice(purchased')<main.indexOf('if(result.world)acceptWorldView(result.world)',main.indexOf('async function sendAction')));
+ assert.match(main,/if\(result\.purchased\)/); const notice=main.indexOf('ui.purchaseNotice(purchased'),reconcile=main.indexOf('if(result.world)acceptWorldView(result.world,true)',main.indexOf('async function sendAction')); assert.ok(notice>=0&&reconcile>notice);
 });

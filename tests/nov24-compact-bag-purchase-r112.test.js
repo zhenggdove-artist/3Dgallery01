@@ -14,7 +14,8 @@ test('buy is pending immediately and confirmation precedes world reconciliation'
  const main=read('src/main.js'),ui=read('src/ui.js');
  assert(main.includes("ui.showPurchaseStatus('pending','PURCHASING…')"));
  const action=main.slice(main.indexOf('async function sendAction'));
- assert(action.indexOf('ui.purchaseNotice(')<action.indexOf('acceptWorldView(result.world)'));
+ const notice=action.indexOf('ui.purchaseNotice('),reconcile=action.indexOf('acceptWorldView(result.world,true)');
+ assert(notice>=0&&reconcile>notice);
  assert(ui.includes('},3500);'));assert(ui.includes("if(state==='pending')return;"));
 });
 test('Huang and Musk have separate dense sculpted meshes; Trump remains on original path',()=>{
