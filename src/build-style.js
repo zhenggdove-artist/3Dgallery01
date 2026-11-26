@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {houseSignSpecs} from './shared/city-layout.js';
-import {drawSignArtwork} from './sign-art.js';
+import {drawSignArtwork,drawRooftopSignArtwork,installRooftopSignLighting} from './sign-art.js';
 export const originalBuildSizes={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4]};
 const textures=new Map();
 export function buildMaterial(surface){const material=new THREE.MeshStandardMaterial({color:'#c6a5dc',roughness:.72,metalness:.03});if(surface){if(!textures.has(surface)){const t=new THREE.TextureLoader().load(window.TEMPLE_CONFIG.backendUrl+'/api/media/'+surface);t.colorSpace=THREE.SRGBColorSpace;textures.set(surface,t);}material.map=textures.get(surface);material.color.set('#ffffff');}return material;}
@@ -47,8 +47,8 @@ export function createGmHouseMesh(spec,{preview=false,seed=0}={}){
   const panel=new THREE.Mesh(new THREE.BoxGeometry(s.width,s.height,s.depth),mat);group.add(panel);
   const border=new THREE.Mesh(new THREE.BoxGeometry(s.blade?s.width+.025:s.width*.94,s.height*.93,s.blade?s.depth*.94:s.depth+.025),mat);group.add(border);
   if(typeof document!=='undefined'){
-   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d');drawSignArtwork(ctx,0,0,c.width,c.height,{color:s.color,title:'商店',subtitle:'TEMPLE SHOP',vertical:s.blade,aspect:s.blade?s.depth/s.height:s.width/s.height,seed:(s.seed+seed)|0,style:s.style,font:s.font,saturation:s.saturation});
-   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const faceMat=new THREE.MeshStandardMaterial({map:tex,roughness:.8,side:THREE.DoubleSide});faceMat.userData.ownedSignMap=true;materials.push(faceMat);
+   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d'),rooftop=s.id.startsWith('sign-roof-');(rooftop?drawRooftopSignArtwork:drawSignArtwork)(ctx,0,0,c.width,c.height,{color:s.color,title:'商店',subtitle:'TEMPLE SHOP',vertical:s.blade,aspect:s.blade?s.depth/s.height:s.width/s.height,seed:(s.seed+seed)|0,style:s.style,font:s.font,saturation:s.saturation});
+   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const faceMat=new THREE.MeshStandardMaterial({map:tex,roughness:.8,side:THREE.DoubleSide});faceMat.userData.ownedSignMap=true;materials.push(faceMat);if(rooftop)installRooftopSignLighting(faceMat,{seed:(s.seed+seed)|0});
    for(const side of [-1,1]){const face=new THREE.Mesh(new THREE.PlaneGeometry((s.blade?s.depth:s.width)*.92,s.height*.92),faceMat);if(s.blade){face.rotation.y=side*Math.PI/2;face.position.x=side*(s.width/2+.02);}else{face.rotation.y=side===1?0:Math.PI;face.position.z=side*(s.depth/2+.02);}group.add(face);}
   }
   for(const p of s.supports){const support=new THREE.Mesh(new THREE.BoxGeometry(p.width,p.height,p.depth),steel);support.position.set(p.x-s.x,p.y-s.y,p.z-s.z);group.add(support);}

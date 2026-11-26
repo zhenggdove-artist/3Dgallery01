@@ -272,3 +272,69 @@ export function drawSignArtwork(ctx,x,y,w,h,{color='#965044',title='商店',subt
  const cx=vertical?W/2:W*.12,cy=vertical?25:H/2;circle(cx,cy,Math.min(W,H)*.19,accent);graphic(cx,cy,.72);
  label(vertical?{x:6,y:48,w:W-12,h:H-54}:{x:W*.24,y:3,w:W*.73,h:H-6},'#fff5d0','#17191d','900');ctx.restore();
 }
+
+ // Rooftop typography is drawn once into the existing atlas, not into
+ // extra canvases, textures, meshes or dynamic lights per city sign.
+export function rooftopSignMode(seed){return (seed>>>0)%5;}
+export function drawRooftopSignArtwork(ctx,x,y,w,h,{color='#4c9ea1',title='商店',subtitle='',aspect=2,seed=0,style='wild',font='hei',saturation=1}={}){
+ const W=Math.max(144,Math.min(960,96*aspect)),H=96,mode=rooftopSignMode(seed),base=saturated(color,saturation),family=FONTS[font]||FONTS.hei;
+ const lightbox=mode===1||mode===4,neon=mode===3,ink=lightbox?'#181b21':neon?'#ffd6eb':'#fff4cf';
+ const rect=(a,b,c,d,fill)=>{ctx.fillStyle=fill;ctx.fillRect(a,b,c,d);};
+ ctx.save();ctx.translate(x,y);ctx.scale(w/W,h/H);
+ rect(0,0,W,H,'#303438');rect(3,3,W-6,90,base);
+ if(!lightbox)rect(3,3,W-6,90,'rgba(12,20,24,.53)');
+ // Corrugated metal, folded edge rails and bolted lower steel frame are
+ // painted into the original board envelope; collision and paint UV stay fixed.
+ for(let i=4;i<W-3;i+=Math.max(5,W/36)){rect(i,4,1,70,'rgba(0,0,0,.17)');rect(i+1,4,1,70,'rgba(255,255,255,.10)');}
+ rect(3,75,W-6,18,lightbox?'#34343b':'#20282d');
+ ctx.strokeStyle='#697176';ctx.lineWidth=1.5;
+ ctx.beginPath();ctx.moveTo(4,76);ctx.lineTo(W-4,76);ctx.moveTo(4,91);ctx.lineTo(W-4,91);
+ for(let i=4;i<W-4;i+=W/6){const end=Math.min(W-4,i+W/6);ctx.moveTo(i,76);ctx.lineTo(end,91);ctx.moveTo(i,91);ctx.lineTo(i,76);}
+ ctx.stroke();
+ if(neon){ctx.strokeStyle='#f783bc';ctx.lineWidth=2;ctx.strokeRect(5,5,W-10,68);}
+ else if(lightbox){rect(4,67,W-8,7,'#983e38');}
+ const main=String(title||'商店'),glyphCount=Math.max(1,Array.from(main).length);
+ const max=W-16,size=Math.min(subtitle?56:65,max/glyphCount*1.04);
+ ctx.font=(style==='handwritten'?'700':'900')+' '+size+'px '+family;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
+ ctx.strokeStyle=lightbox?'rgba(255,255,255,.28)':'#172027';ctx.lineWidth=2.8;ctx.strokeText(main,W/2,subtitle?31:39,max);
+ ctx.fillStyle=ink;ctx.fillText(main,W/2,subtitle?31:39,max);
+ if(subtitle){ctx.font='700 12px '+family;ctx.fillStyle=lightbox?'#20232a':ink;ctx.fillText(String(subtitle),W/2,61,max);}
+ ctx.restore();
+}
+
+// Shared clock: one scalar write per existing scene update. A vertex shader
+// evaluates the phase per sign; no CPU sign loop or texture re-upload.
+const rooftopClock={value:0};
+export function updateRooftopSignClock(time){rooftopClock.value=time;}
+export function installRooftopSignLighting(material,{batched=false,seed=0}={}){
+ const previous=material.onBeforeCompile,key=material.customProgramCacheKey();
+ material.customProgramCacheKey=()=>key+'-roof-light-v098-'+(batched?'batch':'single');
+ material.onBeforeCompile=function(shader,renderer){
+  previous.call(this,shader,renderer);
+  shader.uniforms.uRoofClock=rooftopClock;
+  if(!batched)shader.uniforms.uRoofMode={value:rooftopSignMode(seed)+1};
+  if(!batched)shader.uniforms.uRoofPhase={value:(seed>>>0)%97*.73};
+  shader.vertexShader='uniform float uRoofClock;\n'+(batched?'attribute vec3 roofSignLight;\n':'uniform float uRoofMode;\nuniform float uRoofPhase;\n')+'varying vec3 vRoofLight;\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+   vec3 roofInput=${batched?'roofSignLight':'vec3(uRoofMode,uRoofPhase,uv.x)'};
+   float rt=uRoofClock+roofInput.y;
+   float pulse=.83+.17*sin(rt*2.1);
+   float broken=step(.27,fract(rt*.43))*step(.22,fract(rt*3.7));
+   float mode=roofInput.x;
+   float glow=mode<1.5?1.:(mode<2.5?pulse:(mode<3.5?broken:(mode<4.5?pulse:.05)));
+   vRoofLight=vec3(mode,glow,roofInput.z);`);
+  shader.fragmentShader='varying vec3 vRoofLight;\n'+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+   if(vRoofLight.x>.5){
+    float lamp=vRoofLight.y;
+    if(vRoofLight.x>2.5&&vRoofLight.x<3.5&&vRoofLight.z<.48)lamp=1.;
+    float lit=smoothstep(.12,.65,max(diffuseColor.r,max(diffuseColor.g,diffuseColor.b)));
+    diffuseColor.rgb*=mix(.46,1.22,clamp(lamp,0.,1.))*lit+1.-lit;
+   }`);
+  if(!batched)shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+   float roofLamp=vRoofLight.y;
+   if(vRoofLight.x>2.5&&vRoofLight.x<3.5&&vRoofLight.z<.48)roofLamp=1.;
+   totalEmissiveRadiance+=diffuseColor.rgb*roofLamp*.48;`);
+ };
+ material.needsUpdate=true;
+}

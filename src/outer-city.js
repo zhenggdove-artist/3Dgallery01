@@ -3,7 +3,7 @@ import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
  cityLots,citySignSpecs,cityShopSignSpec,citySignArtOptions,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,CityImpactPlumes,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
-import {drawSignArtwork} from './sign-art.js';
+import {drawSignArtwork,drawRooftopSignArtwork,rooftopSignMode,installRooftopSignLighting,updateRooftopSignClock} from './sign-art.js';
 import {CityWallPaint} from './city-wall-paint.js';
 import {CityFireField} from './city-fire-field.js';
 import {CitySplinterField} from './city-splinter-field.js';
@@ -190,18 +190,20 @@ function signAtlas(lots){
  const g=canvas.getContext('2d');
  entries.forEach(({lot,variant,sign},i)=>{
   const x=i%columns*tile,y=Math.floor(i/columns)*tile;
-  drawSignArtwork(g,x,y,tile,tile,{color:variant===2?sign.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,shopKind:lot.style[0],vertical:variant===1,aspect:variant===1?.5:sign.width/sign.height,...citySignArtOptions(lot,variant)});
+  (variant===2?drawRooftopSignArtwork:drawSignArtwork)(g,x,y,tile,tile,{color:variant===2?sign.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,shopKind:lot.style[0],vertical:variant===1,aspect:variant===1?.5:sign.width/sign.height,...citySignArtOptions(lot,variant),...(variant===2?{seed:lot.index}:{})});
  });
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
  return {map,columns,rows,tile,slots};
 }
 function buildShopSigns(lots){
- const atlas=signAtlas(lots),p=[],uv=[],ids=[],lotIds=[],ranges=new Map(),partRanges=new Map();
+ const atlas=signAtlas(lots),p=[],uv=[],ids=[],lotIds=[],roofLights=[],ranges=new Map(),partRanges=new Map();
  const quad=(lot,points,variant)=>{
   const base=p.length/3;for(const [x,y,z] of points){const q=localToWorld(lot,x,z);p.push(q[0],y,q[1]);lotIds.push(lot.index);}
   const i=atlas.slots.get(lot.index*3+variant),col=i%atlas.columns,row=Math.floor(i/atlas.columns),mx=.8/(atlas.columns*atlas.tile),my=.8/(atlas.rows*atlas.tile);
   const l=col/atlas.columns+mx,r=(col+1)/atlas.columns-mx,t=1-(row+1)/atlas.rows+my,b=1-row/atlas.rows-my;
   uv.push(l,t,r,t,r,b,l,b);ids.push(base,base+1,base+2,base,base+2,base+3);
+   const mode=variant===2?rooftopSignMode(lot.index)+1:0,phase=variant===2?(lot.index%97)*.73:0;
+   for(const u of [0,1,1,0])roofLights.push(mode,phase,u);
  };
  for(const lot of lots){
   const begin=p.length/3,flat=cityShopSignSpec(lot);
@@ -214,7 +216,7 @@ function buildShopSigns(lots){
   }
   ranges.set(lot.index,[begin,p.length/3]);
  }
- const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setAttribute('cityLotId',new THREE.Float32BufferAttribute(lotIds,1));geo.setIndex(ids);geo.computeVertexNormals();
+ const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setAttribute('cityLotId',new THREE.Float32BufferAttribute(lotIds,1));geo.setAttribute('roofSignLight',new THREE.Float32BufferAttribute(roofLights,3));geo.setIndex(ids);geo.computeVertexNormals();
  const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:atlas.map,side:THREE.DoubleSide}));mesh.name='Unique bilingual shop sign atlas';mesh.userData.lotRanges=ranges;mesh.userData.partRanges=partRanges;return mesh;
 }
 function buildWallGraffiti(lots){
@@ -439,7 +441,7 @@ export class OuterCity{
   // Outer district is covered by GrassField's continuous living grass canopy.
   this.walls=batchGeometry(this.lots,mobile);this.facade=installFacadeCracks(this.walls);
   this.signs=buildShopSigns(this.lots);this.graffiti=buildWallGraffiti(this.lots);
-   installAttachedFlash(this.signs,this.facade.texture);installAttachedFlash(this.graffiti,this.facade.texture);
+   installAttachedFlash(this.signs,this.facade.texture);installRooftopSignLighting(this.signs.material,{batched:true});installAttachedFlash(this.graffiti,this.facade.texture);
   this.gpuPose=cityDeformationTexture(this.lots);
   for(const mesh of [this.walls,this.signs,this.graffiti]){
     mesh.userData.originalPositions=mesh.geometry.attributes.position.array.slice();
@@ -974,6 +976,7 @@ export class OuterCity{
  }
  blocked(x,z,y=0){return cityBlocked(x,z,y,this.damage);}
  update(time,dt=1/60,camera=null){
+  updateRooftopSignClock(time);
   const tmp=this.frameTransform??=new THREE.Object3D();
   this.updateRubbleResidency(camera);
   for(let i=0;i<this.bagRecords.length;i++){
