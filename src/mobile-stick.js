@@ -23,7 +23,11 @@ export function bindMobileStick(stick,{enabled,write,win=window,doc=document,nat
   const f=radius/Math.max(radius,Math.hypot(dx,dy));
   write(dx*f/radius,dy*f/radius);knob.style.transform='translate('+dx*f+'px,'+dy*f+'px)';
  }
- const find=(list,id)=>Array.from(list||[]).find(t=>t.identifier===id);
+ const find=(list,id)=>{
+  if(!list)return undefined;
+  if(!Array.isArray(list)&&typeof list.item!=='function')return Array.from(list).find(t=>t.identifier===id);
+  for(let i=0,n=list.length;i<n;i++){const t=list[i];if(t.identifier===id)return t;}
+ };
  const belongs=t=>!!t?.target&&stick.contains(t.target);
  function touchEvent(e){
   if(!enabled()){if(owner)reset();return;}

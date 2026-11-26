@@ -10,10 +10,11 @@ export function changedWorldFields(previous,next,skip=new Set()){
 }
 const headerKeys=new Set(['cityDamage','revision','serverTime']);
 const commonHeaderKeys=new Set([...headerKeys,'profile']);
-export function createWorldPatch(previous,next,ignoreProfile=false){
+const serializeCityRecord=(_id,record)=>JSON.stringify(record);
+export function createWorldPatch(previous,next,ignoreProfile=false,serializeNextCityRecord=serializeCityRecord){
  const fields=changedWorldFields(previous,next,ignoreProfile?commonHeaderKeys:headerKeys),city={};
  const oldCity=previous.cityDamage||{},newCity=next.cityDamage||{};
- for(const [id,record] of Object.entries(newCity))if(JSON.stringify(record)!==JSON.stringify(oldCity[id]))city[id]=record;
+ for(const [id,record] of Object.entries(newCity))if(serializeNextCityRecord(id,record)!==JSON.stringify(oldCity[id]))city[id]=record;
  for(const id of Object.keys(oldCity))if(!Object.hasOwn(newCity,id))city[id]=null;
  return {base:previous.revision,revision:next.revision,serverTime:next.serverTime,fields,...(Object.keys(city).length?{city}:{})};
 }

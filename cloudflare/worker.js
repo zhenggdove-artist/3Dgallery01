@@ -518,7 +518,9 @@ export class TempleRoom extends DurableObject{
   broadcastRoster(){this.lastRosterAt=Date.now();this.broadcast('players',this.roster());}
   broadcastWorld(world=this.readWorld()){
     const now=Date.now(),updateViewers=now-(this.lastSpectatorWorldAt||0)>=350;
-    const commonPatches=new Map(),profileViews=new Map();let common;
+    const commonPatches=new Map(),profileViews=new Map(),cityRecordJSON=new Map();let common;
+    // Only this synchronous broadcast shares serialization of the same cloned snapshot.
+    const serializeCityRecord=(id,record)=>{if(!cityRecordJSON.has(id))cityRecordJSON.set(id,JSON.stringify(record));return cityRecordJSON.get(id);};
     for(const ws of this.sockets()){
       const meta=ws.deserializeAttachment();
       if(!meta||(meta.role==='spectator'&&!updateViewers))continue;
@@ -531,7 +533,7 @@ export class TempleRoom extends DurableObject{
        if(previous){
         const baselineKey=previous.revision+':'+previous.serverTime;
         let patch=commonPatches.get(baselineKey);
-        if(!patch){patch=createWorldPatch(previous,common,true);commonPatches.set(baselineKey,patch);}
+        if(!patch){patch=createWorldPatch(previous,common,true,serializeCityRecord);commonPatches.set(baselineKey,patch);}
         const profileDelta=meta.compact&&previous.profile&&profile?
           changedWorldFields(previous.profile,profile):null;
         const fields=profileDelta||JSON.stringify(previous.profile)===JSON.stringify(profile)?patch.fields:{...patch.fields,profile};
