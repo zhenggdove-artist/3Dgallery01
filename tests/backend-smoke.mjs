@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
+import {applyWorldPatch} from '../src/shared/world-patch.js';
 import {setTimeout as delay} from 'node:timers/promises';
 
 const base=process.env.TEMPLE_WORKER_URL||'http://127.0.0.1:8787';
@@ -78,9 +79,19 @@ if(process.env.TEMPLE_TEST_ADMIN_KEY){
 }
 // The authoritative API deliberately refuses game actions until the player
 // opens the real socket and submits a validated initial position.
-const socket=new WebSocket(base.replace(/^http/,'ws')+'/api/socket?token='+encodeURIComponent(token));
+const socket=new WebSocket(base.replace(/^http/,'ws')+'/api/socket?patch=2&token='+encodeURIComponent(token));
+const wire=[];let wireWorld;
+socket.on('message',raw=>{const msg=JSON.parse(String(raw));if(msg.type==='welcome')wireWorld=msg.data.world;else if(msg.type==='world')wireWorld=msg.data;else if(msg.type==='world-patch')wireWorld=applyWorldPatch(wireWorld,msg.data);wire.push(msg);});
 await new Promise((resolve,reject)=>{socket.once('open',resolve);socket.once('error',reject);});
-socket.send(JSON.stringify({type:'state',data:{position:PLAYER_SPAWNS[0],rotation:0,animation:'idle',visible:true}}));
+const until=async predicate=>{for(let i=0;i<300;i++){const value=predicate();if(value)return value;await delay(20);}throw Error('Realtime action acknowledgement missing');};
+assert.equal((await until(()=>wire.find(m=>m.type==='welcome'))).data.fastActionsV087,true);
+socket.send(JSON.stringify({type:'state',data:{position:PLAYER_SPAWNS[0],rotation:0,animation:'idle',visible:true,seq:1}}));
+await until(()=>wire.find(m=>m.type==='state-ack'&&m.data.seq===1));
+const realtime=async(action,extra={},requestId=randomUUID())=>{const started=performance.now();const index=wire.length;socket.send(JSON.stringify({type:'combat-action',data:{action,requestId,fastActionV087:true,...extra}}));const msg=await until(()=>wire.slice(index).find(m=>m.type==='combat-result'&&m.data.requestId===requestId));console.log('V087 '+action+' '+Math.round(performance.now()-started)+'ms status='+msg.data.status);return msg.data;};
+const equipId=randomUUID(),equip=await realtime('equip',{itemId:'saber-2'},equipId);assert.equal(equip.status,200);assert.ok(equip.result.worldRevision);assert.equal(equip.result.world,undefined);assert.equal(wireWorld.profile.equipment.weapon,'saber-2');
+assert.deepEqual((await realtime('equip',{itemId:'saber-2'},equipId)).result,equip.result);
+const unowned=await realtime('equip',{itemId:'black-cat'});assert.equal(unowned.status,400);assert.equal(wireWorld.profile.equipment.weapon,'saber-2');
+const missing=await realtime('pickup-drop',{dropId:'nonexistent'});assert.equal(missing.status,400);assert.match(missing.result.error,/Drop is gone/);
 await delay(250);
 const act=async(action,extra={})=>call('/api/action',{action,requestId:randomUUID(),...extra},token);
 const denied=await call('/api/action',{action:'recover-artworks',requestId:randomUUID()},token,{expectedStatus:400});

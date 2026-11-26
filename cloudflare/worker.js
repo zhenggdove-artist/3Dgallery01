@@ -12,6 +12,7 @@ import {playerStats} from '../src/shared/player-stats.js';
 import {SHOP_CATALOG_REVISION,SHOP_CATALOG_IDS} from '../src/shared/catalog.js';
 import {CITY_LAYOUT_SIGNATURE,CITY_BUILDING_COUNT} from '../src/shared/city-layout.js';
 import {changedWorldFields,createWorldPatch} from '../src/shared/world-patch.js';
+import {isRealtimeAction} from '../src/shared/realtime-actions.js';
 
 const MUSIC_CHUNK_BYTES=512*1024,MAX_GM_MUSIC_BYTES=7_500_000;
 const ROOM_ID='temple-main-v1',SESSION_MS=24*60*60*1000,SAVE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -21,7 +22,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,fastActionsV087:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
@@ -56,9 +57,9 @@ export class TempleRoom extends DurableObject{
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
   }
 
-  world(){return migrateWorld(JSON.parse(this.sql.exec('SELECT payload FROM world_state WHERE id=1').toArray()[0]?.payload||'{}'));}
+  world(){return migrateWorld(JSON.parse(this.committedPayload??this.sql.exec('SELECT payload FROM world_state WHERE id=1').toArray()[0]?.payload??'{}'));}
   readWorld(){return this.readSnapshot??=this.world();}
-  save(world){this.readSnapshot=null;this.sql.exec('INSERT OR REPLACE INTO world_state VALUES(1,?)',JSON.stringify(world));}
+  save(world){this.readSnapshot=null;this.committedPayload=null;const payload=JSON.stringify(world);this.sql.exec('INSERT OR REPLACE INTO world_state VALUES(1,?)',payload);return payload;}
   session(token){if(!token)return null;return this.sql.exec('SELECT * FROM sessions WHERE id=? AND expires>?',token,Date.now()).toArray()[0]||null;}
   token(request,url){return request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]||url.searchParams.get('token')||'';}
   sockets(){return this.ctx.getWebSockets().filter(ws=>ws.readyState===1&&!this.closed.has(ws));}
@@ -212,7 +213,7 @@ export class TempleRoom extends DurableObject{
     for(const ws of this.ctx.getWebSockets(session.id)){this.closed.add(ws);try{ws.close(1000,'Reconnected');}catch{}}
     const [client,server]=Object.values(new WebSocketPair()),protocol=new URL(request.url).searchParams.get('patch'),compact=protocol==='2',patch=compact||protocol==='1';this.ctx.acceptWebSocket(server,[session.id]);server.serializeAttachment({sessionId:session.id,profileKey:session.profile_key,role:session.role,seat:session.seat,lastStateAt:0,patch,compact});
     const view=worldView(this.readWorld(),session.profile_key);if(patch)this.worldBaselines.set(server,view);
-    server.send(JSON.stringify({type:'welcome',data:{self:this.self(session),players:this.roster(),world:view,compactCombat:compact,combatSocketActions:compact}}));this.broadcastRoster();this.armAlarm();
+    server.send(JSON.stringify({type:'welcome',data:{self:this.self(session),players:this.roster(),world:view,compactCombat:compact,combatSocketActions:compact,fastActionsV087:compact}}));this.broadcastRoster();this.armAlarm();
     return new Response(null,{status:101,webSocket:client});
   }
 
@@ -259,7 +260,7 @@ export class TempleRoom extends DurableObject{
      // Only the negotiated, authenticated fighter socket can submit attacks.
      // All existing action validation, receipts and persistence are shared.
      const body=event.data,requestId=String(body?.requestId||'');
-     if(!meta.compact||body?.action!=='attack'||!(/^[A-Za-z0-9:_-]{8,100}$/.test(requestId)))return;
+     if(!meta.compact||body?.action!=='attack'&&!(body?.fastActionV087===true&&isRealtimeAction(body.action))||!(/^[A-Za-z0-9:_-]{8,100}$/.test(requestId)))return;
      let response;try{response=await this.action(null,session,{...body,compactCombat:true});}
      catch(error){response=json({error:'Combat action failed'},500);console.error('Combat action failed',error);}
      const result=await response.text();
@@ -320,16 +321,18 @@ export class TempleRoom extends DurableObject{
      const next={position:[...newProfile.respawnPosition],rotation:0,animation:'idle',visible:true};
      this.sql.exec('UPDATE sessions SET state=? WHERE id=?',JSON.stringify(next),session.id);
     }
-    const compact=body.action==='attack'&&body.compactCombat===true&&
-      this.ctx.getWebSockets(session.id).some(ws=>ws.readyState===1&&!this.closed.has(ws)&&ws.deserializeAttachment()?.compact);
+    const compact=(body.action==='attack'&&body.compactCombat===true||parsedBody&&body.fastActionV087===true&&isRealtimeAction(body.action))&&
+      this.ctx.getWebSockets(session.id).some(ws=>ws.readyState===1&&!this.closed.has(ws)&&ws.deserializeAttachment()?.compact&&
+       (body.action==='attack'||ws.deserializeAttachment()?.role==='fighter'));
     // Attack results still contain hit events and the original success/error
     // fields, but the room patch already carries the new authority revision.
     // Do not encode, persist and retransmit a full gallery for every pulse.
     const response={ok:true,...result,...(compact?{worldRevision:world.revision}:
       {world:worldView(world,session.profile_key,Date.now(),['gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate','redeem-wing-design'].includes(body.action))})};
     const responseText=JSON.stringify(response);
+    let committedPayload;
     this.ctx.storage.transactionSync(()=>{
-      this.save(world);
+      committedPayload=this.save(world);
       if(['reset-player-artworks','gm-remove-artworks'].includes(body.action)&&Array.isArray(result.removedArtworkMediaIds)){
         for(const mediaId of result.removedArtworkMediaIds){
           this.sql.exec('DELETE FROM art_media_chunks WHERE id=?',mediaId);
@@ -341,7 +344,7 @@ export class TempleRoom extends DurableObject{
     });
     // The committed snapshot is already available; the next movement ACK
     // need not reload and migrate the complete SQLite world again.
-    this.readSnapshot=world;
+    this.committedPayload=committedPayload;this.readSnapshot=world;
     if(result.resetMessages){
       this.sql.exec('DELETE FROM chat_messages');
       // Reset must remove prior messages from *every* connected client's UI.
@@ -596,7 +599,7 @@ export class TempleRoom extends DurableObject{
       role:actor.role,seat:actor.seat,state});
      respawned=true;
     }
-    this.save(world);this.readSnapshot=world;
+    this.committedPayload=this.save(world);this.readSnapshot=world;
     // Full world views include persistent artwork, graffiti, 432-lot city HP,
     // profile inventories and active damage effects. Serializing that entire
     // JSON graph up to 14x/s during beam/building ticks blocks movement ACKs
