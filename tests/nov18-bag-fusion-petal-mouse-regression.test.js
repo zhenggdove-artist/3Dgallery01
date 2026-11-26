@@ -120,14 +120,15 @@ test('official ground healing scene-object VFX is present, at character scale, w
  ice.native.dispose();
 });
 
-test('a single 100ms raise is continuous across tap release and server ack',()=>{
+test('a single 100ms raise remains continuous without blocking attack input',()=>{
  assert.equal(STAFF_RAISE_SECONDS,.1);
  assert.ok(Math.abs(advanceStaffRaise(0,true,.04)-.4)<1e-9);
  assert.ok(Math.abs(advanceStaffRaise(.4,true,.06)-1)<1e-9);
  assert.equal(advanceStaffRaise(1,true,.02),1);
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.match(main,/staffCastingUntil=Infinity/);
- assert.match(main,/STAFF_RAISE_SECONDS\*1000-heldMs/);
+ assert.doesNotMatch(main,/STAFF_RAISE_SECONDS\*1000-heldMs/);
+ assert.match(main,/normalOnPress=true;void performAttack\(0\)/);
  assert.match(main,/await performAttack\(0,null,releaseAim\)/);
  assert.match(main,/controller\.channelAiming=!!\(attackHeld&&isChannelStaff/);
 });

@@ -72,13 +72,13 @@ export class ReletterPresentation{
   }
   beforeAnimation(){for(let i=this.restore.length-1;i>=0;i--){const [object,property,value]=this.restore[i];object[property].copy(value);}this.restore.length=0;}
   previewNormal(root,item,inputId,data){
-   if(!root||root.userData.weaponId!==item.id)return false;
+   if(!root)return false;
    const d=root.userData,now=performance.now();
    if(now-(d.lastNormalPreviewAt??-Infinity)<Math.max(70,Number(item.cooldown)||0))return false;
    d.lastNormalPreviewAt=now;
    if(meleeFamilies.includes(item.family))this.previewMelee(root,item,inputId);
    this.normalPreviews??=new Map();
-   try{this.vfx.play({...item,...data},item,root);}catch(error){console.warn('Local attack visual failed',error);return false;}
+   try{this.vfx.play({...item,...data,localPredicted:true},item,root);}catch(error){console.warn('Local attack visual failed',error);return false;}
    this.normalPreviews.set(inputId,now);
    if(this.normalPreviews.size>128)this.normalPreviews.delete(this.normalPreviews.keys().next().value);
    return true;
@@ -86,8 +86,8 @@ export class ReletterPresentation{
   previewMelee(root,item,inputId){
    if(!root||!meleeFamilies.includes(item.family)||root.userData.weaponId!==item.id)return false;
    const d=root.userData,now=performance.now();
-   if(d.localSwing&&now-d.localSwing.at<Math.max(100,Number(item.cooldown)||0))return false;
-   if(now-(d.lastSwingAt??-Infinity)<Math.max(100,Number(item.cooldown)||0))return false;
+   // The normal input gate already checks the actual tuned cooldown. Never
+   // extend it by the round trip time of an earlier server acknowledgement.
    const combo=now-(d.lastSwingAt??-Infinity)<1200?((d.lastSwingCombo||0)+1)%6:0;
    d.localSwing={inputId,at:now};
    d.attack={age:0,duration:meleeDuration(item.family,combo),combo,data:{...item,charge:0},inputId};
@@ -97,7 +97,7 @@ export class ReletterPresentation{
   play(event,root){if(!event||this.seen.has(event.id))return;this.seen.add(event.id);if(this.seen.size>100)this.seen.delete(this.seen.values().next().value);const item=itemById(event.weapon);if(!item)return;const data={...item,...event,charge:event.charge||0};if(root&&isSpellWeapon(item))root.userData.staffCastingUntil=performance.now()+
      (event.channel?Math.max(1700,(item.cooldown||700)*3):230);if(root&&meleeFamilies.includes(item.family)){
       const d=root.userData,combo=event.combo||0,predicted=event.inputId&&d.localSwing?.inputId===event.inputId;
-      d.lastSwingAt=predicted?d.localSwing.at:performance.now();d.lastSwingCombo=combo;
+      d.lastSwingAt=predicted?d.localSwing.at:(this.normalPreviews?.get(event.inputId)??performance.now());d.lastSwingCombo=combo;
       if(predicted){d.localSwing=null;if(d.attack?.inputId===event.inputId){d.attack.combo=combo;d.attack.duration=meleeDuration(item.family,combo);d.attack.data=data;}}
       else d.attack={age:0,duration:meleeDuration(item.family,combo),combo,data};
     }

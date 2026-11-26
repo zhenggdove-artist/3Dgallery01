@@ -124,12 +124,14 @@ export class TempleNetwork extends EventTarget{
   rejectCombatSocket(socket){
    for(const [id,pending] of this.combatPending){if(pending.socket!==socket)continue;clearTimeout(pending.timer);this.combatPending.delete(id);pending.reject(Error('Combat connection interrupted'));}
   }
-  async action(action,data={}){
+  async action(action,data={},options={}){
    const compactCombat=action==='attack'&&this.compactCombat&&this.socket?.readyState===WebSocket.OPEN;
    const started=performance.now();
    const fastAction=this.fastActionsV087&&isRealtimeAction(action)&&this.socket?.readyState===WebSocket.OPEN;
    const body={action,requestId:crypto.randomUUID(),...data,...(compactCombat?{compactCombat:true}:{}),...(fastAction?{fastActionV087:true}:{})};
-   const socket=(fastAction||(compactCombat&&this.combatSocketActions))?this.socket:null;
+   // V035 used the independent HTTP mutation path for combat. Keep motion,
+   // inventory and pickup traffic on the realtime socket; do not queue attacks behind them.
+   const socket=!options.preferHttp&&(fastAction||(compactCombat&&this.combatSocketActions))?this.socket:null;
    // Do not replay a transmitted attack after a timeout or disconnect. The
    // server may already have committed it. A new input can use HTTP until
    // the negotiated realtime transport is ready again.

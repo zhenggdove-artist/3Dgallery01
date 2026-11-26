@@ -326,7 +326,7 @@ export class WeaponVFX{
   entry.age=0;entry.range=Math.max(1,Number(data.range)||12);
   entry.duration=Math.max(.16,Number(data.flightMs)||projectileFlightMs(item,false,entry.range))/1000;
   entry.group.position.copy(origin);entry.group.scale.setScalar(Math.max(.7,Math.min(1.6,Number(data.qualityScale)||1)));
-  entry.group.visible=true;this.scene.add(entry.group);this.staffOrbs.push(entry);
+  entry.firstFramePending=!!data.localPredicted;entry.group.visible=true;this.scene.add(entry.group);this.staffOrbs.push(entry);
  }
  releaseStaffOrb(entry){
   const index=this.staffOrbs.indexOf(entry);if(index>=0)this.staffOrbs.splice(index,1);
@@ -476,6 +476,11 @@ export class WeaponVFX{
     fx.group.position.y=grip&&Number.isFinite(grip.y)?grip.y:origin.y-.15;
    }
    if(continuous.has(id))fx.update(fx.lifecycle.start||0);
+   else if(data.localPredicted&&!data.ultimate){
+    // The V035 native swipe asset has an authored 80ms startup phase. Prime
+    // to its first active sample instead of adding that delay after input.
+    fx.update(Math.max(0,Number(fx.lifecycle?.start)||0)+.016);
+   }
    if(groundEffect){
     // Prefab local geometry sometimes extends below its origin. Raise the
     // visible effect instead of allowing a frozen half-buried animation.
@@ -486,6 +491,7 @@ export class WeaponVFX{
    }
    entry.stopAt=data.channel?1.3:data.ultimate?1.35:.35;
   }
+  if(data.localPredicted&&!data.ultimate)entry.firstFramePending=true;
   if(root?.userData.blade&&!beams.has(id)&&!projectiles.has(id)){
    let trail=this.active.find(e=>e.id==='weapon-smear'&&e.weapon===root.userData.blade&&!e.stopped);
    if(!trail){trail=this.acquire('weapon-smear',{color:item.color,size:.8});trail.fx.attachWeapon(root.userData.blade,{base:[0,0,0],tip:[0,1.1,0]});trail.weapon=root.userData.blade;}
@@ -494,6 +500,7 @@ export class WeaponVFX{
   // Fusion echoes are complete server-authored source weapon events, not placeholder flashes.
   if(data.impactPoint&&!projectiles.has(id)){const impact=this.acquire(item.family==='ice'?'ice-shatter':'energy-burst',{size:.3,color:item.color,speed:2});impact.fx.group.position.copy(end);}
  }
+ markPresented(){for(const e of this.active)e.firstFramePending=false;for(const orb of this.staffOrbs)orb.firstFramePending=false;}
  confirmNormalImpact(data,item){
   if(!data.impactPoint||isChannelStaff(item)||item.id==='calico-cat'||item.id==='goldfish'||item.id==='black-cat'||projectiles.has(effectFor(item,false)))return;
   const impact=this.acquire(item.family==='ice'?'ice-shatter':'energy-burst',{size:.3,color:item.color,speed:2});
@@ -541,6 +548,7 @@ export class WeaponVFX{
    }
   }
   for(const orb of [...this.staffOrbs]){
+   if(orb.firstFramePending)continue;
    orb.age+=dt;
    const t=Math.min(1,orb.age/orb.duration);
    orb.group.position.copy(orb.origin).addScaledVector(orb.direction,orb.range*t);
@@ -570,6 +578,7 @@ export class WeaponVFX{
      }
      this.alignWaterStream(e,world,dt);
     }
+    if(e.firstFramePending)continue;
     e.age+=dt;if(e.weapon)e.weapon.updateWorldMatrix(true,false);
     if(e.start&&!e.stopped)e.fx.group.position.lerpVectors(e.start,e.end,Math.min(1,e.age/e.travel));
     if(!e.stopped&&e.age>=e.stopAt){

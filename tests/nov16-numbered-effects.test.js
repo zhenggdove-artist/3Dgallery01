@@ -346,12 +346,12 @@ test('native ice / sword / coconut travel durations agree with their extended vi
  assert.equal(projectileFlightMs(itemById('palm-1'),false),245);
 });
 
-test('500ms A hold threshold and doubled ice reach remain consistent with forward rectangular warning',async()=>{
+test('250ms A hold threshold and doubled ice reach remain consistent with forward rectangular warning',async()=>{
  const {STAFF_TAP_MAX_MS,isStaffTap,chargeProgress,channelReachMultiplier,weaponQuality}=await import('../src/shared/weapon-abilities.js');
- assert.equal(STAFF_TAP_MAX_MS,500);
- assert.equal(isStaffTap(itemById('frost-1'),499),true);
- assert.equal(isStaffTap(itemById('frost-1'),501),false);
- assert.equal(chargeProgress(500,1500),0);
+ assert.equal(STAFF_TAP_MAX_MS,250);
+ assert.equal(isStaffTap(itemById('frost-1'),249),true);
+ assert.equal(isStaffTap(itemById('frost-1'),251),false);
+ assert.equal(chargeProgress(250,1500),0);
  assert.ok(chargeProgress(1000,1500)>0);
  const ice=itemById('frost-1'),fire=itemById('ember-1');
  assert.equal(channelReachMultiplier(ice),2);
