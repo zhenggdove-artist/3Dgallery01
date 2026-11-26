@@ -21,7 +21,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
@@ -212,7 +212,7 @@ export class TempleRoom extends DurableObject{
     for(const ws of this.ctx.getWebSockets(session.id)){this.closed.add(ws);try{ws.close(1000,'Reconnected');}catch{}}
     const [client,server]=Object.values(new WebSocketPair()),protocol=new URL(request.url).searchParams.get('patch'),compact=protocol==='2',patch=compact||protocol==='1';this.ctx.acceptWebSocket(server,[session.id]);server.serializeAttachment({sessionId:session.id,profileKey:session.profile_key,role:session.role,seat:session.seat,lastStateAt:0,patch,compact});
     const view=worldView(this.readWorld(),session.profile_key);if(patch)this.worldBaselines.set(server,view);
-    server.send(JSON.stringify({type:'welcome',data:{self:this.self(session),players:this.roster(),world:view,compactCombat:compact}}));this.broadcastRoster();this.armAlarm();
+    server.send(JSON.stringify({type:'welcome',data:{self:this.self(session),players:this.roster(),world:view,compactCombat:compact,combatSocketActions:compact}}));this.broadcastRoster();this.armAlarm();
     return new Response(null,{status:101,webSocket:client});
   }
 
@@ -254,7 +254,19 @@ export class TempleRoom extends DurableObject{
 
   async webSocketMessage(ws,message){
     const meta=ws.deserializeAttachment();if(!meta||this.closed.has(ws))return;const session=this.session(meta.sessionId);if(!session){this.closed.add(ws);ws.close(4001,'Session expired');return;}
-    let event;try{event=JSON.parse(String(message));}catch{return;}if(event.type!=='state')return;
+    let event;const raw=String(message);if(raw.length>320000)return;try{event=JSON.parse(raw);}catch{return;}
+    if(event?.type==='combat-action'){
+     // Only the negotiated, authenticated fighter socket can submit attacks.
+     // All existing action validation, receipts and persistence are shared.
+     const body=event.data,requestId=String(body?.requestId||'');
+     if(!meta.compact||body?.action!=='attack'||!(/^[A-Za-z0-9:_-]{8,100}$/.test(requestId)))return;
+     let response;try{response=await this.action(null,session,{...body,compactCombat:true});}
+     catch(error){response=json({error:'Combat action failed'},500);console.error('Combat action failed',error);}
+     const result=await response.text();
+     try{ws.send('{"type":"combat-result","data":{"requestId":'+JSON.stringify(requestId)+',"status":'+response.status+',"result":'+result+'}}');}catch{this.closed.add(ws);}
+     return;
+    }
+    if(event?.type!=='state')return;
     // Spectators move their free camera locally; only four fighters send
     // authoritative pose streams. Do not fan out up to 100 viewer cameras.
     if(session.role!=='fighter')return;
@@ -286,8 +298,8 @@ export class TempleRoom extends DurableObject{
     if(!replacement)this.sql.exec('UPDATE sessions SET expires=MIN(expires,?) WHERE id=?',Date.now()+45_000,meta.sessionId);
   }
 
-  async action(request,session){
-    const body=await readBody(request,320_000),requestId=String(body.requestId||'');if(!/^[A-Za-z0-9:_-]{8,100}$/.test(requestId))return json({error:'Valid requestId required'},400);
+  async action(request,session,parsedBody=null){
+    const body=parsedBody??await readBody(request,320_000),requestId=String(body.requestId||'');if(!/^[A-Za-z0-9:_-]{8,100}$/.test(requestId))return json({error:'Valid requestId required'},400);
     const receipt=this.sql.exec('SELECT response FROM request_receipts WHERE session_id=? AND request_id=?',session.id,requestId).toArray()[0];if(receipt)return json(JSON.parse(receipt.response));
      if(body.action==='paint-building'&&!this.consumeRate('paint:'+session.profile_key,180,60_000))return json({error:'Painting rate limit reached'},429);
     const state=session.state?JSON.parse(session.state):null;
@@ -327,6 +339,9 @@ export class TempleRoom extends DurableObject{
       this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,responseText,Date.now());
       this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);
     });
+    // The committed snapshot is already available; the next movement ACK
+    // need not reload and migrate the complete SQLite world again.
+    this.readSnapshot=world;
     if(result.resetMessages){
       this.sql.exec('DELETE FROM chat_messages');
       // Reset must remove prior messages from *every* connected client's UI.
@@ -334,7 +349,10 @@ export class TempleRoom extends DurableObject{
     }
     if(result.publishedWingId||result.unpublishedWingId||result.updatedWingId||result.personalWingId)
       this.broadcast('wing-catalog',{revision:world.revision,wings:world.customWings||[]});
-    this.broadcastWorld(world);if(didRespawn||result.delistedItemId)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);this.broadcastStructureEvents(result.structureHits||(result.structureHit?[result.structureHit]:[]),result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]));await this.armAlarm();return new Response(responseText,{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
+    // Attack presentation is independent of the heavyweight world patch.
+    // Deliver the authoritative event first; never predict damage locally.
+    if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);
+    this.broadcastWorld(world);if(didRespawn||result.delistedItemId)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);this.broadcastStructureEvents(result.structureHits||(result.structureHit?[result.structureHit]:[]),result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]));await this.armAlarm();return new Response(responseText,{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
   }
 
   async saveCode(session){
