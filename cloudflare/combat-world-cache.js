@@ -11,18 +11,37 @@ function freezeTree(value){
  return value;
 }
 export function encodeCombatWorld(world,prior=null){
- const records=new Map(),dynamic={},staticJSON=[];
+ const records=new Map(),rows=new Map(),dynamicJSON=[],staticJSON=[];
  for(const [key,value] of Object.entries(world)){
-  if(!STATIC.has(key)){dynamic[key]=value;continue;}
-  const old=prior?.records.get(key),record=old?.value===value?old:{value:freezeTree(value),json:JSON.stringify(value)};
-  records.set(key,record);
-  if(record.json!==undefined)staticJSON.push(JSON.stringify(key)+':'+record.json);
+  const quoted=JSON.stringify(key);
+  if(STATIC.has(key)){
+   const old=prior?.records.get(key),record=old?.value===value?old:{value:freezeTree(value),json:JSON.stringify(value)};
+   records.set(key,record);
+   if(record.json!==undefined){staticJSON.push(quoted+':'+record.json);rows.set('w:'+key,record.json);}
+   continue;
+  }
+  // Serialize each profile once. Both the isolated combat fork and SQLite
+  // journal use the exact same bytes, including thousands of inventory UIDs.
+  if(key==='profiles'&&value&&typeof value==='object'&&!Array.isArray(value)){
+   const parts=[];
+   for(const [id,profile] of Object.entries(value)){
+    const json=JSON.stringify(profile);
+    if(json===undefined)continue;
+    rows.set('p:'+id,json);parts.push(JSON.stringify(id)+':'+json);
+   }
+   dynamicJSON.push(quoted+':{'+parts.join(',')+'}');
+   continue;
+  }
+  const json=JSON.stringify(value);
+  if(json===undefined)continue;
+  dynamicJSON.push(quoted+':'+json);
+  if(key!=='profiles')rows.set('w:'+key,json);
  }
- const dynamicPayload=JSON.stringify(dynamic);
- // Materialize a complete checkpoint only when a noncombat reader or a
- // checkpoint actually requires it. Hot contact writes use the overlay.
+ const dynamicPayload='{'+dynamicJSON.join(',')+'}';
+ // Construct the full checkpoint only on demand. No second stringify of
+ // the large dynamic world or profiles is needed by the hot journal path.
  let payload;
- return {records,dynamicPayload,get payload(){if(payload===undefined){const tail=staticJSON.join(',');payload=tail?dynamicPayload.slice(0,-1)+(dynamicPayload.length>2?',':'')+tail+'}':dynamicPayload;}return payload;}};
+ return {records,rows,dynamicPayload,get payload(){if(payload===undefined){const tail=staticJSON.join(',');payload=tail?dynamicPayload.slice(0,-1)+(dynamicPayload.length>2?',':'')+tail+'}':dynamicPayload;}return payload;}};
 }
 export function forkCombatWorld(encoded){
  const world=JSON.parse(encoded.dynamicPayload);

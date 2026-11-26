@@ -3,6 +3,9 @@
 // A cold start reconstructs EXACTLY the last committed world, including deletes.
 // Only unchanged large fields are omitted from each SQLite write.
 export function combatRows(world,encoded){
+ // The encoded snapshot already contains the exact SQLite row bytes.
+ // Callers only read this map; writeCombatDelta never mutates it.
+ if(encoded?.rows)return encoded.rows;
  const rows=new Map();
  for(const [key,value] of Object.entries(world)){
   if(key==='profiles'){
