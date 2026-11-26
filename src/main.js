@@ -1,6 +1,6 @@
 import {terrainStyle,TERRAIN_DEFAULTS} from './shared/terrain-style.js';
 import {bindWantedList,syncWantedButton} from './wanted-list.js';
-import {tunedEquipment,weaponManaQuote,restorativeCooldown} from './shared/equipment-tuning.js';
+import {tunedEquipment,weaponManaQuote,restorativeCooldown,equipmentTuning} from './shared/equipment-tuning.js';
 import {equippedItem} from './shared/fusion-adapter.js';
 import {mergeWingCatalog,reuseHttpSceneFields} from './shared/world-patch.js';
 import {registerCustomWings,SHOP_CATALOG_REVISION} from './shared/catalog.js';
@@ -21,18 +21,19 @@ import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {attackDirection,cameraAimDirection} from './aiming.js';
 import {castBaseOrigin} from './shared/charge-area.js';
 import {lateralBeamInput,targetOnBeam} from './native-beam-curve.js';
-import {isChannelStaff,isStaffTap,channelInterval,chargeProgress,STAFF_TAP_MAX_MS,CAST_MOVE_FACTOR} from './shared/weapon-abilities.js';
+import {isChannelStaff,isStaffTap,channelInterval,chargeProgress,STAFF_TAP_MAX_MS,CAST_MOVE_FACTOR,weaponQuality,forwardCastRadius} from './shared/weapon-abilities.js';
 import {uploadArtwork} from './artwork-upload.js';
 import {VitalModels} from './vital-models.js';
 import {createVHS} from './reletter-vhs.js';
 import {TempleArena} from './arena-view.js';
 import {TempleNetwork,requestStaffChannelStop} from './network.js';
 import {PlayerController} from './player-controller.js';
-import {STAFF_RAISE_SECONDS} from './staff-raise-pose.js';
+import {normalMeleeFootprint} from './shared/melee-contact.js';
+import {projectileFlightMs} from './shared/combat-balance.js';
 import {TempleUI} from './ui.js';
 import {PLAYER_SPAWNS} from './shared/arena.js';
 import {canBuildAt,canPlaceArtworkAt} from './shared/temple-rules.js';
-import {itemById,ITEMS,EQUIPPABLE_SLOTS} from './shared/catalog.js';
+import {itemById,ITEMS,EQUIPPABLE_SLOTS,attackStats} from './shared/catalog.js';
 import {warmItemPreviews,setOutfitPreviewCharacter} from './item-preview.js';
 import {GPUFrameQueue} from './gpu-frame-queue.js';
 import {ArtworkEditor} from './artwork-editor.js';
@@ -116,8 +117,8 @@ const damageNumbers=createDamageNumbers(THREE),statusVisuals=new ElementalStatus
 let healVisualSeq=0,lastHealVisualAt=0;
 const performanceSamples={logic:[],submit:[],frame:[]};
 let chargeStarted=null,attackHoldStarted=null,chargeRequest=null,autoChargeBusy=false,attackHeld=false;
-let pendingAInteraction=null,chargeDelayTimer=null,beamStartTimer=null,nextChargeRetryAt=0;
-// Begin charging after the 500ms tap threshold without relying on render FPS.
+let pendingAInteraction=null,chargeDelayTimer=null,beamStartTimer=null,nextChargeRetryAt=0,normalOnPress=false;
+// Begin charging after the 250ms tap threshold without relying on render FPS.
 // After a stun/rejected request, retry only while the A/Q button is still held.
 function clearChargeDelay(){
  if(chargeDelayTimer!==null)clearTimeout(chargeDelayTimer);
@@ -611,7 +612,7 @@ ui.addEventListener('attack-start',event=>{
  if(attackHeld||staffChannel)return;
  const weapon=currentTunedWeapon();
  // Black Cat uses A/Q solely to toggle the scope (or interact with nearby items).
- pendingAInteraction=null;
+ pendingAInteraction=null;normalOnPress=false;
  if(!artworkThrow.started){
    const nearbyArt=arena.nearest(controller.root.position.toArray());
   if(nearbyArt?.type==='artwork')
@@ -623,7 +624,11 @@ ui.addEventListener('attack-start',event=>{
  chargeStarted=null;chargeRequest=null;nextChargeRetryAt=0;
  clearChargeDelay();
  if(weapon?.id!=='black-cat')chargeDelayTimer=setTimeout(()=>{chargeDelayTimer=null;startHeldCharge();},STAFF_TAP_MAX_MS);
-  if(isChannelStaff(weapon)&&localRoot)localRoot.userData.staffCastingUntil=attackHoldStarted+1800;
+ // Fire on press; artwork interaction and camera-only controls are unchanged.
+ if(!pendingAInteraction&&!weapon?.firstPerson&&weapon?.id!=='black-cat'){
+  normalOnPress=true;void performAttack(0);
+ }
+ if(isChannelStaff(weapon)&&localRoot)localRoot.userData.staffCastingUntil=attackHoldStarted+1800;
 });
 ui.addEventListener('attack-release',async()=>{
  // This check must precede gun handling. The initial SMG previously left
@@ -646,7 +651,8 @@ ui.addEventListener('attack-release',async()=>{
  if(attackHoldStarted===null)return;
  const weapon=currentTunedWeapon()||itemById('clam');
  const heldMs=performance.now()-attackHoldStarted;
- const charge=chargeProgress(heldMs,weapon?.chargeMs||1500);
+ const pressedNormal=normalOnPress;normalOnPress=false;
+ const charge=pressedNormal?(chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(weapon?.chargeMs||1500))):chargeProgress(heldMs,weapon?.chargeMs||1500);
  const releaseAim=controller&&localRoot?captureReleasedCast(weapon,charge):null;
  lastWarnedCast=null;
 
@@ -667,12 +673,19 @@ ui.addEventListener('attack-release',async()=>{
  }
  if(weapon?.id==='black-cat'){if(heldMs<STAFF_TAP_MAX_MS)gun.cycle();return;}
  if(weapon?.firstPerson&&heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
+ if(pressedNormal){
+  if(autoChargeBusy)return;
+  if(charge<1){if(pending)void requestStaffChannelStop(false,pending,()=>sendAction('attack',{phase:'channel-stop'}));if(localRoot)localRoot.userData.staffCastingUntil=0;return;}
+  if(pending&&!(await pending)?.charging)return;
+  if(world?.profile?.equipment?.weapon!==weapon.id)return;
+  if(!isChannelStaff(weapon)||weapon.family==='ice')await performAttack(1,null,releaseAim);
+  else void sendAction('attack',{phase:'channel-stop'});
+  return;
+ }
  if(heldMs>=STAFF_TAP_MAX_MS&&pending&&!(await pending)?.charging)return;
  if(isChannelStaff(weapon)){
   if(isStaffTap(weapon,heldMs)){
    if(localRoot)localRoot.userData.staffCastingUntil=Infinity;
-   const liftRemaining=Math.max(0,STAFF_RAISE_SECONDS*1000-heldMs);
-   if(liftRemaining>0)await new Promise(resolve=>setTimeout(resolve,liftRemaining));
    if(world?.profile?.equipment?.weapon===weapon.id)await performAttack(0,null,releaseAim);
    if(localRoot)localRoot.userData.staffCastingUntil=performance.now()+200;
   }else if(weapon.family==='ice'&&charge>=1){
@@ -1033,6 +1046,18 @@ function captureReleasedCast(item,charge){
  return charge>=1&&warned?.weapon===item.id&&performance.now()-warned.at<350
   ?warned:sampleCast(item,charge);
 }
+// Mirror ordinary visual range only; server remains sole damage authority.
+function normalVisualData(item,sample){
+ const quality=weaponQuality(item,world?.profile?.fusion?.[item.id]),stats=attackStats(item,0);
+ stats.range=+(stats.range*quality.range).toFixed(2);
+ stats.radius=forwardCastRadius(item,quality,stats.radius,false);
+ if(item.family==='whip'&&!item.exotic){stats.range=+(Math.min(stats.range,4.7+(Math.max(1,item.tier||1)-1)*1.5)/3).toFixed(3);stats.radius=.16;}
+ if(item.family==='swatter'&&!item.exotic){stats.range=Math.min(stats.range,1.55+(Math.max(1,item.tier||1)-1)*.2);stats.radius=.18;}
+ if(item.family==='saber'){stats.range=Math.min(stats.range,(4.7+(Math.max(1,item.tier||1)-1)*1.5)/3);stats.radius=Math.min(stats.radius,.16);}
+ const contact=normalMeleeFootprint(item);if(contact){stats.range=Math.min(stats.range,contact.range);stats.radius=Math.min(stats.radius,contact.radius);}
+ stats.range*=equipmentTuning(world,item).rangeScale??1;
+ return {...stats,...sample,owner:self?.key,charge:0,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,flightMs:projectileFlightMs(item,false,stats.range),time:Date.now()};
+}
 function performAttack(charge=0,phase=null,captured=null,extra={}){
  if(wallPainter.active)return;
  if(controller?.status?.freeze||world?.profile?.effects?.paralysis?.until>Date.now())return;
@@ -1047,7 +1072,7 @@ function performAttack(charge=0,phase=null,captured=null,extra={}){
  // A movement sample can be in flight over the socket; the Worker checks
  // this bounded cast origin against its authoritative player position.
  const inputId=crypto.randomUUID();
- const preview=network.fastCastV089&&!phase&&charge===0&&arena.presentation.previewMelee(localRoot,item,inputId);
+ const preview=network.fastCastV089&&!phase&&charge===0&&arena.presentation.previewNormal(localRoot,item,inputId,normalVisualData(item,sample));
  const action=sendAction('attack',{origin,direction,castPoseV081:true,charge,...(phase?{phase}:{}),...extra,
   ...(preview?{requestId:inputId,previewInputV089:true}:{}),
   ...(item.id==='black-cat'?{
@@ -1145,7 +1170,7 @@ function update(dt,time,movementDt=dt){
   if(heldItem.id!=='black-cat'&&attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&
      performance.now()-attackHoldStarted>=STAFF_TAP_MAX_MS)startHeldCharge();
   const charge=heldItem.id==='black-cat'||chargeStarted===null?0:Math.min(1,(performance.now()-chargeStarted)/(heldItem?.chargeMs||1500));
-  // First 500ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
+  // First 250ms is a tap window, then progress becomes visible from 0%. No staff may continuously cast during
   // the charging window; the very first sustained pulse is the ultimate.
   if(attackHeld&&charge>=1&&isChannelStaff(heldItem)&&heldItem?.family!=='ice'&&!staffChannel)
    beginStaffChannel();
@@ -1195,7 +1220,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V089',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V090',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

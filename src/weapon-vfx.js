@@ -468,7 +468,13 @@ export class WeaponVFX{
    if(remoteCharged){fx.group.position.copy(end);fx.group.position.y=Math.max(.7,end.y);}
    else if(data.impactPoint){fx.group.position.copy(end);fx.group.position.y=Math.max(.16,end.y);}
    else {fx.group.position.y=Math.max(.7,origin.y-.15);}
-   if(id==='azure-sweep'&&!groundEffect)fx.group.position.y=Math.max(.18,origin.y-.15);
+   if(id==='azure-sweep'&&!data.ultimate){
+    // The weapon grip is a world-space anchor, including jumps/platforms.
+    // Do not inherit the target's head-height impact point.
+    const grip=root?.userData?.blade?.getWorldPosition(new THREE.Vector3());
+    fx.group.position.copy(origin);
+    fx.group.position.y=grip&&Number.isFinite(grip.y)?grip.y:origin.y-.15;
+   }
    if(continuous.has(id))fx.update(fx.lifecycle.start||0);
    if(groundEffect){
     // Prefab local geometry sometimes extends below its origin. Raise the
@@ -487,6 +493,11 @@ export class WeaponVFX{
   }
   // Fusion echoes are complete server-authored source weapon events, not placeholder flashes.
   if(data.impactPoint&&!projectiles.has(id)){const impact=this.acquire(item.family==='ice'?'ice-shatter':'energy-burst',{size:.3,color:item.color,speed:2});impact.fx.group.position.copy(end);}
+ }
+ confirmNormalImpact(data,item){
+  if(!data.impactPoint||isChannelStaff(item)||item.id==='calico-cat'||item.id==='goldfish'||item.id==='black-cat'||projectiles.has(effectFor(item,false)))return;
+  const impact=this.acquire(item.family==='ice'?'ice-shatter':'energy-burst',{size:.3,color:item.color,speed:2});
+  impact.fx.group.position.fromArray(data.impactPoint);
  }
  charging(root,progress,item){
   // No arcane-missile emitter here: that effect used to float to the right

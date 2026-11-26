@@ -59,14 +59,14 @@ test('only short taps create single spells; a partially charged long hold must s
  assert.equal(isStaffTap(itemById('calico-cat'),100),false);
 });
 
-// Every attack button uses the same 0.5-second pre-charge tap window.
-test('charge is zero before 500ms and reaches full only after threshold plus item charge duration',async()=>{
+// Every attack button uses the same 0.25-second pre-charge tap window.
+test('charge is zero before 250ms and reaches full only after threshold plus item charge duration',async()=>{
  const {chargeProgress,STAFF_TAP_MAX_MS}=await import('../src/shared/weapon-abilities.js');
- assert.equal(STAFF_TAP_MAX_MS,500);
+ assert.equal(STAFF_TAP_MAX_MS,250);
  for(const id of ['clam','tide-1','frost-1','ember-1']){
   const ms=itemById(id).chargeMs;
-  for(const held of [0,100,498,500])assert.equal(chargeProgress(held,ms),0,id);
-  assert.ok(chargeProgress(501,ms)>0,id);
-  assert.equal(chargeProgress(500+ms,ms),1,id);
+  for(const held of [0,100,248,250])assert.equal(chargeProgress(held,ms),0,id);
+  assert.ok(chargeProgress(251,ms)>0,id);
+  assert.equal(chargeProgress(250+ms,ms),1,id);
  }
 });

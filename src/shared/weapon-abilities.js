@@ -25,7 +25,7 @@ export function forwardCastRadius(item,quality=weaponQuality(item),statsRadius=1
  return +(statsRadius*quality.radius).toFixed(2);
 }
 export const channelReachMultiplier=item=>item?.family==='ice'?2:1;
-export const STAFF_TAP_MAX_MS=500;
+export const STAFF_TAP_MAX_MS=250;
 export const CAST_MOVE_FACTOR=.05;
 // Whip tiers 4 and 5 share the maximum 0.8-second pull duration.
 export const WHIP_PULL_SPEED=8.64*.5;
