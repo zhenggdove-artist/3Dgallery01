@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
- cityLots,citySignSpecs,cityShopSignSpec,citySignArtOptions,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
+ cityLots,citySignSpecs,cityShopSignSpec,citySignArtOptions,citySignClear,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,CityImpactPlumes,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
-import {drawSignArtwork,drawRooftopSignArtwork,rooftopSignMode,installRooftopSignLighting,updateRooftopSignClock} from './sign-art.js';
+import {drawSignArtwork,drawRooftopSignArtwork,rooftopSignMode,installRooftopSignLighting,updateRooftopSignClock,rooftopBillboardVisual,rooftopBillboardParts,rooftopBillboardFaces} from './sign-art.js';
 import {CityWallPaint} from './city-wall-paint.js';
 import {CityFireField} from './city-fire-field.js';
 import {CitySplinterField} from './city-splinter-field.js';
@@ -34,6 +34,8 @@ function compactedSand(){
  g.globalAlpha=1;
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;return map;
 }
+const roofVisualCache=new WeakMap();
+function roofVisual(lot,sign){let v=roofVisualCache.get(sign);if(!v){v=rooftopBillboardVisual(lot,sign,lot.index,q=>citySignClear(lot,q));roofVisualCache.set(sign,v);}return v;}
 function batchGeometry(lots,mobile){
  const position=[],normal=[],color=[],indices=[],lotRanges=new Map(),partRanges=new Map(),lotIds=[],localPoints=[],tilePoints=[];
  let category='core',current=-1;
@@ -43,16 +45,17 @@ function batchGeometry(lots,mobile){
    lotIds.push(lot.index??-1);localPoints.push(...(locals?.[i]||[0,0,0]));const p=locals?.[i]||[0,0,0];tilePoints.push((axis===0?p[2]:p[0])/2.4,p[1]/1.2,category==='core'&&lot.index>=0&&axis!==1?1:0);}
   indices.push(at,at+1,at+2,at,at+2,at+3);
  };
- const box=(lot,x,y,z,w,h,d,c)=>{
+ const box=(lot,x,y,z,w,h,d,c,rotation=0)=>{
   if(w<=0||h<=0||d<=0)return;
   const at=position.length/3;
   const locals=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],
-   [-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]].map(([a,b,k])=>[x+a*w/2,y+b*h/2,z+k*d/2]);
+   [-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]].map(([a,b,k])=>rotation?[x+a*w/2*Math.cos(rotation)-b*h/2*Math.sin(rotation),y+a*w/2*Math.sin(rotation)+b*h/2*Math.cos(rotation),z+k*d/2]:[x+a*w/2,y+b*h/2,z+k*d/2]);
   const vertices=locals.map(([vx,vy,vz])=>{const q=localToWorld(lot,vx,vz);return [q[0],vy,q[1]];});
   const cs=Math.cos(lot.yaw),sn=Math.sin(lot.yaw);
   for(const [ids,n] of [[[4,5,6,7],[0,0,1]],[[1,0,3,2],[0,0,-1]],
    [[5,1,2,6],[1,0,0]],[[0,4,7,3],[-1,0,0]],[[7,6,2,3],[0,1,0]],[[0,1,5,4],[0,-1,0]]]){
-    face(ids.map(i=>vertices[i]),[n[0]*cs+n[2]*sn,n[1],-n[0]*sn+n[2]*cs],c,lot,ids.map(i=>locals[i]),Math.abs(n[0])>.5?0:Math.abs(n[1])>.5?1:2);
+    const nx=rotation?n[0]*Math.cos(rotation)-n[1]*Math.sin(rotation):n[0],ny=rotation?n[0]*Math.sin(rotation)+n[1]*Math.cos(rotation):n[1];
+    face(ids.map(i=>vertices[i]),[nx*cs+n[2]*sn,ny,-nx*sn+n[2]*cs],c,lot,ids.map(i=>locals[i]),Math.abs(n[0])>.5?0:Math.abs(n[1])>.5?1:2);
   }
   if(current>=0&&category!=='core'){
    const key=current+':'+category,group=partRanges.get(key)||[];
@@ -112,8 +115,9 @@ function batchGeometry(lots,mobile){
   }
   const flatSign=cityShopSignSpec(lot);if(flatSign){category='sign';box(lot,flatSign.x,flatSign.y,flatSign.z,flatSign.width,flatSign.height,flatSign.depth,flatSign.color);for(const p of flatSign.supports)box(lot,p.x,p.y,p.z,p.width,p.height,p.depth,lot.trim);}
   for(const sign of citySignSpecs(lot)){
-   category=sign.id;box(lot,sign.x,sign.y,sign.z,sign.width,sign.height,sign.depth,sign.color);
-   for(const p of sign.supports)box(lot,p.x,p.y,p.z,p.width,p.height,p.depth,lot.trim);
+   category=sign.id;
+   if(sign.id.startsWith('sign-roof-')){for(const p of rooftopBillboardParts(roofVisual(lot,sign)))box(lot,p.x,p.y,p.z,p.width,p.height,p.depth,p.color,p.rotation||0);}
+   else{box(lot,sign.x,sign.y,sign.z,sign.width,sign.height,sign.depth,sign.color);for(const p of sign.supports)box(lot,p.x,p.y,p.z,p.width,p.height,p.depth,lot.trim);}
   }
   category='roof-clutter';
   for(let k=0;k<(mobile?2:5);k++){
@@ -190,7 +194,7 @@ function signAtlas(lots){
  const g=canvas.getContext('2d');
  entries.forEach(({lot,variant,sign},i)=>{
   const x=i%columns*tile,y=Math.floor(i/columns)*tile;
-  (variant===2?drawRooftopSignArtwork:drawSignArtwork)(g,x,y,tile,tile,{color:variant===2?sign.color||lot.style[3]:lot.style[3],title:lot.shopName,subtitle:lot.enName,shopKind:lot.style[0],vertical:variant===1,aspect:variant===1?.5:sign.width/sign.height,...citySignArtOptions(lot,variant),...(variant===2?{seed:lot.index}:{})});
+  (variant===2?drawRooftopSignArtwork:drawSignArtwork)(g,x,y,tile,tile,{color:variant===2?sign.color||lot.style[3]:lot.style[3],title:variant===2?lot.style[1]:lot.shopName,subtitle:variant===2?lot.style[2]:lot.enName,shopKind:lot.style[0],vertical:variant===1,aspect:variant===1?.5:variant===2?roofVisual(lot,sign).width/roofVisual(lot,sign).height:sign.width/sign.height,...citySignArtOptions(lot,variant),...(variant===2?{seed:lot.index}:{})});
  });
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
  return {map,columns,rows,tile,slots};
@@ -211,7 +215,7 @@ function buildShopSigns(lots){
   for(const s of citySignSpecs(lot)){
    const start=p.length/3,a=s.x-s.width/2,b=s.x+s.width/2,c=s.y-s.height/2+.035,d=s.y+s.height/2-.035,e=s.z-s.depth/2+.035,g=s.z+s.depth/2-.035;
    if(s.blade){quad(lot,[[a-.008,c,e],[a-.008,c,g],[a-.008,d,g],[a-.008,d,e]],1);quad(lot,[[b+.008,c,g],[b+.008,c,e],[b+.008,d,e],[b+.008,d,g]],1);}
-   else{quad(lot,[[a+.035,c,g+.044],[b-.035,c,g+.044],[b-.035,d,g+.044],[a+.035,d,g+.044]],2);quad(lot,[[b-.035,c,e-.044],[a+.035,c,e-.044],[a+.035,d,e-.044],[b-.035,d,e-.044]],2);}
+   else{for(const points of rooftopBillboardFaces(roofVisual(lot,s)))quad(lot,points,2);}
    partRanges.set(lot.index+':'+s.id,[[start,p.length/3]]);
   }
   ranges.set(lot.index,[begin,p.length/3]);

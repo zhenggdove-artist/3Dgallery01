@@ -283,22 +283,17 @@ export function drawRooftopSignArtwork(ctx,x,y,w,h,{color='#4c9ea1',title='商�
  ctx.save();ctx.translate(x,y);ctx.scale(w/W,h/H);
  rect(0,0,W,H,'#303438');rect(3,3,W-6,90,base);
  if(!lightbox)rect(3,3,W-6,90,'rgba(12,20,24,.53)');
- // Corrugated metal, folded edge rails and bolted lower steel frame are
- // painted into the original board envelope; collision and paint UV stay fixed.
+ // Corrugated metal surface; steel supports are real static geometry.
  for(let i=4;i<W-3;i+=Math.max(5,W/36)){rect(i,4,1,70,'rgba(0,0,0,.17)');rect(i+1,4,1,70,'rgba(255,255,255,.10)');}
- rect(3,75,W-6,18,lightbox?'#34343b':'#20282d');
- ctx.strokeStyle='#697176';ctx.lineWidth=1.5;
- ctx.beginPath();ctx.moveTo(4,76);ctx.lineTo(W-4,76);ctx.moveTo(4,91);ctx.lineTo(W-4,91);
- for(let i=4;i<W-4;i+=W/6){const end=Math.min(W-4,i+W/6);ctx.moveTo(i,76);ctx.lineTo(end,91);ctx.moveTo(i,91);ctx.lineTo(i,76);}
- ctx.stroke();
- if(neon){ctx.strokeStyle='#f783bc';ctx.lineWidth=2;ctx.strokeRect(5,5,W-10,68);}
- else if(lightbox){rect(4,67,W-8,7,'#983e38');}
+ rect(3,78,W-6,15,lightbox?'#a82e34':'#20282d');
+ if(neon){ctx.strokeStyle='#f783bc';ctx.lineWidth=2;ctx.strokeRect(5,5,W-10,86);}
+ else if(lightbox){rect(4,4,W-8,73,mode===1?'#e9bf39':'#e7e6c8');}
  const main=String(title||'商店'),glyphCount=Math.max(1,Array.from(main).length);
- const max=W-16,size=Math.min(subtitle?56:65,max/glyphCount*1.04);
+ const max=W-12,size=Math.min(subtitle?72:82,max/glyphCount*1.12);
  ctx.font=(style==='handwritten'?'700':'900')+' '+size+'px '+family;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
- ctx.strokeStyle=lightbox?'rgba(255,255,255,.28)':'#172027';ctx.lineWidth=2.8;ctx.strokeText(main,W/2,subtitle?31:39,max);
- ctx.fillStyle=ink;ctx.fillText(main,W/2,subtitle?31:39,max);
- if(subtitle){ctx.font='700 12px '+family;ctx.fillStyle=lightbox?'#20232a':ink;ctx.fillText(String(subtitle),W/2,61,max);}
+ ctx.strokeStyle=lightbox?'rgba(255,255,255,.28)':'#172027';ctx.lineWidth=2.8;ctx.strokeText(main,W/2,subtitle?40:46,max);
+ ctx.fillStyle=ink;ctx.fillText(main,W/2,subtitle?40:46,max);
+ if(subtitle){ctx.font='700 12px '+family;ctx.fillStyle='#fff4cf';ctx.fillText(String(subtitle),W/2,85,max);}
  ctx.restore();
 }
 
@@ -337,4 +332,41 @@ export function installRooftopSignLighting(material,{batched=false,seed=0}={}){
    totalEmissiveRadiance+=diffuseColor.rgb*roofLamp*.48;`);
  };
  material.needsUpdate=true;
+}
+
+/** Client-only billboard envelope; original interactive panel and paint
+ * coordinates remain inside the decorative extension. */
+export function rooftopBillboardVisual(lot,s,seed=0,clear=()=>true){
+ const mode=rooftopSignMode(seed),half=Math.max(s.width/2,lot.width/2-Math.abs(s.x)-.20);
+ const width=Math.min(half*2,Math.max(s.width,lot.width*.88));
+ const bottom=s.y-s.height/2,roof=lot.height;
+ const height=Math.max(s.height,Math.min(3.65,Math.max(s.height*1.75,width*.43)));
+ const available=Math.max(0,s.z+lot.depth/2-.24);
+ const wing=mode===1||mode===4?Math.min(1.65,lot.depth*.28,available):mode===3?Math.min(.85,lot.depth*.16,available):0;
+ for(const scale of [1,.75,.5,0]){
+  const w=s.width+(width-s.width)*scale,h=s.height+(height-s.height)*scale,k=wing*scale;
+  const v={...s,width:w,height:h,y:bottom+h/2,wing:k,mode,bottom,roof};
+  if(clear({...v,z:s.z-k/2,depth:s.depth+k}))return v;
+ }
+ return {...s,wing:0,mode,bottom,roof};
+}
+export function rooftopBillboardParts(v){
+ const {x,y,z,width:w,height:h,depth:d,wing,bottom,roof}=v;
+ const steel='#41494e',out=[{x,y,z,width:w,height:h,depth:d,color:v.color,steel:false}];
+ if(wing>.12)for(const side of [-1,1])out.push({x:x+side*(w/2-d/2),y,z:z-wing/2,width:d,height:h,depth:wing+d,color:v.color,steel:false});
+ const base=roof+.13,top=bottom+Math.min(h*.38,.9),rise=Math.max(.12,top-base),rear=z-d/2-(wing>.12?wing*.75:.10);
+ const add=(x,y,z,width,height,depth,rotation=0)=>out.push({x,y,z,width,height,depth,rotation,color:steel,steel:true});
+ for(const side of [-1,1])add(x+side*w*.37,(top+base)/2,rear,.085,rise,.10);
+ const run=w*.34;
+ for(const side of [-1,1])add(x+side*w*.20,(top+base)/2,rear,.065,Math.hypot(run,rise),.065,-side*Math.atan2(run,rise));
+ add(x,base+.045,rear,w*.80,.075,.10);
+ return out;
+}
+export function rooftopBillboardFaces(v){
+ const {x,y,z,width:w,height:h,depth:d,wing}=v,a=x-w/2+.018,b=x+w/2-.018,c=y-h/2+.018,t=y+h/2-.018,f=z+d/2+.009,r=z-d/2-.009;
+ const out=[[[a,c,f],[b,c,f],[b,t,f],[a,t,f]],[[b,c,r],[a,c,r],[a,t,r],[b,t,r]]];
+ if(wing>.12){const q=z-wing-d/2+.018,l=x-w/2-.009,e=x+w/2+.009;
+  out.push([[l,c,q],[l,c,f],[l,t,f],[l,t,q]],[[e,c,f],[e,c,q],[e,t,q],[e,t,f]]);
+ }
+ return out;
 }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {houseSignSpecs} from './shared/city-layout.js';
-import {drawSignArtwork,drawRooftopSignArtwork,installRooftopSignLighting} from './sign-art.js';
+import {drawSignArtwork,drawRooftopSignArtwork,installRooftopSignLighting,rooftopBillboardVisual,rooftopBillboardParts,rooftopBillboardFaces} from './sign-art.js';
 export const originalBuildSizes={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4]};
 const textures=new Map();
 export function buildMaterial(surface){const material=new THREE.MeshStandardMaterial({color:'#c6a5dc',roughness:.72,metalness:.03});if(surface){if(!textures.has(surface)){const t=new THREE.TextureLoader().load(window.TEMPLE_CONFIG.backendUrl+'/api/media/'+surface);t.colorSpace=THREE.SRGBColorSpace;textures.set(surface,t);}material.map=textures.get(surface);material.color.set('#ffffff');}return material;}
@@ -33,6 +33,12 @@ export function houseTileTexture(){
  return wallTile;
 }
 export function houseWallMaterial(color='#ffffff'){return new THREE.MeshStandardMaterial({color,map:houseTileTexture(),roughness:.96});}
+function roofSolidGeometry(parts,s){
+ const pos=[],norm=[],ids=[];
+ for(const p of parts){const g=new THREE.BoxGeometry(p.width,p.height,p.depth);if(p.rotation)g.rotateZ(p.rotation);g.translate(p.x-s.x,p.y-s.y,p.z-s.z);const at=pos.length/3;pos.push(...g.attributes.position.array);norm.push(...g.attributes.normal.array);for(const i of g.index.array)ids.push(at+i);g.dispose();}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(norm,3));g.setIndex(ids);return g;
+}
+function roofFaceGeometry(v,s){const p=[],uv=[],ids=[];for(const points of rooftopBillboardFaces(v)){const at=p.length/3;for(const q of points)p.push(q[0]-s.x,q[1]-s.y,q[2]-s.z);uv.push(0,0,1,0,1,1,0,1);ids.push(at,at+1,at+2,at,at+2,at+3);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(ids);g.computeVertexNormals();return g;}
 export function createGmHouseMesh(spec,{preview=false,seed=0}={}){
  const root=new THREE.Group(),{width:w,depth:d,height:h,floors,windows,signs,pipes,metal}=spec;
  const tile=houseWallMaterial(spec.wallColor||'#b4a395'),roofMat=new THREE.MeshStandardMaterial({color:spec.roofColor||'#8b8073',roughness:.96}),trim=new THREE.MeshStandardMaterial({color:'#8b8073',roughness:.96}),glass=new THREE.MeshStandardMaterial({color:'#465c60',roughness:.42,metalness:.12}),steel=new THREE.MeshStandardMaterial({color:'#83837e',roughness:.78,metalness:.25}),sign=new THREE.MeshStandardMaterial({color:'#964b42',roughness:.8}),black=new THREE.MeshStandardMaterial({color:spec.doorColor||'#292b2b'});
@@ -41,17 +47,21 @@ export function createGmHouseMesh(spec,{preview=false,seed=0}={}){
  for(let level=0;level<floors;level++){const y=(level+.53)*h/floors;for(let i=0;i<windows;i++){const x=(i-(windows-1)/2)*w/(windows+1),ww=Math.min(1.45,w/(windows+2)),wh=Math.min(1.35,h/floors*.46);for(const z of [-d/2-.035,d/2+.035]){box(x,y,z,ww+.12,wh+.12,.075,trim);box(x,y,z+Math.sign(z)*.055,ww,wh,.045,glass);box(x,y,z+Math.sign(z)*.085,.045,wh,.04,trim);}}}
  if(pipes)for(const side of [-1,1]){box(side*(w/2-.16),h*.47,d/2+.17,.12,h*.88,.12,steel);box(side*(w/2-.29),h*.9,d/2+.17,.38,.12,.12,steel);}
  if(metal){box(0,Math.min(2.6,h-.2),d/2+.45,w+.12,.12,.85,steel);const count=Math.min(32,Math.ceil(w*4));for(let i=0;i<count;i++)box(-w/2+(i+.5)*w/count,Math.min(2.67,h-.13),d/2+.45,.045,.065,.86,trim);}
- for(const s of houseSignSpecs({...spec,bladeCount:spec.bladeCount??0,roofCount:spec.roofCount??0})){
+ const houseSigns=houseSignSpecs({...spec,bladeCount:spec.bladeCount??0,roofCount:spec.roofCount??0});
+ for(const s of houseSigns){
   const group=new THREE.Group();group.name=s.id;group.userData.houseSignId=s.id;group.position.set(s.x,s.y,s.z);root.add(group);
   const mat=new THREE.MeshStandardMaterial({color:s.color,roughness:.75});materials.push(mat);
-  const panel=new THREE.Mesh(new THREE.BoxGeometry(s.width,s.height,s.depth),mat);group.add(panel);
-  const border=new THREE.Mesh(new THREE.BoxGeometry(s.blade?s.width+.025:s.width*.94,s.height*.93,s.blade?s.depth*.94:s.depth+.025),mat);group.add(border);
+  const rooftop=s.id.startsWith('sign-roof-');
+  const v=rooftop?rooftopBillboardVisual(spec,s,(s.seed+seed)|0,q=>!houseSigns.some(other=>other!==s&&other.id.startsWith('sign-roof-')&&Math.abs(other.x-q.x)<(other.width+q.width)/2+.10&&Math.abs(other.z-q.z)<(other.depth+q.depth)/2+.10)):null;
+  if(rooftop){const parts=rooftopBillboardParts(v);group.add(new THREE.Mesh(roofSolidGeometry(parts.filter(p=>!p.steel),s),mat),new THREE.Mesh(roofSolidGeometry(parts.filter(p=>p.steel),s),steel));}
+  else{const panel=new THREE.Mesh(new THREE.BoxGeometry(s.width,s.height,s.depth),mat);group.add(panel);const border=new THREE.Mesh(new THREE.BoxGeometry(s.blade?s.width+.025:s.width*.94,s.height*.93,s.blade?s.depth*.94:s.depth+.025),mat);group.add(border);}
   if(typeof document!=='undefined'){
-   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d'),rooftop=s.id.startsWith('sign-roof-');(rooftop?drawRooftopSignArtwork:drawSignArtwork)(ctx,0,0,c.width,c.height,{color:s.color,title:'商店',subtitle:'TEMPLE SHOP',vertical:s.blade,aspect:s.blade?s.depth/s.height:s.width/s.height,seed:(s.seed+seed)|0,style:s.style,font:s.font,saturation:s.saturation});
+   const c=document.createElement('canvas');c.width=s.blade?128:256;c.height=s.blade?256:128;const ctx=c.getContext('2d');(rooftop?drawRooftopSignArtwork:drawSignArtwork)(ctx,0,0,c.width,c.height,{color:s.color,title:'商店',subtitle:'TEMPLE SHOP',vertical:s.blade,aspect:rooftop?v.width/v.height:s.blade?s.depth/s.height:s.width/s.height,seed:(s.seed+seed)|0,style:s.style,font:s.font,saturation:s.saturation});
    const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const faceMat=new THREE.MeshStandardMaterial({map:tex,roughness:.8,side:THREE.DoubleSide});faceMat.userData.ownedSignMap=true;materials.push(faceMat);if(rooftop)installRooftopSignLighting(faceMat,{seed:(s.seed+seed)|0});
-   for(const side of [-1,1]){const face=new THREE.Mesh(new THREE.PlaneGeometry((s.blade?s.depth:s.width)*.92,s.height*.92),faceMat);if(s.blade){face.rotation.y=side*Math.PI/2;face.position.x=side*(s.width/2+.02);}else{face.rotation.y=side===1?0:Math.PI;face.position.z=side*(s.depth/2+.02);}group.add(face);}
+   if(rooftop)group.add(new THREE.Mesh(roofFaceGeometry(v,s),faceMat));
+   else for(const side of [-1,1]){const face=new THREE.Mesh(new THREE.PlaneGeometry((s.blade?s.depth:s.width)*.92,s.height*.92),faceMat);if(s.blade){face.rotation.y=side*Math.PI/2;face.position.x=side*(s.width/2+.02);}else{face.rotation.y=side===1?0:Math.PI;face.position.z=side*(s.depth/2+.02);}group.add(face);}
   }
-  for(const p of s.supports){const support=new THREE.Mesh(new THREE.BoxGeometry(p.width,p.height,p.depth),steel);support.position.set(p.x-s.x,p.y-s.y,p.z-s.z);group.add(support);}
+  if(!rooftop)for(const p of s.supports){const support=new THREE.Mesh(new THREE.BoxGeometry(p.width,p.height,p.depth),steel);support.position.set(p.x-s.x,p.y-s.y,p.z-s.z);group.add(support);}
  }
  if(preview)for(const m of materials){m.transparent=true;m.opacity=.86;}
  root.userData.gmHouseMaterials=materials;return root;
