@@ -39,6 +39,9 @@ export class TempleRoom extends DurableObject{
       CREATE TABLE IF NOT EXISTS presence_events (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, role TEXT NOT NULL, event TEXT NOT NULL, time INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS request_receipts (session_id TEXT NOT NULL, request_id TEXT NOT NULL, response TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(session_id,request_id));
       CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS request_receipts_created_at_idx ON request_receipts(created_at);
+      CREATE INDEX IF NOT EXISTS rate_limits_window_start_idx ON rate_limits(window_start);
+      CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions(expires);
       CREATE TABLE IF NOT EXISTS plant_media (id TEXT PRIMARY KEY, owner TEXT NOT NULL, type TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL);
        CREATE TABLE IF NOT EXISTS gm_music_meta (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, bytes INTEGER NOT NULL, chunks INTEGER NOT NULL);
        CREATE TABLE IF NOT EXISTS gm_music_chunks (version INTEGER NOT NULL, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(version,part));
@@ -312,6 +315,7 @@ export class TempleRoom extends DurableObject{
     // Do not encode, persist and retransmit a full gallery for every pulse.
     const response={ok:true,...result,...(compact?{worldRevision:world.revision}:
       {world:worldView(world,session.profile_key,Date.now(),['gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate','redeem-wing-design'].includes(body.action))})};
+    const responseText=JSON.stringify(response);
     this.ctx.storage.transactionSync(()=>{
       this.save(world);
       if(['reset-player-artworks','gm-remove-artworks'].includes(body.action)&&Array.isArray(result.removedArtworkMediaIds)){
@@ -320,7 +324,7 @@ export class TempleRoom extends DurableObject{
           this.sql.exec('DELETE FROM art_media WHERE id=?',mediaId);
         }
       }
-      this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,JSON.stringify(response),Date.now());
+      this.sql.exec('INSERT INTO request_receipts VALUES(?,?,?,?)',session.id,requestId,responseText,Date.now());
       this.sql.exec('DELETE FROM request_receipts WHERE created_at<?',Date.now()-86_400_000);
     });
     if(result.resetMessages){
@@ -330,7 +334,7 @@ export class TempleRoom extends DurableObject{
     }
     if(result.publishedWingId||result.unpublishedWingId||result.updatedWingId||result.personalWingId)
       this.broadcast('wing-catalog',{revision:world.revision,wings:world.customWings||[]});
-    this.broadcastWorld(world);if(didRespawn||result.delistedItemId)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);this.broadcastStructureEvents(result.structureHits||(result.structureHit?[result.structureHit]:[]),result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]));await this.armAlarm();return json(response);
+    this.broadcastWorld(world);if(didRespawn||result.delistedItemId)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);this.broadcastStructureEvents(result.structureHits||(result.structureHit?[result.structureHit]:[]),result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]));await this.armAlarm();return new Response(responseText,{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
   }
 
   async saveCode(session){

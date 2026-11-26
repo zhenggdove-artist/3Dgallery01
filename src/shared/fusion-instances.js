@@ -31,6 +31,10 @@ function migrateSniperEcho(record,itemId){
 // record already owned by another physical UID.
 function detachedLegacyRecord(profile,itemId,uid,direct){
  const projected=profile.fusion?.[itemId];
+ // These cases cannot inherit a projected record; avoid scanning every UID.
+ if(!projected||typeof projected!=='object'||projected===direct)return null;
+ if(direct?.layer||direct?.templeStats||direct?.original||direct?.effects?.length||direct?.affixIds?.length)return null;
+ if(!(projected.layer||projected.templeStats||projected.original||projected.effects?.length||projected.affixIds?.length||projected.bonus))return null;
  // Persisted JSON detaches legacy projection objects from their owning UID.
  // A collapsed ×N stack cannot inherit one target copy's fusion progress.
  if(profile.fusionIdentityMigrated){
@@ -40,15 +44,10 @@ function detachedLegacyRecord(profile,itemId,uid,direct){
    return null;
   if(copies[0]?.uid!==uid)return null;
  }
- if(!projected||typeof projected!=='object'||projected===direct)return null;
  const equippedSlot=Object.entries(profile.equipment||{}).find(([,selected])=>selected===itemId)?.[0];
  if(equippedSlot&&profile.equippedInstanceIds?.[equippedSlot]&&profile.equippedInstanceIds[equippedSlot]!==uid)return null;
  if(Object.entries(profile.fusionByInstance||{}).some(([id,record])=>id!==uid&&record===projected))
   return null;
- if(direct?.layer||direct?.templeStats||direct?.original||direct?.effects?.length||
-    direct?.affixIds?.length)return null;
- if(!(projected.layer||projected.templeStats||projected.original||
-    projected.effects?.length||projected.affixIds?.length||projected.bonus))return null;
  return {...direct,...projected,weaponAffixes:direct?.weaponAffixes||projected.weaponAffixes};
 }
 // Server migration is idempotent: previously owned equipment receives a
@@ -164,6 +163,7 @@ export function fusionRecordAt(profile,index){
  if(direct)return detachedLegacyRecord(profile,itemId,uid,direct)||direct;
  // Older tests or save rehydration can provide a legacy record after
  // initialization; never share a record between two *actual* instances.
+ if(!profile.fusion?.[itemId])return {};
  const owned=profile.inventoryInstances||[];
   if(owned.some(row=>row.itemId===itemId&&profile.fusionByInstance?.[row.uid]))return {};
   // No direct UID record: at most the FIRST legacy physical copy can inherit.

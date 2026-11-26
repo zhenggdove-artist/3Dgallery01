@@ -42,3 +42,18 @@ export function mergeWingCatalog(previous=[],incoming=[]){
  }
  return changed?[...map.values()]:previous;
 }
+
+// A full HTTP response has fresh JSON identities even for unchanged scene
+// data. Retain only equal, already-rendered sections; never reuse a changed
+// field, invent a revision or alter the socket's independent patch baseline.
+const sceneSnapshotKeys=['environment','audioSettings','customArtworks','artworks','artworkLayout','floatingPlatforms','customPedestals','platformOverrides','removedPlatformIds','structures','cityDamage','wallPaint','discPaint','groundDrops','coins','equipmentTuning','shopPrices','delistedShopItems','wantedSettings','chatDefault','artworkPromptPositions','collector'];
+export function reuseHttpSceneFields(previous,next){
+ if(!previous||!next)return next;
+ let result=next;
+ for(const key of sceneSnapshotKeys){
+  const old=previous[key],fresh=next[key];
+  if(old===fresh||old==null||fresh==null||typeof old!=='object'||typeof fresh!=='object')continue;
+  if(JSON.stringify(old)===JSON.stringify(fresh)){if(result===next)result={...next};result[key]=old;}
+ }
+ return result;
+}

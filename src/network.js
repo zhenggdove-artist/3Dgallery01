@@ -7,7 +7,7 @@ export class TempleNetwork extends EventTarget{
     super();this.config=config;this.base=String(config.backendUrl||'').replace(/\/$/,'');this.token='';this.socket=null;this.joinData=null;this.reconnectTimer=0;this.reconnectAttempt=0;this.closedByUser=false;this.lastStateAt=0;
     this.stateSequence=0;this.lastAcceptedSequence=0;this.lastCorrectedSequence=0;this.lastAuthorityAt=0;
     this.spawnConfirmed=false;
-    this.sentStates=new Map();this.rejectionCounts={};this.motionDiagnostics=[];
+    this.sentStates=new Map();this.rejectionCounts={};this.motionDiagnostics=[];this.actionTimings=[];
   }
   setBackend(url){this.base=String(url||'').trim().replace(/\/$/,'');localStorage.setItem('temple-backend-url',this.base);}
   ensureConfigured(){if(!/^https?:\/\//.test(this.base)||this.base.includes('REPLACE_WITH_ACCOUNT'))throw new Error('Temple backend URL has not been deployed yet');}
@@ -96,10 +96,13 @@ export class TempleNetwork extends EventTarget{
   }
   async action(action,data={}){
    const compactCombat=action==='attack'&&this.compactCombat&&this.socket?.readyState===WebSocket.OPEN;
+   const started=performance.now();
    const result=await this.request('/api/action',{
     method:'POST',body:{action,requestId:crypto.randomUUID(),...data,...(compactCombat?{compactCombat:true}:{})},
     timeoutMs:['gm-wing-publish','gm-wing-update','redeem-wing-design'].includes(action)?30000:0
    });
+   this.actionTimings.push({action,elapsedMs:Math.round(performance.now()-started),at:Date.now()});
+   if(this.actionTimings.length>64)this.actionTimings.shift();
    if(result.worldRevision>(this.wireWorld?.revision??-1)){
     // Stream interruptions must not strand a completed action. This is a
     // presentation recovery only; do not alter the socket's patch baseline.
