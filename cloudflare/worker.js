@@ -30,7 +30,7 @@ export default {
 
 export class TempleRoom extends DurableObject{
   constructor(ctx,env){
-    super(ctx,env);this.ctx=ctx;this.env=env;this.sql=ctx.storage.sql;this.closed=new Set();this.lastTick=0;this.worldBaselines=new WeakMap();
+    super(ctx,env);this.ctx=ctx;this.env=env;this.sql=ctx.storage.sql;this.closed=new WeakSet();this.lastTick=0;this.worldBaselines=new WeakMap();
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS world_state (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, profile_key TEXT NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL, role TEXT NOT NULL, seat INTEGER NOT NULL, expires INTEGER NOT NULL, state TEXT, save_code TEXT, last_code_at INTEGER NOT NULL DEFAULT 0);
