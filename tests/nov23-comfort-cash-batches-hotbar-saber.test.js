@@ -84,8 +84,8 @@ test('server protects 1/2/3 slots: correct heal, exact stock consumption, red sl
  assert.equal(execute(world,'use-consumable',{slot:2},at).healed,99);
  const count=p.inventory.length;
  assert.match(execute(world,'use-consumable',{slot:2},at+1000).error,/cooling down/);
- assert.match(execute(world,'use-consumable',{slot:2},at+3000).error,/already full/);
- assert.equal(p.inventory.length,count);
+ const full=execute(world,'use-consumable',{slot:2},at+3000);assert.equal(full.error,undefined);assert.equal(full.healed,0);assert.equal(full.notice,undefined);
+ assert.equal(p.inventory.length,count-1);assert.equal(p.hp,p.maxHp);
 });
 test('server validates consumable quick slots and keeps the remaining inventory unchanged',()=>{
  const {world,p}=setup();

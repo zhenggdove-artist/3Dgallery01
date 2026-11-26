@@ -10,11 +10,11 @@ test('discs support feet only from above, never catch from underneath or outside
  assert.ok(discGroundHeight(x,z,d.top-1)<d.top);
  assert.equal(discGroundHeight(75,75,d.top),0);
 });
-test('hearts clamp health; full-health players cannot consume them; empty gear slots auto-equip',()=>{
+test('hearts clamp health; full-health players can consume them; empty gear slots auto-equip',()=>{
  const now=10000,w=createInitialWorld(now),a={key:'p',name:'Test',role:'fighter',position:[0,0,0]},p=ensureProfile(w,'p','Test',null,now);
  const drop=(id,kind,itemId)=>w.groundDrops.push({id,kind,itemId,amount:25,position:[0,0,0],expiresAt:now+50000});
- drop('h','heart');assert.match(applyAction(w,a,{action:'pickup-drop',dropId:'h'},{now}).error,/full/);assert.equal(w.groundDrops.length,1);
- p.hp=90;assert.ok(!applyAction(w,a,{action:'pickup-drop',dropId:'h'},{now}).error);assert.equal(p.hp,p.maxHp);
+ drop('h','heart');const full=applyAction(w,a,{action:'pickup-drop',dropId:'h'},{now});assert.equal(full.error,undefined);assert.equal(full.notice,undefined);assert.equal(w.groundDrops.length,0);assert.equal(p.hp,p.maxHp);
+ p.hp=90;drop('h2','heart');assert.ok(!applyAction(w,a,{action:'pickup-drop',dropId:'h2'},{now}).error);assert.equal(p.hp,p.maxHp);
  p.equipment.weapon=null;drop('g','equipment','frost-1');assert.ok(!applyAction(w,a,{action:'pickup-drop',dropId:'g'},{now}).error);assert.equal(p.equipment.weapon,'frost-1');
  drop('g2','equipment','tide-1');applyAction(w,a,{action:'pickup-drop',dropId:'g2'},{now});assert.equal(p.equipment.weapon,'frost-1');
 });
