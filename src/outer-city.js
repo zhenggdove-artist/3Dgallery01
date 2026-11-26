@@ -832,7 +832,7 @@ export class OuterCity{
   this.prepareChunks(lot);
   if(!motion){
    const start=Math.max(previousTier,Math.floor(visible));
-   motion={tier:Math.max(0,start),elapsed:0,target:nextTier,triggered:0,event};
+   motion={tier:Math.max(0,start),elapsed:0,target:nextTier,triggered:0,event,lastWallAt:performance.now()};
    this.collapseAnimations.set(lot.index,motion);
   }else{
    motion.target=Math.max(nextTier,motion.target);
@@ -988,7 +988,9 @@ export class OuterCity{
      if(motion.triggered!==motion.tier+1){
       motion.triggered=motion.tier+1;this.emitCollapseStep(lot,motion.tier+1,motion.event);
      }
-     motion.elapsed+=Math.min(dt,.1);
+     // V035's authored per-tier duration is retained, but a slow GPU
+     // frame must not stretch a confirmed demolition into slow motion.
+     const wallNow=performance.now();motion.elapsed+=Math.max(dt,Math.min(.25,(wallNow-(motion.lastWallAt??wallNow))/1000));motion.lastWallAt=wallNow;
      const t=Math.min(1,motion.elapsed/duration),ease=t*t*(3-2*t);
      visibleTier=motion.tier+ease;
      if(t>=1){

@@ -18,9 +18,11 @@ export function encodeCombatWorld(world,prior=null){
   records.set(key,record);
   if(record.json!==undefined)staticJSON.push(JSON.stringify(key)+':'+record.json);
  }
- const dynamicPayload=JSON.stringify(dynamic),tail=staticJSON.join(',');
- const payload=tail?dynamicPayload.slice(0,-1)+(dynamicPayload.length>2?',':'')+tail+'}':dynamicPayload;
- return {records,dynamicPayload,payload};
+ const dynamicPayload=JSON.stringify(dynamic);
+ // Materialize a complete checkpoint only when a noncombat reader or a
+ // checkpoint actually requires it. Hot contact writes use the overlay.
+ let payload;
+ return {records,dynamicPayload,get payload(){if(payload===undefined){const tail=staticJSON.join(',');payload=tail?dynamicPayload.slice(0,-1)+(dynamicPayload.length>2?',':'')+tail+'}':dynamicPayload;}return payload;}};
 }
 export function forkCombatWorld(encoded){
  const world=JSON.parse(encoded.dynamicPayload);
