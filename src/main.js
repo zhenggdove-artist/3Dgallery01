@@ -413,8 +413,8 @@ function receiveCombatDamage(packet){
   if(!Number.isFinite(packet.revision)||packet.revision<=(world?.revision??-1)||packet.revision<(combatVitals.get(value.key)?.revision??-1))continue;
   combatVitals.set(value.key,{...value,revision:packet.revision});
   if(value.player){const root=roots.get(value.key);if(root){if(root!==localRoot)setHealthBar(root,value.hp,value.maxHp);applyShieldHit(root,value);applyHitReaction(root,value);}}
-  else if(arena.monster&&world?.monster?.id===value.key)setHealthBar(arena.monster,value.hp,value.maxHp,ENEMY_HEIGHT+.65);
-  else for(const {root,state} of arena.islandEnemies.extraLive)if(state?.id===value.key)setHealthBar(root,value.hp,value.maxHp,ENEMY_HEIGHT+.65);
+  else if(arena.monster&&world?.monster?.id===value.key){setHealthBar(arena.monster,value.hp,value.maxHp,ENEMY_HEIGHT+.65);arena.monster.userData.hitFlashUntil=performance.now()+250;}
+  else for(const {root,state} of arena.islandEnemies.extraLive)if(state?.id===value.key){setHealthBar(root,value.hp,value.maxHp,ENEMY_HEIGHT+.65);root.userData.hitFlashUntil=performance.now()+250;}
  }
  showFastLocalHealth();
 }

@@ -699,7 +699,7 @@ export class TempleRoom extends DurableObject{
    // Periodic quiet checkpoint preserves the legacy full-row recovery format.
    // The journal itself is durable even if the room hibernates mid-fight.
    const world=this.readWorld();
-   if(this.combatRows&&!(world.persistentAttacks||[]).length&&!Object.values(world.profiles||{}).some(p=>p.channelWeapon)&&Date.now()-(this.lastFullCheckpointAt||0)>=15000){
+   if(this.combatStateCache&&this.combatRows&&!(world.persistentAttacks||[]).length&&!Object.values(world.profiles||{}).some(p=>p.channelWeapon)&&Date.now()-(this.lastFullCheckpointAt||0)>=15000){
     this.save(world,this.combatStateCache.payload);this.readSnapshot=world;
    }
   }
