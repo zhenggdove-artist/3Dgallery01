@@ -407,18 +407,22 @@ export function cityWallPoint(lot,wall,u,v,outset=0){
 // Returns ONLY a visible wall face (never roof or an invisible interior plane).
 // Destroyed facades are not editable until GM repairs the house, but existing
 // paintings remain on the collapsing mesh, and remain after repair.
-export function cityPaintHit(origin,direction,range=17,damage={}){
+export function cityPaintHit(origin,direction,range=17,damage={},roofRange=range){
  if(!Array.isArray(origin)||!Array.isArray(direction)||range<=0)return null;
- let best=null,limit=range;
+ let best=null,limit=Math.max(range,roofRange);
  for(const lot of CITY_LOTS){
   if(cityStage(damage[lot.id]?.hp??CITY_MAX_HP)===3)continue;
   const dx=origin[0]-lot.x,dz=origin[2]-lot.z;
-  const bound=range+Math.max(lot.width,lot.depth)*1.5;
+  const bound=Math.max(range,roofRange)+Math.max(lot.width,lot.depth)*1.5;
   if(dx*dx+dz*dz>bound*bound)continue;
-  const signHit=signPaintHit(lot,origin,direction,limit,damage);if(signHit){best=signHit;limit=signHit.distance;}
   const [ox,oz]=cityLocal(lot,origin[0],origin[2]);
   const c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
   const vx=direction[0]*c-direction[2]*s,vz=direction[0]*s+direction[2]*c,vy=direction[1];
+  // Reject lots whose entire conservative facade/sign envelope misses the ray.
+  // Long upward paint rays must not traverse every floor of every nearby lot.
+  const hx=lot.width/2+Math.abs(lot.offset)+.5,hz=lot.depth/2+3.6;
+  if(spanMisses(ox,ox+vx*limit,-hx,hx)||spanMisses(oz,oz+vz*limit,-hz,hz)||spanMisses(origin[1],origin[1]+vy*limit,-.1,lot.height+5))continue;
+  const signHit=signPaintHit(lot,origin,direction,limit,damage,limit);if(signHit){best=signHit;limit=signHit.distance;}
   for(let floor=0;floor<lot.floors;floor++){
    const g=cityFacadeFloor(lot,floor);
    for(const wall of CITY_PAINT_WALLS){
@@ -446,7 +450,7 @@ export function cityPaintHit(origin,direction,range=17,damage={}){
    }
   }
  }
- return best;
+ return best&&(best.distance<=range||isRooftopPaintWall(best.wall))?best:null;
 }
 
 export const SIGN_HP=42;
@@ -724,41 +728,107 @@ export function citySignArtOptions(lot,variant){
  return {seed,style,font,saturation:seed%7===0?.5:1};
 }
 
-export function signPaintWall(wall){return typeof wall==='string'&&/^sign(?:-(?:blade|roof|flat)-[0-9]+)?:[+-]$/.test(wall);}
+export function signPaintWall(wall){return typeof wall==='string'&&(/^sign(?:-(?:blade|roof|flat)-[0-9]+)?:[+-]$/.test(wall)||/^sign-roof-[0-9]+:[LR]$/.test(wall));}
 export function structurePaintLot(s){return {id:s.id,x:s.position[0],y:s.position[1],z:s.position[2],yaw:s.rotation||0,structure:s};}
+function paintSigns(lot){return lot.structure?structureSignSpecs(lot.structure):[cityShopSignSpec(lot),...citySignSpecs(lot)].filter(Boolean);}
+function paintDescriptor(lot,wall,sign,signs){
+ const [id,face]=wall.split(':');if(!sign||sign.id!==id)return null;
+ if(id==='sign'&&face==='-')return null;
+ const roof=id.startsWith('sign-roof-');
+ const v=roof?(lot.structure?(lot.structure.gmHouse?gmRooftopVisual(lot.structure.house,sign,signPortraitSeed(lot.structure.id),signs):sign):cityRooftopVisual(lot,sign)):sign;
+ const side=face==='+'||face==='R'?1:-1,wing=face==='L'||face==='R';
+ if(wing&&(!roof||!(v.wing>.12)))return null;
+ const axis=wing||v.blade?'x':'z';
+ const width=wing?v.wing+v.depth:v.blade?v.depth:v.width;
+ // The side artwork spans from the front board face to the rear edge.
+ const center=wing?v.z-v.wing/2:axis==='x'?v.z:v.x;
+ const plane=axis==='x'?v.x+side*v.width/2:v.z+side*v.depth/2;
+ return {sign,visual:v,side,axis,wing,width,height:v.height,center,plane};
+}
 export function signPaintDescriptor(lot,wall){
  if(!signPaintWall(wall)||!lot)return null;
- const [id,face]=wall.split(':'),sign=(lot.structure?structureSignSpecs(lot.structure):[cityShopSignSpec(lot),...citySignSpecs(lot)]).find(s=>s?.id===id);
- if(!sign)return null;
- const side=face==='+'?1:-1;
- if(id==='sign'&&side<0)return null; // Existing city storefront has one printed face.
- return {sign,side,width:sign.blade?sign.depth:sign.width,height:sign.height};
+ const signs=paintSigns(lot),id=wall.split(':')[0];return paintDescriptor(lot,wall,signs.find(s=>s.id===id),signs);
+}
+function descriptorPoint(lot,d,u,v,outset){
+ const {visual:s,side,axis,center,plane,width,height}=d;
+ const along=axis==='x'?center-side*(u-.5)*width:center+side*(u-.5)*width;
+ return signWorldPosition(lot,{x:axis==='x'?plane+side*outset:along,y:s.y+(.5-v)*height,z:axis==='x'?along:plane+side*outset});
 }
 export function signPaintPoint(lot,wall,u,v,outset=.038){
  const d=signPaintDescriptor(lot,wall);if(!d||!Number.isFinite(u)||!Number.isFinite(v)||u<0||u>1||v<0||v>1)return null;
- const {sign:s,side}=d,x=s.blade?s.x+side*(s.width/2+outset):s.x+side*(u-.5)*s.width,z=s.blade?s.z-side*(u-.5)*s.depth:s.z+side*(s.depth/2+outset);
- return signWorldPosition(lot,{x,y:s.y+(.5-v)*s.height,z});
+ return descriptorPoint(lot,d,u,v,outset);
 }
-export function signPaintAvailable(lot,wall,damage={}){
- const d=signPaintDescriptor(lot,wall);if(!d)return false;
+function descriptorAvailable(lot,d,damage){
  if(lot.structure)return lot.structure.hp>0&&(lot.structure.signDamage?.[d.sign.id]??SIGN_HP)>0;
  const state=damage[lot.id];return cityDamageTier(state?.hp??CITY_MAX_HP,state?.maxHp??CITY_MAX_HP)<3&&(state?.parts?.[d.sign.id]??SIGN_HP)>0;
 }
-export function signPaintHit(lot,origin,direction,range,damage={}){
- const signs=lot.structure?structureSignSpecs(lot.structure):[cityShopSignSpec(lot),...citySignSpecs(lot)].filter(Boolean);
+export function signPaintAvailable(lot,wall,damage={}){
+ const d=signPaintDescriptor(lot,wall);return !!d&&descriptorAvailable(lot,d,damage);
+}
+export function signPaintHit(lot,origin,direction,range,damage={},roofRange=range){
+ const signs=paintSigns(lot);
  const [ox,oz]=cityLocal(lot,origin[0],origin[2]),c=Math.cos(lot.yaw),s=Math.sin(lot.yaw),dx=direction[0]*c-direction[2]*s,dz=direction[0]*s+direction[2]*c;
  let best=null;
- for(const sign of signs)for(const side of [1,-1]){
-  const wall=sign.id+':'+(side===1?'+':'-');if(!signPaintAvailable(lot,wall,damage))continue;
-  const axis=sign.blade?dx:dz;if(axis*side>=-1e-7)continue;
-  const plane=(sign.blade?sign.x:sign.z)+side*((sign.blade?sign.width:sign.depth)/2+.038);
-  const t=(plane-(sign.blade?ox:oz))/axis;if(t<.15||t>range||t>=(best?.distance??Infinity))continue;
-  const x=ox+dx*t,z=oz+dz*t,y=origin[1]+direction[1]*t-(lot.y||0),u=.5+side*(sign.blade?-(z-sign.z)/sign.depth:(x-sign.x)/sign.width),v=.5-(y-sign.y)/sign.height;
-  if(u<0||u>1||v<0||v>1)continue;
-  best={lotId:lot.id,lotIndex:lot.index,wall,u,v,position:signPaintPoint(lot,wall,u,v),distance:t};
+ for(const sign of signs){
+  const roof=sign.id.startsWith('sign-roof-');
+  for(const face of roof?['+','-','L','R']:['+','-']){
+   const wall=sign.id+':'+face,d=paintDescriptor(lot,wall,sign,signs);if(!d||!descriptorAvailable(lot,d,damage))continue;
+   const alongX=d.axis==='x',axis=alongX?dx:dz;if(axis*d.side>=-1e-7)continue;
+   const t=(d.plane+d.side*.038-(alongX?ox:oz))/axis;
+   if(t<.15||t>(roof?roofRange:range)||t>=(best?.distance??Infinity))continue;
+   const x=ox+dx*t,z=oz+dz*t,y=origin[1]+direction[1]*t-(lot.y||0),u=.5+d.side*(alongX?d.center-z:x-d.center)/d.width,v=.5-(y-d.visual.y)/d.height;
+   if(u<0||u>1||v<0||v>1)continue;
+   best={lotId:lot.id,lotIndex:lot.index,wall,u,v,position:descriptorPoint(lot,d,u,v,.038),distance:t};
+  }
  }
  return best;
 }
-export function structureSignPaintHit(structures,origin,direction,range=18){
- let best=null;for(const structure of structures||[]){if(structure.kind!=='house'||structure.hp<=0)continue;const hit=signPaintHit(structurePaintLot(structure),origin,direction,Math.min(range,best?.distance??range));if(hit)best=hit;}return best;
+export function structureSignPaintHit(structures,origin,direction,range=18,roofRange=range){
+ let best=null;for(const structure of structures||[]){if(structure.kind!=='house'||structure.hp<=0)continue;const hit=signPaintHit(structurePaintLot(structure),origin,direction,Math.min(range,best?.distance??range),{},Math.min(roofRange,best?.distance??roofRange));if(hit)best=hit;}return best;
+}
+
+export function rooftopSignMode(seed){return (seed>>>0)%5;}
+export function signPortraitSeed(id){
+ let hash=0;for(const ch of String(id??''))hash=(Math.imul(hash,31)+ch.charCodeAt(0))|0;
+ return hash>>>0;
+}
+/** Shared visual and paint geometry; combat sign specifications stay unchanged. */
+export function rooftopBillboardVisual(lot,s,seed=0,clear=()=>true){
+ const mode=rooftopSignMode(seed),half=Math.max(s.width/2,lot.width/2-Math.abs(s.x)-.20);
+ const width=Math.min(half*2,Math.max(s.width,lot.width*.88));
+ const bottom=s.y-s.height/2,roof=lot.height;
+ const height=Math.max(s.height,Math.min(3.65,Math.max(s.height*1.75,width*.43)));
+ const available=Math.max(0,s.z+lot.depth/2-.24);
+ const wing=mode===1||mode===4?Math.min(1.65,lot.depth*.28,available):mode===3?Math.min(.85,lot.depth*.16,available):0;
+ for(const scale of [1,.75,.5,0]){
+  const w=s.width+(width-s.width)*scale,h=s.height+(height-s.height)*scale,k=wing*scale;
+  const v={...s,width:w,height:h,y:bottom+h/2,wing:k,mode,bottom,roof};
+  if(clear({...v,z:s.z-k/2,depth:s.depth+k}))return v;
+ }
+ return {...s,wing:0,mode,bottom,roof};
+}
+
+const visualCityRoofs=new WeakMap();
+export function cityRooftopVisual(lot,sign){
+ let v=visualCityRoofs.get(sign);
+ if(!v){v=rooftopBillboardVisual(lot,sign,lot.index,q=>citySignClear(lot,q));visualCityRoofs.set(sign,v);}
+ return v;
+}
+export function gmRooftopVisual(spec,sign,seed=0,signs=houseSignSpecs({...spec,bladeCount:spec.bladeCount??0,roofCount:spec.roofCount??0})){
+ return rooftopBillboardVisual(spec,sign,(sign.seed+seed)|0,q=>!signs.some(other=>other.id!==sign.id&&other.id.startsWith('sign-roof-')&&Math.abs(other.x-q.x)<(other.width+q.width)/2+.10&&Math.abs(other.z-q.z)<(other.depth+q.depth)/2+.10));
+}
+export const ROOF_PAINT_RAY_RANGE=65;
+export function isRooftopPaintWall(wall){return typeof wall==='string'&&/^sign-roof-\d+:[+\-LR]$/.test(wall);}
+export function paintPointInReach(position,location,wall){
+ if(!location||!position)return false;
+ const dx=location[0]-position[0],dy=location[1]-(position[1]+1.4),dz=location[2]-position[2];
+ return isRooftopPaintWall(wall)?Math.hypot(dx,dz)<=19&&Math.hypot(dx,dy,dz)<=ROOF_PAINT_RAY_RANGE:Math.hypot(dx,dy,dz)<=19;
+}
+const HIGH_RISE_COMPANIES=Object.freeze([
+ ['光磊科技','LUMEN SYSTEMS','#23476b'],['長曜銀行','CHANG YAO BANK','#236852'],['晶川半導體','CRYSTAL RIVER SEMICONDUCTOR','#325e9d'],['東衡商業銀行','EAST BALANCE BANK','#286f67'],['聯星電子','UNITED STAR ELECTRONICS','#3d5893'],['華遠銀行','HUA YUAN BANK','#9a303a'],['新域資訊','NOVA DOMAIN TECHNOLOGY','#394b76'],['海岳國際銀行','OCEAN PEAK BANK','#294d67'],['天穹光電','SKYVAULT OPTRONICS','#3e668b'],['永辰銀行','YONG CHEN BANK','#27685e'],['微島科技','MICRO ISLAND TECHNOLOGY','#424c78'],['中原信託銀行','CENTRAL TRUST BANK','#9c4142']
+]);
+export function highRiseCompanySign(floors,seed){
+ if(floors<=5)return null;
+ const [title,subtitle,color]=HIGH_RISE_COMPANIES[(seed>>>0)%HIGH_RISE_COMPANIES.length];
+ return {title,subtitle,color,style:'wild',font:'hei',shopKind:(seed>>>0)%2?'bank':'technology'};
 }

@@ -1,3 +1,4 @@
+import {rooftopSignMode} from './shared/city-layout.js';
 // Deterministic signs: one original-illustration sheet, composed into the existing atlas once.
 let portraitLoad=null;
 const CATEGORY_WORDS={
@@ -192,10 +193,7 @@ export function portraitVariant(seed){
  const n=Math.abs(seed|0);
  return (Math.floor(n/5)+(n%5)*3)%10;
 }
-export function signPortraitSeed(id){
- let hash=0;for(const ch of String(id??''))hash=(Math.imul(hash,31)+ch.charCodeAt(0))|0;
- return hash>>>0;
-}
+export {signPortraitSeed} from './shared/city-layout.js';
 export function loadSignPortraits(){
  if(portraitLoad)return portraitLoad;
  if(typeof Image==='undefined'||typeof document==='undefined')return Promise.resolve(false);
@@ -275,7 +273,7 @@ export function drawSignArtwork(ctx,x,y,w,h,{color='#965044',title='商店',subt
 
  // Rooftop typography is drawn once into the existing atlas, not into
  // extra canvases, textures, meshes or dynamic lights per city sign.
-export function rooftopSignMode(seed){return (seed>>>0)%5;}
+export {rooftopSignMode,rooftopBillboardVisual} from './shared/city-layout.js';
 export function drawRooftopSignArtwork(ctx,x,y,w,h,{color='#4c9ea1',title='商店',subtitle='',aspect=2,seed=0,style='wild',font='hei',saturation=1}={}){
  const W=Math.max(144,Math.min(960,96*aspect)),H=96,mode=rooftopSignMode(seed),base=saturated(color,saturation),family=FONTS[font]||FONTS.hei;
  const lightbox=mode===1||mode===4,neon=mode===3,ink=lightbox?'#181b21':neon?'#ffd6eb':'#fff4cf';
@@ -334,22 +332,6 @@ export function installRooftopSignLighting(material,{batched=false,seed=0}={}){
  material.needsUpdate=true;
 }
 
-/** Client-only billboard envelope; original interactive panel and paint
- * coordinates remain inside the decorative extension. */
-export function rooftopBillboardVisual(lot,s,seed=0,clear=()=>true){
- const mode=rooftopSignMode(seed),half=Math.max(s.width/2,lot.width/2-Math.abs(s.x)-.20);
- const width=Math.min(half*2,Math.max(s.width,lot.width*.88));
- const bottom=s.y-s.height/2,roof=lot.height;
- const height=Math.max(s.height,Math.min(3.65,Math.max(s.height*1.75,width*.43)));
- const available=Math.max(0,s.z+lot.depth/2-.24);
- const wing=mode===1||mode===4?Math.min(1.65,lot.depth*.28,available):mode===3?Math.min(.85,lot.depth*.16,available):0;
- for(const scale of [1,.75,.5,0]){
-  const w=s.width+(width-s.width)*scale,h=s.height+(height-s.height)*scale,k=wing*scale;
-  const v={...s,width:w,height:h,y:bottom+h/2,wing:k,mode,bottom,roof};
-  if(clear({...v,z:s.z-k/2,depth:s.depth+k}))return v;
- }
- return {...s,wing:0,mode,bottom,roof};
-}
 export function rooftopBillboardParts(v){
  const {x,y,z,width:w,height:h,depth:d,wing,bottom,roof}=v;
  const steel='#41494e',out=[{x,y,z,width:w,height:h,depth:d,color:v.color,steel:false}];

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,CITY_LOTS,
- cityLots,citySignSpecs,cityShopSignSpec,citySignArtOptions,citySignClear,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
+ cityLots,citySignSpecs,cityShopSignSpec,citySignArtOptions,cityRooftopVisual,highRiseCompanySign,cityStage,cityDamageTier,cityCollapseProgress,cityCollapsePosition,cityBlocked,cityRoofHeight,CITY_MAX_HP} from './shared/city-layout.js';
 export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './shared/city-layout.js';
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,CityImpactPlumes,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
-import {drawSignArtwork,drawRooftopSignArtwork,rooftopSignMode,installRooftopSignLighting,updateRooftopSignClock,rooftopBillboardVisual,rooftopBillboardParts,rooftopBillboardFaces} from './sign-art.js';
+import {drawSignArtwork,drawRooftopSignArtwork,rooftopSignMode,installRooftopSignLighting,updateRooftopSignClock,rooftopBillboardParts,rooftopBillboardFaces} from './sign-art.js';
 import {CityWallPaint} from './city-wall-paint.js';
 import {CityFireField} from './city-fire-field.js';
 import {CitySplinterField} from './city-splinter-field.js';
@@ -34,8 +34,7 @@ function compactedSand(){
  g.globalAlpha=1;
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;return map;
 }
-const roofVisualCache=new WeakMap();
-function roofVisual(lot,sign){let v=roofVisualCache.get(sign);if(!v){v=rooftopBillboardVisual(lot,sign,lot.index,q=>citySignClear(lot,q));roofVisualCache.set(sign,v);}return v;}
+const roofVisual=cityRooftopVisual;
 function batchGeometry(lots,mobile){
  const position=[],normal=[],color=[],indices=[],lotRanges=new Map(),partRanges=new Map(),lotIds=[],localPoints=[],tilePoints=[];
  let category='core',current=-1;
@@ -194,7 +193,7 @@ function signAtlas(lots){
  const g=canvas.getContext('2d');
  entries.forEach(({lot,variant,sign},i)=>{
   const x=i%columns*tile,y=Math.floor(i/columns)*tile;
-  (variant===2?drawRooftopSignArtwork:drawSignArtwork)(g,x,y,tile,tile,{color:variant===2?sign.color||lot.style[3]:lot.style[3],title:variant===2?lot.style[1]:lot.shopName,subtitle:variant===2?lot.style[2]:lot.enName,shopKind:lot.style[0],vertical:variant===1,aspect:variant===1?.5:variant===2?roofVisual(lot,sign).width/roofVisual(lot,sign).height:sign.width/sign.height,...citySignArtOptions(lot,variant),...(variant===2?{seed:lot.index}:{})});
+  (variant===2?drawRooftopSignArtwork:drawSignArtwork)(g,x,y,tile,tile,{color:variant===2?sign.color||lot.style[3]:lot.style[3],title:variant===2?lot.style[1]:lot.shopName,subtitle:variant===2?lot.style[2]:lot.enName,shopKind:lot.style[0],vertical:variant===1,aspect:variant===1?.5:variant===2?roofVisual(lot,sign).width/roofVisual(lot,sign).height:sign.width/sign.height,...citySignArtOptions(lot,variant),...(variant===2?{seed:lot.index}:{}),...(highRiseCompanySign(lot.floors,lot.index)||{})});
  });
  const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
  return {map,columns,rows,tile,slots};

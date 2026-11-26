@@ -15,7 +15,7 @@ import {publishArtBomb,resizeArtBomb,updateArtBombAppearance,resetPlayerArtworks
 import {addArtwork,artworkDefinitions,artworkPickupReach,validateAppearance,isArtwork22,labelStyleOnly,LABEL_STYLE_BATCH_FIELDS} from './artwork-library.js';
 import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,itemById,shopWeaponVariant,inventoryCapacity,isRetiredHeadgear,shopPrice,shopPriceKey,shopPurchaseVariant,shopResalePrice,registerCustomWings,groundDropRoll,monsterDropRoll,isRestorativeDrop} from './catalog.js';
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
-import {CITY_LOTS,CITY_MAX_HP,SIGN_HP,citySignSpecs,structureSignSpecs,signPaintWall,signPaintAvailable,signPaintPoint,structurePaintLot,signWorldPosition,signRayDistance,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp,cityFacadeFloor} from './city-layout.js';
+import {CITY_LOTS,CITY_MAX_HP,SIGN_HP,citySignSpecs,structureSignSpecs,signPaintWall,signPaintAvailable,signPaintPoint,paintPointInReach,structurePaintLot,signWorldPosition,signRayDistance,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp,cityFacadeFloor} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
@@ -598,8 +598,7 @@ export function applyAction(world,actor,body,context={}){
      return {error:'Invalid paint coordinates'};
     const u=+p[0].toFixed(4),v=+p[1].toFixed(4);
     const location=signSurface?signPaintPoint(lot,bodyStroke.wall,u,v):cityWallPoint(lot,bodyStroke.wall,u,v);
-    if(!location||Math.hypot(location[0]-actor.position[0],
-      location[1]-(actor.position[1]+1.4),location[2]-actor.position[2])>19)
+    if(!paintPointInReach(actor.position,location,bodyStroke.wall))
      return {error:'Paint within reach of your character'};
     verified.push([u,v]);
    }
