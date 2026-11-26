@@ -1242,7 +1242,6 @@ function attack(world,profile,actor,body,context,now){
   const area=stats.ultimate&&weapon.id!=='goldfish'&&!waveVortex?chargedArea(weapon,origin,direction,stats,groundForSpell,channel||(weapon.family==='ice'&&stats.ultimate)):null;
   const pellets=weapon.pattern==='scatter'?calicoPellets(direction,stats.ultimate,now):null;
   const fusionEchoes=[];
-  const deferredStructures=stats.ultimate&&(weapon.id==='jellybrella'||weapon.id==='goldfish'||weapon.id==='fan'||returningStructureWeapon(weapon));
   const sniperMaterialBonus=(profile.fusion?.[weapon.id]?.sources||[]).filter(s=>s.id==='black-cat'&&!s.echo).reduce((sum,s)=>sum+sniperMaterialStat(itemById('black-cat'),stats.ultimate?'chargeDamage':'damage')*.3,0);
   const sniperMaterialRatio=1+sniperMaterialBonus/Math.max(1,Number(itemById(weapon.id)?.[stats.ultimate?'chargeDamage':'damage'])||1);
   const pvpDamage=(sustained?sustained.hit*quality.damage*(1+(enchants.damage+enchants.attack)/100)*(1+enchants.charge/100):pvpShotDamage(weapon,stats,quality))*tuningRatio*sniperMaterialRatio;
@@ -1353,35 +1352,8 @@ function attack(world,profile,actor,body,context,now){
     if(world.persistentAttacks.length>44)world.persistentAttacks.splice(0,world.persistentAttacks.length-44);
   }
   const hit=null,hits=[],monsterHit=null,monsterHits=[];
-  let structureHit=null,structureDestroyed=null;
-  const structureHits=[],structureDestroyedEvents=[];
-  // Evaluate builds regardless of hits on characters/monsters. Area attacks
-  // reach every matching structure; directional attacks hit the nearest one.
-  if(!deferredStructures&&!returningGiraffe&&!waveVortex&&tuningRatio!==0){
-   const signHits=structureSignHits(world,origin,direction,stats.range,area,Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*.7)),now);
-   for(const event of signHits){structureHit??=event;structureHits.push(event);}
-  }
-  const candidates=deferredStructures?[]:(world.structures||[]).filter(destructibleStructure).map(v=>{
-   const boxes=structureBoxes(v),point=[v.position[0],v.position[1]+structureHeight(v)*.5,v.position[2]];
-   const along=project(origin,direction,point);
-   const radius=weapon.pattern==='scatter'?.65+Math.max(0,along)*(stats.ultimate?.56:.32):stats.radius;
-   const distance=area&&['area','sector'].includes(area.mode)?(boxes.some(b=>areaTouchesBox(area,b))?0:null):firstBoxContact(boxes,origin,direction,stats.range,radius);
-   return {v,along:distance??along,inside:distance!==null};
-  }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
-  for(const {v:structure,along} of (returningGiraffe||waveVortex?[]:area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
-   const damage=tuningRatio===0?0:Math.round(Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*.7))*(weapon.pattern==='scatter'?shotgunDistanceScale(along,stats.range):1));if(damage<=0)continue;
-   structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
-   structure.hp=Math.max(0,structure.hp-damage);
-   const event={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
-   structureHit??=event;structureHits.push(event);
-   if(structure.hp===0){const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);}
-  }
-  // The city's structural impact follows weapon damage and charged strength,
-  // without changing PvP damage or displaying health numbers on the building.
-  const structuralDamage=tuningRatio===0?0:Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*(charge>=1?1.5:1.1)));
-  const city=deferredStructures||returningGiraffe||waveVortex||!structuralDamage?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now,weapon.pattern==='scatter',stats.radius);
- for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
- for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
+  const {structureHit,structureDestroyed,structureHits,structureDestroyedEvents}=immediateStructureDamage(world,weapon,stats,area,origin,direction,charge,bonus,tuningRatio,now);
+  if(body.previewInputV089===true&&typeof body.requestId==='string')for(const event of [...structureHits,...structureDestroyedEvents])event.inputId=body.requestId.slice(0,100);
  return {...(startWithPulse?{channeling:true}:{}),structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),...(body.previewInputV089===true&&typeof body.requestId==='string'?{inputId:body.requestId.slice(0,100)}:{}),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,
     aimMode:weapon.id==='black-cat'?'scope':null,
     piercing:false,qualityTier:quality.tier,qualityScale:quality.visual,skillRadiusScale:stats.ultimate?(tuning.radiusScale??1):1,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:weapon.id==='black-cat'?[]:(profile.fusion[weapon.id]?.effects||[]).filter(id=>id!=='black-cat'),fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,manaCost,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
@@ -1908,6 +1880,97 @@ function sweptBuildingContacts(world,fx,now,a,b,radius,damage,interval=Infinity)
  const delta=b.map((v,i)=>v-a[i]),range=Math.hypot(...delta),direction=range>1e-8?delta.map(v=>v/range):[0,0,1];
  return persistentBuildingContacts(world,fx,now,{origin:a,direction,range,radius},damage,interval);
 }
+// The V035 cast-time structural contact path, with current collision geometry
+// and damage coefficients. Local preview calls it only on disposable copies.
+function immediateStructureDamage(world,weapon,stats,area,origin,direction,charge,bonus,tuningRatio,now){
+ const deferredStructures=stats.ultimate&&(weapon.id==='jellybrella'||weapon.id==='goldfish'||weapon.id==='fan'||returningStructureWeapon(weapon));
+ const returningGiraffe=weapon.id==='giraffe'&&stats.ultimate,waveVortex=weapon.family==='wave'&&stats.ultimate;
+  let structureHit=null,structureDestroyed=null;
+  const structureHits=[],structureDestroyedEvents=[];
+  // Evaluate builds regardless of hits on characters/monsters. Area attacks
+  // reach every matching structure; directional attacks hit the nearest one.
+  if(!deferredStructures&&!returningGiraffe&&!waveVortex&&tuningRatio!==0){
+   const signHits=structureSignHits(world,origin,direction,stats.range,area,Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*.7)),now);
+   for(const event of signHits){structureHit??=event;structureHits.push(event);}
+  }
+  const candidates=deferredStructures?[]:(world.structures||[]).filter(destructibleStructure).map(v=>{
+   const boxes=structureBoxes(v),point=[v.position[0],v.position[1]+structureHeight(v)*.5,v.position[2]];
+   const along=project(origin,direction,point);
+   const radius=weapon.pattern==='scatter'?.65+Math.max(0,along)*(stats.ultimate?.56:.32):stats.radius;
+   const distance=area&&['area','sector'].includes(area.mode)?(boxes.some(b=>areaTouchesBox(area,b))?0:null):firstBoxContact(boxes,origin,direction,stats.range,radius);
+   return {v,along:distance??along,inside:distance!==null};
+  }).filter(v=>v.inside).sort((a,b)=>a.along-b.along);
+  for(const {v:structure,along} of (returningGiraffe||waveVortex?[]:area&&['area','sector'].includes(area.mode)?candidates:candidates.slice(0,1))){
+   const damage=tuningRatio===0?0:Math.round(Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*.7))*(weapon.pattern==='scatter'?shotgunDistanceScale(along,stats.range):1));if(damage<=0)continue;
+   structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;
+   structure.hp=Math.max(0,structure.hp-damage);
+   const event={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};
+   structureHit??=event;structureHits.push(event);
+   if(structure.hp===0){const destroyed=structureEvent(structure,now);structureDestroyed??=destroyed;structureDestroyedEvents.push(destroyed);world.structures.splice(world.structures.indexOf(structure),1);}
+  }
+  // The city's structural impact follows weapon damage and charged strength,
+  // without changing PvP damage or displaying health numbers on the building.
+  const structuralDamage=tuningRatio===0?0:Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*(charge>=1?1.5:1.1)));
+  const city=deferredStructures||returningGiraffe||waveVortex||!structuralDamage?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now,weapon.pattern==='scatter',stats.radius);
+ for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
+ for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
+
+ return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents};
+}
+export function previewImmediateBuildingDamage(world,weapon,data,now=Date.now()){
+ if(!world?.profile||!weapon||!data?.origin||!data.direction)return [];
+ const p=world.profile,quality=weaponQuality(weapon,p.fusion?.[weapon.id]),enchants=weaponAffixTotals(weapon);
+ const charge=data.ultimate?1:0,stats={...data},sustained=data.channel?sustainedSpellBalance(weapon):null;
+ if(sustained)stats.damage=sustained.hit*10;
+ stats.damage=+(stats.damage*quality.damage*(1+enchants.damage/100)*(stats.ultimate?1+enchants.charge/100:1)).toFixed(3);
+ const ratio=tuningDamageRatio(world,weapon,stats.ultimate);
+ stats.damage*=ratio;
+ if(!Number.isFinite(p.stats?.attack))return [];
+ stats.damage=+(stats.damage*p.stats.attack*.1).toFixed(3);
+ const copy={structures:clone(world.structures||[]),cityDamage:clone(world.cityDamage||{})};
+ return immediateStructureDamage(copy,weapon,stats,data.area,data.origin,data.direction,charge,p.fusion?.[weapon.id]?.bonus||0,ratio,now).structureHits;
+}
+// Read-only contact geometry on the LOCAL animation clock. No HP, mana, hit
+// locks, rewards, destruction or other gameplay is written by this function.
+export function previewActorContacts(data,targets,fromMs,toMs){
+ const weapon=itemById(data.weapon);if(!weapon||!data.origin||!data.direction||data.range<=0)return [];
+ if(data.ultimate&&(['giraffe','goldfish','fan'].includes(weapon.id)||weapon.family==='wave'))return [];
+ // Target-seeking beams are not approximated as a forward ray.
+ if(data.channel&&(weapon.family==='beam'||/^tide-[1-5]$/.test(weapon.id)))return [];
+ const flight=Math.max(1,data.flightMs||projectileFlightMs(weapon,!!data.ultimate,data.range));
+ const prev=clamp(fromMs/flight,0,1),next=clamp(toMs/flight,0,1),area=data.area;
+ const pan=/^pan-[1-5]$/.test(weapon.id)&&data.ultimate;
+ const palm=/^palm-[1-5]$/.test(weapon.id)&&data.ultimate;
+ const fullRay=data.channel&&!data.fusionEcho&&weapon.family==='fire'&&!weapon.exotic;
+ const lanes=weapon.pattern==='scatter'?calicoPellets(data.direction,!!data.ultimate,data.time||0):[{direction:data.direction,radius:data.radius}];
+ const contact=[];
+ for(const target of targets){
+  if(!target?.position||target.key===data.owner||target.hp<=0||target.immune||target.kind==='player'&&insideSafeZone(target.position))continue;
+  const player=target.kind==='player',radius=player?1.02:target.bodyRadius||ENEMY_RADIUS;
+  const ground=[target.position[0],target.position[1]+(player?1:1.25),target.position[2]];
+  let hit=false;
+  if(area?.mode==='sector'){
+   const crest=t=>weapon.family==='saber'?saberWaveCrest(data.range,t):clamp((t*2.18-.2)/1.98,0,1)**2*(3-2*clamp((t*2.18-.2)/1.98,0,1))*data.range;
+   const along=(ground[0]-area.apex[0])*area.forward[0]+(ground[2]-area.apex[2])*area.forward[1];
+   hit=next>prev&&insideChargedArea(area,ground,radius)&&along+radius>=crest(prev)&&along-radius<=crest(next);
+  }else if(area?.mode==='area'){
+   if(area.shape==='ice-line')hit=iceEruptionContact(area,ground,radius,toMs);
+   else if(palm||toMs>=flight*(pan?Math.max(0,.5-PAN_BLAST_DETONATION_ADVANCE_MS/flight):1))
+    hit=insideChargedArea(area,ground,radius);
+  }
+  if(!hit&&area?.mode!=='sector'&&!pan&&!palm&&area?.shape!=='ice-line'&&!(data.fusionEcho&&area?.mode==='area')&&next>=prev){
+   for(const lane of lanes){
+    const lo=fullRay?0:prev,hi=fullRay?1:next;
+    const start=data.origin.map((v,i)=>v+lane.direction[i]*lo*data.range);
+    const length=(hi-lo)*data.range,rr=(lane.radius??data.radius)*(weapon.pattern==='scatter'?(data.qualityScale||1):1);
+    if(player?rayCylinderDistance(start,lane.direction,length,target.position,1.02+rr,2.35)!==null:monsterRayDistance(start,lane.direction,length,target,rr)!==null){hit=true;break;}
+   }
+  }
+  if(hit)contact.push(target.key||target.id);
+ }
+ return contact;
+}
+
 function cityWeaponHits(world,origin,direction,range,area,damage,now,scatter=false,radius=0){
  const impactDamage=point=>scatter?Math.round(damage*shotgunDistanceScale(Math.max(0,project(origin,direction,point)),range)):damage;
  const hits=[],destroyed=[];
@@ -2395,7 +2458,7 @@ function tickPersistentAttacks(world,actors,now,rng){
    // all travelled segments, so no damage can occur before contact.
    const lanes=fx.pellets||[{direction:fx.direction,radius:fx.radius}];
    const segmentLength=Math.max(0,(next-prev)*fx.range);
-   if(segmentLength>.00001&&!accordionTornado&&fx.area?.mode!=='sector'&&!panBlast&&
+   if((segmentLength>.00001||now===fx.createdAt&&fx.lastAt===fx.createdAt)&&!accordionTornado&&fx.area?.mode!=='sector'&&!panBlast&&
        !(fx.echo&&fx.area?.mode==='area')&&
        !(weapon.family==='ice'&&fx.charge>=1&&fx.area?.mode==='area')){
     lanes.forEach((pellet,index)=>{

@@ -29,11 +29,12 @@ import {TempleArena} from './arena-view.js';
 import {TempleNetwork,requestStaffChannelStop} from './network.js';
 import {PlayerController} from './player-controller.js';
 import {normalMeleeFootprint} from './shared/melee-contact.js';
-import {projectileFlightMs} from './shared/combat-balance.js';
+import {projectileFlightMs,SNIPER_RANGE} from './shared/combat-balance.js';
 import {chargedVisualData} from './shared/charged-visual-data.js';
 import {TempleUI} from './ui.js';
 import {PLAYER_SPAWNS} from './shared/arena.js';
-import {canBuildAt,canPlaceArtworkAt} from './shared/temple-rules.js';
+import {canBuildAt,canPlaceArtworkAt,previewImmediateBuildingDamage,previewActorContacts} from './shared/temple-rules.js';
+import {updateHitFlash} from './hit-flash.js';
 import {itemById,ITEMS,EQUIPPABLE_SLOTS,attackStats} from './shared/catalog.js';
 import {warmItemPreviews,setOutfitPreviewCharacter} from './item-preview.js';
 import {GPUFrameQueue} from './gpu-frame-queue.js';
@@ -1069,8 +1070,9 @@ function normalVisualData(item,sample){
  if(item.family==='swatter'&&!item.exotic){stats.range=Math.min(stats.range,1.55+(Math.max(1,item.tier||1)-1)*.2);stats.radius=.18;}
  if(item.family==='saber'){stats.range=Math.min(stats.range,(4.7+(Math.max(1,item.tier||1)-1)*1.5)/3);stats.radius=Math.min(stats.radius,.16);}
  const contact=normalMeleeFootprint(item);if(contact){stats.range=Math.min(stats.range,contact.range);stats.radius=Math.min(stats.radius,contact.radius);}
+ if(item.id==='black-cat')stats.range=SNIPER_RANGE;
  stats.range*=equipmentTuning(world,item).rangeScale??1;
- return {...stats,...sample,owner:self?.key,charge:0,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,flightMs:projectileFlightMs(item,false,stats.range),time:Date.now()};
+ return {...stats,...sample,weapon:item.id,owner:self?.key,charge:0,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,flightMs:projectileFlightMs(item,false,stats.range),time:Date.now()};
 }
 function performAttack(charge=0,phase=null,captured=null,extra={},pendingCharge=null,stillValid=()=>true){
  if(wallPainter.active)return;
@@ -1095,20 +1097,52 @@ function performAttack(charge=0,phase=null,captured=null,extra={},pendingCharge=
    scoped:gun.mode===2,aimMode:'scope'
   }:{})},{throwOnError:phase==='channel'});
  const action=pendingCharge?Promise.resolve(pendingCharge).then(result=>result?.charging&&stillValid()&&world?.profile?.equipment?.weapon===item.id?submit():null):submit();
- const preview=normal&&arena.presentation.previewNormal(localRoot,item,inputId,normalVisualData(item,sample));
- const chargedPreview=ultimate&&arena.presentation.previewUltimate(localRoot,item,inputId,chargedVisualData(world,item,sample,self?.key,phase==='channel'));
+ const data=normal?normalVisualData(item,sample):ultimate?chargedVisualData(world,item,sample,self?.key,phase==='channel'):null;
+ const preview=normal&&arena.presentation.previewNormal(localRoot,item,inputId,data);
+ const chargedPreview=ultimate&&arena.presentation.previewUltimate(localRoot,item,inputId,data);
+ if(preview||chargedPreview)beginContactPreview(inputId,item,data,startedAt);
  if(preview||chargedPreview){
   const diag=window.templeAttackInputDiagnostics??=([]);
   const entry={id:inputId,weapon:item.id,transport:'http',inputAt:startedAt,visualAt:performance.now(),submittedAt:null,ackAt:null};diag.push(entry);if(diag.length>32)diag.shift();
   playAttackAudio(item,1,ultimate,true);
   if(ultimate&&item.family!=='fire')audio.play('ultimate',.45);
-  const reject=()=>{arena.presentation.cancelMeleePreview(localRoot,inputId);if(chargedPreview)arena.presentation.cancelUltimatePreview(localRoot,inputId);};
-  void action.then(result=>{entry.ackAt=performance.now();entry.accepted=!!result?.attackEvent;if(!entry.accepted)reject();},()=>{entry.ackAt=performance.now();entry.accepted=false;reject();});
+  const reject=()=>{cancelContactPreview(inputId);arena.presentation.cancelMeleePreview(localRoot,inputId);if(chargedPreview)arena.presentation.cancelUltimatePreview(localRoot,inputId);};
+  void action.then(result=>{entry.ackAt=performance.now();entry.accepted=!!result?.attackEvent;if(!entry.accepted)reject();else arena.outerCity?.finishPredictedContact(inputId);},()=>{entry.ackAt=performance.now();entry.accepted=false;reject();});
  }
  return action;
 }
 function performInteract(target=null){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=target||arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
 
+const localContactPreviews=new Map();
+function cancelContactPreview(inputId){localContactPreviews.delete(inputId);arena.outerCity?.finishPredictedContact(inputId);}
+function beginContactPreview(inputId,item,data,at){
+ try{
+  for(const hit of previewImmediateBuildingDamage(world,item,data))arena.previewStructureContact(hit,inputId);
+  const attacks=[data,...(data.fusionEchoes||[])].map(v=>({...v,flightMs:v.flightMs||projectileFlightMs(itemById(v.weapon)||item,!!v.ultimate,v.range)}));
+  localContactPreviews.set(inputId,{at,previous:0,attacks,seen:new Set()});
+  if(localContactPreviews.size>12)cancelContactPreview(localContactPreviews.keys().next().value);
+  updateContactPreviews(at);
+ }catch(error){console.warn('Local contact presentation',error);}
+}
+function updateContactPreviews(now=performance.now()){
+ if(!localContactPreviews.size)return;
+ const targets=[];
+ for(const player of players){if(player.key===self?.key||player.role!=='fighter')continue;const root=roots.get(player.key),p=combatVital(player.key,player.profile);if(root?.visible&&p&&p.hp>0)targets.push({key:player.key,kind:'player',position:root.position.toArray(),hp:p.hp,immune:player.profile?.gmInvincible===true||player.profile?.spawnProtectedUntil>Date.now(),root});}
+ if(arena.monster?.visible&&world?.monster?.active)targets.push({...world.monster,key:world.monster.id,kind:'monster',position:arena.monster.position.toArray(),root:arena.monster});
+ for(const {root,state} of arena.islandEnemies.extraLive)if(root.visible&&state?.active)targets.push({...state,key:state.id,kind:'monster',position:root.position.toArray(),root});
+ const byKey=new Map(targets.map(t=>[t.key,t]));
+ for(const [inputId,cast] of localContactPreviews){
+  const elapsed=Math.max(0,now-cast.at);
+  if(elapsed>Math.max(350,...cast.attacks.map(v=>v.flightMs+300))){localContactPreviews.delete(inputId);continue;}
+  if(elapsed-cast.previous<25&&elapsed!==0)continue;
+  for(const data of cast.attacks)for(const key of previewActorContacts(data,targets,cast.previous,elapsed)){
+   if(cast.seen.has(key))continue;cast.seen.add(key);const t=byKey.get(key);if(!t)continue;
+   // Only visual feedback is predicted, never numbers, HP, stun or movement.
+   t.root.userData.hitFlashUntil=Math.max(t.root.userData.hitFlashUntil||0,now+250);
+  }
+  cast.previous=elapsed;
+ }
+}
 let screenShakeUntil=0;
 const heardStompLandings=new Set();
 function update(dt,time,movementDt=dt){
@@ -1178,7 +1212,10 @@ function update(dt,time,movementDt=dt){
      localRoot.userData.staffTargetPoint=null;
     }
   }
+  updateContactPreviews();
   arena.update(dt,time,camera,roots,localRoot);
+  if(arena.monster)updateHitFlash(arena.monster,performance.now());
+  for(const {root} of arena.islandEnemies.extraLive)updateHitFlash(root,performance.now());
   for(const {root,state} of arena.islandEnemies.extraLive){const fast=combatVital(state?.id,null);if(fast)setHealthBar(root,fast.hp,fast.maxHp,ENEMY_HEIGHT+.65);}
   // The outbound/returning giraffe is the actual thrown weapon. Do not
   // keep a duplicate giraffe in its wielder's hand during the 2.3s flight.
@@ -1249,7 +1286,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V094',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V095',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

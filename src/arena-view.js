@@ -122,6 +122,12 @@ export class TempleArena{
    group.add(root);group.userData.actualArtwork=true;
    root.userData.video?.play().catch(()=>{});
   }
+  previewStructureContact(event,inputId){
+   if(event?.cityLotIndex!==undefined){this.outerCity?.previewDamage(event,inputId);return;}
+   if(!event?.structureId)return;
+   // Existing in-place hit tint/shake only; no fake detachment or deletion.
+   const now=performance.now();this.structureHitTimes.set(event.structureId,{start:now,until:now+550});
+  }
   applyStructureEvents(hits=[],broken=[]){
    this.fastStructureRecords??=new Map();let changed=false;
    const revision=this.world?.revision??-1;

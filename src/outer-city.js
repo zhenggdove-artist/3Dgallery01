@@ -852,6 +852,28 @@ export class OuterCity{
   // masonry and sign fragments, with only five shared draw calls.
   this.splinters?.burst(lot,tier,impact,lot.index*131+tier*499);
  }
+ previewDamage(event,inputId){
+  const lot=this.lots[event?.cityLotIndex];if(!lot||!inputId)return;
+  this.predictedDamage??=new Map();
+  const records=this.predictedDamage.get(lot.id)||new Map();
+  const previousHp=Number(event.previousHp),hp=Number(event.hp);
+  if(!records.has(inputId))records.set(inputId,{amount:0,expiresAt:performance.now()+1250});
+  if(Number.isFinite(previousHp)&&Number.isFinite(hp))records.get(inputId).amount+=Math.max(0,previousHp-hp);
+  this.predictedDamage.set(lot.id,records);this.applyPredictedFacade(lot);
+  this.flash(lot);
+  const point=event.position||[lot.x,1.5,lot.z];this.splinters?.burst(lot,this.damage[lot.id]?.tier||0,point,lot.index+Math.floor(performance.now()),this.mobile?5:8);
+ }
+ applyPredictedFacade(lot){
+  const actual=this.damage[lot.id],maxHp=actual?.maxHp||CITY_MAX_HP,records=this.predictedDamage?.get(lot.id);
+  const amount=[...(records?.values()||[])].reduce((n,v)=>n+v.amount,0);
+  this.facade.set(lot.index,Math.max(0,(actual?.hp??maxHp)-amount),maxHp);
+ }
+ finishPredictedContact(inputId){
+  for(const [id,records] of this.predictedDamage||[]){if(!records.delete(inputId))continue;if(!records.size)this.predictedDamage.delete(id);const lot=this.lotById.get(id);if(lot)this.applyPredictedFacade(lot);}
+ }
+ expirePredictedContacts(){
+  const now=performance.now();for(const [id,records] of this.predictedDamage||[]){let changed=false;for(const [inputId,record] of records)if(record.expiresAt<=now){records.delete(inputId);changed=true;}if(!records.size)this.predictedDamage.delete(id);if(changed){const lot=this.lotById.get(id);if(lot)this.applyPredictedFacade(lot);}}
+ }
  applyDamageEvent(event){
   const lot=this.lots[event?.cityLotIndex];if(!lot)return;
   if(event.id&&this.seenCityEvents.has(event.id))return;
@@ -862,6 +884,8 @@ export class OuterCity{
    if(event.revision<(this.liveDamageRevisions.get(lot.id)??-1))return;
    this.liveDamageRevisions.set(lot.id,event.revision);
   }
+  const predicted=this.predictedDamage?.get(lot.id),alreadyFlashed=!!event.inputId&&predicted?.has(event.inputId);
+  if(alreadyFlashed){predicted.delete(event.inputId);if(!predicted.size)this.predictedDamage.delete(lot.id);}
   const maxHp=event.maxHp||CITY_MAX_HP,existing=this.damage[lot.id];
   const oldHp=Number.isFinite(event.previousHp)?event.previousHp:
    existing?.hp??Math.min(maxHp,event.hp+Math.max(0,event.damage||0));
@@ -869,8 +893,8 @@ export class OuterCity{
   const tier=cityDamageTier(event.hp,maxHp),stage=cityStage(event.hp,maxHp);
   this.damage[lot.id]={...existing,hp:event.hp,maxHp,stage,tier};
   this.fireField?.setLot(lot,event.hp,maxHp,{live:true});
-  this.facade.set(lot.index,event.hp,maxHp);
-  this.flash(lot);
+  this.applyPredictedFacade(lot);
+  if(!alreadyFlashed)this.flash(lot);
   // Non-threshold hits still throw fine chips, smoke and shake the building.
   if(tier===from){
    this.eject(lot,event.part||'masonry',event.position,!!event.partDestroyed);
@@ -910,7 +934,7 @@ export class OuterCity{
     &&!this.collapseAnimations.has(lot.index);
    this.damage[lot.id]={hp:record.hp,maxHp,stage,tier,partSig};
    this.fireField?.setLot(lot,record.hp,maxHp,{snapshot:true});
-   this.facade.set(lot.index,record.hp,maxHp);
+   this.applyPredictedFacade(lot);
    for(const part of destroyedParts)this.hidePart(lot.index,part);
    if(firstSnapshot||staticChange){
     this.collapseLot(lot.index,tier);
@@ -922,7 +946,7 @@ export class OuterCity{
   }
  }
  resetBuildings(){
-  this.damage={};this.lastDamage=null;this.liveDamageRevisions?.clear();this.hidden.clear();this.partsHidden.clear();this.facade.reset();
+  this.damage={};this.lastDamage=null;this.liveDamageRevisions?.clear();this.predictedDamage?.clear();this.hidden.clear();this.partsHidden.clear();this.facade.reset();
   this.fireField?.reset();this.splinters?.reset();
   this.gpuPose?.reset();
   this.renderedTiers.clear();this.poseCache.clear();this.deformationBasis?.clear();
@@ -968,6 +992,7 @@ export class OuterCity{
    tmp.position.set(x-.3*Math.sin(a),.15,z-.3*Math.cos(a));tmp.scale.set(1,1,1);tmp.rotation.set(.7,a,0);tmp.updateMatrix();this.tails.setMatrixAt(i,tmp.matrix);
   }
   this.rats.instanceMatrix.needsUpdate=this.tails.instanceMatrix.needsUpdate=true;
+  this.expirePredictedContacts();
   // Flash and deformation apply to the actual building geometry and decals.
   for(let i=this.flashes.length-1;i>=0;i--){
    const flash=this.flashes[i];flash.age+=dt;

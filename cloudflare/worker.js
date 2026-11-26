@@ -24,7 +24,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,fastActionsV087:true,fastCastV089:true,instantAttackV090:true,v35CombatV091:true,combatLatencyV092:true,contactFastV093:true,v35ContactV094:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,fastActionsV087:true,fastCastV089:true,instantAttackV090:true,v35CombatV091:true,combatLatencyV092:true,contactFastV093:true,v35ContactV094:true,impactFeedbackV095:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
@@ -60,15 +60,22 @@ export class TempleRoom extends DurableObject{
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
   }
 
-  world(){
-   if(this.combatStateCache)return migrateWorld(JSON.parse(this.combatStateCache.payload));
+  persistedWorld(){
    const base=JSON.parse(this.committedPayload??this.sql.exec('SELECT payload FROM world_state WHERE id=1').toArray()[0]?.payload??'{}');
-   return migrateWorld(restoreCombatOverlay(base,this.sql.exec('SELECT key,payload FROM combat_world_overlay').toArray()));
+   return restoreCombatOverlay(base,this.sql.exec('SELECT key,payload FROM combat_world_overlay').toArray());
   }
+  world(){return migrateWorld(this.combatStateCache?JSON.parse(this.combatStateCache.payload):this.persistedWorld());}
   readWorld(){return this.readSnapshot??=this.world();}
   // Only payloads committed by this instance are eligible; cold starts and
   // noncombat mutations still go through the full versioned repair path.
-  combatWorld(){return this.combatStateCache?forkCombatWorld(this.combatStateCache):this.committedPayload!=null?JSON.parse(this.committedPayload):this.world();}
+  combatWorld(){
+   if(this.combatStateCache)return forkCombatWorld(this.combatStateCache);
+   const persisted=this.persistedWorld();
+   // Capture the exact durable baseline BEFORE migration/attack mutations.
+   // The first contact after a pickup or cold restart can use the delta too.
+   this.combatRows=combatRows(persisted);
+   return migrateWorld(persisted);
+  }
   save(world,encodedPayload=null){
    const payload=encodedPayload??JSON.stringify(world);
    this.ctx.storage.transactionSync(()=>{this.sql.exec('INSERT OR REPLACE INTO world_state VALUES(1,?)',payload);this.sql.exec('DELETE FROM combat_world_overlay');});
@@ -340,7 +347,7 @@ export class TempleRoom extends DurableObject{
     const result=applyAction(world,actor,body,{now:body.action==='attack'?receivedAt:Date.now(),actors,seatIndex:session.seat});if(result.error)return json({error:result.error},400);
     // Account only for actual server elapsed time during action processing;
     // do not trust client clocks or jump a projectile to its final target.
-    if(result.attackEvent&&Date.now()>receivedAt)advanceCombatContacts(world,actors,Date.now());
+    if(result.attackEvent)advanceCombatContacts(world,actors,Math.max(receivedAt,Date.now()));
     const contactVisuals=world.pendingArtworkVisualEvents?.splice(0)||[];
     // Handle explicit or login-time revivals during an HTTP action too.
     const newProfile=world.profiles[session.profile_key];
