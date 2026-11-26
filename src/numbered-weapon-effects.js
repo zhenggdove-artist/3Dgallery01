@@ -293,7 +293,7 @@ export class NumberedWeaponEffects {
   const target=areaLocked?vector(event.area.visualCenter,origin):origin.clone();
   const entry={
    spec,fx,group:fx.group,root,item,direction,visualDirection:direction.clone(),origin,target,options,
-   curveBend:0,visualEnd:null,attackId:event.persistentAttackId||null,
+   curveBend:0,visualEnd:null,attackId:event.persistentAttackId||null,previewInputId:event.localPredicted?event.inputId:null,previewSlot:event.fusionEcho?event.fusionSlot:null,
    owner:event.owner||null,lockedPoint:null,
    worldScale:ultimateWorldScale(spec.number,event,options),
    range:Math.max(.5,Number(event.range)||12),

@@ -413,9 +413,9 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
    if(group.userData.fishVhsTime)group.userData.fishVhsTime.value=age;
    const progress=Math.min(1,age/duration);
    const travel=(event.range||32)*progress;
-   const track=world?.goldfishFlights?.find(v=>v.id===event.persistentAttackId);
+   const track=world?.goldfishFlights?.find(v=>v.id===flightEntry.attackId);
    const impacts=(world?.goldfishImpactEvents||[]).filter(v=>
-    v.attackId===event.persistentAttackId);
+    v.attackId===flightEntry.attackId);
    if(impacts.length)group.userData.gotServerTrack=true;
    const impactBursts=group.userData.goldfishBubbleBursts;
    const capture=(index,position)=>{
@@ -577,7 +577,7 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
    const fade=Math.min(1,age*6,(totalDuration-age)*7);
    group.scale.setScalar(Math.max(0,fade));
   },'goldfish');
-  flightEntry.attackId=event.persistentAttackId||null;
+  flightEntry.attackId=event.persistentAttackId||null;flightEntry.previewInputId=event.localPredicted?event.inputId:null;flightEntry.previewSlot=event.fusionEcho?event.fusionSlot:null;
  }
  flower(event){
   const quality=event.qualityScale||1,origin=vec(event.origin),direction=vec(event.direction).normalize();

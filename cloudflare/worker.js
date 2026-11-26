@@ -22,7 +22,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,fastActionsV087:true,fastCastV089:true,instantAttackV090:true,v35CombatV091:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,fastActionsV087:true,fastCastV089:true,instantAttackV090:true,v35CombatV091:true,combatLatencyV092:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
@@ -313,6 +313,7 @@ export class TempleRoom extends DurableObject{
     delete body.verifiedArtMedia;if(body.action==='add-artwork'||body.action==='publish-art-bomb'){const media=this.sql.exec('SELECT id,type,owner FROM art_media WHERE id=?',String(body.artwork?.mediaId||'')).toArray()[0];if(!media||media.owner!==session.profile_key||body.action==='add-artwork'&&!actor.admin||body.action==='publish-art-bomb'&&session.role!=='fighter')return json({error:'Upload your own validated artwork with the required role first'},403);body.verifiedArtMedia={id:media.id,type:media.type};}
     if(body.media||body.surface){const mediaId=body.media?.id||body.surface,media=this.sql.exec('SELECT id,type,owner FROM plant_media WHERE id=?',mediaId).toArray()[0];if(!media||media.owner!==session.profile_key||body.surface&&!media.type.startsWith('image/'))return json({error:'Upload your own media first'},400);if(body.media)body.media={id:media.id,type:media.type};}
     const previousRespawnAt=world.profiles[session.profile_key]?.lastRespawnAt||0;
+    const previousDamageSequence=world.damageSequence||0;
     const result=applyAction(world,actor,body,{now:Date.now(),actors,seatIndex:session.seat});if(result.error)return json({error:result.error},400);
     // Handle explicit or login-time revivals during an HTTP action too.
     const newProfile=world.profiles[session.profile_key];
@@ -355,7 +356,10 @@ export class TempleRoom extends DurableObject{
     // Attack presentation is independent of the heavyweight world patch.
     // Deliver the authoritative event first; never predict damage locally.
     if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);
-    this.broadcastWorld(world);if(didRespawn||result.delistedItemId)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);this.broadcastStructureEvents(result.structureHits||(result.structureHit?[result.structureHit]:[]),result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]));await this.armAlarm();return new Response(responseText,{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
+    this.broadcastNewDamage(world,previousDamageSequence);
+    this.broadcastStructureEvents(result.structureHits||(result.structureHit?[result.structureHit]:[]),result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]));
+    this.scheduleCombatTick();
+    this.broadcastWorld(world);if(didRespawn||result.delistedItemId)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);await this.armAlarm();return new Response(responseText,{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
   }
 
   async saveCode(session){
@@ -574,10 +578,25 @@ export class TempleRoom extends DurableObject{
     // full roster on every 70ms weapon-effect tick.
     if(now-(this.lastRosterAt||0)>=800)this.broadcastRoster();
   }
+  broadcastNewDamage(world,sequence){
+   const events=(world.damageEvents||[]).filter(e=>e.id>sequence);
+   if(events.length)this.broadcast('combat-damage',{revision:world.revision,events});
+  }
+  scheduleCombatTick(){
+   if(this.combatTimer!=null)return;
+   const w=this.readWorld();
+   const active=(w.persistentAttacks||[]).length||Object.keys(w.prismLocks||{}).length||Object.keys(w.tidalLocks||{}).length||Object.values(w.profiles||{}).some(p=>p.channelWeapon);
+   if(!active)return;
+   // Independent of player movement/state packet delivery. Retain the existing
+   // 70ms authoritative simulation cap; no extra world tick when a state tick ran.
+   const delay=Math.max(8,70-(Date.now()-this.lastTick));
+   this.combatTimer=setTimeout(()=>{this.combatTimer=null;void this.tick(true).catch(error=>console.error('Combat tick failed',error)).finally(()=>this.scheduleCombatTick());},delay);
+  }
   async tick(fromState=false){
    const now=Date.now(),current=this.readWorld(),movingEffects=(current.persistentAttacks||[]).length>0||(current.pendingArtworkFlights||[]).length>0||Object.keys(current.prismLocks||{}).length>0||Object.keys(current.tidalLocks||{}).length>0||Object.values(current.profiles||{}).some(p=>p.tidalChannelStats)||(current.monster?.tidePush!=null)||(current.monsters||[]).some(m=>m.tidePush);
    if(fromState&&now-this.lastTick<(movingEffects?70:500))return;
    const world=this.world();
+   const previousDamageSequence=world.damageSequence||0;
    this.lastTick=now;
    const actors=this.actors();
    const previousRespawns=new Map(actors.map(actor=>[actor.key,world.profiles[actor.key]?.lastRespawnAt||0]));
@@ -600,6 +619,7 @@ export class TempleRoom extends DurableObject{
      respawned=true;
     }
     this.committedPayload=this.save(world);this.readSnapshot=world;
+    this.broadcastNewDamage(world,previousDamageSequence);
     // Full world views include persistent artwork, graffiti, 432-lot city HP,
     // profile inventories and active damage effects. Serializing that entire
     // JSON graph up to 14x/s during beam/building ticks blocks movement ACKs
@@ -616,6 +636,7 @@ export class TempleRoom extends DurableObject{
        this.broadcast(impact.kind,impact.event);
     if(respawned)this.broadcastRoster();
    }
+   this.scheduleCombatTick();
    await this.armAlarm();
   }
   async alarm(){this.prune();await this.tick();}

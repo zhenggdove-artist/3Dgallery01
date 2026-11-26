@@ -83,6 +83,35 @@ export class ReletterPresentation{
    if(this.normalPreviews.size>128)this.normalPreviews.delete(this.normalPreviews.keys().next().value);
    return true;
   }
+  previewUltimate(root,item,inputId,data){
+   if(!root)return false;
+   this.ultimatePreviews??=new Map();
+   const d=root.userData,now=performance.now(),record={channel:data.channel,echoes:new Set()};
+   if(meleeFamilies.includes(item.family)&&d.weaponId===item.id){
+    d.localSwing={inputId,at:now};d.attack={age:0,duration:meleeDuration(item.family,6),combo:6,data:{...item,...data},inputId};
+   }
+   if(isSpellWeapon(item))d.staffCastingUntil=now+(data.channel?Math.max(1700,(item.cooldown||700)*3):230);
+   try{this.vfx.play({...item,...data,inputId,localPredicted:true},item,root);}catch(error){console.warn('Local ultimate visual failed',error);return false;}
+   for(const echo of data.fusionEchoes||[]){
+    const source=itemById(echo.weapon);if(!source)continue;
+    try{this.vfx.play({...source,...echo,inputId,localPredicted:true},source,root);record.echoes.add(echo.fusionSlot);}catch(error){console.warn('Local fusion visual failed',error);}
+   }
+   this.ultimatePreviews.set(inputId,record);if(this.ultimatePreviews.size>64)this.ultimatePreviews.delete(this.ultimatePreviews.keys().next().value);
+   return true;
+  }
+  cancelUltimatePreview(root,inputId){const record=this.ultimatePreviews?.get(inputId);this.ultimatePreviews?.delete(inputId);if(record?.channel&&root)this.vfx.stopChannel(root);}
+  confirmUltimatePreview(event){
+   const record=this.ultimatePreviews?.get(event.inputId);if(!record)return null;
+   this.ultimatePreviews.delete(event.inputId);
+   for(const data of [event,...(event.fusionEchoes||[])]){
+    const slot=data.fusionEcho?data.fusionSlot:null;
+    for(const e of this.vfx.numberedEffects.active)if(e.previewInputId===event.inputId&&e.previewSlot===slot){
+     if(data.persistentAttackId){e.attackId=data.persistentAttackId;if(e.spec.number===20)e.key='vortex:'+data.persistentAttackId;}
+    }
+    for(const e of this.vfx.signatureEffects.active)if(e.previewInputId===event.inputId&&e.previewSlot===slot)e.attackId=data.persistentAttackId||null;
+   }
+   return record;
+  }
   previewMelee(root,item,inputId){
    if(!root||!meleeFamilies.includes(item.family)||root.userData.weaponId!==item.id)return false;
    const d=root.userData,now=performance.now();
@@ -101,11 +130,12 @@ export class ReletterPresentation{
       if(predicted){d.localSwing=null;if(d.attack?.inputId===event.inputId){d.attack.combo=combo;d.attack.duration=meleeDuration(item.family,combo);d.attack.data=data;}}
       else d.attack={age:0,duration:meleeDuration(item.family,combo),combo,data};
     }
-    const predictedNormal=event.inputId&&this.normalPreviews?.has(event.inputId);
-    if(predictedNormal){this.normalPreviews.delete(event.inputId);this.vfx.confirmNormalImpact(data,item);}else this.vfx.play(data,item,root);
+    const predictedNormal=event.inputId&&this.normalPreviews?.has(event.inputId),predictedUltimate=this.confirmUltimatePreview(event);
+    if(predictedNormal){this.normalPreviews.delete(event.inputId);this.vfx.confirmNormalImpact(data,item);}else if(!predictedUltimate)this.vfx.play(data,item,root);
     // Each bonus uses its real source weapon's ultimate and matched server collider.
     for(const echo of (event.fusionEchoes||[]).slice(0,2)){
        const source=itemById(echo.weapon);if(!source)continue;
+       if(predictedUltimate?.echoes.has(echo.fusionSlot)){if(event.channel&&!echo.channel)this.fusionEchoLast.set(event.owner+':'+(echo.fusionSlot||0)+':'+echo.weapon,performance.now());continue;}
        // Persist channel-staff echoes using the keyed native emitter. For
        // non-channel source ultimates, never allocate new multi-pass effects
        // on every 300–1000ms damage pulse.

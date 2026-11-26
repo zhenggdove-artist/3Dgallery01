@@ -26,7 +26,7 @@ test('release and preview share a captured cast; non-channel effects cannot drif
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const native=readFileSync(new URL('../src/numbered-weapon-effects.js',import.meta.url),'utf8');
  assert.match(main,/chargePreview\.update\(localRoot,chargedWeapon,charge,cast\.direction,arena,[^\n]+cast\.origin,dt\)/);
- assert.match(main,/performAttack\(1,null,releaseAim\)/);
+ assert.match(main,/performAttack\(1,null,releaseAim,\{\},pending\)/);
  assert.match(native,/if\(entry\.root&&entry\.channel\) \{/);
 });
 

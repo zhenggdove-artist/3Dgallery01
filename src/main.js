@@ -30,6 +30,7 @@ import {TempleNetwork,requestStaffChannelStop} from './network.js';
 import {PlayerController} from './player-controller.js';
 import {normalMeleeFootprint} from './shared/melee-contact.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
+import {chargedVisualData} from './shared/charged-visual-data.js';
 import {TempleUI} from './ui.js';
 import {PLAYER_SPAWNS} from './shared/arena.js';
 import {canBuildAt,canPlaceArtworkAt} from './shared/temple-rules.js';
@@ -192,16 +193,15 @@ function beginStaffChannel(){
  const serial=++staffChannelSerial,firstCast=captureReleasedCast(item,1);
  staffChannel={weapon:item.id,serial,ready:false};
  staffChannelShotAt=-Infinity;
- staffChannelPromise=Promise.resolve(chargeRequest).then(result=>{
-  if(!result?.charging||!attackHeld||staffChannel?.serial!==serial)return null;
-  if(network.fastCastV089){
-   staffChannelShotAt=performance.now();
-   return Promise.resolve(performAttack(1,'channel',firstCast,{startChannelV089:true})).catch(error=>{
-    if(/not enough mana/i.test(error.message||'')&&staffChannel?.serial===serial)stopInsufficientCharge();
-    return null;
-   });
-  }
-  return sendAction('attack',{phase:'channel-start'});
+ const pending=chargeRequest;
+ const valid=()=>attackHeld&&staffChannel?.serial===serial;
+ // Begin the actual visual at 100%, independently of the charge receipt.
+ const first=network.fastCastV089?performAttack(1,'channel',firstCast,{startChannelV089:true},pending,valid):
+  Promise.resolve(pending).then(result=>result?.charging&&valid()?sendAction('attack',{phase:'channel-start'}):null);
+ staffChannelShotAt=performance.now();
+ staffChannelPromise=Promise.resolve(first).catch(error=>{
+  if(/not enough mana/i.test(error.message||'')&&staffChannel?.serial===serial)stopInsufficientCharge();
+  return null;
  }).then(result=>{
   if(result?.channeling&&staffChannel?.serial===serial&&attackHeld){
    staffChannel.ready=true;
@@ -398,6 +398,8 @@ network.addEventListener('chat',event=>{if(!joined)return;ui.addChat(event.detai
 network.addEventListener('chat-reset',()=>{ui.clearChat();for(const entry of speechBubbles.values())entry.element.remove();speechBubbles.clear();});
 network.addEventListener('artwork-throw',event=>showThrowPulse(event.detail));
 network.addEventListener('attack',event=>showAttack(event.detail));
+// Authoritative damage events bypass the heavyweight/coalesced world snapshot.
+network.addEventListener('combat-damage',event=>{if(joined)damageNumbers.receive(event.detail?.events||[]);});
 network.addEventListener('channel-stop',event=>{const root=roots.get(event.detail.owner);if(root){arena.presentation.vfx.stopChannel(root);root.userData.staffCastingUntil=0;}});
 network.addEventListener('structure-destroyed',event=>arena.showStructureBreak(event.detail));
 network.addEventListener('structure-hit',event=>arena.showStructureHit(event.detail));
@@ -665,8 +667,7 @@ ui.addEventListener('attack-release',async()=>{
  if(weapon?.id==='goldfish'){
   if(gun.mode===1){gun.cycle();return;} // scoped A remains camera-only
   if(heldMs<STAFF_TAP_MAX_MS){gun.cycle();return;}
-  if(pending&&!(await pending)?.charging)return;
-  if(charge>=1)await performAttack(1,null,releaseAim); // original full-size red fish
+  if(charge>=1)await performAttack(1,null,releaseAim,{},pending); // original full-size red fish
   else void sendAction('attack',{phase:'channel-stop'}); // clear interrupted charge
   return;
  }
@@ -675,13 +676,12 @@ ui.addEventListener('attack-release',async()=>{
  if(pressedNormal){
   if(autoChargeBusy)return;
   if(charge<1){if(pending)void requestStaffChannelStop(false,pending,()=>sendAction('attack',{phase:'channel-stop'}));if(localRoot)localRoot.userData.staffCastingUntil=0;return;}
-  if(pending&&!(await pending)?.charging)return;
   if(world?.profile?.equipment?.weapon!==weapon.id)return;
-  if(!isChannelStaff(weapon)||weapon.family==='ice')await performAttack(1,null,releaseAim);
+  if(!isChannelStaff(weapon)||weapon.family==='ice')await performAttack(1,null,releaseAim,{},pending);
   else void sendAction('attack',{phase:'channel-stop'});
   return;
  }
- if(heldMs>=STAFF_TAP_MAX_MS&&pending&&!(await pending)?.charging)return;
+ if(heldMs>=STAFF_TAP_MAX_MS&&charge<1&&pending&&!(await pending)?.charging)return;
  if(isChannelStaff(weapon)){
   if(isStaffTap(weapon,heldMs)){
    if(localRoot)localRoot.userData.staffCastingUntil=Infinity;
@@ -691,11 +691,11 @@ ui.addEventListener('attack-release',async()=>{
    // A charged frost staff is a RELEASE cast. Never start a continuous
    // channel or abort its ice circle when A is lifted.
    if(world?.profile?.equipment?.weapon===weapon.id)
-    await performAttack(1,null,releaseAim);
+    await performAttack(1,null,releaseAim,{},pending);
    if(localRoot)localRoot.userData.staffCastingUntil=performance.now()+200;
   }else if(localRoot)localRoot.userData.staffCastingUntil=0;
  }else{
-  performAttack(heldMs<STAFF_TAP_MAX_MS?0:charge,null,releaseAim);
+  performAttack(heldMs<STAFF_TAP_MAX_MS?0:charge,null,releaseAim,{},charge>=1?pending:null);
  }
 });
 ui.addEventListener('attack-cancel',()=>{
@@ -1057,7 +1057,7 @@ function normalVisualData(item,sample){
  stats.range*=equipmentTuning(world,item).rangeScale??1;
  return {...stats,...sample,owner:self?.key,charge:0,qualityTier:quality.tier,qualityScale:quality.visual,qualityDuration:quality.duration,flightMs:projectileFlightMs(item,false,stats.range),time:Date.now()};
 }
-function performAttack(charge=0,phase=null,captured=null,extra={}){
+function performAttack(charge=0,phase=null,captured=null,extra={},pendingCharge=null,stillValid=()=>true){
  if(wallPainter.active)return;
  if(controller?.status?.freeze||world?.profile?.effects?.paralysis?.until>Date.now())return;
  if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
@@ -1071,19 +1071,24 @@ function performAttack(charge=0,phase=null,captured=null,extra={}){
  // A movement sample can be in flight over the socket; the Worker checks
  // this bounded cast origin against its authoritative player position.
  const inputId=crypto.randomUUID();
- const normal=!phase&&charge===0,startedAt=performance.now();
- // Send immediately on the V035 transport before constructing any Three.js effects.
- const action=sendAction('attack',{origin,direction,castPoseV081:true,charge,...(phase?{phase}:{}),...extra,
-  ...(normal?{requestId:inputId,previewInputV089:true}:{}),
+ const normal=!phase&&charge===0,ultimate=charge>=1&&(!phase||extra.startChannelV089===true),startedAt=performance.now();
+ if(ultimate&&Number(world?.profile?.mana)+1e-6<weaponManaQuote(world,item,world.profile.fusion?.[item.id]).initial){ui.toast('NOT ENOUGH MANA');return;}
+ // Send immediately unless an earlier charge mutation is still unconfirmed.
+ const submit=()=>sendAction('attack',{origin,direction,castPoseV081:true,charge,...(phase?{phase}:{}),...extra,
+  ...(normal||ultimate?{requestId:inputId,previewInputV089:true}:{}),
   ...(item.id==='black-cat'?{
    scoped:gun.mode===2,aimMode:'scope'
   }:{})},{throwOnError:phase==='channel'});
+ const action=pendingCharge?Promise.resolve(pendingCharge).then(result=>result?.charging&&stillValid()&&world?.profile?.equipment?.weapon===item.id?submit():null):submit();
  const preview=normal&&arena.presentation.previewNormal(localRoot,item,inputId,normalVisualData(item,sample));
- if(preview){
+ const chargedPreview=ultimate&&arena.presentation.previewUltimate(localRoot,item,inputId,chargedVisualData(world,item,sample,self?.key,phase==='channel'));
+ if(preview||chargedPreview){
   const diag=window.templeAttackInputDiagnostics??=([]);
   const entry={id:inputId,weapon:item.id,transport:'http',inputAt:startedAt,visualAt:performance.now(),submittedAt:null,ackAt:null};diag.push(entry);if(diag.length>32)diag.shift();
-  playAttackAudio(item,1,false,true);
-  void action.then(result=>{entry.ackAt=performance.now();entry.accepted=!!result?.attackEvent;if(!entry.accepted)arena.presentation.cancelMeleePreview(localRoot,inputId);},()=>{entry.ackAt=performance.now();entry.accepted=false;arena.presentation.cancelMeleePreview(localRoot,inputId);});
+  playAttackAudio(item,1,ultimate,true);
+  if(ultimate&&item.family!=='fire')audio.play('ultimate',.45);
+  const reject=()=>{arena.presentation.cancelMeleePreview(localRoot,inputId);if(chargedPreview)arena.presentation.cancelUltimatePreview(localRoot,inputId);};
+  void action.then(result=>{entry.ackAt=performance.now();entry.accepted=!!result?.attackEvent;if(!entry.accepted)reject();},()=>{entry.ackAt=performance.now();entry.accepted=false;reject();});
  }
  return action;
 }
@@ -1206,7 +1211,7 @@ function update(dt,time,movementDt=dt){
    }else lastHealVisualAt=0;
   if(charge>=1&&!isChannelStaff(heldItem)&&heldItem?.autoCharge&&!autoChargeBusy){
    autoChargeBusy=true;const pending=chargeRequest,releaseAim=captureReleasedCast(heldItem,1);chargeStarted=null;
-   Promise.resolve(pending).then(async result=>{if(!result?.charging)return;await performAttack(1,null,releaseAim);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeRequest=null;startHeldCharge();}}).finally(()=>autoChargeBusy=false);
+   Promise.resolve(performAttack(1,null,releaseAim,{},pending)).then(()=>{if(attackHeld&&controller?.enabled&&!ui.panelName){chargeRequest=null;startHeldCharge();}}).finally(()=>autoChargeBusy=false);
   }
   arena.presentation.charging(localRoot,charge);
   const chargedWeapon=castingItem;
@@ -1226,7 +1231,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V091',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V092',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);
@@ -1250,7 +1255,7 @@ function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.
 requestAnimationFrame(frame);
 
 function playAttackAudio(item,gain,ultimate,local){audio.playWeapon(item,gain,ultimate);if(local&&(item?.firstPerson||item?.id==='calico-cat'))gun.kick(item);}
-const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),gain=event.owner===self?.key?1:.38;if(!event.inputId||event.owner!==self?.key||!arena.presentation.normalPreviews?.has(event.inputId))playAttackAudio(item,gain,!!event.ultimate,event.owner===self?.key);if(event.ultimate&&item?.family!=='fire'){audio.play('ultimate',gain*.45);if(['pan','swatter','lightning','wave','beam','planter','palm'].includes(item?.family)||Number(event.area?.radius)>1.5)audio.play('explosion',gain*.95);}}arena.presentation.play(event,roots.get(event.owner));}
+const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),gain=event.owner===self?.key?1:.38;const predicted=event.owner===self?.key&&(arena.presentation.normalPreviews?.has(event.inputId)||arena.presentation.ultimatePreviews?.has(event.inputId));if(!predicted)playAttackAudio(item,gain,!!event.ultimate,event.owner===self?.key);if(!predicted&&event.ultimate&&item?.family!=='fire'){audio.play('ultimate',gain*.45);if(['pan','swatter','lightning','wave','beam','planter','palm'].includes(item?.family)||Number(event.area?.radius)>1.5)audio.play('explosion',gain*.95);}}arena.presentation.play(event,roots.get(event.owner));}
 function showThrowPulse(event){artworkThrow.queue(event);}
 function applyEditorSettings(next){renderer.setPixelRatio(Math.min(devicePixelRatio,next.pixelRatio));renderer.setSize(innerWidth,innerHeight,false);scene.fog.density=next.fog;arena.artFloat=next.artFloat;}
 function loadEditorSettings(){try{return JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');}catch{return {};}}
