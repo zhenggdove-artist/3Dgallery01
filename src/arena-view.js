@@ -122,6 +122,23 @@ export class TempleArena{
    group.add(root);group.userData.actualArtwork=true;
    root.userData.video?.play().catch(()=>{});
   }
+  applyStructureEvents(hits=[],broken=[]){
+   this.fastStructureRecords??=new Map();let changed=false;
+   const revision=this.world?.revision??-1;
+   for(const event of hits){
+    if(event?.cityLotIndex===undefined&&event?.structureId&&Number.isFinite(event.revision)&&event.revision>revision&&event.revision>=(this.fastStructureRecords.get(event.structureId)?.revision??-1)&&Object.hasOwn(event,'structureRecord')){
+     this.fastStructureRecords.set(event.structureId,{revision:event.revision,record:event.structureRecord});changed=true;
+    }
+    this.showStructureHit(event);
+   }
+   for(const event of broken){
+    if(event?.cityLotIndex===undefined&&event?.kind!=='house-sign'&&Number.isFinite(event?.revision)&&event.revision>revision&&event.revision>=(this.fastStructureRecords.get(event.structureId||event.id)?.revision??-1)){
+     this.fastStructureRecords.set(event.structureId||event.id,{revision:event.revision,record:null});changed=true;
+    }
+    this.showStructureBreak(event);
+   }
+   if(changed)this.syncStructures();
+  }
   showStructureHit(event){
     if(event?.cityLotIndex!==undefined){this.outerCity?.applyDamageEvent(event);return;}
    if(!event?.structureId||!Array.isArray(event.position)||this.seenStructureHits.has(event.id))return;
@@ -325,7 +342,10 @@ export class TempleArena{
     mesh.name=cash?'Ground loot · cash '+item.denomination:'Ground loot · coin';this.scene.add(mesh);this.dropMeshes.push(mesh);
    }
   }
-  syncStructures(){const structures=this.world?.structures||[],
+  syncStructures(){
+   const revision=this.world?.revision??-1;
+   for(const [id,pending] of this.fastStructureRecords||[])if(pending.revision<=revision)this.fastStructureRecords.delete(id);
+   const structures=(this.world?.structures||[]).map(s=>this.fastStructureRecords?.has(s.id)?this.fastStructureRecords.get(s.id).record:s).filter(Boolean),
    // Geometry/placement identity is independent of HP. Previous code
    // disposed EVERY structure mesh/material and recreated its GL resources
    // after a single damage tick, forcing shader rebuilds and long GPU stalls.
@@ -419,7 +439,7 @@ export class TempleArena{
   syncMonster(){this.islandEnemies.cityDamage=this.world?.cityDamage||{};this.islandEnemies.sync(this.world?.monster,this.world?.monsters||[]);this.monster=this.islandEnemies.current;}
   update(dt,time,camera,playerRoots=new Map(),viewerRoot=null){
     this.presentation.beforeAnimation();const frameNow=performance.now(),wallNow=Date.now();for(const root of playerRoots.values())updateHitFlash(root,frameNow);
-    this.clock=time;this.displayPlatforms?.update(time);this.scene.userData.moonlitSky?.update(camera,time);this.grass?.update(time,playerRoots);this.outerCity?.syncDamage(this.world?.cityDamage||EMPTY_CITY_DAMAGE);this.outerCity?.update(time,dt,camera);for(const mixer of this.mixers)mixer.update(dt);if(this.dust){this.dust.rotation.y=time*.004;const positions=this.dust.geometry.attributes.position.array;for(let i=1;i<positions.length;i+=3){positions[i]+=dt*.025;if(positions[i]>22)positions[i]=0;}this.dust.geometry.attributes.position.needsUpdate=true;}if(this.water)this.water.material.opacity=.72+Math.sin(time*1.4)*.05;
+    this.clock=time;this.displayPlatforms?.update(time);this.scene.userData.moonlitSky?.update(camera,time);this.grass?.update(time,playerRoots);this.outerCity?.syncDamage(this.world?.cityDamage||EMPTY_CITY_DAMAGE,this.world?.revision??-1);this.outerCity?.update(time,dt,camera);for(const mixer of this.mixers)mixer.update(dt);if(this.dust){this.dust.rotation.y=time*.004;const positions=this.dust.geometry.attributes.position.array;for(let i=1;i<positions.length;i+=3){positions[i]+=dt*.025;if(positions[i]>22)positions[i]=0;}this.dust.geometry.attributes.position.needsUpdate=true;}if(this.water)this.water.material.opacity=.72+Math.sin(time*1.4)*.05;
     if(this.coinMesh&&this.world){PLATFORMS.forEach((p,i)=>{const available=this.world.coins?.[p.id]?.available;tempPosition.fromArray(p.coinPosition);const fly=this.coinFlights?.get(p.id);if(fly)fly.age+=dt;const t=fly?fly.age/.8:1;if(fly&&t>=1)this.coinFlights.delete(p.id);tempPosition.y=fly?fly.y+Math.min(1,t)*5:tempPosition.y+Math.sin(time*1.8+i)*.4;tempQuaternion.setFromEuler(tempEuler.set(0,time*(fly?6:2)+i,0));tempScale.setScalar(fly?1.6*Math.max(0,1-t):available?1.6:0);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);this.coinMesh.setMatrixAt(i,tempMatrix);});this.coinMesh.instanceMatrix.needsUpdate=true;}
     for(const mesh of this.heartDrops.values()){
       const seed=mesh.userData.seed;mesh.position.y=mesh.userData.baseY+.32*Math.sin(time*2.1+seed);

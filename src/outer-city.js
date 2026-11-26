@@ -857,6 +857,11 @@ export class OuterCity{
   if(event.id&&this.seenCityEvents.has(event.id))return;
   if(event.id){this.seenCityEvents.add(event.id);if(this.seenCityEvents.size>200)
    this.seenCityEvents.delete(this.seenCityEvents.values().next().value);}
+  this.liveDamageRevisions??=new Map();
+  if(Number.isFinite(event.revision)){
+   if(event.revision<(this.liveDamageRevisions.get(lot.id)??-1))return;
+   this.liveDamageRevisions.set(lot.id,event.revision);
+  }
   const maxHp=event.maxHp||CITY_MAX_HP,existing=this.damage[lot.id];
   const oldHp=Number.isFinite(event.previousHp)?event.previousHp:
    existing?.hp??Math.min(maxHp,event.hp+Math.max(0,event.damage||0));
@@ -876,14 +881,16 @@ export class OuterCity{
   }else this.beginCollapse(lot,from,tier,event);
   if(event.partDestroyed&&event.part!=='masonry'){if(tier!==from&&event.part.startsWith('sign-')&&!this.partsHidden.has(lot.index+':'+event.part))this.eject(lot,event.part,event.position,true);this.hidePart(lot.index,event.part);}
  }
- syncDamage(damage={}){
-  if(damage===this.lastDamage)return;
-  if(!Object.keys(damage).length&&Object.keys(this.damage).length)this.resetBuildings();
+ syncDamage(damage={},revision=-1){
+  if(damage===this.lastDamage&&(!this.liveDamageRevisions?.size||revision===this.lastDamageRevision))return;
+  this.lastDamageRevision=revision;
+  for(const [id,liveRevision] of this.liveDamageRevisions||[])if(liveRevision<=revision)this.liveDamageRevisions.delete(id);
+  if(!Object.keys(damage).length&&Object.keys(this.damage).length&&!this.liveDamageRevisions?.size)this.resetBuildings();
   const firstSnapshot=this.lastDamage===null;
   this.lastDamage=damage;
   const byId=this.lotById??=new Map(this.lots.map(lot=>[lot.id,lot]));
   for(const [id,record] of Object.entries(damage)){
-   const lot=byId.get(id);if(!lot||!record)continue;
+   const lot=byId.get(id);if(!lot||!record||this.liveDamageRevisions?.has(id))continue;
    const maxHp=record.maxHp||CITY_MAX_HP;
    const tier=cityDamageTier(record.hp,maxHp),stage=cityStage(record.hp,maxHp);
    const existing=this.damage[lot.id],knownTier=existing?.tier??0;
@@ -915,7 +922,7 @@ export class OuterCity{
   }
  }
  resetBuildings(){
-  this.damage={};this.lastDamage=null;this.hidden.clear();this.partsHidden.clear();this.facade.reset();
+  this.damage={};this.lastDamage=null;this.liveDamageRevisions?.clear();this.hidden.clear();this.partsHidden.clear();this.facade.reset();
   this.fireField?.reset();this.splinters?.reset();
   this.gpuPose?.reset();
   this.renderedTiers.clear();this.poseCache.clear();this.deformationBasis?.clear();

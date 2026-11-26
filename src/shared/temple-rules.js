@@ -1623,10 +1623,16 @@ export function tickArtworkFlights(world,actors=[],now=Date.now(),rng=Math.rando
  return changed;
 }
 
-export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0,actors=[]}={}){
+export function advanceCombatContacts(world,actors,now=Date.now(),rng=Math.random){
+ let changed=tickPersistentAttacks(world,actors,now,rng);
+ changed=tickPrismChannels(world,actors,now,rng)||changed;
+ changed=tickTidalChannels(world,actors,now,rng)||changed;
+ return changed;
+}
+export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0,actors=[],alreadyMigrated=false}={}){
   // Apply damage strictly when the server-observed artwork touches a collider.
   const artworkChanged=tickArtworkFlights(world,actors,now,rng);
-  migrateWorld(world,now);
+  if(!alreadyMigrated)migrateWorld(world,now);
   // The same authoritative damage/death/shield pipeline used by combat
   // processes Collector bullets. Fixed 50 HP ignores armour and shields,
   // but respects respawn protection and GM invincibility.
@@ -1651,9 +1657,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
    }
    if(profile.manaChannelPaid!==false)changed=tickBloomChannelHeal(profile,now,world)>0||changed;
   }
-  changed=tickPersistentAttacks(world,actors,now,rng)||changed;
-  changed=tickPrismChannels(world,actors,now,rng)||changed;
-  changed=tickTidalChannels(world,actors,now,rng)||changed;
+  changed=advanceCombatContacts(world,actors,now,rng)||changed;
   if(world.channelContactLocks)for(const [key,expiry] of Object.entries(world.channelContactLocks))
    if(expiry<now-2000)delete world.channelContactLocks[key];
   if(world.monster?.active)changed=tickStatus(world.monster,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng))||changed;
