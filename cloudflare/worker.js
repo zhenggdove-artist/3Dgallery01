@@ -589,9 +589,9 @@ export class TempleRoom extends DurableObject{
    }
    this.broadcast('combat-damage',{revision:world.revision,events,vitals});
   }
-  scheduleCombatWorld(){
+  scheduleCombatWorld(delayMs=70){
    if(this.combatWorldTimer!=null)return;
-   this.combatWorldTimer=setTimeout(()=>{this.combatWorldTimer=null;this.lastCombatWorldAt=Date.now();this.broadcastWorld(this.readWorld());},70);
+   this.combatWorldTimer=setTimeout(()=>{this.combatWorldTimer=null;this.lastCombatWorldAt=Date.now();this.broadcastWorld(this.readWorld());},Math.max(8,delayMs));
   }
   scheduleCombatTick(){
    if(this.combatTimer!=null)return;
@@ -641,7 +641,7 @@ export class TempleRoom extends DurableObject{
     if(respawned||now-(this.lastCombatWorldAt||0)>=180){
      this.lastCombatWorldAt=now;
      this.broadcastWorld(world);
-    }else this.scheduleCombatWorld();
+    }else this.scheduleCombatWorld(Math.max(8,180-(now-(this.lastCombatWorldAt||0))));
     for(const impact of artworkVisualEvents)
       if(impact?.kind==='structure-hit'||impact?.kind==='structure-destroyed')
        this.broadcast(impact.kind,impact.event);
