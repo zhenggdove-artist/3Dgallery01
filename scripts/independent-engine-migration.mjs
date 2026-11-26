@@ -61,7 +61,7 @@ for(const p of tracked()){
   after=after.replace("makePlant('TEMPLE RELETTER',{clipBelow:false})","makePlant('GGTEMPLE',{clipBelow:false,fixedGeometrySeed:2666664333})");
   after=after.replace("'RELETTER message tree'","'Temple message tree'");
  }
- if(p==='src/arena-view.js')after=after.replace('Original RELETTER coin mesh missing','Temple coin mesh missing');
+ if(p==='src/arena-view.js')after=after.replaceAll('Original RELETTER','Temple');
  if(p==='src/plant-hover.js')after=after.replaceAll("'RELETTER message tree'","'Temple message tree'");
  if(p==='src/engine/build-surfaces.js')after=after.replaceAll('reletter_test','templeSurfaceTest');
  if(p==='src/player-controller.js')after=after.replaceAll('RELETTER_MOVEMENT','TEMPLE_MOVEMENT');
@@ -79,6 +79,8 @@ for(const p of tracked()){
   remaining.push({file:p,line:i+1,tokens:names});
  }
 }
+const html=readFileSync('index.html','utf8');
+for(const match of html.matchAll(/"(src\/[^"]+\.js)"/g))if(!existsSync(match[1]))throw Error('Import-map target missing: '+match[1]);
 const remainingPaths=tracked().filter(p=>/reletter/i.test(p));
 if(remainingPaths.length)throw Error('Old module paths remain: '+remainingPaths.join(', '));
 writeFileSync('/tmp/engine-independence-report.json',JSON.stringify({renamed:oldNames,changed,remaining,notes:['Legacy persisted/world-wire field names are intentionally preserved.','Third-party licensing and credits are not edited.','History and other refs are not rewritten.']},null,2));
