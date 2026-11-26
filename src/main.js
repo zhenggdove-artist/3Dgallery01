@@ -784,6 +784,7 @@ ui.addEventListener('wing-payment-checkout',async event=>{
  const order=await beginWingCheckout(network,ui,event.detail);
  if(!order){ui.wingCheckoutBusy=false;if(ui.panelName==='wing-shop')ui.renderWingShop(world.profile);}
 });
+ui.addEventListener('operation-prompt-save',async event=>{const {device,layout,complete}=event.detail;try{const result=await sendAction('gm-operation-prompt-layout',{device,layout},{throwOnError:true});if(!result?.artworkPromptPositions)throw Error('伺服器未確認設定');complete();}catch(error){complete(error.message||'儲存失敗');}});
 ui.addEventListener('server-action',event=>{const {action,...data}=event.detail;
  if(action==='fuse'){
   if(ui.bagFusionPending)return;

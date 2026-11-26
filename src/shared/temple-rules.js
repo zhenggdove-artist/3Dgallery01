@@ -33,6 +33,7 @@ import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs,sustainedSpellBalance,channelInterval} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
+import {validPromptLayout} from './operation-prompt.js';
 import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS,vortexSegmentDistance} from './vortex-flight.js';
 import {directHitModifiers} from '../reletter/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
@@ -417,11 +418,22 @@ export function applyAction(world,actor,body,context={}){
    world.revision=(world.revision||0)+1;
    return {notice:body.action==='gm-player-level'?'LEVEL UPDATED · '+target.name:'WING CANVAS GRANTED · '+target.name};
   }
+  if(body.action==='gm-operation-prompt-layout'){
+   if(!profile.admin||actor.admin!==true)return {error:'GM only'};
+   const {device,layout}=body;
+   if(!['mobile','desktop','all'].includes(device)||!validPromptLayout(layout))return {error:'Invalid operation prompt layout'};
+   const saved={x:layout.x,gap:layout.gap,scale:layout.scale,opacity:layout.opacity};
+   const devices=device==='all'?['mobile','desktop']:[device];
+   world.artworkPromptPositions={...(world.artworkPromptPositions||{})};
+   for(const key of devices)world.artworkPromptPositions[key]={...saved};
+   world.revision=(world.revision||0)+1;
+   return {notice:'操作提示設定已儲存並同步全服',artworkPromptPositions:clone(world.artworkPromptPositions)};
+  }
   if(body.action==='gm-artwork-prompt-position'){
    if(!profile.admin||actor.admin!==true)return {error:'GM only'};
    const {device,x,gap}=body;
    if(!['mobile','desktop'].includes(device)||!Number.isFinite(x)||!Number.isFinite(gap)||x<-.4||x>.4||gap<0||gap>.6)return {error:'Invalid artwork prompt position'};
-   world.artworkPromptPositions={...(world.artworkPromptPositions||{}),[device]:{x,gap}};
+   world.artworkPromptPositions={...(world.artworkPromptPositions||{}),[device]:{...(world.artworkPromptPositions?.[device]||{}),x,gap}};
    world.revision=(world.revision||0)+1;
    return {notice:'作品提示框位置已儲存'};
   }
@@ -852,7 +864,7 @@ function pickupDrop(world,profile,actor,body,now){
    if(!near(actor,drop.position,3.2))return {error:'Move closer to the drop'};
   if(drop.owner===actor.key&&now<drop.ownerLockedUntil)return {error:'Drop is still settling'};
   const wasFullHeart=drop.kind==='heart'&&profile.hp>=profile.maxHp;
-  world.groundDrops.splice(index,1);if(drop.kind==='coin')earn(profile,drop.amount,world);else if(drop.kind==='heart'){profile.hp=Math.min(profile.maxHp,profile.hp+(drop.amount||25));}else{addItem(profile,drop.itemId);const item=itemById(drop.itemId);if(item&&EQUIPPABLE_SLOTS.includes(item.slot)&&!profile.equipment[item.slot])selectEquipmentInstance(profile,item.slot,profile.inventory.length-1);}
+  world.groundDrops.splice(index,1);if(drop.kind==='coin')earn(profile,drop.amount,world);else if(drop.kind==='heart'){const nominal=drop.amount||25;profile.hp=Math.min(profile.maxHp,profile.hp+nominal);recordTempleDamage(world,{amount:nominal,kind:'heal',restorative:true,position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],owner:profile.key,target:profile.key},now);}else{addItem(profile,drop.itemId);const item=itemById(drop.itemId);if(item&&EQUIPPABLE_SLOTS.includes(item.slot)&&!profile.equipment[item.slot])selectEquipmentInstance(profile,item.slot,profile.inventory.length-1);}
   if(drop.itemId){profile.itemOrigins??={};profile.itemOrigins[drop.itemId]='monster';}world.pickupReceipts??=[];world.pickupReceipts.push({id:drop.id,time:now});if(world.pickupReceipts.length>64)world.pickupReceipts.shift();world.activity.itemsClaimed++;return wasFullHeart?{}:{notice:drop.kind==='coin'?`+${drop.amount} coins`:drop.kind==='heart'?'Health restored':`Picked up ${itemById(drop.itemId)?.name}`};
 }
 
@@ -944,18 +956,20 @@ function useConsumable(world,profile,actor,body,now){
  profile.restorativeCooldowns??={health:0,mana:0};
  refreshMana(profile,now,world);
  if(type==='mana'){
-  const restored=Math.max(0,Math.min(profile.maxMana-profile.mana,Math.ceil(profile.maxMana*item.manaFraction)));
+  const nominal=Math.max(0,Math.ceil(profile.maxMana*item.manaFraction));
+  const restored=Math.max(0,Math.min(profile.maxMana-profile.mana,nominal));
   removeInventoryInstance(profile,inventoryIndex);profile.mana+=restored;profile.restorativeCooldowns.mana=now+(item.cooldownMs??2000);
-  recordTempleDamage(world,{amount:restored,kind:'mana-heal',position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],owner:profile.key,target:profile.key},now);
+  recordTempleDamage(world,{amount:nominal,kind:'mana-heal',restorative:true,position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],owner:profile.key,target:profile.key},now);
   return {...(restored>0?{notice:'Restored '+Math.round(restored)+' MP'}:{}),restoredMana:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
  }
  const hpBefore=profile.hp;
  // A healing percentage is measured against CURRENT maximum HP, not coins
  // or the untrusted client-provided HP value.
- const restored=Math.max(0,Math.min(profile.maxHp-hpBefore,Math.ceil(profile.maxHp*item.healFraction)));
+ const nominal=Math.max(0,Math.ceil(profile.maxHp*item.healFraction));
+ const restored=Math.max(0,Math.min(profile.maxHp-hpBefore,nominal));
  removeInventoryInstance(profile,inventoryIndex);
  profile.hp=Math.min(profile.maxHp,hpBefore+restored);profile.restorativeCooldowns.health=now+(item.cooldownMs??2000);
- recordTempleDamage(world,{amount:restored,kind:'heal',
+ recordTempleDamage(world,{amount:nominal,kind:'heal',restorative:true,
   position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],
   owner:profile.key,target:profile.key},now);
  return {...(restored>0?{notice:`Restored ${restored} HP · ${item.name}`} :{}),

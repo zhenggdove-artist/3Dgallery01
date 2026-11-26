@@ -22,6 +22,7 @@ import {wingRarity,WING_QUALITY_NAMES,WING_QUALITY_COLORS} from './shared/wing-s
 import {mountWingPainter} from './gm-wing-painter.js';
 import {bindChatLayout} from './chat-layout.js';
 import {comfortCashImage} from './comfort-cash-art.js';
+import {OperationPromptLayout} from './operation-prompt-layout.js';
 
 const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
@@ -40,7 +41,7 @@ export class TempleUI extends EventTarget{
   constructor(){
     super();this.world=null;this.players=[];this.self=null;this.panelName='';this.toastTimer=0;this.near=null;this.chat=[];this.buildKind='';this.selectedPlant=null;this.saveCode='';this.platformDeleteMode=false;this.gmPresenceData=null;this.gmPresenceError='';this.gmPresenceLoading=false;this.lastWingDraw=null;this.wingPaymentStatus=null;this.firebaseIdToken='';this.googleAuthenticated=false;this.authMode='firebase';this.pendingLoginMode='firebase';this.joining=false;this.selectedQuickSlot=null;this.quickBarSignature='';this.shopQuantities={};
     this.entry=$('entry');this.form=$('entry-form');this.hud=$('hud');this.panel=$('panel');this.content=$('panel-content');this.buildFloat=new FloatingGmEditorPanel(this.panel,{force:true,storageKey:'temple-build-floating-v1'});this.buildTab='upload';
-    bindBagDrag(this);this.chatLayout=bindChatLayout();addEventListener('resize',()=>{this.scheduleRosterLayout();this.layoutArtworkPrompt();});
+    bindBagDrag(this);this.chatLayout=bindChatLayout();this.operationPrompts=new OperationPromptLayout(this);addEventListener('resize',()=>{this.scheduleRosterLayout();this.layoutArtworkPrompt();});
     this.bind();
     const hotbar=$('comfort-hotbar');
     const quickUse=event=>{
@@ -279,14 +280,7 @@ export class TempleUI extends EventTarget{
        this.gmChatLoading=true;this.gmChatError='';this.renderGm();
        this.emit('gm-chat-history-request',action==='gm-chat-older'?this.gmChatCursor:null);
       }
-      else if(action==='artwork-prompt-save'||action==='artwork-prompt-preview'){
-       const device=event.target.closest('[data-prompt-device]')?.dataset.promptDevice;
-       const section=event.target.closest('[data-prompt-device]');if(!section||!['mobile','desktop'].includes(device))return;
-       const x=Number(section.querySelector('[data-prompt-x]').value)/100,gap=Number(section.querySelector('[data-prompt-gap]').value)/100;
-       if(!Number.isFinite(x)||!Number.isFinite(gap))return;
-       if(action==='artwork-prompt-save'){this.emit('server-action',{action:'gm-artwork-prompt-position',device,x,gap});this.toast('正在儲存作品提示框位置');}
-       else{this.artPromptPreview={x,gap,until:performance.now()+5000};this.closePanel();this.nearPromptText=null;this.layoutArtworkPrompt();}
-      }
+      else if(action==='operation-prompt-edit')this.operationPrompts.edit();
       else if(action==='chat-position-edit'){this.closePanel();this.chatLayout?.prepare();this.toast('拖曳 CHAT 的 ＋ 至指定位置，再開啟 GM 控制中心儲存');}
       else if(action==='chat-position-save'){this.closePanel();requestAnimationFrame(()=>{const position=this.chatLayout?.position();if(position)this.emit('server-action',{action:'gm-chat-default',...position});});}
       else if(action==='recover-misplaced-artwork')this.emit('server-action',{action:'recover-misplaced-artwork'});
@@ -384,8 +378,8 @@ export class TempleUI extends EventTarget{
      $('spectator-fly-controls').hidden=!isViewer;
      $('gm-spectator-test-exit').hidden=!(this.self?.profile?.admin&&this.self?.gmSpectatorPreview);
    }
-   enter(data){document.activeElement?.blur();this.clearChat();this.gmChatMessages=[];this.gmChatCursor=null;this.gmChatLoaded=false;this.gmChatError='';this.self=data.self;this.refreshGalleryGuideAttention();this.authMode=data.authMode||'firebase';this.world=data.world;this.chatLayout?.applyDefault(data.world?.chatDefault);this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.joinBusy(false);}
-  setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();if(this.panelName&&!['bag','wanted','wanted-gm','terrain-style'].includes(this.panelName))this.renderPanel();}
+   enter(data){document.activeElement?.blur();this.clearChat();this.gmChatMessages=[];this.gmChatCursor=null;this.gmChatLoaded=false;this.gmChatError='';this.self=data.self;this.refreshGalleryGuideAttention();this.authMode=data.authMode||'firebase';this.world=data.world;this.chatLayout?.applyDefault(data.world?.chatDefault);this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.append($('toast'));this.layoutArtworkPrompt();document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.joinBusy(false);}
+  setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.layoutArtworkPrompt();if(this.panelName&&!['bag','wanted','wanted-gm','terrain-style','operation-prompt-layout'].includes(this.panelName))this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();if(this.panelName==='gm')this.refreshGmPlayerTargets();}
   setWorld(world){const promptChanged=JSON.stringify(this.world?.artworkPromptPositions||{})!==JSON.stringify(world.artworkPromptPositions||{});this.world=world;if(promptChanged)this.layoutArtworkPrompt();this.chatLayout?.applyDefault(world.chatDefault);this.refreshHUD();if(['bag','shop','shop-prices','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(['shop','shop-prices'].includes(this.panelName)&&this.shopPriceSignature!==JSON.stringify([world.shopPrices||{},world.equipmentTuning||{},world.delistedShopItems||{}])))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
   refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);
@@ -499,17 +493,8 @@ export class TempleUI extends EventTarget{
     }
     if(this.seenKillEvents.size>128)this.seenKillEvents.clear();
   }
-  layoutArtworkPrompt(){
-   const prompt=$('prompt'),button=$('attack-button');if(!prompt||!button||!prompt.matches('.artwork-pickup-hint,.artwork-throw-hint'))return;
-   const r=button.getBoundingClientRect();if(!r.width||!r.height)return;
-   const device=matchMedia('(max-width:720px),(pointer:coarse)').matches?'mobile':'desktop';
-   const p=this.artPromptPreview&&this.artPromptPreview.until>performance.now()?this.artPromptPreview:this.world?.artworkPromptPositions?.[device]||{x:0,gap:0};
-   const w=innerWidth,h=innerHeight,half=Math.min(w/2-4,prompt.offsetWidth/2+4),height=prompt.offsetHeight;
-   const x=Math.max(half,Math.min(w-half,r.left+r.width/2+(p.x||0)*w));
-   const bottom=Math.max(Math.min(height+4,r.top-8),r.top-8-(p.gap||0)*h);
-   prompt.style.setProperty('--artwork-prompt-x',x+'px');prompt.style.setProperty('--artwork-prompt-bottom',bottom+'px');
-  }
-  setNear(near,holding=false){this.near=near;const prompt=$('prompt');let text='';const touch=matchMedia('(pointer:coarse)').matches;if(this.platformToolMode==='place')text='GM PLACE · ENTER / E / PLACE · ESC';else if(this.platformToolMode==='edit')text='GM EDIT · CLICK DISC / PEDESTAL → BLUE';else if(this.buildKind)text=touch?'A · PLACE':'E · PLACE  R · ROTATE  ESC · CANCEL';else if(this.artPromptPreview?.until>performance.now())text='A · TAKE ARTWORK';else if(holding)text='HOLD A · CHARGE THROW';else if(near?.type==='coin'||near?.type==='drop')text='';else if(near?.type==='artwork')text='A · TAKE ARTWORK';else if(near?.type==='plant')text='';else if(near?.type==='structure')text='ATTACK · DAMAGE STRUCTURE';if(this.artPromptPreview&&this.artPromptPreview.until<=performance.now()){this.artPromptPreview=null;this.layoutArtworkPrompt();}if(prompt.textContent===text&&this.nearPromptText===text)return;this.nearPromptText=text;prompt.textContent=text;prompt.classList.toggle('artwork-pickup-hint',text==='A · TAKE ARTWORK');prompt.classList.toggle('artwork-throw-hint',text==='HOLD A · CHARGE THROW');prompt.classList.toggle('visible',!!text);this.layoutArtworkPrompt();}
+  layoutArtworkPrompt(){this.operationPrompts?.schedule();}
+  setNear(near,holding=false){this.near=near;const prompt=$('prompt');let text='';const touch=matchMedia('(pointer:coarse)').matches;if(this.platformToolMode==='place')text='GM PLACE · ENTER / E / PLACE · ESC';else if(this.platformToolMode==='edit')text='GM EDIT · CLICK DISC / PEDESTAL → BLUE';else if(this.buildKind)text=touch?'A · PLACE':'E · PLACE  R · ROTATE  ESC · CANCEL';else if(holding)text='HOLD A · CHARGE THROW';else if(near?.type==='coin'||near?.type==='drop')text='';else if(near?.type==='artwork')text='A · TAKE ARTWORK';else if(near?.type==='plant')text='';else if(near?.type==='structure')text='ATTACK · DAMAGE STRUCTURE';if(prompt.textContent===text&&this.nearPromptText===text)return;this.nearPromptText=text;prompt.textContent=text;prompt.classList.toggle('artwork-pickup-hint',text==='A · TAKE ARTWORK');prompt.classList.toggle('artwork-throw-hint',text==='HOLD A · CHARGE THROW');prompt.classList.toggle('visible',!!text);this.layoutArtworkPrompt();}
   showCollectorSale(sale,key){
    // Fresh server-confirmed sale notifications are displayed exactly once.
    // Once visible, the appraisal NEVER times out or disappears on world sync.
@@ -553,14 +538,14 @@ export class TempleUI extends EventTarget{
     const notice=$('purchase-notice');if(!notice)return;
     clearTimeout(this.purchaseNoticeTimer);clearTimeout(this.purchaseHideTimer);
     notice.dataset.state=state;notice.textContent=message;notice.hidden=false;
-    notice.classList.remove('leaving');notice.classList.add('visible');
+    notice.classList.remove('leaving');notice.classList.add('visible');this.layoutArtworkPrompt();
     if(state==='pending')return;
-    this.purchaseNoticeTimer=setTimeout(()=>{notice.classList.add('leaving');this.purchaseHideTimer=setTimeout(()=>{notice.classList.remove('visible','leaving');notice.hidden=true;},250);},3500);
+    this.purchaseNoticeTimer=setTimeout(()=>{notice.classList.add('leaving');this.purchaseHideTimer=setTimeout(()=>{notice.classList.remove('visible','leaving');notice.hidden=true;this.layoutArtworkPrompt();},250);},3500);
   }
   purchaseNotice(itemName,quantity){
     this.showPurchaseStatus('success','PURCHASE SUCCESSFUL · '+String(itemName||'ITEM')+' ×'+String(quantity||1));
   }
-  toast(message){clearTimeout(this.toastTimer);const toast=$('toast');toast.textContent=message;toast.classList.add('visible');this.toastTimer=setTimeout(()=>toast.classList.remove('visible'),2200);}
+  toast(message){if(/^(?:not enough mana|insufficient mana|魔力不足|法力不足)[.!。！]?$/i.test(String(message).trim())){const notice=$('mana-notice');notice.textContent=message;notice.classList.add('visible');clearTimeout(this.manaNoticeTimer);this.manaNoticeTimer=setTimeout(()=>notice.classList.remove('visible'),2200);return;}clearTimeout(this.toastTimer);const toast=$('toast');toast.textContent=message;toast.classList.add('visible');this.layoutArtworkPrompt();this.toastTimer=setTimeout(()=>{toast.classList.remove('visible');this.layoutArtworkPrompt();},2200);}
   fusionFeedback(success,message=''){
     clearTimeout(this.fusionTimer);
     this.fusionIndicator?.remove();
@@ -576,16 +561,16 @@ export class TempleUI extends EventTarget{
   galleryGuideKey(){return 'temple-gallery-guide-read-v1:'+String(this.self?.key||'guest');}
   refreshGalleryGuideAttention(){const key=this.galleryGuideKey();let read=this.galleryGuideReadKey===key;try{read=read||localStorage.getItem(key)==='1';}catch{}$('gallery-guide').classList.toggle('guide-unread',!read);}
   markGalleryGuideRead(){const key=this.galleryGuideKey();this.galleryGuideReadKey=key;try{localStorage.setItem(key,'1');}catch{}$('gallery-guide').classList.remove('guide-unread');}
-  openPanel(name,fromJourney=false){if(!this.self)return;if(this.self.gmSpectatorPreview&&['gm','editor','help','sky-color','terrain-style','wing-manage','wing-painter','wing-personal-painter','wing-player-preview','shop-prices'].includes(name))return;
+  openPanel(name,fromJourney=false){if(!this.self||this.operationPrompts?.editor)return;if(this.self.gmSpectatorPreview&&['gm','editor','help','sky-color','terrain-style','wing-manage','wing-painter','wing-personal-painter','wing-player-preview','shop-prices'].includes(name))return;
      if(['gm','wing-manage','shop-prices','wing-player-preview','wing-painter'].includes(name)&&!this.self.profile?.admin)return;
      if(name==='wanted-gm'&&(!this.self.profile?.admin||this.self.gmSpectatorPreview))return;
      // Sky editing is a separate GM capability; retain the existing SUPPORT access contract.
      if(name==='sky-color'&&!this.self.profile?.admin)return;
      if(name==='terrain-style'&&!this.self.profile?.admin)return;
-    if(name==='wing-personal-painter'&&!(this.world?.profile?.wingDesignCredits>0))return;if(name==='social'&&!fromJourney&&this.self.role!=='spectator'){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');if(name==='shop'&&this.panelName!=='shop'){this.shopTab='head';this.shopSelectedKey=null;}this.panelName=name;this.panel.classList.toggle('wanted-window',['wanted','wanted-gm'].includes(name));document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',['wing-painter','wing-personal-painter','wing-player-preview'].includes(name));document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.panel.classList.toggle('build-floating',['build','sky-color','terrain-style','gallery-guide'].includes(name));this.panel.classList.toggle('sky-color-floating',name==='sky-color');this.panel.classList.toggle('terrain-style-floating',name==='terrain-style');this.panel.classList.toggle('gallery-guide-floating',name==='gallery-guide');if(['build','sky-color','terrain-style','gallery-guide'].includes(name)){this.buildFloat.open();this.buildFloat.setCollapsed(false);}else{this.buildFloat.mobile=false;this.panel.classList.remove('gm-mobile-floating');}this.renderPanel();this.emit('panel',{open:true,name});
+    if(name==='wing-personal-painter'&&!(this.world?.profile?.wingDesignCredits>0))return;if(name==='social'&&!fromJourney&&this.self.role!=='spectator'){this.emit('write-start');return;}this.hud.classList.remove('functions-open');$('function-toggle').setAttribute('aria-expanded','false');if(name==='shop'&&this.panelName!=='shop'){this.shopTab='head';this.shopSelectedKey=null;}this.panelName=name;this.panel.classList.toggle('wanted-window',['wanted','wanted-gm'].includes(name));document.body.classList.add('panel-open');document.body.classList.toggle('panel-wing-painter',['wing-painter','wing-personal-painter','wing-player-preview'].includes(name));document.body.classList.toggle('panel-wing-shop',['wing-shop','wing-manage'].includes(name));this.panel.hidden=false;this.panel.classList.toggle('build-floating',['build','sky-color','terrain-style','gallery-guide'].includes(name));this.panel.classList.toggle('sky-color-floating',name==='sky-color');this.panel.classList.toggle('terrain-style-floating',name==='terrain-style');this.panel.classList.toggle('gallery-guide-floating',name==='gallery-guide');if(['build','sky-color','terrain-style','gallery-guide'].includes(name)){this.buildFloat.open();this.buildFloat.setCollapsed(false);}else{this.buildFloat.mobile=false;this.panel.classList.remove('gm-mobile-floating');}this.renderPanel();this.layoutArtworkPrompt();this.emit('panel',{open:true,name});
     if(name==='wing-shop'){$('panel-close').focus({preventScroll:true});this.emit('wing-payment-status-request');}
     if(name==='gm'){this.content.scrollTop=0;this.requestGmPresence();this.content.scrollTop=0;}}
-  closePanel(){if(this.panel.hidden)return;this.panel.hidden=true;this.buildFloat.mobile=false;this.panel.classList.remove('build-floating','gm-mobile-floating','sky-color-floating','terrain-style-floating','gallery-guide-floating','wanted-window');document.body.classList.remove('panel-open','panel-wing-painter','panel-wing-shop');this.wingGalleryObserver?.disconnect();this.panelName='';this.emit('panel',{open:false});}
+  closePanel(){if(this.operationPrompts?.editor){this.operationPrompts.editor.cancel();return;}if(this.panel.hidden)return;this.panel.hidden=true;this.buildFloat.mobile=false;this.panel.classList.remove('build-floating','gm-mobile-floating','sky-color-floating','terrain-style-floating','gallery-guide-floating','wanted-window');document.body.classList.remove('panel-open','panel-wing-painter','panel-wing-shop');this.wingGalleryObserver?.disconnect();this.panelName='';this.layoutArtworkPrompt();this.emit('panel',{open:false});}
   renderPanel(){this.panelSignature=inventoryPanelSignature(this.world?.profile);const profile=this.world?.profile;if(!profile)return;const titles={'terrain-style':'草地環境','sky-color':'星空底色','gallery-guide':'GGTEMPLE · 操作說明','wanted':'Wanted List','wanted-gm':'Wanted List · GM',bag:'BAG',shop:'TEMPLE SHOP','shop-prices':'GM · 售價／裝備數值','wing-shop':'SUPPORT',build:'BUILD',social:'WRITE',plant:'MESSAGE PLANT','plant-list':'留言之樹',editor:'GM 編輯器',gm:'GM 控制中心','wing-painter':'翅膀繪圖工作室','wing-personal-painter':'翅膀繪圖工作室','wing-player-preview':'翅膀繪圖工作室 · GM TEST','wing-manage':'GM · 翅膀上架管理',save:'SAVE / MEMORY CODE'};$('panel-title').textContent=titles[this.panelName]||'TEMPLE';
     if(this.panelName==='sky-color'){this.renderSkyColor();return;}
     if(this.panelName==='terrain-style'){this.renderTerrainStyle();return;}
@@ -698,9 +683,9 @@ export class TempleUI extends EventTarget{
       </div>
 
       <p><strong>GM 指令：</strong><code>/recoverposition</code> 找回座標 -100 的作品 · <code>/reset building</code> 復原房屋（保留塗鴉） · <code>/clean graffic</code> 清除塗鴉 · <code>/reset message</code> 清空留言 · <code>/reset</code> 清空玩家作品 · <code>/recovery</code> 還原藝術品</p>
-      <h3>作品操作提示框位置</h3>
-      <p>相對 A 鍵定位；水平偏移為畫面寬度百分比，向上距離為畫面高度百分比，最少保留 8px 間距。兩種提示共用位置。</p>
-      ${['mobile','desktop'].map(device=>{const p=this.world?.artworkPromptPositions?.[device]||{x:0,gap:0};return `<section data-prompt-device="${device}"><strong>${device==='mobile'?'手機／平板':'電腦'}</strong><label>水平偏移 %（左負／右正）<input type="number" inputmode="decimal" data-prompt-x min="-40" max="40" step="1" value="${Math.round(p.x*100)}"></label><label>額外向上距離 %<input type="number" inputmode="decimal" data-prompt-gap min="0" max="60" step="1" value="${Math.round(p.gap*100)}"></label><button type="button" data-gm-action="artwork-prompt-preview">在目前畫面預覽</button><button type="button" data-gm-action="artwork-prompt-save">儲存位置</button></section>`;}).join('')}
+      <h3>全服操作提示</h3>
+      <p>直接在遊戲畫面拖曳提示框位置、右下角調整大小，拖曳透明度滑桿後儲存；手機與電腦皆可同步。</p>
+      <button type="button" data-gm-action="operation-prompt-edit">編輯操作提示位置／尺寸／透明度</button>
       <h3>GM 聊天歷史紀錄</h3>
       <div class="gm-tools"><button type="button" data-gm-action="gm-chat-refresh" ${this.gmChatLoading?'disabled':''}>讀取／重新整理聊天紀錄</button><button type="button" data-gm-action="gm-chat-older" ${!this.gmChatCursor||this.gmChatLoading?'disabled':''}>載入更早紀錄</button></div>
       ${this.gmChatError?`<p role="alert">${escape(this.gmChatError)}</p>`:''}
