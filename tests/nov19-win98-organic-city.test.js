@@ -50,7 +50,8 @@ test('Win98 login is square and beveled while Google/GM selectors remain intact'
  assert.match(login,/data-google-login/);
  assert.match(login,/id="entry-form" hidden/);
  assert.match(login,/不會讀取 Gmail/);
- assert.match(html,/id="gm-menu"/);
+ assert.match(html,/id="gm-title"[^>]*>GGTEMPLE<\/strong>/);
+ assert.doesNotMatch(html,/id="gm-menu"/);
  assert.match(css,/#entry\s*\{[\s\S]*?background:#008080!important/);
  assert.match(css,/#entry \.temple-entry-card\{[\s\S]*?border-radius:0/);
  assert.match(css,/#entry \.temple-win98-titlebar\{/);

@@ -25,12 +25,15 @@ test('legacy profiles retain White Cat starter ownership while preserving equipp
   assert.ok(profile.inventory.includes('white-cat'));
 });
 
-test('GM S panel and server-side history restriction are wired',()=>{
+test('GM title panel and server-side history restriction are wired',()=>{
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
   const worker=readFileSync(new URL('../cloudflare/worker.js',import.meta.url),'utf8');
-  assert.match(html,/id="gm-menu"[^>]*hidden/);
-  assert.match(ui,/\$\('gm-menu'\)\.hidden=!this\.self\.profile\?\.admin/);
+  assert.match(html,/id="gm-title"[^>]*>GGTEMPLE<\/strong>/);
+  assert.doesNotMatch(html,/id="gm-menu"/);
+  assert.match(ui,/gmTitle\.addEventListener\('click',openGmTitle\)/);
+  assert.match(ui,/if\(this\.self\?\.profile\?\.admin&&!this\.self\.gmSpectatorPreview\)this\.openPanel\('gm'\)/);
+  assert.match(ui,/enabled=!!this\.self\?\.profile\?\.admin&&!this\.self\.gmSpectatorPreview/);
   assert.match(ui,/gm-presence-request/);
   assert.match(worker,/path==='\/api\/gm\/presence'&&request\.method==='GET'/);
   assert.match(worker,/session\.profile_key\]\?\.admin!==true\)return json\(\{error:'GM only'\},403\)/);
