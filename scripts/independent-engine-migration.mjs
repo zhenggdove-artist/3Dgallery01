@@ -62,6 +62,13 @@ for(const p of tracked()){
   after=after.replace("'RELETTER message tree'","'Temple message tree'");
  }
  if(p==='src/arena-view.js')after=after.replace('Original RELETTER coin mesh missing','Temple coin mesh missing');
+ if(p==='src/plant-hover.js')after=after.replaceAll("'RELETTER message tree'","'Temple message tree'");
+ if(p==='src/engine/build-surfaces.js')after=after.replaceAll('reletter_test','templeSurfaceTest');
+ if(p==='src/player-controller.js')after=after.replaceAll('RELETTER_MOVEMENT','TEMPLE_MOVEMENT');
+ if(p==='src/golden-burst.js')after=after.replace(/\bRELETTER\b/g,'Temple');
+ if(p==='src/write-cinematic.js')after=after.replaceAll('RELETTER writing flight disc','Temple writing flight disc');
+ if(p==='tests/engine-browser.mjs')after=after.replaceAll('RELETTER controls','Temple controls');
+
  if(p==='index.html'){
   if(!after.includes('20261126-v084-r168'))throw Error('Unexpected release baseline');
   after=after.replaceAll('20261126-v084-r168','20261126-v085-r169').replaceAll('V084','V085').replaceAll('v084','v085');
@@ -77,4 +84,4 @@ if(remainingPaths.length)throw Error('Old module paths remain: '+remainingPaths.
 writeFileSync('/tmp/engine-independence-report.json',JSON.stringify({renamed:oldNames,changed,remaining,notes:['Legacy persisted/world-wire field names are intentionally preserved.','Third-party licensing and credits are not edited.','History and other refs are not rewritten.']},null,2));
 for(const entry of remaining)console.log('Compatibility review: '+entry.file+':'+entry.line+' '+entry.tokens.join(', '));
 console.log('Renamed/deleted paths: '+oldNames.length+'; edited text files: '+changed.length+'; residual reference lines for manual compatibility review: '+remaining.length);
-if(remaining.some(x=>x.tokens.some(t=>/sync-reletter/i.test(t))))throw Error('A current file still references the retired sync script');
+if(remaining.some(x=>x.tokens.some(t=>t!=='reletter')))throw Error('Non-schema project references require review');
