@@ -2,6 +2,15 @@ import {applyWorldPatch,mergeWingCatalog} from './shared/world-patch.js';
 import {CITY_LAYOUT_SIGNATURE} from './shared/city-layout.js';
 import {SHOP_CATALOG_REVISION} from './shared/catalog.js';
 
+export function requestStaffChannelStop(startAcknowledged,pendingStart,sendStop){
+ void sendStop();
+ // A late channel-start can land after the first stop. Retry only while its
+ // acknowledgement is still outstanding, not for an already active beam.
+ if(!startAcknowledged)return Promise.resolve(pendingStart).then(result=>{
+  if(result?.channeling)return sendStop();
+ });
+}
+
 export class TempleNetwork extends EventTarget{
   constructor(config=window.TEMPLE_CONFIG){
     super();this.config=config;this.base=String(config.backendUrl||'').replace(/\/$/,'');this.token='';this.socket=null;this.joinData=null;this.reconnectTimer=0;this.reconnectAttempt=0;this.closedByUser=false;this.lastStateAt=0;

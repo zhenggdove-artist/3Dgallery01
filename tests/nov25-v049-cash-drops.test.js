@@ -15,7 +15,9 @@ test('all three restorative drops use cash exclusively; fallback cannot display 
  assert.equal(groundDropVisualKind({kind:'weapon',itemId:'tide-1'}),'equipment');
  assert.equal(groundDropVisualKind({kind:'coin'}),'coin');
  const a=readFileSync(new URL('../src/adventure-view.js',import.meta.url),'utf8'),b=readFileSync(new URL('../src/arena-view.js',import.meta.url),'utf8');
- assert.match(a,/groundDropVisualKind\(d\)==='equipment'/);assert.match(b,/cash\?createCashDropGeometry\(THREE\)/);
+ assert.match(a,/groundDropVisualKind\(d\)==='equipment'/);
+ assert.match(b,/kind==='cash'\?\(this\.groundCashGeometry\?\?=createCashDropGeometry\(THREE\)\)/);
+ assert.match(b,/geometry=this\.groundDropGeometry\(shape\)/);
 });
 test('persisted misclassified restorative loot is corrected, invalid legacy entry removed, pickup preserves actual denomination',()=>{
  const now=19000000,world=createInitialWorld(now),actor={key:'cash',name:'Cash',role:'fighter',color:'#fff',position:[75,0,0]};

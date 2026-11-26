@@ -22,6 +22,9 @@ try{
  await page.addInitScript(base=>localStorage.setItem('temple-backend-url',base),backend);
  await page.goto(site,{waitUntil:'domcontentloaded'});
  await page.waitForFunction(()=>document.body.classList.contains('ready'),null,{timeout:180000});
+ // Reproduce a normal trusted entry gesture. A programmatic join alone
+ // otherwise creates the OS AudioContext on the first measured attack.
+ await page.locator('#entry h1').click({timeout:15000});
  await page.evaluate(({base,key})=>{
   const n=templeTest.network;
   // The localhost fixture needs the GM credential only on /join. Everything
@@ -61,9 +64,30 @@ try{
  });
  const dev=await page.context().newCDPSession(page);
  await dev.send('Profiler.enable');
+ await dev.send('Performance.enable');
+ const metrics=await dev.send('Performance.getMetrics');
+ const nav=metrics.metrics.find(m=>m.name==='NavigationStart')?.value;
+ const networkTime=seconds=>nav===undefined?null:(seconds-nav)*1000;
+ const transport=new Map(),wireAttacks=new Map();
+ await dev.send('Network.enable');
+ dev.on('Network.requestWillBeSent',e=>{
+  if(e.request.url!==backend+'/api/action'||e.request.method!=='POST')return;
+  let body;try{body=JSON.parse(e.request.postData||'{}');}catch{return;}
+  if(body.action==='attack')transport.set(e.requestId,{phase:body.phase||'release',at:networkTime(e.timestamp)});
+ });
+ dev.on('Network.responseReceived',e=>{
+  const r=transport.get(e.requestId);if(!r)return;
+  r.responseAt=networkTime(e.timestamp);r.status=e.response.status;
+  const timing=e.response.timing;
+  if(timing?.receiveHeadersStart>=0&&timing?.sendEnd>=0)r.sendToHeadersMs=timing.receiveHeadersStart-timing.sendEnd;
+ });
+ dev.on('Network.webSocketFrameReceived',e=>{
+  if(!e.response.payloadData.startsWith('{"type":"attack"'))return;
+  try{const m=JSON.parse(e.response.payloadData);wireAttacks.set(m.data.id,networkTime(e.timestamp));}catch{}
+ });
  await page.evaluate(()=>{
   const t=templeTest,net=t.network,gl=t.renderer.getContext();
-  const samples={busy:[],frames:[],updates:[],renders:[],websocket:[],attacks:[],input:[],http:[],vfx:[],compiles:0,programLinks:[],gpu:[],uploadBytes:0};
+  const samples={busy:[],frames:[],updates:[],renders:[],websocket:[],attacks:[],input:[],http:[],vfx:[],compiles:0,programLinks:[],gpu:[],uploadBytes:0,sceneWork:[]};
   window.v085Sample=samples;
   const now=()=>performance.now();
   new PerformanceObserver(l=>{for(const task of l.getEntries())samples.busy.push([task.startTime,task.duration]);}).observe({type:'longtask'});
@@ -79,6 +103,9 @@ try{
   measure(t.arena.presentation,'play',(start,ms,[event])=>samples.attacks.push({start,ms,id:event.id,weapon:event.weapon,channel:!!event.channel,charge:event.charge}));
   measure(t.arena,'update',(start,ms)=>samples.updates.push({start,ms}));
   measure(t.arena.presentation.vfx,'update',(start,ms)=>samples.vfx.push({start,ms}));
+  if(t.arena.grass?.prepareVisibility)measure(t.arena.grass,'prepareVisibility',(start,ms)=>{if(ms>=.5)samples.sceneWork.push({start,ms,name:'grass visibility'});});
+  for(const [object,name] of [[t.arena,'syncDrops'],[t.arena.outerCity,'syncDamage'],[t.arena.outerCity,'stepChunkPreparation'],[t.arena.outerCity,'processEjections']])
+   measure(object,name,(start,ms)=>{if(ms>=.5)samples.sceneWork.push({start,ms,name});});
   const native=net.action.bind(net);
   net.action=async(action,data)=>{
    const start=now();
@@ -117,6 +144,7 @@ try{
   const render=t.renderer.render.bind(t.renderer);let draws=0;
   t.renderer.render=(...args)=>{
    const start=now();
+   const isWorld=args[0]===t.arena.scene;
    if(ext){
     for(let i=pending.length-1;i>=0;i--){
      const q=pending[i];
@@ -125,10 +153,10 @@ try{
      pending.splice(i,1);gl.deleteQuery(q);
     }
    }
-   const q=ext&&++draws%32===0&&pending.length<4?gl.createQuery():null;
+   const q=ext&&isWorld&&++draws%8===0&&pending.length<4?gl.createQuery():null;
    if(q)gl.beginQuery(ext.TIME_ELAPSED_EXT,q);
    try{return render(...args);}
-   finally{if(q){gl.endQuery(ext.TIME_ELAPSED_EXT);pending.push(q);}samples.renders.push({start,ms:now()-start,calls:t.renderer.info.render.calls});}
+   finally{if(q){gl.endQuery(ext.TIME_ELAPSED_EXT);pending.push(q);}samples.renders.push({start,ms:now()-start,calls:t.renderer.info.render.calls,isWorld});}
   };
   let prev;
   const sample=at=>{if(prev!==undefined)samples.frames.push({at,ms:at-prev});prev=at;if(!samples.stop)requestAnimationFrame(sample);};
@@ -149,9 +177,15 @@ try{
  await page.screenshot({path:`${out}/${label}-frost.png`});
  await equip('prism-5');
  await stage('prism channel',async()=>{await page.keyboard.down('KeyQ');await page.waitForTimeout(5300);await page.keyboard.up('KeyQ');await page.waitForTimeout(500);});
+ if(process.env.PROFILE_WALK==='1')await stage('walk and turn',async()=>{
+  await page.keyboard.down('KeyW');await page.waitForTimeout(800);
+  await page.evaluate(()=>{const c=templeTest.controller();c.yaw+=Math.PI/3;c.updateCamera(.5);});
+  await page.waitForTimeout(500);await page.keyboard.up('KeyW');await page.waitForTimeout(400);
+ });
  const {profile}=await dev.send('Profiler.stop');
  const raw=await page.evaluate(()=>{v085Sample.stop=true;return v085Sample;});
  const state=JSON.parse(await page.evaluate(()=>render_game_to_text()));
+ const boot=await page.evaluate(()=>window.templeLoadTimings);
  const pct=(values,p)=>{values=[...values].sort((a,b)=>a-b);return values[Math.floor((values.length-1)*p)]??null;};
  const inside=(t,stage)=>t>=stage.start&&t<=stage.end;
  const stagesSummary=stages.map(stage=>{
@@ -171,12 +205,15 @@ try{
   const f=byId.get(profile.samples[i]),key=f.functionName+' '+f.url.split('/').at(-1);
   cpu.set(key,(cpu.get(key)||0)+profile.timeDeltas[i]/1000);
  }
- const report={stages:stagesSummary,state,compiles:raw.compiles,programLinks:raw.programLinks.map(({at,ms,material,object})=>({at,ms,material,object})),uploads:raw.uploadBytes,gpuP95:pct(raw.gpu,.95),cpu:[...cpu].sort((a,b)=>b[1]-a[1]).slice(0,40),faults};
+ const delivery=raw.attacks.filter((a,i)=>raw.attacks.findIndex(b=>b.id===a.id)===i)
+  .map(a=>({weapon:a.weapon,wireToHandlerMs:wireAttacks.get(a.id)==null?null:a.start-wireAttacks.get(a.id)}));
+ const report={stages:stagesSummary,state,boot,compiles:raw.compiles,programLinks:raw.programLinks.map(({at,ms,material,object})=>({at,ms,material,object})),uploads:raw.uploadBytes,gpuWorldP95:pct(raw.gpu,.95),transport:[...transport.values()],delivery,sceneWork:raw.sceneWork.sort((a,b)=>b.ms-a.ms).slice(0,12),cpu:[...cpu].sort((a,b)=>b[1]-a[1]).slice(0,40),faults};
  await writeFile(`${out}/${label}.json`,JSON.stringify({report,raw},null,2));
  await writeFile(`${out}/${label}.cpuprofile`,JSON.stringify(profile));
  console.log(JSON.stringify(report));
  assert.ok(raw.attacks.some(e=>e.weapon==='frost-5'&&e.charge>=1),'Expected actual released frost ultimate');
  assert.ok(raw.attacks.some(e=>e.weapon==='prism-5'&&e.channel),'Expected actual sustained prism');
+ if(process.env.CHECK_CHANNEL_STOP==='1')assert.equal(raw.http.filter(row=>row.phase==='channel-stop').length,1,'an acknowledged beam release must send just one stop');
  assert.deepEqual(faults,[]);
 }finally{
  if(page)await page.evaluate(()=>window.templeTest?.network.close()).catch(()=>{});

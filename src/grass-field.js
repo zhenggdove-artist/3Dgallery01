@@ -83,16 +83,64 @@ void main(){
  tone+=vec3(.06,.08,.02)*clamp(vWind*.3,0.,1.)*vHeight;
  gl_FragColor=vec4(clamp(tone+uGrassDelta,0.,1.),1.);
 }`;
+const GRASS_TILE=24,GRASS_BOUND_PAD=8;
+class GrassVisibility{
+ constructor(geometry,seed,count){
+  this.geometry=geometry;this.count=count;this.source=seed;this.tileOf=new Uint16Array(count);
+  this.boxes=[];this.covered=count;
+  const index=new Map();
+  for(let i=0;i<count;i++){
+   const x=Math.floor(seed.points[i*2]/GRASS_TILE),z=Math.floor(seed.points[i*2+1]/GRASS_TILE),key=x+':'+z;
+   let tile=index.get(key);
+   if(tile===undefined){
+    tile=this.boxes.length;index.set(key,tile);
+    // A rotated blade extends <.36m, wind <.27m and six simultaneous
+    // foot pushes sum to <=6.3m before the <=1.05^2 bend multiplier.
+    // Eight metres covers all displacements, including shader rounding.
+    const box=new THREE.Box3(new THREE.Vector3(x*GRASS_TILE-GRASS_BOUND_PAD,-.1,z*GRASS_TILE-GRASS_BOUND_PAD),
+     new THREE.Vector3((x+1)*GRASS_TILE+GRASS_BOUND_PAD,4.3,(z+1)*GRASS_TILE+GRASS_BOUND_PAD));
+    this.boxes.push({box,count:0});
+   }
+   this.tileOf[i]=tile;this.boxes[tile].count++;
+  }
+  this.active=new Uint8Array(this.boxes.length);this.active.fill(1);
+  this.next=new Uint8Array(this.boxes.length);
+  for(const [name,data,size] of [['aOffset',seed.points,2],['aHeight',seed.heights,1],
+   ['aAngle',seed.angles,1],['aPhase',seed.phases,1],['aShade',seed.shades,1]])
+   geometry.setAttribute(name,new THREE.InstancedBufferAttribute(data.slice(),size).setUsage(THREE.DynamicDrawUsage));
+  geometry.instanceCount=count;
+ }
+ prepare(frustum,length){
+  let needed=0,uncovered=false;
+  for(let i=0;i<this.boxes.length;i++){
+   const {box,count}=this.boxes[i];box.max.y=1.4*length+.10;
+   const visible=frustum.intersectsBox(box);this.next[i]=+visible;
+   if(visible){needed+=count;uncovered||=!this.active[i];}
+  }
+  // A previous superset is safe when it still contains the visible tiles.
+  // Don't upload new buffers for minor movement while turning or shaking.
+  if(!uncovered&&needed>=this.covered*.74)return;
+  this.active.set(this.next);this.covered=needed;
+  const {geometry,source,active,tileOf,count}=this;
+  const [p,h,a,t,s]=['aOffset','aHeight','aAngle','aPhase','aShade'].map(name=>geometry.getAttribute(name));
+  let n=0;
+  for(let i=0;i<count;i++)if(active[tileOf[i]]){
+   // Copy a subsequence in the seed's original order. Intersecting blades
+   // keep their depth and draw ordering even at identical pixel depth.
+   p.array[n*2]=source.points[i*2];p.array[n*2+1]=source.points[i*2+1];
+   h.array[n]=source.heights[i];a.array[n]=source.angles[i];t.array[n]=source.phases[i];s.array[n]=source.shades[i];n++;
+  }
+  geometry.instanceCount=n;
+  if(n)for(const attr of [p,h,a,t,s]){
+   attr.clearUpdateRanges();attr.addUpdateRange(0,n*attr.itemSize);attr.needsUpdate=true;
+  }
+ }
+}
 export class GrassField{
  constructor(scene,{mobile=false,count}={}){
   this.count=count??(mobile?25000:65000);
   const geo=bladeGeometry(),seed=grassPositions(this.count);
-  geo.setAttribute('aOffset',new THREE.InstancedBufferAttribute(seed.points,2));
-  geo.setAttribute('aHeight',new THREE.InstancedBufferAttribute(seed.heights,1));
-  geo.setAttribute('aAngle',new THREE.InstancedBufferAttribute(seed.angles,1));
-  geo.setAttribute('aPhase',new THREE.InstancedBufferAttribute(seed.phases,1));
-  geo.setAttribute('aShade',new THREE.InstancedBufferAttribute(seed.shades,1));
-  geo.instanceCount=this.count;
+  this.innerVisibility=new GrassVisibility(geo,seed,this.count);
   const positions=Array.from({length:6},()=>new THREE.Vector3(10000,0,10000));
   const material=new THREE.ShaderMaterial({vertexShader:vertex,fragmentShader:fragment,side:THREE.DoubleSide,depthWrite:true,
    uniforms:{uTime:{value:0},uPlayers:{value:positions},uPlayerCount:{value:0},uGrassLength:{value:1},uGrassDelta:{value:new THREE.Vector3()}}});
@@ -104,12 +152,7 @@ export class GrassField{
   this.outerCount=mobile?85000:190000;
   const cityGeo=bladeGeometry({segments:1,blades:4}),city=grassPositions(this.outerCount,73917,
    CITY_INNER_RADIUS-.5,CITY_OUTER_RADIUS+.5);
-  cityGeo.setAttribute('aOffset',new THREE.InstancedBufferAttribute(city.points,2));
-  cityGeo.setAttribute('aHeight',new THREE.InstancedBufferAttribute(city.heights,1));
-  cityGeo.setAttribute('aAngle',new THREE.InstancedBufferAttribute(city.angles,1));
-  cityGeo.setAttribute('aPhase',new THREE.InstancedBufferAttribute(city.phases,1));
-  cityGeo.setAttribute('aShade',new THREE.InstancedBufferAttribute(city.shades,1));
-  cityGeo.instanceCount=this.outerCount;
+  this.outerVisibility=new GrassVisibility(cityGeo,city,this.outerCount);
   this.outerMesh=new THREE.Mesh(cityGeo,material);
   this.outerMesh.name='Dense living wind-blown city grass - full ruined district';
   this.outerMesh.frustumCulled=false;scene.add(this.outerMesh);
@@ -139,6 +182,19 @@ export class GrassField{
   this.outerCanopy.rotation.x=-Math.PI/2;this.outerCanopy.position.y=.007;scene.add(this.outerCanopy);
   // The grass edge meets the full-sphere nebula directly. No ocean or horizon mesh.
 
+ }
+ prepareVisibility(camera){
+  // Called after the final camera position/screen shake and before uploading
+  // attributes. It does not change the animation uniforms or grass shader.
+  camera.updateWorldMatrix(true,false);
+  const view=this.visibilityView??=new THREE.Matrix4(),local=this.visibilityLocal??=new THREE.Matrix4();
+  const frustum=this.visibilityFrustum??=new THREE.Frustum(),length=this.mesh.material.uniforms.uGrassLength.value;
+  view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
+  for(const [mesh,data] of [[this.mesh,this.innerVisibility],[this.outerMesh,this.outerVisibility]]){
+   mesh.updateWorldMatrix(true,false);
+   frustum.setFromProjectionMatrix(local.multiplyMatrices(view,mesh.matrixWorld));
+   data.prepare(frustum,length);
+  }
  }
  setTerrainStyle(environment){
   const s=terrainStyle(environment),key=JSON.stringify(s);if(key===this.terrainSignature)return;this.terrainSignature=key;

@@ -112,7 +112,11 @@ export class MonsterAttackEffects {
       }
      if(e.native&&motion==='beam')e.native.setEndpoints(new THREE.Vector3(0,7,0),new THREE.Vector3(10,7,6));
      e.native?.update(.016);
-     await renderer.compileAsync(stage,view);
+     if(motion==='freeze'&&i===count-1){
+      // The first pooled copy already warmed the detached variant. Pre-link
+      // the live light/fog variant for the native ice planes and clusters.
+      renderer.setRenderTarget(target);await renderer.compileAsync(stage,view,this.scene);
+     }else await renderer.compileAsync(stage,view);
      renderer.setRenderTarget(target);renderer.render(stage,view);
      renderer.setRenderTarget(before);
      this.scene.add(e.root);this.put(e);

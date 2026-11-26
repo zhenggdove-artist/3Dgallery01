@@ -32,7 +32,7 @@ export class IslandEnemies{
   const actors=[...this.models.values(),...this.extraModels].filter(Boolean);
   const stage=new THREE.Scene(),view=camera.clone();
   view.position.set(0,14,38);view.lookAt(0,4,0);view.updateMatrixWorld(true);
-  stage.add(new THREE.HemisphereLight('#ffffff','#555555',1));
+  const stageLight=new THREE.HemisphereLight('#ffffff','#555555',1);stage.add(stageLight);
   const target=new THREE.WebGLRenderTarget(32,32),previous=renderer.getRenderTarget();
   const saved=actors.map(root=>({root,parent:root.parent,position:root.position.clone(),visible:root.visible}));
   try{
@@ -45,7 +45,15 @@ export class IslandEnemies{
      moving:pose==='walk',leap:pose==='jump',patrolling:false,
      skills:pose==='freeze'?[{motion:'freeze',phase:'active'}]:[],
     },.017,0);
-    await renderer.compileAsync(stage,view);
+    // The original stage draws warm vertex/bone buffers. On the last pose,
+    // also select the exact program used by the arena's lights and fog.
+    if(pose==='idle'){
+     // Three combines lights from both scenes when targetScene is passed.
+     // Exclude the preview-only lamp for the live compile, then restore it
+     // before the existing offscreen draw.
+     stageLight.removeFromParent();
+     try{await renderer.compileAsync(stage,view,this.scene);}finally{stage.add(stageLight);}
+    }else await renderer.compileAsync(stage,view);
     renderer.setRenderTarget(target);renderer.render(stage,view);
    }
    return actors.length;

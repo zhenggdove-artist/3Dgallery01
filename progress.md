@@ -895,3 +895,34 @@ no heart drops, and a monster remaining inside the newly protected art area.
 - `tests/v085-skill-profile.mjs` exercises Q, charged frost and channeled prism
   against local Wrangler. Chrome traces and captures are in `output/v085-skill/`.
   These measurements do not characterize production WAN or every GPU.
+
+## 2026-11-26 r171 live latency follow-up
+
+- Replay of r170 reproduced a 1.33 s combat frame. Real GPU links blocked on
+  new cash (1.04 s), monster ice, and a skinned monster taking an elemental
+  tint (1.22 s). Pre-link their unchanged programs with the real scene light,
+  fog and environment flags, and keep references after the last drop/status
+  expires. Do not mutate live materials or change their id/draw order.
+- Keep immutable cash and coin geometry resident across world/drop updates.
+  `node tests/r171-render-lag-parity.mjs`: 15 identical rendered frames,
+  34 to 0 gameplay shader compilations in the targeted fixture; 40 to 2
+  distinct geometries across 10 drop updates.
+- Keep the exact grass seed, wind, trample, length and per-instance draw order.
+  Filter only fully out-of-frustum spatial cells before buffer upload. The
+  targeted desktop/mobile test compares 18 exact frames.
+  `node tests/r171-grass-parity.mjs` (local Chrome and static host).
+- Keep the cancellation retry for an unacknowledged staff start, but do not
+  submit redundant stop actions for an acknowledged beam release. Test the
+  normal release and the original late-ack race separately.
+- Browser profiler distinguishes HTTP first byte, socket delivery, world GPU
+  and geometry work. Establish a trusted entry gesture before gameplay so
+  first-time OS audio initialization is not misattributed to Q.
+- Local SQLite fixture `node tests/r171-room-load.mjs` exercises all four
+  fighter seats, 12 spectators, 432 already damaged lots, 12 casts and 64
+  building hits. At this host/load the request-to-attack median was 46 ms,
+  p95 130 ms. Do not interpret this as production network latency.
+- Final Chrome/Worker replay (`RUN_LABEL=r171-release`, `PROFILE_WALK=1`,
+  `CHECK_CHANNEL_STOP=1`): zero in-play shader compilations, the same 11
+  frost building hits, and one normal channel stop. Frost maximum frame
+  1332 to 83 ms and world GPU p95 16.4 to 10.8 ms in the recorded runs.
+  All 278 pose packets were acknowledged. HTTP round trips can still vary.

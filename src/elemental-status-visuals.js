@@ -120,6 +120,36 @@ function tintMaterial(source,uniforms){
 
 export class ElementalStatusVisuals{
  constructor(){this.entries=new Map();}
+ async warmModelTints(renderer,camera,scene,roots){
+  const stage=new THREE.Scene(),materials=new Map(),uniforms={color:{value:new THREE.Color('#ffffff')},alpha:{value:0}};
+  for(const root of roots){
+   const body=root.userData?.model||root.userData?.pivot||root;
+   body.traverse(mesh=>{
+    if(!mesh.isMesh||!mesh.material)return;
+    const originals=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+    const tinted=originals.map(source=>{
+     if(!materials.has(source))materials.set(source,tintMaterial(source,uniforms));
+     return materials.get(source)||source;
+    });
+    if(tinted.every((m,i)=>m===originals[i]))return;
+    // Compile the existing tint hook on the real geometry type (including
+    // skinned/morph targets) without swapping any live material or drawing.
+    const sample=mesh.clone(false);sample.material=Array.isArray(mesh.material)?tinted:tinted[0];stage.add(sample);
+   });
+  }
+  if(!stage.children.length)return;
+  const target=new THREE.WebGLRenderTarget(1,1,{type:THREE.HalfFloatType}),before=renderer.getRenderTarget();
+  const keepers=[...materials.values()].filter(Boolean);
+  let ready=false;
+  try{
+   renderer.setRenderTarget(target);await renderer.compileAsync(stage,camera,scene);
+   for(const material of this.warmTintMaterials||[])material.dispose();
+   this.warmTintMaterials=keepers;ready=true;
+  }finally{
+   if(!ready)for(const material of keepers)material.dispose();
+   stage.clear();renderer.setRenderTarget(before);target.dispose();
+  }
+ }
  detachTint(entry){
   for(const {mesh,original,owned} of entry.materials){
    // Equipment changes may have already replaced a mesh's old material.
@@ -187,5 +217,5 @@ export class ElementalStatusVisuals{
   this.detachTint(entry);this.stopFlames(entry);
   this.entries.delete(root);
  }
- dispose(){for(const root of [...this.entries.keys()])this.clear(root);for(const fx of fireballPool.splice(0))destroyFireball(fx);}
+ dispose(){for(const root of [...this.entries.keys()])this.clear(root);for(const fx of fireballPool.splice(0))destroyFireball(fx);for(const material of this.warmTintMaterials||[])material.dispose();this.warmTintMaterials=[];}
 }

@@ -26,7 +26,7 @@ import {uploadArtwork} from './artwork-upload.js';
 import {VitalModels} from './vital-models.js';
 import {createVHS} from './reletter-vhs.js';
 import {TempleArena} from './arena-view.js';
-import {TempleNetwork} from './network.js';
+import {TempleNetwork,requestStaffChannelStop} from './network.js';
 import {PlayerController} from './player-controller.js';
 import {STAFF_RAISE_SECONDS} from './staff-raise-pose.js';
 import {TempleUI} from './ui.js';
@@ -282,7 +282,7 @@ boot();
 
 async function boot(){
   const started=performance.now(),timings=window.templeLoadTimings={};
-  try{const [published,layout]=await Promise.all([fetch('./temple-layout.json').then(r=>r.ok?r.json():{}),fetch('./temple-artwork-layout.json').then(r=>r.json())]);Object.assign(settings,published.settings||{},loadEditorSettings());arena.defaultLayout=layout.artworkLayout||{};timings.configMs=performance.now()-started;const assetStart=performance.now();await Promise.all([arena.load((value,label)=>ui.setLoading(value,label)),document.fonts.load('bold 48px GoldenGirdle')]);vitalModels=new VitalModels(arena.coinMesh.geometry,arena.coinMesh.material);timings.assetsMs=performance.now()-assetStart;ui.setLoading(.9,'Preparing 00GameDevs weapon effects');const warmStart=performance.now();timings.effects=await arena.presentation.vfx.warm(renderer,camera);timings.effectsMs=performance.now()-warmStart;ui.setLoading(.905,'Pre-rendering complete equipment for SHOP and BAG');setOutfitPreviewCharacter(arena.characterAsset?.scene);timings.previews=await warmItemPreviews(ITEMS,(done,total)=>ui.setLoading(.905+.032*done/Math.max(1,total),'Pre-rendering full equipment '+done+'/'+total));ui.setLoading(.94,'Prewarming all monster jump and dash animations');try{timings.monsterRigs=await arena.islandEnemies.warmModels(renderer,camera);}catch(error){console.warn('Monster rig prewarm incomplete',error);}ui.setLoading(.95,'Prewarming monster landing shockwaves');try{await arena.islandEnemies.attackEffects.warm(renderer,camera);}catch(error){console.warn('Monster VFX shader prewarm incomplete',error);}applyEditorSettings({pixelRatio:settings.pixelRatio||(coarse?1:1.35),fog:settings.fog??.0008,artFloat:settings.artFloat??.17});camera.position.set(0,13,30);camera.lookAt(0,2,0);ui.setLoading(.99,'Preparing scene shaders');const compileStart=performance.now();await renderer.compileAsync(scene,camera);await chargePreview.warm(renderer,camera);await arena.outerCity?.warmEffects(renderer,camera);timings.sceneCompileMs=performance.now()-compileStart;timings.totalMs=performance.now()-started;ui.setLoading(1,'100% · Ready');assetsReady=true;ui.ready();void initializeGoogleAuth();}
+  try{const [published,layout]=await Promise.all([fetch('./temple-layout.json').then(r=>r.ok?r.json():{}),fetch('./temple-artwork-layout.json').then(r=>r.json())]);Object.assign(settings,published.settings||{},loadEditorSettings());arena.defaultLayout=layout.artworkLayout||{};timings.configMs=performance.now()-started;const assetStart=performance.now();await Promise.all([arena.load((value,label)=>ui.setLoading(value,label)),document.fonts.load('bold 48px GoldenGirdle')]);vitalModels=new VitalModels(arena.coinMesh.geometry,arena.coinMesh.material);timings.assetsMs=performance.now()-assetStart;ui.setLoading(.9,'Preparing 00GameDevs weapon effects');const warmStart=performance.now();timings.effects=await arena.presentation.vfx.warm(renderer,camera);timings.effectsMs=performance.now()-warmStart;ui.setLoading(.905,'Pre-rendering complete equipment for SHOP and BAG');setOutfitPreviewCharacter(arena.characterAsset?.scene);timings.previews=await warmItemPreviews(ITEMS,(done,total)=>ui.setLoading(.905+.032*done/Math.max(1,total),'Pre-rendering full equipment '+done+'/'+total));ui.setLoading(.94,'Prewarming all monster jump and dash animations');try{timings.monsterRigs=await arena.islandEnemies.warmModels(renderer,camera);}catch(error){console.warn('Monster rig prewarm incomplete',error);}ui.setLoading(.95,'Prewarming monster landing shockwaves');try{await arena.islandEnemies.attackEffects.warm(renderer,camera);}catch(error){console.warn('Monster VFX shader prewarm incomplete',error);}applyEditorSettings({pixelRatio:settings.pixelRatio||(coarse?1:1.35),fog:settings.fog??.0008,artFloat:settings.artFloat??.17});camera.position.set(0,13,30);camera.lookAt(0,2,0);ui.setLoading(.99,'Preparing scene shaders');const compileStart=performance.now();await renderer.compileAsync(scene,camera);await chargePreview.warm(renderer,camera);try{await arena.warmGroundDropPrograms(renderer,camera);}catch(error){console.warn('Ground loot shader prewarm incomplete',error);}try{await statusVisuals.warmModelTints(renderer,camera,scene,[...arena.islandEnemies.models.values(),arena.characterAsset.scene]);}catch(error){console.warn('Elemental filter shader prewarm incomplete',error);}await arena.outerCity?.warmEffects(renderer,camera);timings.sceneCompileMs=performance.now()-compileStart;timings.totalMs=performance.now()-started;ui.setLoading(1,'100% · Ready');assetsReady=true;ui.ready();void initializeGoogleAuth();}
   catch(error){console.error(error);ui.setLoading(0,'Loading failed · reload to retry: '+error.message);ui.joinError(error.message);}
 }
 
@@ -627,14 +627,11 @@ ui.addEventListener('attack-release',async()=>{
  gun.held=false;attackHeld=false;clearChargeDelay();
  const tapInteraction=pendingAInteraction;pendingAInteraction=null;
  if(staffChannel){
-  const pending=staffChannelPromise;
+  const pending=staffChannelPromise,acknowledged=staffChannel.ready;
   staffChannel=null;++staffChannelSerial;
   arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;
   chargeStarted=null;attackHoldStarted=null;chargeRequest=null;
-  void sendAction('attack',{phase:'channel-stop'});
-  void Promise.resolve(pending).then(result=>{
-   if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});
-  });
+  void requestStaffChannelStop(acknowledged,pending,()=>sendAction('attack',{phase:'channel-stop'}));
   return;
  }
  if(attackHoldStarted===null)return;
@@ -685,10 +682,10 @@ ui.addEventListener('attack-cancel',()=>{
  attackHeld=false;chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();artworkThrow.cancel();
  if(localRoot)localRoot.userData.staffCastingUntil=0;
  if(staffChannel){
-  const pending=staffChannelPromise;
+  const pending=staffChannelPromise,acknowledged=staffChannel.ready;
   staffChannel=null;++staffChannelSerial;
   arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;
-  void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});
+  void requestStaffChannelStop(acknowledged,pending,()=>sendAction('attack',{phase:'channel-stop'}));
  }
 });
 async function confirmSavedWing(result,wingId){
@@ -827,7 +824,7 @@ ui.addEventListener('spectator-lift',event=>{
  if(controller?.role==='spectator')controller.spectatorLift=Number(event.detail)||0;
 });
 ui.addEventListener('spectator-follow',event=>followSpectator(event.detail));ui.addEventListener('spectator-cycle',()=>cycleSpectator());
-ui.addEventListener('panel',event=>{if(event.detail.open)wallPainter.stop();chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active&&!wallPainter.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
+ui.addEventListener('panel',event=>{if(event.detail.open)wallPainter.stop();chargeStarted=null;attackHoldStarted=null;chargeRequest=null;pendingAInteraction=null;clearChargeDelay();if(event.detail.open){attackHeld=false;}if(event.detail.open&&staffChannel){arena.presentation.vfx.stopChannel(localRoot);localRoot.userData.staffCastingUntil=0;const pending=staffChannelPromise,acknowledged=staffChannel.ready;staffChannel=null;++staffChannelSerial;void requestStaffChannelStop(acknowledged,pending,()=>sendAction('attack',{phase:'channel-stop'}));}if(event.detail.open)artworkThrow.cancel();controller?.setEnabled(!event.detail.open&&!artEditor.mode&&!writer.active&&!platformDelete.active&&!wallPainter.active);if(!event.detail.open&&(writer.phase==='write'||writer.legacy))writer.cancel();});
 let skyColorPreview=null;
 const savedSkyColor=()=>world?.environment?.skyBaseColor||'#101b36';
 const applySkyColor=color=>scene.userData.moonlitSky?.setBaseColor(color);
@@ -1140,8 +1137,8 @@ function update(dt,time,movementDt=dt){
    beginStaffChannel();
   if(staffChannel){
    if(!attackHeld||!isChannelStaff(heldItem)||heldItem.id!==staffChannel.weapon||!controller.enabled){
-    const pending=staffChannelPromise;staffChannel=null;++staffChannelSerial;
-    void sendAction('attack',{phase:'channel-stop'});void Promise.resolve(pending).then(result=>{if(result?.channeling)return sendAction('attack',{phase:'channel-stop'});});
+    const pending=staffChannelPromise,acknowledged=staffChannel.ready;staffChannel=null;++staffChannelSerial;
+    void requestStaffChannelStop(acknowledged,pending,()=>sendAction('attack',{phase:'channel-stop'}));
    }else if(staffChannel.ready&&!staffChannelBusy&&performance.now()-staffChannelShotAt>=channelInterval(heldItem)+45){
     const cost=weaponManaQuote(world,equippedItem(world.profile,itemById(heldItem.id)||heldItem),world.profile?.fusion?.[heldItem.id]).pulse;
     if(Number(world?.profile?.mana)+1e-6<cost){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}
@@ -1204,7 +1201,7 @@ function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.
   if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}
   try{recordRenderHealth(now);}catch{}return;
  }
- refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);const shake=gun.mode===2?0:Math.max(0,(screenShakeUntil-performance.now())/350),savedPosition=shake>0?camera.position.clone():null;if(shake>0){camera.position.x+=(Math.random()-.5)*shake*.16;camera.position.y+=(Math.random()-.5)*shake*.10;}try{vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view));}catch(error){renderDiagnostics.renderFaults++;renderDiagnostics.lastError=String(error?.message||error);if(now-lastRenderFaultAt>2000){lastRenderFaultAt=now;console.error('Render fault',error);}}finally{if(savedPosition)camera.position.copy(savedPosition);gpuFrames.submitted();}const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}try{recordRenderHealth(now);}catch(error){console.warn('Render health sample failed',error);}}
+ refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);const shake=gun.mode===2?0:Math.max(0,(screenShakeUntil-performance.now())/350),savedPosition=shake>0?camera.position.clone():null;if(shake>0){camera.position.x+=(Math.random()-.5)*shake*.16;camera.position.y+=(Math.random()-.5)*shake*.10;}try{arena.grass?.prepareVisibility(camera);vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view));}catch(error){renderDiagnostics.renderFaults++;renderDiagnostics.lastError=String(error?.message||error);if(now-lastRenderFaultAt>2000){lastRenderFaultAt=now;console.error('Render fault',error);}}finally{if(savedPosition)camera.position.copy(savedPosition);gpuFrames.submitted();}const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}try{recordRenderHealth(now);}catch(error){console.warn('Render health sample failed',error);}}
 requestAnimationFrame(frame);
 
 const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),gain=event.owner===self?.key?1:.38;audio.playWeapon(item,gain,!!event.ultimate);if(event.owner===self?.key&&(item?.firstPerson||item?.id==='calico-cat'))gun.kick(item);if(event.ultimate&&item?.family!=='fire'){audio.play('ultimate',gain*.45);if(['pan','swatter','lightning','wave','beam','planter','palm'].includes(item?.family)||Number(event.area?.radius)>1.5)audio.play('explosion',gain*.95);}}arena.presentation.play(event,roots.get(event.owner));}
