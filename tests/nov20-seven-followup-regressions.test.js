@@ -92,7 +92,7 @@ test('all non-saber melee swings recover rapidly and music note particles are vi
  assert.match(shader,/pattern>4\.5&&pattern<5\.5\?17\.:5\./);
  const main=source('src/main.js');
  assert.match(main,/if\(weapon\?\.id==='goldfish'\)\{/);
- assert.match(main,/if\(charge>=1\)await performAttack\(1,null,releaseAim\)/);
+ assert.match(main,/if\(charge>=1\)await performAttack\(1,null,releaseAim,\{\},pending\)/);
  const css=source('fidelity-ui.css');
  assert.ok(css.includes('bottom:calc(var(--comfort-bottom) + var(--comfort-slot-size) + var(--chat-gap))!important'));
  assert.ok(css.includes('--comfort-bottom:max(143px,env(safe-area-inset-bottom) + 133px);--comfort-slot-size:43px'));

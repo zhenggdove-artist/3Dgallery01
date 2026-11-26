@@ -399,7 +399,24 @@ network.addEventListener('chat-reset',()=>{ui.clearChat();for(const entry of spe
 network.addEventListener('artwork-throw',event=>showThrowPulse(event.detail));
 network.addEventListener('attack',event=>showAttack(event.detail));
 // Authoritative damage events bypass the heavyweight/coalesced world snapshot.
-network.addEventListener('combat-damage',event=>{if(joined)damageNumbers.receive(event.detail?.events||[]);});
+const combatVitals=new Map();
+function combatVital(key,base){const fast=combatVitals.get(key);return fast&&fast.revision>(world?.revision??-1)?fast:base;}
+function showFastLocalHealth(){
+ const fast=combatVital(self?.key,null);if(!fast)return;
+ const hp=document.getElementById('hp'),label=document.getElementById('hp-label');
+ if(hp&&label){hp.max=fast.maxHp||100;hp.value=fast.hp||0;label.textContent=Math.ceil(fast.hp||0)+'/'+fast.maxHp;}
+}
+network.addEventListener('combat-damage',event=>{
+ if(!joined)return;const packet=event.detail||{};damageNumbers.receive(packet.events||[]);
+ for(const value of packet.vitals||[]){
+  if(!Number.isFinite(packet.revision)||packet.revision<=(world?.revision??-1)||packet.revision<(combatVitals.get(value.key)?.revision??-1))continue;
+  combatVitals.set(value.key,{...value,revision:packet.revision});
+  if(value.player){const root=roots.get(value.key);if(root){if(root!==localRoot)setHealthBar(root,value.hp,value.maxHp);applyShieldHit(root,value);applyHitReaction(root,value);}}
+  else if(arena.monster&&world?.monster?.id===value.key)setHealthBar(arena.monster,value.hp,value.maxHp,ENEMY_HEIGHT+.65);
+  else for(const {root,state} of arena.islandEnemies.extraLive)if(state?.id===value.key)setHealthBar(root,value.hp,value.maxHp,ENEMY_HEIGHT+.65);
+ }
+ showFastLocalHealth();
+});
 network.addEventListener('channel-stop',event=>{const root=roots.get(event.detail.owner);if(root){arena.presentation.vfx.stopChannel(root);root.userData.staffCastingUntil=0;}});
 network.addEventListener('structure-destroyed',event=>arena.showStructureBreak(event.detail));
 network.addEventListener('structure-hit',event=>arena.showStructureHit(event.detail));
@@ -1099,7 +1116,9 @@ const heardStompLandings=new Set();
 function update(dt,time,movementDt=dt){
   const nowMs=Date.now();
   if(queuedWorld){const pending=queuedWorld;queuedWorld=null;acceptWorldView(pending);}
-  damageNumbers.update(camera,innerWidth,innerHeight);vitalModels?.update(time,world?.profile?.hp||0,world?.profile?.maxHp||100);
+  for(const [key,value] of combatVitals)if(value.revision<=(world?.revision??-1))combatVitals.delete(key);
+  showFastLocalHealth();const currentVitals=combatVital(self?.key,world?.profile);
+  damageNumbers.update(camera,innerWidth,innerHeight);vitalModels?.update(time,currentVitals?.hp||0,currentVitals?.maxHp||100);
   if(joined)minimap.update(time,roots,self?.key,world?.monster,world?.monsters||[],world?.collector);
   if(joined&&controller){
    const debuffs=world?.profile?.effects||{};
@@ -1175,7 +1194,7 @@ function update(dt,time,movementDt=dt){
    heardStompLandings.add(skill.id);if(heardStompLandings.size>128)heardStompLandings.delete(heardStompLandings.values().next().value);
    if(localRoot&&Math.hypot(localRoot.position.x-skill.aim[0],localRoot.position.z-skill.aim[2])<48){audio.play('stomp',.8);audio.play('ground-crack',.95);}
   }
-  updateKnockdowns();arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}updatePlayerSpeech();artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){setHealthBar(arena.monster,world.monster.hp,world.monster.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
+  updateKnockdowns();arena.remoteAimTargets=[...roots.values()].filter(r=>r!==localRoot);for(const [key,root] of roots){const dead=root.userData.deadUntil>Date.now();if(dead&&!root.userData.burstDead){bursts.play(root.position,'death-'+key+'-'+root.userData.deadUntil);if(root!==localRoot)audio.play('explosion',.35);}root.userData.burstDead=dead;root.visible=!dead&&performance.now()>=(root.userData.plantHiddenUntil||0)&&(key===self?.key?self.role==='fighter':root.visible||players.find(p=>p.key===key)?.role==='fighter');}updatePlayerSpeech();artworkThrow.update();bursts.update(dt,renderer.domElement.height);for(const root of roots.values())faceHealthBar(root,camera);if(arena.monster&&world?.monster){const hp=combatVital(world.monster.id,world.monster);setHealthBar(arena.monster,hp.hp,hp.maxHp,ENEMY_HEIGHT+.65);faceHealthBar(arena.monster,camera);}gun.update();gun.pose(arena.presentation);
   const heldItem=castingItem||itemById('clam');
   if(chargeStarted!==null&&!staffChannel&&attackHeld&&world?.profile&&Number(world.profile.mana)+1e-6<weaponManaQuote(world,heldItem,world.profile.fusion?.[heldItem.id]).initial)stopInsufficientCharge();
   if(heldItem.id!=='black-cat'&&attackHeld&&attackHoldStarted!==null&&chargeStarted===null&&!chargeRequest&&

@@ -359,7 +359,7 @@ export class TempleRoom extends DurableObject{
     this.broadcastNewDamage(world,previousDamageSequence);
     this.broadcastStructureEvents(result.structureHits||(result.structureHit?[result.structureHit]:[]),result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]));
     this.scheduleCombatTick();
-    this.broadcastWorld(world);if(didRespawn||result.delistedItemId)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);await this.armAlarm();return new Response(responseText,{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
+    if(body.action==='attack'&&compact&&!didRespawn)this.scheduleCombatWorld();else this.broadcastWorld(world);if(didRespawn||result.delistedItemId)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);await this.armAlarm();return new Response(responseText,{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
   }
 
   async saveCode(session){
@@ -580,7 +580,18 @@ export class TempleRoom extends DurableObject{
   }
   broadcastNewDamage(world,sequence){
    const events=(world.damageEvents||[]).filter(e=>e.id>sequence);
-   if(events.length)this.broadcast('combat-damage',{revision:world.revision,events});
+   if(!events.length)return;
+   const keys=new Set(events.map(e=>e.target)),vitals=[];
+   for(const key of keys){
+    const p=world.profiles?.[key];
+    const target=p||[world.monster,...(world.monsters||[])].find(m=>m?.id===key);
+    if(target)vitals.push({key,hp:target.hp,maxHp:target.maxHp,player:!!p,...(p?{shield:p.shield,hitReaction:p.hitReaction}: {})});
+   }
+   this.broadcast('combat-damage',{revision:world.revision,events,vitals});
+  }
+  scheduleCombatWorld(){
+   if(this.combatWorldTimer!=null)return;
+   this.combatWorldTimer=setTimeout(()=>{this.combatWorldTimer=null;this.lastCombatWorldAt=Date.now();this.broadcastWorld(this.readWorld());},70);
   }
   scheduleCombatTick(){
    if(this.combatTimer!=null)return;
@@ -593,7 +604,7 @@ export class TempleRoom extends DurableObject{
    this.combatTimer=setTimeout(()=>{this.combatTimer=null;void this.tick(true).catch(error=>console.error('Combat tick failed',error)).finally(()=>this.scheduleCombatTick());},delay);
   }
   async tick(fromState=false){
-   const now=Date.now(),current=this.readWorld(),movingEffects=(current.persistentAttacks||[]).length>0||(current.pendingArtworkFlights||[]).length>0||Object.keys(current.prismLocks||{}).length>0||Object.keys(current.tidalLocks||{}).length>0||Object.values(current.profiles||{}).some(p=>p.tidalChannelStats)||(current.monster?.tidePush!=null)||(current.monsters||[]).some(m=>m.tidePush);
+   const now=Date.now(),current=this.readWorld(),movingEffects=(current.persistentAttacks||[]).length>0||(current.pendingArtworkFlights||[]).length>0||Object.keys(current.prismLocks||{}).length>0||Object.keys(current.tidalLocks||{}).length>0||Object.values(current.profiles||{}).some(p=>p.tidalChannelStats||p.channelWeapon)||(current.monster?.tidePush!=null)||(current.monsters||[]).some(m=>m.tidePush);
    if(fromState&&now-this.lastTick<(movingEffects?70:500))return;
    const world=this.world();
    const previousDamageSequence=world.damageSequence||0;
@@ -630,7 +641,7 @@ export class TempleRoom extends DurableObject{
     if(respawned||now-(this.lastCombatWorldAt||0)>=180){
      this.lastCombatWorldAt=now;
      this.broadcastWorld(world);
-    }
+    }else this.scheduleCombatWorld();
     for(const impact of artworkVisualEvents)
       if(impact?.kind==='structure-hit'||impact?.kind==='structure-destroyed')
        this.broadcast(impact.kind,impact.event);
