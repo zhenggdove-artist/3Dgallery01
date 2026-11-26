@@ -48,6 +48,20 @@ for(const p of tracked()){
   if(p.startsWith('tests/'))return line.replace(/(\btest\(['"][^'"]*)\bRELETTER\b/g,'$1baseline engine').replace(/output\/reletter-/g,'output/engine-');
   return line;
  }).join('\n');
+ if(p==='tests/nov24-asset-wearable-cleanup-r105.test.js')after=after.replaceAll("'src','reletter','world-visuals.js'","'src','engine','world-visuals.js'");
+ if(p==='scripts/check-release-bump.mjs')after=after.replaceAll('reletter-theme','engine-theme');
+ if(p==='src/engine/plants.js'){
+  if(!after.includes('const seed=hash(text);'))throw Error('Unexpected plant seed code');
+  after=after.replace('const seed=hash(text);','const seed=opts.fixedGeometrySeed??hash(text);');
+ }
+ if(p==='src/engine-presentation.js'){
+  let h=2166136261;const old='TEMPLE RELETTER';
+  for(let i=0;i<old.length;i++){h^=old.charCodeAt(i);h+=(h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24);}
+  if((h>>>0)!==2666664333||!after.includes("makePlant('TEMPLE RELETTER',{clipBelow:false})"))throw Error('Unexpected central tree seed');
+  after=after.replace("makePlant('TEMPLE RELETTER',{clipBelow:false})","makePlant('GGTEMPLE',{clipBelow:false,fixedGeometrySeed:2666664333})");
+  after=after.replace("'RELETTER message tree'","'Temple message tree'");
+ }
+ if(p==='src/arena-view.js')after=after.replace('Original RELETTER coin mesh missing','Temple coin mesh missing');
  if(p==='index.html'){
   if(!after.includes('20261126-v084-r168'))throw Error('Unexpected release baseline');
   after=after.replaceAll('20261126-v084-r168','20261126-v085-r169').replaceAll('V084','V085').replaceAll('v084','v085');
@@ -61,5 +75,6 @@ for(const p of tracked()){
 const remainingPaths=tracked().filter(p=>/reletter/i.test(p));
 if(remainingPaths.length)throw Error('Old module paths remain: '+remainingPaths.join(', '));
 writeFileSync('/tmp/engine-independence-report.json',JSON.stringify({renamed:oldNames,changed,remaining,notes:['Legacy persisted/world-wire field names are intentionally preserved.','Third-party licensing and credits are not edited.','History and other refs are not rewritten.']},null,2));
+for(const entry of remaining)console.log('Compatibility review: '+entry.file+':'+entry.line+' '+entry.tokens.join(', '));
 console.log('Renamed/deleted paths: '+oldNames.length+'; edited text files: '+changed.length+'; residual reference lines for manual compatibility review: '+remaining.length);
 if(remaining.some(x=>x.tokens.some(t=>/sync-reletter/i.test(t))))throw Error('A current file still references the retired sync script');
