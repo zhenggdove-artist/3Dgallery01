@@ -88,7 +88,7 @@ export function artBombDamage(maxHp,rng=Math.random){
 }
 
 // GM-only: remove ALL non-GM uploaded works, but never touch original gallery
-// works, GM records, or any of the associated RELETTER storage.
+// works, GM records, or any of the associated earlier engine storage.
 export function resetPlayerArtworks(world,admin,now=Date.now()){
  if(!admin)return {error:'GM only'};
  const records=world.customArtworks||[];

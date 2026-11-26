@@ -7,7 +7,7 @@ test('browser entry points and visual modules always parse as JavaScript',()=>{
  for(const file of [
   'src/main.js','src/equipment-portrait.js','src/weapon-vfx.js',
   'src/weapon-particle-effects.js','src/weapon-signature-effects.js',
-  'src/reletter-presentation.js','src/ui.js','src/arena-view.js',
+  'src/engine-presentation.js','src/ui.js','src/arena-view.js',
   'src/shared/weapon-abilities.js','src/shared/temple-rules.js'
  ]){
   const run=spawnSync(process.execPath,['--check',file],{encoding:'utf8'});

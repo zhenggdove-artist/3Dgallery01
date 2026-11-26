@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createInitialWorld,createProfile,setArtworkLayout,migrateWorld} from '../src/shared/temple-rules.js';
-import {EQUIPMENT} from '../src/reletter/equipment-catalog.js';
+import {EQUIPMENT} from '../src/engine/equipment-catalog.js';
 import {itemById} from '../src/shared/catalog.js';
 import {playerStats,refreshStats} from '../src/shared/player-stats.js';
 test('Golden Girdle is the exact original font binary',()=>{
- const hash=createHash('sha256').update(readFileSync(new URL('../src/reletter/FONTS/Golden Girdle.otf',import.meta.url))).digest('hex');
+ const hash=createHash('sha256').update(readFileSync(new URL('../src/engine/FONTS/Golden Girdle.otf',import.meta.url))).digest('hex');
  assert.equal(hash,'46e61e171acb970eabd7cc9918c349b851c25d448563e4613b229f1b34ffa523');
 });
 test('Original combat equipment IDs survive; the Temple-only farming catalog is retired',()=>{

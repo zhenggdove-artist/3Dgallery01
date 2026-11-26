@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {applyAction,createInitialWorld,ensureProfile,worldView} from '../src/shared/temple-rules.js';
-import {EQUIPMENT} from '../src/reletter/equipment-catalog.js';
+import {EQUIPMENT} from '../src/engine/equipment-catalog.js';
 import {ITEMS,EQUIPPABLE_SLOTS} from '../src/shared/catalog.js';
-import {SEEDS} from '../src/reletter/garden-catalog.js';
+import {SEEDS} from '../src/engine/garden-catalog.js';
 const setup=()=>{const world=createInitialWorld(1000),actor={key:'tester',name:'Test',role:'fighter',position:[-5,0,-12]},profile=ensureProfile(world,actor.key,actor.name,null,1000);return {world,actor,profile};};
 test('Garden seeds, watering, harvesting and crops are retired from Temple',()=>{
  const {world,actor,profile}=setup();profile.inventory.push(SEEDS[0].id);

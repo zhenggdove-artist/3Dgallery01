@@ -43,7 +43,7 @@ function showConsumableSlotPicker(ui,item,profile){
  document.body.append(dialog);
  dialog.showModal();
 }
-// RELETTER refreshBag/bagCell/inspectBag; Temple's authoritative inventory adapter.
+// earlier engine refreshBag/bagCell/inspectBag; Temple's authoritative inventory adapter.
 export function renderOriginalBag(ui,profile){
  const scroll={content:ui.content.scrollTop,items:ui.content.querySelector('#bag-items')?.scrollTop||0,tabs:ui.content.querySelector('#bag-tabs')?.scrollLeft||0};
  ui.bagObserver?.disconnect();

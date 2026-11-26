@@ -1,4 +1,4 @@
-// Extracted from RELETTER index.html. Host supplies time/fishing adapter only.
+// Extracted from earlier engine index.html. Host supplies time/fishing adapter only.
 import * as THREE from 'three';
 import {createToken} from './token-model.js';
 import {createOddWeapon,animateOddWeapon} from './odd-weapon-art.js';

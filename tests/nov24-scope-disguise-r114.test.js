@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import {readFileSync} from 'node:fs';
 import {GunController} from '../src/gun-controller.js';
-import {disguiseFrame} from '../src/reletter/outfit-model.js';
+import {disguiseFrame} from '../src/engine/outfit-model.js';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('scope ray is optical center and shoulder retains lifted reticle',()=>{
  const camera=new T.PerspectiveCamera(20,1,.1,100);camera.position.set(1,2,3);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
@@ -22,7 +22,7 @@ test('disguise local vertical follows anatomy even with rotated head and hips',(
  model.updateMatrixWorld(true);const frame=disguiseFrame(T,model,bones,.3);
  assert.ok(new T.Vector3(0,1,0).applyQuaternion(frame.rotation).distanceTo(new T.Vector3(0,1,0))<1e-6);
  assert.ok(frame.height>.018&&frame.height<.02);assert.ok(frame.base.y<.001);
- assert.match(read('src/reletter/outfit-model.js'),/model\.add\(g\);g\.updateMatrixWorld\(true\)/);
+ assert.match(read('src/engine/outfit-model.js'),/model\.add\(g\);g\.updateMatrixWorld\(true\)/);
 });
 test('release tokens retain numeric format required by deploy pipeline',()=>{
  assert.match(read('index.html'),/const release = '20\d{6}-[^']+-r\d+'/);

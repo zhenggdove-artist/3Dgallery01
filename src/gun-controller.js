@@ -15,7 +15,7 @@ export function shouldDismissScopePointer(pointerType,x,y,width,height){
  return pointerType==='touch'&&outsideScopeCircle(x,y,width,height);
 }
 
-// RELETTER gun-additions: shoulder / sniper scope, original sensitivity and FOV.
+// earlier engine gun-additions: shoulder / sniper scope, original sensitivity and FOV.
 export class GunController {
   constructor({canvas,camera,controller,weapon,ui,attack}) {
     Object.assign(this,{canvas,camera,controller,weapon,ui,attack});this.mode=0;this.held=false;this.nextShot=0;this.recoilOffset=0;this.recoilAmount=0;this.lastKick=-Infinity;

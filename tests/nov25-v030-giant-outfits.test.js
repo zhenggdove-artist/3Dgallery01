@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import {itemById,SHOP_ITEMS,shopPurchaseVariant,SHOP_CATALOG_REVISION} from '../src/shared/catalog.js';
 import {orientPortraitModel} from '../src/equipment-portrait.js';
-import {cutDisguiseOpening} from '../src/reletter/outfit-model.js';
+import {cutDisguiseOpening} from '../src/engine/outfit-model.js';
 test('giant props retain explicit sizes and all three new items are sold',()=>{
  assert.match(SHOP_CATALOG_REVISION,/^r\d+$/);
  for(const [name,size] of [['cardboard',2],['chimney',3],['water-tower',2],['utility-pole',3],['tin-pipe',3],['bubble-tea',2],['luroufan-sign',2],['luroufan-bowl',2],['notok-sign',2],['987-sign',2]]){

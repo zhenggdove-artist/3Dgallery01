@@ -3,17 +3,17 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createInitialWorld,applyAction,tickWorld,ensureProfile,worldView,canBuildAt,canPlaceArtworkAt} from '../src/shared/temple-rules.js';
 import {attackStats,WEAPONS} from '../src/shared/catalog.js';
-import {attackStats as originalStats} from '../src/reletter/equipment-catalog.js';
+import {attackStats as originalStats} from '../src/engine/equipment-catalog.js';
 import {PNG_APPEARANCE_DEFAULTS,APPEARANCE_DEFAULTS,validateAppearance,artworkAppearanceDefaults,LABEL_STYLE_DEFAULTS} from '../src/shared/artwork-library.js';
 import {MONSTER_PACK_SIZE,spawnMonsterPack,monsterPosition} from '../src/shared/monster-pack.js';
 import {ENEMY_HEIGHT,ENEMY_RADIUS} from '../src/shared/island-combat.js';
 import {grassPositions} from '../src/grass-field.js';
-import {saturatedPlantColor,PLANT_SATURATION_MULTIPLIER} from '../src/reletter/plants.js';
+import {saturatedPlantColor,PLANT_SATURATION_MULTIPLIER} from '../src/engine/plants.js';
 import * as THREE from 'three';
 import {cleanLegacyScene} from '../src/shared/scene-cleanup.js';
 
 const actor=(key,admin=false)=>({key,name:key,role:'fighter',admin,position:[70,0,0],color:'#33bbaa'});
-test('every elemental staff spell uses exactly one third of RELETTER effective range',()=>{
+test('every elemental staff spell uses exactly one third of baseline engine effective range',()=>{
  const ids=['water','ice','fire','lightning','beam','petal','wave'];
  const spells=WEAPONS.filter(w=>ids.includes(w.family)&&!w.exotic);
  assert.ok(spells.length>=35);
@@ -82,7 +82,7 @@ test('procedural grass distribution is deterministic, slender, and excludes cent
  assert.match(src,/blades=4/);
 });
 
-test('central RELETTER message plants have threefold HSL color saturation',()=>{
+test('central baseline engine message plants have threefold HSL color saturation',()=>{
  assert.equal(PLANT_SATURATION_MULTIPLIER,3);
  for(const original of ['#B2D8D8','#E6A8D7','#F08080','#FDFD96']){
   const a=new THREE.Color(original),b=new THREE.Color(saturatedPlantColor(original));

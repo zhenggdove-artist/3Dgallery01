@@ -1,6 +1,6 @@
 
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
-import * as T from 'three';import {animatePlushBear} from '../src/reletter/outfit-model.js';
+import * as T from 'three';import {animatePlushBear} from '../src/engine/outfit-model.js';
 import {createInitialWorld,ensureProfile,applyAction,worldView} from '../src/shared/temple-rules.js';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('artwork prompt offsets are GM-only and separately persisted',()=>{

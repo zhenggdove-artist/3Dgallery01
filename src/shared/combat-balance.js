@@ -30,7 +30,7 @@ export function sniperHitsHead(origin,direction,range,position){
  });
 }
 // Authoritative PvP balance independent from monster HP scaling (Temple uses
-// 100 HP per fighter; RELETTER's monster-scaled weapon numbers are far higher).
+// 100 HP per fighter; earlier engine's monster-scaled weapon numbers are far higher).
 // A clean 100-HP fighter should survive roughly 8–10 ordinary starter hits.
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const MELEE=new Set(['saber','whip','swatter','pan','planter','palm']);

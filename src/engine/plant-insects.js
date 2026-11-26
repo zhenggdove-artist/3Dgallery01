@@ -1,4 +1,4 @@
-// Original RELETTER insect paths and point rendering, with a bounded host population.
+// Original earlier engine insect paths and point rendering, with a bounded host population.
 import * as THREE from 'three';
 export function createPlantInsects(scene){
 const BUG_COLORS=['#FDFD96','#FFB7B2','#B5E2FA','#DDA0DD','#FFA6C9','#88ff88'];

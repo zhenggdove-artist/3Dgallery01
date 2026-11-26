@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {HEADGEAR} from '../src/reletter/headgear-catalog.js';
-import {OUTFITS} from '../src/reletter/outfit-catalog.js';
-import {EQUIPMENT} from '../src/reletter/equipment-catalog.js';
+import {HEADGEAR} from '../src/engine/headgear-catalog.js';
+import {OUTFITS} from '../src/engine/outfit-catalog.js';
+import {EQUIPMENT} from '../src/engine/equipment-catalog.js';
 import {ITEMS,SHOP_ITEMS} from '../src/shared/catalog.js';
 
 const creatures=['elephant','rooster','anteater','guinea-pig','penguin','polar-bear',

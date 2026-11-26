@@ -1,4 +1,4 @@
-import {renderPaintedWing} from './reletter/painted-wing-art.js';
+import {renderPaintedWing} from './engine/painted-wing-art.js';
 import {normalizePaintedWing,wingContours,MAX_WING_CONTOURS} from './shared/custom-wings.js';
 
 // GM-only atelier. Each paint operation is stored in normalized image space.

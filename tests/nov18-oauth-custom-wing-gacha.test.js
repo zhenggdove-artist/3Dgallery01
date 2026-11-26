@@ -5,7 +5,7 @@ import {createInitialWorld,ensureProfile,applyAction,worldView,migrateWorld} fro
 import {registerCustomWings,itemById} from '../src/shared/catalog.js';
 import {normalizePaintedWing} from '../src/shared/custom-wings.js';
 
-import {SWALLOWTAIL_WINGS} from '../src/reletter/wing-catalog.js';
+import {SWALLOWTAIL_WINGS} from '../src/engine/wing-catalog.js';
 const now=10_000_000,actor={key:'gm',name:'Ely',color:'#abcdef',role:'fighter',position:[0,0,10]};
 const draft={name:'Hand-painted Monarch',tier:4,slot:'wings',family:'wings',
  color:'#d5b995',ability:'swift',scaleX:1,scaleY:1,
@@ -59,7 +59,7 @@ test('Google-only Firebase entry and verified server route integration',()=>{
  const index=read('index.html'),ui=read('src/ui.js'),network=read('src/network.js'),
   worker=read('cloudflare/worker.js'),client=read('src/main.js'),
   verifier=read('cloudflare/firebase-auth.js'),firebase=read('src/firebase-login.js'),
-  atlas=read('src/reletter/epic-specimens.js'),painter=read('src/gm-wing-painter.js');
+  atlas=read('src/engine/epic-specimens.js'),painter=read('src/gm-wing-painter.js');
  assert.match(index,/data-google-login/);
  assert.doesNotMatch(index,/data-login-provider="apple"/);
  assert.doesNotMatch(index,/data-login-provider="facebook"/);

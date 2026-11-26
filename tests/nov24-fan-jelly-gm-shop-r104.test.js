@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ITEMS,WEAPONS,SHOP_ITEMS,itemById,attackStats,shopWeaponVariant,inventoryCapacity} from '../src/shared/catalog.js';
 import {pvpShotDamage,JELLYBRELLA_ULTIMATE_DAMAGE_SCALE} from '../src/shared/combat-balance.js';
-import {oddAttackStats} from '../src/reletter/odd-weapons.js';
+import {oddAttackStats} from '../src/engine/odd-weapons.js';
 import {createInitialWorld,ensureProfile,applyAction,migrateWorld} from '../src/shared/temple-rules.js';
 const now=100_000_000;
 const gm={key:'gm-r104',name:'GM',color:'#ffffff',role:'fighter',admin:true,position:[75,0,0]};

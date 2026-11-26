@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createInitialWorld,createProfile,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
 import {itemById} from '../src/shared/catalog.js';
-import {SWALLOWTAIL_WINGS} from '../src/reletter/wing-catalog.js';
+import {SWALLOWTAIL_WINGS} from '../src/engine/wing-catalog.js';
 const T=Date.UTC(2026,10,19,8),admin='gm-verified',player='firebase:wing-test:verified';
 const actor=(key)=>({key,name:key,color:'#aabbcc',role:'fighter',position:[0,0,0]});
 const draft=(name,rate=1)=>({name,drawRatePct:rate,tier:4,color:'#d9b389',
@@ -68,7 +68,7 @@ test('fourteen material designs have deterministic motifs and epic detail indepe
 });
 test('authentic native rays, floating +1 and separate secure payment remain wired',()=>{
  const fx=read('src/weapon-vfx.js'),vendor=read('src/numbered-weapon-effects.js');
- const ui=read('src/ui.js'),main=read('src/main.js'),numbers=read('src/reletter/damage-numbers.js');
+ const ui=read('src/ui.js'),main=read('src/main.js'),numbers=read('src/engine/damage-numbers.js');
  assert.doesNotMatch(fx,/new ForwardChannelBeam\(this.scene,false\)/,'old four-ray Prism overlay removed');
  assert.match(vendor,/entry\.lockedPoint\.clone\(\)/,'one authentic guided native beam remains');
  assert.match(fx,/this\.numberedEffects\.play/);

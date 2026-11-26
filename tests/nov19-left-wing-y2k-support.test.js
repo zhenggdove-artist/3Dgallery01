@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {wingTextureScaleX} from '../src/reletter/swallowtail-art.js';
+import {wingTextureScaleX} from '../src/engine/swallowtail-art.js';
 
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 
@@ -13,7 +13,7 @@ test('GM hand-painted canvas is mapped to actual left side; right is mirrored',(
  assert.equal(wingTextureScaleX(-1,original),-1,'do not change old Papilio left wing');
  assert.equal(wingTextureScaleX(1,original),1,'do not change old Papilio right wing');
  assert.throws(()=>wingTextureScaleX(0,custom),RangeError);
- const art=read('src/reletter/swallowtail-art.js');
+ const art=read('src/engine/swallowtail-art.js');
  assert.match(art,/face\.scale\.x=wingTextureScaleX\(side,item\)/);
  assert.match(art,/wingSide=side<0\?'left':'right'/);
  const painter=read('src/gm-wing-painter.js');

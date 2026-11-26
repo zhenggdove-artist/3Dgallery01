@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import * as T from 'three';
-import {softPorkGeometry,streetMotionStep,buildStreetOutfit,animateStreetOutfit} from '../src/reletter/street-outfits.js';
+import {softPorkGeometry,streetMotionStep,buildStreetOutfit,animateStreetOutfit} from '../src/engine/street-outfits.js';
 import {itemById,SHOP_ITEMS,shopPurchaseVariant} from '../src/shared/catalog.js';
 test('street outfits are real purchasable wearable definitions',()=>{for(const [name,height] of [['ggcola',2],['bei7-road',3],['traffic-light',1.6],['taipower-box',1.7]]){const i=itemById('outfit-'+name+'-disguise');assert.equal(i.disguiseHeight,height);assert.equal(i.exposedHead,true);assert.ok(SHOP_ITEMS.includes(i));assert.ok(shopPurchaseVariant(i.id).price>0);}});
 test('pork mesh has organic rounded irregular surfaces',()=>{const g=softPorkGeometry(T,1),a=g.attributes.position;assert.ok(a.count>80);const radii=[];for(let i=0;i<a.count;i++)radii.push(Math.hypot(a.getX(i),a.getY(i),a.getZ(i)));assert.ok(Math.max(...radii)-Math.min(...radii)>.15);assert.equal(g.attributes.normal.count,a.count);g.dispose();});

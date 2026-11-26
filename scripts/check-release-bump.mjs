@@ -9,7 +9,7 @@ const changed=execFileSync('git',['diff','--name-only',parent,'HEAD'],{encoding:
  .split(/\r?\n/).filter(Boolean);
 const gameplay=changed.some(p=>
  /^src\/.*\.js$/.test(p)||/^cloudflare\/.*\.(?:js|mjs)$/.test(p)||
- /^(?:styles|fidelity-ui|gun|wall-paint|wing-atelier|sketch-hud|reletter-theme)\.css$/.test(p));
+ /^(?:styles|fidelity-ui|gun|wall-paint|wing-atelier|sketch-hud|engine-theme)\.css$/.test(p));
 if(!gameplay){console.log('Release guard: no gameplay, Worker or linked CSS changes');process.exit(0);}
 const old=execFileSync('git',['show',parent+':index.html'],{encoding:'utf8'});
 const current=readFileSync('index.html','utf8');

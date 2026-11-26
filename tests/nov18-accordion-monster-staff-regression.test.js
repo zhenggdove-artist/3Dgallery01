@@ -5,7 +5,7 @@ import {itemById,attackStats} from '../src/shared/catalog.js';
 import {weaponClass} from '../src/shared/weapon-info.js';
 import {normalMeleeFootprint} from '../src/shared/melee-contact.js';
 import {createInitialWorld,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
-import {animateIslandModel} from '../src/reletter/island-actors.js';
+import {animateIslandModel} from '../src/engine/island-actors.js';
 import {IslandEnemies} from '../src/island-enemies.js';
 import {MonsterAttackEffects} from '../src/monster-attack-effects.js';
 import {STAFF_RAISE_SECONDS,advanceStaffRaise,poseOverheadStaff} from '../src/staff-raise-pose.js';

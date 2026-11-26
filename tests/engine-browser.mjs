@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
-const site='http://127.0.0.1:8000',backend='http://127.0.0.1:8788',output='output/reletter-review';await mkdir(output,{recursive:true});
+const site='http://127.0.0.1:8000',backend='http://127.0.0.1:8788',output='output/engine-review';await mkdir(output,{recursive:true});
 const key=(await readFile('.dev.vars','utf8')).match(/^TEMPLE_ADMIN_KEY=(.+)$/m)?.[1]?.trim();if(!key)throw Error('Local GM test secret missing');
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--ignore-gpu-blocklist']});
 const context=await browser.newContext({viewport:{width:1280,height:800}});await context.addInitScript(url=>localStorage.setItem('temple-backend-url',url),backend);
@@ -30,5 +30,5 @@ try{
  await page.locator('#art-editor [data-action="save"]').click();await page.waitForFunction(()=>!templeTest.editor.dirty&&!templeTest.editor.saving);const saved=await page.evaluate(async()=>{const w=await templeTest.network.world();return w.world.artworkLayout['platform-09'];});assert.ok(Math.abs(saved.rotation[1]-25*Math.PI/180)<.00001);assert.ok(saved.scale[0]>saved.scale[1]);
  await page.keyboard.press('Escape');await page.evaluate(()=>templeTest.controller().followTarget=null);await page.screenshot({path:output+'/garden.png'});
  await page.waitForTimeout(4000);const metrics=await page.evaluate(()=>{const t=templeTest,gl=t.renderer.getContext(),ext=gl.getExtension('WEBGL_debug_renderer_info');return {gpu:ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):'unknown',...Object.fromEntries(Object.entries(t.performanceSamples).map(([k,a])=>[k,{mean:a.reduce((s,x)=>s+x,0)/a.length,p95:[...a].sort((x,y)=>x-y)[Math.floor(a.length*.95)]}]))};});
- const state=JSON.parse(await page.evaluate(()=>render_game_to_text()));await writeFile(output+'/state.json',JSON.stringify({state,saved,metrics,errors},null,2));assert.equal(state.artworks.total,13);assert.deepEqual(errors,[]);console.log('PASS: entry, RELETTER controls, rig, charge, 8 handles, nonuniform scale, rotation and server save',JSON.stringify(metrics));
+ const state=JSON.parse(await page.evaluate(()=>render_game_to_text()));await writeFile(output+'/state.json',JSON.stringify({state,saved,metrics,errors},null,2));assert.equal(state.artworks.total,13);assert.deepEqual(errors,[]);console.log('PASS: entry, Temple controls, rig, charge, 8 handles, nonuniform scale, rotation and server save',JSON.stringify(metrics));
 }finally{await page.evaluate(()=>window.templeTest?.network.close()).catch(()=>{});await context.close();await browser.close();}

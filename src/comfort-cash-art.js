@@ -40,7 +40,7 @@ export function comfortCashImage(item){
  return url;
 }
 
-// World loot is real layered geometry, not the legacy RELETTER staff sprite.
+// World loot is real layered geometry, not the legacy earlier engine staff sprite.
 // One atlas per denomination; geometry/material are instanced for each pile.
 const DROP_PALETTES={
  20:{paper:'#b8e2a7',light:'#eaf4cb',ink:'#235039',dark:'#173b29',edge:'#7eaa70',seal:'#397f48',effect:'HP +30%'},

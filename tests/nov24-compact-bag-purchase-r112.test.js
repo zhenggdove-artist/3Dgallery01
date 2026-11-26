@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as T from 'three';
-import {createHeadgear,disposeHeadgear} from '../src/reletter/headgear-model.js';
+import {createHeadgear,disposeHeadgear} from '../src/engine/headgear-model.js';
 import {itemById} from '../src/shared/catalog.js';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('compact bag has two explicit rows and collapsible sale tools',()=>{

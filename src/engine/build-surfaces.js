@@ -64,4 +64,4 @@ const originalUpdateBuildGhost=updateBuildGhost;updateBuildGhost=function(){orig
 function holeAt(x,z){return (gameView.fishing?.holes||[]).find(h=>Math.hypot(x-h.position[0],z-h.position[2])<h.radius-.08);}
 function recoverFromHole(){const h=holeAt(charRoot.position.x,charRoot.position.z);if(!h||charRoot.position.y> -1.2)return;const angle=Math.atan2(charRoot.position.z-h.position[2],charRoot.position.x-h.position[0]);for(let i=0;i<32;i++){const a=angle+i*Math.PI/16,x=h.position[0]+Math.cos(a)*(h.radius+.65),z=h.position[2]+Math.sin(a)*(h.radius+.65);if(!holeAt(x,z)&&!blockedByBuild(x,z,0)){charRoot.position.set(x,0,z);charVelY=0;isJumping=false;charRoot.userData.fallStartY=0;centerNotice('Back on shore');return;}}}
 
-if(window.reletter_test)reletter_test.surfaces={sync:syncSurfaces,objects:surfaceObjects,cache:surfaceCache,canvas:paintCanvas,target:()=>paintTarget,undo:()=>paintUndo.length,holeAt};
+if(window.templeSurfaceTest)templeSurfaceTest.surfaces={sync:syncSurfaces,objects:surfaceObjects,cache:surfaceCache,canvas:paintCanvas,target:()=>paintTarget,undo:()=>paintUndo.length,holeAt};

@@ -1,4 +1,4 @@
-import {applyWeaponTraits,effectActive} from '../reletter/server/combat-effects.js';
+import {applyWeaponTraits,effectActive} from '../engine/server/combat-effects.js';
 import {originalEquipmentGame} from './fusion-adapter.js';
 export {effectActive};
 export function applyStatus(world,source,target,weapon,shot,now){
@@ -7,7 +7,7 @@ export function applyStatus(world,source,target,weapon,shot,now){
  const resolved={...shot,shooter:source.key,damage:shot.damage/10};
  const previous=Object.fromEntries(Object.entries(target.effects||{}).map(([key,value])=>[key,value.until]));
  applyWeaponTraits(game,{...weapon,damage:weapon.damage/10},resolved,now);
- // RELETTER's old 400ms lightning stun immobilises monsters. Temple's electric
+ // earlier engine's old 400ms lightning stun immobilises monsters. Temple's electric
  // effect MUST block attacks but never movement; replace that new stun.
  if((weapon.family==='lightning'||weapon.element==='electric')&&
     target.effects?.stun?.owner===source.key&&target.effects.stun.until<=now+400)
@@ -28,13 +28,13 @@ export function applyStatus(world,source,target,weapon,shot,now){
  source.hp=Math.min(source.maxHp,source.maxHp-game.hits[source.key]*10);
  if(resolved.knockback)target.impulse={id:now,vector:resolved.knockback};
 }
-// Same original durations/tick schedule; 10x damage converts RELETTER HP to Temple HP.
+// Same original durations/tick schedule; 10x damage converts earlier engine HP to Temple HP.
 export function tickStatus(target,now,deal){let changed=false;for(const [key,e]of Object.entries(target.effects||{})){
  if(['burn','poison','bleed'].includes(key)&&target.hp>0){const ticks=Math.max(0,Math.floor((Math.min(now,e.until)-e.next)/1000)+1);if(ticks){deal(e.owner,e.power*ticks*10);e.next+=ticks*1000;changed=true;}}
  if(now>=e.until){delete target.effects[key];changed=true;}
  }return changed;}
 
-// Independent of the legacy RELETTER traits, so the same status rules apply
+// Independent of the legacy earlier engine traits, so the same status rules apply
 // to both human fighters and enemy actors on server-authorised contact.
 export function applyElementalHit(target,source,weapon,now,scale=1){
  if(!target||target.admin||target.hp<=0||!weapon)return null;

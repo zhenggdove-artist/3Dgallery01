@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import {originalWorldVisuals} from './reletter/world-visuals.js';
-import {disposeGardenModel} from './reletter/garden-art.js';
-import {makePlant} from './reletter/plants.js';
+import {originalWorldVisuals} from './engine/world-visuals.js';
+import {disposeGardenModel} from './engine/garden-art.js';
+import {makePlant} from './engine/plants.js';
 import {itemById,groundDropVisualKind} from './shared/catalog.js';
-import {makeHeldWeapon} from './reletter/held-weapons.js';
+import {makeHeldWeapon} from './engine/held-weapons.js';
 import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
 
 function createVisibleDrop(item,original){
@@ -25,7 +25,7 @@ function createVisibleDrop(item,original){
 export class AdventureView{
  constructor(scene){this.scene=scene;this.original=originalWorldVisuals(scene);this.loot=new Map();this.plants=new Map();this.world=null;this.nextSync=0;}
  // GGTEMPLE never supplies fishing sessions. Keep the original model factory
- // for loot art, but do not tick the inactive RELETTER fishing runtime.
+ // for loot art, but do not tick the inactive earlier engine fishing runtime.
  beforeAnimation(){}
  takeLoot(id,drop=null){let mesh=this.loot.get(id);if(mesh)this.loot.delete(id);else if(drop&&itemById(drop.itemId)){mesh=createVisibleDrop(itemById(drop.itemId),this.original);mesh.position.fromArray(drop.position);mesh.position.y+=mesh.userData.weaponDrop?.95:1.2;}return mesh;}
  sync(world){this.world=world;const active=new Set((world.groundDrops||[]).map(d=>d.id));for(const [id,mesh] of this.loot)if(!active.has(id)){disposeGardenModel(mesh);this.loot.delete(id);}}
@@ -47,7 +47,7 @@ export class AdventureView{
     o.userData.phase=Math.random()*Math.PI*2;this.scene.add(o);return o;});
   }
   for(const o of this.loot.values()){const d=o.userData.drop;o.position.fromArray(d.position);o.position.y+=(o.userData.weaponDrop?.95:1.2)+Math.sin(time*2)*.15;if(o.userData.weaponDrop){o.rotation.y=time*.7;o.rotation.z=Math.sin(time*1.4)*.18;}}
-  // Original RELETTER indexed growth and organic wriggle, not whole-plant scaling.
+  // Original earlier engine indexed growth and organic wriggle, not whole-plant scaling.
   const now=performance.now();
   for(const o of this.plants.values()){const m=o.children[0],t=Math.max(0,Math.min(1,(now-o.userData.growStart)/o.userData.growDur)),ease=t*t*(3-2*t),ph=o.userData.phase;
    // Growth begins below the soil after the WRITE burst: indexed stems unfold

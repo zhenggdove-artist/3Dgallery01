@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {createUltimate,updateUltimate,disposeUltimate,prepareUltimates,ultimateNames} from './reletter/ultimate-effects.js';
+import {createUltimate,updateUltimate,disposeUltimate,prepareUltimates,ultimateNames} from './engine/ultimate-effects.js';
 const pool=new Map();
 const yawAxis=new THREE.Vector3(0,1,0),groundOffset=new THREE.Vector3(),groundInverse=new THREE.Quaternion();
 export const warmUltimates=(renderer,camera)=>prepareUltimates(THREE,renderer,camera);

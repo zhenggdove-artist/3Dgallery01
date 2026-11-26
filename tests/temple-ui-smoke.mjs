@@ -33,7 +33,7 @@ try{
  await page.locator('#hud').waitFor({state:'visible'});
  await page.waitForFunction(()=>window.templeTest?.controller()&&JSON.parse(window.render_game_to_text()).connected);
  // SHOP must display the complete 3D equipment models in the FIRST frame,
- // not Promise URLs, broken images, or the deleted generic RELETTER glyphs.
+ // not Promise URLs, broken images, or the deleted generic earlier engine glyphs.
  await page.evaluate(()=>templeTest.ui.openPanel('shop'));
  await page.waitForFunction(()=>{
   const cards=[...document.querySelectorAll('.shop-grid .shop-cell')];

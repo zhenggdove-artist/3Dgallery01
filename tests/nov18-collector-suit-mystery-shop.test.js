@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {EQUIPMENT} from '../src/reletter/equipment-catalog.js';
-import {RELETTER_ITEMS,SHOP_ITEMS,WEAPONS,isMysteryWeapon} from '../src/shared/catalog.js';
+import {EQUIPMENT} from '../src/engine/equipment-catalog.js';
+import {ENGINE_ITEMS,SHOP_ITEMS,WEAPONS,isMysteryWeapon} from '../src/shared/catalog.js';
 import {createInitialWorld,applyAction,ensureProfile} from '../src/shared/temple-rules.js';
 
 const ranks=[240,620,1450,3300,7600];
@@ -13,7 +13,7 @@ const premiumIds=new Set([
 test('every specified colour/rank is exactly five times its former shop price',()=>{
  assert.equal(premiumIds.size,15);
  for(const original of EQUIPMENT.filter(i=>premiumIds.has(i.id))){
-  const item=RELETTER_ITEMS.find(i=>i.id===original.id);
+  const item=ENGINE_ITEMS.find(i=>i.id===original.id);
   const originalPrice=ranks[Math.max(1,Math.min(5,original.tier||1))-1]+Math.min(180,original.price||0);
   assert.equal(item.price,originalPrice*5,item.id);
   assert.equal(item.mysteryWeapon,true,item.id);
@@ -63,7 +63,7 @@ test('shop places premium weapons only in the exclusive Mystery tab',()=>{
 
 test('Collector retains native skinned player model and transparent purple name',()=>{
  const view=readFileSync(new URL('../src/collector-view.js',import.meta.url),'utf8');
- const outfit=readFileSync(new URL('../src/reletter/outfit-model.js',import.meta.url),'utf8');
+ const outfit=readFileSync(new URL('../src/engine/outfit-model.js',import.meta.url),'utf8');
  assert.match(view,/this\.arena\.createPlayer\(/);
  assert.match(view,/attachOutfit\(THREE,root\.userData\.model,tailoredSuit,\{hood:false\}\)/);
  assert.match(view,/design:'suit'/);

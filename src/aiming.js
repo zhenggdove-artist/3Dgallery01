@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {meleeFamilies} from './reletter/melee-motion.js';
+import {meleeFamilies} from './engine/melee-motion.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
 import {ENEMY_RADIUS,ENEMY_HEIGHT} from './shared/island-combat.js';
 export const AIM_RAISE_PX=30;
@@ -34,7 +34,7 @@ export function raisedBeamDirection(camera,muzzle=null){
  }
  return aimed;
 }
-// RELETTER cameraElevationAim/rangedAim: camera parallax supplies elevation,
+// earlier engine cameraElevationAim/rangedAim: camera parallax supplies elevation,
 // character heading supplies yaw; melee stays level. Only host targets differ.
 export function attackDirection(controller,camera,arena,roots,item,charge,muzzle=null){
  const heading=controller.root.rotation.y;

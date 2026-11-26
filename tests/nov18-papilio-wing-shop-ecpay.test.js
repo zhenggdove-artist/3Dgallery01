@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {SWALLOWTAIL_WINGS,WINGS} from '../src/reletter/wing-catalog.js';
+import {SWALLOWTAIL_WINGS,WINGS} from '../src/engine/wing-catalog.js';
 import {SHOP_ITEMS,groundDropRoll,monsterDropRoll,itemById} from '../src/shared/catalog.js';
 import {createInitialWorld,ensureProfile,applyAction,migrateWorld} from '../src/shared/temple-rules.js';
 import {PRODUCTION_GATEWAY,STAGE_GATEWAY,wingPaymentStatus} from '../cloudflare/ecpay-wing-payments.js';
@@ -52,7 +52,7 @@ test('monster and ground drops never contain any wings; outdated inventories are
  assert.equal(world.profiles.legacy.equipment.wings,null);
 });
 test('SUPPORT is one personal design payment; shop wings show material previews',()=>{
- const ui=read('src/ui.js'),index=read('index.html'),art=read('src/reletter/swallowtail-art.js');
+ const ui=read('src/ui.js'),index=read('index.html'),art=read('src/engine/swallowtail-art.js');
  assert.match(ui,/wings:'Wings'/);
  assert.match(ui,/previewMarkup\(item\)/,'wings use actual pre-rendered models in shop');
  assert.match(ui,/data-wing-checkout/);

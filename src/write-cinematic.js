@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {journeyPose,WRITE_HEIGHT} from './shared/write-journey.js';
 
-// RELETTER's WRITE sequence, ported from the original index.html:
+// earlier engine's WRITE sequence, ported from the original index.html:
 // platform ascent -> write -> animated mouth-absorbed lettering and drink ->
 // automatic edge walk -> fall -> golden 22,000-particle burst -> new plant
 // growth -> orbiting plant reveal. Server records alone are persisted.
@@ -11,7 +11,7 @@ export class WriteCinematic{
  constructor({scene,controller,arena,ui,send,audio,bursts,upload}){
   Object.assign(this,{scene,controller,arena,ui,send,audio,bursts,upload});
   this.disc=new THREE.Mesh(new THREE.CylinderGeometry(9,9,.4,48),new THREE.MeshPhysicalMaterial({color:'#e84887',roughness:.25,metalness:.1,clearcoat:.8}));
-  this.disc.name='RELETTER writing flight disc';this.disc.visible=false;scene.add(this.disc);
+  this.disc.name='Temple writing flight disc';this.disc.visible=false;scene.add(this.disc);
   const material=new THREE.MeshBasicMaterial({color:'#ffe38c',transparent:true,opacity:.65,depthTest:false,depthWrite:false,side:THREE.DoubleSide});
   this.plantHalo=new THREE.Mesh(new THREE.RingGeometry(.55,.68,64),material);
   this.plantHalo.rotation.x=-Math.PI/2;this.plantHalo.visible=false;scene.add(this.plantHalo);

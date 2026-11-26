@@ -1,6 +1,6 @@
 import {tunedEquipment,equipmentTuning,manaCostFromStats} from './equipment-tuning.js';
 import {effectActive} from './combat-status.js';
-import {traitStats} from '../reletter/combat-traits.js';
+import {traitStats} from '../engine/combat-traits.js';
 import {itemById} from './catalog.js';
 import {originalEquipmentGame,equippedItem} from './fusion-adapter.js';
 import {weaponAffixTotals} from './weapon-affixes.js';

@@ -1,4 +1,4 @@
-// Persistent uploads go only to Temple's isolated database, never RELETTER.
+// Persistent uploads go only to Temple's isolated database, never earlier engine.
 export async function uploadMedia(network,file){
  if(!file)return null;let blob=file;
  if(file.type.startsWith('image/')){const bitmap=await createImageBitmap(file),scale=Math.min(1,1024/Math.max(bitmap.width,bitmap.height)),c=document.createElement('canvas');c.width=Math.round(bitmap.width*scale);c.height=Math.round(bitmap.height*scale);c.getContext('2d').drawImage(bitmap,0,0,c.width,c.height);bitmap.close();blob=await new Promise(resolve=>c.toBlob(resolve,'image/webp',.8));}

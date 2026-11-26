@@ -1,4 +1,4 @@
-// Original RELETTER projectile shaders, particles and melee ribbons; scoped host adapter.
+// Original earlier engine projectile shaders, particles and melee ribbons; scoped host adapter.
 import * as THREE from 'three';
 import {equipmentById} from './equipment-catalog.js';
 import {meleeDuration,meleeTrailPattern,meleeMoveNames} from './melee-motion.js';

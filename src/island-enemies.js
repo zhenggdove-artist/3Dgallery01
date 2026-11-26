@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {MonsterAttackEffects} from './monster-attack-effects.js';
-import {islandModel,animateIslandModel} from './reletter/island-actors.js';
-import {createEnemySpellEffect,updateEnemySpellEffect} from './reletter/temple-spell-effects.js';
+import {islandModel,animateIslandModel} from './engine/island-actors.js';
+import {createEnemySpellEffect,updateEnemySpellEffect} from './engine/temple-spell-effects.js';
 import {ISLAND_ENEMIES,ENEMY_HEIGHT,monsterBeamEndpoint} from './shared/island-combat.js';
 import {MONSTER_PACK_SIZE} from './shared/monster-pack.js';
 import {setHealthBar,faceHealthBar} from './health-bars.js';

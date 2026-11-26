@@ -40,7 +40,7 @@ export function orientPortraitModel(model,{precise=true}={}){
  return 'authored';
 }
 
-// RELETTER's render-target portrait approach: one on-demand snapshot, no extra canvas loop.
+// earlier engine's render-target portrait approach: one on-demand snapshot, no extra canvas loop.
 export function equipmentPortrait(renderer,root){
   if(!root)return '';
   // userData contains live mixer/material references: clone only the model hierarchy.

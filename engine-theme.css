@@ -1,8 +1,8 @@
-/* RELETTER's actual GoldenGirdle title font and pastel garden palette. */
+/* earlier engine's actual GoldenGirdle title font and pastel garden palette. */
 :root{--gold:#ae4b92;--muted:#796b86;--line:#c9afce;color-scheme:light}
 body{font-family:Saint,'Trebuchet MS',sans-serif;color:#45344f;background:#f9c8e6}
-.reletter-wordmark,#entry h1{font-family:GoldenGirdle,Saint,sans-serif!important;font-weight:bold!important;letter-spacing:.12em!important;line-height:1.1}
-#loading{background:#f8dced;color:#613a66}#loading .reletter-wordmark{font-size:clamp(32px,10vw,110px)}.loading-track{background:#dcb6d9}.loading-track i{background:#92508c}
+.temple-wordmark,#entry h1{font-family:GoldenGirdle,Saint,sans-serif!important;font-weight:bold!important;letter-spacing:.12em!important;line-height:1.1}
+#loading{background:#f8dced;color:#613a66}#loading .temple-wordmark{font-size:clamp(32px,10vw,110px)}.loading-track{background:#dcb6d9}.loading-track i{background:#92508c}
 #entry{position:fixed;inset:0;transform:none;width:100%;max-width:none;padding:24px;display:grid;place-items:center;background:#008080;color:#111;z-index:50}
 .notepad-window{width:min(540px,calc(100vw - 32px));background:#c0c0c0;padding:3px;box-shadow:inset 1px 1px #fff,inset -1px -1px #000,2px 3px 0 #004c4c;animation:desktop-open .35s ease-out}
 .win98-titlebar{display:flex;justify-content:space-between;align-items:center;padding:4px 5px;background:linear-gradient(90deg,#000080,#1084d0);color:white;font:bold 13px Tahoma,sans-serif}

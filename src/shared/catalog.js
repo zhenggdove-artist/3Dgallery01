@@ -1,4 +1,4 @@
-import {EQUIPMENT,DEFAULT_WEAPON,attackStats as reletterAttackStats} from '../reletter/equipment-catalog.js';
+import {EQUIPMENT,DEFAULT_WEAPON,attackStats as engineAttackStats} from '../engine/equipment-catalog.js';
 import {SNIPER_RANGE,JELLYBRELLA_ULTIMATE_DAMAGE_SCALE} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 export const RARITIES = Object.freeze([
@@ -69,8 +69,8 @@ export const ARMOR = Object.freeze([
 // consumers; the three legacy IDs are no longer in the catalog or inventory.
 export const MATERIALS = Object.freeze([]);
 
-// Original RELETTER identity, range, cadence and effects; only Temple economy/HP scale differ.
-export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(original=>!['chiang-token','fan'].includes(original.id)&&!['seed','harvest'].includes(original.slot)).map(original=>{
+// Original earlier engine identity, range, cadence and effects; only Temple economy/HP scale differ.
+export const ENGINE_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(original=>!['chiang-token','fan'].includes(original.id)&&!['seed','harvest'].includes(original.slot)).map(original=>{
   const tier=Math.max(1,Math.min(5,original.tier||1));
   const basePrice=original.shopWing?original.price:original.notForSale||original.id==='water'?0:TIER_PRICES[tier-1]+Math.min(180,original.price||0);
   const mysteryWeapon=isMysteryWeapon(original);
@@ -79,7 +79,7 @@ export const RELETTER_ITEMS=Object.freeze([DEFAULT_WEAPON,...EQUIPMENT].filter(o
   const price=original.templePrice??(original.id==='giraffe'?19999:premiumPrice);
   return Object.freeze({...original,...(original.id==='black-cat'?{chargeMs:0,autoCharge:false,description:'Scope-only precision rifle. Single normal shots; lethal verified headshots. No ultimate.'}:{}),price,mysteryWeapon,sell:Math.floor(price*.25),rarity:original.slot==='weapon'?SHOP_WEAPON_GRADES[tier-1].rarity:RARITIES[tier-1].id,damage:original.damage===undefined?undefined:original.damage*10*(original.id==='white-cat'?.5:1),chargeDamage:original.chargeDamage===undefined?undefined:original.chargeDamage*10*(original.id==='white-cat'?.5:1),cooldown:original.id==='white-cat'?Math.max(65,Math.round(original.cooldown*.5)):original.cooldown});
 }));
-export const WEAPONS=Object.freeze(RELETTER_ITEMS.filter(item=>item.slot==='weapon'));
+export const WEAPONS=Object.freeze(ENGINE_ITEMS.filter(item=>item.slot==='weapon'));
  // Exotic weapons must keep their stable canonical IDs: fusion records, held
  // 3D models and skill dispatch all refer to IDs like "telephone" directly.
  // The purchased quality belongs to the unique inventory instance, not its ID.
@@ -122,7 +122,7 @@ export function shopWeaponVariant(item,tier=3){
 export const EQUIPPABLE_SLOTS=Object.freeze(['weapon','head','outfit','shield','wings']);
 export const SPELL_FAMILIES=Object.freeze(['water','ice','fire','lightning','beam','petal','wave']);
 export function attackStats(item,charge=0){
- const result=reletterAttackStats(item,item.id==='black-cat'?0:charge);
+ const result=engineAttackStats(item,item.id==='black-cat'?0:charge);
  // Only the giant swimming fish receives triple damage, never ordinary bubbles.
  if(item.id==='goldfish'&&result.ultimate)result.damage*=3;
  if(item.id==='jellybrella')result.damage*=result.ultimate?JELLYBRELLA_ULTIMATE_DAMAGE_SCALE:.5;
@@ -157,7 +157,7 @@ export const COMFORT_ITEMS=Object.freeze([
  {id:'comfort-dollar-50',name:'Comfort Cash · $50',slot:'consumable',category:'Comfort for the Soul',denomination:50,manaFraction:.50,cooldownMs:2000,price:300,tier:3,rarity:'rare',color:'#64a7db',description:'Give me more!'},
  {id:'comfort-dollar-100',name:'Comfort Cash · $100',slot:'consumable',category:'Comfort for the Soul',denomination:100,healFraction:1,cooldownMs:3000,price:700,tier:5,rarity:'relic',color:'#e36c68',description:'Give me more!'}
 ].map(item=>Object.freeze({...item,sell:Math.floor(item.price*.25)})));
-export const ITEMS = Object.freeze([...RELETTER_ITEMS,...COMFORT_ITEMS]);
+export const ITEMS = Object.freeze([...ENGINE_ITEMS,...COMFORT_ITEMS]);
 const INDEX = new Map([...ITEMS,...ARMOR].map(item=>[item.id,item]));
 const CUSTOM_IDS=new Set();
 // Rehydrate custom GM wings from authoritative room data before equipment lookup.
@@ -236,13 +236,13 @@ export function groundDropRoll(rng=Math.random,excluded={},relisted={}){
  if(kind==='coin')return {kind,amount:20+Math.floor(rng()*41)};
  if(kind==='consumable'){const pool=COMFORT_ITEMS.map((item,i)=>({id:item.id,weight:[45,40,15][i]})).filter(allowed);return pool.length?{kind,itemId:weightedChoice(pool,rng).id}:{kind:'coin',amount:20};}
  const pool=kind==='weapon'?WEAPONS.filter(item=>item.tier>0&&item.tier<=3&&!item.notForSale):
-  RELETTER_ITEMS.filter(item=>['head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier<=3);
+  ENGINE_ITEMS.filter(item=>['head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier<=3);
  const weighted=withRelisted(pool,relisted,kind==='weapon'?['weapon']:['head','outfit','shield','wings']).filter(allowed).map(item=>({...item,weight:item.tier===1?58:item.tier===2?30:12}));
  return weighted.length?{kind,itemId:weightedChoice(weighted,rng).id}:{kind:'coin',amount:20};
 }
 
 export function monsterDropRoll(rng=Math.random,excluded={},relisted={}){
-  const native=RELETTER_ITEMS.filter(item=>['weapon','head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier>0);
+  const native=ENGINE_ITEMS.filter(item=>['weapon','head','outfit','shield'].includes(item.slot)&&!isRetiredHeadgear(item)&&item.tier>0);
   const pool=withRelisted(native,relisted,['weapon','head','outfit','shield','wings','consumable']).filter(item=>!Object.hasOwn(excluded,item.id)).map(item=>({...item,weight:[0,48,29,15,8][item.tier]||2}));
   if(!pool.length)return {kind:'coin',amount:20};
   const item=weightedChoice(pool,rng);return {kind:item.slot==='consumable'?'consumable':'equipment',itemId:item.id};

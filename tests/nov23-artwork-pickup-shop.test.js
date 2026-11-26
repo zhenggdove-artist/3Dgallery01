@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {SHOP_ITEMS,itemById,isMysteryWeapon} from '../src/shared/catalog.js';
-import {weaponRangeClass} from '../src/reletter/odd-weapons.js';
+import {weaponRangeClass} from '../src/engine/odd-weapons.js';
 import {PLATFORMS} from '../src/shared/arena.js';
 import {artworkPickupReach} from '../src/shared/artwork-library.js';
 import {applyAction,createInitialWorld,ensureProfile} from '../src/shared/temple-rules.js';

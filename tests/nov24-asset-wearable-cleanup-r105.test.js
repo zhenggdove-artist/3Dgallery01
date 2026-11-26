@@ -66,7 +66,7 @@ test('retired headgear image directory is absent; live outfit artwork and music 
   else if(/\.(js|css|html|json)$/.test(path))assert.doesNotMatch(readFileSync(path,'utf8'),/art\/headgear\//,path);
  }};
  scan(join(root,'src'));
- const world=readFileSync(join(root,'src','reletter','world-visuals.js'),'utf8');
+ const world=readFileSync(join(root,'src','engine','world-visuals.js'),'utf8');
  assert.match(world,/item.slot==='head'/);
  assert.match(world,/createHeadgear\(THREE,item\)/);
 });

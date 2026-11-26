@@ -55,7 +55,7 @@ test('non-aggro perimeter humanoids pause, walk slowly and stop again',()=>{
  assert.equal(mob.moving,false);
  assert.notDeepEqual(mob.position,[70,0,0]);
  assert.deepEqual(mob.position,before);
- const rig=readFileSync(new URL('../src/reletter/island-actors.js',import.meta.url),'utf8');
+ const rig=readFileSync(new URL('../src/engine/island-actors.js',import.meta.url),'utf8');
  assert.match(rig,/const walking=!b\.leap&&!freezing/);
  assert.doesNotMatch(rig,/b\.patrolling\?'Walk':'Run'/);
  assert.match(rig,/setEffectiveTimeScale/);

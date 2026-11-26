@@ -1,5 +1,5 @@
 import {attackStats} from './catalog.js';
-import {weaponRangeClass} from '../reletter/odd-weapons.js';
+import {weaponRangeClass} from '../engine/odd-weapons.js';
 import {pvpShotDamage,SNIPER_RANGE} from './combat-balance.js';
 import {weaponQuality,forwardCastRadius,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
 import {scaleUltimateFootprint} from './charge-area.js';

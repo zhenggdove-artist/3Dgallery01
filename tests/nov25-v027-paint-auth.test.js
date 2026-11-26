@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import {readFileSync} from 'node:fs';
 import {CityWallPaint} from '../src/city-wall-paint.js';
-import {addEpicDust,animateEpicDust} from '../src/reletter/epic-specimens.js';
+import {addEpicDust,animateEpicDust} from '../src/engine/epic-specimens.js';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('finished paint remains pending across snapshots until acknowledgement',()=>{
  const p=Object.create(CityWallPaint.prototype),stroke={lotId:'lot',wall:'front',clientId:'a',points:[[.1,.2]]},slot={strokes:[],pending:[],preview:stroke,stamp:''};

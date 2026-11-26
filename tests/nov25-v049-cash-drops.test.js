@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {COMFORT_ITEMS,groundDropRoll,groundDropVisualKind,itemById} from '../src/shared/catalog.js';
 import {createInitialWorld,migrateWorld,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
 import {createCashDropGeometry,drawCashDropAtlas,comfortCashImage} from '../src/comfort-cash-art.js';
-import {itemIcon} from '../src/reletter/item-art.js';
+import {itemIcon} from '../src/engine/item-art.js';
 test('all three restorative drops use cash exclusively; fallback cannot display a staff',()=>{
  for(const item of COMFORT_ITEMS){
   for(const kind of ['consumable','equipment','weapon'])assert.equal(groundDropVisualKind({kind,itemId:item.id}),'cash');

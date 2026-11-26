@@ -43,7 +43,7 @@ test('all outfit icons use high-resolution actual character renders and transpar
 });
 
 test('shield hit has a persistent and distinctly saturated red overlay, not faint additive tint alone',()=>{
- const visual=source('src/reletter-presentation.js'),main=source('src/main.js');
+ const visual=source('src/engine-presentation.js'),main=source('src/main.js');
  assert.match(visual,/color:'#ff0030'/);
  assert.match(visual,/blending:THREE.NormalBlending/);
  assert.match(visual,/red\.material\.opacity=flashing\?\.4\+\.59\*blink:0/);

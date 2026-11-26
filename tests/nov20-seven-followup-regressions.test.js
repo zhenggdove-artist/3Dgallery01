@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {readFileSync} from 'node:fs';
-import {createFlexibleGiraffe,animateFlexibleGiraffe} from '../src/reletter/flexible-giraffe.js';
+import {createFlexibleGiraffe,animateFlexibleGiraffe} from '../src/engine/flexible-giraffe.js';
 import {createInitialWorld,ensureProfile,applyAction,tickWorld} from '../src/shared/temple-rules.js';
 import {artworkPosition} from '../src/shared/artwork-flight.js';
 import {itemById} from '../src/shared/catalog.js';
 import {pvpShotDamage} from '../src/shared/combat-balance.js';
 import {cityCollisionCandidates,CITY_LOTS} from '../src/shared/city-layout.js';
-import {meleeDuration} from '../src/reletter/melee-motion.js';
+import {meleeDuration} from '../src/engine/melee-motion.js';
 
 const T=15_230_000;
 const fighter=(key,position)=>({key,name:key,color:'#aaaaaa',position,role:'fighter',admin:false});
@@ -88,7 +88,7 @@ test('all non-saber melee swings recover rapidly and music note particles are vi
   assert.ok(meleeDuration(family,0)<=.28,family+' animation supports quick successive hits');
  }
  for(const id of ['giraffe','accordion','clam'])assert.ok(itemById(id).cooldown<=310);
- const shader=source('src/reletter/odd-weapon-effects.js');
+ const shader=source('src/engine/odd-weapon-effects.js');
  assert.match(shader,/pattern>4\.5&&pattern<5\.5\?17\.:5\./);
  const main=source('src/main.js');
  assert.match(main,/if\(weapon\?\.id==='goldfish'\)\{/);

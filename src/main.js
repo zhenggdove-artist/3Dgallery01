@@ -24,7 +24,7 @@ import {lateralBeamInput,targetOnBeam} from './native-beam-curve.js';
 import {isChannelStaff,isStaffTap,channelInterval,chargeProgress,STAFF_TAP_MAX_MS,CAST_MOVE_FACTOR} from './shared/weapon-abilities.js';
 import {uploadArtwork} from './artwork-upload.js';
 import {VitalModels} from './vital-models.js';
-import {createVHS} from './reletter-vhs.js';
+import {createVHS} from './engine-vhs.js';
 import {TempleArena} from './arena-view.js';
 import {TempleNetwork} from './network.js';
 import {PlayerController} from './player-controller.js';
@@ -44,7 +44,7 @@ import {GunController} from './gun-controller.js';
 import {Minimap} from './minimap.js';
 import {CityWallPainter} from './city-wall-painter.js';
 import {rebaseRejectedPose,shouldIgnoreRejection,keepPredictedMoveOnLatencyReject} from './shared/state-reconciliation.js';
-import {createDamageNumbers} from './reletter/damage-numbers.js';
+import {createDamageNumbers} from './engine/damage-numbers.js';
 
 const canvas=document.getElementById('game'),coarse=matchMedia('(pointer:coarse)').matches,settings=loadEditorSettings();
 // Prevent iOS Safari gesture zoom, long-press selection, and browser callouts

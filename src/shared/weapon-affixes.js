@@ -1,4 +1,4 @@
-// Temple weapon enchantments are independent of the legacy RELETTER affix
+// Temple weapon enchantments are independent of the legacy earlier engine affix
 // IDs. Each physical inventory UID rolls its own persistent 3–15% property.
 // A successful fusion retains the full ordered naming history, but inherits
 // only 30% of each material property's value to keep damage bounded.

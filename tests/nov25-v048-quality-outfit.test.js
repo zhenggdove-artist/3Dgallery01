@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {itemById,SHOP_ITEMS,shopPurchaseVariant} from '../src/shared/catalog.js';
 import {tuningVariant,equipmentTuning,linkedEquipmentTuning,bloomHealRate,applySkillAreaScale,migrateSkillQuality} from '../src/shared/equipment-tuning.js';
-import {teaSloshStep} from '../src/reletter/outfit-model.js';
+import {teaSloshStep} from '../src/engine/outfit-model.js';
 test('all five quality defaults, flower healing and linked changes preserve purple baseline',()=>{
  const w={equipmentTuning:{}};
  for(let tier=1;tier<=5;tier++){

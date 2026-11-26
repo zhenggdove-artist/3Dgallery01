@@ -1,4 +1,4 @@
-import {affixById} from '../reletter/combat-traits.js';
+import {affixById} from '../engine/combat-traits.js';
 import {normalizedWeaponAffixes,weaponAffixById,weaponAffixTotals} from './weapon-affixes.js';
 
 const round=(n,digits=1)=>Number(n.toFixed(digits));

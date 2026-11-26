@@ -4,7 +4,7 @@ import {ITEMS,itemById,shopPrice,shopPurchaseVariant,SHOP_ITEMS} from '../src/sh
 import {createInitialWorld,ensureProfile,applyAction,worldView,migrateWorld} from '../src/shared/temple-rules.js';
 import {appendInventoryInstance} from '../src/shared/fusion-instances.js';
 import * as T from 'three';
-import {createHeadgear,animateHeadgear,disposeHeadgear} from '../src/reletter/headgear-model.js';
+import {createHeadgear,animateHeadgear,disposeHeadgear} from '../src/engine/headgear-model.js';
 const now=130000000,gm={key:'gm',name:'GM',admin:true,role:'fighter',position:[75,0,0]},p={...gm,key:'p',admin:false};
 test('price override is GM-only, per quality, persistent and authoritative for player purchases',()=>{
  const w=createInitialWorld(now);ensureProfile(w,gm.key,gm.name,'#ffffff',now,true);const player=ensureProfile(w,p.key,p.name,'#ffffff',now,false);player.wallet=100000;

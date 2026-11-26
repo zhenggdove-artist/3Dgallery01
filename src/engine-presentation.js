@@ -1,36 +1,36 @@
-import {animateFlightVehicle} from './reletter/flight-vehicle.js';
+import {animateFlightVehicle} from './engine/flight-vehicle.js';
 import * as THREE from 'three';
 import {CITY_OUTER_RADIUS} from './shared/city-layout.js';
 import {WeaponVFX} from './weapon-vfx.js';
 import {createMoonlitSky} from './night-sky.js';
 import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
 import {itemById} from './shared/catalog.js';
-import {makePlant} from './reletter/plants.js';
-import {makeHeldWeapon,attachHeldWeapon,setHeldTime} from './reletter/held-weapons.js';
-import {attachHeadgear,disposeHeadgear,animateHeadgear} from './reletter/headgear-model.js';
-import {attachOutfit,disposeOutfit,animateOutfit} from './reletter/outfit-model.js';
-import {attachWings,disposeGardenModel} from './reletter/garden-art.js';
-import {animateEpicDust} from './reletter/epic-specimens.js';
-import {sampleMeleePose,meleeDuration,meleeFamilies} from './reletter/melee-motion.js';
-import {animateOddWeapon,faceOddWeapon} from './reletter/odd-weapon-art.js';
-import {supportOffhand} from './reletter/offhand-pose.js';
-import {oddWeapon} from './reletter/odd-weapons.js';
+import {makePlant} from './engine/plants.js';
+import {makeHeldWeapon,attachHeldWeapon,setHeldTime} from './engine/held-weapons.js';
+import {attachHeadgear,disposeHeadgear,animateHeadgear} from './engine/headgear-model.js';
+import {attachOutfit,disposeOutfit,animateOutfit} from './engine/outfit-model.js';
+import {attachWings,disposeGardenModel} from './engine/garden-art.js';
+import {animateEpicDust} from './engine/epic-specimens.js';
+import {sampleMeleePose,meleeDuration,meleeFamilies} from './engine/melee-motion.js';
+import {animateOddWeapon,faceOddWeapon} from './engine/odd-weapon-art.js';
+import {supportOffhand} from './engine/offhand-pose.js';
+import {oddWeapon} from './engine/odd-weapons.js';
 import {poseOverheadStaff,advanceStaffRaise} from './staff-raise-pose.js';
 
-export function buildReletterEnvironment(scene,renderer){
+export function buildEngineEnvironment(scene,renderer){
   renderer.toneMappingExposure=1.3;
   scene.background=new THREE.Color('#020516'); // fallback behind the animated nebula dome
   const env=document.createElement('canvas');env.width=256;env.height=128;const ec=env.getContext('2d'),eg=ec.createLinearGradient(0,0,256,0);['#152f64','#385fa0','#749bd5','#ffe7a2','#a7b9d8','#2c578a'].forEach((color,i)=>eg.addColorStop(i/5,color));ec.fillStyle=eg;ec.fillRect(0,0,256,128);ec.globalAlpha=.35;ec.fillStyle='#fff';ec.fillRect(0,0,256,128*.45);const tex=new THREE.CanvasTexture(env);tex.mapping=THREE.EquirectangularReflectionMapping;scene.environment=tex;
   scene.fog=new THREE.FogExp2('#12284d',.0011);scene.add(new THREE.HemisphereLight('#86adff','#15304c',.72));const moonlight=new THREE.DirectionalLight('#ffe2a1',1.05);moonlight.position.set(-32,55,-48);scene.add(moonlight,new THREE.AmbientLight('#8fafff',.35));scene.userData.moonlitSky=createMoonlitSky(scene,renderer);
   const ground=new THREE.Mesh(new THREE.CircleGeometry(CITY_OUTER_RADIUS+1,192),new THREE.MeshStandardMaterial({color:'#2e6658',emissive:'#0c302b',emissiveIntensity:.16,roughness:.92,envMapIntensity:0}));ground.rotation.x=-Math.PI/2;ground.position.y=-.1;ground.name='Grass footprint only — direct nebula edge';scene.add(ground);scene.userData.terrainGround=ground;
   const p=[],colors=[];let seed=12847;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};for(let i=0;i<9000;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand())*65,shade=.35+rand()*.3;p.push(Math.cos(a)*r,rand()*.25,Math.sin(a)*r);colors.push(shade*.45,shade*1.05,shade*.35);}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));scene.add(new THREE.Points(geo,new THREE.PointsMaterial({size:.07,vertexColors:true,transparent:true,opacity:.45,depthWrite:false})));
-  const center=makePlant('TEMPLE RELETTER',{clipBelow:false});center.name='RELETTER message tree';center.scale.multiplyScalar(1.2);scene.add(center);
-  return reletterPlatformMaterial();
+  const center=makePlant('GGTEMPLE',{clipBelow:false,fixedGeometrySeed:2666664333});center.name='Temple message tree';center.scale.multiplyScalar(1.2);scene.add(center);
+  return enginePlatformMaterial();
 }
-export function reletterPlatformMaterial(){return new THREE.MeshPhysicalMaterial({color:'#E84887',roughness:.2,metalness:.1,clearcoat:1,clearcoatRoughness:.15,iridescence:1,iridescenceIOR:1.3,iridescenceThicknessRange:[100,800],specularIntensity:.9,specularColor:new THREE.Color('#FFB0D0'),sheen:.6,sheenColor:new THREE.Color('#FF6B9D'),envMapIntensity:1.4,emissive:'#E84887',emissiveIntensity:.08});}
+export function enginePlatformMaterial(){return new THREE.MeshPhysicalMaterial({color:'#E84887',roughness:.2,metalness:.1,clearcoat:1,clearcoatRoughness:.15,iridescence:1,iridescenceIOR:1.3,iridescenceThicknessRange:[100,800],specularIntensity:.9,specularColor:new THREE.Color('#FFB0D0'),sheen:.6,sheenColor:new THREE.Color('#FF6B9D'),envMapIntensity:1.4,emissive:'#E84887',emissiveIntensity:.08});}
 export function disposeVisual(root){if(!root)return;const geometry=new Set(),materials=new Set();root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry)geometry.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);});geometry.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());root.removeFromParent();}
 
-export class ReletterPresentation{
+export class EnginePresentation{
   removeOdd(f){f.root.removeFromParent();if(!f.root.geometry.userData.sharedOdd)f.root.geometry.dispose();f.root.material.dispose();}
   removeGuardian(f){f.root.removeFromParent();f.root.traverse(o=>{if(o.geometry&&!o.geometry.userData.sharedGuardian)o.geometry.dispose();o.material?.dispose();});}
   constructor(scene){this.scene=scene;this.players=new Set();this.bursts=[];this.ultimates=[];this.restore=[];this.seen=new Set();this.charge=null;this.odd=[];this.guardians=[];this.echoes=[];this.fusionEchoLast=new Map();this.vfx=new WeaponVFX(scene);}

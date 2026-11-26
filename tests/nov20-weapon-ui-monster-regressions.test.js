@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {readFileSync} from 'node:fs';
-import {equipmentById,attackStats} from '../src/reletter/equipment-catalog.js';
-import {weaponRangeClass} from '../src/reletter/odd-weapons.js';
+import {equipmentById,attackStats} from '../src/engine/equipment-catalog.js';
+import {weaponRangeClass} from '../src/engine/odd-weapons.js';
 import {applyElementalHit} from '../src/shared/combat-status.js';
 import {scaleUltimateFootprint,PALM_ULTIMATE_RADIUS_MULTIPLIER,chargedArea,spellFootprint} from '../src/shared/charge-area.js';
 import {CITY_LOTS,CITY_MAX_HP,cityBlocked} from '../src/shared/city-layout.js';
@@ -95,7 +95,7 @@ test('single guided native Prism beam, water surf and colored music notes in act
  assert.match(shader,/float lane=floor\(u\*3\.\)/);
  assert.match(shader,/float crest=pow\(max/);
  assert.match(vfx,/item\.id==='accordion'&&!data\.ultimate/);
- assert.match(source('src/reletter/odd-weapon-effects.js'),/pattern===5\?2400:650/);
+ assert.match(source('src/engine/odd-weapon-effects.js'),/pattern===5\?2400:650/);
 });
 test('green tornado replaces legacy palm binding vines without changing gameplay status',()=>{
  const root=new THREE.Group(),effects=new PlantUltimateEffects(root),item=equipmentById('palm-3');

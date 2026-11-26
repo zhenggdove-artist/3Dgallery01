@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import {normalizePaintedWing,wingContours} from '../src/shared/custom-wings.js';
 import {wingBounds,reflectWingArtwork} from '../src/gm-wing-painter.js';
-import {addEpicDust,animateEpicDust} from '../src/reletter/epic-specimens.js';
+import {addEpicDust,animateEpicDust} from '../src/engine/epic-specimens.js';
 const contours=[{points:[[.1,.1],[.25,.1],[.2,.25]],color:'#f00000',size:4},{points:[[.6,.6],[.9,.6],[.7,.9]],color:'#00f000',size:14},{points:[[.4,.1],[.5,.1],[.45,.2]],color:'#0000f0',size:7}];
 const raw={name:'Three contours',tier:3,color:'#ffffff',abilities:['sparkle'],shape:'freehand',contours,strokes:[],scaleX:1,scaleY:1,impulse:10,gravity:.58,flapMs:300,drawRatePct:0};
 test('all independent contours and per-contour ink survive authoritative round trip',()=>{

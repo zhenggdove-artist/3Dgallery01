@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {PLATFORMS} from '../src/shared/arena.js';
 import {itemById,SHOP_ITEMS,STARTER_LOADOUT} from '../src/shared/catalog.js';
 import {createInitialWorld,createProfile,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
-import {oddVolley,oddAttackStats} from '../src/reletter/odd-weapons.js';
+import {oddVolley,oddAttackStats} from '../src/engine/odd-weapons.js';
 import {recipeFor} from '../src/weapon-particle-effects.js';
 test('display coins are walkable and outside all artwork decks',()=>{
  for(const p of PLATFORMS){

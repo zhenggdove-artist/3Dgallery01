@@ -34,7 +34,7 @@ test('server exposes shield capacity to the player without changing red HP',()=>
  assert.equal(publicState.hp,100);
 });
 test('only an actually absorbed shield hit triggers a whole-shell red flash',()=>{
- const rules=read('src/shared/temple-rules.js'),visual=read('src/reletter-presentation.js'),main=read('src/main.js');
+ const rules=read('src/shared/temple-rules.js'),visual=read('src/engine-presentation.js'),main=read('src/main.js');
  assert.match(rules,/shield\.hitId=id\(\)/);
  assert.match(rules,/shield:clone\(profile\.shield\|\|null\)/);
  assert.match(visual,/uniform float hit/);

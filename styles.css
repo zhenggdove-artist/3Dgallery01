@@ -9,7 +9,7 @@
 @media(max-width:720px),(pointer:coarse){#entry{left:18px;padding:24px}#entry h1{font-size:52px}#identity{top:max(9px,env(safe-area-inset-top));left:9px}#vitals{right:9px;top:max(9px,env(safe-area-inset-top));max-width:52vw;flex-wrap:wrap;justify-content:flex-end;gap:6px}#vitals progress{width:68px}#dock{left:auto;right:10px;transform:none;display:grid;grid-template-columns:repeat(2,52px)}#dock button{width:52px;height:52px}#mobile-stick{display:block}#prompt{bottom:176px}#panel{inset:70px 8px 82px;width:auto}.item-grid{grid-template-columns:1fr}#monster-hud{top:82px;width:70vw}#build-mode{left:8px;right:8px;bottom:140px;transform:none;flex-wrap:wrap;justify-content:center}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-/* RELETTER-style hover/tap plant reading — never requires the E key. */
+/* earlier engine-style hover/tap plant reading — never requires the E key. */
 #plant-hover{position:fixed;z-index:48;max-width:min(340px,calc(100vw - 20px));width:max-content;
   padding:13px 16px;border:1px solid rgba(217,194,145,.62);border-radius:12px;
   background:rgba(14,18,18,.91);color:#f5f0dd;backdrop-filter:blur(13px);

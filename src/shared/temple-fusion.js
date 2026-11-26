@@ -1,7 +1,7 @@
 import {itemById} from './catalog.js';
 import {equippedItem} from './fusion-adapter.js';
 import {ensureFusionIdentity,fusionRecordAt,inventoryIndexFor,projectFusionForInstance,removeInventoryInstance} from './fusion-instances.js';
-import {itemAffixes} from '../reletter/combat-traits.js';
+import {itemAffixes} from '../engine/combat-traits.js';
 import {sniperMaterialStat} from './fusion-balance.js';
 import {mergeWeaponAffixes} from './weapon-affixes.js';
 

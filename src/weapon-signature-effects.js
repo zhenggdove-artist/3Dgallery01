@@ -1,7 +1,7 @@
-import {createFlexibleGiraffe,animateFlexibleGiraffe} from './reletter/flexible-giraffe.js';
+import {createFlexibleGiraffe,animateFlexibleGiraffe} from './engine/flexible-giraffe.js';
 import * as THREE from 'three';
 import {itemById} from './shared/catalog.js';
-import {oddParts} from './reletter/odd-weapon-art.js';
+import {oddParts} from './engine/odd-weapon-art.js';
 import {calicoPellets,CALICO_PELLET_COUNT} from './shared/calico-pellets.js';
 import {GOLDFISH_SWIM_MS} from './shared/weapon-abilities.js';
 import {GOLDFISH_SCHOOL_COUNT,GOLDFISH_SCHOOL_OFFSETS,GOLDFISH_FISH_SCALE,goldfishSchoolPosition} from './shared/goldfish-school.js';

@@ -1,4 +1,4 @@
-// Extracted verbatim from RELETTER index.html; only module boundary added.
+// Extracted verbatim from earlier engine index.html; only module boundary added.
 import * as THREE from 'three';
 let groundClip=null;
 const PASTEL_PINK = ['#FFA6C9','#FFB7B2','#E8A0BF','#FFC8DD','#FFAFCC','#DB7093','#F08080'];
@@ -425,7 +425,7 @@ function buildPlantGeo(allSegs,leaves,flowers,stemCol,leafCol,flowerCol,rng,caps
 function makePlant(text){
   const opts=(arguments.length>1&&arguments[1])?arguments[1]:{};
   const clipBelow=opts.clipBelow!==undefined?opts.clipBelow:true;
-  const seed=hash(text);
+  const seed=opts.fixedGeometrySeed??hash(text);
   const rng=srand(seed);
   let plantType=seed%8;
   // 0-1:tree, 2:fern, 3:mushroom, 4:big flower, 5:vine, 6:coral, 7:cactus

@@ -1,4 +1,4 @@
-import {disposeGardenModel} from './reletter/garden-art.js';
+import {disposeGardenModel} from './engine/garden-art.js';
 import * as THREE from 'three';
 import {GrassField} from './grass-field.js';
 import {OuterCity} from './outer-city.js';
@@ -14,11 +14,11 @@ import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {PLATFORMS,SAFE_ZONE,distance2d} from './shared/arena.js';
 import {itemById,groundDropVisualKind} from './shared/catalog.js';
 import {createCashDropGeometry,cashDropMaterial} from './comfort-cash-art.js';
-import {buildReletterEnvironment,reletterPlatformMaterial,ReletterPresentation,disposeVisual} from './reletter-presentation.js';
+import {buildEngineEnvironment,enginePlatformMaterial,EnginePresentation,disposeVisual} from './engine-presentation.js';
 import {AdventureView} from './adventure-view.js';
 import {IslandEnemies} from './island-enemies.js';
 import {createHeart} from './heart-model.js';
-import {createPlantInsects} from './reletter/plant-insects.js';
+import {createPlantInsects} from './engine/plant-insects.js';
 import artworkDelivery from '../artwork-delivery.json' with {type:'json'};
 import {ARTWORK_DISCS,discGroundHeight} from './shared/artwork-discs.js';
 import {samplePanBlastPosition} from './shared/pan-blast-flight.js';
@@ -34,7 +34,7 @@ export class TempleArena{
   constructor(scene,renderer){
     this.scene=scene;this.renderer=renderer;this.dracoLoader=new DRACOLoader();this.dracoLoader.setDecoderPath('./vendor/three/examples/jsm/libs/draco/');this.loader=new GLTFLoader().setDRACOLoader(this.dracoLoader);this.clock=0;this.world=null;this.players=[];this.dropMeshes=[];
     this.heartDrops=new Map();this.artworks=new Map();this.localArtworkFlights=new Map();this.coinMesh=null;this.dropMesh=null;this.dropIds=[];this.dropCoinFlights=[];this.coinFlights=new Map();this.structureGroup=new THREE.Group();this.structureGroup.name='Persistent structures';scene.add(this.structureGroup);this.plantGroup=new THREE.Group();this.plantGroup.name='Permanent message plants';scene.add(this.plantGroup);
-    this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.collapsingShells=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
+    this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.collapsingShells=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new EnginePresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
   }
   async load(progress=()=>{}){
     progress(.08,'Building arena');await loadSignPortraits();this.buildEnvironment();
@@ -47,7 +47,7 @@ export class TempleArena{
   }
   buildEnvironment(){
     this.insects=createPlantInsects(this.scene);
-    buildReletterEnvironment(this.scene,this.renderer);
+    buildEngineEnvironment(this.scene,this.renderer);
     const rings=new THREE.Mesh(new THREE.RingGeometry(SAFE_ZONE.radius-1,SAFE_ZONE.radius,64),new THREE.MeshBasicMaterial({color:'#b9ac70',transparent:true,opacity:.34,side:THREE.DoubleSide,depthWrite:false}));rings.rotation.x=-Math.PI/2;rings.position.y=.025;this.scene.add(rings);
     this.buildPlatforms();this.buildDust();this.grass=new GrassField(this.scene,{mobile:touch});this.outerCity=new OuterCity(this.scene,{mobile:touch});
     for(let i=0;i<(touch?3:5);i++){const light=new THREE.PointLight('#e6d49a',0,18,2);this.scene.add(light);this.lightPool.push(light);}
@@ -58,7 +58,7 @@ export class TempleArena{
   }
   buildPlatforms(){this.displayPlatforms=new DisplayPlatforms(this);this.displayPlatforms.sync();}
   buildDust(){const count=touch?500:1200,positions=new Float32Array(count*3),seed=new Float32Array(count);for(let i=0;i<count;i++){positions[i*3]=(Math.random()-.5)*100;positions[i*3+1]=Math.random()*22;positions[i*3+2]=(Math.random()-.5)*100;seed[i]=Math.random();}const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('seed',new THREE.BufferAttribute(seed,1));const material=new THREE.PointsMaterial({color:'#d8cfac',size:touch?.025:.035,transparent:true,opacity:.42,depthWrite:false});this.dust=new THREE.Points(geometry,material);this.dust.frustumCulled=false;this.scene.add(this.dust);}
-  createCoinInstances(){let mesh;this.coinAsset.scene.traverse(node=>{if(!mesh&&node.isMesh)mesh=node;});if(!mesh)throw Error('Original RELETTER coin mesh missing');this.coinAsset.scene.updateMatrixWorld(true);const geometry=mesh.geometry.clone().applyMatrix4(mesh.matrixWorld),material=mesh.material.clone();material.side=THREE.DoubleSide;material.metalness=.8;material.roughness=.2;material.emissive.set('#FFD700');material.emissiveIntensity=.3;this.coinMesh=new THREE.InstancedMesh(geometry,material,PLATFORMS.length);this.coinMesh.name='Original RELETTER platform coins';this.coinMesh.frustumCulled=false;this.scene.add(this.coinMesh);}
+  createCoinInstances(){let mesh;this.coinAsset.scene.traverse(node=>{if(!mesh&&node.isMesh)mesh=node;});if(!mesh)throw Error('Temple coin mesh missing');this.coinAsset.scene.updateMatrixWorld(true);const geometry=mesh.geometry.clone().applyMatrix4(mesh.matrixWorld),material=mesh.material.clone();material.side=THREE.DoubleSide;material.metalness=.8;material.roughness=.2;material.emissive.set('#FFD700');material.emissiveIntensity=.3;this.coinMesh=new THREE.InstancedMesh(geometry,material,PLATFORMS.length);this.coinMesh.name='Temple platform coins';this.coinMesh.frustumCulled=false;this.scene.add(this.coinMesh);}
   async loadArtworks(records,onProgress){
     const selected=records.slice(0,PLATFORMS.length);if(selected.length!==13)throw Error(`Expected 13 artworks, found ${selected.length}`);let complete=0;
     const loadOne=async(record,index)=>{const platform=PLATFORMS[index],root=new THREE.Group();root.name=`Artwork ${record.title}`;root.userData={platformId:platform.id,record,base:platform.artPosition};
@@ -230,7 +230,7 @@ export class TempleArena{
   sync(world,players=[]){
   const previous=this.syncedWorld;
   this.syncedWorld=world;this.world=world;this.players=players;
-  // RELETTER coin collection: *every* disappearing coin, whether on a disc
+  // earlier engine coin collection: *every* disappearing coin, whether on a disc
   // or dropped by a monster/player, spins upward and diminishes for .8 sec.
   if(previous?.coins!==world.coins)for(const p of PLATFORMS){
    if(previous?.coins?.[p.id]?.available&&!world.coins?.[p.id]?.available&&!this.coinFlights.has(p.id))

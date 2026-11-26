@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
 import {SHOP_ITEMS,shopWeaponGroups,shopPurchaseVariant,SHOP_CATALOG_REVISION} from '../src/shared/catalog.js';
-import {createFlightVehicle,animateFlightVehicle} from '../src/reletter/flight-vehicle.js';
+import {createFlightVehicle,animateFlightVehicle} from '../src/engine/flight-vehicle.js';
 const ids=['wings-42','wings-43','wings-44','outfit-tin-pipe-disguise','outfit-luroufan-sign-disguise','outfit-bubble-tea-disguise','outfit-fried-chicken-disguise'];
 test('new coin shop wearables exist, sort before older gear and are purchasable',()=>{
  assert.ok(Number(SHOP_CATALOG_REVISION.slice(1))>=117);const groups=shopWeaponGroups(SHOP_ITEMS);const latest=groups.filter(g=>(g.base.shopRelease||0)>121);assert.deepEqual(latest.map(g=>g.base.id).sort(),['outfit-bei7-road-disguise','outfit-ggcola-disguise','outfit-pooh-plush-disguise','outfit-taipower-box-disguise','outfit-traffic-light-disguise']);const first=groups.filter(g=>(g.base.shopRelease||0)<=121).slice(0,11).map(g=>g.base.id);

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-// Shader copied verbatim from RELETTER index.html; only viewport host adapted.
+// Shader copied verbatim from earlier engine index.html; only viewport host adapted.
 const VHSShader={
   uniforms:{
     tDiffuse:{value:null},
@@ -83,7 +83,7 @@ const VHSShader={
 
       gl_FragColor=vec4(col,1.0);
       #include <tonemapping_fragment>
-      // Original RELETTER VHS outputs its display palette directly (no OutputPass).
+      // Original earlier engine VHS outputs its display palette directly (no OutputPass).
     }
   `
 };

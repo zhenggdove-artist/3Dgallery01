@@ -10,7 +10,7 @@ export function bindPlantHover({canvas,camera,arena,controller,ui}){
  let active=null,timer=null,last=0,down=null;
  const stopTimer=()=>{clearTimeout(timer);timer=null;};
  const hide=()=>{if(timer)return;timer=setTimeout(()=>{label.hidden=true;active=null;timer=null;},400);};
- const tree=()=>arena.scene.getObjectByName('RELETTER message tree');
+ const tree=()=>arena.scene.getObjectByName('Temple message tree');
  function pick(e){
   const c=controller();if(!c||ui.panelName)return null;
   const rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return null;
@@ -24,7 +24,7 @@ export function bindPlantHover({canvas,camera,arena,controller,ui}){
   const central=tree();
   if(central&&Math.hypot(c.root.position.x,c.root.position.z)<11&&ray.intersectObject(central,true).length)
    return {entry:null,central:true};
-  // RELETTER-style tap targeting: on mobile, a small plant can be too thin
+  // earlier engine-style tap targeting: on mobile, a small plant can be too thin
   // for an exact ray hit. Select its nearest screen-space silhouette.
   if(e.pointerType==='touch'&&Math.hypot(c.root.position.x,c.root.position.z)<11){
    let best=null,score=68**2;

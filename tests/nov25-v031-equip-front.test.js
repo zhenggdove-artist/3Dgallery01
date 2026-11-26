@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
 import {placeRigidPortraitPart,placeWingPortraitPart,EquipmentPortraitViewport} from '../src/equipment-portrait-view.js';
-import {createFlightVehicle} from '../src/reletter/flight-vehicle.js';
+import {createFlightVehicle} from '../src/engine/flight-vehicle.js';
 import {itemById} from '../src/shared/catalog.js';
 const near=(a,b)=>assert.ok(a.distanceTo(b)<1e-6,JSON.stringify([a.toArray(),b.toArray()]));
 test('sign preserves face +Z, height +Y and head aperture through live yaw, tilt and model scale',()=>{

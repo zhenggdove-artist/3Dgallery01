@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {advanceIslandEnemy,monsterSkillContains,MONSTER_SKILLS} from '../src/shared/island-combat.js';
 import {createInitialWorld,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
-import {ReletterPresentation} from '../src/reletter-presentation.js';
+import {EnginePresentation} from '../src/engine-presentation.js';
 import {itemById} from '../src/shared/catalog.js';
 import {attackDirection,crosshairNdc} from '../src/aiming.js';
 
@@ -68,7 +68,7 @@ test('continuous staff fusion produces three simultaneous native VFX streams and
  assert.deepEqual(event.fusionEchoes.map(e=>e.weapon),['frost-1','storm-1']);
  assert.ok(event.fusionEchoes.every(e=>e.channel&&e.fusionEcho));
  const scene=new THREE.Scene(),root=new THREE.Group();scene.add(root);
- const presentation=new ReletterPresentation(scene);
+ const presentation=new EnginePresentation(scene);
  presentation.play(event,root);
  const originals=presentation.vfx.numberedEffects;
  assert.deepEqual(originals.active.map(e=>e.spec.number).sort((a,b)=>a-b),[8,73]);

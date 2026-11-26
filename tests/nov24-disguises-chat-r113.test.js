@@ -5,7 +5,7 @@ import * as T from 'three';
 import {readFileSync} from 'node:fs';
 import {itemById,SHOP_ITEMS} from '../src/shared/catalog.js';
 import {createInitialWorld,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
-import {createHeadgear,disposeHeadgear} from '../src/reletter/headgear-model.js';
+import {createHeadgear,disposeHeadgear} from '../src/engine/headgear-model.js';
 test('all nine new wearables have unique stable shop IDs and correct slots',()=>{
  const ids=['hat-xi-mask','hat-putin-mask','hat-kim-mask','outfit-chimney-disguise','outfit-cardboard-disguise','outfit-garbage-bag-disguise','outfit-trash-can-disguise','outfit-postbox-disguise','outfit-wooden-horse-disguise'];
  const now=135000000,actor={key:'r113-shop',name:'Buyer',color:'#ffffff',role:'fighter',position:[75,0,0]};

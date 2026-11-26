@@ -1,4 +1,4 @@
-import {SWALLOWTAIL_WINGS} from '../reletter/wing-catalog.js';
+import {SWALLOWTAIL_WINGS} from '../engine/wing-catalog.js';
 import {wingDrawRatePercent,totalCustomWingRates} from './custom-wings.js';
 
 // Public Google accounts get five lifetime free trial draws. The server owns

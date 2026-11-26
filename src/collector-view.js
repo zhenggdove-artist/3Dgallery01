@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {COLLECTOR_RADIUS} from './shared/collector.js';
-import {attachOutfit} from './reletter/outfit-model.js';
+import {attachOutfit} from './engine/outfit-model.js';
 
 // Visual enlargement only: the server's Collector trade/defence radius is unchanged.
 const COLLECTOR_VISUAL_SCALE=2;

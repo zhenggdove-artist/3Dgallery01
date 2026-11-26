@@ -17,7 +17,7 @@ import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,it
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,SIGN_HP,citySignSpecs,structureSignSpecs,signPaintWall,signPaintAvailable,signPaintPoint,structurePaintLot,signWorldPosition,signRayDistance,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp,cityFacadeFloor} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
-import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
+import {ORIGINAL_ACTIONS,originalAction,originalView} from './engine-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
 import {playerStats,refreshStats,refreshMana,manaCapacity,ultimateManaCost} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
@@ -34,7 +34,7 @@ import {weaponAffixTotals} from './weapon-affixes.js';
 import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs,sustainedSpellBalance,channelInterval} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS,vortexSegmentDistance} from './vortex-flight.js';
-import {directHitModifiers} from '../reletter/combat-hit-rules.js';
+import {directHitModifiers} from '../engine/combat-hit-rules.js';
 import {insideArtSanctuary} from './arena.js';
 import {replenishHearts} from './heart-pickups.js';
 import {cleanLegacyScene} from './scene-cleanup.js';
@@ -114,7 +114,7 @@ export function migrateWorld(raw,now=Date.now()){
       }
     }
   }
-  // Old RELETTER farming data must not survive the removal of the Garden game mode.
+  // Old earlier engine farming data must not survive the removal of the Garden game mode.
   if(world.reletter?.garden)delete world.reletter.garden;
   world.monster??={active:false,nextSpawnAt:now+ECONOMY.monsterIntervalMs,generation:0};world.monsters??=[];world.audioSettings??={};world.musicVersion??=0;
   world.collector??=initialCollector(now);world.lastCollectorSale??=null;

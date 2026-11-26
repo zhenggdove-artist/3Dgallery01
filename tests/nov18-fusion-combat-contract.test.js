@@ -34,7 +34,7 @@ test('server-authoritative channel fusion echoes are emitted with separate hit l
  assert.match(source,/fx\.echo\?'echo'/);
 });
 test('native VFX always passes through VHS instead of returning early',()=>{
- const source=readFileSync(new URL('../src/reletter-vhs.js',import.meta.url),'utf8');
+ const source=readFileSync(new URL('../src/engine-vhs.js',import.meta.url),'utf8');
  assert.doesNotMatch(source,/fullScreenNative&&!material\.uniforms\.dizzy\.value/);
  assert.match(source,/if\(renderWorld\)renderWorld\(renderer,world,view\)/);
 });

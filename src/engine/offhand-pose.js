@@ -1,4 +1,4 @@
-// Original RELETTER three-iteration offhand IK.
+// Original earlier engine three-iteration offhand IK.
 import * as THREE from 'three';
 const cache=new WeakMap();function fishingBones(model){if(cache.has(model))return cache.get(model);const bones={};model.traverse(o=>{if(o.isBone)bones[o.name.replace(/[^a-z0-9]/gi,'').replace(/^mixamorig\d*/i,'')]=o;});cache.set(model,bones);return bones;}
 export function supportOffhand(model,target,strength){

@@ -17,7 +17,7 @@ try{
  const page=await browser.newPage({viewport:{width:1280,height:720}});
  if(label==='before'){
   const {execFileSync}=await import('node:child_process');
-  const prior=new Set(['src/main.js','src/network.js','src/shared/world-patch.js','src/arena-view.js','src/equipment-portrait-view.js','src/equipment-portrait.js','src/bag-view.js','src/item-preview.js','src/reletter-presentation.js','src/outer-city.js','src/city-ruins-vfx.js','src/ui.js','fidelity-ui.css']);
+  const prior=new Set(['src/main.js','src/network.js','src/shared/world-patch.js','src/arena-view.js','src/equipment-portrait-view.js','src/equipment-portrait.js','src/bag-view.js','src/item-preview.js','src/engine-presentation.js','src/outer-city.js','src/city-ruins-vfx.js','src/ui.js','fidelity-ui.css']);
   await page.route(url=>prior.has(url.pathname.slice(1)),route=>{
    const path=new URL(route.request().url()).pathname.slice(1);
    return route.fulfill({contentType:path.endsWith('.css')?'text/css':'text/javascript',body:execFileSync('git',['show','6b5b729:'+path],{encoding:'utf8'})});

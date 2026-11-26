@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import {makeHeldWeapon} from './reletter/held-weapons.js';
+import {makeHeldWeapon} from './engine/held-weapons.js';
 import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
-import {createHeadgear} from './reletter/headgear-model.js';
-import {attachOutfit,disposeOutfit} from './reletter/outfit-model.js';
+import {createHeadgear} from './engine/headgear-model.js';
+import {attachOutfit,disposeOutfit} from './engine/outfit-model.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {orientPortraitModel} from './equipment-portrait.js';
-import {wingIcon,createWings} from './reletter/garden-art.js';
+import {wingIcon,createWings} from './engine/garden-art.js';
 import {itemById} from './shared/catalog.js';
 import {comfortCashImage} from './comfort-cash-art.js';
 

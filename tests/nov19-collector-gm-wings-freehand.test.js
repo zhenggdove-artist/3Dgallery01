@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createInitialWorld,createProfile,ensureProfile,tickWorld,migrateWorld} from '../src/shared/temple-rules.js';
 import {COLLECTOR_INTERVAL_MS,COLLECTOR_SHOT_DAMAGE,COLLECTOR_REPEAT_LINES} from '../src/shared/collector.js';
 import {ITEMS,isRetiredHeadgear,registerCustomWings} from '../src/shared/catalog.js';
-import {SWALLOWTAIL_WINGS} from '../src/reletter/wing-catalog.js';
+import {SWALLOWTAIL_WINGS} from '../src/engine/wing-catalog.js';
 import {normalizePaintedWing} from '../src/shared/custom-wings.js';
 import {simplifyFreehandOutline} from '../src/gm-wing-painter.js';
 
@@ -111,7 +111,7 @@ test('Collector neon text grows 1.5x and flickers without rerendering textures',
 
 test('GM wing painter starts blank, accepts fully freehand contours and simplifies to server size',()=>{
  const editor=fetchText('src/gm-wing-painter.js');
- const renderer=fetchText('src/reletter/painted-wing-art.js');
+ const renderer=fetchText('src/engine/painted-wing-art.js');
  assert.doesNotMatch(editor,/data-wing-shape/);
  assert.match(editor,/shape:'freehand'/);
  assert.match(editor,/outline:\[\]/);

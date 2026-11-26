@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {createOddEffect,updateOddEffect} from './reletter/odd-weapon-effects.js';
+import {createOddEffect,updateOddEffect} from './engine/odd-weapon-effects.js';
 import {chargedArea} from './shared/charge-area.js';
 import {ElementalCharge} from './elemental-charge.js';
 import {SaberImpact} from './saber-impact.js';
