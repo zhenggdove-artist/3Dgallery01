@@ -60,7 +60,17 @@ export class WeaponVFX{
    }
    await renderer.compileAsync(layeredScene,camera);
    const target=new THREE.WebGLRenderTarget(32,32),prior=renderer.getRenderTarget();
-   try{renderer.setRenderTarget(target);renderer.render(layeredScene,camera);}
+   try{
+    renderer.setRenderTarget(target);renderer.render(layeredScene,camera);
+    // More than two overlapping ice segments reach a fresh material after
+    // the pool is exhausted. Its existing shader then links against the
+    // arena's light/fog variant, not this detached scene's warmup variant.
+    // Pre-link that same offscreen program here without an additional draw.
+    const iceStage=new THREE.Scene();
+    iceStage.add(layered.find(([id])=>id==='ice-shatter')[1].group);
+    try{await renderer.compileAsync(iceStage,camera,this.scene);}
+    catch(error){console.warn('Ice shatter arena program prewarm incomplete',error);}
+   }
    finally{renderer.setRenderTarget(prior);target.dispose();}
   }finally{
    for(const [id,fx] of layered){

@@ -1,3 +1,5 @@
+import {CITY_SIGN_MOUNT_SIGNATURE,CITY_SIGN_MOUNTS} from './city-sign-mounts.js';
+
 // Deterministic city geometry shared by the browser and authoritative Worker.
 // The extension doubles the original sand district's surface area (not its
 // radius) and triples building count per square unit: 72 -> 504 lots.
@@ -324,21 +326,34 @@ export function cityBlocked(x,z,y=0,damage={},radius=.22){
 }
 // Slab intersection with a *solid* rotated rectangular building, including
 // the top/bottom faces. The impact point chooses a damageable component.
+const spanMisses=(a,b,lo,hi)=>(a<lo&&b<lo)||(a>hi&&b>hi);
+function cityRayCanReachSign(lot,x,y,z,dx,dy,dz,limit){
+ // Only blade/roof signs are tested by cityRaycast. Include every mount
+ // option plus its .06 slab padding. Blades stay on the facade (<.44 of
+ // the floor width + offset), and extend forward by at most 1.22 canopy
+ // clearance + 1.512 board depth + .12 gap + .60 extension + .06 padding.
+ const halfX=lot.width/2+Math.abs(lot.offset)+.25,halfZ=lot.depth/2+3.6;
+ const bottom=lot.floors>5?lot.height+.2:-.1,top=lot.height+3;
+ return !spanMisses(x,x+dx*limit,-halfX,halfX)&&
+  !spanMisses(z,z+dz*limit,-halfZ,halfZ)&&!spanMisses(y,y+dy*limit,bottom,top);
+}
 export function cityRaycast(origin,direction,range,damage={}){
  if(!Array.isArray(origin)||!Array.isArray(direction)||range<=0)return null;
  let nearest=null;
  for(const lot of CITY_LOTS){
   const record=damage[lot.id],stage=cityStage(record?.hp??CITY_MAX_HP);
   if(stage===3)continue;
+  const [ox,oz]=cityLocal(lot,origin[0],origin[2]);
+  const c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
+  const d=[direction[0]*c-direction[2]*s,direction[1],direction[0]*s+direction[2]*c];
   // Test protruding signs before the masonry volume. Detached signs cannot be hit again.
-  for(const sign of citySignSpecs(lot)){
+  // A short miss in open space must not invoke the entire cold sign solver.
+  // Keep the original exact slab intersection, order and tie-breaks.
+  if(cityRayCanReachSign(lot,ox,origin[1]-(lot.y||0),oz,...d,Math.min(range,nearest?.distance??range)))for(const sign of citySignSpecs(lot)){
    if((record?.parts?.[sign.id]??SIGN_HP)<=0)continue;
    const distance=signRayDistance(lot,sign,origin,direction,Math.min(range,nearest?.distance??range));
    if(distance!==null&&(!nearest||distance<nearest.distance))nearest={lot,distance,part:sign.id,position:origin.map((v,i)=>v+direction[i]*distance)};
   }
-  const [ox,oz]=cityLocal(lot,origin[0],origin[2]);
-  const c=Math.cos(lot.yaw),s=Math.sin(lot.yaw);
-  const d=[direction[0]*c-direction[2]*s,direction[1],direction[0]*s+direction[2]*c];
   const h=cityRoofHeightAtHp(lot,record?.hp??CITY_MAX_HP,record?.maxHp??CITY_MAX_HP);
   const mins=[-lot.width/2,0,-lot.depth/2],maxs=[lot.width/2,h,lot.depth/2],o=[ox,origin[1],oz];
   let near=0,far=Math.min(range,nearest?.distance??range),hitAxis=2;
@@ -589,8 +604,7 @@ function flatSupports(s,q){
  const floor=signFloor(s,q.y),wall=floor.setback+floor.d/2-.025,rear=q.z-q.depth/2+.025;
  return [-1,1].map(side=>({x:q.x+side*q.width*.31,y:q.y,z:(wall+rear)/2,width:.10,height:.10,depth:Math.max(.08,rear-wall)}));
 }
-function mountOptions(s,sign){
- const list=[];
+function* mountOptions(s,sign){
  if(sign.blade){
   for(const scale of [1,.85,.7,.55,.42])for(const delta of [0,.24,-.24,.48,-.48,.9,-.9,1.5,-1.5])for(const dx of [0,-.12,.12,-.24,.24]){
    const height=sign.height*scale,y=Math.min(s.height-height/2-.05,Math.max(height/2+.08,sign.y+delta));
@@ -598,44 +612,105 @@ function mountOptions(s,sign){
    const floor=signFloor(s,y),x=floor.shift+(sign.x>=0?1:-1)*floor.w*.36+dx*floor.w;
    if(Math.abs(x-floor.shift)>floor.w*.44)continue;
    const q={...sign,x,y,height,z:signFront(s,y,height)+sign.depth/2+.12};
-   q.supports=bladeMount(s,q);list.push(q);
+   q.supports=bladeMount(s,q);yield q;
   }
  }else if(sign.id.startsWith('sign-roof-')){
   for(const scale of [1,.85,.7,.55])for(const dz of [0,-.18,-.36,.12])for(const dx of [0,-.18,.18,-.32,.32]){
    const q={...sign,x:sign.x+dx*s.width,z:sign.z+dz*s.depth,width:sign.width*scale};
    if(Math.abs(q.x)+q.width/2>s.width/2-.04||Math.abs(q.z)+q.depth/2>s.depth/2-.04)continue;
-   q.supports=[-1,1].map(side=>({x:q.x+side*q.width*.34,y:s.height+.20,z:q.z,width:.11,height:.36,depth:.14}));list.push(q);
+   q.supports=[-1,1].map(side=>({x:q.x+side*q.width*.34,y:s.height+.20,z:q.z,width:.11,height:.36,depth:.14}));yield q;
   }
  }else{
   for(const scale of [1,.86,.72,.58,.46])for(const delta of [0,-.48,.48,-.95,.95,-1.4])for(const dx of [0,-.12,.12,-.24,.24]){
    const height=sign.height,y=Math.max(height/2+.05,Math.min(s.height+.25,sign.y+delta));
    const q={...sign,x:sign.x+dx*s.width,y,width:sign.width*scale,z:signFront(s,y,height)+sign.depth/2+.12};
    if(Math.abs(q.x)+q.width/2>s.width/2-.03)continue;
-   q.supports=flatSupports(s,q);list.push(q);
+   q.supports=flatSupports(s,q);yield q;
   }
  }
- return list;
 }
 function decorateSign(sign,style,font,saturation,seed){
  return {...sign,style,font,saturation,seed};
 }
 const globalCitySigns=new Map(),globalCityFlats=new Map();
+const CITY_MOUNT_IDS=['sign','sign-roof-0','sign-blade-0','sign-blade-1'];
 let citySignsReady=false;
 function ensureCitySignLayout(){
  if(citySignsReady)return;
- const accepted=[],grid=new Map(),size=12;
+ const grid=new Map(),size=12;
  const cells=(lot,sign)=>{const p=signWorldPosition(lot,sign),r=Math.hypot(sign.width,sign.depth)/2+3,keys=[];for(let x=Math.floor((p[0]-r)/size);x<=Math.floor((p[0]+r)/size);x++)for(let z=Math.floor((p[2]-r)/size);z<=Math.floor((p[2]+r)/size);z++)keys.push(x+','+z);return keys;};
- const add=(lot,sign)=>{const e={lot,sign};accepted.push(e);for(const key of cells(lot,sign)){const cell=grid.get(key)||[];cell.push(e);grid.set(key,cell);}};
- const clear=(lot,sign)=>{if(!citySignClear(lot,sign))return false;const nearby=new Set(cells(lot,sign).flatMap(k=>grid.get(k)||[]));return ![...nearby].some(e=>signAssembliesOverlap(lot,sign,e.lot,e.sign));};
- const choose=(lot,s)=>{if(!s)return null;for(const candidate of [s,...mountOptions(lot,s)])if(clear(lot,candidate)){add(lot,candidate);return candidate;}return null;};
+ const add=(lot,sign)=>{const e={lot,sign};for(const key of cells(lot,sign)){const cell=grid.get(key)||[];cell.push(e);grid.set(key,cell);}};
+ const clear=(lot,sign,base=false)=>{
+  // The base constructors have already checked these exact immutable
+  // volumes. Alternative mounts still need the original facade test.
+  if(!base&&!citySignClear(lot,sign))return false;
+  const nearby=new Set();
+  for(const key of cells(lot,sign))for(const entry of grid.get(key)||[]){
+   if(nearby.has(entry))continue;
+   nearby.add(entry);
+   if(signAssembliesOverlap(lot,sign,entry.lot,entry.sign))return false;
+  }
+  return true;
+ };
+ const choose=(lot,s)=>{
+  if(!s)return null;
+  if(clear(lot,s,true)){add(lot,s);return s;}
+  // Preserve the first-match order without building every unused mount on
+  // the Worker path to an otherwise unrelated attack's first collision test.
+  for(const candidate of mountOptions(lot,s))if(clear(lot,candidate)){add(lot,candidate);return candidate;}
+  return null;
+ };
  // Preserve main storefronts and rooftop boards first. Blades use remaining space.
  for(const lot of CITY_LOTS){const s=choose(lot,baseCityShopSignSpec(lot));globalCityFlats.set(lot.id,s);}
  for(const lot of CITY_LOTS){const list=[],base=baseCitySignSpecs(lot).find(s=>!s.blade),s=choose(lot,base);if(s)list.push(s);globalCitySigns.set(lot.id,list);}
  for(const lot of CITY_LOTS){const list=globalCitySigns.get(lot.id);for(const base of baseCitySignSpecs(lot).filter(s=>s.blade)){const s=choose(lot,base);if(s)list.push(s);}}
  citySignsReady=true;
 }
-export function cityShopSignSpec(lot){ensureCitySignLayout();return globalCityFlats.get(lot.id)||null;}
-export function citySignSpecs(lot){ensureCitySignLayout();return globalCitySigns.get(lot.id)||[];}
+function* cityMountCandidates(lot,base){
+ if(base){yield base;yield* mountOptions(lot,base);}
+}
+function cityMountBases(lot){
+ const panels=baseCitySignSpecs(lot);
+ return [baseCityShopSignSpec(lot),...CITY_MOUNT_IDS.slice(1).map(id=>panels.find(s=>s.id===id))];
+}
+function ensureCityLotSigns(lot){
+ if(citySignsReady||globalCitySigns.has(lot.id))return;
+ const canonical=CITY_LOTS[lot.index],mounts=CITY_SIGN_MOUNTS[lot.index];
+ if(CITY_LAYOUT_SIGNATURE!==CITY_SIGN_MOUNT_SIGNATURE||canonical?.id!==lot.id||!mounts){ensureCitySignLayout();return;}
+ // The recipe stores only candidate indexes. Build the selected panels and
+ // brackets using the original runtime geometry and the canonical lot, with
+ // no coordinates rounded, serialized, or introduced by the cache.
+ const bases=cityMountBases(canonical),panels=[];
+ for(let i=0;i<mounts.length;i++){
+  const index=mounts[i];
+  if(index===-1){panels.push(null);continue;}
+  let n=0,selected=null;
+  for(const sign of cityMountCandidates(canonical,bases[i]))if(n++===index){selected=sign;break;}
+  if(!selected){ensureCitySignLayout();return;}
+  panels.push(selected);
+ }
+ globalCityFlats.set(lot.id,panels[0]);globalCitySigns.set(lot.id,panels.slice(1).filter(Boolean));
+}
+// Build tooling and tests regenerate the recipe with the exact fallback
+// solver, preserving its placement order and all clearance/overlap checks.
+export function deriveCitySignMounts(){
+ ensureCitySignLayout();
+ return CITY_LOTS.map(lot=>{
+  const chosen=[globalCityFlats.get(lot.id),...globalCitySigns.get(lot.id)];
+  return cityMountBases(lot).map((base,i)=>{
+   const wanted=chosen.find(s=>s?.id===CITY_MOUNT_IDS[i]);
+   if(!wanted)return -1;
+   const encoded=JSON.stringify(wanted);let n=0;
+   for(const candidate of cityMountCandidates(lot,base)){
+    if(JSON.stringify(candidate)===encoded)return n;
+    n++;
+   }
+   throw Error('Unmatched static sign mount: '+lot.id+' '+wanted.id);
+  });
+ });
+}
+export function cityShopSignSpec(lot){ensureCityLotSigns(lot);return globalCityFlats.get(lot.id)||null;}
+export function citySignSpecs(lot){ensureCityLotSigns(lot);return globalCitySigns.get(lot.id)||[];}
 export function citySignLayoutAudit(){
  ensureCitySignLayout();
  const all=CITY_LOTS.flatMap(lot=>[cityShopSignSpec(lot),...citySignSpecs(lot)].filter(Boolean).map(sign=>({lot,sign})));

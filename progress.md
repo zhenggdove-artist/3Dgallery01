@@ -876,3 +876,22 @@ no heart drops, and a monster remaining inside the newly protected art area.
   Reports, CPU profiles and screenshots are under `output/live-hotpaths/`.
   Local tests do not characterize production geographic latency or mobile GPU
   variance; keep the network and rendering measurements separate.
+
+## 2026-11-26 V85 equivalence-only skill performance
+
+- Cold Worker attacks synchronously solved sign mounts for all 504 city lots,
+  even for a short miss. Reject unreachable panels before the exact slab test,
+  and rebuild each needed lot from the unchanged solver's selected mount
+  indexes. Retain the full solver as a fallback and verify the derived table
+  against it. `node scripts/generate-city-sign-mounts.mjs` emits that table.
+- Cold local Durable Objects: compare both an open-space attack and a first
+  attack that damages a building. Check the same ACK, hit part, damage and
+  world-patch-before-attack order (`node tests/v085-worker-first-cast.mjs`).
+- Exact V85 comparison: all 504 layouts, 4,218 rays, 16 custom houses and the
+  ordered combat replay match (`node tests/v085-sign-differential.mjs`).
+- Pre-link the existing ice-shatter scene variant during the existing load.
+  The deterministic VHS comparison checks the actual visible pixels and draw
+  counts of 12 frames: identical, with 10 to 0 in-cast shader compilations.
+- `tests/v085-skill-profile.mjs` exercises Q, charged frost and channeled prism
+  against local Wrangler. Chrome traces and captures are in `output/v085-skill/`.
+  These measurements do not characterize production WAN or every GPU.
