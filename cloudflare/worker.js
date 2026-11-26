@@ -13,6 +13,7 @@ import {SHOP_CATALOG_REVISION,SHOP_CATALOG_IDS} from '../src/shared/catalog.js';
 import {CITY_LAYOUT_SIGNATURE,CITY_BUILDING_COUNT} from '../src/shared/city-layout.js';
 import {changedWorldFields,createWorldPatch} from '../src/shared/world-patch.js';
 import {isRealtimeAction} from '../src/shared/realtime-actions.js';
+import {encodeCombatWorld,forkCombatWorld} from './combat-world-cache.js';
 
 const MUSIC_CHUNK_BYTES=512*1024,MAX_GM_MUSIC_BYTES=7_500_000;
 const ROOM_ID='temple-main-v1',SESSION_MS=24*60*60*1000,SAVE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -61,8 +62,8 @@ export class TempleRoom extends DurableObject{
   readWorld(){return this.readSnapshot??=this.world();}
   // Only payloads committed by this instance are eligible; cold starts and
   // noncombat mutations still go through the full versioned repair path.
-  combatWorld(){return this.committedPayload!=null?JSON.parse(this.committedPayload):this.world();}
-  save(world){this.readSnapshot=null;this.committedPayload=null;const payload=JSON.stringify(world);this.sql.exec('INSERT OR REPLACE INTO world_state VALUES(1,?)',payload);return payload;}
+  combatWorld(){return this.combatStateCache?forkCombatWorld(this.combatStateCache):this.committedPayload!=null?JSON.parse(this.committedPayload):this.world();}
+  save(world,encodedPayload=null){this.readSnapshot=null;this.committedPayload=null;this.combatStateCache=null;const payload=encodedPayload??JSON.stringify(world);this.sql.exec('INSERT OR REPLACE INTO world_state VALUES(1,?)',payload);return payload;}
   session(token){if(!token)return null;return this.sql.exec('SELECT * FROM sessions WHERE id=? AND expires>?',token,Date.now()).toArray()[0]||null;}
   token(request,url){return request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]||url.searchParams.get('token')||'';}
   sockets(){return this.ctx.getWebSockets().filter(ws=>ws.readyState===1&&!this.closed.has(ws));}
@@ -339,9 +340,10 @@ export class TempleRoom extends DurableObject{
     const response={ok:true,...result,...(compact?{worldRevision:world.revision}:
       {world:worldView(world,session.profile_key,Date.now(),['gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate','redeem-wing-design'].includes(body.action))})};
     const responseText=JSON.stringify(response);
+    const encoded=body.action==='attack'?encodeCombatWorld(world,this.combatStateCache):null;
     let committedPayload;
     this.ctx.storage.transactionSync(()=>{
-      committedPayload=this.save(world);
+      committedPayload=this.save(world,encoded?.payload);
       if(['reset-player-artworks','gm-remove-artworks'].includes(body.action)&&Array.isArray(result.removedArtworkMediaIds)){
         for(const mediaId of result.removedArtworkMediaIds){
           this.sql.exec('DELETE FROM art_media_chunks WHERE id=?',mediaId);
@@ -353,7 +355,7 @@ export class TempleRoom extends DurableObject{
     });
     // The committed snapshot is already available; the next movement ACK
     // need not reload and migrate the complete SQLite world again.
-    this.committedPayload=committedPayload;this.readSnapshot=world;
+    this.committedPayload=committedPayload;this.combatStateCache=encoded;this.readSnapshot=world;
     if(result.resetMessages){
       this.sql.exec('DELETE FROM chat_messages');
       // Reset must remove prior messages from *every* connected client's UI.
@@ -566,7 +568,7 @@ export class TempleRoom extends DurableObject{
       try{
        const previous=meta.patch?this.worldBaselines.get(ws):null;
        if(previous?.revision>=world.revision)continue;
-       common??=worldView(world,null,now,false);
+       common??=worldView(world,null,now,false,true);
        if(!profileViews.has(meta.profileKey))profileViews.set(meta.profileKey,worldProfileView(world,meta.profileKey,now));
        const profile=profileViews.get(meta.profileKey),next={...common,profile};
        if(previous){
@@ -639,7 +641,9 @@ export class TempleRoom extends DurableObject{
       role:actor.role,seat:actor.seat,state});
      respawned=true;
     }
-    this.committedPayload=this.save(world);this.readSnapshot=world;
+    const encoded=encodeCombatWorld(world,this.combatStateCache);
+    this.committedPayload=this.save(world,encoded.payload);
+    this.combatStateCache=encoded;this.readSnapshot=world;
     this.broadcastNewDamage(world,previousDamageSequence);
     // Building impacts are authoritative contact events, not scene updates.
     // Send the complete batch before any large world/roster serialization.

@@ -37,6 +37,8 @@ jobs:
       - run: node scripts/check-release-bump.mjs
       - run: npm run check
       - run: npm test
+      - name: Measure authoritative stationary-target and building contact in isolated Worker
+        run: node tests/v093-contact-worker.mjs
       - name: Validate Cloudflare deploy credentials
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

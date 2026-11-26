@@ -61,7 +61,7 @@ test('fragmented structural facades stay solid, synchronized and restore all dam
  assert.match(render,/BoxGeometry\(1,1,1\)/);
  assert.match(render,/createChunks\(lot,stage/);
  assert.match(render,/applyDamageEvent\(event\)/);
- assert.match(render,/syncDamage\(damage=\{\}\)/);
+ assert.match(render,/syncDamage\(damage=\{\},revision=-1\)/);
  assert.match(render,/hidePart\(index,part\)/);
  assert.match(render,/flash\(lot\)/);
  assert.match(render,/eject\(lot,part,point,detached=false\)/);
