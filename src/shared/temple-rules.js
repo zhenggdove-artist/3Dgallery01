@@ -851,8 +851,9 @@ function pickupDrop(world,profile,actor,body,now){
    if(drop.itemId&&profile.inventory.length>=inventoryCapacity(profile))return {error:'Inventory full'};
    if(!near(actor,drop.position,3.2))return {error:'Move closer to the drop'};
   if(drop.owner===actor.key&&now<drop.ownerLockedUntil)return {error:'Drop is still settling'};
-  world.groundDrops.splice(index,1);if(drop.kind==='coin')earn(profile,drop.amount,world);else if(drop.kind==='heart'){if(profile.hp>=profile.maxHp){world.groundDrops.splice(index,0,drop);return {error:'Health is full'};}profile.hp=Math.min(profile.maxHp,profile.hp+(drop.amount||25));}else{addItem(profile,drop.itemId);const item=itemById(drop.itemId);if(item&&EQUIPPABLE_SLOTS.includes(item.slot)&&!profile.equipment[item.slot])selectEquipmentInstance(profile,item.slot,profile.inventory.length-1);}
-  if(drop.itemId){profile.itemOrigins??={};profile.itemOrigins[drop.itemId]='monster';}world.pickupReceipts??=[];world.pickupReceipts.push({id:drop.id,time:now});if(world.pickupReceipts.length>64)world.pickupReceipts.shift();world.activity.itemsClaimed++;return {notice:drop.kind==='coin'?`+${drop.amount} coins`:drop.kind==='heart'?'Health restored':`Picked up ${itemById(drop.itemId)?.name}`};
+  const wasFullHeart=drop.kind==='heart'&&profile.hp>=profile.maxHp;
+  world.groundDrops.splice(index,1);if(drop.kind==='coin')earn(profile,drop.amount,world);else if(drop.kind==='heart'){profile.hp=Math.min(profile.maxHp,profile.hp+(drop.amount||25));}else{addItem(profile,drop.itemId);const item=itemById(drop.itemId);if(item&&EQUIPPABLE_SLOTS.includes(item.slot)&&!profile.equipment[item.slot])selectEquipmentInstance(profile,item.slot,profile.inventory.length-1);}
+  if(drop.itemId){profile.itemOrigins??={};profile.itemOrigins[drop.itemId]='monster';}world.pickupReceipts??=[];world.pickupReceipts.push({id:drop.id,time:now});if(world.pickupReceipts.length>64)world.pickupReceipts.shift();world.activity.itemsClaimed++;return wasFullHeart?{}:{notice:drop.kind==='coin'?`+${drop.amount} coins`:drop.kind==='heart'?'Health restored':`Picked up ${itemById(drop.itemId)?.name}`};
 }
 
 function pickupArtwork(world,actor,body,now){
@@ -943,24 +944,21 @@ function useConsumable(world,profile,actor,body,now){
  profile.restorativeCooldowns??={health:0,mana:0};
  refreshMana(profile,now,world);
  if(type==='mana'){
-  const restored=Math.min(profile.maxMana-profile.mana,Math.ceil(profile.maxMana*item.manaFraction));
-  if(restored<=0)return {error:'Mana is already full'};
+  const restored=Math.max(0,Math.min(profile.maxMana-profile.mana,Math.ceil(profile.maxMana*item.manaFraction)));
   removeInventoryInstance(profile,inventoryIndex);profile.mana+=restored;profile.restorativeCooldowns.mana=now+(item.cooldownMs??2000);
   recordTempleDamage(world,{amount:restored,kind:'mana-heal',position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],owner:profile.key,target:profile.key},now);
-  return {notice:'Restored '+Math.round(restored)+' MP',restoredMana:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
+  return {...(restored>0?{notice:'Restored '+Math.round(restored)+' MP'}:{}),restoredMana:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
  }
- if(profile.hp>=profile.maxHp)return {error:'Health is already full'};
  const hpBefore=profile.hp;
  // A healing percentage is measured against CURRENT maximum HP, not coins
  // or the untrusted client-provided HP value.
- const restored=Math.min(profile.maxHp-hpBefore,Math.ceil(profile.maxHp*item.healFraction));
- if(restored<=0)return {error:'Health is already full'};
+ const restored=Math.max(0,Math.min(profile.maxHp-hpBefore,Math.ceil(profile.maxHp*item.healFraction)));
  removeInventoryInstance(profile,inventoryIndex);
  profile.hp=Math.min(profile.maxHp,hpBefore+restored);profile.restorativeCooldowns.health=now+(item.cooldownMs??2000);
  recordTempleDamage(world,{amount:restored,kind:'heal',
   position:[actor.position[0],actor.position[1]+1.5,actor.position[2]],
   owner:profile.key,target:profile.key},now);
- return {notice:`Restored ${restored} HP · ${item.name}`,
+ return {...(restored>0?{notice:`Restored ${restored} HP · ${item.name}`} :{}),
   healed:restored,remaining:profile.inventory.filter(v=>v===itemId).length,slot:index};
 }
 // Sell physical instances, not the first item with a matching canonical ID.
@@ -1126,21 +1124,29 @@ function attack(world,profile,actor,body,context,now){
     profile.chargeStartedAt=0;
     if(body.phase||Number(body.charge||0)!==0)return {error:'Black Cat supports scoped normal attacks only'};
   }
-  if(body.phase==='channel-start'){
+  const startWithPulse=body.phase==='channel'&&body.startChannelV089===true;
+  if(body.phase==='channel-start'||startWithPulse){
     if(!isChannelStaff(weapon)||weapon.family==='ice')return {error:'This staff casts its ultimate on release'};
     // A staff is silent during a hold. Continuous magic only becomes legal
     // once the ORIGINAL charge request has reached the weapon's full time.
     if(!profile.chargeStartedAt||now-profile.chargeStartedAt<(weapon.chargeMs||1500))
       return {error:'Charge must reach 100% before channeling'};
     // An already-live start retry cannot reset its mana billing state.
-    if(profile.channelWeapon===weapon.id&&isLiveStaffChannel(profile,now,world))return {channeling:true};
-    refreshMana(profile,now,world);
-    if(profile.mana<weaponManaQuote(world,weapon,profile.fusion?.[weapon.id]).initial)return {error:'Not enough mana'};
-    profile.channelWeapon=weapon.id;profile.manaChannelPaid=false;
-    profile.channelStartedAt=profile.chargeStartedAt;
-    profile.lastChannelPulseAt=now;
-    profile.lastBloomHealAt=weapon.family==='petal'?now:0;
-    return {channeling:true};
+    const alreadyLive=profile.channelWeapon===weapon.id&&isLiveStaffChannel(profile,now,world);
+    if(!alreadyLive){
+     if(startWithPulse){
+      if(now-profile.lastAttackAt<channelInterval(weapon))return {error:'Weapon is recovering'};
+      if(!normalDirection(body.direction))return {error:'Invalid attack direction'};
+      if(!resolveCastOrigin(actor.position,body.origin,{strict:body.castPoseV081===true,legacyMuzzle:true}))return {error:'Attack position changed; aim again'};
+     }
+     refreshMana(profile,now,world);
+     if(profile.mana<weaponManaQuote(world,weapon,profile.fusion?.[weapon.id]).initial)return {error:'Not enough mana'};
+     profile.channelWeapon=weapon.id;profile.manaChannelPaid=false;
+     profile.channelStartedAt=profile.chargeStartedAt;
+     profile.lastChannelPulseAt=now;
+     profile.lastBloomHealAt=weapon.family==='petal'?now:0;
+    }
+    if(!startWithPulse)return {channeling:true};
   }
 
   const channel=body.phase==='channel';
@@ -1375,7 +1381,7 @@ function attack(world,profile,actor,body,context,now){
   const city=deferredStructures||returningGiraffe||waveVortex||!structuralDamage?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now,weapon.pattern==='scatter',stats.radius);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
- return {structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,
+ return {...(startWithPulse?{channeling:true}:{}),structureHit,structureDestroyed,structureHits,structureDestroyedEvents,attackEvent:{id:id(),...(body.previewInputV089===true&&typeof body.requestId==='string'?{inputId:body.requestId.slice(0,100)}:{}),persistentAttackId,owner:actor.key,origin:goldfishOrigin,direction:goldfishDirection,aimPoint:weapon.firstPerson?origin.map((v,i)=>v+direction[i]*stats.range):null,impactPoint:monsterHit?.position||(hit?.target?(()=>{const p=(context.actors||[]).find(a=>a.key===hit.target)?.position;return p?[p[0],p[1]+1,p[2]]:null;})():null),weapon:weapon.id,family:weapon.family,color:weapon.color,charge,combo,area,
     aimMode:weapon.id==='black-cat'?'scope':null,
     piercing:false,qualityTier:quality.tier,qualityScale:quality.visual,skillRadiusScale:stats.ultimate?(tuning.radiusScale??1):1,qualityDuration:quality.duration,channel,pellets:pellets?.map(p=>p.direction)||null,fusionEffects:weapon.id==='black-cat'?[]:(profile.fusion[weapon.id]?.effects||[]).filter(id=>id!=='black-cat'),fusionEchoes,flightMs:projectileFlightMs(weapon,stats.ultimate,stats.range),...stats,manaCost,time:now},hit,hits,monsterHit,monsterHits:monsterHits.map(x=>x.result)};
 }

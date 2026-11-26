@@ -157,7 +157,9 @@ function startHeldCharge(){
  const quote=weaponManaQuote(world,item,world.profile.fusion?.[item.id]);
  if(Number(world.profile.mana)+1e-6<quote.initial){stopInsufficientCharge();return;}
  const started=performance.now(),hold=attackHoldStarted;
- // Do not render the warning until the server has approved charge.
+ // The same local mana quote permits immediate cosmetic charge progress.
+ // The server still validates charge start, elapsed time, mana and every hit.
+ chargeStarted=started;
  chargeRequest=sendAction('attack',{phase:'charge'},{throwOnError:true}).then(result=>{
   if(result?.charging&&attackHeld&&attackHoldStarted===hold)chargeStarted=started;
   else if(attackHeld&&attackHoldStarted===hold){chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;}
@@ -165,7 +167,7 @@ function startHeldCharge(){
  }).catch(error=>{
   if(attackHeld&&attackHoldStarted===hold){
    if(/not enough mana/i.test(error.message||''))stopInsufficientCharge();
-   else{chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;ui.toast(error.message);}
+   else{chargeStarted=null;chargeRequest=null;nextChargeRetryAt=performance.now()+350;if(!/^Weapon is recovering$/i.test(error.message||''))ui.toast(error.message);}
   }
   return null;
  });
@@ -174,7 +176,7 @@ function startHeldCharge(){
  // Do not wait for a future render frame to request that pulse: slow mobile
  // GPU compilation can starve the rAF-driven transition for several seconds.
  const weapon=currentTunedWeapon();
- if(weapon&&['lightning','beam'].includes(weapon.family))
+ if(isChannelStaff(weapon)&&weapon.family!=='ice')
   scheduleBeamChannelStart((Number(weapon.chargeMs)||1500)+75);
 }
 let staffChannel=null,staffChannelPromise=null,staffChannelBusy=false,staffChannelShotAt=0,staffChannelSerial=0;
@@ -192,13 +194,20 @@ function beginStaffChannel(){
  staffChannelShotAt=-Infinity;
  staffChannelPromise=Promise.resolve(chargeRequest).then(result=>{
   if(!result?.charging||!attackHeld||staffChannel?.serial!==serial)return null;
+  if(network.fastCastV089){
+   staffChannelShotAt=performance.now();
+   return Promise.resolve(performAttack(1,'channel',firstCast,{startChannelV089:true})).catch(error=>{
+    if(/not enough mana/i.test(error.message||'')&&staffChannel?.serial===serial)stopInsufficientCharge();
+    return null;
+   });
+  }
   return sendAction('attack',{phase:'channel-start'});
  }).then(result=>{
   if(result?.channeling&&staffChannel?.serial===serial&&attackHeld){
    staffChannel.ready=true;
    // The player has ALREADY fully charged. Trigger one server-owned effect
    // now rather than rendering another empty frame before the next rAF.
-   if(!staffChannelBusy){
+   if(!result.attackEvent&&!staffChannelBusy){
     staffChannelShotAt=performance.now();
     staffChannelBusy=true;
     void Promise.resolve(performAttack(1,'channel',firstCast)).catch(error=>{if(/not enough mana|channel is not active/i.test(error.message||'')&&staffChannel){staffChannel=null;attackHeld=false;chargeStarted=null;arena.presentation.vfx.stopChannel(localRoot);ui.toast('NOT ENOUGH MANA');void sendAction('attack',{phase:'channel-stop'});}}).finally(()=>{staffChannelBusy=false;});
@@ -605,7 +614,7 @@ ui.addEventListener('attack-start',event=>{
  pendingAInteraction=null;
  if(!artworkThrow.started){
    const nearbyArt=arena.nearest(controller.root.position.toArray());
-  if(nearbyArt?.type==='artwork'||['coin','drop'].includes(nearbyArt?.type))
+  if(nearbyArt?.type==='artwork')
    pendingAInteraction=nearbyArt;
  }
  attackHeld=true;
@@ -995,7 +1004,7 @@ if(localRoot&&profile){if(self.name!==profile.name){self.name=profile.name;ui.se
  wasDead=false;ui.toast('RESPAWNED · WRITE HUB');
 }if(!ui.panelName&&!artEditor.mode&&!writer.active&&!platformDelete.active)controller?.setEnabled(true);ui.death(0);}if(profile&&self)self.profile=profile;}
 
-async function sendAction(action,data={},options={}){const inventoryAction=['buy','sell','sell-bulk','equip','unequip','inspect-item','assign-consumable','swap-inventory','gm-shop-price','gm-shop-delist','gm-equipment-tuning','gm-player-level','gm-wing-canvas'].includes(action);if(!joined||!controller&&!inventoryAction){if(inventoryAction)ui.toast('CONNECT TO TEMPLE FIRST');return null;}try{const result=await network.action(action,data);if(result.purchased){const purchased=itemById(result.purchased.itemId);ui.purchaseNotice(purchased?.name||result.purchased.itemId,result.purchased.quantity);}if(inventoryAction){ui.inventoryActionError='';ui.inventoryActionNotice=result.sold?`SOLD ${result.sold.count} · BAG ${result.sold.remaining}/${result.sold.capacity}`:'';}if(result.world)acceptWorldView(result.world,true);else if(action!=='attack'&&Number.isFinite(result.worldRevision)){const authoritative=network.wireWorld;if(authoritative?.revision>=result.worldRevision){if(queuedWorld?.revision<=authoritative.revision)queuedWorld=null;acceptWorldView(authoritative);}}if(inventoryAction&&['bag','shop','shop-prices'].includes(ui.panelName)){document.activeElement?.blur();if(ui.panelName==='bag'&&['equip','unequip','inspect-item'].includes(action))ui.refreshBagAfterAction();else ui.renderPanel();}if(!result.purchased&&result.notice)ui.toast(result.notice);if(result.resetMessages)ui.clearChat();if(['gm-wing-draw','wing-draw'].includes(action)&&result.wingDraw)ui.showWingDraw(result.wingDraw);if(['gm-wing-remove','gm-wing-set-rate'].includes(action)&&ui.panelName==='wing-manage')ui.renderPanel();if(action==='fuse'&&result.fusion){ui.fusionFeedback(!!result.fusion.success,result.notice);audio.play(result.fusion.success?'fusion-success':'fusion-fail',1);}if(result.attackEvent)showAttack(result.attackEvent);if(result.throwEvent)showThrowPulse(result.throwEvent);if(action==='pickup-coin'||action==='pickup-drop')audio.play('coin');for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))arena.showStructureHit(hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))arena.showStructureBreak(broken);if(result.hit?.defeated)ui.toast(`DEFEATED · ${result.hit.lostCoins} COINS DROPPED`);return result;}catch(error){if(['gm-wing-draw','wing-draw'].includes(action))ui.cancelWingDraw();if(options.throwOnError)throw error;if(action==='fuse')ui.fusionFeedback(false,error.message);if(['buy','sell','sell-bulk','equip'].includes(action)){ui.inventoryActionNotice='';ui.inventoryActionError=String(error.message||'Transaction failed');const status=ui.content.querySelector('[data-inventory-error]');if(status){status.textContent=ui.inventoryActionError;status.hidden=false;}if(action==='buy'&&/item is not sold|invalid weapon quality|unknown action/i.test(ui.inventoryActionError)){void network.request('/health',{auth:false,timeoutMs:5000}).then(health=>{if(health?.features?.wearableCatalog!==SHOP_CATALOG_REVISION){ui.inventoryActionError='SERVER CATALOG OUT OF DATE · '+String(error.message);const node=ui.content.querySelector('[data-inventory-error]');if(node){node.textContent=ui.inventoryActionError;node.hidden=false;}}}).catch(()=>{});}}if((action==='pickup-artwork'||!/^Move closer to (?:the )?(?:artwork|coin|drop)/i.test(error.message||''))&&performance.now()-toastErrorAt>400){toastErrorAt=performance.now();ui.toast(error.message);}return null;}}
+async function sendAction(action,data={},options={}){const inventoryAction=['buy','sell','sell-bulk','equip','unequip','inspect-item','assign-consumable','swap-inventory','gm-shop-price','gm-shop-delist','gm-equipment-tuning','gm-player-level','gm-wing-canvas'].includes(action);if(!joined||!controller&&!inventoryAction){if(inventoryAction)ui.toast('CONNECT TO TEMPLE FIRST');return null;}try{const result=await network.action(action,data);if(result.purchased){const purchased=itemById(result.purchased.itemId);ui.purchaseNotice(purchased?.name||result.purchased.itemId,result.purchased.quantity);}if(inventoryAction){ui.inventoryActionError='';ui.inventoryActionNotice=result.sold?`SOLD ${result.sold.count} · BAG ${result.sold.remaining}/${result.sold.capacity}`:'';}if(result.world)acceptWorldView(result.world,true);else if(action!=='attack'&&Number.isFinite(result.worldRevision)){const authoritative=network.wireWorld;if(authoritative?.revision>=result.worldRevision){if(queuedWorld?.revision<=authoritative.revision)queuedWorld=null;acceptWorldView(authoritative);}}if(inventoryAction&&['bag','shop','shop-prices'].includes(ui.panelName)){document.activeElement?.blur();if(ui.panelName==='bag'&&['equip','unequip','inspect-item'].includes(action))ui.refreshBagAfterAction();else ui.renderPanel();}if(!result.purchased&&result.notice)ui.toast(result.notice);if(result.resetMessages)ui.clearChat();if(['gm-wing-draw','wing-draw'].includes(action)&&result.wingDraw)ui.showWingDraw(result.wingDraw);if(['gm-wing-remove','gm-wing-set-rate'].includes(action)&&ui.panelName==='wing-manage')ui.renderPanel();if(action==='fuse'&&result.fusion){ui.fusionFeedback(!!result.fusion.success,result.notice);audio.play(result.fusion.success?'fusion-success':'fusion-fail',1);}if(result.attackEvent)showAttack(result.attackEvent);if(result.throwEvent)showThrowPulse(result.throwEvent);if(action==='pickup-coin'||action==='pickup-drop')audio.play('coin');for(const hit of result.structureHits||(result.structureHit?[result.structureHit]:[]))arena.showStructureHit(hit);for(const broken of result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[]))arena.showStructureBreak(broken);if(result.hit?.defeated)ui.toast(`DEFEATED · ${result.hit.lostCoins} COINS DROPPED`);return result;}catch(error){if(['gm-wing-draw','wing-draw'].includes(action))ui.cancelWingDraw();if(options.throwOnError)throw error;if(/^Weapon is recovering$/i.test(error.message||''))return null;if(action==='fuse')ui.fusionFeedback(false,error.message);if(['buy','sell','sell-bulk','equip'].includes(action)){ui.inventoryActionNotice='';ui.inventoryActionError=String(error.message||'Transaction failed');const status=ui.content.querySelector('[data-inventory-error]');if(status){status.textContent=ui.inventoryActionError;status.hidden=false;}if(action==='buy'&&/item is not sold|invalid weapon quality|unknown action/i.test(ui.inventoryActionError)){void network.request('/health',{auth:false,timeoutMs:5000}).then(health=>{if(health?.features?.wearableCatalog!==SHOP_CATALOG_REVISION){ui.inventoryActionError='SERVER CATALOG OUT OF DATE · '+String(error.message);const node=ui.content.querySelector('[data-inventory-error]');if(node){node.textContent=ui.inventoryActionError;node.hidden=false;}}}).catch(()=>{});}}if((action==='pickup-artwork'||!/^Move closer to (?:the )?(?:artwork|coin|drop)/i.test(error.message||''))&&performance.now()-toastErrorAt>400){toastErrorAt=performance.now();ui.toast(error.message);}return null;}}
 
 function startBuildPlacement(kind,surface=null,artwork=null){if(self?.role!=='fighter')return ui.toast('SPECTATORS CANNOT BUILD');buildPlacement={kind,surface,artwork,rotation:controller?.root.rotation.y||0,position:controller?.buildPosition(kind==='art-bomb'?3.2:5)||[0,0,0],valid:false};ui.buildKind=kind;document.getElementById('build-kind').textContent=kind==='art-bomb'?'YOUR ARTWORK':kind.toUpperCase();document.getElementById('build-mode').hidden=false;document.activeElement?.blur();if(!writer.active&&!artEditor.mode)controller?.setEnabled(true);ui.toast('MOVE WITH YOUR ARTWORK · R ROTATE · E / PLACE');}
 function rotateBuildPlacement(){if(!buildPlacement)return;buildPlacement.rotation+=Math.PI/4;}
@@ -1024,7 +1033,7 @@ function captureReleasedCast(item,charge){
  return charge>=1&&warned?.weapon===item.id&&performance.now()-warned.at<350
   ?warned:sampleCast(item,charge);
 }
-function performAttack(charge=0,phase=null,captured=null){
+function performAttack(charge=0,phase=null,captured=null,extra={}){
  if(wallPainter.active)return;
  if(controller?.status?.freeze||world?.profile?.effects?.paralysis?.until>Date.now())return;
  if(!controller?.enabled||performance.now()<(controller.stunUntil||0)||self?.role!=='fighter'||ui.panelName)return;
@@ -1037,10 +1046,15 @@ function performAttack(charge=0,phase=null,captured=null){
  const {origin,direction}=sample;
  // A movement sample can be in flight over the socket; the Worker checks
  // this bounded cast origin against its authoritative player position.
- return sendAction('attack',{origin,direction,castPoseV081:true,charge,...(phase?{phase}:{}),
+ const inputId=crypto.randomUUID();
+ const preview=network.fastCastV089&&!phase&&charge===0&&arena.presentation.previewMelee(localRoot,item,inputId);
+ const action=sendAction('attack',{origin,direction,castPoseV081:true,charge,...(phase?{phase}:{}),...extra,
+  ...(preview?{requestId:inputId,previewInputV089:true}:{}),
   ...(item.id==='black-cat'?{
    scoped:gun.mode===2,aimMode:'scope'
   }:{})},{throwOnError:phase==='channel'});
+ if(preview)void action.then(result=>{if(!result?.attackEvent)arena.presentation.cancelMeleePreview(localRoot,inputId);},()=>arena.presentation.cancelMeleePreview(localRoot,inputId));
+ return action;
 }
 function performInteract(target=null){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=target||arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
 
@@ -1073,7 +1087,7 @@ function update(dt,time,movementDt=dt){
     const substeps=Math.max(1,Math.ceil(simulationDt/(1/40)));
     let state;
     for(let step=0;step<substeps;step++)state=controller.update(simulationDt/substeps);
-    if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);const remotePositionAlpha=1-Math.exp(-dt*11),remoteRotationAlpha=1-Math.exp(-dt*12);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,remotePositionAlpha);root.rotation.y=lerpAngle(root.rotation.y,target.rotation,remoteRotationAlpha);arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=hasHeldArtwork(world?.artworks,self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){lastAutoCoinAt=performance.now();const p=localRoot.position;const coin=PLATFORMS.find(c=>!pendingAutoPickups.has('pickup-coin:'+c.id)&&world?.coins?.[c.id]?.available&&(p.x-c.coinPosition[0])**2+(p.z-c.coinPosition[2])**2<2.8**2&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=coin?null:world?.groundDrops?.find(d=>!pendingAutoPickups.has('pickup-drop:'+d.id)&&(p.x-d.position[0])**2+(p.y-d.position[1])**2+(p.z-d.position[2])**2<2.2**2&&(d.kind!=='heart'||world.profile.hp<world.profile.maxHp)&&!(d.owner===self.key&&nowMs<d.ownerLockedUntil));if(coin||drop){if(coin)autoPickup('pickup-coin',coin.id,'platformId');else autoPickup('pickup-drop',drop.id,'dropId');}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
+    if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);const remotePositionAlpha=1-Math.exp(-dt*11),remoteRotationAlpha=1-Math.exp(-dt*12);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,remotePositionAlpha);root.rotation.y=lerpAngle(root.rotation.y,target.rotation,remoteRotationAlpha);arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=hasHeldArtwork(world?.artworks,self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){lastAutoCoinAt=performance.now();const p=localRoot.position;const coin=PLATFORMS.find(c=>!pendingAutoPickups.has('pickup-coin:'+c.id)&&world?.coins?.[c.id]?.available&&(p.x-c.coinPosition[0])**2+(p.z-c.coinPosition[2])**2<2.8**2&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=coin?null:world?.groundDrops?.find(d=>!pendingAutoPickups.has('pickup-drop:'+d.id)&&(p.x-d.position[0])**2+(p.y-d.position[1])**2+(p.z-d.position[2])**2<2.2**2&&!(d.owner===self.key&&nowMs<d.ownerLockedUntil));if(coin||drop){if(coin)autoPickup('pickup-coin',coin.id,'platformId');else autoPickup('pickup-drop',drop.id,'dropId');}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
   platformDelete.update();
   collectorView.update(time,camera);
   statusVisuals.update(dt);
@@ -1161,7 +1175,7 @@ function update(dt,time,movementDt=dt){
    }else lastHealVisualAt=0;
   if(charge>=1&&!isChannelStaff(heldItem)&&heldItem?.autoCharge&&!autoChargeBusy){
    autoChargeBusy=true;const pending=chargeRequest,releaseAim=captureReleasedCast(heldItem,1);chargeStarted=null;
-   Promise.resolve(pending).then(async()=>{await performAttack(1,null,releaseAim);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeRequest=null;startHeldCharge();}}).finally(()=>autoChargeBusy=false);
+   Promise.resolve(pending).then(async result=>{if(!result?.charging)return;await performAttack(1,null,releaseAim);if(attackHeld&&controller?.enabled&&!ui.panelName){chargeRequest=null;startHeldCharge();}}).finally(()=>autoChargeBusy=false);
   }
   arena.presentation.charging(localRoot,charge);
   const chargedWeapon=castingItem;
@@ -1181,7 +1195,7 @@ const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextR
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V087',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ const sample={version:'V089',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
  renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
  // Each pool only releases its own inactive surplus, even if another weapon is busy.
  vfx.trimIdlePools(now);

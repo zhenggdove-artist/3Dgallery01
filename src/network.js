@@ -17,7 +17,7 @@ export class TempleNetwork extends EventTarget{
     super();this.config=config;this.base=String(config.backendUrl||'').replace(/\/$/,'');this.token='';this.socket=null;this.joinData=null;this.reconnectTimer=0;this.reconnectAttempt=0;this.closedByUser=false;this.lastStateAt=0;
     this.stateSequence=0;this.lastAcceptedSequence=0;this.lastCorrectedSequence=0;this.lastAuthorityAt=0;
     this.spawnConfirmed=false;
-    this.sentStates=new Map();this.rejectionCounts={};this.motionDiagnostics=[];this.actionTimings=[];this.combatPending=new Map();this.combatSocketActions=false;this.fastActionsV087=false;
+    this.sentStates=new Map();this.rejectionCounts={};this.motionDiagnostics=[];this.actionTimings=[];this.combatPending=new Map();this.combatSocketActions=false;this.fastActionsV087=false;this.fastCastV089=false;
   }
   setBackend(url){this.base=String(url||'').trim().replace(/\/$/,'');localStorage.setItem('temple-backend-url',this.base);}
   ensureConfigured(){if(!/^https?:\/\//.test(this.base)||this.base.includes('REPLACE_WITH_ACCOUNT'))throw new Error('Temple backend URL has not been deployed yet');}
@@ -49,13 +49,13 @@ export class TempleNetwork extends EventTarget{
   }
   async connect(){
     if(!this.token)throw new Error('Join Temple first');if(this.socket){this.rejectCombatSocket(this.socket);this.socket.onclose=null;this.socket.close();}
-    this.compactCombat=false;this.combatSocketActions=false;this.fastActionsV087=false;
+    this.compactCombat=false;this.combatSocketActions=false;this.fastActionsV087=false;this.fastCastV089=false;
     const url=new URL(this.base);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/socket';url.searchParams.set('token',this.token);url.searchParams.set('patch','2');
     await new Promise((resolve,reject)=>{const socket=new WebSocket(url);this.socket=socket;const timer=setTimeout(()=>{socket.close();reject(new Error('Realtime connection timed out'));},10_000);socket.onopen=()=>{clearTimeout(timer);this.reconnectAttempt=0;this.dispatch('connection',{connected:true});resolve();};socket.onerror=()=>{clearTimeout(timer);reject(new Error('Realtime connection failed'));};socket.onmessage=event=>{if(socket!==this.socket||event.data==='pong')return;try{const message=JSON.parse(event.data);
       if(message.type==='combat-result'){this.resolveCombatSocket(socket,message.data);return;}
       if(message.type==='state-ack')this.acknowledgeState(message.data);
       if(message.type==='state-rejected')this.rejectedState(message.data);
-      if(message.type==='welcome'){this.wireWorld=message.data.world;this.compactCombat=message.data.compactCombat===true;this.combatSocketActions=message.data.combatSocketActions===true;this.fastActionsV087=message.data.fastActionsV087===true;}
+      if(message.type==='welcome'){this.wireWorld=message.data.world;this.compactCombat=message.data.compactCombat===true;this.combatSocketActions=message.data.combatSocketActions===true;this.fastActionsV087=message.data.fastActionsV087===true;this.fastCastV089=message.data.fastCastV089===true;}
       if(message.type==='world'){const wings=mergeWingCatalog(this.wireWorld?.customWings||[],message.data.customWings||[]);this.wireWorld={...message.data,customWings:wings};message.data=this.wireWorld;}
       if(message.type==='wing-catalog'&&this.wireWorld){this.wireWorld={...this.wireWorld,customWings:mergeWingCatalog(this.wireWorld.customWings||[],message.data?.wings||[])};}
       if(message.type==='world-patch'){

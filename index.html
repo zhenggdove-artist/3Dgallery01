@@ -10,18 +10,18 @@
   <title>Temple</title>
   <link rel="icon" href="data:,">
   <link rel="preload" href="./src/reletter/FONTS/Golden%20Girdle.otf" as="font" type="font/otf" crossorigin>
-  <link rel="stylesheet" href="./styles.css?v=20261126-v088-actions-r174">
+  <link rel="stylesheet" href="./styles.css?v=20261126-v089-input-r175">
   <link rel="stylesheet" href="./src/reletter/fonts.css">
   <link rel="stylesheet" href="./reletter-theme.css">
-  <link rel="stylesheet" href="./gun.css?v=20261126-v088-actions-r174">
-  <link rel="stylesheet" href="./sketch-hud.css?v=20261126-v088-actions-r174">
-  <link rel="stylesheet" href="./fidelity-ui.css?v=20261126-v088-actions-r174">
-  <link rel="stylesheet" href="./wing-atelier.css?v=20261126-v088-actions-r174">
-  <link rel="stylesheet" href="./wall-paint.css?v=20261126-v088-actions-r174">
-  <link rel="stylesheet" href="./wanted-list.css?v=20261126-v088-actions-r174">
+  <link rel="stylesheet" href="./gun.css?v=20261126-v089-input-r175">
+  <link rel="stylesheet" href="./sketch-hud.css?v=20261126-v089-input-r175">
+  <link rel="stylesheet" href="./fidelity-ui.css?v=20261126-v089-input-r175">
+  <link rel="stylesheet" href="./wing-atelier.css?v=20261126-v089-input-r175">
+  <link rel="stylesheet" href="./wall-paint.css?v=20261126-v089-input-r175">
+  <link rel="stylesheet" href="./wanted-list.css?v=20261126-v089-input-r175">
   <link rel="preload" href="./temple-assets/character.temple.glb" as="fetch" crossorigin>
   <link rel="preload" href="./temple-assets/coin_small.temple.glb" as="fetch" crossorigin>
-  <script src="./temple-config.js?v=20261126-v088-actions-r174"></script>
+  <script src="./temple-config.js?v=20261126-v089-input-r175"></script>
   <script>
   // One release token for the entire first-party ES-module graph.
   // GitHub Pages and mobile Safari can otherwise mix cached modules from
@@ -30,7 +30,7 @@
     // Stable for one deployment: 15-second URL rotation previously defeated Safari cache
     // and forced every 4G reload to download the whole large module graph.
     // Bump this token when changing the boot graph or deployed JS modules.
-    const release = '20261126-v088-actions-r174';
+    const release = '20261126-v089-input-r175';
     const imports = {
       "three": "./vendor/three/build/three.module.js",
       "three/addons/": "./vendor/three/examples/jsm/"
@@ -44,7 +44,7 @@
   // Import/link failures happen before main.js can enter its boot try/catch.
   (() => {
     let moduleFailure = "";
-    window.templeStartupDiagnostics = {release: "20261126-v088-actions-r174", failures: []};
+    window.templeStartupDiagnostics = {release: "20261126-v089-input-r175", failures: []};
     function displayFailure(message) {
       if (!message || document.body?.classList.contains("ready")) return;
       // Do not replace the original module/import error with a later timeout.
@@ -129,7 +129,7 @@
       </form>
       </div>
     </section>
-    <span id="entry-version" aria-label="Game version V088" style="position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));font:12px/1 monospace;color:#fff;pointer-events:none;z-index:2">V088</span>
+    <span id="entry-version" aria-label="Game version V089" style="position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));font:12px/1 monospace;color:#fff;pointer-events:none;z-index:2">V089</span>
   </main>
 
   <section id="hud" hidden>

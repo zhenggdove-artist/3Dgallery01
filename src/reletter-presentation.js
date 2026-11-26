@@ -43,7 +43,7 @@ export class ReletterPresentation{
     if(next.every((value,i)=>value===last[i]))return;
     if(next[0]!==last[0]){
      const weapon=itemById(equipment.weapon);
-     if(d.blade)disposeVisual(d.blade);d.blade=null;if(weapon&&(weapon.exotic||weapon.id==='chiang-token'||meleeFamilies.includes(weapon.family)||isSpellWeapon(weapon))){d.blade=isSpellWeapon(weapon)?makeSpellEquipment(weapon):makeHeldWeapon(weapon);d.blade.scale.multiplyScalar(.30);d.blade.userData.heldScale=.30;root.add(d.blade);}d.weaponId=weapon?.id;d.staffRaise=0;
+     if(d.blade)disposeVisual(d.blade);d.blade=null;if(weapon&&(weapon.exotic||weapon.id==='chiang-token'||meleeFamilies.includes(weapon.family)||isSpellWeapon(weapon))){d.blade=isSpellWeapon(weapon)?makeSpellEquipment(weapon):makeHeldWeapon(weapon);d.blade.scale.multiplyScalar(.30);d.blade.userData.heldScale=.30;root.add(d.blade);}d.weaponId=weapon?.id;d.staffRaise=0;d.localSwing=null;
     }
     if(next[1]!==last[1]){
      if(d.headgear)disposeHeadgear(d.headgear);d.headgear=equipment.head?attachHeadgear(THREE,d.model,itemById(equipment.head)):null;
@@ -71,8 +71,24 @@ export class ReletterPresentation{
     d.equipmentVisualSlots=next;d.equipmentSignature=JSON.stringify(next);
   }
   beforeAnimation(){for(let i=this.restore.length-1;i>=0;i--){const [object,property,value]=this.restore[i];object[property].copy(value);}this.restore.length=0;}
+  previewMelee(root,item,inputId){
+   if(!root||!meleeFamilies.includes(item.family)||root.userData.weaponId!==item.id)return false;
+   const d=root.userData,now=performance.now();
+   if(d.localSwing&&now-d.localSwing.at<Math.max(100,Number(item.cooldown)||0))return false;
+   if(now-(d.lastSwingAt??-Infinity)<Math.max(100,Number(item.cooldown)||0))return false;
+   const combo=now-(d.lastSwingAt??-Infinity)<1200?((d.lastSwingCombo||0)+1)%6:0;
+   d.localSwing={inputId,at:now};
+   d.attack={age:0,duration:meleeDuration(item.family,combo),combo,data:{...item,charge:0},inputId};
+   return true;
+  }
+  cancelMeleePreview(root,inputId){const d=root?.userData;if(d?.localSwing?.inputId!==inputId)return;d.localSwing=null;if(d.attack?.inputId===inputId)d.attack=null;}
   play(event,root){if(!event||this.seen.has(event.id))return;this.seen.add(event.id);if(this.seen.size>100)this.seen.delete(this.seen.values().next().value);const item=itemById(event.weapon);if(!item)return;const data={...item,...event,charge:event.charge||0};if(root&&isSpellWeapon(item))root.userData.staffCastingUntil=performance.now()+
-     (event.channel?Math.max(1700,(item.cooldown||700)*3):230);if(root&&meleeFamilies.includes(item.family))root.userData.attack={age:0,duration:meleeDuration(item.family,event.combo||0),combo:event.combo||0,data};
+     (event.channel?Math.max(1700,(item.cooldown||700)*3):230);if(root&&meleeFamilies.includes(item.family)){
+      const d=root.userData,combo=event.combo||0,predicted=event.inputId&&d.localSwing?.inputId===event.inputId;
+      d.lastSwingAt=performance.now();d.lastSwingCombo=combo;
+      if(predicted){d.localSwing=null;if(d.attack?.inputId===event.inputId){d.attack.combo=combo;d.attack.duration=meleeDuration(item.family,combo);d.attack.data=data;}}
+      else d.attack={age:0,duration:meleeDuration(item.family,combo),combo,data};
+    }
     this.vfx.play(data,item,root);
     // Each bonus uses its real source weapon's ultimate and matched server collider.
     for(const echo of (event.fusionEchoes||[]).slice(0,2)){
