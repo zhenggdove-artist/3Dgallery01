@@ -25,6 +25,6 @@ test('inactive fishing is no longer ticked; organic growth remains and uses the 
 test('artwork definitions and appearance are not invalidated by unrelated HP/world revisions',()=>{
  const code=read('src/arena-view.js');assert.match(code,/this\.artworkRenderCustom!==custom/);assert.doesNotMatch(code,/prior\.world!==this\.artworkRenderRevision/);assert.match(code,/prior\.appearance!==layout\.appearance/);assert.match(code,/prior\.draft!==d\.editTitleDraft/);
 });
-test('pickup dedup preserves 300ms cadence, coin priority, radius and motion socket cadence',()=>{
- const code=read('src/main.js');assert.match(code,/pendingAutoPickups\.add\(key\)/);assert.match(code,/finally\(\(\)=>pendingAutoPickups\.delete\(key\)\)/);assert.match(code,/lastAutoCoinAt>300/);assert.match(code,/drop=coin\?null:/);assert.match(code,/<2\.2\*\*2/);assert.match(read('src/network.js'),/now-this\.lastStateAt<90/);
+test('pickup dedup preserves per-target retry cadence, coin priority, radius and motion socket cadence',()=>{
+ const code=read('src/auto-pickup.js');assert.match(code,/pending\.add\(key\)/);assert.match(code,/pending\.delete\(key\)/);assert.match(code,/retry\.set\(key,this\.clock\(\)\+300\)/);assert.match(code,/if\(coin\)return this\.request/);assert.match(code,/>=2\.2\*\*2/);assert.match(read('src/main.js'),/pickups\.poll\(world,localRoot\.position/);assert.match(read('src/network.js'),/now-this\.lastStateAt<90/);
 });

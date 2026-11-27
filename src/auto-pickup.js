@@ -1,26 +1,25 @@
 // Detect contact in the existing simulation frame; keep the old 300ms
 // retry interval for the same target, not first contact with a new target.
 export class PickupScheduler{
- constructor(platforms,send,clock=()=>performance.now()){this.platforms=platforms;this.send=send;this.clock=clock;this.pending=new Set();this.retry=new Map();this.auto=null;this.owner=null;this.last=null;this.nextScan=0;}
- reset(owner){this.owner=owner;this.pending=new Set();this.retry=new Map();this.auto=null;this.last=null;this.nextScan=0;}
+ constructor(platforms,send,clock=()=>performance.now()){this.platforms=platforms;this.send=send;this.clock=clock;this.pending=new Set();this.retry=new Map();this.owner=null;this.last=null;this.nextScan=0;}
+ reset(owner){this.owner=owner;this.pending=new Set();this.retry=new Map();this.last=null;this.nextScan=0;}
  request(action,id,field,automatic=false){
   const key=action+':'+id,pending=this.pending,retry=this.retry;
   if(pending.has(key))return null;
   pending.add(key);
-  if(automatic)this.auto=key;
+  if(automatic)this.last=null;
   const finish=()=>{
    pending.delete(key);
    // An outstanding request from an old session cannot affect the new one.
    if(this.pending!==pending)return;
    retry.set(key,this.clock()+300);
-   if(this.auto===key)this.auto=null;
    this.last=null;
   };
-  try{return Promise.resolve(this.send(action,{[field]:id})).finally(finish);}catch(error){finish();return Promise.reject(error);}
+  try{return Promise.resolve(this.send(action,{[field]:id},automatic)).finally(finish);}catch(error){finish();return Promise.reject(error);}
  }
  poll(world,position,owner,now,wallTime){
   if(this.owner!==owner)this.reset(owner);
-  if(!world||!owner||this.auto!==null)return null;
+  if(!world||!owner||this.pending.size>=4)return null;
   const {x,y,z}=position,coins=world.coins,drops=world.groundDrops,last=this.last;
   if(last&&last.x===x&&last.y===y&&last.z===z&&last.coins===coins&&last.drops===drops&&now<this.nextScan)return null;
   this.last={x,y,z,coins,drops};this.nextScan=now+300;

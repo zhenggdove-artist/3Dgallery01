@@ -86,7 +86,19 @@ function currentTunedWeapon(){
 }
 let artBombUploading=false;let assetsReady=false,joined=false,self=null,world=null,players=[],controller=null,localRoot=null,wasDead=false,last=performance.now(),externalUntil=0,toastErrorAt=0,frameSamples=[],fps=0,fpsFrames=0,fpsAt=performance.now(),buildPlacement=null,spectatorFollowIndex=-1;
 const roots=new Map(),remoteTargets=new Map(),effects=[];
-const pickups=new PickupScheduler(PLATFORMS,(action,data)=>sendAction(action,data));
+const pickups=new PickupScheduler(PLATFORMS,submitPickup);
+async function submitPickup(action,data,automatic){
+ const profile=world?.profile,now=Date.now();
+ const drop=action==='pickup-drop'?world?.groundDrops?.find(d=>d.id===data.dropId):null;
+ const eligible=automatic&&joined&&network.spawnConfirmed&&self?.role==='fighter'&&profile?.hp>0&&!(profile.deadUntil>now)&&
+  (!drop||(!(drop.expiresAt<=now)&&!(drop.owner===self.key&&now<drop.ownerLockedUntil)&&(!drop.itemId||profile.inventory.length<profile.inventoryCapacity)));
+ let preview=null;
+ // A local GPU/model failure must never block the actual pickup transaction.
+ if(eligible)try{preview=arena.beginPickupPreview(action,data.dropId??data.platformId);}catch(error){console.warn('Pickup preview unavailable',error);}
+ let result=null;
+ try{result=await sendAction(action,data);return result;}
+ finally{if(preview)try{arena.pickupPreviews.finish(preview,result,arena.world);}catch(error){console.warn('Pickup preview restoration',error);}}
+}
 let heldArtworkSource=null,heldArtworkOwner=null,heldArtworkCached=false;
 function hasHeldArtwork(artworks,owner){
  if(heldArtworkSource!==artworks||heldArtworkOwner!==owner){heldArtworkSource=artworks;heldArtworkOwner=owner;heldArtworkCached=Object.values(artworks||{}).some(art=>art.holder===owner);}

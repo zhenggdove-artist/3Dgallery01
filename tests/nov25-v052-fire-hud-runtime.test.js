@@ -30,5 +30,5 @@ test('touch controls retain solid backing and same bill art; inactive aim and du
  assert.ok(main.includes('staffAimActive&&castingItem'));
  assert.ok(!main.includes('void arena.loadCustomArtworks(data.world.customArtworks'));
  assert.ok(preview.includes('await cachedPreview(item)'));
- assert.ok(main.includes('lastAutoCoinAt>300){lastAutoCoinAt='));
+ assert.ok(main.includes('pickups.poll(world,localRoot.position'));assert.ok(read('src/auto-pickup.js').includes('retry.set(key,this.clock()+300)'));
 });

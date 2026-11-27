@@ -16,6 +16,7 @@ import {itemById,groundDropVisualKind} from './shared/catalog.js';
 import {createCashDropGeometry,cashDropMaterial} from './comfort-cash-art.js';
 import {buildReletterEnvironment,reletterPlatformMaterial,ReletterPresentation,disposeVisual} from './reletter-presentation.js';
 import {AdventureView} from './adventure-view.js';
+import {PickupPreviewLedger} from './pickup-preview.js';
 import {IslandEnemies} from './island-enemies.js';
 import {createHeart} from './heart-model.js';
 import {createPlantInsects} from './reletter/plant-insects.js';
@@ -34,8 +35,8 @@ const EMPTY_CITY_DAMAGE=Object.freeze({}),EMPTY_PLANTS=Object.freeze([]);
 export class TempleArena{
   constructor(scene,renderer){
     this.scene=scene;this.renderer=renderer;this.dracoLoader=new DRACOLoader();this.dracoLoader.setDecoderPath('./vendor/three/examples/jsm/libs/draco/');this.loader=new GLTFLoader().setDRACOLoader(this.dracoLoader);this.clock=0;this.world=null;this.players=[];this.dropMeshes=[];
-    this.heartDrops=new Map();this.artworks=new Map();this.localArtworkFlights=new Map();this.coinMesh=null;this.dropMesh=null;this.dropIds=[];this.dropCoinFlights=[];this.coinFlights=new Map();this.structureGroup=new THREE.Group();this.structureGroup.name='Persistent structures';scene.add(this.structureGroup);this.plantGroup=new THREE.Group();this.plantGroup.name='Permanent message plants';scene.add(this.plantGroup);
-    this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.collapsingShells=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene);this.islandEnemies=new IslandEnemies(scene);
+    this.heartDrops=new Map();this.artworks=new Map();this.localArtworkFlights=new Map();this.coinMesh=null;this.dropMesh=null;this.dropIds=[];this.dropCoinFlights=[];this.coinFlights=new Map();this.pickupPreviews=new PickupPreviewLedger(entry=>this.cancelPickupPreview(entry));this.structureGroup=new THREE.Group();this.structureGroup.name='Persistent structures';scene.add(this.structureGroup);this.plantGroup=new THREE.Group();this.plantGroup.name='Permanent message plants';scene.add(this.plantGroup);
+    this.mixers=[];this.lightPool=[];this.lastLightUpdate=0;this.stairs=[];this.shared={};this.monster=null;this.monsterMixer=null;this.throwClones=[];this.buildPreview=null;this.debrisBursts=[];this.collapsingShells=[];this.destroyedEffects=new Set();this.structureHitTimes=new Map();this.seenStructureHits=new Set();this.presentation=new ReletterPresentation(scene);this.grass=null;this.defaultLayout={};this.adventure=new AdventureView(scene,id=>this.pickupPreviews.has('pickup-drop',id));this.islandEnemies=new IslandEnemies(scene);
   }
   async load(progress=()=>{}){
     progress(.08,'Building arena');await loadSignPortraits();this.buildEnvironment();
@@ -262,17 +263,18 @@ export class TempleArena{
   // RELETTER coin collection: *every* disappearing coin, whether on a disc
   // or dropped by a monster/player, spins upward and diminishes for .8 sec.
   if(previous?.coins!==world.coins)for(const p of PLATFORMS){
-   if(previous?.coins?.[p.id]?.available&&!world.coins?.[p.id]?.available&&!this.coinFlights.has(p.id))
+   if(previous?.coins?.[p.id]?.available&&!world.coins?.[p.id]?.available&&!this.coinFlights.has(p.id)&&!this.pickupPreviews.has('pickup-coin',p.id))
     this.coinFlights.set(p.id,{age:0,y:p.coinPosition[1]+Math.sin(this.clock*1.7+p.index)*.18});
   }
   if(!previous||previous.groundDrops!==world.groundDrops){
    const active=new Set((world.groundDrops||[]).map(d=>d.id));
    const receipts=new Set((world.pickupReceipts||[]).map(r=>r.id));
    for(const prior of previous?.groundDrops||[]){
-    if(!active.has(prior.id)&&receipts.has(prior.id))this.spawnDropCoinFlight(prior);
+    if(!active.has(prior.id)&&receipts.has(prior.id)&&!this.pickupPreviews.has('pickup-drop',prior.id))this.spawnDropCoinFlight(prior);
    }
    this.syncHearts();this.syncDrops();
   }
+  this.pickupPreviews.reconcile(world);
   if(!previous||previous.wallPaintRevision!==world.wallPaintRevision||previous.structures!==world.structures)
    this.outerCity?.wallPaint?.sync(world.wallPaint||{},world.wallPaintRevision||0,world.structures||[]);
   if(!previous||previous.floatingPlatforms!==world.floatingPlatforms||
@@ -282,6 +284,27 @@ export class TempleArena{
   if(!previous||previous.discPaint!==world.discPaint)this.displayPlatforms.paint.sync(world.discPaint);
   if(!previous||previous.structures!==world.structures)this.syncStructures();
   this.adventure.sync(world);this.syncMonster();
+  }
+  beginPickupPreview(action,id){
+   return this.pickupPreviews.begin(action,id,this.world,()=>{
+    if(action==='pickup-coin'){
+     const p=PLATFORMS.find(p=>p.id===id);if(!p||!this.coinMesh||this.coinFlights.has(id))return null;
+     const flight={age:0,y:p.coinPosition[1]+Math.sin(this.clock*1.7+p.index)*.18};
+     this.coinFlights.set(id,flight);return flight;
+    }
+    const drop=this.world?.groundDrops?.find(d=>d.id===id);
+    return drop?this.spawnDropCoinFlight(drop):null;
+   });
+  }
+  cancelPickupPreview(entry){
+   if(entry.action==='pickup-coin'){
+    if(this.coinFlights.get(entry.id)===entry.visual)this.coinFlights.delete(entry.id);
+    return;
+   }
+   const index=this.dropCoinFlights.indexOf(entry.visual);
+   if(index>=0){const fly=this.dropCoinFlights[index];this.dropCoinFlights.splice(index,1);fly.mesh.removeFromParent();fly.dispose();}
+   // Authority still contains the object; restore only its representation.
+   this.syncHearts();this.adventure.syncLoot(this.world);
   }
   spawnDropCoinFlight(drop){
    if(!this.coinMesh||!Array.isArray(drop.position))return;
@@ -293,12 +316,12 @@ export class TempleArena{
    if(!mesh)return;
    if(this.dropCoinFlights.length>=40){const old=this.dropCoinFlights.shift();old.mesh.removeFromParent();old.dispose();}
    mesh.name='Collected '+kind+' ascension';this.scene.add(mesh);
-   this.dropCoinFlights.push({mesh,age:0,startY:mesh.position.y,spin:mesh.rotation.y,scale:mesh.scale.clone(),dispose});
+   const flight={mesh,age:0,startY:mesh.position.y,spin:mesh.rotation.y,scale:mesh.scale.clone(),dispose};this.dropCoinFlights.push(flight);return flight;
   }
   syncHearts(){
     const live=new Set();
     for(const drop of this.world?.groundDrops||[]){
-     if(groundDropVisualKind(drop)!=='heart')continue;
+     if(groundDropVisualKind(drop)!=='heart'||this.pickupPreviews.has('pickup-drop',drop.id))continue;
      live.add(drop.id);
      if(this.heartDrops.has(drop.id))continue;
      const mesh=createHeart();mesh.name='Floating rotating healing heart '+drop.id;
@@ -462,12 +485,12 @@ export class TempleArena{
   update(dt,time,camera,playerRoots=new Map(),viewerRoot=null){
     this.presentation.beforeAnimation();const frameNow=performance.now(),wallNow=Date.now();for(const root of playerRoots.values())updateHitFlash(root,frameNow);
     this.clock=time;this.displayPlatforms?.update(time);this.scene.userData.moonlitSky?.update(camera,time);this.grass?.update(time,playerRoots);this.outerCity?.syncDamage(this.world?.cityDamage||EMPTY_CITY_DAMAGE,this.world?.revision??-1);this.outerCity?.update(time,dt,camera);for(const mixer of this.mixers)mixer.update(dt);if(this.dust){this.dust.rotation.y=time*.004;const positions=this.dust.geometry.attributes.position.array;for(let i=1;i<positions.length;i+=3){positions[i]+=dt*.025;if(positions[i]>22)positions[i]=0;}this.dust.geometry.attributes.position.needsUpdate=true;}if(this.water)this.water.material.opacity=.72+Math.sin(time*1.4)*.05;
-    if(this.coinMesh&&this.world){PLATFORMS.forEach((p,i)=>{const available=this.world.coins?.[p.id]?.available;tempPosition.fromArray(p.coinPosition);const fly=this.coinFlights?.get(p.id);if(fly)fly.age+=dt;const t=fly?fly.age/.8:1;if(fly&&t>=1)this.coinFlights.delete(p.id);tempPosition.y=fly?fly.y+Math.min(1,t)*5:tempPosition.y+Math.sin(time*1.8+i)*.4;tempQuaternion.setFromEuler(tempEuler.set(0,time*(fly?6:2)+i,0));tempScale.setScalar(fly?1.6*Math.max(0,1-t):available?1.6:0);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);this.coinMesh.setMatrixAt(i,tempMatrix);});this.coinMesh.instanceMatrix.needsUpdate=true;}
+    if(this.coinMesh&&this.world){PLATFORMS.forEach((p,i)=>{const available=this.world.coins?.[p.id]?.available&&!this.pickupPreviews.has('pickup-coin',p.id);tempPosition.fromArray(p.coinPosition);const fly=this.coinFlights?.get(p.id);if(fly)fly.age+=dt;const t=fly?fly.age/.8:1;if(fly&&t>=1)this.coinFlights.delete(p.id);tempPosition.y=fly?fly.y+Math.min(1,t)*5:tempPosition.y+Math.sin(time*1.8+i)*.4;tempQuaternion.setFromEuler(tempEuler.set(0,time*(fly?6:2)+i,0));tempScale.setScalar(fly?1.6*Math.max(0,1-t):available?1.6:0);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);this.coinMesh.setMatrixAt(i,tempMatrix);});this.coinMesh.instanceMatrix.needsUpdate=true;}
     for(const mesh of this.heartDrops.values()){
       const seed=mesh.userData.seed;mesh.position.y=mesh.userData.baseY+.32*Math.sin(time*2.1+seed);
       mesh.rotation.set(.09*Math.sin(time*.9+seed),time*1.55+seed,.10*Math.sin(time*1.1+seed));
      }
-     for(const mesh of this.dropMeshes){const shape=mesh.userData.dropShape;mesh.userData.records.forEach((drop,i)=>setDropMatrix(mesh,drop,i,shape,time));mesh.instanceMatrix.needsUpdate=true;}
+     for(const mesh of this.dropMeshes){const shape=mesh.userData.dropShape;mesh.userData.records.forEach((drop,i)=>setDropMatrix(mesh,drop,i,shape,time,this.pickupPreviews.has('pickup-drop',drop.id)));mesh.instanceMatrix.needsUpdate=true;}
     for(let i=this.dropCoinFlights.length-1;i>=0;i--){
      const fly=this.dropCoinFlights[i];fly.age+=dt;
      const t=Math.min(1,fly.age/.8),ease=1-(1-t)*(1-t);
@@ -589,7 +612,7 @@ export class TempleArena{
 
 function direction(name){return {east:[1,0],west:[-1,0],north:[0,-1],south:[0,1]}[name]||[1,0];}
 function hashText(value){let hash=2166136261;for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return hash>>>0;}
-function setDropMatrix(mesh,drop,index,shape,time){tempPosition.set(...drop.position);tempPosition.y+=(shape==='cash'?.85:.55)+Math.sin(time*2+index)*.12;if(shape==='cash')tempQuaternion.setFromEuler(tempEuler.set(.20+Math.sin(time*1.1+index)*.13,time*.7+index,.15));else tempQuaternion.setFromEuler(tempEuler.set(time*.25,time*.85+index,0));tempScale.setScalar(shape==='coin'?1.6:shape==='weapon'?.9:1);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);}
+function setDropMatrix(mesh,drop,index,shape,time,hidden=false){tempPosition.set(...drop.position);tempPosition.y+=(shape==='cash'?.85:.55)+Math.sin(time*2+index)*.12;if(shape==='cash')tempQuaternion.setFromEuler(tempEuler.set(.20+Math.sin(time*1.1+index)*.13,time*.7+index,.15));else tempQuaternion.setFromEuler(tempEuler.set(time*.25,time*.85+index,0));tempScale.setScalar(hidden?0:shape==='coin'?1.6:shape==='weapon'?.9:1);tempMatrix.compose(tempPosition,tempQuaternion,tempScale);mesh.setMatrixAt(index,tempMatrix);}
 function previewMeshes(kind,material){const mesh=(geometry,x=0,y=0,z=0)=>{const value=new THREE.Mesh(geometry,material.clone());value.position.set(x,y,z);return value;};if(kind==='art-bomb')return [mesh(new THREE.BoxGeometry(3,3,.16),0,1.5,0)];if(kind==='tree')return [mesh(new THREE.CylinderGeometry(.28,.42,3.2,7),0,1.6,0),mesh(new THREE.IcosahedronGeometry(1.4,1),0,3.7,0)];if(kind==='house')return [mesh(new THREE.BoxGeometry(4.8,3.4,3.8),0,1.7,0),mesh(new THREE.ConeGeometry(3.45,1.7,4),0,4.25,0)];const dimensions=originalBuildSizes[kind]||[2,2,2];return [mesh(kind==='cylinder'?new THREE.CylinderGeometry(dimensions[0]/2,dimensions[0]/2,dimensions[1],24):new THREE.BoxGeometry(...dimensions),0,dimensions[1]/2,0)];}
 function disposeArtworkRoot(root){
  if(!root)return;
