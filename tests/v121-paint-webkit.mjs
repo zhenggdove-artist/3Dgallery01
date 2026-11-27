@@ -29,9 +29,30 @@ try{
   const canvas=fabricCanvas(),original=staticPaintTexture(THREE,fabricCanvas(),false),fabric=staticPaintTexture(THREE,canvas,true);original.colorSpace=THREE.SRGBColorSpace;
   const pa=pixels({texture:original}),pb=pixels({texture:fabric});let fabricMismatch=0;for(let i=0;i<pa.length;i++)if(pa[i]!==pb[i])fabricMismatch++;
   const released=canvas.width===0&&canvas.height===0;original.dispose();fabric.dispose();
+  const {signAtlas}=await import('/src/outer-city.js'),{CITY_LOTS}=await import('/src/shared/city-layout.js'),{loadSignPortraits}=await import('/src/sign-art.js');
+  await loadSignPortraits();
+  const city=signAtlas(CITY_LOTS,true),signs=pixels({texture:city.map});let signPixels=0,signColors=0;
+  for(let i=0;i<signs.length;i+=4){const r=signs[i],g=signs[i+1],b=signs[i+2];if(r+g+b>30)signPixels++;if(Math.max(r,g,b)-Math.min(r,g,b)>15)signColors++;}
+  const citySize=[city.map.image.width,city.map.image.height],cityStable=city.map.isDataTexture===true;city.map.dispose();
+  // Test actual Lambert material with a missing/black map, not just map bytes.
+  const originalQuadMaterial=quad.material;
+  const col=new THREE.Color('#ff00aa'),vertexColors=new Float32Array(quad.geometry.attributes.position.count*3);
+  for(let i=0;i<vertexColors.length;i+=3)col.toArray(vertexColors,i);
+  quad.geometry.setAttribute('color',new THREE.BufferAttribute(vertexColors,3));
+  const flags=new THREE.BufferAttribute(new Float32Array(quad.geometry.attributes.position.count),1);
+  quad.geometry.setAttribute('paintHasInk',flags);
+  const ambient=new THREE.AmbientLight(0xffffff,1);scene.add(ambient);
+  const reference=new THREE.MeshLambertMaterial({vertexColors:true}),black=new THREE.DataTexture(new Uint8Array([0,0,0,255]),1,1);black.colorSpace=THREE.SRGBColorSpace;black.needsUpdate=true;
+  const renderQuad=material=>{quad.material=material;renderer.setRenderTarget(target);renderer.render(scene,camera);const p=new Uint8Array(128*128*4);renderer.readRenderTargetPixels(target,0,0,128,128,p);return p;};
+  const basePixels=renderQuad(reference),priorMap=stable.material.map;stable.material.map=black;stable.material.needsUpdate=true;
+  const fallbackPixels=renderQuad(stable.material);let fallbackMismatch=0;
+  for(let i=0;i<basePixels.length;i++)if(basePixels[i]!==fallbackPixels[i])fallbackMismatch++;
+  flags.array.fill(1);flags.needsUpdate=true;const blackPixels=renderQuad(stable.material);
+  const center=(64*128+64)*4,legitimateBlack=blackPixels[center]===0&&blackPixels[center+1]===0&&blackPixels[center+2]===0;
+  stable.material.map=priorMap;quad.material=originalQuadMaterial;reference.dispose();black.dispose();scene.remove(ambient);
   const glError=renderer.getContext().getError(),partial=!!fast.uploadTexture&&fast.renderer===renderer,stablePartial=!!stable.uploadTexture&&stable.renderer===renderer;
   fast.dispose();stable.dispose();full.dispose();target.dispose();quad.geometry.dispose();quad.material.dispose();renderer.dispose();
-  return {checks,glError,partial,stablePartial,fabricMismatch,released};
+  return {checks,glError,partial,stablePartial,fabricMismatch,released,citySize,cityStable,signPixels,signColors,fallbackMismatch,legitimateBlack};
  });
- console.log(JSON.stringify(result));assert.equal(result.glError,0);assert.equal(result.partial,true);assert.equal(result.stablePartial,true);assert.equal(result.fabricMismatch,0);assert.equal(result.released,true);assert.ok(result.checks.every(n=>n===0),'GPU tile upload and incremental brush must match full replay');
+ console.log(JSON.stringify(result));assert.equal(result.glError,0);assert.equal(result.partial,true);assert.equal(result.stablePartial,true);assert.equal(result.fabricMismatch,0);assert.equal(result.released,true);assert.equal(result.cityStable,true);assert.equal(result.fallbackMismatch,0);assert.equal(result.legitimateBlack,true);assert.ok(result.signPixels>10000&&result.signColors>1000,'full-size city signs must contain visible colored pixels');assert.ok(result.checks.every(n=>n===0),'GPU tile upload and incremental brush must match full replay');
 }finally{await browser.close();}

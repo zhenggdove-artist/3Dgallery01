@@ -50,7 +50,7 @@ export class TempleArena{
     this.insects=createPlantInsects(this.scene);
     buildReletterEnvironment(this.scene,this.renderer);
     const rings=new THREE.Mesh(new THREE.RingGeometry(SAFE_ZONE.radius-1,SAFE_ZONE.radius,64),new THREE.MeshBasicMaterial({color:'#b9ac70',transparent:true,opacity:.34,side:THREE.DoubleSide,depthWrite:false}));rings.rotation.x=-Math.PI/2;rings.position.y=.025;this.scene.add(rings);
-    this.buildPlatforms();this.buildDust();this.grass=new GrassField(this.scene,{mobile:touch});this.outerCity=new OuterCity(this.scene,{mobile:touch});
+    this.buildPlatforms();this.buildDust();this.grass=new GrassField(this.scene,{mobile:touch});this.outerCity=new OuterCity(this.scene,{mobile:touch,renderer:this.renderer});
     for(let i=0;i<(touch?3:5);i++){const light=new THREE.PointLight('#e6d49a',0,18,2);this.scene.add(light);this.lightPool.push(light);}
   }
   buildCentralPlant(){

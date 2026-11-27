@@ -5,6 +5,7 @@ export {CITY_INNER_RADIUS,CITY_OUTER_RADIUS,CITY_SHOP_STYLES,cityLots} from './s
 import {buildDetachableFixture,buildBrokenStructure,installFacadeCracks,installAttachedFlash,createPlumeResources,CityImpactPlumes,packRubble,packedRubbleMaterial} from './city-ruins-vfx.js';
 import {drawSignArtwork,drawRooftopSignArtwork,rooftopSignMode,installRooftopSignLighting,updateRooftopSignClock,rooftopBillboardParts,rooftopBillboardFaces} from './sign-art.js';
 import {CityWallPaint} from './city-wall-paint.js';
+import {paintAtlasBands,useStablePaintPixels} from './paint-texture-source.js';
 import {CityFireField} from './city-fire-field.js';
 import {CitySplinterField} from './city-splinter-field.js';
 
@@ -177,7 +178,7 @@ function batchGeometry(lots,mobile){
  mesh.userData.lotRanges=lotRanges;mesh.userData.partRanges=partRanges;
  return mesh;
 }
-function signAtlas(lots){
+export function signAtlas(lots,stablePixels=false){
  // Three separately designed layouts, packed under the 4096px texture limit.
  const columns=40,tile=96,slots=new Map(),entries=[];
  // Allocate only artwork actually referenced by the geometry, at the original resolution.
@@ -189,17 +190,26 @@ function signAtlas(lots){
   }
  }
  const rows=Math.max(1,Math.ceil(entries.length/columns));
- const canvas=document.createElement('canvas');canvas.width=columns*tile;canvas.height=rows*tile;
- const g=canvas.getContext('2d');
- entries.forEach(({lot,variant,sign},i)=>{
-  const x=i%columns*tile,y=Math.floor(i/columns)*tile;
+ const draw=(g,i,x,y)=>{
+  const {lot,variant,sign}=entries[i];
   (variant===2?drawRooftopSignArtwork:drawSignArtwork)(g,x,y,tile,tile,{color:variant===2?sign.color||lot.style[3]:lot.style[3],title:variant===2?lot.style[1]:lot.shopName,subtitle:variant===2?lot.style[2]:lot.enName,shopKind:lot.style[0],vertical:variant===1,aspect:variant===1?.5:variant===2?roofVisual(lot,sign).width/roofVisual(lot,sign).height:sign.width/sign.height,...citySignArtOptions(lot,variant),...(variant===2?{seed:lot.index}:{}),...(highRiseCompanySign(lot.floors,lot.index)||{})});
- });
- const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
+ };
+ let map;
+ if(stablePixels){
+  try{map=paintAtlasBands(THREE,columns,rows,tile,entries.length,draw);}
+  catch(error){console.warn('Banded city sign atlas unavailable; original upload retained',error);}
+ }
+ if(!map){
+  const canvas=document.createElement('canvas');canvas.width=columns*tile;canvas.height=rows*tile;
+  const g=canvas.getContext('2d');if(!g)throw Error('City sign atlas canvas unavailable');
+  entries.forEach((_,i)=>draw(g,i,i%columns*tile,Math.floor(i/columns)*tile));
+  map=new THREE.CanvasTexture(canvas);
+ }
+ map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=2;
  return {map,columns,rows,tile,slots};
 }
-function buildShopSigns(lots){
- const atlas=signAtlas(lots),p=[],uv=[],ids=[],lotIds=[],roofLights=[],ranges=new Map(),partRanges=new Map();
+function buildShopSigns(lots,stablePixels=false){
+ const atlas=signAtlas(lots,stablePixels),p=[],uv=[],ids=[],lotIds=[],roofLights=[],ranges=new Map(),partRanges=new Map();
  const quad=(lot,points,variant)=>{
   const base=p.length/3;for(const [x,y,z] of points){const q=localToWorld(lot,x,z);p.push(q[0],y,q[1]);lotIds.push(lot.index);}
   const i=atlas.slots.get(lot.index*3+variant),col=i%atlas.columns,row=Math.floor(i/atlas.columns),mx=.8/(atlas.columns*atlas.tile),my=.8/(atlas.rows*atlas.tile);
@@ -410,7 +420,7 @@ function installDeformation(mesh,pose){
 }
 
 export class OuterCity{
- constructor(scene,{mobile=false}={}){
+ constructor(scene,{mobile=false,renderer=null}={}){
   this.scene=scene;this.mobile=mobile;this.root=new THREE.Group();
   this.root.name='High-density ruined city, solid collision and staged destruction';scene.add(this.root);
   this.lots=CITY_LOTS;this.lotById=new Map(this.lots.map(lot=>[lot.id,lot]));this.damage={};this.lastDamage=null;this.hidden=new Set();this.flashes=[];this.debris=[];this.chunks=new Map();
@@ -443,7 +453,7 @@ export class OuterCity{
   }
   // Outer district is covered by GrassField's continuous living grass canopy.
   this.walls=batchGeometry(this.lots,mobile);this.facade=installFacadeCracks(this.walls);
-  this.signs=buildShopSigns(this.lots);this.graffiti=buildWallGraffiti(this.lots);
+  this.signs=buildShopSigns(this.lots,renderer?.capabilities?.isWebGL2===true&&useStablePaintPixels());this.graffiti=buildWallGraffiti(this.lots);
    installAttachedFlash(this.signs,this.facade.texture);installRooftopSignLighting(this.signs.material,{batched:true});installAttachedFlash(this.graffiti,this.facade.texture);
   this.gpuPose=cityDeformationTexture(this.lots);
   for(const mesh of [this.walls,this.signs,this.graffiti]){

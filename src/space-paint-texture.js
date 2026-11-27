@@ -56,7 +56,7 @@ export class SpacePaintTexture{
   const uv=[],old=mesh.geometry,geometry=old.toNonIndexed();this.entries=new Map();
   ranges.forEach((range,i)=>{
    const stroke=strokes[i],info=range.info||surfaceInfo(stroke),x=(i%this.grid)*this.tile,y=Math.floor(i/this.grid)*this.tile;
-   const entry={stroke,info,x,y};this.entries.set(stroke.id,entry);
+   const entry={stroke,info,x,y,initialized:true,hasInk:false,start:range.start*3,end:range.end*3};this.entries.set(stroke.id,entry);
    // Initialize every tile before the material is ever visible. Async graffiti
    // and failed canvas uploads must not turn the rest of the batch black.
    if(this.stablePixels)fillPaintTile(this.pixels,this.side,x,this.side-y-this.tile,this.tile,stroke.color);
@@ -66,9 +66,27 @@ export class SpacePaintTexture{
     for(const [u,v] of face.uv)uv.push((x+rect.x+u*rect.w)/this.side,1-(y+rect.y+v*rect.h)/this.side);
    }
   });
-  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));mesh.geometry=geometry;old.dispose();
+  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  this.inkFlags=new THREE.BufferAttribute(new Float32Array(geometry.attributes.position.count),1).setUsage(THREE.DynamicDrawUsage);
+  geometry.setAttribute('paintHasInk',this.inkFlags);mesh.geometry=geometry;old.dispose();
   this.originalMaterial=mesh.material;
-  this.material=new THREE.MeshLambertMaterial({map:this.texture,side:THREE.DoubleSide});mesh.material=this.material;
+  this.material=new THREE.MeshLambertMaterial({map:this.texture,vertexColors:true,side:THREE.DoubleSide});
+  // Valid opaque atlas texels render identically. If a tile is genuinely
+  // transparent because its backing was lost, retain the actual geometry
+  // color rather than treating missing texels as black paint.
+  this.material.onBeforeCompile=shader=>{
+   shader.vertexShader='attribute float paintHasInk;\nvarying float vPaintHasInk;\n'+shader.vertexShader;
+   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvPaintHasInk=paintHasInk;');
+   shader.fragmentShader='varying float vPaintHasInk;\n'+shader.fragmentShader;
+   shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`
+    #ifdef USE_MAP
+     vec4 paintSample=texture2D(map,vMapUv);
+     diffuseColor.rgb=mix(vColor.rgb,paintSample.rgb,paintSample.a*vPaintHasInk);
+    #endif
+   `).replace('#include <color_fragment>','');
+  };
+  this.material.customProgramCacheKey=()=> 'space-paint-opaque-map-base-v123';
+  mesh.material=this.material;
  }
  rect(chart){
   return surfaceChartRect(this.tile,chart);
@@ -133,6 +151,7 @@ export class SpacePaintTexture{
  repaint(id,paints){
   const e=this.entries.get(id);if(!e)return;
   e.paints=paints;
+  if(!paints.length&&!e.hasInk&&!e.loading&&!e.checkpoint)return;
   const checkpoint=isSurfaceCheckpoint(paints[0])?paints[0].checkpoint:null;
   if(checkpoint&&e.checkpoint!==checkpoint){
    if(e.loading!==checkpoint&&this.loadRaster){
@@ -158,7 +177,6 @@ export class SpacePaintTexture{
     }).catch(error=>{if(this.disposed||e.loading!==checkpoint)return;e.loading=null;console.warn('3D paint checkpoint',error);if(++e.failures<=1)setTimeout(()=>{if(!this.disposed&&e.paints?.[0]?.checkpoint===checkpoint)this.repaint(id,e.paints);},500);});
    }
    // Keep the last displayed tile during asynchronous checkpoint loading.
-   if(!e.initialized){this.commitTile(e,false);e.initialized=true;}
    return;
   }
   if(!checkpoint){if(e.base)this.releaseBase(e);e.checkpoint=null;e.loading=null;}
@@ -170,7 +188,10 @@ export class SpacePaintTexture{
   });
   this.inkId=id;
   if(prior===this.inkState&&e.initialized)return;
-  if(this.commitTile(e)!==false)e.initialized=true;
+  if(this.commitTile(e)!==false){
+   e.initialized=true;const hasInk=records.length>0;
+   if(e.hasInk!==hasInk){e.hasInk=hasInk;this.inkFlags.array.fill(hasInk?1:0,e.start,e.end);this.inkFlags.addUpdateRange(e.start,e.end-e.start);this.inkFlags.needsUpdate=true;}
+  }
  }
  restoreTexture(){this.texture.needsUpdate=true;this.checkedUpload=false;this.inkId=null;this.inkState=null;}
  dispose(){this.disposed=true;for(const e of this.entries.values())this.releaseBase(e);this.entries.clear();this.mesh.material=this.originalMaterial;this.material.dispose();this.texture.dispose();this.uploadTexture?.dispose();this.inkState=null;this.pixels=null;this.tilePixels=null;this.canvas.width=this.canvas.height=this.scratch.width=this.scratch.height=0;if(this.uploadCanvas)this.uploadCanvas.width=this.uploadCanvas.height=0;}

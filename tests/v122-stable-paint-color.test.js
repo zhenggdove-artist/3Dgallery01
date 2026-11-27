@@ -24,6 +24,7 @@ test('static outfit keeps an independent pixel source, same filtering and alpha;
  assert.equal(texture.isDataTexture,true);assert.deepEqual(Array.from(texture.image.data),[4,5,6,128,1,2,3,255]);
  assert.equal(texture.image.width,1);assert.equal(texture.image.height,2);assert.equal(texture.flipY,false);assert.equal(texture.generateMipmaps,true);assert.equal(texture.minFilter,THREE.LinearMipmapLinearFilter);assert.equal(texture.colorSpace,THREE.SRGBColorSpace);
  assert.equal(canvas.width,0);source.fill(0);assert.equal(texture.image.data[3],128);
+ const npot={width:3,height:5};assert.equal(staticPaintTexture(THREE,npot,true).isCanvasTexture,true);
  const failed={width:1,height:1,getContext:()=>({getImageData:()=>({data:new Uint8ClampedArray(4)})})};
  assert.equal(staticPaintTexture(THREE,failed,true).isCanvasTexture,true);assert.equal(failed.width,1);
 });
