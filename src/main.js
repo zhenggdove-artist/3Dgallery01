@@ -984,6 +984,7 @@ function syncWorld(){if(!world)return;
   arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));
  if(!previous||world.damageEvents!==previous.damageEvents)damageNumbers.receive(world.damageEvents);
  arena.sync(world,players);
+ wallPainter.sync3D(world);
  if(!previous||world.collector!==previous.collector)collectorView.sync(world.collector);
  syncWantedButton(world.wantedSettings,network.base);ui.setWorld(world);ui.showCollectorSale(world.collectorSale,self?.key);ui.showKillEvents(world.killEvents);
   // Monster deaths use the SAME purely visual golden burst as thrown artwork.
