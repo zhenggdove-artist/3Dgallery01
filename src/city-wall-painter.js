@@ -9,8 +9,6 @@ export class CityWallPainter{
   this.space=new SpacePainter({scene,canvas,camera,send,ui,loadRaster,controller,arena,ownerKey});this.mode3D=false;this.access3D=false;
   this.spaceControls=document.getElementById('paint-3d-controls');this.spaceToggle=document.getElementById('paint-3d-toggle');this.spaceSettings=document.getElementById('paint-3d-settings');
   this.spaceToggle?.addEventListener('click',()=>this.setMode3D(!this.mode3D));
-  const fixedScale=document.getElementById('paint-3d-fixed-scale');
-  if(fixedScale)fixedScale.addEventListener('click',()=>{if(!this.mode3D||this.paintTouches.size||!this.space.setFixedScale(!this.space.fixedScale))return;fixedScale.textContent=this.space.fixedScale?'Mode: Fixed':'Mode: Direct';fixedScale.setAttribute('aria-pressed',String(this.space.fixedScale));});
   const connect=document.getElementById('paint-3d-connect');
   if(connect){connect.checked=false;connect.addEventListener('change',()=>{if(!this.mode3D||this.paintTouches.size||!this.space.setConnected(connect.checked))connect.checked=this.space.connected;});}
   this.flightControls=document.getElementById('paint-3d-flight');this.flightPointers=new Map();

@@ -27,22 +27,20 @@ test('nearest surface is selected in 3D rather than archive order, endpoints or 
  geometry.dispose();atlas.dispose();
 });
 test('connected stroke starts on nearest existing surface and preserves drag delta, plane and validation',()=>{
- for(const fixed of [false,true]){
-  const painter=fixture(),points=[];
-  painter.sync({spacePaint:[stroke('stroke-far',-17),stroke('stroke-near',-10)],spacePaintRevision:1});
-  painter.setFixedScale(fixed);assert.equal(painter.connected,false);painter.setConnected(true);
-  painter.append=p=>{points.push(p.clone());painter.stroke.points.push(p.toArray().map(v=>+v.toFixed(3)));};
-  let saved;painter.finish=()=>{saved=painter.stroke;painter.stroke=null;};
-  const start=e(),move=e(110,95,'pointermove'),up=e(120,90,'pointerup');
-  painter.setDrawingFrame(settings.distance);const from=new THREE.Vector3(),to=new THREE.Vector3();
-  painter.drawingPoint(start,from);painter.drawingPoint(move,to);const delta=to.sub(from);
-  painter.down(start,settings,false);assert.equal(painter.setConnected(false),false);
-  near(points[0],new THREE.Vector3(0,9.5,-10.2));painter.move(move);
-  near(points[1],points[0].clone().add(delta));
-  painter.end(up,true);assert.ok(validateSpacePaint(saved));
-  assert.equal(painter.archive.length,2);
-  painter.setConnected(false);painter.down(start,settings,false);near(points[3],new THREE.Vector3(0,9.5,-12));
- }
+ const painter=fixture(),points=[];
+ painter.sync({spacePaint:[stroke('stroke-far',-17),stroke('stroke-near',-10)],spacePaintRevision:1});
+ assert.equal(painter.connected,false);painter.setConnected(true);
+ painter.append=p=>{points.push(p.clone());painter.stroke.points.push(p.toArray().map(v=>+v.toFixed(3)));};
+ let saved;painter.finish=()=>{saved=painter.stroke;painter.stroke=null;};
+ const start=e(),move=e(110,95,'pointermove'),up=e(120,90,'pointerup');
+ painter.setDrawingFrame(settings.distance);const from=new THREE.Vector3(),to=new THREE.Vector3();
+ painter.drawingPoint(start,from);painter.drawingPoint(move,to);const delta=to.sub(from);
+ painter.down(start,settings,false);assert.equal(painter.setConnected(false),false);
+ near(points[0],new THREE.Vector3(0,9.5,-10.2));painter.move(move);
+ near(points[1],points[0].clone().add(delta));
+ painter.end(up,true);assert.ok(validateSpacePaint(saved));
+ assert.equal(painter.archive.length,2);
+ painter.setConnected(false);painter.down(start,settings,false);near(points[3],new THREE.Vector3(0,9.5,-12));
 });
 test('no existing structure starts on ground, pending geometry is eligible, checkbox defaults off',()=>{
  const painter=fixture(),points=[];

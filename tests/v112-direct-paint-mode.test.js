@@ -23,7 +23,6 @@ function assertUnderPointer(point,camera,e){
 }
 test('default brush draws exactly under the cursor at every zoom and keeps the avatar-anchored plane',()=>{
  const {painter,camera,zoom}=fixture();
- assert.equal(painter.fixedScale,false);
  const e=event(135,85),point=new THREE.Vector3(),center=new THREE.Vector3();
  for(const d of [3,7,50]){
   zoom(d);assert.ok(painter.setDrawingFrame(settings.distance));
@@ -41,20 +40,18 @@ test('direct stroke starts at pointer, follows drag and release, not the ground 
  painter.updateGuide(e,settings,arena);
  assert.ok(Math.abs(painter.guide.position.y-15.525)<1e-6);
  painter.append=p=>points.push(p.clone());painter.finish=()=>{painter.stroke=null;};
- painter.down(e,settings,false);assert.equal(painter.setFixedScale(true),false);
+ painter.down(e,settings,false);
  painter.move(move);painter.end(up,true);
  [e,move,up].forEach((e,i)=>assertUnderPointer(points[i],camera,e));
  assert.ok(points.every(p=>Math.abs(p.z+12)<1e-8));
- assert.equal(painter.setFixedScale(true),true);
- assert.equal(painter.fixedScale,true);
 });
-test('idle guide stays anchored when zoom changes; fixed-scale checkbox is optional and unchecked by default',()=>{
+test('idle guide stays anchored when zoom changes; Connect is the only checkbox and no mode switch remains',()=>{
  const {painter,zoom}=fixture();
  painter.updateGuide(null,settings,arena);const position=painter.guide.position.clone(),key=painter.guideKey;
  zoom(50);painter.updateGuide(null,settings,arena);near(painter.guide.position,position);assert.equal(painter.guideKey,key);
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- const input=html.match(/<button id="paint-3d-fixed-scale"[^>]*>/)?.[0];
- assert.ok(input);assert.match(input,/aria-pressed="false"/);
- const settings=html.slice(html.indexOf('<div id="paint-3d-settings"'),html.indexOf('<button data-paint-close'));
- assert.equal((settings.match(/type="checkbox"/g)||[]).length,1);
+ const toolbar=html.slice(html.indexOf('<div id="paint-3d-settings"'),html.indexOf('<button data-paint-close'));
+ assert.doesNotMatch(toolbar,/paint-3d-fixed-scale|Mode: Direct|Mode: Fixed/);
+ assert.equal((toolbar.match(/type="checkbox"/g)||[]).length,1);
+ assert.match(toolbar,/id="paint-3d-connect" type="checkbox"/);
 });

@@ -116,7 +116,7 @@ export class SpacePainter{
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
   this.guide=null;this.guideKey=null;this.previewRanges=[];
-  this.paintCenter=new THREE.Vector3();this.paintNormal=new THREE.Vector3();this.paintRight=new THREE.Vector3();this.paintUp=new THREE.Vector3();this.paintScale=0;this.paintPlane=new THREE.Plane();this.fixedScale=false;this.connected=false;this.paintOffset=new THREE.Vector3();this.connectPoint=new THREE.Vector3();this.connectKey=null;
+  this.paintCenter=new THREE.Vector3();this.paintNormal=new THREE.Vector3();this.paintPlane=new THREE.Plane();this.connected=false;this.paintOffset=new THREE.Vector3();this.connectPoint=new THREE.Vector3();this.connectKey=null;
  }
  mesh(which,strokes){
   if(!strokes.length){if(this[which]){this[which].removeFromParent();this[which].geometry.dispose();this[which]=null;}if(which==='preview')this.previewRanges=[];return [];}
@@ -218,19 +218,10 @@ export class SpacePainter{
   if(!player?.root?.position||!Number.isFinite(player.yaw)||!Number.isFinite(player.pitch))return false;
   const {yaw,pitch}=player,c=Math.cos(pitch);
   this.paintNormal.set(-Math.sin(yaw)*c,-Math.sin(pitch),-Math.cos(yaw)*c);
-  this.paintRight.set(Math.cos(yaw),0,-Math.sin(yaw));
-  this.paintUp.crossVectors(this.paintRight,this.paintNormal);
   this.paintCenter.copy(player.root.position);this.paintCenter.y+=1.5;
   this.paintCenter.addScaledVector(this.paintNormal,distance);
   this.paintPlane.setFromNormalAndCoplanarPoint(this.paintNormal,this.paintCenter);this.paintOffset.set(0,0,0);
-  // Match the existing default third-person viewing distance (7). Camera
-  // zoom changes presentation only, never the drawing-coordinate scale.
-  this.paintScale=(distance+7)*Math.tan(this.camera.fov*Math.PI/360);
   return true;
- }
- setFixedScale(enabled){
-  if(this.pointer!==null)return false;
-  this.fixedScale=!!enabled;this.guideKey=null;return true;
  }
  setConnected(enabled){
   if(this.pointer!==null)return false;
@@ -238,12 +229,9 @@ export class SpacePainter{
  }
  drawingPoint(event,out){
   if(!event){out.copy(this.paintCenter).add(this.paintOffset);return true;}
-  // Default: the actual camera ray meets the avatar-anchored drawing plane.
-  // Only the optional fixed-scale mode uses zoom-independent screen offsets.
-  if(!this.fixedScale){if(!this.setRay(event)||!this.ray.ray.intersectPlane(this.paintPlane,out))return false;out.add(this.paintOffset);return true;}
-  const r=this.canvas.getBoundingClientRect();if(!r.width||!r.height)return false;
-  const x=(event.clientX-r.left)/r.width*2-1,y=1-(event.clientY-r.top)/r.height*2;
-  out.copy(this.paintCenter).addScaledVector(this.paintRight,x*this.paintScale*r.width/r.height).addScaledVector(this.paintUp,y*this.paintScale).add(this.paintOffset);
+  // Direct painting: intersect the pointer ray with the avatar-anchored plane.
+  if(!this.setRay(event)||!this.ray.ray.intersectPlane(this.paintPlane,out))return false;
+  out.add(this.paintOffset);
   return true;
  }
  baseFloor(point,arena=this.arena){
@@ -267,8 +255,8 @@ export class SpacePainter{
   const x=event?.clientX??r.left+r.width/2,y=event?.clientY??r.top+r.height/2;
   const player=this.controller(),p=player?.root?.position,stroke=this.stroke,color=stroke?.color??settings.color,size=stroke?.size??settings.size,thickness=stroke?.thickness??settings.thickness;
   if(!p){this.hideGuide();return;}
-  const key=[x,y,!!event,r.left,r.top,r.width,r.height,p.x,p.y,p.z,player.yaw,player.pitch,this.camera.fov,this.fixedScale,this.connected,size,color,thickness,settings.distance,stroke?.id,this.saved?.geometry,this.preview?.geometry,arena.world?.cityDamage,arena.displayPlatforms?.discs];
-  if(event&&!this.fixedScale){const cp=this.camera.position,q=this.camera.quaternion;key.push(cp.x,cp.y,cp.z,q.x,q.y,q.z,q.w,this.camera.zoom,this.camera.aspect);}
+  const key=[x,y,!!event,r.left,r.top,r.width,r.height,p.x,p.y,p.z,player.yaw,player.pitch,this.camera.fov,this.connected,size,color,thickness,settings.distance,stroke?.id,this.saved?.geometry,this.preview?.geometry,arena.world?.cityDamage,arena.displayPlatforms?.discs];
+  if(event){const cp=this.camera.position,q=this.camera.quaternion;key.push(cp.x,cp.y,cp.z,q.x,q.y,q.z,q.w,this.camera.zoom,this.camera.aspect);}
   if(this.guideKey&&key.every((v,i)=>v===this.guideKey[i]))return;
   this.guideKey=key;
   if(!this.guide){

@@ -32,18 +32,16 @@ test('Connect has a ground anchor even with no geometry or only a more distant s
  }
 });
 test('nearest actual surface wins over ground, preview equals start and search is not repeated during drag',()=>{
- for(const fixed of [false,true]){
-  const {painter,arena,points,getSaved}=fixture();painter.setFixedScale(fixed);painter.setConnected(true);
-  painter.sync({spacePaint:[stroke('stroke-near',9.5,-10)],spacePaintRevision:1});
-  const e=event();painter.updateGuide(e,settings,arena);
-  near(painter.guidePoint,new THREE.Vector3(0,9.5,-10.2));near(painter.guideAnchor.position,painter.guidePoint);
-  const key=painter.connectKey;painter.down(e,settings,false);near(points[0],painter.guidePoint);assert.equal(painter.connectKey,key);
-  painter.move(event(110,90,'pointermove'));painter.updateGuide(event(110,90),settings,arena);
-  near(painter.guideAnchor.position,points[1]);assert.equal(painter.connectKey,key);
-  painter.end(event(120,80,'pointerup'),true);assert.ok(validateSpacePaint(getSaved()));
-  painter.setConnected(false);painter.down(e,settings,false);near(points[3],new THREE.Vector3(0,9.5,-12));
-  painter.hideGuide();assert.equal(painter.guideAnchor.visible,false);
- }
+ const {painter,arena,points,getSaved}=fixture();painter.setConnected(true);
+ painter.sync({spacePaint:[stroke('stroke-near',9.5,-10)],spacePaintRevision:1});
+ const e=event();painter.updateGuide(e,settings,arena);
+ near(painter.guidePoint,new THREE.Vector3(0,9.5,-10.2));near(painter.guideAnchor.position,painter.guidePoint);
+ const key=painter.connectKey;painter.down(e,settings,false);near(points[0],painter.guidePoint);assert.equal(painter.connectKey,key);
+ painter.move(event(110,90,'pointermove'));painter.updateGuide(event(110,90),settings,arena);
+ near(painter.guideAnchor.position,points[1]);assert.equal(painter.connectKey,key);
+ painter.end(event(120,80,'pointerup'),true);assert.ok(validateSpacePaint(getSaved()));
+ painter.setConnected(false);painter.down(e,settings,false);near(points[3],new THREE.Vector3(0,9.5,-12));
+ painter.hideGuide();assert.equal(painter.guideAnchor.visible,false);
 });
 test('ground cutoff skips farther geometry; saved geometry replacement invalidates the anchor cache',()=>{
  const {geometry,ranges}=spacePaintGeometry([stroke('stroke-remote',35,-12)]);
