@@ -64,7 +64,7 @@ export function buildTreeDisguise(T,g,record,mat){
    for(let i=0;i<=sides;i++){const a=i/sides*TAU,ridge=.16*Math.sin(a*9+t*5)+.10*Math.cos(a*17-t*8)+.055*Math.sin(a*29+t*19),radius=r*(1+ridge);
     v.copy(p).addScaledVector(frames.normals[j],Math.cos(a)*radius).addScaledVector(frames.binormals[j],Math.sin(a)*radius);verts.push(v.x,v.y,v.z);
     const tone=.23+.085*Math.sin(a*9+t*5)+.04*Math.sin(a*29+t*23)+rand()*.045;color.setRGB(tone*.90,tone*.66,tone*.45);colors.push(color.r,color.g,color.b);
-    if(j<segments&&i<sides){const z=j*(sides+1)+i;faces.push(z,z+sides+1,z+1,z+1,z+sides+1,z+sides+2);}
+    if(j<segments&&i<sides){const z=j*(sides+1)+i;faces.push(z,z+1,z+sides+1,z+1,z+sides+2,z+sides+1);}
    }
   }geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setIndex(faces);geo.computeVertexNormals();pos.push(...verts);nor.push(...geo.attributes.normal.array);col.push(...colors);for(const n of faces)idx.push(n+offset);geo.dispose();
  }
