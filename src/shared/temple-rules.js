@@ -340,7 +340,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
    next.position.length===3&&next.position.every(Number.isFinite)&&
    Math.hypot(next.position[0],next.position[2])<=ARENA_RADIUS+2&&
    next.position[1]>=-4&&next.position[1]<=72;
-  const validPaintHeight=role==='fighter'&&Array.isArray(next?.position)&&next.position.length===3&&next.position.every(Number.isFinite)&&Math.hypot(next.position[0],next.position[2])<=ARENA_RADIUS+2&&next.position[1]>=-4&&next.position[1]<=SPACE_PAINT_FLIGHT_LIMIT&&((canSpacePaint(mobility)&&next.paintFlight===true)||(previous?.position?.[1]>64&&next.position[1]<=previous.position[1]+.1));
+  const validPaintHeight=role==='fighter'&&Array.isArray(next?.position)&&next.position.length===3&&next.position.every(Number.isFinite)&&Math.hypot(next.position[0],next.position[2])<=ARENA_RADIUS+2&&next.position[1]>=-4&&next.position[1]<=SPACE_PAINT_FLIGHT_LIMIT&&((mobility&&next.paintFlight==='2d')||(canSpacePaint(mobility)&&next.paintFlight===true)||(previous?.position?.[1]>64&&next.position[1]<=previous.position[1]+.1));
   if(!next||!Array.isArray(next.position)||next.position.length!==3||!next.position.every(Number.isFinite)||
      !(insideArena(next.position,role==='spectator'?28:2)||validPanHeight||validPaintHeight)||!Number.isFinite(next.rotation))
     return {error:'Invalid position',state:previous||null};

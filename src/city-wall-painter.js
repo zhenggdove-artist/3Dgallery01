@@ -15,7 +15,7 @@ export class CityWallPainter{
   const updateAxes=()=>{const axes=[0,0,0];for(const [axis,dir] of this.flightPointers.values())axes[axis]+=dir;const player=this.controller();if(player)player.paintAxes=axes.map(v=>clamp(v,-1,1));};
   this.clearFlight=()=>{this.flightPointers.clear();updateAxes();};
   for(const button of this.flightControls?.querySelectorAll('[data-paint-axis]')||[]){
-   button.addEventListener('pointerdown',e=>{if(!this.mode3D||(e.pointerType==='mouse'&&e.button!==0))return;e.preventDefault();e.stopPropagation();button.setPointerCapture(e.pointerId);this.flightPointers.set(e.pointerId,[Number(button.dataset.paintAxis),Number(button.dataset.paintDir)]);updateAxes();});
+   button.addEventListener('pointerdown',e=>{if(!this.active||this.role()!=='fighter'||(e.pointerType==='mouse'&&e.button!==0))return;e.preventDefault();e.stopPropagation();button.setPointerCapture(e.pointerId);this.flightPointers.set(e.pointerId,[Number(button.dataset.paintAxis),Number(button.dataset.paintDir)]);updateAxes();});
    for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,e=>{if(this.flightPointers.delete(e.pointerId))updateAxes();e.stopPropagation();});
   }
   for(const button of this.flightControls?.querySelectorAll('[data-paint-turn]')||[]){
@@ -96,8 +96,22 @@ export class CityWallPainter{
   if(enabled&&(!this.active||!this.can3D()||this.role()!=='fighter'))return;
   if(enabled===this.mode3D)return;
   if(this.mode3D){if(!this.can3D())this.space.stroke=null;this.space.end();}else{this.finish();const pointer=this.pointer;this.pointer=null;if(pointer!==null&&this.canvas.hasPointerCapture(pointer))this.canvas.releasePointerCapture(pointer);}
-  this.resetPaintPointers();this.space.hideGuide();this.mode3D=enabled;this.clearFlight();this.controller()?.setPaintFlight(enabled);if(this.flightControls)this.flightControls.hidden=!enabled;this.spaceToggle?.classList.toggle('active',enabled);this.spaceToggle?.setAttribute('aria-pressed',String(enabled));if(this.spaceSettings)this.spaceSettings.hidden=!enabled;
+  this.resetPaintPointers();this.space.hideGuide();this.mode3D=enabled;if(this.active)this.syncPaintFlight();this.spaceToggle?.classList.toggle('active',enabled);this.spaceToggle?.setAttribute('aria-pressed',String(enabled));if(this.spaceSettings)this.spaceSettings.hidden=!enabled;
   if(!enabled&&this.tool==='eyedropper')this.setTool('brush');
+ }
+ syncPaintFlight(){
+  this.clearFlight();
+  const active=this.active&&this.role()==='fighter';
+  this.controller()?.setPaintFlight(active?(this.mode3D?true:'2d'):false);
+  if(this.flightControls){
+   this.flightControls.hidden=!active;
+   const title=this.flightControls.querySelector('span');if(title)title.textContent=this.mode3D?'3D MOVE':'2D MOVE';
+   for(const button of this.flightControls.querySelectorAll('[data-paint-turn]')){
+    button.hidden=!this.mode3D;
+    // Keep the existing grid layout and styling when returning to 3D.
+    button.style.display=this.mode3D?'':'none';
+   }
+  }
  }
  setTool(tool){
   this.tool=tool;this.brush?.classList.toggle('active',tool==='brush');
@@ -118,9 +132,9 @@ export class CityWallPainter{
  setActive(active){
   if(active&&this.role()!=='fighter'){this.ui.toast('Enter the arena to paint');return;}
   if(this.active===active)return;
-  if(!active){this.setMode3D(false);this.finish();this.resetPaintPointers();this.space.hideGuide();}
+  if(!active){this.active=false;this.setMode3D(false);this.finishTouchStroke(false);this.resetPaintPointers();this.space.hideGuide();}
   if(active)this.beforeStart();
-  this.active=active;this.refresh3D();
+  this.active=active;this.refresh3D();this.syncPaintFlight();
   if(this.toolbar)this.toolbar.hidden=!active;
   // The menu otherwise stays over the palette and makes PAINT appear inert.
   if(active){

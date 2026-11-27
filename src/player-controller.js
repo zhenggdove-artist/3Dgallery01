@@ -110,7 +110,7 @@ export class PlayerController{
   jump(){if(this.paintFlight)return;if(this.awaitingSpawn||this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;this.onJump?.();return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
   setPaintFlight(active){
     if(!active&&this.paintFlight){this.paintHighDescent=this.root.position.y>64;this.fallStartY=this.root.position.y;}
-    this.paintFlight=!!active&&this.role==='fighter';this.paintAxes=[0,0,0];this.velocityY=0;this.speed=0;
+    this.paintFlight=!!active&&this.role==='fighter';this.paintFlightMode=this.paintFlight?(active==='2d'?'2d':'3d'):null;this.paintAxes=[0,0,0];this.velocityY=0;this.speed=0;
     this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.wantedArtworkView=null;
     this.grounded=!this.paintFlight&&Math.abs(this.root.position.y-this.arena.groundHeight(this.root.position.x,this.root.position.z,this.root.position.y))<.04;
   }
@@ -377,5 +377,5 @@ export class PlayerController{
   }
   aimDirection(){const elevation=THREE.MathUtils.clamp(-this.pitch,-.7,.8),h=this.root.rotation.y;return [Math.sin(h)*Math.cos(elevation),Math.sin(elevation),Math.cos(h)*Math.cos(elevation)];}
   buildPosition(distance=5){const h=this.root.rotation.y,x=this.root.position.x+Math.sin(h)*distance,z=this.root.position.z+Math.cos(h)*distance;return [x,this.arena.groundHeight(x,z),z];}
-  state(){return {position:this.root.position.toArray(),rotation:this.root.rotation.y,animation:this.animation,visible:true,...(this.paintFlight?{paintFlight:true}:{})};}
+  state(){return {position:this.root.position.toArray(),rotation:this.root.rotation.y,animation:this.animation,visible:true,...(this.paintFlight?{paintFlight:this.paintFlightMode==='2d'?'2d':true}:{})};}
 }
