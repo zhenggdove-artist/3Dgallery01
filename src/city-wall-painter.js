@@ -16,6 +16,9 @@ export class CityWallPainter{
    button.addEventListener('pointerdown',e=>{if(!this.mode3D||(e.pointerType==='mouse'&&e.button!==0))return;e.preventDefault();e.stopPropagation();button.setPointerCapture(e.pointerId);this.flightPointers.set(e.pointerId,[Number(button.dataset.paintAxis),Number(button.dataset.paintDir)]);updateAxes();});
    for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,e=>{if(this.flightPointers.delete(e.pointerId))updateAxes();e.stopPropagation();});
   }
+  for(const button of this.flightControls?.querySelectorAll('[data-paint-turn]')||[]){
+   button.addEventListener('click',e=>{e.stopPropagation();this.turn3D(Number(button.dataset.paintTurn));});
+  }
   window.addEventListener('blur',this.clearFlight);
   document.getElementById('paint-3d-undo')?.addEventListener('click',()=>{if(this.mode3D)this.space.history(false);});
   document.getElementById('paint-3d-redo')?.addEventListener('click',()=>{if(this.mode3D)this.space.history(true);});
@@ -65,6 +68,15 @@ export class CityWallPainter{
    }
   },true);
   this.setTool('brush');
+ }
+ turn3D(direction){
+  if(!this.mode3D||!this.can3D()||this.space.pointer!==null||Math.abs(direction)!==1)return false;
+  const player=this.controller();
+  if(!player?.paintFlight||!player.enabled||player.role!=='fighter'||player.awaitingSpawn||player.status.freeze||player.status.root||performance.now()<(player.stunUntil||0)||performance.now()<(player.authorityHoldUntil||0)||player.panBlastFlight||player.vortexSpin||player.knockback||player.tidePush||player.whipPull)return false;
+  const delta=direction*Math.PI/2;
+  player.wantedArtworkView=null;
+  player.yaw+=delta;player.root.rotation.y+=delta;
+  player.updateCamera(0,true);return true;
  }
  sync3D(world){this.space.sync(world);this.refresh3D();}
  refresh3D(){
