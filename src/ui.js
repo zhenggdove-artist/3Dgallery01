@@ -1,4 +1,4 @@
-import {levelXpRequired} from './shared/player-stats.js';
+import {equipmentStatRows,levelXpRequired} from './shared/player-stats.js';
 import {terrainStyle,TERRAIN_DEFAULTS} from './shared/terrain-style.js';
 import {equippedItem} from './shared/fusion-adapter.js';
 import {tuningFields,equipmentTuning,tunedEquipment,tuningDamageRatio,weaponManaQuote,weaponManaLabel,restorativeCooldown} from './shared/equipment-tuning.js';
@@ -385,7 +385,16 @@ export class TempleUI extends EventTarget{
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.layoutArtworkPrompt();if(this.panelName&&!['bag','wanted','wanted-gm','terrain-style','operation-prompt-layout'].includes(this.panelName))this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();if(this.panelName==='gm')this.refreshGmPlayerTargets();}
   setWorld(world){const promptChanged=JSON.stringify(this.world?.artworkPromptPositions||{})!==JSON.stringify(world.artworkPromptPositions||{});this.world=world;if(promptChanged)this.layoutArtworkPrompt();this.chatLayout?.applyDefault(world.chatDefault);this.refreshHUD();if(['bag','shop','shop-prices','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(['shop','shop-prices'].includes(this.panelName)&&this.shopPriceSignature!==JSON.stringify([world.shopPrices||{},world.equipmentTuning||{},world.delistedShopItems||{}])))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
-  refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);if(this.panelName==='bag'&&this.bagCategory==='equipment'){const xp=this.content.querySelector('[data-equip-xp]'),label='XP '+Math.floor(profile.xp||0)+' / '+levelXpRequired(profile.level);if(xp&&xp.textContent!==label)xp.textContent=label;}
+  refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);if(this.panelName==='bag'&&this.bagCategory==='equipment'){const xp=this.content.querySelector('[data-equip-xp]'),label='XP '+Math.floor(profile.xp||0)+' / '+levelXpRequired(profile.level);if(xp&&xp.textContent!==label)xp.textContent=label;
+  const summary=this.content.querySelector('.equip-stat-summary');
+  if(summary)for(const row of equipmentStatRows(profile)){
+   const el=summary.querySelector('[data-equip-stat="'+row.label+'"]');if(!el)continue;
+   const total=row.label+' '+row.total+(['ATK','DEF','SPD','JUMP'].includes(row.label)?'%':'');
+   for(const [selector,value] of [['b',total],['.stat-o',row.base],['.stat-a',row.level],['.stat-b',row.gear]]){
+    const node=el.querySelector(selector),text=String(value);if(node&&node.textContent!==text)node.textContent=text;
+   }
+  }
+ }
  const mp=$('mana-bar'),mpLabel=$('mana-label');if(mp&&mpLabel){mp.max=profile.maxMana||100;mp.value=profile.mana??mp.max;mpLabel.textContent=Math.floor(mp.value)+'/'+mp.max;}
  const shieldItem=itemById(profile.equipment?.shield),shieldDisplay=$('shield-readout');
  if(shieldDisplay){

@@ -1,4 +1,4 @@
-import {levelAttributeScale,levelXpRequired} from './shared/player-stats.js';
+import {equipmentStatRows,levelXpRequired} from './shared/player-stats.js';
 import {weaponManaQuote,weaponManaLabel,tunedEquipment} from './shared/equipment-tuning.js';
 import {equippedItem} from './shared/fusion-adapter.js';
 import {itemById,EQUIPPABLE_SLOTS,RARITIES,shopWeaponVariant,shopResalePrice,inventoryCapacity} from './shared/catalog.js';
@@ -92,9 +92,8 @@ export function renderOriginalBag(ui,profile){
    const item=itemById(id),index=items.find(v=>v.item.id===id)?.index;
    return `<div class="comfort-supply">${cell(item,index,count)}</div>`;
   }).join('');
-  const st=profile.stats||{},lv=Math.max(0,(profile.level||1)-1),scale=levelAttributeScale(profile.level),bonus=(scale-1)*100,round=v=>Number((Number(v)||0).toFixed(1));
-  const statRows=[['HP',st.maxHp,100,lv*4],['ATK',(st.attack??1)*100,100,bonus],['DEF',(1-(st.defense??1))*100,0,(1-1/scale)*100],['SPD',(st.speed??1)*100,100,bonus],['JUMP',(st.jump??1)*100,100,bonus],['MP',st.maxMana??100,100,lv*4]];
-  body+=`<section class="equip-stat-summary"><small data-equip-xp>XP ${Math.floor(profile.xp||0)} / ${levelXpRequired(profile.level)}</small>${statRows.map(([label,total,base,level])=>`<div><b>${label} ${round(total)}${['ATK','DEF','SPD','JUMP'].includes(label)?'%':''}</b> (<span class="stat-o">${round(base)}</span> + <span class="stat-a">${round(level)}</span> + <span class="stat-b">${round(total-base-level)}</span>)</div>`).join('')}<small>O Base · A Level · B Gear / active effects</small>${profile.equipment?.weapon?`<div class="bag-mana-cost">${esc(weaponManaLabel(weaponManaQuote(ui.world,equippedItem(profile,itemById(profile.equipment.weapon)),profile.fusion?.[profile.equipment.weapon])))}</div>`:''}</section>`;
+  const statRows=equipmentStatRows(profile);
+  body+=`<section class="equip-stat-summary"><small data-equip-xp>XP ${Math.floor(profile.xp||0)} / ${levelXpRequired(profile.level)}</small>${statRows.map(({label,total,base,level,gear})=>`<div data-equip-stat="${label}"><b>${label} ${total}${['ATK','DEF','SPD','JUMP'].includes(label)?'%':''}</b> (<span class="stat-o">${base}</span> + <span class="stat-a">${level}</span> + <span class="stat-b">${gear}</span>)</div>`).join('')}<small>O Base · A Level · B Gear / active effects</small>${profile.equipment?.weapon?`<div class="bag-mana-cost">${esc(weaponManaLabel(weaponManaQuote(ui.world,equippedItem(profile,itemById(profile.equipment.weapon)),profile.fusion?.[profile.equipment.weapon])))}</div>`:''}</section>`;
   body+=`<section class="comfort-bag-gear" aria-label="Comfort for the Soul">
    <h3>Comfort for the Soul</h3>
    <p>Double tap a consumable, then choose shortcut 1, 2 or 3 in the popup. Restock at SHOP.</p>

@@ -52,7 +52,7 @@ test('server permits walking on roofs but rejects entering the solid wall',()=>{
 test('client physics uses shared roof-height geometry including late destruction',()=>{
  const arena=source('src/arena-view.js'),player=source('src/player-controller.js');
  const city=source('src/outer-city.js');
- assert.match(arena,/cityGroundHeight\(x,z,y,this\.world\?\.cityDamage/);
+ assert.match(arena,/damage=this\.world\?\.cityDamage/);assert.match(arena,/cityGroundHeight\(x,z,y,damage\)/);assert.match(arena,/c\.damage===damage/);
  assert.match(arena,/cityBlocked\(x,z,y,this\.world\?\.cityDamage/);
  assert.match(player,/Recheck support every tick/);
  assert.match(city,/buildCityDeformationBasis\(lot,/);

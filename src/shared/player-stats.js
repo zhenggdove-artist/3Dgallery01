@@ -60,3 +60,16 @@ export function refreshStats(world,profile,now=Date.now()){
   }
   return stats;
 }
+
+// Use the multiplier included in the authoritative totals, not a locally
+// predicted bonus from a different backend release.
+export function equipmentStatRows(profile){
+ const st=profile?.stats||{},lv=Math.max(0,(profile?.level||1)-1),scale=Number.isFinite(st.levelScale)&&st.levelScale>=1?st.levelScale:1,bonus=(scale-1)*100;
+ const rows=[['HP',st.maxHp??profile?.maxHp,100,lv*4],['ATK',Number.isFinite(st.attack)?st.attack*100:null,100,bonus],['DEF',Number.isFinite(st.defense)?(1-st.defense)*100:null,0,(1-1/scale)*100],['SPD',Number.isFinite(st.speed)?st.speed*100:null,100,bonus],['JUMP',Number.isFinite(st.jump)?st.jump*100:null,100,bonus],['MP',st.maxMana??profile?.maxMana,100,lv*4]];
+ const round=v=>Math.round(v*10)/10;
+ return rows.map(([label,total,base,level])=>{
+  if(!Number.isFinite(total))return {label,total:'—',base,level:'—',gear:'—'};
+  const t=round(total),a=round(level),b=round(t-base-a);
+  return {label,total:t,base,level:a,gear:b===0?0:b};
+ });
+}

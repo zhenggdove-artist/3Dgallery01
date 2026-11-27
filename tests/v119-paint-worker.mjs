@@ -7,6 +7,7 @@ import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
 import WebSocket from 'ws';
 import {PLAYER_SPAWNS} from '../src/shared/arena.js';
 import {applyWorldPatch} from '../src/shared/world-patch.js';
+import {equipmentStatRows,levelAttributeScale} from '../src/shared/player-stats.js';
 
 const entry=fileURLToPath(new URL('../cloudflare/worker.js',import.meta.url));
 const legacy=Array.from({length:300},(_,i)=>({id:'legacy-stroke-'+i,ownerKey:'fixture-old-owner',ownerEpoch:0,color:'#ff00aa',normal:[0,0,1],size:.4,thickness:.34,points:Array.from({length:32},(_,j)=>[j*.1,20,30+i%20])}));
@@ -56,4 +57,15 @@ try{
  socket.send(JSON.stringify(packet));await until(()=>messages.filter(m=>m.type==='combat-result'&&m.data.requestId===requestId).length>receiptCount);
  const duplicate=(await call('/api/world',undefined,join.token)).world;assert.equal(duplicate.pickupReceipts.filter(r=>r.id===dropId).length,1);
  console.log('V124 loaded-room pickup and idempotent receipt verified, including world reads and replay; elapsedMs='+Math.round(performance.now()-beforePickup));
+ await act('gm-player-level',{targetKey:join.self.key,level:1});
+ const lv1=(await call('/api/world',undefined,join.token)).world.profile;
+ await act('gm-player-level',{targetKey:join.self.key,level:100});
+ const lv100=(await call('/api/world',undefined,join.token)).world.profile;
+ assert.equal(lv100.level,100);assert.equal(lv100.stats.levelScale,levelAttributeScale(100));
+ for(const k of ['attack','speed','jump'])assert.ok(Math.abs(lv100.stats[k]-lv1.stats[k]*levelAttributeScale(100))<1e-8,k);
+ assert.ok(lv100.stats.defense<lv1.stats.defense);
+ assert.deepEqual(lv100.equipment,lv1.equipment);
+ const atk=equipmentStatRows(lv100).find(r=>r.label==='ATK');
+ assert.equal(atk.level,49.7);assert.ok(Math.abs(atk.gear-(lv1.stats.attack-1)*levelAttributeScale(100)*100)<.11);
+ console.log('V127 isolated Worker level 100 authority and EQUIP breakdown verified: '+JSON.stringify(atk));
 }finally{socket?.close();await mf.dispose();}
