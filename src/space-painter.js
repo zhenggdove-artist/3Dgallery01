@@ -84,12 +84,12 @@ export class SpacePainter{
  }
  history(redo=false){
   this.end();
-  this.queue=this.queue.catch(()=>{}).then(async()=>{
+  return this.queue=this.queue.catch(()=>{}).then(async()=>{
    const from=redo?this.redoStack:this.undoStack,to=redo?this.undoStack:this.redoStack,edit=from.at(-1);
    if(!edit){this.ui.toast(redo?'Nothing to redo':'Nothing to undo');return;}
    const remove=(redo?edit.remove:edit.add).map(s=>s.id),add=redo?edit.add:edit.remove;
    try{const result=await this.send('gm-edit-3d',{remove,add});if(!result?.spacePaintEdited)throw Error('3D history could not be saved');from.pop();to.push(edit);}
-   catch(e){this.ui.toast(e.message||'3D history could not be saved');}
+   catch(e){this.ui.toast(/unknown action|unsupported action/i.test(e.message||'')?'3D history requires the updated Worker':e.message||'3D history could not be saved');}
   });
  }
  setRay(event){
