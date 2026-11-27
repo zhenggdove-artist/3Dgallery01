@@ -78,3 +78,10 @@ body.wall-paint-active #crosshair{opacity:.4}
 /* Pointer capture keeps the full native range reachable even on touch screens. */
 #hud #paint-toolbar input[type=range]{touch-action:none;min-width:0;max-width:100%;padding:0;cursor:ew-resize;}
 #hud #paint-size-value{font:10px/1.2 monospace;font-variant-numeric:tabular-nums;}
+
+#paint-3d-flight[hidden]{display:none!important}
+#hud #paint-3d-flight{position:fixed;left:max(10px,env(safe-area-inset-left));top:40%;z-index:120;display:grid;grid-template-columns:repeat(2,minmax(44px,1fr));gap:4px;padding:5px;background:#c0c0c0;border:2px solid;border-color:#fafafa #505050 #505050 #fafafa;color:#111;font:700 10px Tahoma,Arial,sans-serif;pointer-events:auto;touch-action:none;user-select:none;}
+#paint-3d-flight span{grid-column:1/-1;background:#000080;color:#fff;padding:4px;text-align:center;}
+#hud #paint-3d-flight button{min-width:44px;min-height:44px;border:2px solid;border-color:#fff #555 #555 #fff;border-radius:0;background:#c0c0c0;color:#111;touch-action:none;font:700 10px Tahoma,Arial,sans-serif;padding:3px;}
+#hud #paint-3d-flight button:active{background:#000080;color:#fff;}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:530px){#hud #paint-3d-flight{top:28%;}#hud #paint-3d-flight button{min-height:36px;}}

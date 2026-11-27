@@ -23,6 +23,7 @@ import artworkDelivery from '../artwork-delivery.json' with {type:'json'};
 import {ARTWORK_DISCS,discGroundHeight} from './shared/artwork-discs.js';
 import {samplePanBlastPosition} from './shared/pan-blast-flight.js';
 import {gmHouseBlocked} from './shared/arena.js';
+import {spacePaintMoveFraction,spacePaintFloor} from './shared/space-paint-collision.js';
 import {originalBuildSizes,buildGeometry,buildMaterial,houseWallMaterial,createGmHouseMesh,disposeGmHouseMesh} from './build-style.js';
 import {inPlaceLocomotion} from './locomotion-clips.js';
 
@@ -570,8 +571,9 @@ export class TempleArena{
   groundHeight(x,z,y=0){
     const platforms=this.displayPlatforms?.ground(x,z,y)||0;
     const city=cityGroundHeight(x,z,y,this.world?.cityDamage||this.outerCity?.damage||{});
-    return Math.max(platforms,city);
+    return Math.max(platforms,city,spacePaintFloor(this.world?.spacePaint,x,z,y));
   }
+  spacePaintClip(from,to){return spacePaintMoveFraction(this.world?.spacePaint,from,to);}
   blocked(x,z,y=0){if(cityBlocked(x,z,y,this.world?.cityDamage||this.outerCity?.damage||{}))return true;if(gmHouseBlocked(this.world?.structures,x,z,y,.35))return true;for(const s of this.world?.structures||[]){if(s.gmHouse)continue;const dims={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4],house:[5,3.8,4],tree:[1.2,4,1.2]}[s.kind]||[2,2,2];if(y<dims[1]&&Math.abs(x-s.position[0])<dims[0]/2+.35&&Math.abs(z-s.position[2])<dims[2]/2+.35)return true;}return false;}
 }
 

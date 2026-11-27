@@ -2,6 +2,7 @@ import {validateGmHouse,gmHouseBlocked} from './arena.js';
 import {isDelisted,reclaimDelisted,retireShopItem,relistShopItem} from './shop-retirement.js';
 import {validateDiscPaint} from './disc-paint.js';
 import {applySpacePaint} from './space-paint.js';
+import {spacePaintMoveFraction,SPACE_PAINT_FLIGHT_LIMIT} from './space-paint-collision.js';
 import {setTerrainStyle} from './terrain-style.js';
 import {wantedSettings,countWantedDeath} from './wanted-list.js';
 import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown,migrateSkillQuality,applySkillAreaScale,bloomHealRate} from './equipment-tuning.js';
@@ -339,8 +340,9 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
    next.position.length===3&&next.position.every(Number.isFinite)&&
    Math.hypot(next.position[0],next.position[2])<=ARENA_RADIUS+2&&
    next.position[1]>=-4&&next.position[1]<=72;
+  const validPaintHeight=role==='fighter'&&mobility?.admin===true&&Array.isArray(next?.position)&&next.position.length===3&&next.position.every(Number.isFinite)&&Math.hypot(next.position[0],next.position[2])<=ARENA_RADIUS+2&&next.position[1]>=-4&&next.position[1]<=SPACE_PAINT_FLIGHT_LIMIT&&(next.paintFlight===true||(previous?.position?.[1]>64&&next.position[1]<=previous.position[1]+.1));
   if(!next||!Array.isArray(next.position)||next.position.length!==3||!next.position.every(Number.isFinite)||
-     !(insideArena(next.position,role==='spectator'?28:2)||validPanHeight)||!Number.isFinite(next.rotation))
+     !(insideArena(next.position,role==='spectator'?28:2)||validPanHeight||validPaintHeight)||!Number.isFinite(next.rotation))
     return {error:'Invalid position',state:previous||null};
   const distanceTo=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
   const nearSpawn=spawn&&distanceTo(next.position,spawn)<=6;
@@ -393,11 +395,12 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
      (previous?.position?.[1]??0)+.002,mobility.cityDamage,.218))
    return {error:'Building collision',state:previous||null};
   if(previous&&role==='fighter'&&gmHouseBlocked(mobility?.structures,next.position[0],next.position[2],next.position[1],.218)&&!gmHouseBlocked(mobility?.structures,previous.position[0],previous.position[2],previous.position[1],.218))return {error:'Building collision',state:previous};
+  if(previous&&role==='fighter'&&mobility?.spacePaint?.length&&spacePaintMoveFraction(mobility.spacePaint,previous.position,next.position)<1)return {error:'3D paint collision',state:previous};
   return {state:{position:next.position.map(n=>+n.toFixed(3)),rotation:+next.rotation.toFixed(4),animation:String(next.animation||'idle').slice(0,12),visible:next.visible!==false}};
 }
 
 export function applyAction(world,actor,body,context={}){
-  if(body.action==='gm-paint-3d'||body.action==='gm-erase-3d')return applySpacePaint(world,actor,body);
+  if(['gm-paint-3d','gm-erase-3d','gm-edit-3d'].includes(body.action))return applySpacePaint(world,actor,body);
   const now=context.now??Date.now(),rng=context.rng??Math.random,
    // The premium draw checks PERSISTED admin status before any ensureProfile
    // mutation. Existing game/GM actions retain their original role semantics.

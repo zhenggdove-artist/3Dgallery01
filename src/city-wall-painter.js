@@ -9,6 +9,16 @@ export class CityWallPainter{
   this.space=new SpacePainter({scene,canvas,camera,send,ui});this.mode3D=false;this.access3D=false;
   this.spaceControls=document.getElementById('paint-3d-controls');this.spaceToggle=document.getElementById('paint-3d-toggle');this.spaceSettings=document.getElementById('paint-3d-settings');
   this.spaceToggle?.addEventListener('click',()=>this.setMode3D(!this.mode3D));
+  this.flightControls=document.getElementById('paint-3d-flight');this.flightPointers=new Map();
+  const updateAxes=()=>{const axes=[0,0,0];for(const [axis,dir] of this.flightPointers.values())axes[axis]+=dir;const player=this.controller();if(player)player.paintAxes=axes.map(v=>clamp(v,-1,1));};
+  this.clearFlight=()=>{this.flightPointers.clear();updateAxes();};
+  for(const button of this.flightControls?.querySelectorAll('[data-paint-axis]')||[]){
+   button.addEventListener('pointerdown',e=>{if(!this.mode3D||(e.pointerType==='mouse'&&e.button!==0))return;e.preventDefault();e.stopPropagation();button.setPointerCapture(e.pointerId);this.flightPointers.set(e.pointerId,[Number(button.dataset.paintAxis),Number(button.dataset.paintDir)]);updateAxes();});
+   for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,e=>{if(this.flightPointers.delete(e.pointerId))updateAxes();e.stopPropagation();});
+  }
+  window.addEventListener('blur',this.clearFlight);
+  document.getElementById('paint-3d-undo')?.addEventListener('click',()=>{if(this.mode3D)this.space.history(false);});
+  document.getElementById('paint-3d-redo')?.addEventListener('click',()=>{if(this.mode3D)this.space.history(true);});
   this.thickness=.34;this.distance=12;
   for(const [id,key] of [['paint-3d-thickness','thickness'],['paint-3d-distance','distance']]){
    const input=document.getElementById(id),output=document.getElementById(id+'-value');if(!input)continue;
@@ -49,6 +59,7 @@ export class CityWallPainter{
   canvas.addEventListener('pointercancel',e=>this.up(e),true);
   canvas.addEventListener('lostpointercapture',e=>this.up(e),true);
   window.addEventListener('keydown',e=>{
+   if(this.mode3D&&(e.ctrlKey||e.metaKey)&&!(/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName))&&['KeyZ','KeyY'].includes(e.code)){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat)this.space.history(e.code==='KeyY'||e.shiftKey);return;}
    if(this.active&&e.code==='Escape'){
     e.preventDefault();e.stopImmediatePropagation();this.setActive(false);
    }
@@ -64,7 +75,7 @@ export class CityWallPainter{
   if(enabled&&(!this.active||!this.isGM()||this.role()!=='fighter'))return;
   if(enabled===this.mode3D)return;
   if(this.mode3D)this.space.end();else{this.finish();const pointer=this.pointer;this.pointer=null;if(pointer!==null&&this.canvas.hasPointerCapture(pointer))this.canvas.releasePointerCapture(pointer);}
-  this.mode3D=enabled;this.spaceToggle?.classList.toggle('active',enabled);this.spaceToggle?.setAttribute('aria-pressed',String(enabled));if(this.spaceSettings)this.spaceSettings.hidden=!enabled;
+  this.mode3D=enabled;this.clearFlight();this.controller()?.setPaintFlight(enabled);if(this.flightControls)this.flightControls.hidden=!enabled;this.spaceToggle?.classList.toggle('active',enabled);this.spaceToggle?.setAttribute('aria-pressed',String(enabled));if(this.spaceSettings)this.spaceSettings.hidden=!enabled;
  }
  setTool(tool){
   this.tool=tool;this.brush?.classList.toggle('active',tool==='brush');

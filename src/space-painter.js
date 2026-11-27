@@ -55,7 +55,7 @@ export function spacePaintGeometry(strokes){
 export class SpacePainter{
  constructor({scene,canvas,camera,send,ui}){
   Object.assign(this,{scene,canvas,camera,send,ui});
-  this.archive=[];this.revision=-1;this.pending=new Map();this.erasing=new Set();this.queue=Promise.resolve();
+  this.archive=[];this.revision=-1;this.pending=new Map();this.erasing=new Set();this.queue=Promise.resolve();this.undoStack=[];this.redoStack=[];this.gesture=null;
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();this.normal=new THREE.Vector3();this.plane=new THREE.Plane();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
  }
@@ -76,6 +76,22 @@ export class SpacePainter{
   const rev=world.spacePaintRevision||0;if(rev===this.revision)return;
   this.revision=rev;this.archive=world.spacePaint||[];this.rebuild();
  }
+ record(edit){
+  const last=this.undoStack.at(-1);
+  if(edit.gesture&&last?.gesture===edit.gesture)last.add.push(...edit.add);
+  else{this.undoStack.push(edit);if(this.undoStack.length>64)this.undoStack.shift();}
+  this.redoStack.length=0;
+ }
+ history(redo=false){
+  this.end();
+  this.queue=this.queue.catch(()=>{}).then(async()=>{
+   const from=redo?this.redoStack:this.undoStack,to=redo?this.undoStack:this.redoStack,edit=from.at(-1);
+   if(!edit){this.ui.toast(redo?'Nothing to redo':'Nothing to undo');return;}
+   const remove=(redo?edit.remove:edit.add).map(s=>s.id),add=redo?edit.add:edit.remove;
+   try{const result=await this.send('gm-edit-3d',{remove,add});if(!result?.spacePaintEdited)throw Error('3D history could not be saved');from.pop();to.push(edit);}
+   catch(e){this.ui.toast(e.message||'3D history could not be saved');}
+  });
+ }
  setRay(event){
   const r=this.canvas.getBoundingClientRect();if(!r.width||!r.height)return false;
   this.ndc.set((event.clientX-r.left)/r.width*2-1,1-(event.clientY-r.top)/r.height*2);
@@ -89,7 +105,7 @@ export class SpacePainter{
    const hit=this.ray.intersectObject(this.saved,false)[0];const id=hit&&this.ranges.find(r=>hit.faceIndex>=r.start&&hit.faceIndex<r.end)?.id;
    if(id&&!this.erasing.has(id)){
     this.erasing.add(id);this.queue=this.queue.catch(()=>{}).then(async()=>{
-     try{const result=await this.send('gm-erase-3d',{id});if(!result?.erased3DStroke)throw Error('3D erase failed');}
+     try{const result=await this.send('gm-erase-3d',{id});if(!result?.erased3DStroke||!result.erasedStroke)throw Error('3D erase failed');this.record({add:[],remove:[result.erasedStroke]});}
      catch(e){this.ui.toast(e.message||'3D erase failed');}finally{this.erasing.delete(id);}
     });
    }
@@ -102,7 +118,7 @@ export class SpacePainter{
   this.plane.setFromNormalAndCoplanarPoint(this.normal,this.point.copy(this.camera.position).addScaledVector(this.normal,distance));
   if(!this.ray.ray.intersectPlane(this.plane,this.point)||!spacePaintPointAllowed(this.point.toArray())){this.ui.toast('Aim inside the 3D paint area');return;}
   this.pointer=event.pointerId;this.canvas.setPointerCapture(event.pointerId);
-  this.begin({color,size,thickness,normal:this.normal.toArray()});this.append(this.point);
+  this.gesture=globalThis.crypto.randomUUID();this.begin({color,size,thickness,normal:this.normal.toArray()});this.append(this.point);
  }
  begin(settings){this.stroke={...settings,id:globalThis.crypto.randomUUID(),points:[]};}
  append(point){
@@ -130,13 +146,13 @@ export class SpacePainter{
   this.finish();
  }
  finish(){
-  const s=this.stroke;this.stroke=null;
+  const s=this.stroke,gesture=this.gesture;this.stroke=null;
   if(this.frame){cancelAnimationFrame(this.frame);this.frame=0;}
   this.mesh('preview',[]);
   if(!s?.points.length)return;
   this.pending.set(s.id,s);this.rebuild();
   this.queue=this.queue.catch(()=>{}).then(async()=>{
-   try{const result=await this.send('gm-paint-3d',{stroke:s});if(!result?.spacePaintStroke)throw Error('3D paint could not be saved');}
+   try{const result=await this.send('gm-paint-3d',{stroke:s});if(!result?.spacePaintStroke)throw Error('3D paint could not be saved');this.record({gesture,add:[result.spacePaintStroke],remove:[]});}
    catch(e){this.ui.toast(e.message||'3D paint could not be saved');}
    finally{this.pending.delete(s.id);if(!this.archive.some(p=>p.id===s.id))this.rebuild();}
   });

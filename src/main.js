@@ -477,14 +477,14 @@ network.addEventListener('state-rejected',event=>{
     network.lastStateAt=0;
     return;
   }
-  const recovered=sent&&rejection.error!=='Invalid position'?
+  const recovered=sent&&rejection.error!=='Invalid position'&&rejection.error!=='3D paint collision'?
    rebaseRejectedPose(accepted,sent.position,current.toArray(),(x,z,y)=>arena.blocked(x,z,y)):
    accepted;
   const corrected=recovered||accepted;
   const dx=current.x-corrected[0],dy=current.y-corrected[1],dz=current.z-corrected[2];
   // A correction is authoritative, but movement applied after the rejected
   // sample must not be wiped away by a delayed reply.
-  if(dx*dx+dy*dy+dz*dz>.36){
+  if(dx*dx+dy*dy+dz*dz>.36||rejection.error==='3D paint collision'){
    network.noteMotionError({kind:'applied-rejection',source:rejection.error,seq,serverTime:rejection.serverTime,before:current.toArray(),submitted:sent?.position,authoritative:accepted,after:corrected});
    // Predicted step replay is not a teleport: do not erase walk speed,
    // airborne velocity or knockback each time the server responds.
@@ -1025,7 +1025,7 @@ if(localRoot&&profile){if(self.name!==profile.name){self.name=profile.name;ui.se
   controller.lastVortexSpinId=profile.vortexSpin.id;
   controller.beginVortexSpin(profile.vortexSpin);
  }
- controller.stats=profile.stats||{speed:1,jump:1,gravity:1};statusVisuals.sync(localRoot,profile.effects);if(profile.impulse&&controller.lastImpulse!==profile.impulse.id){controller.lastImpulse=profile.impulse.id;controller.knockback=new THREE.Vector3(...profile.impulse.vector).multiplyScalar(5);}}if(dead){if(!wasDead&&localRoot){bursts.play(localRoot.position,'death-'+self.key+'-'+profile.deadUntil);audio.play('explosion');}wasDead=true;controller?.setEnabled(false);ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}else if(joined){if(wasDead&&controller){
+ controller.stats=profile.stats||{speed:1,jump:1,gravity:1};statusVisuals.sync(localRoot,profile.effects);if(profile.impulse&&controller.lastImpulse!==profile.impulse.id){controller.lastImpulse=profile.impulse.id;controller.knockback=new THREE.Vector3(...profile.impulse.vector).multiplyScalar(5);}}if(dead){if(wallPainter.mode3D)wallPainter.stop();if(!wasDead&&localRoot){bursts.play(localRoot.position,'death-'+self.key+'-'+profile.deadUntil);audio.play('explosion');}wasDead=true;controller?.setEnabled(false);ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}else if(joined){if(wasDead&&controller){
  const spawn=Array.isArray(profile?.respawnPosition)?profile.respawnPosition:
   (PLAYER_SPAWNS[self.seat]||PLAYER_SPAWNS[0]);
  controller.teleport(spawn);

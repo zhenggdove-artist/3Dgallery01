@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {bindMobileStick} from './mobile-stick.js';
 import {ARENA_RADIUS,PLAYER_SPAWNS} from './shared/arena.js';
+import {SPACE_PAINT_FLIGHT_LIMIT,SPACE_PAINT_FLIGHT_SPEED} from './shared/space-paint-collision.js';
 import {PAN_BLAST_GRAVITY,PAN_BLAST_LAUNCH_SPEED,PAN_BLAST_BOUNCE_SPEEDS,PAN_BLAST_BOUNCE_GRAVITY,PAN_BLAST_INITIAL_DURATION} from './shared/pan-blast-flight.js';
 import {WHIP_PULL_SPEED} from './shared/weapon-abilities.js';
 import {vortexSpinPoint,VORTEX_SPIN_MS} from './shared/vortex-flight.js';
@@ -106,9 +107,35 @@ export class PlayerController{
     this.canvas.addEventListener('wheel',e=>{if(!this.enabled)return;e.preventDefault();this.wantedArtworkView=null;this.distance=THREE.MathUtils.clamp(this.distance+e.deltaY*.015,3,50);},{passive:false});
     if(stick)this.mobileStick=bindMobileStick(stick,{enabled:()=>this.enabled,write:(x,y)=>{if(Math.hypot(x,y)>.1)this.wantedArtworkView=null;this.move.set(x,y);}});
   }
-  jump(){if(this.awaitingSpawn||this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;this.onJump?.();return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
+  jump(){if(this.paintFlight)return;if(this.awaitingSpawn||this.vortexSpin||this.panBlastFlight||!this.enabled||this.status.freeze||this.status.root||this.status.confuse||performance.now()<(this.stunUntil||0)||this.role!=='fighter')return;if(this.stats.impulse){const now=performance.now();if(now-(this.lastFlap||-Infinity)<this.stats.flapMs||this.root.position.y>=64)return;this.lastFlap=now;if(this.grounded)this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);this.walkOffMomentum=false;this.grounded=false;this.velocityY=this.stats.impulse*this.stats.jump;this.onJump?.();return;}if(!this.grounded)return;this.fallStartY=this.root.position.y;this.walkOffMomentum=false;this.grounded=false;this.velocityY=10*this.stats.jump;this.onJump?.();this.jumpVelocity.copy(this.direction).multiplyScalar(this.speed);}
+  setPaintFlight(active){
+    if(!active&&this.paintFlight){this.paintHighDescent=this.root.position.y>64;this.fallStartY=this.root.position.y;}
+    this.paintFlight=!!active&&this.role==='fighter';this.paintAxes=[0,0,0];this.velocityY=0;this.speed=0;
+    this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.wantedArtworkView=null;
+    this.grounded=!this.paintFlight&&Math.abs(this.root.position.y-this.arena.groundHeight(this.root.position.x,this.root.position.z,this.root.position.y))<.04;
+  }
+  paintVertical(previousY){
+    const p=this.root.position;if(!this.arena.world?.spacePaint?.length)return null;
+    const t=this.arena.spacePaintClip([p.x,previousY,p.z],[p.x,p.y,p.z]);if(t===1)return null;
+    p.y=previousY+(p.y-previousY)*t;
+    if(this.velocityY>0){this.velocityY=0;return null;}return p.y;
+  }
+  advancePaintFlight(dt){
+    const p=this.root.position,axes=this.paintAxes||[0,0,0];
+    const x=axes[0]+Number(this.keys.has('KeyD'))-Number(this.keys.has('KeyA'))+this.move.x;
+    const z=axes[2]+Number(this.keys.has('KeyS'))-Number(this.keys.has('KeyW'))+this.move.y;
+    const y=axes[1],scale=SPACE_PAINT_FLIGHT_SPEED*dt/Math.max(1,Math.hypot(x,y,z));
+    const dx=(x*Math.cos(this.yaw)+z*Math.sin(this.yaw))*scale,dz=(-x*Math.sin(this.yaw)+z*Math.cos(this.yaw))*scale;
+    const next=[p.x+dx,THREE.MathUtils.clamp(p.y+y*scale,0,SPACE_PAINT_FLIGHT_LIMIT),p.z+dz],from=p.toArray();
+    const can=q=>Math.hypot(q[0],q[2])<=ARENA_RADIUS-1&&!this.arena.blocked(q[0],q[2],q[1])&&
+      (this.arena.spacePaintClip?.(p.toArray(),q)??1)===1;
+    if(can(next))p.fromArray(next);
+    else for(let axis=0;axis<3;axis++){const q=p.toArray();q[axis]=next[axis];if(can(q))p.fromArray(q);}
+    this.velocityY=0;this.grounded=false;this.animation=Math.hypot(p.x-from[0],p.y-from[1],p.z-from[2])>.0001?'walk':'idle';
+    this.updateCamera(dt);return this.state();
+  }
   setEnabled(value){this.enabled=value;if(!value){this.mobileStick?.reset();this.keys.clear();this.move.set(0,0);this.drag=null;this.pinch=null;this.pointers.clear();}}
-  setRole(role){if(this.role!==role){this.mobileStick?.reset();this.wantedArtworkView=null;}this.role=role;this.root.visible=role==='fighter';this.followTarget=null;this.spectatorLift=0;this.cameraLocked=false;this.authorityHoldUntil=0;this.stunUntil=0;}
+  setRole(role){if(this.role!==role){if(this.paintFlight)this.setPaintFlight(false);this.mobileStick?.reset();this.wantedArtworkView=null;}this.role=role;this.root.visible=role==='fighter';this.followTarget=null;this.spectatorLift=0;this.cameraLocked=false;this.authorityHoldUntil=0;this.stunUntil=0;}
   setFollowTarget(root=null){this.followTarget=root;}
   teleport(position){this.wantedArtworkView=null;this.root.position.fromArray(position);this.speed=0;this.velocityY=0;this.jumpVelocity.set(0,0,0);this.walkOffMomentum=false;this.knockback=null;this.knockbackRemaining=0;this.knockbackSpeed=0;this.panBlastFlight=null;this.whipPull=null;this.vortexSpin=null;this.tidePush=null;}
   beginPanBlast(hit){
@@ -172,7 +199,8 @@ export class PlayerController{
       this.velocityY-=(flight.rebounds>0?PAN_BLAST_BOUNCE_GRAVITY:PAN_BLAST_GRAVITY)*step;
       root.position.y+=this.velocityY*step;
       if(root.position.y>64){root.position.y=64;this.velocityY=0;}
-      const floor=this.arena.groundHeight(root.position.x,root.position.z,Math.max(previousY,root.position.y));
+      const paintLanding=this.paintVertical(previousY);
+      const floor=Math.max(this.arena.groundHeight(root.position.x,root.position.z,Math.max(previousY,root.position.y)),paintLanding??-Infinity);
       if(this.velocityY<=0&&previousY>=floor-.05&&root.position.y<=floor){
         root.position.y=floor;flight.landings++;
         if(flight.rebounds<PAN_BLAST_BOUNCE_SPEEDS.length){
@@ -192,7 +220,7 @@ export class PlayerController{
     const p=this.root.position,nx=p.x+dx,nz=p.z+dz;
     // All discs are walkable tops without invisible side colliders.
     // Keep only real build collision and the outer arena limit.
-    const permitted=(x,z)=>Math.hypot(x,z)<=ARENA_RADIUS-1&&!this.arena.blocked(x,z,p.y);
+    const permitted=(x,z)=>Math.hypot(x,z)<=ARENA_RADIUS-1&&!this.arena.blocked(x,z,p.y)&&(!this.arena.world?.spacePaint?.length||this.arena.spacePaintClip(p.toArray(),[x,p.y,z])===1);
     if(permitted(nx,nz)){p.x=nx;p.z=nz;}
     else{
       if(permitted(nx,p.z))p.x=nx;
@@ -215,6 +243,7 @@ export class PlayerController{
   }
   update(dt){
     if(!this.enabled||this.awaitingSpawn||(!this.panBlastFlight&&performance.now()<(this.authorityHoldUntil||0))){this.updateCamera(dt);return this.state();}
+    if(this.paintFlight&&this.role==='fighter')return this.advancePaintFlight(dt);
     if(this.panBlastFlight){
       // Hit stun cannot cancel the launch: steer/jump return only after
       // one big parabola and precisely three successively lower bounces.
@@ -284,9 +313,9 @@ export class PlayerController{
     if(this.grounded){const factor=this.castMoveFactor===.05 ? .05 : 1;
      this.speed=Math.min(this.speed,8.64*this.stats.speed*factor);
      this.speed=moving?Math.min(8.64*this.stats.speed*factor,this.speed+6*this.stats.speed*factor*dt):Math.max(0,this.speed-12*dt);if(moving){this.stepHorizontal(this.direction.x*this.speed*dt,this.direction.z*this.speed*dt);this.root.rotation.y=Math.atan2(this.direction.x,this.direction.z);}}
-    else{const previousY=this.root.position.y;this.velocityY-=25*this.stats.gravity*dt;this.root.position.y+=this.velocityY*dt;if(this.root.position.y>64){this.root.position.y=64;this.velocityY=0;}const airSpeed=(this.stats.impulse?8.64*this.stats.speed*.8:this.speed*.3)*(this.castMoveFactor===.05 ? .05 : 1);if(this.stats.impulse){this.jumpVelocity.multiplyScalar(Math.exp(-6*dt));if(moving)this.root.rotation.y=Math.atan2(this.direction.x,this.direction.z);}
+    else{const previousY=this.root.position.y;this.velocityY-=25*this.stats.gravity*dt;this.root.position.y+=this.velocityY*dt;if(this.root.position.y<=64)this.paintHighDescent=false;if(this.root.position.y>64&&!this.paintHighDescent){this.root.position.y=64;this.velocityY=0;}const paintLanding=this.paintVertical(previousY);const airSpeed=(this.stats.impulse?8.64*this.stats.speed*.8:this.speed*.3)*(this.castMoveFactor===.05 ? .05 : 1);if(this.stats.impulse){this.jumpVelocity.multiplyScalar(Math.exp(-6*dt));if(moving)this.root.rotation.y=Math.atan2(this.direction.x,this.direction.z);}
      else if(this.walkOffMomentum)this.jumpVelocity.multiplyScalar(Math.exp(-2*dt));
-     this.stepHorizontal((this.jumpVelocity.x+this.direction.x*airSpeed)*dt,(this.jumpVelocity.z+this.direction.z*airSpeed)*dt);const floor=this.arena.groundHeight(this.root.position.x,this.root.position.z,Math.max(previousY,this.root.position.y));if(this.velocityY<=0&&previousY>=floor-.05&&this.root.position.y<=floor){
+     this.stepHorizontal((this.jumpVelocity.x+this.direction.x*airSpeed)*dt,(this.jumpVelocity.z+this.direction.z*airSpeed)*dt);const floor=Math.max(this.arena.groundHeight(this.root.position.x,this.root.position.z,Math.max(previousY,this.root.position.y)),paintLanding??-Infinity);if(this.velocityY<=0&&previousY>=floor-.05&&this.root.position.y<=floor){
       // Only land when falling THROUGH the top from above. A disc side
       // must never snap a descending actor back onto the deck.
       this.root.position.y=floor;this.velocityY=0;this.grounded=true;
@@ -345,5 +374,5 @@ export class PlayerController{
   }
   aimDirection(){const elevation=THREE.MathUtils.clamp(-this.pitch,-.7,.8),h=this.root.rotation.y;return [Math.sin(h)*Math.cos(elevation),Math.sin(elevation),Math.cos(h)*Math.cos(elevation)];}
   buildPosition(distance=5){const h=this.root.rotation.y,x=this.root.position.x+Math.sin(h)*distance,z=this.root.position.z+Math.cos(h)*distance;return [x,this.arena.groundHeight(x,z),z];}
-  state(){return {position:this.root.position.toArray(),rotation:this.root.rotation.y,animation:this.animation,visible:true};}
+  state(){return {position:this.root.position.toArray(),rotation:this.root.rotation.y,animation:this.animation,visible:true,...(this.paintFlight?{paintFlight:true}:{})};}
 }

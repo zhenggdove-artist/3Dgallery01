@@ -24,6 +24,17 @@ export function validateSpacePaint(s){
 export function applySpacePaint(world,actor,body){
  if(actor.admin!==true||world.profiles?.[actor.key]?.admin!==true||actor.role!=='fighter')return {error:'GM only'};
  const list=world.spacePaint||[];
+ if(body.action==='gm-edit-3d'){
+  const remove=body.remove,add=body.add;
+  if(!Array.isArray(remove)||!Array.isArray(add)||remove.length+add.length<1||remove.length+add.length>SPACE_PAINT_STROKE_BUDGET||
+    !remove.every(validId)||new Set(remove).size!==remove.length)return {error:'Invalid 3D history edit'};
+  const ids=new Set(remove);
+  if(remove.some(id=>!list.some(s=>s.id===id)))return {error:'3D history has changed'};
+  const next=list.filter(s=>!ids.has(s.id)),seen=new Set(next.map(s=>s.id));
+  for(const raw of add){const s=validateSpacePaint(raw);if(!s||seen.has(s.id))return {error:'Invalid 3D history stroke'};seen.add(s.id);next.push(s);}
+  if(next.length>SPACE_PAINT_STROKE_BUDGET||next.reduce((n,s)=>n+s.points.length,0)>SPACE_PAINT_POINT_BUDGET)return {error:'3D paint archive full'};
+  world.spacePaint=next;world.spacePaintRevision=(world.spacePaintRevision||0)+1;world.revision++;return {spacePaintEdited:true};
+ }
  if(body.action==='gm-erase-3d'){
   if(!validId(body.id)||!list.some(s=>s.id===body.id))return {error:'3D stroke not found'};
   world.spacePaint=list.filter(s=>s.id!==body.id);
@@ -34,5 +45,5 @@ export function applySpacePaint(world,actor,body){
   world.spacePaint=[...list,s];
  }
  world.spacePaintRevision=(world.spacePaintRevision||0)+1;world.revision++;
- return body.action==='gm-erase-3d'?{erased3DStroke:body.id}:{spacePaintStroke:world.spacePaint.at(-1)};
+ return body.action==='gm-erase-3d'?{erased3DStroke:body.id,erasedStroke:list.find(s=>s.id===body.id)}:{spacePaintStroke:world.spacePaint.at(-1)};
 }
