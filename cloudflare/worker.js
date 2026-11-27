@@ -1,4 +1,5 @@
 import {initializeWanted,wantedApi,wantedMedia} from './wanted-api.js';
+import {initializeSpacePaintCheckpoints,readSpacePaintCheckpoint,verifySpacePaintCheckpoint,prepareSpacePaintCheckpoints,commitSpacePaintCheckpoints} from './space-paint-checkpoints.js';
 import {initializeArtMedia,uploadArtMedia,getArtMedia} from './art-media.js';
 import {initializeWingOrders,wingPaymentStatus,wingCheckoutApi,wingOrderStatus,wingNotifyApi,paymentMode} from './ecpay-wing-payments.js';
 import {verifyFirebaseIdToken,firebaseWebConfig,firebaseProfileKey,isFirebaseGm} from './firebase-auth.js';
@@ -24,7 +25,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,rooftopPaintV100:true,spacePaintV102:true,spacePaintV103:true,spacePaintHistoryV104:true,spacePaintAccessV105:true,operationPromptV101:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,fastActionsV087:true,fastCastV089:true,instantAttackV090:true,v35CombatV091:true,combatLatencyV092:true,contactFastV093:true,v35ContactV094:true,impactFeedbackV095:true,contactLedgerV097:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,rooftopPaintV100:true,spacePaintV102:true,spacePaintV103:true,spacePaintHistoryV104:true,spacePaintAccessV105:true,spacePaintUnlimitedV106:true,operationPromptV101:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,fastActionsV087:true,fastCastV089:true,instantAttackV090:true,v35CombatV091:true,combatLatencyV092:true,contactFastV093:true,v35ContactV094:true,impactFeedbackV095:true,contactLedgerV097:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
@@ -55,7 +56,7 @@ export class TempleRoom extends DurableObject{
      if(!this.sql.exec('PRAGMA table_info(sessions)').toArray().some(c=>c.name==='preview_seat'))
        this.sql.exec('ALTER TABLE sessions ADD COLUMN preview_seat INTEGER');
      initializeArtMedia(this.sql);initializeWanted(this.sql);
-     initializeWingOrders(this.sql);
+     initializeWingOrders(this.sql);initializeSpacePaintCheckpoints(this.sql);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
   }
@@ -129,6 +130,10 @@ export class TempleRoom extends DurableObject{
       if(path==='/api/wing-pay/checkout'&&request.method==='POST')return withCors(request,await wingCheckoutApi(this,request,session),this.env);
       if(path==='/api/wing-pay/order'&&request.method==='GET')return withCors(request,wingOrderStatus(this,request,session),this.env);
       if(path==='/api/art-media'&&request.method==='POST')return withCors(request,await uploadArtMedia(request,session,this),this.env);
+      if(path.startsWith('/api/space-paint-raster/')&&request.method==='GET'){
+       const bytes=readSpacePaintCheckpoint(this.sql,path.slice('/api/space-paint-raster/'.length));
+       return withCors(request,bytes?new Response(bytes,{headers:{'Content-Type':'application/octet-stream','Cache-Control':'private,max-age=31536000,immutable'}}):json({error:'Surface checkpoint missing'},404),this.env);
+      }
       if(path==='/api/socket')return this.connect(request,session,token);
       if(path==='/api/media'&&request.method==='POST')return withCors(request,await this.uploadMedia(request,session),this.env);
        if(path==='/api/gm/music'&&request.method==='POST')return withCors(request,await this.uploadGmMusic(request,session),this.env);
@@ -240,7 +245,7 @@ export class TempleRoom extends DurableObject{
   connect(request,session,token){
     if(request.headers.get('Upgrade')?.toLowerCase()!=='websocket')return json({error:'WebSocket required'},426);
     for(const ws of this.ctx.getWebSockets(session.id)){this.closed.add(ws);try{ws.close(1000,'Reconnected');}catch{}}
-    const [client,server]=Object.values(new WebSocketPair()),protocol=new URL(request.url).searchParams.get('patch'),compact=protocol==='2',patch=compact||protocol==='1';this.ctx.acceptWebSocket(server,[session.id]);server.serializeAttachment({sessionId:session.id,profileKey:session.profile_key,role:session.role,seat:session.seat,lastStateAt:0,patch,compact});
+    const [client,server]=Object.values(new WebSocketPair()),protocol=new URL(request.url).searchParams.get('patch'),compact=protocol==='2',patch=compact||protocol==='1';this.ctx.acceptWebSocket(server,[session.id]);server.serializeAttachment({sessionId:session.id,profileKey:session.profile_key,role:session.role,seat:session.seat,lastStateAt:0,patch,compact,surfaceDelta:new URL(request.url).searchParams.get('surfaceDelta')==='1'});
     const view=worldView(this.readWorld(),session.profile_key);if(patch)this.worldBaselines.set(server,view);
     server.send(JSON.stringify({type:'welcome',data:{self:this.self(session),players:this.roster(),world:view,compactCombat:compact,combatSocketActions:compact,fastActionsV087:compact,fastCastV089:compact,contactFastV093:compact}}));this.broadcastRoster();this.armAlarm();
     return new Response(null,{status:101,webSocket:client});
@@ -340,12 +345,14 @@ export class TempleRoom extends DurableObject{
      // to use the fixed central plant position, never combat or BUILD actions.
      const noPoseAction=['buy','equip','unequip','sell','sell-bulk','inspect-item','assign-consumable','swap-inventory','gm-shop-price','gm-shop-delist','gm-shop-relist','gm-create-house','gm-update-house','gm-delete-house','gm-equipment-tuning','gm-chat-default','gm-artwork-prompt-position','gm-operation-prompt-layout','gm-player-level','gm-wing-canvas','gm-space-paint-access','gm-space-paint-clear','gm-terrain-style'].includes(body.action);
      if(!state?.position&&!spectatorWrite&&!noPoseAction)return json({error:'Connect and enter the Temple first'},409);
-     const world=body.action==='attack'?this.combatWorld():this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:spectatorWrite||!state?.position?[0,0,0]:state.position},actors=this.actors();
+     const world=body.action==='paint-space-surface'?this.combatWorld():body.action==='attack'?this.combatWorld():this.world(),actor={key:session.profile_key,name:session.name,color:session.color,role:session.role,admin:!!world.profiles[session.profile_key]?.admin,position:spectatorWrite||!state?.position?[0,0,0]:state.position},actors=this.actors();
     delete body.verifiedArtMedia;if(body.action==='add-artwork'||body.action==='publish-art-bomb'){const media=this.sql.exec('SELECT id,type,owner FROM art_media WHERE id=?',String(body.artwork?.mediaId||'')).toArray()[0];if(!media||media.owner!==session.profile_key||body.action==='add-artwork'&&!actor.admin||body.action==='publish-art-bomb'&&session.role!=='fighter')return json({error:'Upload your own validated artwork with the required role first'},403);body.verifiedArtMedia={id:media.id,type:media.type};}
     if(body.media||body.surface){const mediaId=body.media?.id||body.surface,media=this.sql.exec('SELECT id,type,owner FROM plant_media WHERE id=?',mediaId).toArray()[0];if(!media||media.owner!==session.profile_key||body.surface&&!media.type.startsWith('image/'))return json({error:'Upload your own media first'},400);if(body.media)body.media={id:media.id,type:media.type};}
     const previousRespawnAt=world.profiles[session.profile_key]?.lastRespawnAt||0;
     const previousDamageSequence=world.damageSequence||0;
-    const result=applyAction(world,actor,body,{now:body.action==='attack'?receivedAt:Date.now(),actors,seatIndex:session.seat});if(result.error)return json({error:result.error},400);
+    const surfaceAction=['paint-space-surface','gm-edit-3d','gm-erase-3d','gm-space-paint-clear'].includes(body.action),previousSurfaces=surfaceAction?world.spacePaintSurface:null;
+    const result=applyAction(world,actor,body,{now:body.action==='attack'?receivedAt:Date.now(),actors,seatIndex:session.seat,...(body.action==='gm-edit-3d'?{verifySurfaceCheckpoint:(strokeId,id)=>verifySpacePaintCheckpoint(this.sql,strokeId,id)}:{})});if(result.error)return json({error:result.error},400);
+    const surfaceWrites=surfaceAction?prepareSpacePaintCheckpoints(this.sql,world,body.action,body):[];
     // Account only for actual server elapsed time during action processing;
     // do not trust client clocks or jump a projectile to its final target.
     if(result.attackEvent)advanceCombatContacts(world,actors,Math.max(receivedAt,Date.now()));
@@ -365,13 +372,14 @@ export class TempleRoom extends DurableObject{
     // Do not encode, persist and retransmit a full gallery for every pulse.
     const contactDamage=body.action==='attack'?this.damagePacket(world,previousDamageSequence):null;
     const contactStructures=body.action==='attack'?this.structurePacket([...(result.structureHits||(result.structureHit?[result.structureHit]:[])),...contactVisuals.filter(v=>v.kind==='structure-hit').map(v=>v.event)],[...(result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[])),...contactVisuals.filter(v=>v.kind==='structure-destroyed').map(v=>v.event)],world):null;
-    const response={ok:true,...result,...(contactDamage?{contactDamage}:{}),...(contactStructures&&(contactStructures.hits.length||contactStructures.broken.length)?{contactStructures}:{}),...(compact?{worldRevision:world.revision}:
+    const response={ok:true,...result,...(contactDamage?{contactDamage}:{}),...(contactStructures&&(contactStructures.hits.length||contactStructures.broken.length)?{contactStructures}:{}),...((compact||body.action==='paint-space-surface')?{worldRevision:world.revision}:
       {world:worldView(world,session.profile_key,Date.now(),['gm-wing-publish','gm-wing-update','gm-wing-remove','gm-wing-set-rate','redeem-wing-design'].includes(body.action))})};
     const responseText=JSON.stringify(response);
-    const encoded=body.action==='attack'?encodeCombatWorld(world,this.combatStateCache):null,rows=encoded?combatRows(world,encoded):null;
+    const encoded=body.action==='paint-space-surface'?encodeCombatWorld(world,this.combatStateCache):body.action==='attack'?encodeCombatWorld(world,this.combatStateCache):null,rows=encoded?combatRows(world,encoded):null;
     let committedPayload;
     this.ctx.storage.transactionSync(()=>{
       if(encoded)this.saveCombat(world,encoded,rows);else committedPayload=this.save(world);
+      if(surfaceAction)commitSpacePaintCheckpoints(this.sql,previousSurfaces,world.spacePaintSurface,surfaceWrites,body.action);
       if(['reset-player-artworks','gm-remove-artworks'].includes(body.action)&&Array.isArray(result.removedArtworkMediaIds)){
         for(const mediaId of result.removedArtworkMediaIds){
           this.sql.exec('DELETE FROM art_media_chunks WHERE id=?',mediaId);
@@ -603,9 +611,9 @@ export class TempleRoom extends DurableObject{
        if(!profileViews.has(meta.profileKey))profileViews.set(meta.profileKey,worldProfileView(world,meta.profileKey,now));
        const profile=profileViews.get(meta.profileKey),next={...common,profile};
        if(previous){
-        const baselineKey=previous.revision+':'+previous.serverTime;
+        const baselineKey=previous.revision+':'+previous.serverTime+':'+Number(!!meta.surfaceDelta);
         let patch=commonPatches.get(baselineKey);
-        if(!patch){patch=createWorldPatch(previous,common,true,serializeCityRecord);commonPatches.set(baselineKey,patch);}
+        if(!patch){patch=createWorldPatch(previous,common,true,serializeCityRecord,meta.surfaceDelta===true);commonPatches.set(baselineKey,patch);}
         const profileDelta=meta.compact&&previous.profile&&profile?
           changedWorldFields(previous.profile,profile):null;
         const fields=profileDelta||JSON.stringify(previous.profile)===JSON.stringify(profile)?patch.fields:{...patch.fields,profile};

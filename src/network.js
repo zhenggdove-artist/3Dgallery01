@@ -50,7 +50,7 @@ export class TempleNetwork extends EventTarget{
   async connect(){
     if(!this.token)throw new Error('Join Temple first');if(this.socket){this.rejectCombatSocket(this.socket);this.socket.onclose=null;this.socket.close();}
     this.compactCombat=false;this.combatSocketActions=false;this.fastActionsV087=false;this.fastCastV089=false;this.contactFastV093=false;
-    const url=new URL(this.base);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/socket';url.searchParams.set('token',this.token);url.searchParams.set('patch','2');
+    const url=new URL(this.base);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/socket';url.searchParams.set('token',this.token);url.searchParams.set('patch','2');url.searchParams.set('surfaceDelta','1');
     await new Promise((resolve,reject)=>{const socket=new WebSocket(url);this.socket=socket;const timer=setTimeout(()=>{socket.close();reject(new Error('Realtime connection timed out'));},10_000);socket.onopen=()=>{clearTimeout(timer);this.reconnectAttempt=0;this.dispatch('connection',{connected:true});resolve();};socket.onerror=()=>{clearTimeout(timer);reject(new Error('Realtime connection failed'));};socket.onmessage=event=>{if(socket!==this.socket||event.data==='pong')return;try{const message=JSON.parse(event.data);
       if(message.type==='combat-result'){this.resolveCombatSocket(socket,message.data);return;}
       if(message.type==='state-ack')this.acknowledgeState(message.data);
@@ -123,6 +123,21 @@ export class TempleNetwork extends EventTarget{
   }
   rejectCombatSocket(socket){
    for(const [id,pending] of this.combatPending){if(pending.socket!==socket)continue;clearTimeout(pending.timer);this.combatPending.delete(id);pending.reject(Error('Combat connection interrupted'));}
+  }
+  spacePaintRaster(id){
+   this.rasterRequests??=new Map();this.rasterQueue??=[];this.rasterActive??=0;
+   const existing=this.rasterRequests.get(id);if(existing)return existing;
+   const task=new Promise((resolve,reject)=>this.rasterQueue.push({id,resolve,reject,base:this.base,token:this.token}));
+   this.rasterRequests.set(id,task);this.drainSpacePaintRasters();return task;
+  }
+  drainSpacePaintRasters(){
+   while(this.rasterActive<4&&this.rasterQueue.length){
+    const job=this.rasterQueue.shift();this.rasterActive++;
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+    fetch(job.base+'/api/space-paint-raster/'+encodeURIComponent(job.id),{headers:{Authorization:'Bearer '+job.token},signal:controller.signal})
+     .then(response=>{if(!response.ok)throw Error('3D surface checkpoint unavailable');return response.arrayBuffer();})
+     .then(bytes=>job.resolve(new Uint8Array(bytes)),job.reject).finally(()=>{clearTimeout(timeout);this.rasterRequests.delete(job.id);this.rasterActive--;this.drainSpacePaintRasters();});
+   }
   }
   async action(action,data={},options={}){
    const compactCombat=action==='attack'&&this.compactCombat&&this.socket?.readyState===WebSocket.OPEN;

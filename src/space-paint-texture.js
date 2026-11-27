@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import {surfaceInfo,surfaceFace} from './shared/space-paint-surface.js';
+import {surfaceChartRect,isSurfaceCheckpoint,decodeSurfaceRaster,RASTER_TILE} from './shared/space-paint-raster.js';
 // A single bounded atlas for all saved stroke surfaces. Geometry stays batched.
 // Canvas is allocated only after the first surface-paint operation.
 export class SpacePaintTexture{
- constructor(mesh,ranges,strokes){
+ constructor(mesh,ranges,strokes,loadRaster){
+  this.loadRaster=loadRaster;this.disposed=false;
   this.mesh=mesh;this.grid=Math.ceil(Math.sqrt(ranges.length));this.tile=Math.min(256,Math.floor(2048/this.grid));this.side=this.tile*this.grid;
   this.canvas=document.createElement('canvas');this.canvas.width=this.canvas.height=this.side;this.ctx=this.canvas.getContext('2d');
   this.scratch=document.createElement('canvas');this.scratch.width=this.scratch.height=this.tile;this.ink=this.scratch.getContext('2d');
@@ -22,9 +24,7 @@ export class SpacePaintTexture{
   this.material=new THREE.MeshLambertMaterial({map:this.texture,side:THREE.DoubleSide});mesh.material=this.material;
  }
  rect(chart){
-  const t=this.tile,h=Math.floor(t*.62),half=Math.floor(t/2);
-  if(chart===0)return {x:2,y:2,w:t-4,h:h-4};
-  return {x:(chart===1?0:half)+2,y:h+2,w:half-4,h:t-h-4};
+  return surfaceChartRect(this.tile,chart);
  }
  drawInk(paint,info){
   const ctx=this.ink,r=this.rect(paint.chart),w=paint.chart===0?info.total:2*info.a,h=paint.chart===0?info.circumference:2*info.b;
@@ -36,10 +36,31 @@ export class SpacePaintTexture{
  }
  repaint(id,paints){
   const e=this.entries.get(id);if(!e)return;
+  e.paints=paints;
+  const checkpoint=isSurfaceCheckpoint(paints[0])?paints[0].checkpoint:null;
+  if(checkpoint&&e.checkpoint!==checkpoint){
+   if(e.loading!==checkpoint&&this.loadRaster){
+    e.loading=checkpoint;
+    if(e.failedCheckpoint!==checkpoint){e.failedCheckpoint=checkpoint;e.failures=0;}
+    this.loadRaster(checkpoint).then(bytes=>{
+     if(this.disposed||e.loading!==checkpoint)return;
+     const pixels=decodeSurfaceRaster(bytes);
+     const canvas=document.createElement('canvas');canvas.width=canvas.height=RASTER_TILE;
+     canvas.getContext('2d').putImageData(new ImageData(pixels,RASTER_TILE,RASTER_TILE),0,0);
+     const base=document.createElement('canvas');base.width=base.height=this.tile;base.getContext('2d').drawImage(canvas,0,0,this.tile,this.tile);
+     e.base=base;e.checkpoint=checkpoint;e.loading=null;this.repaint(id,e.paints);
+    }).catch(error=>{if(this.disposed||e.loading!==checkpoint)return;e.loading=null;console.warn('3D paint checkpoint',error);if(++e.failures<=1)setTimeout(()=>{if(!this.disposed&&e.paints?.[0]?.checkpoint===checkpoint)this.repaint(id,e.paints);},500);});
+   }
+   // Keep the last displayed tile during asynchronous checkpoint loading.
+   if(!e.initialized){this.ctx.fillStyle=e.stroke.color;this.ctx.fillRect(e.x,e.y,this.tile,this.tile);this.texture.needsUpdate=true;e.initialized=true;}
+   return;
+  }
   this.ink.clearRect(0,0,this.tile,this.tile);
-  for(const paint of paints)this.drawInk(paint,e.info);
+  if(checkpoint&&e.base)this.ink.drawImage(e.base,0,0);
+  if(!checkpoint){e.base=null;e.checkpoint=null;e.loading=null;}
+  for(const paint of paints)if(!isSurfaceCheckpoint(paint))this.drawInk(paint,e.info);
   this.ctx.fillStyle=e.stroke.color;this.ctx.fillRect(e.x,e.y,this.tile,this.tile);
-  this.ctx.drawImage(this.scratch,e.x,e.y);this.texture.needsUpdate=true;
+  this.ctx.drawImage(this.scratch,e.x,e.y);this.texture.needsUpdate=true;e.initialized=true;
  }
- dispose(){this.mesh.material=this.originalMaterial;this.material.dispose();this.texture.dispose();}
+ dispose(){this.disposed=true;this.entries.clear();this.mesh.material=this.originalMaterial;this.material.dispose();this.texture.dispose();}
 }

@@ -4,9 +4,9 @@ import {cityPaintHit,structureSignPaintHit,ROOF_PAINT_RAY_RANGE,isRooftopPaintWa
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 export class CityWallPainter{
- constructor({canvas,camera,scene,arena,controller,role,isGM=()=>false,can3D=isGM,ui,send,beforeStart=()=>{}}){
+ constructor({canvas,camera,scene,arena,controller,role,isGM=()=>false,can3D=isGM,ui,send,loadRaster,beforeStart=()=>{}}){
   Object.assign(this,{canvas,camera,arena,controller,role,isGM,can3D,ui,send,beforeStart});
-  this.space=new SpacePainter({scene,canvas,camera,send,ui});this.mode3D=false;this.access3D=false;
+  this.space=new SpacePainter({scene,canvas,camera,send,ui,loadRaster});this.mode3D=false;this.access3D=false;
   this.spaceControls=document.getElementById('paint-3d-controls');this.spaceToggle=document.getElementById('paint-3d-toggle');this.spaceSettings=document.getElementById('paint-3d-settings');
   this.spaceToggle?.addEventListener('click',()=>this.setMode3D(!this.mode3D));
   this.flightControls=document.getElementById('paint-3d-flight');this.flightPointers=new Map();
@@ -196,7 +196,7 @@ export class CityWallPainter{
   if(!this.stroke)return;
   const stroke=this.stroke;this.stroke=null;
   if(stroke.points.length>130)stroke.points=stroke.points.slice(0,130);
-  if(stroke.id){this.space.queueSurface(stroke);this.pending=this.pending.catch(()=>{}).then(async()=>{try{const result=await this.send('paint-space-surface',{stroke});if(!result?.spaceSurfacePainted)throw Error('3D surface paint could not be saved');}catch(error){this.ui.toast(error.message||'3D surface paint could not be saved');}finally{this.space.finishSurface(stroke);}});return;}
+  if(stroke.id){this.space.queueSurface(stroke);this.pending=this.pending.catch(()=>{}).then(async()=>{let revision=null;try{const result=await this.send('paint-space-surface',{stroke});if(!result?.spaceSurfacePainted)throw Error('3D surface paint could not be saved');revision=result.spaceSurfaceRevision;}catch(error){this.ui.toast(error.message||'3D surface paint could not be saved');}finally{this.space.finishSurface(stroke,revision);}});return;}
   const paint=stroke.wall==='top'?this.arena.displayPlatforms?.paint:this.arena.outerCity?.wallPaint;
   // Move the finished segment into a local pending layer before starting
   // the next segment. Keep it visible throughout HTTP and snapshot latency.

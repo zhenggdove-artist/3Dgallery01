@@ -1,7 +1,6 @@
 // Stable UV charts for the original 12-sided tube. Side seam and both caps
 // have separate coordinates; the render mesh need not gain extra draw calls.
 export const SPACE_PAINT_SIDES=12;
-export const SURFACE_POINT_BUDGET=16384,SURFACE_STROKE_BUDGET=1024;
 const dot=(a,b)=>a.reduce((n,v,i)=>n+v*b[i],0);
 export function surfaceInfo(s){
  let points=s.points;
@@ -44,8 +43,4 @@ export function normalizeSurfaceStroke(raw,s,position=null){
   points.push(p.map(v=>+v.toFixed(5)));
  }
  return {chart:raw.chart,tool:raw.tool,size:raw.size,color:raw.color.toLowerCase(),points};
-}
-export function surfaceBudget(map){
- let strokes=0,points=0;for(const list of Object.values(map)){strokes+=list.length;for(const s of list)points+=s.points.length;}
- return strokes<=SURFACE_STROKE_BUDGET&&points<=SURFACE_POINT_BUDGET;
 }

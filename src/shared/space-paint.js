@@ -1,5 +1,6 @@
 import {ARENA_RADIUS} from './arena.js';
-import {normalizeSurfaceStroke,surfaceBudget} from './space-paint-surface.js';
+import {normalizeSurfaceStroke} from './space-paint-surface.js';
+import {isSurfaceCheckpoint} from './space-paint-raster.js';
 
 export const SPACE_PAINT_MAX_POINTS=256, SPACE_PAINT_POINT_BUDGET=8192, SPACE_PAINT_STROKE_BUDGET=256;
 const finite3=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
@@ -23,7 +24,7 @@ export function validateSpacePaint(s){
 // Permission and ownership come only from the persisted profile, never a client role.
 export function canSpacePaint(profile){return profile?.admin===true||profile?.spacePaintEnabled===true;}
 export const SPACE_PAINT_ACTIONS=['gm-paint-3d','gm-erase-3d','gm-edit-3d','gm-space-paint-access','gm-space-paint-clear','paint-space-surface'];
-export function applySpacePaint(world,actor,body){
+export function applySpacePaint(world,actor,body,context={}){
  const profile=world.profiles?.[actor.key],gm=actor.admin===true&&profile?.admin===true;
  const action=body.action,list=world.spacePaint||[],surfaces=world.spacePaintSurface||{};
  const bump=(geometry=false,surface=false)=>{if(geometry)world.spacePaintRevision=(world.spacePaintRevision||0)+1;if(surface)world.spacePaintSurfaceRevision=(world.spacePaintSurfaceRevision||0)+1;world.revision=(world.revision||0)+1;};
@@ -49,9 +50,8 @@ export function applySpacePaint(world,actor,body){
   if(!actor.position)return {error:'Paint within reach of your character'};
   const paint=normalizeSurfaceStroke(raw,s,actor.position);if(!paint)return {error:'Invalid 3D surface paint or out of reach'};
   const prior=surfaces[s.id]||[];
-  if(prior.length>=128)return {error:'3D surface mural is full'};
-  const next={...surfaces,[s.id]:[...prior,paint]};if(!surfaceBudget(next))return {error:'3D surface mural archive is full'};
-  world.spacePaintSurface=next;bump(false,true);return {spaceSurfacePainted:true};
+  const next={...surfaces,[s.id]:[...prior,paint]};
+  world.spacePaintSurface=next;bump(false,true);return {spaceSurfacePainted:true,spaceSurfaceRevision:world.spacePaintSurfaceRevision};
  }
  if(!gm&&(profile.admin===true||profile.spacePaintEnabled!==true))return {error:'3D PAINT permission required'};
  const own=s=>gm||s.ownerKey===actor.key;
@@ -75,12 +75,12 @@ export function applySpacePaint(world,actor,body){
    const s=owned(raw,true);if(!s||seen.has(s.id))return {error:'Invalid 3D history stroke'};
    seen.add(s.id);next.push(s);
    if(raw.graffiti!==undefined){
-    if(!Array.isArray(raw.graffiti)||raw.graffiti.length>128)return {error:'Invalid 3D history graffiti'};
-    const verified=raw.graffiti.map(v=>normalizeSurfaceStroke(v,s));if(verified.some(v=>!v))return {error:'Invalid 3D history graffiti'};
+    if(!Array.isArray(raw.graffiti))return {error:'Invalid 3D history graffiti'};
+    const verified=raw.graffiti.map((v,i)=>isSurfaceCheckpoint(v)?(i===0&&context.verifySurfaceCheckpoint?.(s.id,v.checkpoint)?{checkpoint:v.checkpoint}:null):normalizeSurfaceStroke(v,s));if(verified.some(v=>!v))return {error:'Invalid 3D history graffiti'};
     if(verified.length)paint[s.id]=verified;
    }
   }
-  if(next.length>SPACE_PAINT_STROKE_BUDGET||next.reduce((n,s)=>n+s.points.length,0)>SPACE_PAINT_POINT_BUDGET||!surfaceBudget(paint))return {error:'3D paint archive full'};
+  if(next.length>SPACE_PAINT_STROKE_BUDGET||next.reduce((n,s)=>n+s.points.length,0)>SPACE_PAINT_POINT_BUDGET)return {error:'3D paint archive full'};
   world.spacePaint=next;world.spacePaintSurface=paint;bump(true,true);return {spacePaintEdited:true,removedStrokes:removed.map(removedRecord)};
  }
  if(action==='gm-erase-3d'){

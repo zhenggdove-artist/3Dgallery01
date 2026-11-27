@@ -55,8 +55,8 @@ export function spacePaintGeometry(strokes){
  return {geometry,ranges};
 }
 export class SpacePainter{
- constructor({scene,canvas,camera,send,ui}){
-  Object.assign(this,{scene,canvas,camera,send,ui});
+ constructor({scene,canvas,camera,send,ui,loadRaster}){
+  Object.assign(this,{scene,canvas,camera,send,ui,loadRaster});
   this.archive=[];this.revision=-1;this.pending=new Map();this.erasing=new Set();this.queue=Promise.resolve();this.undoStack=[];this.redoStack=[];this.gesture=null;this.surfaceArchive={};this.surfaceRevision=-1;this.surfacePending=new Map();this.surfacePreview=null;this.surfaceFrame=0;this.atlas=null;this.renderedStrokes=[];this.ownerEpoch=null;
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();this.normal=new THREE.Vector3();this.plane=new THREE.Plane();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
@@ -81,7 +81,7 @@ export class SpacePainter{
   if(epoch!==undefined&&this.ownerEpoch!==null&&epoch!==this.ownerEpoch){this.undoStack.length=0;this.redoStack.length=0;this.pending.clear();if(this.stroke){this.stroke=null;this.end();}}
   if(epoch!==undefined)this.ownerEpoch=epoch;
   const previousSurface=this.surfaceArchive,rev=world.spacePaintRevision||0,srev=world.spacePaintSurfaceRevision||0,changed=srev!==this.surfaceRevision;
-  if(changed){this.surfaceRevision=srev;this.surfaceArchive=world.spacePaintSurface||{};}
+  if(changed){this.surfaceRevision=srev;this.surfaceArchive=world.spacePaintSurface||{};for(const [key,pending] of this.surfacePending)if(pending.ackRevision!==undefined&&pending.ackRevision<=srev)this.surfacePending.delete(key);}
   if(rev!==this.revision){this.revision=rev;this.archive=world.spacePaint||[];this.rebuild();}
   else if(changed){if(!this.atlas)this.refreshSurface();else for(const id of new Set([...Object.keys(previousSurface),...Object.keys(this.surfaceArchive)])){if(previousSurface[id]!==this.surfaceArchive[id]&&JSON.stringify(previousSurface[id])!==JSON.stringify(this.surfaceArchive[id]))this.refreshSurface(id);}}
  }
@@ -92,7 +92,7 @@ export class SpacePainter{
   if(!this.saved||typeof document==='undefined')return;
   if(!this.atlas){
    if(!Object.keys(this.surfaceArchive).length&&!this.surfacePending.size&&!this.surfacePreview)return;
-   this.atlas=new SpacePaintTexture(this.saved,this.ranges,this.renderedStrokes);id=null;
+   this.atlas=new SpacePaintTexture(this.saved,this.ranges,this.renderedStrokes,this.loadRaster);id=null;
   }
   if(id)this.atlas.repaint(id,this.surfacePaints(id));
   else for(const s of this.renderedStrokes)this.atlas.repaint(s.id,this.surfacePaints(s.id));
@@ -104,7 +104,8 @@ export class SpacePainter{
  queueSurface(stroke){
   this.surfacePreview=null;this.surfacePending.set(stroke.clientId,stroke);this.refreshSurface(stroke.id);
  }
- finishSurface(stroke){
+ finishSurface(stroke,revision=null){
+  if(Number.isFinite(revision)&&revision>this.surfaceRevision){stroke.ackRevision=revision;return;}
   this.surfacePending.delete(stroke.clientId);this.refreshSurface(stroke.id);
  }
  pickSurface(event,player){

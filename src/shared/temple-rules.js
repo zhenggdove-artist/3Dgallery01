@@ -400,7 +400,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
 }
 
 export function applyAction(world,actor,body,context={}){
-  if(SPACE_PAINT_ACTIONS.includes(body.action))return applySpacePaint(world,actor,body);
+  if(SPACE_PAINT_ACTIONS.includes(body.action))return applySpacePaint(world,actor,body,context);
   const now=context.now??Date.now(),rng=context.rng??Math.random,
    // The premium draw checks PERSISTED admin status before any ensureProfile
    // mutation. Existing game/GM actions retain their original role semantics.
