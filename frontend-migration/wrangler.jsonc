@@ -1,0 +1,6 @@
+{
+  "name": "ggtemple-client-staging",
+  "compatibility_date": "2026-10-13",
+  "pages_build_output_dir": "./.build/pages",
+  "r2_buckets": [{"binding":"GGTEMPLE_LARGE_ASSETS","bucket_name":"ggtemple-client-staging"}]
+}
