@@ -32,8 +32,8 @@ test('ordinary player graffiti, reach, caps, eraser and deletion synchronization
  assert.ok(act({...other,position:[100,2,100]},'paint-space-surface',{stroke:raw}).error);
  assert.equal(act(other,'paint-space-surface',{stroke:{...raw,chart:2,tool:'eraser'}}).spaceSurfacePainted,true);
  assert.equal(w.spacePaintRevision,1);assert.equal(w.spacePaintSurfaceRevision,2);
- const erased=act(gm,'gm-erase-3d',{id:s.id}).erasedStroke;assert.equal(erased.graffiti.length,2);assert.equal(w.spacePaintSurface[s.id],undefined);
- assert.equal(act(gm,'gm-edit-3d',{remove:[],add:[erased]}).spacePaintEdited,true);assert.equal(w.spacePaintSurface[s.id].length,2);
+ assert.ok(act(gm,'gm-erase-3d',{id:s.id}).error);assert.equal(w.spacePaintSurface[s.id].length,2);
+ assert.ok(act(gm,'gm-edit-3d',{remove:[s.id],add:[]}).error);assert.equal(w.spacePaintSurface[s.id].length,2);
  act(gm,'gm-space-paint-clear',{targetKey:gm.key});assert.equal(w.spacePaint.length,0);assert.equal(w.spacePaintSurface[s.id],undefined);
 });
 test('surface chart topology matches the existing indexed mesh including single dots',()=>{

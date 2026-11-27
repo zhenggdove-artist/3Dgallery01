@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {surfaceInfo,surfaceFace} from './shared/space-paint-surface.js';
 import {SpacePaintTexture} from './space-paint-texture.js';
+import {isSurfaceCheckpoint} from './shared/space-paint-raster.js';
 import {cityGroundHeight} from './shared/city-layout.js';
 import {SPACE_PAINT_MAX_POINTS,SPACE_PAINT_POINT_BUDGET,SPACE_PAINT_STROKE_BUDGET,spacePaintPointAllowed} from './shared/space-paint.js';
 
@@ -109,8 +110,8 @@ export function nearestSpacePaintPoint(geometry,ranges,point,out,maxDistanceSqua
  return found;
 }
 export class SpacePainter{
- constructor({scene,canvas,camera,send,ui,loadRaster,controller=()=>null,arena=null}){
-  Object.assign(this,{scene,canvas,camera,send,ui,loadRaster,controller,arena});
+ constructor({scene,canvas,camera,send,ui,loadRaster,controller=()=>null,arena=null,ownerKey=()=>null}){
+  Object.assign(this,{scene,canvas,camera,send,ui,loadRaster,controller,arena,ownerKey});
   this.archive=[];this.revision=-1;this.pending=new Map();this.erasing=new Set();this.queue=Promise.resolve();this.undoStack=[];this.redoStack=[];this.gesture=null;this.surfaceArchive={};this.surfaceRevision=-1;this.surfacePending=new Map();this.surfacePreview=null;this.surfaceFrame=0;this.atlas=null;this.renderedStrokes=[];this.ownerEpoch=null;
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
@@ -297,6 +298,9 @@ export class SpacePainter{
    if(!this.saved||!this.setRay(event))return;
    this.saved.updateMatrixWorld(true);
    const hit=this.ray.intersectObject(this.saved,false)[0];const id=hit&&this.ranges.find(r=>hit.faceIndex>=r.start&&hit.faceIndex<r.end)?.id;
+   const owner=this.ownerKey();
+   if(id&&(!owner||this.renderedStrokes.find(s=>s.id===id)?.ownerKey!==owner)){this.ui.toast('You can only erase your own 3D paint');return;}
+   if(id&&(this.surfaceArchive[id]||[]).some(v=>isSurfaceCheckpoint(v)?!Array.isArray(v.owners)||v.owners.some(key=>key!==owner):v.tool==='brush'&&v.owner!==owner)){this.ui.toast('This structure contains another artist’s graffiti');return;}
    if(id&&!this.erasing.has(id)){
     const epoch=this.ownerEpoch;this.erasing.add(id);this.queue=this.queue.catch(()=>{}).then(async()=>{
      try{const result=await this.send('gm-erase-3d',{id});if(!result?.erased3DStroke||!result.erasedStroke)throw Error('3D erase failed');if(epoch===this.ownerEpoch)this.record({add:[],remove:[result.erasedStroke]});}
@@ -348,7 +352,7 @@ export class SpacePainter{
   if(this.frame){cancelAnimationFrame(this.frame);this.frame=0;}
   this.mesh('preview',[]);
   if(!s?.points.length)return;
-  this.pending.set(s.id,s);this.rebuild();
+  this.pending.set(s.id,{...s,ownerKey:this.ownerKey()});this.rebuild();
   this.queue=this.queue.catch(()=>{}).then(async()=>{
    try{const result=await this.send('gm-paint-3d',{stroke:s,...(epoch===null?{}:{ownerEpoch:epoch})});if(!result?.spacePaintStroke)throw Error('3D paint could not be saved');if(epoch===this.ownerEpoch)this.record({gesture,add:[result.spacePaintStroke],remove:[]});}
    catch(e){this.ui.toast(e.message||'3D paint could not be saved');}

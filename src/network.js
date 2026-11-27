@@ -26,6 +26,7 @@ export class TempleNetwork extends EventTarget{
   async join({name,color='#43b59a',firebaseIdToken='',mode='firebase'}) {
     this.ensureConfigured();
     const health=await this.request('/health',{auth:false,timeoutMs:6000});
+    this.paintOwnershipV115=health?.features?.paintOwnershipV115===true;
     if(health?.service==='Temple'&&(health.features?.wearableCatalog!==SHOP_CATALOG_REVISION||health.cityLayoutSignature!==CITY_LAYOUT_SIGNATURE))throw Error('Temple server is updating. Client/server city and shop versions must match.');
     if(mode==='guest'&&firebaseIdToken)throw Error('Cannot use guest mode after Google authentication');
     const data=await this.request('/api/join',{
@@ -140,6 +141,7 @@ export class TempleNetwork extends EventTarget{
    }
   }
   async action(action,data={},options={}){
+   if(!this.paintOwnershipV115&&(['gm-erase-3d','gm-edit-3d','paint-space-surface'].includes(action)||(['paint-building','paint-disc'].includes(action)&&data.stroke?.tool==='eraser')))throw Error('Paint ownership update is not active on this server. Reconnect after update.');
    const compactCombat=action==='attack'&&this.compactCombat&&this.socket?.readyState===WebSocket.OPEN;
    const started=performance.now();
    const fastAction=this.fastActionsV087&&isRealtimeAction(action)&&this.socket?.readyState===WebSocket.OPEN;

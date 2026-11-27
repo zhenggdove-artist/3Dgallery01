@@ -4,13 +4,13 @@ import {cityPaintHit,structureSignPaintHit,ROOF_PAINT_RAY_RANGE,isRooftopPaintWa
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 export class CityWallPainter{
- constructor({canvas,camera,scene,arena,controller,role,isGM=()=>false,can3D=isGM,ui,send,loadRaster,beforeStart=()=>{}}){
-  Object.assign(this,{canvas,camera,arena,controller,role,isGM,can3D,ui,send,beforeStart});
-  this.space=new SpacePainter({scene,canvas,camera,send,ui,loadRaster,controller,arena});this.mode3D=false;this.access3D=false;
+ constructor({canvas,camera,scene,arena,controller,role,ownerKey=()=>null,isGM=()=>false,can3D=isGM,ui,send,loadRaster,beforeStart=()=>{}}){
+  Object.assign(this,{canvas,camera,arena,controller,role,ownerKey,isGM,can3D,ui,send,beforeStart});
+  this.space=new SpacePainter({scene,canvas,camera,send,ui,loadRaster,controller,arena,ownerKey});this.mode3D=false;this.access3D=false;
   this.spaceControls=document.getElementById('paint-3d-controls');this.spaceToggle=document.getElementById('paint-3d-toggle');this.spaceSettings=document.getElementById('paint-3d-settings');
   this.spaceToggle?.addEventListener('click',()=>this.setMode3D(!this.mode3D));
   const fixedScale=document.getElementById('paint-3d-fixed-scale');
-  if(fixedScale){fixedScale.checked=false;fixedScale.addEventListener('change',()=>{if(!this.mode3D||this.paintTouches.size||!this.space.setFixedScale(fixedScale.checked))fixedScale.checked=this.space.fixedScale;});}
+  if(fixedScale)fixedScale.addEventListener('click',()=>{if(!this.mode3D||this.paintTouches.size||!this.space.setFixedScale(!this.space.fixedScale))return;fixedScale.textContent=this.space.fixedScale?'Mode: Fixed':'Mode: Direct';fixedScale.setAttribute('aria-pressed',String(this.space.fixedScale));});
   const connect=document.getElementById('paint-3d-connect');
   if(connect){connect.checked=false;connect.addEventListener('change',()=>{if(!this.mode3D||this.paintTouches.size||!this.space.setConnected(connect.checked))connect.checked=this.space.connected;});}
   this.flightControls=document.getElementById('paint-3d-flight');this.flightPointers=new Map();
@@ -280,7 +280,7 @@ export class CityWallPainter{
   this.start(hit);
  }
  start(hit){
-  this.stroke={lotId:hit.lotId,wall:hit.wall,tool:this.tool,
+  this.stroke={lotId:hit.lotId,wall:hit.wall,tool:this.tool,owner:this.ownerKey(),...(this.tool==='eraser'?{eraseOwn:true}:{}),
    color:this.color,size:this.size,clientId:globalThis.crypto?.randomUUID?.()||('local-'+Date.now()+'-'+Math.random().toString(36).slice(2)),points:[]};
   if(hit.wall.startsWith('space:')){this.stroke.id=hit.lotId;this.stroke.chart=Number(hit.wall.slice(6));}
   this.append(hit);

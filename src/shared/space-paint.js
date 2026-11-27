@@ -50,33 +50,46 @@ export function applySpacePaint(world,actor,body,context={}){
   if(!actor.position)return {error:'Paint within reach of your character'};
   const paint=normalizeSurfaceStroke(raw,s,actor.position);if(!paint)return {error:'Invalid 3D surface paint or out of reach'};
   const prior=surfaces[s.id]||[];
-  const next={...surfaces,[s.id]:[...prior,paint]};
+  if(paint.tool==='eraser'&&!prior.some(v=>isSurfaceCheckpoint(v)?v.owners?.includes(actor.key):v.tool==='brush'&&v.owner===actor.key))return {error:'No paint of your own on this surface'};
+  const next={...surfaces,[s.id]:[...prior,{...paint,owner:actor.key,...(paint.tool==='eraser'?{eraseOwn:true}:{})}]};
   world.spacePaintSurface=next;bump(false,true);return {spaceSurfacePainted:true,spaceSurfaceRevision:world.spacePaintSurfaceRevision};
  }
  if(!gm&&(profile.admin===true||profile.spacePaintEnabled!==true))return {error:'3D PAINT permission required'};
- const own=s=>gm||s.ownerKey===actor.key;
+ const own=s=>s.ownerKey===actor.key;
+ // Normal erasing and history must not destroy another author's surface ink.
+ // Legacy flattened checkpoints have no recoverable author and are protected.
+ const canRemove=s=>own(s)&&!(surfaces[s.id]||[]).some(v=>isSurfaceCheckpoint(v)?!Array.isArray(v.owners)||v.owners.some(key=>key!==actor.key):v.tool==='brush'&&v.owner!==actor.key);
  const owned=(raw,history=false)=>{
   const s=validateSpacePaint(raw);if(!s)return null;
-  const key=history&&gm&&raw.ownerKey?raw.ownerKey:actor.key;
-  if(!gm&&history&&raw.ownerKey!==actor.key)return null;
+  const key=actor.key;
+  if(history&&raw.ownerKey!==actor.key)return null;
   const owner=Object.hasOwn(world.profiles||{},key)?world.profiles[key]:null;
   if(!owner||history&&Number(raw.ownerEpoch||0)!==(owner.spacePaintEpoch||0))return null;
   return {...s,ownerKey:key,ownerEpoch:owner.spacePaintEpoch||0};
  };
- const removedRecord=s=>({...s,...(surfaces[s.id]?.length?{graffiti:surfaces[s.id]}:{})});
+ const removedRecord=s=>{const graffiti=(surfaces[s.id]||[]).filter(v=>isSurfaceCheckpoint(v)||v.owner===actor.key);return {...s,...(graffiti.length?{graffiti}:{})};};
  if(action==='gm-edit-3d'){
   const remove=body.remove,add=body.add;
   if(!Array.isArray(remove)||!Array.isArray(add)||remove.length+add.length<1||remove.length+add.length>SPACE_PAINT_STROKE_BUDGET||
     !remove.every(validId)||new Set(remove).size!==remove.length)return {error:'Invalid 3D history edit'};
   const ids=new Set(remove),removed=list.filter(s=>ids.has(s.id));
-  if(removed.length!==remove.length||removed.some(s=>!own(s)))return {error:'3D history has changed or permission denied'};
+  if(removed.length!==remove.length||removed.some(s=>!canRemove(s)))return {error:'3D history has changed or permission denied'};
   const next=list.filter(s=>!ids.has(s.id)),seen=new Set(next.map(s=>s.id)),paint=Object.fromEntries(Object.entries(surfaces).filter(([id])=>!ids.has(id)));
   for(const raw of add){
    const s=owned(raw,true);if(!s||seen.has(s.id))return {error:'Invalid 3D history stroke'};
    seen.add(s.id);next.push(s);
    if(raw.graffiti!==undefined){
     if(!Array.isArray(raw.graffiti))return {error:'Invalid 3D history graffiti'};
-    const verified=raw.graffiti.map((v,i)=>isSurfaceCheckpoint(v)?(i===0&&context.verifySurfaceCheckpoint?.(s.id,v.checkpoint)?{checkpoint:v.checkpoint}:null):normalizeSurfaceStroke(v,s));if(verified.some(v=>!v))return {error:'Invalid 3D history graffiti'};
+    const verified=raw.graffiti.map((v,i)=>{
+     if(isSurfaceCheckpoint(v)){
+      if(i!==0||!context.verifySurfaceCheckpoint?.(s.id,v.checkpoint))return null;
+      const owners=context.surfaceCheckpointOwners?.(s.id,v.checkpoint);
+      if(!Array.isArray(owners)||owners.some(key=>key!==actor.key))return null;
+      return {checkpoint:v.checkpoint,owners};
+     }
+     const paint=normalizeSurfaceStroke(v,s);if(!paint||v.owner!==actor.key)return null;
+     return {...paint,owner:actor.key,...(paint.tool==='eraser'?{eraseOwn:true}:{})};
+    });if(verified.some(v=>!v))return {error:'Invalid 3D history graffiti'};
     if(verified.length)paint[s.id]=verified;
    }
   }
@@ -85,7 +98,7 @@ export function applySpacePaint(world,actor,body,context={}){
  }
  if(action==='gm-erase-3d'){
   const s=list.find(s=>s.id===body.id);
-  if(!validId(body.id)||!s||!own(s))return {error:'3D stroke not found or permission denied'};
+  if(!validId(body.id)||!s||!canRemove(s))return {error:'Only your own 3D paint without other artists’ graffiti can be erased'};
   world.spacePaint=list.filter(s=>s.id!==body.id);
   if(surfaces[s.id]){world.spacePaintSurface=Object.fromEntries(Object.entries(surfaces).filter(([id])=>id!==s.id));}
   bump(true,!!surfaces[s.id]);return {erased3DStroke:body.id,erasedStroke:removedRecord(s)};

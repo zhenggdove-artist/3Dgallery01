@@ -4,8 +4,8 @@ import {applySpacePaint} from '../src/shared/space-paint.js';
 import {surfaceInfo} from '../src/shared/space-paint-surface.js';
 import {RASTER_BYTES,RASTER_TILE,encodeSurfaceRaster,decodeSurfaceRaster,rasterizeSurfaceStroke,compactSurfaceRecords,surfaceTailSize,SURFACE_TAIL_BYTES,surfaceChartRect} from '../src/shared/space-paint-raster.js';
 const gm={key:'gm',admin:true,role:'fighter',position:[0,2,0]};
-const stroke={id:'stroke-0001',size:.5,thickness:.4,color:'#ffaa00',normal:[0,0,1],points:[[-2,3,0],[2,3,0]]};
-const brush={id:stroke.id,chart:0,color:'#112233',tool:'brush',size:.2,points:[[.2,.5],[.8,.5]]};
+const stroke={ownerKey:'gm',ownerEpoch:0,id:'stroke-0001',size:.5,thickness:.4,color:'#ffaa00',normal:[0,0,1],points:[[-2,3,0],[2,3,0]]};
+const brush={owner:'gm',id:stroke.id,chart:0,color:'#112233',tool:'brush',size:.2,points:[[.2,.5],[.8,.5]]};
 const key='00000000-0000-4000-8000-000000000001';
 test('no cumulative count or point quota on surface graffiti',()=>{
  const world={profiles:{gm:{admin:true,hp:100}},spacePaint:[stroke],spacePaintSurface:{},revision:0};
@@ -31,10 +31,10 @@ test('raster checkpoint losslessly roundtrips sparse and dense pixel states; bru
  assert.deepEqual(decodeSurfaceRaster(encodeSurfaceRaster(p)),p);
 });
 test('checkpoint history is authorized for its actual geometry, restored with recent strokes, and removed with geometry',()=>{
- const world={profiles:{gm:{admin:true,hp:100}},spacePaint:[stroke],spacePaintSurface:{[stroke.id]:[{checkpoint:key},brush]},revision:0};
+ const world={profiles:{gm:{admin:true,hp:100}},spacePaint:[stroke],spacePaintSurface:{[stroke.id]:[{checkpoint:key,owners:['gm']},brush]},revision:0};
  const erased=applySpacePaint(world,gm,{action:'gm-erase-3d',id:stroke.id}).erasedStroke;
  assert.ok(applySpacePaint(world,gm,{action:'gm-edit-3d',remove:[],add:[erased]}).error);
- assert.ok(applySpacePaint(world,gm,{action:'gm-edit-3d',remove:[],add:[erased]},{verifySurfaceCheckpoint:(id,ref)=>id===stroke.id&&ref===key}).spacePaintEdited);
+ assert.ok(applySpacePaint(world,gm,{action:'gm-edit-3d',remove:[],add:[erased]},{verifySurfaceCheckpoint:(id,ref)=>id===stroke.id&&ref===key,surfaceCheckpointOwners:()=>['gm']}).spacePaintEdited);
  assert.equal(world.spacePaintSurface[stroke.id][0].checkpoint,key);
 });
 

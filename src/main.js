@@ -232,7 +232,7 @@ const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>
 const artEditor=new ArtworkEditor({scene,camera,canvas,arena,player:()=>localRoot,isGM:()=>!!self?.profile?.admin,ownerKey:()=>self?.key,focusArtwork:root=>{if(!controller)return;controller.artworkEditTarget=root;if(root){controller.target.copy(root.position);controller.yaw=root.rotation.y;controller.pitch=.05;controller.updateCamera(1,true);camera.updateMatrixWorld(true);}},send:sendAction,control:enabled=>{if(controller){controller.setEnabled(enabled&&!ui.panelName&&!wasDead);controller.cameraLocked=!!artEditor.mode&&artEditor.mode!=='follow';}},toast:text=>ui.toast(text)});
 const platformDelete=new PlatformDeleteEditor({canvas,camera,arena,ui,editor:artEditor,isGM:()=>!!self?.profile?.admin,send:sendAction,controller:()=>controller,cancelBuild:cancelBuildPlacement});
 const wallPainter=new CityWallPainter({canvas,camera,scene,arena,controller:()=>controller,isGM:()=>world?.profile?.admin===true,can3D:()=>world?.profile?.admin===true||world?.profile?.spacePaintEnabled===true,
- role:()=>self?.role,ui,loadRaster:id=>network.spacePaintRaster(id),send:(action,data)=>sendAction(action,data,{throwOnError:true}),
+ role:()=>self?.role,ownerKey:()=>self?.key,ui,loadRaster:id=>network.spacePaintRaster(id),send:(action,data)=>sendAction(action,data,{throwOnError:true}),
  beforeStart:()=>{gun.end();ui.emit('attack-cancel');}});
 
 // Shared capture-phase MIDDLE-MOUSE orbit for player BUILD/PAINT and

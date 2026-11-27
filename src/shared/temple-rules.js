@@ -588,9 +588,10 @@ export function applyAction(world,actor,body,context={}){
   if(body.action==='paint-disc'){
    if(actor.role!=='fighter'||profile.hp<=0||profile.deadUntil>now)return {error:'Cannot paint'};
    const s=body.stroke||{},v=validateDiscPaint(world,actor,s);if(v.error)return v;
+   if(s.tool==='eraser'&&!(world.discPaint?.[s.lotId]||[]).some(p=>p.owner===actor.key&&p.tool==='brush'))return {error:'No paint of your own on this surface'};
    world.discPaint??={};const list=world.discPaint[s.lotId]??=[];
    if(list.length>=100||Object.values(world.discPaint).reduce((n,a)=>n+a.length,0)>=2000)return {error:'Disc graffiti archive full'};
-   const stroke={id:'paint-'+id(),owner:actor.key,lotId:s.lotId,wall:'top',tool:s.tool,color:s.color,size:s.size,points:v.points,time:now,...(typeof s.clientId==='string'&&/^[a-zA-Z0-9-]{1,80}$/.test(s.clientId)?{clientId:s.clientId}:{})};list.push(stroke);world.revision++;return {paintStroke:stroke};
+   const stroke={id:'paint-'+id(),owner:actor.key,lotId:s.lotId,wall:'top',tool:s.tool,...(s.tool==='eraser'?{eraseOwn:true}:{}),color:s.color,size:s.size,points:v.points,time:now,...(typeof s.clientId==='string'&&/^[a-zA-Z0-9-]{1,80}$/.test(s.clientId)?{clientId:s.clientId}:{})};list.push(stroke);world.revision++;return {paintStroke:stroke};
   }
   if(body.action==='paint-building'){
    if(actor.role!=='fighter')return {error:'Spectators cannot paint'};
@@ -619,6 +620,7 @@ export function applyAction(world,actor,body,context={}){
      return {error:'Paint within reach of your character'};
     verified.push([u,v]);
    }
+   if(bodyStroke.tool==='eraser'&&!(world.wallPaint?.[lot.id]?.[bodyStroke.wall]||[]).some(p=>p.owner===actor.key&&p.tool==='brush'))return {error:'No paint of your own on this surface'};
    world.wallPaint??={};
    const total=Object.values(world.wallPaint).reduce((n,walls)=>
     n+Object.values(walls||{}).reduce((m,strokes)=>m+(strokes?.length||0),0),0);
@@ -627,7 +629,7 @@ export function applyAction(world,actor,body,context={}){
    const strokes=walls[bodyStroke.wall]??=[];
    if(strokes.length>=100)return {error:'This wall has reached the mural limit'};
    const stroke={id:'paint-'+id(),owner:actor.key,lotId:lot.id,wall:bodyStroke.wall,
-    tool:bodyStroke.tool,color,size,points:verified,time:now,
+    tool:bodyStroke.tool,...(bodyStroke.tool==='eraser'?{eraseOwn:true}:{}),color,size,points:verified,time:now,
     ...(typeof bodyStroke.clientId==='string'&&/^[a-zA-Z0-9-]{1,80}$/.test(bodyStroke.clientId)?{clientId:bodyStroke.clientId}:{})};
    strokes.push(stroke);
    world.wallPaintRevision=(world.wallPaintRevision||0)+1;

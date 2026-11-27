@@ -53,6 +53,8 @@ test('idle guide stays anchored when zoom changes; fixed-scale checkbox is optio
  painter.updateGuide(null,settings,arena);const position=painter.guide.position.clone(),key=painter.guideKey;
  zoom(50);painter.updateGuide(null,settings,arena);near(painter.guide.position,position);assert.equal(painter.guideKey,key);
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- const input=html.match(/<input id="paint-3d-fixed-scale"[^>]*>/)?.[0];
- assert.ok(input);assert.match(input,/type="checkbox"/);assert.doesNotMatch(input,/\bchecked\b/);
+ const input=html.match(/<button id="paint-3d-fixed-scale"[^>]*>/)?.[0];
+ assert.ok(input);assert.match(input,/aria-pressed="false"/);
+ const settings=html.slice(html.indexOf('<div id="paint-3d-settings"'),html.indexOf('<button data-paint-close'));
+ assert.equal((settings.match(/type="checkbox"/g)||[]).length,1);
 });

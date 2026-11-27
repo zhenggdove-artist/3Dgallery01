@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {paintOwnerStrokes} from './paint-composite.js';
 import {CITY_LOTS,cityFacadeFloor,cityCollapsePosition,signPaintWall,signPaintDescriptor,signPaintPoint,signPaintAvailable,structurePaintLot} from './shared/city-layout.js';
 
 const WALLS=['front','back','left','right'];
@@ -35,12 +36,12 @@ function paintGeometry(lot,wall){
  geometry.setIndex(indices);geometry.computeVertexNormals();
  return geometry;
 }
-function strokeOnCanvas(ctx,stroke,lot,wall){
+function strokeOnCanvas(ctx,stroke,lot,wall,mode=stroke.tool==='eraser'?'destination-out':'source-over'){
  if(!Array.isArray(stroke?.points)||!stroke.points.length)return;
  const points=stroke.points,sign=signPaintDescriptor(lot,wall),sideWidth=sign?.width||(['front','back'].includes(wall)?lot.width:lot.depth);
  const radius=Math.max(.8,Number(stroke.size||.14)*SIZE/Math.max(1,sideWidth));
  ctx.save();
- ctx.globalCompositeOperation=stroke.tool==='eraser'?'destination-out':'source-over';
+ ctx.globalCompositeOperation=mode;
  ctx.strokeStyle=stroke.tool==='eraser'?'#000':stroke.color||'#ff3333';
  ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=radius*2;
  ctx.lineCap='round';ctx.lineJoin='round';
@@ -88,10 +89,8 @@ export class CityWallPaint{
  }
  draw(slot){
   slot.ctx.clearRect(0,0,SIZE,SIZE);
-  for(const stroke of slot.strokes)strokeOnCanvas(slot.ctx,stroke,slot.lot,slot.wall);
   const acknowledged=new Set(slot.strokes.map(stroke=>stroke.clientId).filter(Boolean));
-  for(const stroke of slot.pending)if(!acknowledged.has(stroke.clientId))strokeOnCanvas(slot.ctx,stroke,slot.lot,slot.wall);
-  if(slot.preview)strokeOnCanvas(slot.ctx,slot.preview,slot.lot,slot.wall);
+  paintOwnerStrokes(slot.ctx,[...slot.strokes,...slot.pending.filter(s=>!acknowledged.has(s.clientId)),...(slot.preview?[slot.preview]:[])],(ctx,stroke,mode)=>strokeOnCanvas(ctx,stroke,slot.lot,slot.wall,mode));
   slot.texture.needsUpdate=true;
  }
  preview(stroke){

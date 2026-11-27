@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {spacePaintMoveFraction,spacePaintFloor} from '../src/shared/space-paint-collision.js';
 import {applySpacePaint} from '../src/shared/space-paint.js';
 import {validateState} from '../src/shared/temple-rules.js';
-const stroke={id:'stroke-0001',color:'#ff00aa',size:.5,thickness:.4,normal:[0,0,1],points:[[-2,3,0],[2,3,0]]};
+const stroke={ownerKey:'gm',ownerEpoch:0,id:'stroke-0001',color:'#ff00aa',size:.5,thickness:.4,normal:[0,0,1],points:[[-2,3,0],[2,3,0]]};
 test('solid 3D paint blocks continuous crossing and provides floor support',()=>{
  const list=[stroke];
  assert.ok(spacePaintMoveFraction(list,[0,2,-5],[0,2,5])<.5);
