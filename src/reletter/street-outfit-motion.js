@@ -17,7 +17,7 @@ export function buildSoftGarbage(T,g,record,mat){
 export function buildNewStreetProp(T,g,kind,record,mat){
  if(kind==='pharmacy-bag-disguise'){
   const white=mat('#ffffff');white.roughness=.35;white.side=T.DoubleSide;white.alphaTest=.5;
-  white.map=tex(T,record,512,800,(x,w,h)=>{
+  white.map=tex(T,record,512,1024,(x,w,h)=>{x.scale(1,1024/800);h=800;
    x.fillStyle='#e6e7e1';x.fillRect(0,0,w,h);
    const shades=x.createLinearGradient(0,0,w,0);shades.addColorStop(0,'rgba(100,110,105,.25)');shades.addColorStop(.16,'rgba(255,255,255,.55)');shades.addColorStop(.47,'rgba(255,255,255,0)');shades.addColorStop(.83,'rgba(130,145,135,.12)');shades.addColorStop(1,'rgba(100,110,105,.25)');x.fillStyle=shades;x.fillRect(0,0,w,h);
    x.fillStyle='#126343';x.textAlign='center';x.font='bold 39px sans-serif';x.fillText('健保特約藥局',w/2,188);x.font='bold 28px sans-serif';x.fillText('ⓗ  社區藥局',w/2,238);x.font='18px sans-serif';x.fillText('全民健康保險特約藥局',w/2,270);
@@ -26,7 +26,7 @@ export function buildNewStreetProp(T,g,kind,record,mat){
    x.fillText('內',47,399);x.fillText('服',47,430);x.fillText('藥',47,461);x.fillText('外',47,563);x.fillText('用',47,594);x.fillText('藥',47,625);
    for(const [i,line] of ['每日 ____ 次，每次 ____ 粒','飯前　飯後　睡前','早　午　晚　睡前服用','用藥方式依藥師指示','每日 ____ 次，適量使用','患部清潔後使用'].entries()){const yy=386+i*48+(i>3?9:0);x.strokeRect(105,yy-15,15,15);x.fillText(line,130,yy);}
    x.fillStyle='#17694a';x.fillRect(0,711,w,89);x.fillStyle='#f3f3e9';x.textAlign='center';x.font='21px sans-serif';x.fillText('用藥安全　請依藥師指示',w/2,751);x.font='15px sans-serif';x.fillText('請將藥品放置於兒童不易取得之處',w/2,780);
-   x.globalCompositeOperation='destination-out';x.beginPath();x.roundRect(144,43,224,62,28);x.fill();x.globalCompositeOperation='source-over';
+   x.globalCompositeOperation='destination-out';x.beginPath();x.moveTo(172,43);x.lineTo(340,43);x.quadraticCurveTo(368,43,368,71);x.lineTo(368,77);x.quadraticCurveTo(368,105,340,105);x.lineTo(172,105);x.quadraticCurveTo(144,105,144,77);x.lineTo(144,71);x.quadraticCurveTo(144,43,172,43);x.closePath();x.fill();x.globalCompositeOperation='source-over';
   });
   for(const side of [1,-1]){const geo=new T.PlaneGeometry(1.05,2,24,36),a=geo.attributes.position;
    for(let i=0;i<a.count;i++){const xx=a.getX(i),yy=a.getY(i)+1,bulge=Math.max(0,Math.sin(Math.PI*(xx/1.05+.5)))*Math.max(0,Math.sin(Math.PI*yy/2));a.setXYZ(i,xx*(.93+.07*Math.sin(yy*2.1)),yy,side*(.018+.23*bulge+.016*Math.sin(xx*39+yy*7)*bulge));}
@@ -63,10 +63,10 @@ function batch(T,g,geo,mat,count){
 }
 function smokeBatch(T,g,record){
  const texture=tex(T,record,64,64,(x)=>{const radial=x.createRadialGradient(32,32,1,32,32,31);radial.addColorStop(0,'rgba(17,16,18,.78)');radial.addColorStop(.4,'rgba(22,20,22,.55)');radial.addColorStop(1,'rgba(25,24,25,0)');x.fillStyle=radial;x.fillRect(0,0,64,64);});
- const material=new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false});record.materials.push(material);
- return {particles:Array.from({length:24},()=>{const sprite=new T.Sprite(material);sprite.visible=false;g.add(sprite);return {sprite,p:new T.Vector3(),v:new T.Vector3(),age:99,life:0,size:1};}),next:0};
+ const material=new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false});record.materials.push(material);let geometry;
+ return {particles:Array.from({length:24},()=>{const sprite=new T.Sprite(material);geometry??=sprite.geometry.clone();sprite.geometry=geometry;sprite.visible=false;sprite.scale.setScalar(0);g.add(sprite);return {sprite,p:new T.Vector3(),v:new T.Vector3(),age:99,life:0,size:1};}),next:0};
 }
-function envelopeGeometry(T){const shape=new T.Shape();shape.moveTo(-.11,-.07);shape.lineTo(.11,-.07);shape.lineTo(.11,.07);shape.lineTo(-.11,.07);shape.closePath();return new T.ShapeGeometry(shape);}
+function envelopeGeometry(T){const shape=new T.Shape();shape.moveTo(-.11,-.07);shape.lineTo(.11,-.07);shape.lineTo(.11,.07);shape.lineTo(-.11,.07);shape.closePath();const geo=new T.ShapeGeometry(shape),uv=geo.attributes.uv,a=geo.attributes.position;for(let i=0;i<uv.count;i++)uv.setXY(i,a.getX(i)/.22+.5,a.getY(i)/.14+.5);return geo;}
 export function attachStreetMotion(T,g,kind,record,mat){
  if(!['chimney-disguise','trash-can-disguise','garbage-bag-disguise','fried-chicken-disguise','postbox-disguise','pharmacy-bag-disguise','goldfish-bowl-disguise'].includes(kind))return;
  const d={T,g,kind,pos:new T.Vector3(),last:null,delta:new T.Vector3(),inverse:new T.Matrix4(),dummy:new T.Object3D(),origin:new T.Vector3(),local:new T.Vector3(),worldScale:new T.Vector3(),run:0,air:0,grace:0,elapsed:0,credit:0,energy:0,floor:null,batches:[],seed:7823};
@@ -85,10 +85,10 @@ export function attachStreetMotion(T,g,kind,record,mat){
  if(kind==='goldfish-bowl-disguise'){const water=mat('#9bdcf5');water.transparent=true;water.opacity=.7;water.roughness=.13;add(new T.SphereGeometry(1,8,6),water,28);}
  if(kind==='trash-can-disguise'){
   const fur=mat('#77706b'),pink=mat('#cf9a94'),black=mat('#151515');
-  const rat=new T.Group();g.add(rat);rat.visible=false;d.rat=rat;
+  const rat=new T.Group();g.add(rat);rat.visible=false;d.rat=rat;d.ratAge=99;d.ratPos=new T.Vector3();d.ratVelocity=new T.Vector3();d.ratDirection=new T.Vector3();d.ratLegs=[];
   sphere(T,rat,fur,0,0,0,.13,.085,.075);sphere(T,rat,fur,.10,.015,0,.075,.06,.054);
   for(const z of [-.045,.045]){sphere(T,rat,pink,.065,.065,z,.036,.036,.015);sphere(T,rat,black,.13,.035,z,.012,.012,.012);}
-  sphere(T,rat,pink,.169,.01,0,.019,.015,.018);
+  sphere(T,rat,pink,.169,.01,0,.019,.015,.018);for(const x of [-.08,.075])for(const z of [-.055,.055])d.ratLegs.push(sphere(T,rat,fur,x,-.065,z,.031,.055,.023));
   const curve=new T.CatmullRomCurve3([new T.Vector3(-.1,0,0),new T.Vector3(-.2,-.01,.025),new T.Vector3(-.29,.025,.06),new T.Vector3(-.36,.025,.01)]);part(T,rat,new T.TubeGeometry(curve,12,.013,5,false),pink);
   d.flies=[];const wing=twoSided('#d6e2df');wing.transparent=true;wing.opacity=.55;
   for(let i=0;i<9;i++){const f=new T.Group();g.add(f);f.visible=false;sphere(T,f,black,0,0,0,.023,.017,.033);const w1=sphere(T,f,wing,-.029,.012,0,.035,.005,.018),w2=sphere(T,f,wing,.029,.012,0,.035,.005,.018);d.flies.push({f,w1,w2});}
@@ -98,7 +98,7 @@ function rng(d){d.seed=(Math.imul(d.seed,1664525)+1013904223)>>>0;return d.seed/
 function emit(d,b,x,y,z,speed,up,size,life){
  const p=b.particles[b.next++%b.particles.length],a=rng(d)*TAU;
  p.age=0;p.life=life;p.size=size;p.angle=rng(d)*TAU;p.floor=d.floor??d.pos.y;
- p.p.copy(d.g.localToWorld(d.origin.set(x,y,z)));p.v.set(Math.cos(a)*speed,up,Math.sin(a)*speed);
+ p.p.copy(d.g.localToWorld(d.origin.set(x,y,z)));p.v.set(Math.cos(a)*speed,up,Math.sin(a)*speed);if(d.kind==='postbox-disguise'){p.v.set((rng(d)-.5)*.8,0,1).transformDirection(d.g.matrixWorld).multiplyScalar(speed);p.v.y=up;}
 }
 function updateBatch(d,b,dt,scale){
  let n=0;const dummy=d.dummy;
@@ -118,7 +118,7 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
  const active=streetMotionStep(d,dt,moving,airborne,teleport);
  d.energy+=((moving||airborne?1:0)-d.energy)*(1-Math.exp(-dt*10));d.elapsed+=dt;
  d.g.updateWorldMatrix(true,false);d.inverse.copy(d.g.matrixWorld).invert();const scale=Math.max(.001,d.g.getWorldScale(d.worldScale).y);
- if(teleport){d.credit=0;for(const b of d.batches)for(const p of b.particles)p.age=p.life;if(d.smoke)for(const p of d.smoke.particles){p.age=p.life;p.sprite.visible=false;}d.energy=0;}
+ if(teleport){d.credit=0;for(const b of d.batches)for(const p of b.particles)p.age=p.life;if(d.smoke)for(const p of d.smoke.particles){p.age=p.life;p.sprite.visible=false;}d.energy=0;if(d.rat){d.ratAge=99;d.rat.visible=false;}}
  for(const soft of record.softMeshes||[]){const a=soft.mesh.geometry.attributes.position,b=soft.base;if(d.energy<.002&&soft.resting)continue;soft.resting=d.energy<.002;
   for(let i=0;i<a.count;i++){const x=b[i*3],y=b[i*3+1],z=b[i*3+2],weight=soft.kind==='pharmacy'?Math.min(1,Math.abs(y-.87)*2.4):1,phase=time*9+y*6+x*5;const w=soft.amp*d.energy*weight;a.setXYZ(i,x+w*Math.sin(phase),y+w*.37*Math.sin(phase*1.4+z*6),z+w*Math.cos(phase+x*7));}a.needsUpdate=true;soft.mesh.geometry.computeVertexNormals();
  }
@@ -130,8 +130,9 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
   for(let i=0;i<fish.fish.length;i++){const {f,tail}=fish.fish[i],a=time*(i?-.8:1)+i*Math.PI,r=.35+.05*Math.sin(time*1.4+i),u=Math.max(0,Math.min(1,(fish.jumpAge-i*.11)/.75)),leap=fish.jumpAge>=i*.11&&fish.jumpAge<i*.11+.75?Math.sin(u*Math.PI)*.71:0;f.position.set(Math.cos(a)*r,.65+.045*Math.sin(time*3+i)+leap,Math.sin(a)*r);f.rotation.y=-a+(i?Math.PI:0);f.rotation.z=leap>0?Math.cos(u*Math.PI)*.55:0;tail.rotation.y=Math.sin(time*15+i)*.65;}
  }
  if(d.rat){const open=active?1:0;d.lidOpen=(d.lidOpen||0)+(open-(d.lidOpen||0))*(1-Math.exp(-dt*9));if(record.trashLid)record.trashLid.rotation.x=-1.6*d.lidOpen;
-  const u=(d.elapsed*.55)%1;d.rat.visible=d.lidOpen>.15;d.rat.position.set(Math.sin(u*TAU)*.28,.92+Math.sin(u*Math.PI)*.19,Math.cos(u*TAU)*(.21+u*.24));d.rat.rotation.y=u*TAU;
-  for(let i=0;i<d.flies.length;i++){const {f,w1,w2}=d.flies[i],a=time*(2.1+i*.07)+i*2.4;f.visible=d.lidOpen>.2;f.position.set(Math.cos(a)*(.35+.11*Math.sin(a*2)),1.15+.25*Math.sin(a*1.7+i),Math.sin(a)*.5);f.rotation.y=-a;w1.rotation.z=Math.sin(time*70+i)*.7;w2.rotation.z=-w1.rotation.z;}
+  d.ratAge+=dt;if(active&&d.lidOpen>.65&&d.ratAge>2.8){d.ratAge=0;d.ratPos.copy(d.g.localToWorld(d.origin.set(0,1.04,.12)));d.ratDirection.set((rng(d)-.5)*.65,0,1).transformDirection(d.g.matrixWorld);d.ratVelocity.copy(d.ratDirection).multiplyScalar(1.65);d.ratVelocity.y=1.5;d.ratFloor=d.floor??d.pos.y;}
+  d.rat.visible=d.ratAge<2.6;if(d.rat.visible){d.ratVelocity.y-=9.8*dt;d.ratPos.addScaledVector(d.ratVelocity,dt);if(d.ratPos.y<d.ratFloor+.11*scale){d.ratPos.y=d.ratFloor+.11*scale;d.ratVelocity.y=0;}d.rat.position.copy(d.local.copy(d.ratPos).applyMatrix4(d.inverse));d.local.copy(d.ratDirection).transformDirection(d.inverse);d.rat.rotation.y=Math.atan2(-d.local.z,d.local.x);for(let j=0;j<d.ratLegs.length;j++)d.ratLegs[j].rotation.z=Math.sin(time*22+j*Math.PI*.75)*.5;}
+  for(let i=0;i<d.flies.length;i++){const {f,w1,w2}=d.flies[i],a=time*(2.1+i*.07)+i*2.4;f.visible=d.lidOpen>.2;const approach=.5+(1-d.lidOpen)*1.6;f.position.set(Math.cos(a)*(approach+.11*Math.sin(a*2)),1.15+.25*Math.sin(a*1.7+i),Math.sin(a)*approach);f.rotation.y=-a;w1.rotation.z=Math.sin(time*70+i)*.7;w2.rotation.z=-w1.rotation.z;}
  }
  const smoke=d.smoke;
  if(smoke){const rate=teleport?0:5+Math.min(9,speed*.75)+(airborne?6:0);d.credit+=rate*dt;

@@ -244,7 +244,7 @@ export function disguiseFrame(T,model,bones,headHeight){
    buildSoftGarbage(T,g,record,mat);
   }else if(kind==='trash-can-disguise'){
    const metal=mat('#777c7a',.55);
-   c([0,.49,0],.39,.33,.94,metal);
+   add(g,new T.CylinderGeometry(.39,.33,.94,28,1,true),[0,.49,0],[1,1,1],metal);metal.side=T.DoubleSide;c([0,.79,0],.365,.365,.022,black,28);
    c([0,.055,0],.36,.36,.08,rust);const lid=c([0,.985,0],.43,.40,.11,metal);
    for(let i=0;i<18;i++){const a=i*6.283/18;const rib=b([Math.cos(a)*.365,.48,Math.sin(a)*.365],[.035,.84,.043],i%5===0?rust:silver);rib.rotation.y=-a;}
    for(let i=0;i<7;i++){const a=i*2.4;const patch=o([Math.sin(a)*.372,.14+(i%3)*.23,Math.cos(a)*.372],[.056,.085,.020],rust);patch.rotation.y=a;}
