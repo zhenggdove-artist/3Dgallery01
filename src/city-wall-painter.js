@@ -6,7 +6,7 @@ const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 export class CityWallPainter{
  constructor({canvas,camera,scene,arena,controller,role,isGM=()=>false,can3D=isGM,ui,send,loadRaster,beforeStart=()=>{}}){
   Object.assign(this,{canvas,camera,arena,controller,role,isGM,can3D,ui,send,beforeStart});
-  this.space=new SpacePainter({scene,canvas,camera,send,ui,loadRaster,controller});this.mode3D=false;this.access3D=false;
+  this.space=new SpacePainter({scene,canvas,camera,send,ui,loadRaster,controller,arena});this.mode3D=false;this.access3D=false;
   this.spaceControls=document.getElementById('paint-3d-controls');this.spaceToggle=document.getElementById('paint-3d-toggle');this.spaceSettings=document.getElementById('paint-3d-settings');
   this.spaceToggle?.addEventListener('click',()=>this.setMode3D(!this.mode3D));
   const fixedScale=document.getElementById('paint-3d-fixed-scale');
@@ -30,6 +30,7 @@ export class CityWallPainter{
   for(const [id,key] of [['paint-3d-thickness','thickness'],['paint-3d-distance','distance']]){
    const input=document.getElementById(id),output=document.getElementById(id+'-value');if(!input)continue;
    const update=()=>{this[key]=Number(input.value);if(output)output.value=input.value;};
+   if(key==='distance')for(const button of this.spaceSettings?.querySelectorAll('[data-paint-distance-step]')||[]){button.addEventListener('click',()=>{input.value=String(clamp(Number(input.value)+Number(button.dataset.paintDistanceStep),Number(input.min),Number(input.max)));update();});}
    input.addEventListener('input',update);let pointer=null;
    const slide=e=>{const rect=input.getBoundingClientRect(),t=clamp((e.clientX-rect.left)/Math.max(1,rect.width),0,1);input.value=String(Number(input.min)+(Number(input.max)-Number(input.min))*t);update();};
    input.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();e.stopPropagation();pointer=e.pointerId;input.setPointerCapture(pointer);slide(e);});
@@ -158,7 +159,8 @@ export class CityWallPainter{
  }
  updateGuide(){
   if(!this.mode3D||this.tool!=='brush'){this.space.hideGuide();return;}
-  const pointer=!this.touchCamera&&this.paintTouches.size===1?[...this.paintTouches.values()][0].last:this.guidePointer;
+  const touch=!this.touchCamera&&this.paintTouches.size===1?this.paintTouches.values().next().value:null;
+  const pointer=touch?(this.touchDrawing?touch.last:touch.start):this.guidePointer;
   this.space.updateGuide(pointer,{color:this.color,size:this.size,thickness:this.thickness,distance:this.distance},this.arena);
  }
  resetPaintPointers(){

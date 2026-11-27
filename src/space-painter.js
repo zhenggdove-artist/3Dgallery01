@@ -79,10 +79,10 @@ export function spacePaintGuideHeight(geometry,ranges,x,z,floor){
 }
 // Find the closest actual surface only at stroke start. Existing tube ranges
 // provide conservative segment bounds, so distant triangles are never tested.
-export function nearestSpacePaintPoint(geometry,ranges,point,out){
+export function nearestSpacePaintPoint(geometry,ranges,point,out,maxDistanceSquared=Infinity){
  const p=geometry.attributes.position,index=geometry.index?.array;
  const triangle=new THREE.Triangle(),candidate=new THREE.Vector3();
- let best=Infinity;
+ let best=maxDistanceSquared,found=false;
  const near=(a,b,r)=>{
   const dx=Math.max(0,Math.min(a[0],b[0])-r-point.x,point.x-Math.max(a[0],b[0])-r);
   const dy=Math.max(0,Math.min(a[1],b[1])-r-point.y,point.y-Math.max(a[1],b[1])-r);
@@ -97,7 +97,7 @@ export function nearestSpacePaintPoint(geometry,ranges,point,out){
    triangle.c.fromBufferAttribute(p,index?index[i+2]:i+2);
    triangle.closestPointToPoint(point,candidate);
    const d=candidate.distanceToSquared(point);
-   if(d<best&&spacePaintPointAllowed(candidate.toArray())){best=d;out.copy(candidate);}
+   if(d<best&&spacePaintPointAllowed(candidate.toArray())){best=d;found=true;out.copy(candidate);}
   }
  };
  for(const {start,end,info} of ranges){
@@ -106,16 +106,16 @@ export function nearestSpacePaintPoint(geometry,ranges,point,out){
   const first=points[0],last=points.at(-1);
   if(near(first,first,r)||near(last,last,r))scan(start+info.sideFaces,end);
  }
- return Number.isFinite(best);
+ return found;
 }
 export class SpacePainter{
- constructor({scene,canvas,camera,send,ui,loadRaster,controller=()=>null}){
-  Object.assign(this,{scene,canvas,camera,send,ui,loadRaster,controller});
+ constructor({scene,canvas,camera,send,ui,loadRaster,controller=()=>null,arena=null}){
+  Object.assign(this,{scene,canvas,camera,send,ui,loadRaster,controller,arena});
   this.archive=[];this.revision=-1;this.pending=new Map();this.erasing=new Set();this.queue=Promise.resolve();this.undoStack=[];this.redoStack=[];this.gesture=null;this.surfaceArchive={};this.surfaceRevision=-1;this.surfacePending=new Map();this.surfacePreview=null;this.surfaceFrame=0;this.atlas=null;this.renderedStrokes=[];this.ownerEpoch=null;
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
   this.guide=null;this.guideKey=null;this.previewRanges=[];
-  this.paintCenter=new THREE.Vector3();this.paintNormal=new THREE.Vector3();this.paintRight=new THREE.Vector3();this.paintUp=new THREE.Vector3();this.paintScale=0;this.paintPlane=new THREE.Plane();this.fixedScale=false;this.connected=false;this.paintOffset=new THREE.Vector3();this.connectPoint=new THREE.Vector3();
+  this.paintCenter=new THREE.Vector3();this.paintNormal=new THREE.Vector3();this.paintRight=new THREE.Vector3();this.paintUp=new THREE.Vector3();this.paintScale=0;this.paintPlane=new THREE.Plane();this.fixedScale=false;this.connected=false;this.paintOffset=new THREE.Vector3();this.connectPoint=new THREE.Vector3();this.connectKey=null;
  }
  mesh(which,strokes){
   if(!strokes.length){if(this[which]){this[which].removeFromParent();this[which].geometry.dispose();this[which]=null;}if(which==='preview')this.previewRanges=[];return [];}
@@ -245,13 +245,28 @@ export class SpacePainter{
   out.copy(this.paintCenter).addScaledVector(this.paintRight,x*this.paintScale*r.width/r.height).addScaledVector(this.paintUp,y*this.paintScale).add(this.paintOffset);
   return true;
  }
- hideGuide(){if(this.guide)this.guide.visible=false;this.guideKey=null;}
+ baseFloor(point,arena=this.arena){
+  const {x,y,z}=point,top=y+.003;
+  return Math.max(0,arena?.displayPlatforms?.ground(x,z,top)||0,cityGroundHeight(x,z,top,arena?.world?.cityDamage||{}));
+ }
+ // Ground is always a valid candidate, not just a fallback after searching
+ // every stroke. Its distance bounds the nearest-surface search.
+ connectedStart(point,arena=this.arena){
+  const floor=this.baseFloor(point,arena),geometry=this.saved?.geometry,k=this.connectKey;
+  if(!k||k[0]!==geometry||k[1]!==point.x||k[2]!==point.y||k[3]!==point.z||k[4]!==floor){
+   this.connectPoint.set(point.x,floor,point.z);
+   if(geometry)nearestSpacePaintPoint(geometry,this.ranges,point,this.connectPoint,(point.y-floor)**2);
+   this.connectKey=[geometry,point.x,point.y,point.z,floor];
+  }
+  return this.connectPoint;
+ }
+ hideGuide(){if(this.guide){this.guide.visible=false;this.guideAnchor.visible=false;}this.guideKey=null;}
  updateGuide(event,settings,arena){
   const r=this.canvas.getBoundingClientRect();if(!r.width||!r.height){this.hideGuide();return;}
   const x=event?.clientX??r.left+r.width/2,y=event?.clientY??r.top+r.height/2;
   const player=this.controller(),p=player?.root?.position,stroke=this.stroke,color=stroke?.color??settings.color,size=stroke?.size??settings.size,thickness=stroke?.thickness??settings.thickness;
   if(!p){this.hideGuide();return;}
-  const key=[x,y,!!event,r.left,r.top,r.width,r.height,p.x,p.y,p.z,player.yaw,player.pitch,this.camera.fov,this.fixedScale,size,color,thickness,settings.distance,stroke?.id,this.saved?.geometry,this.preview?.geometry,arena.world?.cityDamage,arena.displayPlatforms?.discs];
+  const key=[x,y,!!event,r.left,r.top,r.width,r.height,p.x,p.y,p.z,player.yaw,player.pitch,this.camera.fov,this.fixedScale,this.connected,size,color,thickness,settings.distance,stroke?.id,this.saved?.geometry,this.preview?.geometry,arena.world?.cityDamage,arena.displayPlatforms?.discs];
   if(event&&!this.fixedScale){const cp=this.camera.position,q=this.camera.quaternion;key.push(cp.x,cp.y,cp.z,q.x,q.y,q.z,q.w,this.camera.zoom,this.camera.aspect);}
   if(this.guideKey&&key.every((v,i)=>v===this.guideKey[i]))return;
   this.guideKey=key;
@@ -259,14 +274,19 @@ export class SpacePainter{
    this.guide=new THREE.Mesh(new THREE.RingGeometry(.78,1,48),new THREE.MeshBasicMaterial({side:THREE.DoubleSide,transparent:true,opacity:.9,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
    this.guide.name='3D Paint landing guide';this.guide.rotation.x=-Math.PI/2;this.guide.visible=false;this.scene.add(this.guide);
    this.guidePoint=new THREE.Vector3();
+   this.guideAnchor=new THREE.Mesh(new THREE.SphereGeometry(1,8,6),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,depthWrite:false}));
+   this.guideAnchor.name='3D Paint exact brush point';this.guideAnchor.visible=false;this.guideAnchor.renderOrder=10;this.scene.add(this.guideAnchor);
   }
   const g=this.guide;
   const point=this.guidePoint;
-  if((!stroke&&!this.setDrawingFrame(settings.distance))||!this.drawingPoint(event,point)||!spacePaintPointAllowed(point.toArray())){g.visible=false;return;}
-  // Keep the same X/Z prediction; use the uppermost 3D surface even when
-  // the drawing plane is inside or below a structure.
-  const top=point.y+.003;
-  let floor=Math.max(0,arena.displayPlatforms?.ground(point.x,point.z,top)||0,cityGroundHeight(point.x,point.z,top,arena.world?.cityDamage||{}));
+  if((!stroke&&!this.setDrawingFrame(settings.distance))||!this.drawingPoint(event,point)||!spacePaintPointAllowed(point.toArray())){g.visible=this.guideAnchor.visible=false;return;}
+  // Use exactly the same anchor for the preview and the next stroke.
+  if(!stroke&&this.connected)point.copy(this.connectedStart(point,arena));
+  if(!spacePaintPointAllowed(point.toArray())){g.visible=this.guideAnchor.visible=false;return;}
+  // The coloured ring remains on the uppermost structure. A separate small
+  // point marks the true 3D brush position, even on a vertical or hidden face.
+  this.guideAnchor.position.copy(point);this.guideAnchor.scale.setScalar(Math.max(.045,Math.min(.12,size*.35)));this.guideAnchor.visible=true;
+  let floor=this.baseFloor(point,arena);
   if(this.saved)floor=spacePaintGuideHeight(this.saved.geometry,this.ranges,point.x,point.z,floor);
   if(this.preview)floor=spacePaintGuideHeight(this.preview.geometry,this.previewRanges,point.x,point.z,floor);
   g.position.set(point.x,floor+.025,point.z);g.scale.set(size,size,1);g.material.color.set(color);g.visible=true;
@@ -291,8 +311,10 @@ export class SpacePainter{
   if(!this.setDrawingFrame(distance)||!this.drawingPoint(event,this.point)||!spacePaintPointAllowed(this.point.toArray())){this.ui.toast('Aim inside the 3D paint area');return;}
   // Translate the whole new planar stroke by a single offset. No per-move
   // snapping, bridge to the original touch point, or mutation of old strokes.
-  if(this.connected&&this.saved&&nearestSpacePaintPoint(this.saved.geometry,this.ranges,this.point,this.connectPoint)){
-   this.paintOffset.subVectors(this.connectPoint,this.point);this.point.copy(this.connectPoint);
+  if(this.connected){
+   const anchor=this.connectedStart(this.point);
+   if(!spacePaintPointAllowed(anchor.toArray())){this.ui.toast('Aim at a valid ground or 3D surface');return;}
+   this.paintOffset.subVectors(anchor,this.point);this.point.copy(anchor);
   }
   this.pointer=event.pointerId;if(capture)this.canvas.setPointerCapture(event.pointerId);
   this.gesture=globalThis.crypto.randomUUID();this.gestureEpoch=this.ownerEpoch;this.begin({color,size,thickness,normal:this.paintNormal.toArray()});this.append(this.point);

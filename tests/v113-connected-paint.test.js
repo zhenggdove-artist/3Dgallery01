@@ -44,10 +44,10 @@ test('connected stroke starts on nearest existing surface and preserves drag del
   painter.setConnected(false);painter.down(start,settings,false);near(points[3],new THREE.Vector3(0,9.5,-12));
  }
 });
-test('no existing structure falls back to ordinary painting, pending geometry is eligible, checkbox defaults off',()=>{
+test('no existing structure starts on ground, pending geometry is eligible, checkbox defaults off',()=>{
  const painter=fixture(),points=[];
  painter.setConnected(true);painter.append=p=>points.push(p.clone());painter.finish=()=>{painter.stroke=null;};
- painter.down(e(),settings,false);near(points[0],new THREE.Vector3(0,9.5,-12));painter.end(null,true);
+ painter.down(e(),settings,false);near(points[0],new THREE.Vector3(0,0,-12));painter.end(null,true);
  const pending=stroke('stroke-pending',-10);painter.pending.set(pending.id,pending);painter.rebuild();
  painter.down(e(),settings,false);near(points[1],new THREE.Vector3(0,9.5,-10.2));
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');

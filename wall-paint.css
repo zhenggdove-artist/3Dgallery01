@@ -85,3 +85,6 @@ body.wall-paint-active #crosshair{opacity:.4}
 #hud #paint-3d-flight button{min-width:44px;min-height:44px;border:2px solid;border-color:#fff #555 #555 #fff;border-radius:0;background:#c0c0c0;color:#111;touch-action:none;font:700 10px Tahoma,Arial,sans-serif;padding:3px;}
 #hud #paint-3d-flight button:active{background:#000080;color:#fff;}
 @media(pointer:coarse) and (orientation:landscape) and (max-height:530px){#hud #paint-3d-flight{top:28%;}#hud #paint-3d-flight button{min-height:36px;}}
+
+/* Fine depth adjustment stays within the existing 3D palette width. */
+#hud #paint-toolbar .paint-distance-step{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;}
