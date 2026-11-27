@@ -75,7 +75,9 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   ['bei7-road-disguise','Bei 7th Rd. Sign','#168b66',3,2950,3,{hp:1.5,defense:.10}],
   ['traffic-light-disguise','Traffic Light','#216253',3,2950,1.6,{hp:1.5,defense:.10}],
   ['taipower-box-disguise','Taiwan Power Utility Box','#488da9',3,2950,1.7,{hp:1.5,defense:.10}],
-  ['pooh-plush-disguise','Winnie the Pooh Plush Suit','#c68c2b',3,2950,1.6,{hp:1.5,defense:.10}]
+  ['pooh-plush-disguise','Winnie the Pooh Plush Suit','#c68c2b',3,2950,1.6,{hp:1.5,defense:.10}],
+  ['goldfish-bowl-disguise','Round Goldfish Bowl','#9ed8e6',3,2950,1.08,{hp:1.5,defense:.10}],
+  ['pharmacy-bag-disguise','NHI Pharmacy Medicine Bag','#e6e7e1',3,2950,2,{hp:1.5,defense:.10}]
  ];
  OUTFITS.push(...disguises.map(([creature,name,color,tier,templePrice,disguiseHeight,bonuses])=>({
   id:'outfit-'+creature,name,color,tier,price:templePrice,templePrice,slot:'outfit',family:'outfit',
@@ -85,6 +87,7 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   ...(creature==='mutton-sign-disguise'?{shopRelease:121}:{}),
   ...(['ggcola-disguise','bei7-road-disguise','traffic-light-disguise','taipower-box-disguise'].includes(creature)?{shopRelease:122}:{}),
   ...(creature==='pooh-plush-disguise'?{shopRelease:123}:{}),
+  ...(['goldfish-bowl-disguise','pharmacy-bag-disguise'].includes(creature)?{shopRelease:124}:{}),
   ...(['luroufan-sign-disguise','luroufan-bowl-disguise','notok-sign-disguise','987-sign-disguise'].includes(creature)?{shopRelease:118}:{}),
   description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed'}[k]||k)).join(' · ')
  })));

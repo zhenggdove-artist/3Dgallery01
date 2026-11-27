@@ -1,5 +1,6 @@
 import {staticPaintTexture} from '../paint-texture-source.js';
-import {softPorkGeometry,buildStreetOutfit,animateStreetOutfit} from './street-outfits.js';
+import {softPorkGeometry,buildStreetOutfit,animateStreetOutfit,streetMotionStep} from './street-outfits.js';
+import {buildSoftGarbage,buildNewStreetProp,attachStreetMotion,animateExtraStreet,animateFaultyMutton} from './street-outfit-motion.js';
 import {createHeadgear} from './headgear-model.js';
 // Clothing uses the original skinned surface, preserving animation and exposed face/hands.
 const sharedFabrics=new Map();
@@ -213,7 +214,7 @@ export function disguiseFrame(T,model,bones,headHeight){
   const c=(p,r1,r2,h,m=main,n=20)=>add(g,new T.CylinderGeometry(r1,r2,h,n),p,[1,1,1],m);
   const slit=(y,z,w=.25)=>{b([0,y,z],[w,.073,.022],black);b([0,y+.045,z],[w+.04,.018,.04],soot);};
   const mark=(p,s,m)=>{const q=b(p,s,m);q.rotation.z=.16*Math.sin(p[0]*43+p[1]*31);return q;};
-  const street=buildStreetOutfit(T,g,kind,record,mat);
+  const street=buildStreetOutfit(T,g,kind,record,mat)||buildNewStreetProp(T,g,kind,record,mat);
   if(street){/* constructed using the same avatar-local prop frame */}
   else if(kind==='chimney-disguise'){
    const mortar=mat('#938078'),bricks=['#98513d','#ad6349','#7e4737','#b16d53','#864836'].map(v=>mat(v));
@@ -240,23 +241,14 @@ export function disguiseFrame(T,model,bones,headHeight){
    for(let i=0;i<5;i++)mark([-.24+i*.10,.16+(i%2)*.035,.336],[.058,.12,.012],edge);
    slit(.86,.35,.28);
   }else if(kind==='garbage-bag-disguise'){
-   const plastic=mat('#26282a',.08),shine=mat('#44474a',.12),tie=mat('#8e3937');
-   plastic.roughness=.36;shine.roughness=.43;
-   const bag=o([0,.47,0],[.49,.47,.40],plastic);
-   const attr=bag.geometry.attributes.position;
-   for(let i=0;i<attr.count;i++){const x=attr.getX(i),y=attr.getY(i),z=attr.getZ(i),v=1+.08*Math.sin(x*18+y*9+z*13)+.05*Math.sin(y*31-z*19);attr.setXYZ(i,x*v,y*v,z*v);}
-   attr.needsUpdate=true;bag.geometry.computeVertexNormals();
-   for(let i=0;i<7;i++){const a=i*6.283/7;tube(g,[[Math.cos(a)*.14,.86,Math.sin(a)*.12],[Math.cos(a+.3)*.42,.55,Math.sin(a+.3)*.33],[Math.cos(a)*.35,.15,Math.sin(a)*.28]],.012,shine);}
-   c([0,.965,0],.075,.13,.15,plastic,9);b([0,.91,.01],[.18,.035,.17],tie);o([.10,.945,.04],[.09,.035,.045],tie);
-   mark([.26,.29,.305],[.12,.15,.022],black);mark([-.23,.58,.34],[.15,.048,.015],tape);
-   slit(.76,.32,.26);
+   buildSoftGarbage(T,g,record,mat);
   }else if(kind==='trash-can-disguise'){
    const metal=mat('#777c7a',.55);
    c([0,.49,0],.39,.33,.94,metal);
-   c([0,.055,0],.36,.36,.08,rust);c([0,.985,0],.43,.40,.11,metal);
+   c([0,.055,0],.36,.36,.08,rust);const lid=c([0,.985,0],.43,.40,.11,metal);
    for(let i=0;i<18;i++){const a=i*6.283/18;const rib=b([Math.cos(a)*.365,.48,Math.sin(a)*.365],[.035,.84,.043],i%5===0?rust:silver);rib.rotation.y=-a;}
    for(let i=0;i<7;i++){const a=i*2.4;const patch=o([Math.sin(a)*.372,.14+(i%3)*.23,Math.cos(a)*.372],[.056,.085,.020],rust);patch.rotation.y=a;}
-   tube(g,[[-.13,1.035,0],[-.13,1.075,0],[.13,1.075,0],[.13,1.035,0]],.021,black);
+   const handle=tube(g,[[-.13,1.035,0],[-.13,1.075,0],[.13,1.075,0],[.13,1.035,0]],.021,black);const hinge=new T.Group();hinge.position.set(0,.94,-.4);g.add(hinge);g.updateMatrixWorld(true);hinge.attach(lid);if(handle)hinge.attach(handle);record.trashLid=hinge;
    for(const side of [-1,1])tube(g,[[side*.38,.70,-.09],[side*.49,.70,-.09],[side*.49,.57,.09],[side*.38,.57,.09]],.025,silver);
    slit(.77,.397,.25);
   }else if(kind==='postbox-disguise'){
@@ -360,7 +352,7 @@ export function disguiseFrame(T,model,bones,headHeight){
    column('羊肉',422,528,92,'#ad191d',77);column('炒飯',389,721,69,'#ad191d',53);column('燴飯',454,721,69,'#ad191d',53);
    for(let x=2;x<512;x+=5){ctx.fillStyle=x%10===2?'rgba(255,255,255,.08)':'rgba(99,69,0,.05)';ctx.fillRect(x,0,1,864);}
    const tex=staticPaintTexture(T,canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);
-   const casing=mat('#75674e',.5),face=mat('#ffffff');face.map=tex;face.emissive.set('#fff4c2');face.emissiveMap=tex;face.emissiveIntensity=.65;
+   const casing=mat('#75674e',.5),face=mat('#ffffff');face.map=tex;face.emissive.set('#fff4c2');face.emissiveMap=tex;face.emissiveIntensity=.65;record.muttonLight=face;
    b([0,1.18,0],[1.43,2.36,.23],casing);
    for(const side of [-1,1]){b([0,1.18,side*.125],[1.32,2.24,.025],face);for(const x of [-.69,.69])b([x,1.18,side*.14],[.045,2.36,.032],woodDark);}
    for(const y of [.025,2.335])b([0,y,0],[1.47,.05,.29],woodDark);
@@ -427,7 +419,9 @@ export function disguiseFrame(T,model,bones,headHeight){
   const factor=frame.height*item.disguiseHeight/Math.max(.001,widest?Math.max(extent.x,extent.y,extent.z):extent.y);
   g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);
   g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*factor);
-  if(item.exposedHead&&giant){
+  if(street?.waterHead){
+   const headCenter=frame.head.clone().addScaledVector(frame.up,frame.unit*.42);g.position.copy(headCenter).addScaledVector(frame.up,-street.openingY*factor-frame.unit*.35);
+  }else if(item.exposedHead&&giant){
    const front=new T.Vector3(0,0,1).applyQuaternion(frame.rotation);
    const headCenter=frame.head.clone().addScaledVector(frame.up,frame.unit*.42);
    const headY=headCenter.clone().sub(frame.base).dot(frame.up)/factor+bounds.min.y;
@@ -445,6 +439,7 @@ export function disguiseFrame(T,model,bones,headHeight){
    g.scale.set(side,fy,side);g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*fy);
   }
   model.add(g);g.updateMatrixWorld(true);
+  attachStreetMotion(T,g,kind,record,mat);
   // Existing avatar and collision dimensions remain untouched by cosmetic props.
   return record;
  }
@@ -632,7 +627,7 @@ export function disguiseFrame(T,model,bones,headHeight){
  return record;}
 export function disposeOutfit(record){if(!record)return;for(const r of record.surfaces){r.mesh.geometry=r.originalGeometry;r.mesh.material=r.originalMaterial;r.geometry.dispose();r.mats.forEach(m=>m.dispose());}const geometries=new Set();for(const root of record.parts){root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});root.removeFromParent();}geometries.forEach(g=>g.dispose());record.materials.forEach(m=>m.dispose());record.extraTextures?.forEach(t=>{t.dispose();if(t.isCanvasTexture&&t.image)t.image.width=t.image.height=0;});releaseFabric(record);}
 
-export function animateOutfit(record,time,movingRoot=null,frameDt=1/60){if(!record)return;if(record.plushMotion)animatePlushBear(record,time,movingRoot,frameDt);if(record.riceMotion||record.colaMotion||record.trafficLights)animateStreetOutfit(record,time,movingRoot,frameDt);if(record.teaMotion&&movingRoot)animateTeaMotion(record.teaMotion,time,movingRoot,frameDt);if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=q.userData.pipeBend||0;q.position.x=.48*v*v+Math.sin(time*3.2-i*.42)*v*.035;q.position.z=Math.cos(time*2.7-i*.35)*v*.025;q.rotation.z=-.43*v+Math.cos(time*3.2-i*.42)*v*.05;}if(record.blinkLight){const t=(time%5.6+5.6)%5.6;record.blinkLight.emissiveIntensity=t<.12||t>.31&&t<.43||t>2.8&&t<3.05?.04:t<.65?.35:1.35;}}
+export function animateOutfit(record,time,movingRoot=null,frameDt=1/60){if(!record)return;if(record.plushMotion)animatePlushBear(record,time,movingRoot,frameDt);if(record.riceMotion||record.colaMotion||record.trafficLights)animateStreetOutfit(record,time,movingRoot,frameDt);if(record.extraStreetMotion)animateExtraStreet(record,time,movingRoot,frameDt,streetMotionStep);if(record.muttonLight)animateFaultyMutton(record.muttonLight,time);if(record.teaMotion&&movingRoot)animateTeaMotion(record.teaMotion,time,movingRoot,frameDt);if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=q.userData.pipeBend||0;q.position.x=.48*v*v+Math.sin(time*3.2-i*.42)*v*.035;q.position.z=Math.cos(time*2.7-i*.35)*v*.025;q.rotation.z=-.43*v+Math.cos(time*3.2-i*.42)*v*.05;}if(record.blinkLight){const t=(time%5.6+5.6)%5.6;record.blinkLight.emissiveIntensity=t<.12||t>.31&&t<.43||t>2.8&&t<3.05?.04:t<.65?.35:1.35;}}
 
 // Damped spring driven by acceleration, with bounded fixed-step particle pool.
 export function teaSloshStep(tilt,velocity,accelX,accelZ,dt){
