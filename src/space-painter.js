@@ -109,10 +109,44 @@ export function nearestSpacePaintPoint(geometry,ranges,point,out,maxDistanceSqua
  }
  return found;
 }
+// Cache exact triangle-block bounds once for a batch. A surface ray need not
+// intersect or sort every triangle in every nearby stroke on each pointer move.
+// Atlas conversion retains triangle order; both indexed and nonindexed meshes
+// use the same bounds and the same exact Three.js triangle intersection.
+export function surfaceRayBlocks(geometry,ranges){
+ const p=geometry.attributes.position,index=geometry.index?.array,blocks=[],v=new THREE.Vector3();
+ for(const range of ranges)for(let start=range.start;start<range.end;start+=192){
+  const end=Math.min(start+192,range.end),bounds=new THREE.Box3();
+  for(let i=start*3;i<end*3;i++)bounds.expandByPoint(v.fromBufferAttribute(p,index?index[i]:i));
+  blocks.push({start,end,range,bounds});
+ }
+ return blocks;
+}
+export function closestSurfaceHit(pages,raycaster){
+ let best=null,bestRange=null,bestDistance=raycaster.far;
+ const ray=raycaster.ray,a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3(),point=new THREE.Vector3();
+ for(const page of pages){
+  if(!ray.intersectsBox(page.bounds)||page.bounds.distanceToPoint(ray.origin)>bestDistance)continue;
+  const geometry=page.mesh.geometry,p=geometry.attributes.position,index=geometry.index?.array;
+  page.rayBlocks??=surfaceRayBlocks(geometry,page.ranges);
+  for(const block of page.rayBlocks){
+   if(!ray.intersectsBox(block.bounds)||block.bounds.distanceToPoint(ray.origin)>bestDistance)continue;
+   for(let f=block.start;f<block.end;f++){
+    const i=f*3,ia=index?index[i]:i,ib=index?index[i+1]:i+1,ic=index?index[i+2]:i+2;
+    a.fromBufferAttribute(p,ia);b.fromBufferAttribute(p,ib);c.fromBufferAttribute(p,ic);
+    if(!ray.intersectTriangle(a,b,c,false,point))continue;
+    const distance=ray.origin.distanceTo(point);
+    if(distance<raycaster.near||distance>bestDistance||best&&distance===bestDistance)continue;
+    bestDistance=distance;bestRange=block.range;best={distance,point:point.clone(),faceIndex:f,face:{a:ia,b:ib,c:ic},object:page.mesh};
+   }
+  }
+ }
+ return best?{hit:best,range:bestRange}:null;
+}
 export class SpacePainter{
- constructor({scene,canvas,camera,send,ui,loadRaster,controller=()=>null,arena=null,ownerKey=()=>null}){
-  Object.assign(this,{scene,canvas,camera,send,ui,loadRaster,controller,arena,ownerKey});
-  this.archive=[];this.revision=-1;this.pending=new Map();this.erasing=new Set();this.queue=Promise.resolve();this.undoStack=[];this.redoStack=[];this.gesture=null;this.surfaceArchive={};this.surfaceRevision=-1;this.surfacePending=new Map();this.surfacePreview=null;this.surfaceFrame=0;this.atlas=null;this.renderedStrokes=[];this.ownerEpoch=null;
+ constructor({scene,canvas,camera,send,ui,loadRaster,controller=()=>null,arena=null,ownerKey=()=>null,renderer=null}){
+  Object.assign(this,{scene,canvas,camera,send,ui,loadRaster,controller,arena,ownerKey,renderer});
+  this.archive=[];this.archiveIds=new Set();this.revision=-1;this.pending=new Map();this.erasing=new Set();this.queue=Promise.resolve();this.undoStack=[];this.redoStack=[];this.gesture=null;this.surfaceArchive={};this.surfaceRevision=-1;this.surfacePending=new Map();this.surfacePreview=null;this.surfaceFrame=0;this.atlas=null;this.renderedStrokes=[];this.ownerEpoch=null;
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
   this.guide=null;this.guideKey=null;this.previewRanges=[];this.pages=[];this.pageById=new Map();this.geometryVersion=0;
@@ -184,7 +218,7 @@ export class SpacePainter{
   if(epoch!==undefined)this.ownerEpoch=epoch;
   const previousSurface=this.surfaceArchive,rev=world.spacePaintRevision||0,srev=world.spacePaintSurfaceRevision||0,changed=srev!==this.surfaceRevision;
   if(changed){this.surfaceRevision=srev;this.surfaceArchive=world.spacePaintSurface||{};for(const [key,pending] of this.surfacePending)if(pending.ackRevision!==undefined&&pending.ackRevision<=srev)this.surfacePending.delete(key);}
-  if(rev!==this.revision){this.revision=rev;this.archive=world.spacePaint||[];for(const s of this.archive)this.pending.delete(s.id);for(const [id,p] of this.pending)if(Number.isFinite(p.ackRevision)&&p.ackRevision<=world.revision)this.pending.delete(id);this.rebuild();}
+  if(rev!==this.revision){this.revision=rev;this.archive=world.spacePaint||[];this.archiveIds=new Set(this.archive.map(s=>s.id));for(const s of this.archive)this.pending.delete(s.id);for(const [id,p] of this.pending)if(Number.isFinite(p.ackRevision)&&p.ackRevision<=world.revision)this.pending.delete(id);this.rebuild();}
   if(changed)for(const id of new Set([...Object.keys(previousSurface),...Object.keys(this.surfaceArchive)])){if(previousSurface[id]!==this.surfaceArchive[id]&&JSON.stringify(previousSurface[id])!==JSON.stringify(this.surfaceArchive[id]))this.refreshSurface(id);}
  }
  surfacePaints(id){
@@ -194,7 +228,7 @@ export class SpacePainter{
   if(typeof document==='undefined')return;
   if(!page.atlas){
    if(!page.strokes.some(s=>this.surfaceArchive[s.id]?.length||this.surfacePreview?.id===s.id||[...this.surfacePending.values()].some(p=>p.id===s.id)))return;
-   page.atlas=new SpacePaintTexture(page.mesh,page.ranges,page.strokes,this.loadRaster);id=null;
+   page.atlas=new SpacePaintTexture(page.mesh,page.ranges,page.strokes,this.loadRaster,this.renderer);id=null;
   }
   if(id)page.atlas.repaint(id,this.surfacePaints(id));
   else for(const s of page.strokes)page.atlas.repaint(s.id,this.surfacePaints(s.id));
@@ -226,9 +260,9 @@ export class SpacePainter{
  }
  pickSurface(event,player){
   if(!this.saved||!player||!this.setRay(event))return null;
-  const picked=this.nearestHit();if(!picked)return null;
+  const picked=closestSurfaceHit(this.pages,this.ray);if(!picked)return null;
   const {hit,range}=picked;
-  if(hit.point.distanceTo(player.clone().add(new THREE.Vector3(0,1.4,0)))>19||!this.archive.some(s=>s.id===range.id))return null;
+  if(hit.point.distanceTo(player.clone().add(new THREE.Vector3(0,1.4,0)))>19||!this.archiveIds.has(range.id))return null;
   const face=surfaceFace(range.info,hit.faceIndex-range.start),pos=hit.object.geometry.attributes.position;
   const verts=[hit.face.a,hit.face.b,hit.face.c].map(i=>new THREE.Vector3().fromBufferAttribute(pos,i));
   const bary=THREE.Triangle.getBarycoord(hit.point,...verts,new THREE.Vector3());if(!bary||bary.x<-.001)return null;

@@ -4,9 +4,9 @@ import {cityPaintHit,structureSignPaintHit,ROOF_PAINT_RAY_RANGE,isRooftopPaintWa
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 export class CityWallPainter{
- constructor({canvas,camera,scene,arena,controller,role,ownerKey=()=>null,isGM=()=>false,can3D=isGM,ui,send,loadRaster,beforeStart=()=>{}}){
+ constructor({canvas,camera,scene,arena,renderer=null,controller,role,ownerKey=()=>null,isGM=()=>false,can3D=isGM,ui,send,loadRaster,beforeStart=()=>{}}){
   Object.assign(this,{canvas,camera,arena,controller,role,ownerKey,isGM,can3D,ui,send,beforeStart});
-  this.space=new SpacePainter({scene,canvas,camera,send,ui,loadRaster,controller,arena,ownerKey});this.mode3D=false;this.access3D=false;
+  this.space=new SpacePainter({scene,canvas,camera,send,ui,loadRaster,controller,arena,ownerKey,renderer});this.mode3D=false;this.access3D=false;
   this.spaceControls=document.getElementById('paint-3d-controls');this.spaceToggle=document.getElementById('paint-3d-toggle');this.spaceSettings=document.getElementById('paint-3d-settings');
   this.spaceToggle?.addEventListener('click',()=>this.setMode3D(!this.mode3D));
   const connect=document.getElementById('paint-3d-connect');

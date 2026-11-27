@@ -172,6 +172,8 @@ jobs:
       - run: npx playwright install --with-deps webkit
       - name: Serve repository assets for WebKit
         run: npm run start > /tmp/temple-safari-static.log 2>&1 &
+      - name: Verify actual WebKit 3D graffiti tile uploads and pixel replay
+        run: node tests/v121-paint-webkit.mjs
       - name: Verify actual Safari/WebKit module graph and 0% startup
         run: node tests/temple-safari-startup.mjs
       - if: always()
