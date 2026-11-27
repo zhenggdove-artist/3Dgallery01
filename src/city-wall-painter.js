@@ -1,10 +1,24 @@
 import * as THREE from 'three';
+import {SpacePainter} from './space-painter.js';
 import {cityPaintHit,structureSignPaintHit,ROOF_PAINT_RAY_RANGE,isRooftopPaintWall,paintPointInReach} from './shared/city-layout.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 export class CityWallPainter{
- constructor({canvas,camera,arena,controller,role,ui,send,beforeStart=()=>{}}){
-  Object.assign(this,{canvas,camera,arena,controller,role,ui,send,beforeStart});
+ constructor({canvas,camera,scene,arena,controller,role,isGM=()=>false,ui,send,beforeStart=()=>{}}){
+  Object.assign(this,{canvas,camera,arena,controller,role,isGM,ui,send,beforeStart});
+  this.space=new SpacePainter({scene,canvas,camera,send,ui});this.mode3D=false;this.access3D=false;
+  this.spaceControls=document.getElementById('paint-3d-controls');this.spaceToggle=document.getElementById('paint-3d-toggle');this.spaceSettings=document.getElementById('paint-3d-settings');
+  this.spaceToggle?.addEventListener('click',()=>this.setMode3D(!this.mode3D));
+  this.thickness=.34;this.distance=12;
+  for(const [id,key] of [['paint-3d-thickness','thickness'],['paint-3d-distance','distance']]){
+   const input=document.getElementById(id),output=document.getElementById(id+'-value');if(!input)continue;
+   const update=()=>{this[key]=Number(input.value);if(output)output.value=input.value;};
+   input.addEventListener('input',update);let pointer=null;
+   const slide=e=>{const rect=input.getBoundingClientRect(),t=clamp((e.clientX-rect.left)/Math.max(1,rect.width),0,1);input.value=String(Number(input.min)+(Number(input.max)-Number(input.min))*t);update();};
+   input.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();e.stopPropagation();pointer=e.pointerId;input.setPointerCapture(pointer);slide(e);});
+   input.addEventListener('pointermove',e=>{if(e.pointerId===pointer){e.preventDefault();e.stopPropagation();slide(e);}});
+   for(const type of ['pointerup','pointercancel','lostpointercapture'])input.addEventListener(type,e=>{if(e.pointerId!==pointer)return;if(type==='pointerup')slide(e);pointer=null;e.stopPropagation();});update();
+  }
   this.active=false;this.tool='brush';this.color='#e73b33';this.size=.17;
   this.pointer=null;this.stroke=null;this.pending=Promise.resolve();
   this.button=document.getElementById('paint-button');
@@ -41,6 +55,17 @@ export class CityWallPainter{
   },true);
   this.setTool('brush');
  }
+ sync3D(world){this.space.sync(world);this.refresh3D();}
+ refresh3D(){
+  const allowed=this.active&&this.isGM()&&this.role()==='fighter';if(allowed===this.access3D)return;
+  this.access3D=allowed;if(this.spaceControls)this.spaceControls.hidden=!allowed;if(!allowed)this.setMode3D(false);
+ }
+ setMode3D(enabled){
+  if(enabled&&(!this.active||!this.isGM()||this.role()!=='fighter'))return;
+  if(enabled===this.mode3D)return;
+  if(this.mode3D)this.space.end();else{this.finish();const pointer=this.pointer;this.pointer=null;if(pointer!==null&&this.canvas.hasPointerCapture(pointer))this.canvas.releasePointerCapture(pointer);}
+  this.mode3D=enabled;this.spaceToggle?.classList.toggle('active',enabled);this.spaceToggle?.setAttribute('aria-pressed',String(enabled));if(this.spaceSettings)this.spaceSettings.hidden=!enabled;
+ }
  setTool(tool){
   this.tool=tool;this.brush?.classList.toggle('active',tool==='brush');
   this.eraser?.classList.toggle('active',tool==='eraser');
@@ -50,9 +75,9 @@ export class CityWallPainter{
  setActive(active){
   if(active&&this.role()!=='fighter'){this.ui.toast('Enter the arena to paint');return;}
   if(this.active===active)return;
-  if(!active)this.finish();
+  if(!active){this.setMode3D(false);this.finish();}
   if(active)this.beforeStart();
-  this.active=active;
+  this.active=active;this.refresh3D();
   if(this.toolbar)this.toolbar.hidden=!active;
   // The menu otherwise stays over the palette and makes PAINT appear inert.
   if(active){
@@ -91,6 +116,7 @@ export class CityWallPainter{
   // Reserve middle mouse for GM camera orbit, not paint input swallowing.
   if(event.button!==0&&event.pointerType==='mouse')return;
   this.consume(event);
+  if(this.mode3D){this.space.down(event,{tool:this.tool,color:this.color,size:this.size,thickness:this.thickness,distance:this.distance});return;}
   const hit=this.pick(event);
   if(!hit){this.ui.toast('Aim at a nearby wall, sign or pink disc');return;}
   this.pointer=event.pointerId;
@@ -122,6 +148,7 @@ export class CityWallPainter{
   return true;
  }
  move(event){
+  if(this.mode3D){if(event.pointerId===this.space.pointer){this.consume(event);this.space.move(event);}return;}
   if(!this.active||event.pointerId!==this.pointer)return;
   if(event.pointerType==='mouse'&&(event.buttons&4))return;
   this.consume(event);
@@ -139,6 +166,7 @@ export class CityWallPainter{
   }
  }
  up(event){
+  if(this.mode3D){if(event.pointerId===this.space.pointer&&!(event.type==='pointerup'&&event.pointerType==='mouse'&&event.button!==0)){this.consume(event);this.space.end(event);}return;}
   if(!this.active&&this.pointer===null)return;
   if(event.pointerType==='mouse'&&event.type==='pointerup'&&event.button!==0)return;
   if(this.pointer!==event.pointerId)return;

@@ -1,6 +1,7 @@
 import {validateGmHouse,gmHouseBlocked} from './arena.js';
 import {isDelisted,reclaimDelisted,retireShopItem,relistShopItem} from './shop-retirement.js';
 import {validateDiscPaint} from './disc-paint.js';
+import {applySpacePaint} from './space-paint.js';
 import {setTerrainStyle} from './terrain-style.js';
 import {wantedSettings,countWantedDeath} from './wanted-list.js';
 import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown,migrateSkillQuality,applySkillAreaScale,bloomHealRate} from './equipment-tuning.js';
@@ -63,7 +64,7 @@ const initialStructures=now=>[
 export function createInitialWorld(now=Date.now()){
   return {
     version:WORLD_VERSION,revision:1,createdAt:now,
-    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},relistedShopItems:{},discPaint:{},pickupReceipts:[],equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
+    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},relistedShopItems:{},discPaint:{},spacePaint:[],spacePaintRevision:0,pickupReceipts:[],equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},tidalLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
@@ -136,7 +137,7 @@ export function migrateWorld(raw,now=Date.now()){
     (itemById(drop.itemId)&&(itemById(drop.itemId).slot!=='material'&&(itemById(drop.itemId).slot!=='wings'||Object.hasOwn(world.relistedShopItems||{},drop.itemId))))));
   for(const drop of world.groundDrops)if(isRestorativeDrop(drop))drop.kind='consumable';
   world.persistentAttacks=world.persistentAttacks.filter(fx=>fx.weapon!=='fan'&&fx.kind!=='fan');
-  world.delistedShopItems??={};world.relistedShopItems??={};world.discPaint??={};world.pickupReceipts??=[];world.groundDrops=world.groundDrops.filter(d=>!isDelisted(world,d.itemId));
+  world.delistedShopItems??={};world.relistedShopItems??={};world.discPaint??={};world.spacePaint??=[];world.spacePaintRevision??=0;world.pickupReceipts??=[];world.groundDrops=world.groundDrops.filter(d=>!isDelisted(world,d.itemId));
   return cleanLegacyScene(world);
 }
 
@@ -306,7 +307,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true,
        radiusScale:v.gmTuning?.radiusScale??1,consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    delistedShopItems:clone(world.delistedShopItems||{}),discPaint:scene(world.discPaint||{}),pickupReceipts:clone(world.pickupReceipts||[]),wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),artworkPromptPositions:clone(world.artworkPromptPositions||{}),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
+    delistedShopItems:clone(world.delistedShopItems||{}),discPaint:scene(world.discPaint||{}),spacePaint:scene(world.spacePaint||[]),spacePaintRevision:world.spacePaintRevision||0,pickupReceipts:clone(world.pickupReceipts||[]),wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),artworkPromptPositions:clone(world.artworkPromptPositions||{}),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -396,6 +397,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
 }
 
 export function applyAction(world,actor,body,context={}){
+  if(body.action==='gm-paint-3d'||body.action==='gm-erase-3d')return applySpacePaint(world,actor,body);
   const now=context.now??Date.now(),rng=context.rng??Math.random,
    // The premium draw checks PERSISTED admin status before any ensureProfile
    // mutation. Existing game/GM actions retain their original role semantics.

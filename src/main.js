@@ -231,7 +231,7 @@ ui.addEventListener('write-start',()=>writer.begin());
 const gun=new GunController({canvas,camera,controller:()=>controller,weapon:()=>currentTunedWeapon(),ui,attack:performAttack});
 const artEditor=new ArtworkEditor({scene,camera,canvas,arena,player:()=>localRoot,isGM:()=>!!self?.profile?.admin,ownerKey:()=>self?.key,focusArtwork:root=>{if(!controller)return;controller.artworkEditTarget=root;if(root){controller.target.copy(root.position);controller.yaw=root.rotation.y;controller.pitch=.05;controller.updateCamera(1,true);camera.updateMatrixWorld(true);}},send:sendAction,control:enabled=>{if(controller){controller.setEnabled(enabled&&!ui.panelName&&!wasDead);controller.cameraLocked=!!artEditor.mode&&artEditor.mode!=='follow';}},toast:text=>ui.toast(text)});
 const platformDelete=new PlatformDeleteEditor({canvas,camera,arena,ui,editor:artEditor,isGM:()=>!!self?.profile?.admin,send:sendAction,controller:()=>controller,cancelBuild:cancelBuildPlacement});
-const wallPainter=new CityWallPainter({canvas,camera,arena,controller:()=>controller,
+const wallPainter=new CityWallPainter({canvas,camera,scene,arena,controller:()=>controller,isGM:()=>world?.profile?.admin===true,
  role:()=>self?.role,ui,send:(action,data)=>sendAction(action,data,{throwOnError:true}),
  beforeStart:()=>{gun.end();ui.emit('attack-cancel');}});
 
@@ -984,6 +984,7 @@ function syncWorld(){if(!world)return;
   arena.loadCustomArtworks(world.customArtworks,network.base).catch(error=>ui.toast(error.message));
  if(!previous||world.damageEvents!==previous.damageEvents)damageNumbers.receive(world.damageEvents);
  arena.sync(world,players);
+ wallPainter.sync3D(world);
  if(!previous||world.collector!==previous.collector)collectorView.sync(world.collector);
  syncWantedButton(world.wantedSettings,network.base);ui.setWorld(world);ui.showCollectorSale(world.collectorSale,self?.key);ui.showKillEvents(world.killEvents);
   // Monster deaths use the SAME purely visual golden burst as thrown artwork.
