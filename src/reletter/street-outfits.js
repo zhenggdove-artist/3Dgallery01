@@ -1,3 +1,4 @@
+import {staticPaintTexture} from '../paint-texture-source.js';
 // Procedural Taiwanese street objects, shared by gameplay and actual 3D portraits.
 const TAU=Math.PI*2;
 export function softPorkGeometry(T,seed=0){
@@ -9,7 +10,7 @@ export function softPorkGeometry(T,seed=0){
  a.needsUpdate=true;g.computeVertexNormals();return g;
 }
 function random(seed){return ()=>{seed=(1664525*seed+1013904223)>>>0;return seed/4294967296;};}
-function texture(T,record,w,h,paint){const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;paint(canvas.getContext('2d'),w,h);const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);return tex;}
+function texture(T,record,w,h,paint){const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;paint(canvas.getContext('2d'),w,h);const tex=staticPaintTexture(T,canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);return tex;}
 function mesh(T,g,geo,mat,p=[0,0,0],s=[1,1,1]){const m=new T.Mesh(geo,mat);m.position.set(...p);m.scale.set(...s);g.add(m);return m;}
 const STREET_KINDS=new Set(['ggcola-disguise','bei7-road-disguise','traffic-light-disguise','taipower-box-disguise']);
 export function buildStreetOutfit(T,g,kind,record,mat){

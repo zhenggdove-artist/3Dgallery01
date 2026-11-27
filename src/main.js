@@ -1294,7 +1294,7 @@ function recordRenderHealth(now){
  vfx.trimIdlePools(now);
 }
 canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();contextLost=true;gpuFrames.reset();renderDiagnostics.contextLosses++;renderDiagnostics.lastError='WebGL context lost';});
-canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;gpuFrames.reset();renderDiagnostics.contextRestores++;last=performance.now();});
+canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;gpuFrames.reset();wallPainter.space.restoreSurfaceTextures();renderDiagnostics.contextRestores++;last=performance.now();});
 function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.10,elapsed/1000);last=now;if(!assetsReady||!joined||document.hidden||contextLost)return;const started=performance.now();
  // An unexpected model/animation exception cannot prevent the render pass.
  // Individual effects are also contained at source; this is a final guard.

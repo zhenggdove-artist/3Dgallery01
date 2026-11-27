@@ -1,3 +1,4 @@
+import {staticPaintTexture} from '../paint-texture-source.js';
 import {softPorkGeometry,buildStreetOutfit,animateStreetOutfit} from './street-outfits.js';
 import {createHeadgear} from './headgear-model.js';
 // Clothing uses the original skinned surface, preserving animation and exposed face/hands.
@@ -5,13 +6,13 @@ function fabric(T,item){const c=document.createElement('canvas');c.width=c.heigh
  // The Collector's suit uses a restrained pinstripe rather than the ordinary
  // playful outfit print. This texture is applied to the original skinned body.
  if(item.design==='leather'){
-  x.strokeStyle='#544a51';x.lineWidth=2;for(let i=0;i<512;i+=32){x.beginPath();x.moveTo(i,0);x.lineTo(i+12,512);x.stroke();}const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;return texture;
+  x.strokeStyle='#544a51';x.lineWidth=2;for(let i=0;i<512;i+=32){x.beginPath();x.moveTo(i,0);x.lineTo(i+12,512);x.stroke();}const texture=staticPaintTexture(T,c);texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;return texture;
  }
  if(item.design==='suit'){
   x.fillStyle='#c6c9dc';x.globalAlpha=.10;
   for(let px=15;px<512;px+=27)x.fillRect(px,0,1,512);
   x.globalAlpha=1;
-  const texture=new T.CanvasTexture(c);
+  const texture=staticPaintTexture(T,c);
   texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;
   texture.anisotropy=2;return texture;
  }
@@ -59,7 +60,7 @@ function fabric(T,item){const c=document.createElement('canvas');c.width=c.heigh
   x.strokeStyle=light;x.globalAlpha=.08;x.lineWidth=1;
   for(let n=0;n<512;n+=5){x.beginPath();x.moveTo(n,0);x.lineTo(n,512);x.stroke();}
   x.globalAlpha=1;
-  const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;
+  const texture=staticPaintTexture(T,c);texture.colorSpace=T.SRGBColorSpace;
   texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.anisotropy=2;return texture;
  }
  x.strokeStyle='#f6eee2';x.fillStyle='#f3eadb';x.lineWidth=5;const p=item.pattern;
@@ -67,7 +68,7 @@ function fabric(T,item){const c=document.createElement('canvas');c.width=c.heigh
  if(p===2){x.globalAlpha=.3;for(let i=0;i<512;i+=64){x.fillRect(i,0,22,512);x.fillRect(0,i,512,22);}x.globalAlpha=1;}
  for(let y=32;y<512;y+=96)for(let xx=32;xx<512;xx+=96){x.save();x.translate(xx+(y%192?20:0),y);x.fillStyle=(xx+y)%192?'#eee4d8':'#756b85';x.globalAlpha=.7;if(p===1||p===4){x.beginPath();for(let k=0;k<10;k++){const a=k*Math.PI/5-Math.PI/2,r=k%2?6:15;x.lineTo(Math.cos(a)*r,Math.sin(a)*r);}x.closePath();x.fill();}else if(p===3){for(const [a,b,r]of [[0,0,12],[-9,-11,6],[9,-11,6]]){x.beginPath();x.arc(a,b,r,0,Math.PI*2);x.fill();}}else{x.beginPath();x.ellipse(0,0,11,7,-.4,0,Math.PI*2);x.fill();}x.restore();}
  // Fine woven threads remain subtle, with no additional draw calls.
- x.globalAlpha=.08;x.fillStyle='#ffffff';for(let i=0;i<512;i+=4){x.fillRect(i,0,1,512);x.fillRect(0,i,512,1);}const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.anisotropy=2;return texture;}
+ x.globalAlpha=.08;x.fillStyle='#ffffff';for(let i=0;i<512;i+=4){x.fillRect(i,0,1,512);x.fillRect(0,i,512,1);}const texture=staticPaintTexture(T,c);texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.anisotropy=2;return texture;}
 // Compute an anatomical frame in the model's own local coordinates. Its
 // vertical axis follows head-to-feet, while shoulders determine facing.
 export function disguiseFrame(T,model,bones,headHeight){
@@ -135,7 +136,7 @@ export function disguiseFrame(T,model,bones,headHeight){
   const ctx=canvas.getContext('2d');ctx.fillStyle='#c5c5c5';ctx.fillRect(0,0,256,256);
   let seed=2193;const rand=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
   for(let i=0;i<12500;i++){const x=rand()*256,y=rand()*256;ctx.strokeStyle=i%2?'#eeeeee':'#929292';ctx.lineWidth=.6+rand()*.7;ctx.beginPath();ctx.moveTo(x,y);ctx.quadraticCurveTo(x+rand()*2-1,y-1,x+rand()*2-1,y-2-rand()*2);ctx.stroke();}
-  const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.repeat.set(2,2);record.extraTextures??=[];record.extraTextures.push(tex);
+  const tex=staticPaintTexture(T,canvas);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.repeat.set(2,2);record.extraTextures??=[];record.extraTextures.push(tex);
   const plush=(color,bump=.025)=>{const m=mat(color);m.roughness=1;m.metalness=0;m.map=tex;m.bumpMap=tex;m.bumpScale=bump;return m;};
   const fur=plush('#efb94c'),red=plush('#d32735',.012),edge=plush('#b77b2a'),hoodFur=plush('#efb94c'),hoodMuzzle=plush('#efc36c'),hoodInside=plush('#bd832d'),dark=mat('#251b16');
   const group=(boneName,p,q=frame.rotation)=>{const g=new T.Group();g.name='plush-bear:'+boneName;g.userData.outfit=record.id;model.add(g);g.position.copy(p);g.quaternion.copy(q);g.scale.setScalar(u);g.updateMatrixWorld(true);(bones.get(boneName)||head).attach(g);record.parts.push(g);return g;};
@@ -265,7 +266,7 @@ export function disguiseFrame(T,model,bones,headHeight){
     // Small text panel is real canvas typography, not a separate shop icon.
     const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;const ctx=canvas.getContext('2d');
     ctx.fillStyle='#eee8d7';ctx.fillRect(0,0,256,128);ctx.fillStyle=side<0?'#185e38':'#97242d';ctx.textAlign='center';ctx.font='bold 28px sans-serif';ctx.fillText(side<0?'普通郵件':'限時郵件',128,45);ctx.font='bold 20px sans-serif';ctx.fillText(side<0?'ORDINARY MAIL':'PROMPT DELIVERY',128,76);ctx.font='18px sans-serif';ctx.fillText('中華郵政',128,105);
-    const labelTex=new T.CanvasTexture(canvas);labelTex.colorSpace=T.SRGBColorSpace;const labelMat=mat('#ffffff');labelMat.map=labelTex;record.extraTextures??=[];record.extraTextures.push(labelTex);b([x,.49,.333],[.31,.17,.006],labelMat);
+    const labelTex=staticPaintTexture(T,canvas);labelTex.colorSpace=T.SRGBColorSpace;const labelMat=mat('#ffffff');labelMat.map=labelTex;record.extraTextures??=[];record.extraTextures.push(labelTex);b([x,.49,.333],[.31,.17,.006],labelMat);
     for(let i=0;i<3;i++)mark([x-.16+i*.12,.20+(i%2)*.04,.324],[.04,.02,.01],rust);
    }
   }else if(kind==='water-tower-disguise'){
@@ -319,7 +320,7 @@ export function disguiseFrame(T,model,bones,headHeight){
    }else{
     ctx.fillStyle='#c92131';ctx.fillRect(0,0,1024,52);ctx.fillRect(0,324,1024,60);ctx.textAlign='center';ctx.font=brand==='987'?'bold 230px sans-serif':'bold 184px sans-serif';ctx.fillText(brand,512,244);ctx.font='bold 30px sans-serif';ctx.fillText('CONVENIENCE STORE',512,299);
    }
-   const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);
+   const tex=staticPaintTexture(T,canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);
    const face=mat('#ffffff');face.map=tex;face.emissive.set('#ffffff');face.emissiveMap=tex;face.emissiveIntensity=.8;record.blinkLight=face;
    b([0,.56,0],[2.85,1.12,.22],casing);
    for(const side of [-1,1]){b([0,.56,side*.125],[2.76,1.04,.028],face);b([0,.035,side*.14],[2.85,.06,.035],edge);b([0,1.085,side*.14],[2.85,.06,.035],edge);}
@@ -355,7 +356,7 @@ export function disguiseFrame(T,model,bones,headHeight){
    column('蝦仁炒飯',190,530,91,'#171717',76);column('什錦炒麵',294,530,91,'#171717',76);
    column('羊肉',422,528,92,'#ad191d',77);column('炒飯',389,721,69,'#ad191d',53);column('燴飯',454,721,69,'#ad191d',53);
    for(let x=2;x<512;x+=5){ctx.fillStyle=x%10===2?'rgba(255,255,255,.08)':'rgba(99,69,0,.05)';ctx.fillRect(x,0,1,864);}
-   const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);
+   const tex=staticPaintTexture(T,canvas);tex.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(tex);
    const casing=mat('#75674e',.5),face=mat('#ffffff');face.map=tex;face.emissive.set('#fff4c2');face.emissiveMap=tex;face.emissiveIntensity=.65;
    b([0,1.18,0],[1.43,2.36,.23],casing);
    for(const side of [-1,1]){b([0,1.18,side*.125],[1.32,2.24,.025],face);for(const x of [-.69,.69])b([x,1.18,side*.14],[.045,2.36,.032],woodDark);}
@@ -376,7 +377,7 @@ export function disguiseFrame(T,model,bones,headHeight){
    const splashMat=mat('#d7a36f');splashMat.roughness=.23;const drops=new T.InstancedMesh(new T.SphereGeometry(1,7,5),splashMat,36);drops.frustumCulled=false;
    for(let i=0;i<36;i++){dummy.position.set(0,1.45,0);dummy.scale.setScalar(0);dummy.updateMatrix();drops.setMatrixAt(i,dummy.matrix);}g.add(drops);
    record.teaMotion={group:g,milk,vertices:milk.geometry.attributes.position.array.slice(),pearls,rest,cubes,drops,dummy,particles:Array.from({length:36},()=>({age:99,p:new T.Vector3(),v:new T.Vector3()})),last:null,velocity:new T.Vector3(),accel:new T.Vector3(),tilt:new T.Vector2(),tiltVelocity:new T.Vector2(),worldPos:new T.Vector3(),delta:new T.Vector3(),localVelocity:new T.Vector3(),localAccel:new T.Vector3(),q:new T.Quaternion(),inverse:new T.Matrix4(),next:0,credit:0};
-   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff3dc';ctx.fillRect(0,0,256,192);ctx.fillStyle='#583a25';ctx.textAlign='center';ctx.font='bold 47px sans-serif';ctx.fillText('珍珠奶茶',128,82);ctx.font='bold 24px sans-serif';ctx.fillText('BUBBLE TEA',128,135);const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;label.map=tex;record.extraTextures??=[];record.extraTextures.push(tex);b([0,1.05,.535],[.49,.34,.022],label);
+   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff3dc';ctx.fillRect(0,0,256,192);ctx.fillStyle='#583a25';ctx.textAlign='center';ctx.font='bold 47px sans-serif';ctx.fillText('珍珠奶茶',128,82);ctx.font='bold 24px sans-serif';ctx.fillText('BUBBLE TEA',128,135);const tex=staticPaintTexture(T,canvas);tex.colorSpace=T.SRGBColorSpace;label.map=tex;record.extraTextures??=[];record.extraTextures.push(tex);b([0,1.05,.535],[.49,.34,.022],label);
   }else if(kind==='fried-chicken-disguise'){
    // Irregular grilled/fried cutlet: a thick sculpted base plus two scales
    // of real raised batter granules, warm glaze and pale sesame seeds.

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {surfaceInfo,surfaceFace} from './shared/space-paint-surface.js';
 import {surfaceChartRect,isSurfaceCheckpoint,iterateSurfaceLayers,RASTER_TILE} from './shared/space-paint-raster.js';
 import {paintOwnerStrokes} from './paint-composite.js';
+import {useStablePaintPixels,rgbaTexture,copyFlippedRows,fillPaintTile} from './paint-texture-source.js';
 // A bounded atlas per geometry batch, with one reusable ink tile.
 // Do not replay historical graffiti and the entire growing brush on each frame.
 function sameStyle(a,b){
@@ -42,17 +43,24 @@ export function replaySurfaceInk(ctx,state,records,draw){
  return {records:snapshot};
 }
 export class SpacePaintTexture{
- constructor(mesh,ranges,strokes,loadRaster,renderer=null){
-  this.loadRaster=loadRaster;this.disposed=false;this.renderer=renderer;this.inkId=null;this.inkState=null;
+ constructor(mesh,ranges,strokes,loadRaster,renderer=null,stablePixels=useStablePaintPixels()){
+  this.loadRaster=loadRaster;this.disposed=false;this.renderer=renderer;this.inkId=null;this.inkState=null;this.stablePixels=stablePixels;this.checkedUpload=false;
   this.mesh=mesh;this.grid=Math.ceil(Math.sqrt(ranges.length));this.tile=Math.min(256,Math.floor(2048/this.grid));this.side=this.tile*this.grid;
-  this.canvas=document.createElement('canvas');this.canvas.width=this.canvas.height=this.side;this.ctx=this.canvas.getContext('2d');
+  this.canvas=document.createElement('canvas');this.canvas.width=this.canvas.height=stablePixels?this.tile:this.side;this.ctx=this.canvas.getContext('2d',stablePixels?{willReadFrequently:true}:undefined);
   this.scratch=document.createElement('canvas');this.scratch.width=this.scratch.height=this.tile;this.ink=this.scratch.getContext('2d');
-  this.texture=new THREE.CanvasTexture(this.canvas);this.texture.colorSpace=THREE.SRGBColorSpace;this.texture.generateMipmaps=false;this.texture.minFilter=THREE.LinearFilter;this.texture.magFilter=THREE.LinearFilter;
+  if(!this.ctx||!this.ink){this.canvas.width=this.canvas.height=this.scratch.width=this.scratch.height=0;throw Error('3D paint canvas unavailable');}
+  this.pixels=stablePixels?new Uint8Array(this.side*this.side*4):null;
+  this.texture=stablePixels?rgbaTexture(THREE,this.pixels,this.side,this.side):new THREE.CanvasTexture(this.canvas);
+  this.texture.colorSpace=THREE.SRGBColorSpace;this.texture.generateMipmaps=false;this.texture.minFilter=THREE.LinearFilter;this.texture.magFilter=THREE.LinearFilter;
   this.uploadCanvas=null;this.uploadTexture=null;this.uploadPosition=new THREE.Vector2();
   const uv=[],old=mesh.geometry,geometry=old.toNonIndexed();this.entries=new Map();
   ranges.forEach((range,i)=>{
    const stroke=strokes[i],info=range.info||surfaceInfo(stroke),x=(i%this.grid)*this.tile,y=Math.floor(i/this.grid)*this.tile;
    const entry={stroke,info,x,y};this.entries.set(stroke.id,entry);
+   // Initialize every tile before the material is ever visible. Async graffiti
+   // and failed canvas uploads must not turn the rest of the batch black.
+   if(this.stablePixels)fillPaintTile(this.pixels,this.side,x,this.side-y-this.tile,this.tile,stroke.color);
+   else{this.ctx.fillStyle=stroke.color;this.ctx.fillRect(x,y,this.tile,this.tile);}
    for(let f=0;f<range.end-range.start;f++){
     const face=surfaceFace(info,f),rect=this.rect(face.chart);
     for(const [u,v] of face.uv)uv.push((x+rect.x+u*rect.w)/this.side,1-(y+rect.y+v*rect.h)/this.side);
@@ -77,9 +85,33 @@ export class SpacePaintTexture{
  // Preserve the complete CPU atlas for restoration and unmodified WebGL1
  // fallback. On the normal r160 renderer, upload just this opaque tile.
  commitTile(e,ink=true){
-  this.ctx.fillStyle=e.stroke.color;this.ctx.fillRect(e.x,e.y,this.tile,this.tile);
-  if(ink)this.ctx.drawImage(this.scratch,e.x,e.y);
+  const x=this.stablePixels?0:e.x,y=this.stablePixels?0:e.y;
+  this.ctx.fillStyle=e.stroke.color;this.ctx.fillRect(x,y,this.tile,this.tile);
+  if(ink)this.ctx.drawImage(this.scratch,x,y);
   const renderer=this.renderer;
+  if(this.stablePixels){
+   try{
+    const source=this.ctx.getImageData(0,0,this.tile,this.tile).data;
+    // The base is deliberately opaque. An empty backing store is an error,
+    // not legitimate black graffiti; retain the last valid CPU/GPU image.
+    if(source[3]!==255||source[source.length-1]!==255)throw Error('3D paint tile backing lost');
+    const bottom=this.side-e.y-this.tile;
+    if(!this.uploadTexture){this.tilePixels=new Uint8Array(source.length);this.uploadTexture=rgbaTexture(THREE,this.tilePixels,this.tile,this.tile);}
+    copyFlippedRows(source,this.tile,this.tile,this.tilePixels);
+    for(let row=0;row<this.tile;row++)this.pixels.set(this.tilePixels.subarray(row*this.tile*4,(row+1)*this.tile*4),((bottom+row)*this.side+e.x)*4);
+    if(!renderer?.initTexture||!renderer?.copyTextureToTexture||renderer.getContext().isContextLost()){this.texture.needsUpdate=true;return true;}
+    renderer.initTexture(this.texture);this.uploadPosition.set(e.x,bottom);
+    renderer.copyTextureToTexture(this.uploadPosition,this.uploadTexture,this.texture);
+    // Check the first actual typed upload, not every pointer event.
+    if(!this.checkedUpload){this.checkedUpload=true;if(renderer.getContext().getError()!==0)throw Error('3D paint typed texture upload rejected');}
+    return true;
+   }catch(error){
+    this.renderer=null;this.texture.needsUpdate=true;
+    // If canvas readback failed, the previous valid tile is still intact.
+    this.inkId=null;this.inkState=null;
+    console.warn('3D surface stable-pixel fallback',error);return false;
+   }
+  }
   if(!renderer?.initTexture||!renderer?.copyTextureToTexture||renderer.getContext().isContextLost()){this.texture.needsUpdate=true;return;}
   try{
    if(!this.uploadCanvas){
@@ -97,6 +129,7 @@ export class SpacePaintTexture{
    this.renderer=null;this.texture.needsUpdate=true;console.warn('3D surface tile upload fallback',error);
   }
  }
+ releaseBase(e){for(const layer of e.base||[])if(layer.image)layer.image.width=layer.image.height=0;e.base=null;}
  repaint(id,paints){
   const e=this.entries.get(id);if(!e)return;
   e.paints=paints;
@@ -120,7 +153,7 @@ export class SpacePaintTexture{
       image.getContext('2d').drawImage(scaled,x,y,image.width,image.height,0,0,image.width,image.height);
       base.push({owner:layer.owner,image,x,y});
      }
-     e.base=base;canvas.width=canvas.height=scaled.width=scaled.height=0;
+     this.releaseBase(e);e.base=base;canvas.width=canvas.height=scaled.width=scaled.height=0;
      e.checkpoint=checkpoint;e.loading=null;this.repaint(id,e.paints);
     }).catch(error=>{if(this.disposed||e.loading!==checkpoint)return;e.loading=null;console.warn('3D paint checkpoint',error);if(++e.failures<=1)setTimeout(()=>{if(!this.disposed&&e.paints?.[0]?.checkpoint===checkpoint)this.repaint(id,e.paints);},500);});
    }
@@ -128,7 +161,7 @@ export class SpacePaintTexture{
    if(!e.initialized){this.commitTile(e,false);e.initialized=true;}
    return;
   }
-  if(!checkpoint){e.base=null;e.checkpoint=null;e.loading=null;}
+  if(!checkpoint){if(e.base)this.releaseBase(e);e.checkpoint=null;e.loading=null;}
   const records=[...(checkpoint&&e.base?e.base:[]),...paints.filter(p=>!isSurfaceCheckpoint(p))];
   const prior=this.inkId===id?this.inkState:null;
   this.inkState=replaySurfaceInk(this.ink,prior,records,(ctx,paint,mode,start)=>{
@@ -137,7 +170,8 @@ export class SpacePaintTexture{
   });
   this.inkId=id;
   if(prior===this.inkState&&e.initialized)return;
-  this.commitTile(e);e.initialized=true;
+  if(this.commitTile(e)!==false)e.initialized=true;
  }
- dispose(){this.disposed=true;this.entries.clear();this.mesh.material=this.originalMaterial;this.material.dispose();this.texture.dispose();this.uploadTexture?.dispose();this.inkState=null;this.canvas.width=this.canvas.height=this.scratch.width=this.scratch.height=0;if(this.uploadCanvas)this.uploadCanvas.width=this.uploadCanvas.height=0;}
+ restoreTexture(){this.texture.needsUpdate=true;this.checkedUpload=false;this.inkId=null;this.inkState=null;}
+ dispose(){this.disposed=true;for(const e of this.entries.values())this.releaseBase(e);this.entries.clear();this.mesh.material=this.originalMaterial;this.material.dispose();this.texture.dispose();this.uploadTexture?.dispose();this.inkState=null;this.pixels=null;this.tilePixels=null;this.canvas.width=this.canvas.height=this.scratch.width=this.scratch.height=0;if(this.uploadCanvas)this.uploadCanvas.width=this.uploadCanvas.height=0;}
 }

@@ -228,11 +228,12 @@ export class SpacePainter{
   if(typeof document==='undefined')return;
   if(!page.atlas){
    if(!page.strokes.some(s=>this.surfaceArchive[s.id]?.length||this.surfacePreview?.id===s.id||[...this.surfacePending.values()].some(p=>p.id===s.id)))return;
-   page.atlas=new SpacePaintTexture(page.mesh,page.ranges,page.strokes,this.loadRaster,this.renderer);id=null;
+   try{page.atlas=new SpacePaintTexture(page.mesh,page.ranges,page.strokes,this.loadRaster,this.renderer);}catch(error){if(!page.atlasWarning){page.atlasWarning=true;console.warn('3D surface texture deferred; keeping original geometry colours',error);}return;}id=null;
   }
   if(id)page.atlas.repaint(id,this.surfacePaints(id));
   else for(const s of page.strokes)page.atlas.repaint(s.id,this.surfacePaints(s.id));
  }
+ restoreSurfaceTextures(){for(const page of this.pages){if(page.atlas)page.atlas.restoreTexture();else this.refreshPage(page);}}
  refreshSurface(id=null){
   if(id){const page=this.pageById.get(id);if(page)this.refreshPage(page,id);}
   else for(const page of this.pages)this.refreshPage(page);
