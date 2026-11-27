@@ -33,7 +33,7 @@ test('ten outfit collections each expose five individual styles and eleven creat
  const groups=shopWeaponGroups(SHOP_ITEMS).filter(g=>g.base.slot==='outfit');
  assert.equal(groups.filter(g=>!g.base.r113Wearable).length,28);
  const disguises=groups.filter(g=>g.base.r113Wearable);
- const expectedDisguises=['chimney','cardboard','garbage-bag','trash-can','postbox','wooden-horse','water-tower','utility-pole','tin-pipe','luroufan-sign','luroufan-bowl','notok-sign','987-sign','bubble-tea','fried-chicken','mutton-sign','ggcola','bei7-road','traffic-light','taipower-box','pooh-plush'].map(name=>'outfit-'+name+'-disguise');
+ const expectedDisguises=['chimney','cardboard','garbage-bag','trash-can','postbox','wooden-horse','water-tower','utility-pole','tin-pipe','luroufan-sign','luroufan-bowl','notok-sign','987-sign','bubble-tea','fried-chicken','mutton-sign','ggcola','bei7-road','traffic-light','taipower-box','pooh-plush','goldfish-bowl','pharmacy-bag'].map(name=>'outfit-'+name+'-disguise');
  assert.deepEqual(disguises.map(g=>g.base.id).sort(),expectedDisguises.sort());
  for(const g of disguises){assert.equal(g.variants.length,1);assert.ok(g.base.price>0);}
  for(const g of groups.filter(g=>shopOutfitCollection(g.base))){
@@ -47,7 +47,7 @@ test('ten outfit collections each expose five individual styles and eleven creat
  const item=itemById('outfit-pajamas-5');
  assert.equal(applyAction(w,actor,{action:'buy',itemId:item.id,quantity:2},{now:now+1}).purchased.total,item.price*2);
  assert.ok(p.inventory.filter(id=>id===item.id).length===2);
- for(const id of ['outfit-luroufan-bowl-disguise','outfit-notok-sign-disguise','outfit-987-sign-disguise','outfit-ggcola-disguise','outfit-bei7-road-disguise','outfit-traffic-light-disguise','outfit-taipower-box-disguise']){
+ for(const id of ['outfit-luroufan-bowl-disguise','outfit-notok-sign-disguise','outfit-987-sign-disguise','outfit-ggcola-disguise','outfit-bei7-road-disguise','outfit-traffic-light-disguise','outfit-taipower-box-disguise','outfit-goldfish-bowl-disguise','outfit-pharmacy-bag-disguise']){
   const product=itemById(id);
   const receipt=applyAction(w,actor,{action:'buy',itemId:id,quantity:1},{now:now+2});
   assert.equal(receipt.error,undefined,id);
