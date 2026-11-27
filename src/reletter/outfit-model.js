@@ -191,14 +191,55 @@ export function disguiseFrame(T,model,bones,headHeight){
   d.tail.rotation.y=d.angle;d.tail.rotation.x=Math.cos(time*12)*.14*d.energy;
  }
 
+// Layered limestone: multi-frequency erosion and fracture bands on overlapping
+// asymmetric slabs, baked into one mesh with vertex color and normals.
+export function createRockDisguiseGeometry(T){
+ const layers=[
+  [0,.32,0,.76,.32,.62,-.16,1],[-.25,.57,.09,.59,.31,.56,.21,2],[.32,.66,-.09,.53,.40,.52,-.27,3],
+  [-.08,.94,-.03,.77,.41,.60,-.25,4],[-.29,1.26,-.10,.58,.39,.57,.17,5],[.27,1.24,-.07,.46,.36,.49,-.35,6],
+  [-.22,1.55,-.13,.43,.32,.44,.19,7],[.09,.79,.34,.55,.25,.30,-.31,8],[-.39,.23,.23,.43,.20,.36,.12,9],
+  [.47,.40,.27,.31,.25,.30,-.28,10],[-.52,1.05,.12,.27,.26,.29,.22,11]
+ ];
+ const positions=[],normals=[],colors=[],indices=[],color=new T.Color(),q=new T.Quaternion(),axis=new T.Vector3(0,0,1),v=new T.Vector3(),n=new T.Vector3();
+ const noise=(x,y,z,k)=>Math.sin(x*4.3+y*2.8+z*3.1+k)*.48+Math.cos(y*8.2-z*3.9+x*2.1+k*1.3)*.28+Math.sin(z*13.5+x*11.2-y*5.6+k*.7)*.15+Math.cos(x*26+y*19-z*22+k)*.09;
+ for(const [cx,cy,cz,sx,sy,sz,tilt,seed] of layers){
+  const geo=new T.SphereGeometry(1,40,28),a=geo.attributes.position;
+  for(let i=0;i<a.count;i++){const x=a.getX(i),y=a.getY(i),z=a.getZ(i),ang=Math.atan2(z,x),soft=k=>Math.sign(k)*Math.pow(Math.abs(k),.82),wave=y*12+x*3.5+z*2.1+seed*.8+noise(x,y,z,seed)*1.7,seam=Math.pow(.5+.5*Math.cos(wave),13),rough=noise(x,y,z,seed);
+   const d=1+.19*rough-.085*seam+.045*Math.sin(ang*5+seed+y*2);
+   a.setXYZ(i,soft(x)*sx*d,soft(y)*sy*(1+.11*rough)+.018*Math.sin(wave),soft(z)*sz*d);
+  }
+  geo.computeVertexNormals();const no=geo.attributes.normal,offset=positions.length/3;q.setFromAxisAngle(axis,tilt);
+  for(let i=0;i<a.count;i++){v.fromBufferAttribute(a,i);const x=v.x/sx,y=v.y/sy,z=v.z/sz,grain=noise(x*2.5,y*2.5,z*2.5,seed),line=Math.pow(.5+.5*Math.cos(y*18+x*4+z*3+seed+grain),15);
+   const tone=.67+.12*noise(x,y,z,seed)+.08*grain-.19*line;
+   color.setRGB(tone*.97,tone*.92,tone*.83);colors.push(color.r,color.g,color.b);
+   v.applyQuaternion(q);positions.push(v.x+cx,v.y+cy,v.z+cz);n.fromBufferAttribute(no,i).applyQuaternion(q);normals.push(n.x,n.y,n.z);
+  }
+  for(let i=0;i<geo.index.count;i++)indices.push(offset+geo.index.getX(i));geo.dispose();
+ }
+ const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeBoundingBox();geometry.computeBoundingSphere();return geometry;
+}
+function attachRockDisguise(T,model,bones,height,record,mat){
+ const frame=disguiseFrame(T,model,bones,height),g=new T.Group(),geometry=createRockDisguiseGeometry(T);
+ const stone=mat('#ffffff');stone.vertexColors=true;stone.roughness=.97;stone.metalness=0;
+ const rock=new T.Mesh(geometry,stone);g.add(rock);g.name='rock-disguise:layered-limestone';g.userData.outfit=record.id;
+ const bounds=geometry.boundingBox,extent=bounds.getSize(new T.Vector3()),factor=frame.height*1.04/Math.max(.001,extent.y);
+ g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);
+ const front=new T.Vector3(0,0,1).applyQuaternion(frame.rotation),headCenter=frame.head.clone().addScaledVector(frame.up,frame.unit*.42);
+ const y=T.MathUtils.clamp(headCenter.clone().sub(frame.base).dot(frame.up)/factor+bounds.min.y,bounds.min.y+extent.y*.2,bounds.max.y-extent.y*.2);
+ g.position.copy(headCenter).addScaledVector(frame.up,-y*factor).addScaledVector(front,-bounds.max.z*factor+frame.unit*.10);
+ cutDisguiseOpening(T,g,0,y,frame.unit*.80/factor,frame.unit*.93/factor,bounds.max.z);
+ model.add(g);g.updateMatrixWorld(true);record.parts.push(g);return record;
+}
+
  export function attachOutfit(T,model,item,{hood=true}={}){if(!item)return null;model.updateMatrixWorld(true);const bones=new Map();model.traverse(o=>{if(o.isBone)bones.set(o.name.replace(/^mixamorig/,''),o);});const head=bones.get('Head');if(!head)return null;const top=bones.get('HeadTop_End'),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,forward=head.getWorldQuaternion(new T.Quaternion()),fabricRef=acquireFabric(T,item),texture=fabricRef.texture,record={id:item.id,parts:[],surfaces:[],texture,fabricKey:fabricRef.key};
  const meshes=[];model.traverse(o=>{if(o.isSkinnedMesh&&o.geometry.attributes.skinIndex)meshes.push(o);});
  for(const mesh of meshes){const originalGeometry=mesh.geometry,originalMaterial=mesh.material,geometry=originalGeometry.clone(),si=geometry.attributes.skinIndex,sw=geometry.attributes.skinWeight,mask=new Float32Array(si.count);for(let i=0;i<si.count;i++)for(let k=0;k<4;k++){const idx=si.array[i*si.itemSize+k],name=mesh.skeleton.bones[idx]?.name||'';if(/Hips|Spine|Arm|Leg|Foot|Toe/.test(name))mask[i]+=sw.array[i*sw.itemSize+k];}geometry.setAttribute('outfitMask',new T.BufferAttribute(mask,1));const mats=(Array.isArray(originalMaterial)?originalMaterial:[originalMaterial]).map(source=>{const m=source.clone(),before=source.onBeforeCompile,key=source.customProgramCacheKey();m.onBeforeCompile=function(shader){before.call(m,shader);shader.uniforms.outfitFabric={value:texture};shader.vertexShader='attribute float outfitMask;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvOutfitMask=outfitMask;vOutfitUV=uv*3.;');shader.fragmentShader='uniform sampler2D outfitFabric;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
- ${item.exposedHead?'if(vOutfitMask>.48) discard;':''}\n vec3 cloth=texture2D(outfitFabric,vOutfitUV).rgb;float shade=clamp(dot(diffuseColor.rgb,vec3(.2126,.7152,.0722)),.4,1.);diffuseColor.rgb=mix(diffuseColor.rgb,cloth*(.82+.18*shade),smoothstep(.35,.8,vOutfitMask));`);};m.customProgramCacheKey=()=>key+'-outfit-'+item.id;m.needsUpdate=true;return m;});mesh.geometry=geometry;mesh.material=Array.isArray(originalMaterial)?mats:mats[0];record.surfaces.push({mesh,originalGeometry,originalMaterial,geometry,mats});}
+ ${item.exposedHead||item.creature==='rock-disguise'?'if(vOutfitMask>.48) discard;':''}\n vec3 cloth=texture2D(outfitFabric,vOutfitUV).rgb;float shade=clamp(dot(diffuseColor.rgb,vec3(.2126,.7152,.0722)),.4,1.);diffuseColor.rgb=mix(diffuseColor.rgb,cloth*(.82+.18*shade),smoothstep(.35,.8,vOutfitMask));`);};m.customProgramCacheKey=()=>key+'-outfit-'+item.id;m.needsUpdate=true;return m;});mesh.geometry=geometry;mesh.material=Array.isArray(originalMaterial)?mats:mats[0];record.surfaces.push({mesh,originalGeometry,originalMaterial,geometry,mats});}
  const materials=[],mat=(color,metal=0)=>{const m=new T.MeshStandardMaterial({color,roughness:.72,metalness:metal});materials.push(m);return m;},main=mat(item.color),cream=mat('#e8dfcf'),dark=mat('#514b62'),trim=mat('#c9b58b',.3),pink=mat('#c597a2');record.materials=materials;
  function anchor(name){const bone=bones.get(name)||head,g=new T.Group(),scale=bone.getWorldScale(new T.Vector3());g.name=item.id;g.userData.outfit=item.id;bone.add(g);g.quaternion.copy(bone.getWorldQuaternion(new T.Quaternion()).invert().multiply(forward));g.scale.set(height/scale.x,height/scale.y,height/scale.z);record.parts.push(g);return g;}
  const add=(g,geo,p,scale,m=main)=>{const o=new T.Mesh(geo,m);o.position.set(...p);o.scale.set(...scale);g.add(o);return o;},ball=(g,p,s,m=main)=>add(g,new T.SphereGeometry(1,16,12),p,s,m),box=(g,p,s,m=main)=>add(g,new T.BoxGeometry(1,1,1),p,s,m),cone=(g,p,r,h,m=main)=>add(g,new T.ConeGeometry(r,h,12),p,[1,1,1],m),tube=(g,pts,r,m=main)=>add(g,new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>new T.Vector3(...p))),18,r,6,false),[0,0,0],[1,1,1],m);
  if(item.creature==='pooh-plush-disguise')return attachPlushBear(T,model,bones,height,record,mat);
+ if(item.creature==='rock-disguise')return attachRockDisguise(T,model,bones,height,record,mat);
  const chest=anchor('Spine2'),hips=anchor('Hips'),d=item.design,t=item.tier;
  if(d==='disguise'){
   // Props are rigid avatar-local objects, not children of animated hips or
@@ -573,11 +614,6 @@ export function disguiseFrame(T,model,bones,headHeight){
    for(let i=0;i<8;i++){const a=i*Math.PI/4;tube(chest,[[Math.cos(a)*.59,-1.60,Math.sin(a)*.49],[Math.cos(a)*.65,-.45,Math.sin(a)*.5],[Math.cos(a)*.48,.60,Math.sin(a)*.40]],.045,main);}
    const crown=anchor('Head');for(let i=0;i<7;i++)ball(crown,[Math.sin(i*2.4)*.62,.95+(i%3)*.26,Math.cos(i*2.4)*.45],[.64,.52,.60],i%2?leaf:leaf2);
    for(const side of [-1,1])tube(chest,[[side*.35,.12,0],[side*.86,.66,0],[side*1.14,.84,-.12]],.13,bark);
-  }else if(kind==='rock-disguise'){
-   const stone=mat('#858589'),shadow=mat('#60666b');
-   add(hips,new T.DodecahedronGeometry(1,0),[0,.12,0],[1.14,1.27,.97],stone);
-   for(let i=0;i<5;i++){const a=i*2.4;add(hips,new T.IcosahedronGeometry(1,0),[Math.sin(a)*.58,-.31,Math.cos(a)*.48],[.53,.58,.43],i%2?shadow:main);}
-   if(hood){const h=anchor('Head');add(h,new T.DodecahedronGeometry(1,0),[0,.23,0],[.74,.69,.67],stone);}
   }else if(kind==='doghouse-disguise'){
    const roof=mat('#a74538'),wood=mat('#c48e58'),door=mat('#30241e');
    box(chest,[0,-.52,0],[1.36,1.66,1.16],wood);box(chest,[0,-.70,.60],[.67,.98,.055],door);

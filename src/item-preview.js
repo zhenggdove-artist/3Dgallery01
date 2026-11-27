@@ -7,6 +7,7 @@ import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {orientPortraitModel} from './equipment-portrait.js';
 import {wingIcon,createWings} from './reletter/garden-art.js';
 import {itemById} from './shared/catalog.js';
+import {activePreviewItems} from './shared/shop-retirement.js';
 import {comfortCashImage} from './comfort-cash-art.js';
 
 // Only the actual model (or the outfit's authored full-resolution artwork)
@@ -17,6 +18,12 @@ let renderer,scene,camera,queue=Promise.resolve();
 let previewCharacterSource=null,previewIdleEnabled=false,previewIdleTimer=null,warmingPreviews=false;
 export function setOutfitPreviewCharacter(source){previewCharacterSource=source||null;}
 
+let removedPreviewAssets={};
+export function setRemovedPreviewAssets(removed={}){
+ const previous=removedPreviewAssets;removedPreviewAssets=removed||{};
+ for(const id of Object.keys(removedPreviewAssets)){if(Object.hasOwn(previous,id))continue;const item=itemById(id);if(!item)continue;const key=keyOf(item),url=finished.get(key);if(url?.startsWith('blob:'))URL.revokeObjectURL(url);finished.delete(key);failed.delete(key);failUntil.delete(key);void previewCache().then(cache=>cache?.delete(previewCacheKey(item))).catch(()=>{});}
+}
+const excludedPreview=item=>!!item&&Object.hasOwn(removedPreviewAssets,item.id);
 const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0)+(item.id==='outfit-luroufan-bowl-disguise'?':v065':item.id==='outfit-pooh-plush-disguise'?':v070':'');
 // Exact release-scoped PNGs: same resolution, no second WebGL render.
 const previewRelease=new URL(import.meta.url).searchParams.get('temple-release');
@@ -39,10 +46,10 @@ async function storePreview(item,blob){
  try{const cache=await previewCache();if(cache)await cache.put(previewCacheKey(item),new Response(blob,{headers:{'Content-Type':'image/png'}}));}catch{}
 }
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const itemPreviewUrl=item=>item?finished.get(keyOf(item))||null:null;
+export const itemPreviewUrl=item=>item&&!excludedPreview(item)?finished.get(keyOf(item))||null:null;
 export const previewCount=()=>({ready:finished.size,pending:pending.size,failed:failed.size});
 export function itemPreview(item){
- if(!item)return Promise.resolve(null);
+ if(!item||excludedPreview(item))return Promise.resolve(null);
  const key=keyOf(item);
  if(item.design==='painted-wing'){const image=wingIcon(item);finished.set(key,image);return Promise.resolve(image);}
  if(item.slot==='consumable'){
@@ -55,6 +62,7 @@ export function itemPreview(item){
  if(pending.has(key))return pending.get(key);
  const job=queue.then(async()=>{
   try{
+   if(excludedPreview(item))return null;
    let url;
    const cached=await cachedPreview(item);
    if(cached?.size){
@@ -62,6 +70,7 @@ export function itemPreview(item){
     if(!warmingPreviews)try{await preloadImage(url);}catch{URL.revokeObjectURL(url);url=null;}
    }
    if(!url)url=await renderPreview(item);
+   if(excludedPreview(item)){if(url?.startsWith('blob:'))URL.revokeObjectURL(url);return null;}
    finished.set(key,url);failed.delete(key);failUntil.delete(key);
    return url;
   }catch(error){
@@ -81,7 +90,7 @@ async function preloadImage(url){
  else await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;});
 }
 export async function warmItemPreviews(items,onProgress=()=>{}){
- const unique=[...new Map((items||[]).filter(Boolean).map(i=>[keyOf(i),i])).values()];
+ const unique=[...new Map(activePreviewItems(items,removedPreviewAssets).map(i=>[keyOf(i),i])).values()];
  warmingPreviews=true;
  if(previewCacheName&&globalThis.caches)try{
   for(const name of await globalThis.caches.keys())if(name.startsWith('ggtemple-preview-')&&name!==previewCacheName)await globalThis.caches.delete(name);
@@ -100,6 +109,7 @@ export async function warmItemPreviews(items,onProgress=()=>{}){
 // Always creates the actual detailed preview. Entire sets are updated in one
 // DOM turn after the required assets resolve, never as a visible glyph cascade.
 export function previewMarkup(item){
+ if(excludedPreview(item))return '';
  const url=item?.design==='painted-wing'?wingIcon(item):item?.slot==='consumable'?comfortCashImage(item):itemPreviewUrl(item);
  return url?'<img data-preview="'+escape(item.id)+'" src="'+escape(url)+'" alt="" decoding="async" loading="lazy">':
   '<span class="equipment-preview-pending" data-preview="'+escape(item.id)+'" aria-label="Loading full equipment model"></span>';

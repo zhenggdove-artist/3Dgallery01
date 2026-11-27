@@ -75,7 +75,7 @@ export function mergeWingCatalog(previous=[],incoming=[]){
 // A full HTTP response has fresh JSON identities even for unchanged scene
 // data. Retain only equal, already-rendered sections; never reuse a changed
 // field, invent a revision or alter the socket's independent patch baseline.
-const sceneSnapshotKeys=['environment','audioSettings','customArtworks','artworks','artworkLayout','floatingPlatforms','customPedestals','platformOverrides','removedPlatformIds','structures','cityDamage','wallPaint','discPaint','spacePaint','spacePaintSurface','groundDrops','coins','equipmentTuning','shopPrices','delistedShopItems','wantedSettings','chatDefault','artworkPromptPositions','collector'];
+const sceneSnapshotKeys=['environment','audioSettings','customArtworks','artworks','artworkLayout','floatingPlatforms','customPedestals','platformOverrides','removedPlatformIds','structures','cityDamage','wallPaint','discPaint','spacePaint','spacePaintSurface','groundDrops','coins','equipmentTuning','shopPrices','delistedShopItems','removedShopAssets','wantedSettings','chatDefault','artworkPromptPositions','collector'];
 export function reuseHttpSceneFields(previous,next){
  if(!previous||!next)return next;
  let result=next;

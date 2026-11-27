@@ -1,5 +1,5 @@
 import {validateGmHouse,gmHouseBlocked} from './arena.js';
-import {isDelisted,reclaimDelisted,retireShopItem,relistShopItem} from './shop-retirement.js';
+import {isDelisted,reclaimDelisted,retireShopItem,relistShopItem,removeShopAsset} from './shop-retirement.js';
 import {validateDiscPaint} from './disc-paint.js';
 import {applySpacePaint,SPACE_PAINT_ACTIONS,canSpacePaint} from './space-paint.js';
 import {spacePaintMoveFraction,SPACE_PAINT_FLIGHT_LIMIT} from './space-paint-collision.js';
@@ -65,7 +65,7 @@ const initialStructures=now=>[
 export function createInitialWorld(now=Date.now()){
   return {
     version:WORLD_VERSION,revision:1,createdAt:now,
-    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},relistedShopItems:{},discPaint:{},spacePaint:[],spacePaintRevision:0,spacePaintSurface:{},spacePaintSurfaceRevision:0,pickupReceipts:[],equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
+    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},relistedShopItems:{},removedShopAssets:{},discPaint:{},spacePaint:[],spacePaintRevision:0,spacePaintSurface:{},spacePaintSurfaceRevision:0,pickupReceipts:[],equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},tidalLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
@@ -138,7 +138,7 @@ export function migrateWorld(raw,now=Date.now()){
     (itemById(drop.itemId)&&(itemById(drop.itemId).slot!=='material'&&(itemById(drop.itemId).slot!=='wings'||Object.hasOwn(world.relistedShopItems||{},drop.itemId))))));
   for(const drop of world.groundDrops)if(isRestorativeDrop(drop))drop.kind='consumable';
   world.persistentAttacks=world.persistentAttacks.filter(fx=>fx.weapon!=='fan'&&fx.kind!=='fan');
-  world.delistedShopItems??={};world.relistedShopItems??={};world.discPaint??={};world.spacePaint??=[];world.spacePaintRevision??=0;world.spacePaintSurface??={};world.spacePaintSurfaceRevision??=0;world.pickupReceipts??=[];world.groundDrops=world.groundDrops.filter(d=>!isDelisted(world,d.itemId));
+  world.delistedShopItems??={};world.relistedShopItems??={};world.removedShopAssets??={};for(const [id,at] of Object.entries(world.removedShopAssets)){world.delistedShopItems[id]??=at;delete world.relistedShopItems[id];}world.discPaint??={};world.spacePaint??=[];world.spacePaintRevision??=0;world.spacePaintSurface??={};world.spacePaintSurfaceRevision??=0;world.pickupReceipts??=[];world.groundDrops=world.groundDrops.filter(d=>!isDelisted(world,d.itemId));
   return cleanLegacyScene(world);
 }
 
@@ -308,7 +308,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true,
        radiusScale:v.gmTuning?.radiusScale??1,consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    delistedShopItems:clone(world.delistedShopItems||{}),discPaint:scene(world.discPaint||{}),spacePaint:scene(world.spacePaint||[]),spacePaintRevision:world.spacePaintRevision||0,spacePaintSurface:scene(world.spacePaintSurface||{}),spacePaintSurfaceRevision:world.spacePaintSurfaceRevision||0,pickupReceipts:clone(world.pickupReceipts||[]),wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),artworkPromptPositions:clone(world.artworkPromptPositions||{}),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
+    delistedShopItems:clone(world.delistedShopItems||{}),removedShopAssets:clone(world.removedShopAssets||{}),discPaint:scene(world.discPaint||{}),spacePaint:scene(world.spacePaint||[]),spacePaintRevision:world.spacePaintRevision||0,spacePaintSurface:scene(world.spacePaintSurface||{}),spacePaintSurfaceRevision:world.spacePaintSurfaceRevision||0,pickupReceipts:clone(world.pickupReceipts||[]),wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),artworkPromptPositions:clone(world.artworkPromptPositions||{}),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -465,9 +465,10 @@ export function applyAction(world,actor,body,context={}){
    const result=relistShopItem(world,String(body.itemId||''),now);if(result.error)return result;
    world.revision=(world.revision||0)+1;return result;
   }
-  if(body.action==='gm-shop-delist'){
+  if(body.action==='gm-shop-delist'||body.action==='gm-shop-remove-asset'){
    if(!profile.admin||actor.admin!==true)return {error:'GM only'};
-   const result=retireShopItem(world,String(body.itemId||''),now);if(result.error)return result;
+   const operation=body.action==='gm-shop-remove-asset'?removeShopAsset:retireShopItem;
+   const result=operation(world,String(body.itemId||''),now);if(result.error)return result;
    for(const p of Object.values(world.profiles))refreshStats(world,p,now);
    world.revision++;return result;
   }
