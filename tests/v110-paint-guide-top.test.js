@@ -28,7 +28,8 @@ test('guide rises above saved and active structures, falls after removal, and pr
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(50,1,.1,200);
  camera.position.set(0,2,8);camera.lookAt(0,2,0);camera.updateMatrixWorld(true);
  const canvas={getBoundingClientRect:()=>({left:0,top:0,width:200,height:200})};
- const painter=new SpacePainter({scene,camera,canvas});
+ const player={root:{position:new THREE.Vector3(0,.5,8)},yaw:0,pitch:0};
+ const painter=new SpacePainter({scene,camera,canvas,controller:()=>player});
  const settings={size:.4,color:'#abcdef',thickness:.34,distance:8},arena={world:{cityDamage:{}}};
  painter.sync({spacePaint:[stroke('stroke-high',12)],spacePaintRevision:1});
  painter.updateGuide(null,settings,arena);const guide=painter.guide,key=painter.guideKey;

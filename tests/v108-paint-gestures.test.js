@@ -38,7 +38,8 @@ test('landing guide uses selected brush radius and colour, projects below the cu
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(50,1,.1,200);
  camera.position.set(0,10,10);camera.lookAt(0,5,0);camera.updateMatrixWorld(true);
  const canvas={getBoundingClientRect:()=>({left:0,top:0,width:200,height:200})};
- const painter=new SpacePainter({scene,canvas,camera});
+ const player={root:{position:new THREE.Vector3(0,8.5,10)},yaw:0,pitch:Math.atan(.5)};
+ const painter=new SpacePainter({scene,canvas,camera,controller:()=>player});
  const arena={world:{cityDamage:{}}},settings={size:.4,color:'#ff0033',thickness:.34,distance:8};
  painter.updateGuide(null,settings,arena);const guide=painter.guide;
  assert.ok(guide.visible);assert.equal(guide.scale.x,.4);assert.equal(guide.material.color.getHexString(),'ff0033');

@@ -6,7 +6,7 @@ const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 export class CityWallPainter{
  constructor({canvas,camera,scene,arena,controller,role,isGM=()=>false,can3D=isGM,ui,send,loadRaster,beforeStart=()=>{}}){
   Object.assign(this,{canvas,camera,arena,controller,role,isGM,can3D,ui,send,beforeStart});
-  this.space=new SpacePainter({scene,canvas,camera,send,ui,loadRaster});this.mode3D=false;this.access3D=false;
+  this.space=new SpacePainter({scene,canvas,camera,send,ui,loadRaster,controller});this.mode3D=false;this.access3D=false;
   this.spaceControls=document.getElementById('paint-3d-controls');this.spaceToggle=document.getElementById('paint-3d-toggle');this.spaceSettings=document.getElementById('paint-3d-settings');
   this.spaceToggle?.addEventListener('click',()=>this.setMode3D(!this.mode3D));
   this.flightControls=document.getElementById('paint-3d-flight');this.flightPointers=new Map();
