@@ -33,7 +33,7 @@ export class TempleNetwork extends EventTarget{
     });
     // The actual authenticated room, not a potentially stale edge health reply,
     // confirms the paint protocol. The same capability is refreshed on welcome.
-    this.paintOwnershipV115=data.paintOwnershipV115===true;
+    this.paintOwnershipV115=data.paintOwnershipV115===true;this.paintArchiveV118=data.paintArchiveV118===true;
     this.token=data.token;this.joinData=data;this.closedByUser=false;this.spawnConfirmed=false;
     sessionStorage.setItem('temple-session-token',this.token);
     // Gameplay entry never blocks on websocket establishment.
@@ -58,7 +58,7 @@ export class TempleNetwork extends EventTarget{
       if(message.type==='combat-result'){this.resolveCombatSocket(socket,message.data);return;}
       if(message.type==='state-ack')this.acknowledgeState(message.data);
       if(message.type==='state-rejected')this.rejectedState(message.data);
-      if(message.type==='welcome'){this.paintOwnershipV115=message.data.paintOwnershipV115===true;this.wireWorld=message.data.world;this.compactCombat=message.data.compactCombat===true;this.combatSocketActions=message.data.combatSocketActions===true;this.fastActionsV087=message.data.fastActionsV087===true;this.fastCastV089=message.data.fastCastV089===true;this.contactFastV093=message.data.contactFastV093===true;}
+      if(message.type==='welcome'){this.paintOwnershipV115=message.data.paintOwnershipV115===true;this.paintArchiveV118=message.data.paintArchiveV118===true;this.wireWorld=message.data.world;this.compactCombat=message.data.compactCombat===true;this.combatSocketActions=message.data.combatSocketActions===true;this.fastActionsV087=message.data.fastActionsV087===true;this.fastCastV089=message.data.fastCastV089===true;this.contactFastV093=message.data.contactFastV093===true;}
       if(message.type==='world'){const wings=mergeWingCatalog(this.wireWorld?.customWings||[],message.data.customWings||[]);this.wireWorld={...message.data,customWings:wings};message.data=this.wireWorld;}
       if(message.type==='wing-catalog'&&this.wireWorld){this.wireWorld={...this.wireWorld,customWings:mergeWingCatalog(this.wireWorld.customWings||[],message.data?.wings||[])};}
       if(message.type==='world-patch'){
@@ -201,7 +201,7 @@ export class TempleNetwork extends EventTarget{
       if(error?.name==='AbortError')throw new Error(path==='/api/join'?'Sign-in timed out. Retry your connection.':'伺服器上架回覆逾時；請確認上架清單後重試');
       throw new Error('Cannot reach the Temple server');
     }finally{if(timer!==null)clearTimeout(timer);}
-    let data={};try{data=await response.json();}catch{}if(!response.ok)throw new Error(data.error||`Temple server ${response.status}`);return data;
+    let data={};try{data=await response.json();}catch{}if(!response.ok){const legacyPaintLimit=path==='/api/action'&&['gm-paint-3d','gm-edit-3d'].includes(body?.action)&&/^3D paint archive full/i.test(data.error||'');throw new Error(legacyPaintLimit?'3D Paint server is still on the old archive version. No existing strokes need to be erased.':data.error||`Temple server ${response.status}`);}return data;
   }
   dispatch(type,data){this.dispatchEvent(new CustomEvent(type,{detail:data}));}
   close(){
