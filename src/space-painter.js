@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import {surfaceInfo,surfaceFace} from './shared/space-paint-surface.js';
 import {SpacePaintTexture} from './space-paint-texture.js';
 import {cityGroundHeight} from './shared/city-layout.js';
-import {spacePaintFloor} from './shared/space-paint-collision.js';
 import {SPACE_PAINT_MAX_POINTS,SPACE_PAINT_POINT_BUDGET,SPACE_PAINT_STROKE_BUDGET,spacePaintPointAllowed} from './shared/space-paint.js';
 
 const SIDES=12;
@@ -56,20 +55,43 @@ export function spacePaintGeometry(strokes){
  if(positions.length){geometry.computeVertexNormals();geometry.computeBoundingSphere();}
  return {geometry,ranges};
 }
+// Vertical visual-surface query. The tube's existing face ranges and centreline
+// reject distant segments before testing their actual triangles, not avatar colliders.
+export function spacePaintGuideHeight(geometry,ranges,x,z,floor){
+ const p=geometry.attributes.position.array,index=geometry.index?.array;
+ const near=(a,b,r)=>x>=Math.min(a[0],b[0])-r&&x<=Math.max(a[0],b[0])+r&&z>=Math.min(a[2],b[2])-r&&z<=Math.max(a[2],b[2])+r&&Math.max(a[1],b[1])+r>=floor;
+ const scan=(start,end)=>{
+  for(let f=start;f<end;f++){
+   const i=f*3,a=(index?index[i]:i)*3,b=(index?index[i+1]:i+1)*3,c=(index?index[i+2]:i+2)*3;
+   const ax=p[a],az=p[a+2],bx=p[b]-ax,bz=p[b+2]-az,cx=p[c]-ax,cz=p[c+2]-az;
+   const det=bx*cz-bz*cx;if(Math.abs(det)<1e-12)continue;
+   const dx=x-ax,dz=z-az,u=(dx*cz-dz*cx)/det,v=(bx*dz-bz*dx)/det;
+   if(u>=-1e-8&&v>=-1e-8&&u+v<=1+1e-8)floor=Math.max(floor,p[a+1]+u*(p[b+1]-p[a+1])+v*(p[c+1]-p[a+1]));
+  }
+ };
+ for(const {start,end,info} of ranges){
+  const points=info.points,r=Math.max(info.a,info.b)+.0001;
+  for(let i=1;i<points.length;i++)if(near(points[i-1],points[i],r))scan(start+(i-1)*SIDES*2,start+i*SIDES*2);
+  const first=points[0],last=points.at(-1);
+  if(near(first,first,r)||near(last,last,r))scan(start+info.sideFaces,end);
+ }
+ return floor;
+}
 export class SpacePainter{
  constructor({scene,canvas,camera,send,ui,loadRaster}){
   Object.assign(this,{scene,canvas,camera,send,ui,loadRaster});
   this.archive=[];this.revision=-1;this.pending=new Map();this.erasing=new Set();this.queue=Promise.resolve();this.undoStack=[];this.redoStack=[];this.gesture=null;this.surfaceArchive={};this.surfaceRevision=-1;this.surfacePending=new Map();this.surfacePreview=null;this.surfaceFrame=0;this.atlas=null;this.renderedStrokes=[];this.ownerEpoch=null;
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();this.normal=new THREE.Vector3();this.plane=new THREE.Plane();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
-  this.guide=null;this.guideKey=null;
+  this.guide=null;this.guideKey=null;this.previewRanges=[];
  }
  mesh(which,strokes){
-  if(!strokes.length){if(this[which]){this[which].removeFromParent();this[which].geometry.dispose();this[which]=null;}return [];}
+  if(!strokes.length){if(this[which]){this[which].removeFromParent();this[which].geometry.dispose();this[which]=null;}if(which==='preview')this.previewRanges=[];return [];}
   const {geometry,ranges}=spacePaintGeometry(strokes);
   this.material??=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});
   if(this[which]){this[which].geometry.dispose();this[which].geometry=geometry;}
   else{const mesh=new THREE.Mesh(geometry,this.material);mesh.name='3D Paint '+which;this.scene.add(mesh);this[which]=mesh;}
+  if(which==='preview')this.previewRanges=ranges;
   return ranges;
  }
  rebuild(){
@@ -167,7 +189,7 @@ export class SpacePainter{
   if(!this.guide){
    this.guide=new THREE.Mesh(new THREE.RingGeometry(.78,1,48),new THREE.MeshBasicMaterial({side:THREE.DoubleSide,transparent:true,opacity:.9,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
    this.guide.name='3D Paint landing guide';this.guide.rotation.x=-Math.PI/2;this.guide.visible=false;this.scene.add(this.guide);
-   this.guidePlane=new THREE.Plane();this.guidePoint=new THREE.Vector3();this.guideNormal=new THREE.Vector3();this.guideDown=new THREE.Raycaster();
+   this.guidePlane=new THREE.Plane();this.guidePoint=new THREE.Vector3();this.guideNormal=new THREE.Vector3();
   }
   const g=this.guide;
   if(!this.setRay({clientX:x,clientY:y})){g.visible=false;return;}
@@ -175,18 +197,12 @@ export class SpacePainter{
   if(stroke)normal.fromArray(stroke.normal);
   else{this.camera.getWorldDirection(normal);plane.setFromNormalAndCoplanarPoint(normal,point.copy(p).addScaledVector(normal,settings.distance));}
   if(!this.ray.ray.intersectPlane(plane,point)||!spacePaintPointAllowed(point.toArray())){g.visible=false;return;}
-  // Project vertically onto the highest supporting surface beneath the brush.
+  // Keep the same X/Z prediction; use the uppermost 3D surface even when
+  // the drawing plane is inside or below a structure.
   const top=point.y+.003;
   let floor=Math.max(0,arena.displayPlatforms?.ground(point.x,point.z,top)||0,cityGroundHeight(point.x,point.z,top,arena.world?.cityDamage||{}));
-  if(top>=floor){
-   this.guideDown.ray.origin.set(point.x,top,point.z);this.guideDown.ray.direction.set(0,-1,0);
-   this.guideDown.far=Math.max(0,top-floor);
-   // The existing spatial index avoids a full mesh raycast over empty ground.
-   if(this.saved&&spacePaintFloor(this.renderedStrokes,point.x,point.z,top+2)>floor){
-    const hit=this.guideDown.intersectObject(this.saved,false)[0];if(hit)floor=Math.max(floor,hit.point.y);
-   }
-   if(this.preview){const hit=this.guideDown.intersectObject(this.preview,false)[0];if(hit)floor=Math.max(floor,hit.point.y);}
-  }
+  if(this.saved)floor=spacePaintGuideHeight(this.saved.geometry,this.ranges,point.x,point.z,floor);
+  if(this.preview)floor=spacePaintGuideHeight(this.preview.geometry,this.previewRanges,point.x,point.z,floor);
   g.position.set(point.x,floor+.025,point.z);g.scale.set(size,size,1);g.material.color.set(color);g.visible=true;
  }
  down(event,{tool,color,size,thickness,distance},capture=true){
