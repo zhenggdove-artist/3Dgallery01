@@ -266,13 +266,15 @@ export class TempleUI extends EventTarget{
   if(invincible)this.emit('gm-invincible',{enabled:invincible.checked});
  });
      this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='wanted')this.openPanel('wanted-gm');else if(action==='help')this.openPanel('help');else if(action==='wing-painter')this.openPanel('wing-painter');else if(action==='wing-player-preview')this.openPanel('wing-player-preview');else if(action==='wing-manage')this.openPanel('wing-manage');
-      else if(['self-level','player-level','player-canvas'].includes(action)){
+      else if(['self-level','player-level','player-canvas','player-3d-grant','player-3d-revoke','player-3d-clear'].includes(action)){
        if(this.gmPlayerActionPending)return;
        const selfOnly=action==='self-level',targetKey=selfOnly?this.self.key:this.content.querySelector('[data-gm-player]')?.value;
        if(!targetKey)return this.toast('請選擇玩家');
        const target=this.gmPlayerTargets().find(p=>p.key===targetKey);
        if(!target)return this.toast('找不到玩家資料');
-       if(action==='player-canvas'){if(!target.online&&target.persistent===false)return this.toast('訪客帳號不保留登入身分，請待玩家上線後贈送');this.emit('server-action',{action:'gm-wing-canvas',targetKey});}
+       if(action==='player-3d-grant'||action==='player-3d-revoke'){if(targetKey===this.self.key)return this.toast('GM 已具有 3D 畫筆權限');if(action==='player-3d-grant'&&!target.online&&target.persistent===false)return this.toast('訪客已離線，請指定仍在線或 Google 登入的玩家');this.emit('server-action',{action:'gm-space-paint-access',targetKey,enabled:action==='player-3d-grant'});}
+       else if(action==='player-3d-clear'){if(confirm('永久移除 '+target.name+' 的所有 3D 筆跡及其表面塗鴉？'))this.emit('server-action',{action:'gm-space-paint-clear',targetKey});}
+       else if(action==='player-canvas'){if(!target.online&&target.persistent===false)return this.toast('訪客帳號不保留登入身分，請待玩家上線後贈送');this.emit('server-action',{action:'gm-wing-canvas',targetKey});}
        else{const level=Number(this.content.querySelector(selfOnly?'[data-gm-self-level]':'[data-gm-level]')?.value);if(!Number.isInteger(level)||level<1||level>999)return this.toast('等級須為 1–999');this.emit('server-action',{action:'gm-player-level',targetKey,level});}
       }
       else if(action==='gm-chat-refresh'||action==='gm-chat-older'){
@@ -619,9 +621,9 @@ export class TempleUI extends EventTarget{
     if(this.panelName==='gm')this.renderGm();
   }
   gmPlayerTargets(){
-   const own={key:this.self.key,name:this.self.name,level:this.world?.profile?.level||this.self.profile?.level||1,online:true};
+   const own={key:this.self.key,name:this.self.name,level:this.world?.profile?.level||this.self.profile?.level||1,online:true,spacePaintEnabled:true};
    const known=(this.gmPresenceData?.knownPlayers||[]).filter(p=>p.key&&p.key!==own.key).map(p=>({...p,online:false}));
-   const online=(this.players||[]).filter(p=>p.key&&p.key!==own.key).map(p=>({key:p.key,name:p.name,level:p.profile?.level||1,online:true}));
+   const online=(this.players||[]).filter(p=>p.key&&p.key!==own.key).map(p=>({key:p.key,name:p.name,level:p.profile?.level||1,online:true,persistent:!p.key.startsWith('guest:'),spacePaintEnabled:!!p.profile?.spacePaintEnabled}));
    const merged=[...new Map([...known,...online].map(p=>[p.key,p])).values()];
    merged.sort((a,b)=>Number(b.online)-Number(a.online)||String(a.name).localeCompare(String(b.name)));
    return [own,...merged];
@@ -631,7 +633,7 @@ export class TempleUI extends EventTarget{
    const targets=this.gmPlayerTargets(),signature=JSON.stringify(targets);
    if(select.dataset.rosterSignature===signature)return;
    const previous=select.value;
-   select.innerHTML=targets.map(p=>`<option value="${escape(p.key)}">${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':p.persistent===false?'離線訪客（無法領取）':'離線'}</option>`).join('');
+   select.innerHTML=targets.map(p=>`<option value="${escape(p.key)}">${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':p.persistent===false?'離線訪客（無法領取）':'離線'} · 3D ${p.spacePaintEnabled?'ON':'OFF'}</option>`).join('');
    select.value=targets.some(p=>p.key===previous)?previous:this.self.key;
    select.dataset.rosterSignature=signature;
    if(select.value!==previous){const field=this.content.querySelector('[data-gm-level]');if(field)field.value=targets.find(p=>p.key===select.value)?.level||1;}
@@ -664,9 +666,11 @@ export class TempleUI extends EventTarget{
        <label for="gm-self-level">自身等級 · LV ${targets[0].level}</label>
        <div class="gm-player-row"><input id="gm-self-level" data-gm-self-level type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(selfLevel??targets[0].level)}"><button type="button" data-gm-action="self-level" ${disabled}>調整自身等級</button></div>
        <label for="gm-target-player">指定玩家</label>
-       <select id="gm-target-player" data-gm-player>${targets.map(p=>`<option value="${escape(p.key)}" ${p.key===target.key?'selected':''}>${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':p.persistent===false?'離線訪客（無法領取）':'離線'}</option>`).join('')}</select>
+       <select id="gm-target-player" data-gm-player>${targets.map(p=>`<option value="${escape(p.key)}" ${p.key===target.key?'selected':''}>${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':p.persistent===false?'離線訪客（無法領取）':'離線'} · 3D ${p.spacePaintEnabled?'ON':'OFF'}</option>`).join('')}</select>
        <div class="gm-player-row"><input data-gm-level aria-label="指定玩家等級" type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(target.key===selectedTarget?(selectedLevel??target.level):target.level)}"><button type="button" data-gm-action="player-level" ${disabled}>調整玩家等級</button></div>
        <button class="gm-canvas-gift" type="button" data-gm-action="player-canvas" ${disabled}>贈送翅膀畫布 ×1</button>
+       <div class="gm-player-row"><button type="button" data-gm-action="player-3d-grant" ${disabled}>開通 3D PAINT</button><button type="button" data-gm-action="player-3d-revoke" ${disabled}>回收 3D PAINT</button></div>
+       <button type="button" data-gm-action="player-3d-clear" ${disabled}>移除指定玩家全部 3D 筆跡</button>
        <small data-gm-player-status role="status">${escape(this.gmPlayerActionMessage||'可贈送曾登入的玩家（包含離線）。')}</small>
       </section>
       <h3>GM 功能</h3><div class="gm-tools">

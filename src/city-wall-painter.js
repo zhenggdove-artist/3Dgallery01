@@ -4,8 +4,8 @@ import {cityPaintHit,structureSignPaintHit,ROOF_PAINT_RAY_RANGE,isRooftopPaintWa
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 export class CityWallPainter{
- constructor({canvas,camera,scene,arena,controller,role,isGM=()=>false,ui,send,beforeStart=()=>{}}){
-  Object.assign(this,{canvas,camera,arena,controller,role,isGM,ui,send,beforeStart});
+ constructor({canvas,camera,scene,arena,controller,role,isGM=()=>false,can3D=isGM,ui,send,beforeStart=()=>{}}){
+  Object.assign(this,{canvas,camera,arena,controller,role,isGM,can3D,ui,send,beforeStart});
   this.space=new SpacePainter({scene,canvas,camera,send,ui});this.mode3D=false;this.access3D=false;
   this.spaceControls=document.getElementById('paint-3d-controls');this.spaceToggle=document.getElementById('paint-3d-toggle');this.spaceSettings=document.getElementById('paint-3d-settings');
   this.spaceToggle?.addEventListener('click',()=>this.setMode3D(!this.mode3D));
@@ -68,13 +68,13 @@ export class CityWallPainter{
  }
  sync3D(world){this.space.sync(world);this.refresh3D();}
  refresh3D(){
-  const allowed=this.active&&this.isGM()&&this.role()==='fighter';if(allowed===this.access3D)return;
+  const allowed=this.active&&this.can3D()&&this.role()==='fighter';if(allowed===this.access3D)return;
   this.access3D=allowed;if(this.spaceControls)this.spaceControls.hidden=!allowed;if(!allowed)this.setMode3D(false);
  }
  setMode3D(enabled){
-  if(enabled&&(!this.active||!this.isGM()||this.role()!=='fighter'))return;
+  if(enabled&&(!this.active||!this.can3D()||this.role()!=='fighter'))return;
   if(enabled===this.mode3D)return;
-  if(this.mode3D)this.space.end();else{this.finish();const pointer=this.pointer;this.pointer=null;if(pointer!==null&&this.canvas.hasPointerCapture(pointer))this.canvas.releasePointerCapture(pointer);}
+  if(this.mode3D){if(!this.can3D())this.space.stroke=null;this.space.end();}else{this.finish();const pointer=this.pointer;this.pointer=null;if(pointer!==null&&this.canvas.hasPointerCapture(pointer))this.canvas.releasePointerCapture(pointer);}
   this.mode3D=enabled;this.clearFlight();this.controller()?.setPaintFlight(enabled);if(this.flightControls)this.flightControls.hidden=!enabled;this.spaceToggle?.classList.toggle('active',enabled);this.spaceToggle?.setAttribute('aria-pressed',String(enabled));if(this.spaceSettings)this.spaceSettings.hidden=!enabled;
  }
  setTool(tool){
@@ -117,7 +117,8 @@ export class CityWallPainter{
   const cityWall=cityPaintHit(origin,direction,18,this.arena.world?.cityDamage||{},ROOF_PAINT_RAY_RANGE),builtSign=structureSignPaintHit(this.arena.world?.structures,origin,direction,18,ROOF_PAINT_RAY_RANGE),hit=builtSign&&(!cityWall||builtSign.distance<cityWall.distance)?builtSign:cityWall,disc=this.arena.displayPlatforms?.paint.pick(origin,direction);const player=this.controller()?.root?.position;
   const wall=hit&&isRooftopPaintWall(hit.wall)&&!paintPointInReach(player?.toArray(),hit.position,hit.wall)?null:hit;
   const near=disc&&player&&disc.point.distanceTo(player.clone().add(new THREE.Vector3(0,1.4,0)))<=19;
-  return near&&(!wall||disc.distance<(wall.distance??Infinity))?disc:wall;
+  const existing=near&&(!wall||disc.distance<(wall.distance??Infinity))?disc:wall;
+  const space=this.space.pickSurface(event,player);return space&&(!existing||space.distance<(existing.distance??Infinity))?space:existing;
  }
  consume(event){
   event.preventDefault();event.stopImmediatePropagation();
@@ -129,7 +130,7 @@ export class CityWallPainter{
   this.consume(event);
   if(this.mode3D){this.space.down(event,{tool:this.tool,color:this.color,size:this.size,thickness:this.thickness,distance:this.distance});return;}
   const hit=this.pick(event);
-  if(!hit){this.ui.toast('Aim at a nearby wall, sign or pink disc');return;}
+  if(!hit){this.ui.toast('Aim at a nearby wall, sign, pink disc or 3D surface');return;}
   this.pointer=event.pointerId;
   this.canvas.setPointerCapture(event.pointerId);
   this.start(hit);
@@ -137,12 +138,18 @@ export class CityWallPainter{
  start(hit){
   this.stroke={lotId:hit.lotId,wall:hit.wall,tool:this.tool,
    color:this.color,size:this.size,clientId:globalThis.crypto?.randomUUID?.()||('local-'+Date.now()+'-'+Math.random().toString(36).slice(2)),points:[]};
+  if(hit.wall.startsWith('space:')){this.stroke.id=hit.lotId;this.stroke.chart=Number(hit.wall.slice(6));}
   this.append(hit);
  }
  append(hit){
   if(!this.stroke||!hit||hit.lotId!==this.stroke.lotId||hit.wall!==this.stroke.wall)return false;
   const p=[+hit.u.toFixed(4),+hit.v.toFixed(4)];
   const pts=this.stroke.points,last=pts.at(-1);
+  if(this.stroke.id){
+   let dv=last?p[1]-last[1]:0;if(this.stroke.chart===0)dv-=Math.round(dv);
+   if(last&&Math.hypot((p[0]-last[0])*(this.stroke.chart===0?hit.info.total:hit.info.a*2),dv*(this.stroke.chart===0?hit.info.circumference:hit.info.b*2))<.008)return true;
+   pts.push(p);this.space.previewSurface(this.stroke);return true;
+  }
   if(last&&Math.hypot((last[0]-p[0])*6,(last[1]-p[1])*6)<.008)return true;
   // Interpolate widely spaced pointer samples. This preserves continuous
   // handwriting on mobile where pointermove is often sparsely delivered.
@@ -189,6 +196,7 @@ export class CityWallPainter{
   if(!this.stroke)return;
   const stroke=this.stroke;this.stroke=null;
   if(stroke.points.length>130)stroke.points=stroke.points.slice(0,130);
+  if(stroke.id){this.space.queueSurface(stroke);this.pending=this.pending.catch(()=>{}).then(async()=>{try{const result=await this.send('paint-space-surface',{stroke});if(!result?.spaceSurfacePainted)throw Error('3D surface paint could not be saved');}catch(error){this.ui.toast(error.message||'3D surface paint could not be saved');}finally{this.space.finishSurface(stroke);}});return;}
   const paint=stroke.wall==='top'?this.arena.displayPlatforms?.paint:this.arena.outerCity?.wallPaint;
   // Move the finished segment into a local pending layer before starting
   // the next segment. Keep it visible throughout HTTP and snapshot latency.

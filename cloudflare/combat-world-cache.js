@@ -1,7 +1,7 @@
 // Isolate authoritative combat mutations from the committed snapshot. Large
 // inactive BAG ledgers are materialized only if game rules actually access
 // them. Durability, JSON checkpoint/overlay format and simulation stay intact.
-const STATIC=new Set(['sceneArchive','customWings','customArtworks','artworkLayoutHistory','wallPaint','discPaint','spacePaint','plants','artworkLayout','floatingPlatforms','customPedestals','platformOverrides','removedPlatformIds','removedArtworkIds']);
+const STATIC=new Set(['sceneArchive','customWings','customArtworks','artworkLayoutHistory','wallPaint','discPaint','spacePaint','spacePaintSurface','plants','artworkLayout','floatingPlatforms','customPedestals','platformOverrides','removedPlatformIds','removedArtworkIds']);
 const LAZY=new Set(['inventory','inventoryInstances','fusionByInstance','retiredArmorInventory','fusion','itemOrigins','collectorSoldArtworks']);
 const lazyFields=new WeakMap();
 function freezeTree(value){

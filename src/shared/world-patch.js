@@ -5,6 +5,7 @@ export function changedWorldFields(previous,next,skip=new Set()){
  for(const [key,value] of Object.entries(next)){
   if(skip.has(key)||value===undefined)continue;
   if(key==='spacePaint'&&previous.spacePaint!==undefined&&previous.spacePaintRevision===next.spacePaintRevision)continue;
+  if(key==='spacePaintSurface'&&previous.spacePaintSurface!==undefined&&previous.spacePaintSurfaceRevision===next.spacePaintSurfaceRevision)continue;
   if(value!==previous[key]&&JSON.stringify(value)!==JSON.stringify(previous[key]))fields[key]=value;
  }
  return fields;
@@ -47,7 +48,7 @@ export function mergeWingCatalog(previous=[],incoming=[]){
 // A full HTTP response has fresh JSON identities even for unchanged scene
 // data. Retain only equal, already-rendered sections; never reuse a changed
 // field, invent a revision or alter the socket's independent patch baseline.
-const sceneSnapshotKeys=['environment','audioSettings','customArtworks','artworks','artworkLayout','floatingPlatforms','customPedestals','platformOverrides','removedPlatformIds','structures','cityDamage','wallPaint','discPaint','spacePaint','groundDrops','coins','equipmentTuning','shopPrices','delistedShopItems','wantedSettings','chatDefault','artworkPromptPositions','collector'];
+const sceneSnapshotKeys=['environment','audioSettings','customArtworks','artworks','artworkLayout','floatingPlatforms','customPedestals','platformOverrides','removedPlatformIds','structures','cityDamage','wallPaint','discPaint','spacePaint','spacePaintSurface','groundDrops','coins','equipmentTuning','shopPrices','delistedShopItems','wantedSettings','chatDefault','artworkPromptPositions','collector'];
 export function reuseHttpSceneFields(previous,next){
  if(!previous||!next)return next;
  let result=next;

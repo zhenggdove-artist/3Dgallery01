@@ -1,7 +1,7 @@
 import {validateGmHouse,gmHouseBlocked} from './arena.js';
 import {isDelisted,reclaimDelisted,retireShopItem,relistShopItem} from './shop-retirement.js';
 import {validateDiscPaint} from './disc-paint.js';
-import {applySpacePaint} from './space-paint.js';
+import {applySpacePaint,SPACE_PAINT_ACTIONS,canSpacePaint} from './space-paint.js';
 import {spacePaintMoveFraction,SPACE_PAINT_FLIGHT_LIMIT} from './space-paint-collision.js';
 import {setTerrainStyle} from './terrain-style.js';
 import {wantedSettings,countWantedDeath} from './wanted-list.js';
@@ -65,7 +65,7 @@ const initialStructures=now=>[
 export function createInitialWorld(now=Date.now()){
   return {
     version:WORLD_VERSION,revision:1,createdAt:now,
-    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},relistedShopItems:{},discPaint:{},spacePaint:[],spacePaintRevision:0,pickupReceipts:[],equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
+    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},relistedShopItems:{},discPaint:{},spacePaint:[],spacePaintRevision:0,spacePaintSurface:{},spacePaintSurfaceRevision:0,pickupReceipts:[],equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},tidalLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
@@ -138,7 +138,7 @@ export function migrateWorld(raw,now=Date.now()){
     (itemById(drop.itemId)&&(itemById(drop.itemId).slot!=='material'&&(itemById(drop.itemId).slot!=='wings'||Object.hasOwn(world.relistedShopItems||{},drop.itemId))))));
   for(const drop of world.groundDrops)if(isRestorativeDrop(drop))drop.kind='consumable';
   world.persistentAttacks=world.persistentAttacks.filter(fx=>fx.weapon!=='fan'&&fx.kind!=='fan');
-  world.delistedShopItems??={};world.relistedShopItems??={};world.discPaint??={};world.spacePaint??=[];world.spacePaintRevision??=0;world.pickupReceipts??=[];world.groundDrops=world.groundDrops.filter(d=>!isDelisted(world,d.itemId));
+  world.delistedShopItems??={};world.relistedShopItems??={};world.discPaint??={};world.spacePaint??=[];world.spacePaintRevision??=0;world.spacePaintSurface??={};world.spacePaintSurfaceRevision??=0;world.pickupReceipts??=[];world.groundDrops=world.groundDrops.filter(d=>!isDelisted(world,d.itemId));
   return cleanLegacyScene(world);
 }
 
@@ -279,7 +279,7 @@ export function publicProfile(profile){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
     level:profile.level,xp:profile.xp,mana:profile.mana??manaCapacity(profile.level),maxMana:manaCapacity(profile.level),consumableCooldownUntil:0,restorativeCooldowns:clone(profile.restorativeCooldowns||{health:profile.consumableCooldownUntil||0,mana:profile.consumableCooldownUntil||0}),lastWingCanvasGrant:clone(profile.lastWingCanvasGrant||null),wingTrialDraws:profile.wingTrialDraws||0,wingPaidDraws:Math.max(0,Number(profile.wingPaidDraws)||0),wingDesignCredits:Math.max(0,Number(profile.wingDesignCredits)||0),deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
     respawnPosition:clone(profile.respawnPosition||null),
-    spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),shield:clone(profile.shield||null),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,tidePush:profile.tidePush||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
+    spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),shield:clone(profile.shield||null),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,tidePush:profile.tidePush||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,spacePaintEnabled:canSpacePaint(profile),spacePaintEpoch:profile.spacePaintEpoch||0,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
 
 export function worldProfileView(world,actorKey,now){
@@ -308,7 +308,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true,
        radiusScale:v.gmTuning?.radiusScale??1,consumed:clone(v.fishConsumed||[])
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
-    delistedShopItems:clone(world.delistedShopItems||{}),discPaint:scene(world.discPaint||{}),spacePaint:scene(world.spacePaint||[]),spacePaintRevision:world.spacePaintRevision||0,pickupReceipts:clone(world.pickupReceipts||[]),wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),artworkPromptPositions:clone(world.artworkPromptPositions||{}),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
+    delistedShopItems:clone(world.delistedShopItems||{}),discPaint:scene(world.discPaint||{}),spacePaint:scene(world.spacePaint||[]),spacePaintRevision:world.spacePaintRevision||0,spacePaintSurface:scene(world.spacePaintSurface||{}),spacePaintSurfaceRevision:world.spacePaintSurfaceRevision||0,pickupReceipts:clone(world.pickupReceipts||[]),wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),artworkPromptPositions:clone(world.artworkPromptPositions||{}),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
     reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
@@ -340,7 +340,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
    next.position.length===3&&next.position.every(Number.isFinite)&&
    Math.hypot(next.position[0],next.position[2])<=ARENA_RADIUS+2&&
    next.position[1]>=-4&&next.position[1]<=72;
-  const validPaintHeight=role==='fighter'&&mobility?.admin===true&&Array.isArray(next?.position)&&next.position.length===3&&next.position.every(Number.isFinite)&&Math.hypot(next.position[0],next.position[2])<=ARENA_RADIUS+2&&next.position[1]>=-4&&next.position[1]<=SPACE_PAINT_FLIGHT_LIMIT&&(next.paintFlight===true||(previous?.position?.[1]>64&&next.position[1]<=previous.position[1]+.1));
+  const validPaintHeight=role==='fighter'&&Array.isArray(next?.position)&&next.position.length===3&&next.position.every(Number.isFinite)&&Math.hypot(next.position[0],next.position[2])<=ARENA_RADIUS+2&&next.position[1]>=-4&&next.position[1]<=SPACE_PAINT_FLIGHT_LIMIT&&((canSpacePaint(mobility)&&next.paintFlight===true)||(previous?.position?.[1]>64&&next.position[1]<=previous.position[1]+.1));
   if(!next||!Array.isArray(next.position)||next.position.length!==3||!next.position.every(Number.isFinite)||
      !(insideArena(next.position,role==='spectator'?28:2)||validPanHeight||validPaintHeight)||!Number.isFinite(next.rotation))
     return {error:'Invalid position',state:previous||null};
@@ -400,7 +400,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
 }
 
 export function applyAction(world,actor,body,context={}){
-  if(['gm-paint-3d','gm-erase-3d','gm-edit-3d'].includes(body.action))return applySpacePaint(world,actor,body);
+  if(SPACE_PAINT_ACTIONS.includes(body.action))return applySpacePaint(world,actor,body);
   const now=context.now??Date.now(),rng=context.rng??Math.random,
    // The premium draw checks PERSISTED admin status before any ensureProfile
    // mutation. Existing game/GM actions retain their original role semantics.

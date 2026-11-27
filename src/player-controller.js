@@ -243,7 +243,10 @@ export class PlayerController{
   }
   update(dt){
     if(!this.enabled||this.awaitingSpawn||(!this.panBlastFlight&&performance.now()<(this.authorityHoldUntil||0))){this.updateCamera(dt);return this.state();}
-    if(this.paintFlight&&this.role==='fighter')return this.advancePaintFlight(dt);
+    if(this.paintFlight&&this.role==='fighter'&&!this.panBlastFlight&&!this.vortexSpin&&!this.knockback&&!this.tidePush&&!this.whipPull){
+      if(this.status.freeze||this.status.root||performance.now()<(this.stunUntil||0)){this.updateCamera(dt);return this.state();}
+      return this.advancePaintFlight(dt);
+    }
     if(this.panBlastFlight){
       // Hit stun cannot cancel the launch: steer/jump return only after
       // one big parabola and precisely three successively lower bounces.
