@@ -22,7 +22,7 @@ export function buildSoftCardboard(T,g,record,mat){
   const width=side%2?.65:.78,geo=new T.PlaneGeometry(width,.96,18,22),wall=part(T,g,geo,card,0,.53,0);
   wall.rotation.y=side*Math.PI/2;wall.position.x=Math.sin(wall.rotation.y)*.39;wall.position.z=Math.cos(wall.rotation.y)*.325;if(side%2)wall.position.x=Math.sin(wall.rotation.y)*.39;
   record.cardboard.walls.push({mesh:wall,base:geo.attributes.position.array.slice(),side,width});
-  const hinge=new T.Group();hinge.position.copy(wall.position);hinge.position.y=1.01;hinge.rotation.y=wall.rotation.y;g.add(hinge);
+  const hinge=new T.Group();hinge.position.copy(wall.position);hinge.position.y=1.01;hinge.rotation.order='YXZ';hinge.rotation.y=wall.rotation.y;g.add(hinge);
   const flap=part(T,hinge,new T.PlaneGeometry(width,.32,14,8),card,0,0,-.16);flap.rotation.x=-Math.PI/2;record.cardboard.flaps.push({hinge,flap,side,base:flap.geometry.attributes.position.array.slice()});
  }
  part(T,g,new T.BoxGeometry(.78,.025,.65),inner,0,.05,0);
@@ -34,7 +34,7 @@ function animateCardboard(record,d,time){
   const x=base[i*3],y=base[i*3+1],envelope=Math.max(0,1-4*x*x/(width*width))*Math.max(0,1-4*y*y/(.96*.96)),dent=(.05+.085*(.5+.5*Math.sin(time*9+side*1.8+y*10)))*d.energy*envelope;
   a.setXYZ(i,x,y,-dent+.015*d.energy*Math.sin(x*25+y*14+time*7)*envelope);
  }a.needsUpdate=true;mesh.geometry.computeVertexNormals();}
- for(const {hinge,flap,side,base} of box.flaps){flap.rotation.x=-Math.PI/2;hinge.rotation.x=-d.energy*(1.50+.22*Math.sin(time*8+side));const a=flap.geometry.attributes.position;for(let i=0;i<a.count;i++){const x=base[i*3],y=base[i*3+1],weight=(y+.16)/.32;a.setXYZ(i,x,y,.055*d.energy*weight*Math.sin(time*10+x*11+side));}a.needsUpdate=true;flap.geometry.computeVertexNormals();}
+ for(const {hinge,flap,side,base} of box.flaps){flap.rotation.x=-Math.PI/2;hinge.rotation.x=d.energy*(1.50+.22*Math.sin(time*8+side));const a=flap.geometry.attributes.position;for(let i=0;i<a.count;i++){const x=base[i*3],y=base[i*3+1],weight=(y+.16)/.32;a.setXYZ(i,x,y,.055*d.energy*weight*Math.sin(time*10+x*11+side));}a.needsUpdate=true;flap.geometry.computeVertexNormals();}
 }
 export function addSwayingPoleWires(T,g,record,mat,wire){
  const cables=[];for(const y of [2.56,2.88])for(const x of [-.49,0,.49]){
