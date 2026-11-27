@@ -3,8 +3,8 @@ import {removeInventoryInstances} from './fusion-instances.js';
 export const isRemovedShopAsset=(world,id)=>!!id&&Object.hasOwn(world?.removedShopAssets||{},id);
 export const isDelisted=(world,id)=>!!id&&(Object.hasOwn(world?.delistedShopItems||{},id)||isRemovedShopAsset(world,id));
 // Native weapon grades are separate IDs; exotic grades share a single ID.
-// Named non-weapon styles are distinct products, not interchangeable qualities.
-export function shopQualityIds(id){const item=SHOP_ITEMS.find(i=>i.id===id);if(!item)return [];if(item.slot!=='weapon')return [id];const group=shopWeaponGroupKey(item);return SHOP_ITEMS.filter(i=>i.slot==='weapon'&&shopWeaponGroupKey(i)===group).map(i=>i.id);}
+// Use the exact shop card identity for every slot, including the five outfit variants.
+export function shopQualityIds(id){const item=SHOP_ITEMS.find(i=>i.id===id);if(!item)return [];const group=shopWeaponGroupKey(item);return SHOP_ITEMS.filter(i=>shopWeaponGroupKey(i)===group).map(i=>i.id);}
 export const shopGroupDelisted=(world,id)=>{const ids=shopQualityIds(id);return ids.length>0&&ids.every(key=>isDelisted(world,key));};
 export const activePreviewItems=(items,removed={})=>(items||[]).filter(item=>item&&!Object.hasOwn(removed,item.id));
 export function reclaimDelisted(world,profile){
@@ -40,7 +40,7 @@ export function removeShopAsset(world,id,now){
  if(ids.every(key=>isRemovedShopAsset(world,key)))return {error:'Asset already removed'};
  const result=recallShopGroup(world,ids,now);world.removedShopAssets??={};
  for(const key of ids){world.removedShopAssets[key]=now;if(world.relistedShopItems)delete world.relistedShopItems[key];}
- return {...result,delistedItemId:id,removedShopAssetIds:ids,notice:'ASSET REMOVED · '+itemById(id).name+' · '+result.reclaimed+' reclaimed'};
+ return {...result,delistedItemId:id,removedShopAssetIds:ids,notice:'ASSET REMOVED · '+itemById(id).name+' · '+ids.length+' product IDs · '+result.reclaimed+' reclaimed'};
 }
 // Relisting restores availability, never any recalled inventory or drop.
 export function relistShopItem(world,id,now){

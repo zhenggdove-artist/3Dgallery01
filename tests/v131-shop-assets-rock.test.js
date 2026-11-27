@@ -5,8 +5,8 @@ import {shopQualityIds,activePreviewItems} from '../src/shared/shop-retirement.j
 import {createRockDisguiseGeometry} from '../src/reletter/outfit-model.js';
 const now=1000000,gm={key:'gm',name:'GM',color:'#ffffff',admin:true,role:'fighter',position:[75,0,0]},user={...gm,key:'p',name:'P',admin:false};
 function setup(){const w=createInitialWorld(now);ensureProfile(w,gm.key,gm.name,gm.color,now,true);const p=ensureProfile(w,user.key,user.name,user.color,now,false);p.wallet=1e7;return {w,p};}
-test('one native weapon recall covers five IDs; exotic grades are one ID; independent styles stay separate',()=>{
- const {w,p}=setup(),ids=shopQualityIds('tide-3');assert.equal(ids.length,5);assert.deepEqual(shopQualityIds('giraffe'),['giraffe']);assert.deepEqual(shopQualityIds('outfit-pajamas-1'),['outfit-pajamas-1']);
+test('one native weapon recall covers five IDs; exotic grades are one ID; shop outfit variants share the same group',()=>{
+ const {w,p}=setup(),ids=shopQualityIds('tide-3');assert.equal(ids.length,5);assert.deepEqual(shopQualityIds('giraffe'),['giraffe']);assert.deepEqual(shopQualityIds('outfit-pajamas-1'),[1,2,3,4,5].map(n=>'outfit-pajamas-'+n));
  for(const id of ids){assert.ok(!applyAction(w,user,{action:'buy',itemId:id},{now}).error);w.groundDrops.push({id:'drop-'+id,itemId:id,kind:'equipment'});}
  assert.equal(applyAction(w,user,{action:'gm-shop-delist',itemId:'tide-3'},{now}).error,'GM only');
  assert.ok(!applyAction(w,gm,{action:'gm-shop-delist',itemId:'tide-3'},{now}).error);

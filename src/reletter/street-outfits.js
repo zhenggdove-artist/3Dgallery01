@@ -39,9 +39,7 @@ export function buildStreetOutfit(T,g,kind,record,mat){
   const ridges=new T.InstancedMesh(new T.BoxGeometry(.016,.085,.018),red,30),capDummy=new T.Object3D();for(let i=0;i<30;i++){const a=i*TAU/30;capDummy.position.set(Math.sin(a)*.151,.05,.14+Math.cos(a)*.151);capDummy.rotation.y=a;capDummy.updateMatrix();ridges.setMatrixAt(i,capDummy.matrix);}cap.add(ridges);
   const bubbles=new T.InstancedMesh(new T.SphereGeometry(1,7,5),foam,80),dummy=new T.Object3D();
   for(let i=0;i<80;i++){const a=rng()*TAU,y=.18+rng()*1.48,r=y>1.40?.25:.345;dummy.position.set(Math.sin(a)*r,y,Math.cos(a)*r);dummy.scale.setScalar(.005+rng()*.012);dummy.updateMatrix();bubbles.setMatrixAt(i,dummy.matrix);}g.add(bubbles);
-  const droplets=new T.InstancedMesh(new T.SphereGeometry(1,10,7),cola,36),froth=new T.InstancedMesh(new T.SphereGeometry(1,6,4),foam,24);
-  for(const inst of [droplets,froth]){inst.frustumCulled=false;inst.visible=false;for(let i=0;i<inst.count;i++){dummy.position.set(0,1.96,0);dummy.scale.setScalar(0);dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);}g.add(inst);}
-  record.colaMotion={cap,droplets,froth,dummy,run:0,air:0,grace:0,open:0,elapsed:0,last:null,pos:new T.Vector3(),delta:new T.Vector3()};
+  record.colaMotion={cap,run:0,air:0,grace:0,open:0,elapsed:0,last:null,pos:new T.Vector3(),delta:new T.Vector3()};
   createColaStream(T,g,record,mat);
   return {openingY:.81,frontZ:.39};
  }
@@ -114,5 +112,4 @@ export function animateStreetOutfit(record,time,root,dt){
  const moving=!teleport&&Math.hypot(d.delta.x,d.delta.z)/dt>.18;
  if(record.riceMotion){const strength=teleport?0:moving||airborne?1:0;d.energy+=(strength-d.energy)*(1-Math.exp(-dt*12));if(d.energy<.001&&d.resting)return;d.resting=d.energy<.001;for(const group of d.groups){for(let i=0;i<group.rest.length;i++){const [x,y,z,sx,sy,sz,a]=group.rest[i],phase=time*10+a;d.dummy.position.set(x+Math.sin(phase)*.019*d.energy,y+Math.abs(Math.sin(phase))* .085*d.energy,z+Math.cos(phase)*.016*d.energy);d.dummy.rotation.set(.15*Math.sin(phase)*d.energy,a,.20*Math.cos(phase)*d.energy);d.dummy.scale.set(sx*(1+.08*Math.sin(phase)*d.energy),sy*(1-.12*Math.sin(phase)*d.energy),sz);d.dummy.updateMatrix();group.mesh.setMatrixAt(i,d.dummy.matrix);}group.mesh.instanceMatrix.needsUpdate=true;}return;}
  const active=streetMotionStep(d,dt,moving,airborne,teleport);d.open+=(Number(active)-d.open)*(1-Math.exp(-dt*10));d.cap.rotation.x=-1.95*d.open;d.elapsed+=dt;updateColaStream(d,time);
- for(const [inst,phase,sz] of [[d.droplets,0,.017],[d.froth,.35,.013]]){inst.visible=d.open>.03;if(!inst.visible)continue;for(let i=0;i<inst.count;i++){const u=(d.elapsed* .85+i/inst.count+phase)%1,a=i*2.39996+time*.4,spread=(.035+.56*u*u)*d.open;const y=1.98+(2.9*u-2.3*u*u)*d.open;d.dummy.position.set(Math.cos(a)*spread,y,Math.sin(a)*spread);d.dummy.rotation.set(.2*Math.sin(a),a,.2*Math.cos(a));d.dummy.scale.set(sz*(1-u*.45),sz*(1.3+2*Math.abs(.5-u)),sz*(1-u*.45));d.dummy.updateMatrix();inst.setMatrixAt(i,d.dummy.matrix);}inst.instanceMatrix.needsUpdate=true;}
 }

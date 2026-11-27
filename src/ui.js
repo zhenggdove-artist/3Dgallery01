@@ -10,7 +10,7 @@ import {bindBagDrag} from './bag-drag.js';
 import {PLATFORMS} from './shared/arena.js';
 import {playerArtworkAppearanceMarkup} from './art-editor-panel.js';
 import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_WEAPON_GRADES,shopWeaponGroups,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant,inventoryCapacity,shopOutfitCollection,shopPrice} from './shared/catalog.js';
-import {shopGroupDelisted,isRemovedShopAsset} from './shared/shop-retirement.js';
+import {shopGroupDelisted,isRemovedShopAsset,shopQualityIds} from './shared/shop-retirement.js';
 import {SOUND_PROFILES} from './game-audio.js';
 import {pvpShotDamage} from './shared/combat-balance.js';
 import {weaponQuality} from './shared/weapon-abilities.js';
@@ -1022,7 +1022,7 @@ export class TempleUI extends EventTarget{
      if(!reset&&!Object.keys(values).length)return this.toast('數值未變更');button.blur();this.emit('server-action',{action:'gm-equipment-tuning',itemId:button.dataset.gmTuningSave||button.dataset.gmTuningReset,values:reset?null:values,...(button.dataset.shopTier?{qualityTier:Number(button.dataset.shopTier)}:{})});return;
     }
     if(button.dataset.gmRelist){if(!this.world?.profile?.admin)return;const item=itemById(button.dataset.gmRelist);if(!item||!window.confirm('重新上架 '+item.name+' 全部品質？恢復商店與掉落，不補發先前回收的物品。'))return;button.blur();this.emit('server-action',{action:'gm-shop-relist',itemId:item.id});return;}
-    if(button.dataset.gmRemoveAsset){if(!this.world?.profile?.admin)return;const item=itemById(button.dataset.gmRemoveAsset);if(!item||!window.confirm('永久移除 '+item.name+' 全部品質及所有玩家副本？不退費，無法由後台復原。'))return;button.blur();this.emit('server-action',{action:'gm-shop-remove-asset',itemId:item.id});return;}
+    if(button.dataset.gmRemoveAsset){if(!this.world?.profile?.admin)return;const item=itemById(button.dataset.gmRemoveAsset);if(!item||!window.confirm('永久移除 '+item.name+' 整組商品（'+shopQualityIds(item.id).length+' 個商品 ID）及所有玩家副本？不退費，無法由後台復原。'))return;button.blur();this.emit('server-action',{action:'gm-shop-remove-asset',itemId:item.id});return;}
     if(button.dataset.gmDelist){if(!this.world?.profile?.admin)return;const item=itemById(button.dataset.gmDelist);if(!item||!window.confirm('下架 '+item.name+' 全部品質？所有玩家的副本均會回收，不退費。'))return;button.blur();this.emit('server-action',{action:'gm-shop-delist',itemId:item.id});return;}
     if(button.dataset.gmPriceSave||button.dataset.gmPriceReset){if(!this.world?.profile?.admin)return;const reset=!!button.dataset.gmPriceReset,field=button.closest('.shop-price-editor')?.querySelector('[data-gm-price-input]'),price=reset?null:Number(field?.value);if(!reset&&(!field?.value.trim()||!Number.isSafeInteger(price)||price<1||price>100000000))return this.toast('PRICE 1–100,000,000');button.blur();this.emit('server-action',{action:'gm-shop-price',itemId:button.dataset.gmPriceSave||button.dataset.gmPriceReset,price,...(button.dataset.shopTier?{qualityTier:Number(button.dataset.shopTier)}:{})});return;}
     if(button.dataset.gmPlatformTool&&this.self?.profile?.admin){

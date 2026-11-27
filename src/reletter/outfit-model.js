@@ -1,6 +1,6 @@
 import {staticPaintTexture} from '../paint-texture-source.js';
 import {softPorkGeometry,buildStreetOutfit,animateStreetOutfit,streetMotionStep} from './street-outfits.js';
-import {buildSoftGarbage,buildNewStreetProp,attachStreetMotion,animateExtraStreet,animateFaultyMutton} from './street-outfit-motion.js';
+import {buildSoftGarbage,buildNewStreetProp,attachStreetMotion,animateExtraStreet,animateFaultyMutton,buildSoftCardboard,addSwayingPoleWires,buildTreeDisguise} from './street-outfit-motion.js';
 import {createHeadgear} from './headgear-model.js';
 // Clothing uses the original skinned surface, preserving animation and exposed face/hands.
 const sharedFabrics=new Map();
@@ -203,15 +203,15 @@ export function createRockDisguiseGeometry(T){
  const positions=[],normals=[],colors=[],indices=[],color=new T.Color(),q=new T.Quaternion(),axis=new T.Vector3(0,0,1),v=new T.Vector3(),n=new T.Vector3();
  const noise=(x,y,z,k)=>Math.sin(x*4.3+y*2.8+z*3.1+k)*.48+Math.cos(y*8.2-z*3.9+x*2.1+k*1.3)*.28+Math.sin(z*13.5+x*11.2-y*5.6+k*.7)*.15+Math.cos(x*26+y*19-z*22+k)*.09;
  for(const [cx,cy,cz,sx,sy,sz,tilt,seed] of layers){
-  const geo=new T.SphereGeometry(1,40,28),a=geo.attributes.position;
+  const geo=new T.SphereGeometry(1,72,48),a=geo.attributes.position;
   for(let i=0;i<a.count;i++){const x=a.getX(i),y=a.getY(i),z=a.getZ(i),ang=Math.atan2(z,x),soft=k=>Math.sign(k)*Math.pow(Math.abs(k),.82),wave=y*12+x*3.5+z*2.1+seed*.8+noise(x,y,z,seed)*1.7,seam=Math.pow(.5+.5*Math.cos(wave),13),rough=noise(x,y,z,seed);
-   const d=1+.19*rough-.085*seam+.045*Math.sin(ang*5+seed+y*2);
-   a.setXYZ(i,soft(x)*sx*d,soft(y)*sy*(1+.11*rough)+.018*Math.sin(wave),soft(z)*sz*d);
+   const fine=noise(x*5.2,y*5.2,z*5.2,seed+19),chips=noise(x*2.7,y*2.7,z*2.7,seed+7),d=1+.21*rough+.09*chips+.035*fine-.105*seam+.045*Math.sin(ang*5+seed+y*2);
+   a.setXYZ(i,soft(x)*sx*d,soft(y)*sy*(1+.14*rough+.06*chips)+.022*Math.sin(wave)+.008*fine,soft(z)*sz*d);
   }
   geo.computeVertexNormals();const no=geo.attributes.normal,offset=positions.length/3;q.setFromAxisAngle(axis,tilt);
   for(let i=0;i<a.count;i++){v.fromBufferAttribute(a,i);const x=v.x/sx,y=v.y/sy,z=v.z/sz,grain=noise(x*2.5,y*2.5,z*2.5,seed),line=Math.pow(.5+.5*Math.cos(y*18+x*4+z*3+seed+grain),15);
-   const tone=.67+.12*noise(x,y,z,seed)+.08*grain-.19*line;
-   color.setRGB(tone*.97,tone*.92,tone*.83);colors.push(color.r,color.g,color.b);
+   const tone=Math.max(.035,.105+.048*noise(x,y,z,seed)+.025*grain-.045*line+.014*noise(x*9,y*9,z*9,seed+21));
+   color.setRGB(tone*.95,tone*.99,tone*1.05);colors.push(color.r,color.g,color.b);
    v.applyQuaternion(q);positions.push(v.x+cx,v.y+cy,v.z+cz);n.fromBufferAttribute(no,i).applyQuaternion(q);normals.push(n.x,n.y,n.z);
   }
   for(let i=0;i<geo.index.count;i++)indices.push(offset+geo.index.getX(i));geo.dispose();
@@ -222,12 +222,13 @@ function attachRockDisguise(T,model,bones,height,record,mat){
  const frame=disguiseFrame(T,model,bones,height),g=new T.Group(),geometry=createRockDisguiseGeometry(T);
  const stone=mat('#ffffff');stone.vertexColors=true;stone.roughness=.97;stone.metalness=0;
  const rock=new T.Mesh(geometry,stone);g.add(rock);g.name='rock-disguise:layered-limestone';g.userData.outfit=record.id;
- const bounds=geometry.boundingBox,extent=bounds.getSize(new T.Vector3()),factor=frame.height*1.04/Math.max(.001,extent.y);
+ const bounds=geometry.boundingBox,extent=bounds.getSize(new T.Vector3()),factor=frame.height*3/Math.max(.001,extent.y);
  g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);
  const front=new T.Vector3(0,0,1).applyQuaternion(frame.rotation),headCenter=frame.head.clone().addScaledVector(frame.up,frame.unit*.42);
- const y=T.MathUtils.clamp(headCenter.clone().sub(frame.base).dot(frame.up)/factor+bounds.min.y,bounds.min.y+extent.y*.2,bounds.max.y-extent.y*.2);
- g.position.copy(headCenter).addScaledVector(frame.up,-y*factor).addScaledVector(front,-bounds.max.z*factor+frame.unit*.10);
- cutDisguiseOpening(T,g,0,y,frame.unit*.80/factor,frame.unit*.93/factor,bounds.max.z);
+ const y=headCenter.clone().sub(frame.base).dot(frame.up)/factor+bounds.min.y;
+ let frontZ=-Infinity;const a=geometry.attributes.position;for(let i=0;i<a.count;i++)if(Math.abs(a.getY(i)-y)<.13&&Math.abs(a.getX(i))<.18)frontZ=Math.max(frontZ,a.getZ(i));if(!Number.isFinite(frontZ))frontZ=bounds.max.z;
+ g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*factor).addScaledVector(front,-frontZ*factor+frame.unit*.10);
+ cutDisguiseOpening(T,g,0,y,frame.unit*.80/factor,frame.unit*.93/factor,frontZ);
  model.add(g);g.updateMatrixWorld(true);record.parts.push(g);return record;
 }
 
@@ -240,6 +241,13 @@ function attachRockDisguise(T,model,bones,height,record,mat){
  const add=(g,geo,p,scale,m=main)=>{const o=new T.Mesh(geo,m);o.position.set(...p);o.scale.set(...scale);g.add(o);return o;},ball=(g,p,s,m=main)=>add(g,new T.SphereGeometry(1,16,12),p,s,m),box=(g,p,s,m=main)=>add(g,new T.BoxGeometry(1,1,1),p,s,m),cone=(g,p,r,h,m=main)=>add(g,new T.ConeGeometry(r,h,12),p,[1,1,1],m),tube=(g,pts,r,m=main)=>add(g,new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>new T.Vector3(...p))),18,r,6,false),[0,0,0],[1,1,1],m);
  if(item.creature==='pooh-plush-disguise')return attachPlushBear(T,model,bones,height,record,mat);
  if(item.creature==='rock-disguise')return attachRockDisguise(T,model,bones,height,record,mat);
+ if(item.creature==='tree-disguise'){
+  const frame=disguiseFrame(T,model,bones,height),g=new T.Group();g.name='tree-disguise:old-growth';g.userData.outfit=item.id;
+  const tree=buildTreeDisguise(T,g,record,mat);g.updateMatrixWorld(true);const bounds=new T.Box3().setFromObject(g,true),extent=bounds.getSize(new T.Vector3()),factor=frame.height*3/Math.max(.001,extent.y);
+  const headCenter=frame.head.clone().addScaledVector(frame.up,frame.unit*.42),front=new T.Vector3(0,0,1).applyQuaternion(frame.rotation),y=headCenter.clone().sub(frame.base).dot(frame.up)/factor+bounds.min.y,frontZ=tree.trunkRadius(y);
+  g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*factor).addScaledVector(front,-frontZ*factor+frame.unit*.10);
+  g.remove(tree.crown);cutDisguiseOpening(T,g,0,y,frame.unit*.82/factor,frame.unit*.95/factor,frontZ);g.add(tree.crown);model.add(g);g.updateMatrixWorld(true);record.parts.push(g);attachStreetMotion(T,g,'tree-disguise',record,mat);return record;
+ }
  const chest=anchor('Spine2'),hips=anchor('Hips'),d=item.design,t=item.tier;
  if(d==='disguise'){
   // Props are rigid avatar-local objects, not children of animated hips or
@@ -274,13 +282,7 @@ function attachRockDisguise(T,model,bones,height,record,mat){
    b([0,2.975,0],[.47,.05,.45],black);
    slit(.82,.342,.29);
   }else if(kind==='cardboard-disguise'){
-   const card=mat('#a77d49'),edge=mat('#6d4c2b');
-   b([0,.53,0],[.78,.96,.65],card);
-   for(const side of [-1,1]){const flap=b([side*.20,.995,0],[.40,.045,.70],main);flap.rotation.z=side*.09;
-    mark([side*.28,.39,.336],[.13,.25,.012],edge);mark([side*.29,.77,.341],[.17,.057,.016],tape);}
-   b([0,.99,0],[.065,.025,.69],tape);b([0,.80,.337],[.065,.29,.012],tape);
-   for(let i=0;i<5;i++)mark([-.24+i*.10,.16+(i%2)*.035,.336],[.058,.12,.012],edge);
-   slit(.86,.35,.28);
+   buildSoftCardboard(T,g,record,mat);
   }else if(kind==='garbage-bag-disguise'){
    buildSoftGarbage(T,g,record,mat);
   }else if(kind==='trash-can-disguise'){
@@ -321,7 +323,8 @@ function attachRockDisguise(T,model,bones,height,record,mat){
    for(let i=0;i<5;i++)b([0,.27+i*.13,.187],[.18,.06,.025],i%2?black:mat('#d7ae36'));
    for(const y of [2.43,2.75]){b([0,y,0],[1.18,.10,.14],darkConcrete);
     for(const x of [-.49,0,.49]){c([x,y+.13,0],.085,.085,.13,ceramic,10);for(let k=0;k<3;k++)c([x,y+.09+k*.05,0],.114,.114,.025,ceramic,10);}
-    tube(g,[[-.49,y+.21,-.33],[-.49,y+.10,0],[-.49,y+.21,.33]],.018,wire);}
+   }
+   addSwayingPoleWires(T,g,record,mat,wire);
    b([.24,1.98,0],[.32,.48,.34],silver);c([.24,2.26,0],.16,.16,.12,rimSafe());
    function rimSafe(){return darkConcrete;}
    tube(g,[[.18,.27,-.05],[.23,1.32,-.05],[.17,2.43,-.05]],.025,wire);
@@ -608,12 +611,6 @@ function attachRockDisguise(T,model,bones,height,record,mat){
   }else if(kind==='caterpillar'){
    for(let i=0;i<7;i++){const part=ball(hips,[0,-.08-i*.055,-.37-i*.29],[.52-i*.035,.44-i*.025,.30],i%2?cream:main);part.rotation.x=.12;for(const side of [-1,1])ball(hips,[side*(.39-i*.02),-.39,-.37-i*.29],[.10,.15,.11],main);}
    if(hood){const h=anchor('Head');ball(h,[0,.40,.13],[.63,.53,.54],main);for(const side of [-1,1]){tube(h,[[side*.21,.74,0],[side*.37,1.06,.05],[side*.43,1.13,.15]],.055,main);ball(h,[side*.43,1.13,.15],[.10,.10,.10],trim);ball(h,[side*.21,.40,.62],[.10,.11,.04],dark);}}
-  }else if(kind==='tree-disguise'){
-   const bark=mat('#67482f'),leaf=mat('#416d37'),leaf2=mat('#71974a');
-   add(chest,new T.CylinderGeometry(.58,.82,2.45,11),[0,-.52,0],[1,1,.80],bark);
-   for(let i=0;i<8;i++){const a=i*Math.PI/4;tube(chest,[[Math.cos(a)*.59,-1.60,Math.sin(a)*.49],[Math.cos(a)*.65,-.45,Math.sin(a)*.5],[Math.cos(a)*.48,.60,Math.sin(a)*.40]],.045,main);}
-   const crown=anchor('Head');for(let i=0;i<7;i++)ball(crown,[Math.sin(i*2.4)*.62,.95+(i%3)*.26,Math.cos(i*2.4)*.45],[.64,.52,.60],i%2?leaf:leaf2);
-   for(const side of [-1,1])tube(chest,[[side*.35,.12,0],[side*.86,.66,0],[side*1.14,.84,-.12]],.13,bark);
   }else if(kind==='doghouse-disguise'){
    const roof=mat('#a74538'),wood=mat('#c48e58'),door=mat('#30241e');
    box(chest,[0,-.52,0],[1.36,1.66,1.16],wood);box(chest,[0,-.70,.60],[.67,.98,.055],door);
