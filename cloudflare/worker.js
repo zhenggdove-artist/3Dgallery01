@@ -397,7 +397,7 @@ export class TempleRoom extends DurableObject{
     this.broadcastStructureEvents([...(result.structureHits||(result.structureHit?[result.structureHit]:[])),...contactVisuals.filter(v=>v.kind==='structure-hit').map(v=>v.event)],[...(result.structureDestroyedEvents||(result.structureDestroyed?[result.structureDestroyed]:[])),...contactVisuals.filter(v=>v.kind==='structure-destroyed').map(v=>v.event)],world);
     if(result.attackEvent)this.broadcast('attack',result.attackEvent);if(result.channelStopped)this.broadcast('channel-stop',result.channelStopped);
     this.scheduleCombatTick();
-    if(body.action==='attack'&&compact&&!didRespawn)this.scheduleCombatWorld();else this.broadcastWorld(world,body.action==='gm-paint-3d'||body.action==='gm-erase-3d');if(didRespawn||result.delistedItemId)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);await this.armAlarm();return new Response(responseText,{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
+    if(body.action==='attack'&&compact&&!didRespawn)this.scheduleCombatWorld();else if(body.action==='gm-paint-3d'||body.action==='gm-erase-3d')this.broadcastWorld(world,true);else this.broadcastWorld(world);if(didRespawn||result.delistedItemId)this.broadcastRoster();if(result.throwEvent)this.broadcast('artwork-throw',result.throwEvent);await this.armAlarm();return new Response(responseText,{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
   }
 
   async saveCode(session){
