@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import {surfaceInfo,surfaceFace} from './shared/space-paint-surface.js';
 import {SpacePaintTexture} from './space-paint-texture.js';
+import {cityGroundHeight} from './shared/city-layout.js';
+import {spacePaintFloor} from './shared/space-paint-collision.js';
 import {SPACE_PAINT_MAX_POINTS,SPACE_PAINT_POINT_BUDGET,SPACE_PAINT_STROKE_BUDGET,spacePaintPointAllowed} from './shared/space-paint.js';
 
 const SIDES=12;
@@ -60,6 +62,7 @@ export class SpacePainter{
   this.archive=[];this.revision=-1;this.pending=new Map();this.erasing=new Set();this.queue=Promise.resolve();this.undoStack=[];this.redoStack=[];this.gesture=null;this.surfaceArchive={};this.surfaceRevision=-1;this.surfacePending=new Map();this.surfacePreview=null;this.surfaceFrame=0;this.atlas=null;this.renderedStrokes=[];this.ownerEpoch=null;
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();this.normal=new THREE.Vector3();this.plane=new THREE.Plane();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
+  this.guide=null;this.guideKey=null;
  }
  mesh(which,strokes){
   if(!strokes.length){if(this[which]){this[which].removeFromParent();this[which].geometry.dispose();this[which]=null;}return [];}
@@ -141,7 +144,40 @@ export class SpacePainter{
   this.ndc.set((event.clientX-r.left)/r.width*2-1,1-(event.clientY-r.top)/r.height*2);
   this.camera.updateMatrixWorld(true);this.ray.setFromCamera(this.ndc,this.camera);return true;
  }
- down(event,{tool,color,size,thickness,distance}){
+ hideGuide(){if(this.guide)this.guide.visible=false;this.guideKey=null;}
+ updateGuide(event,settings,arena){
+  const r=this.canvas.getBoundingClientRect();if(!r.width||!r.height){this.hideGuide();return;}
+  const x=event?.clientX??r.left+r.width/2,y=event?.clientY??r.top+r.height/2;
+  const {position:p,quaternion:q}=this.camera,stroke=this.stroke,color=stroke?.color??settings.color,size=stroke?.size??settings.size,thickness=stroke?.thickness??settings.thickness;
+  const key=[x,y,r.left,r.top,r.width,r.height,p.x,p.y,p.z,q.x,q.y,q.z,q.w,this.camera.fov,this.camera.zoom,size,color,thickness,settings.distance,stroke?.id,this.saved?.geometry,this.preview?.geometry,arena.world?.cityDamage,arena.displayPlatforms?.discs];
+  if(this.guideKey&&key.every((v,i)=>v===this.guideKey[i]))return;
+  this.guideKey=key;
+  if(!this.guide){
+   this.guide=new THREE.Mesh(new THREE.RingGeometry(.78,1,48),new THREE.MeshBasicMaterial({side:THREE.DoubleSide,transparent:true,opacity:.9,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
+   this.guide.name='3D Paint landing guide';this.guide.rotation.x=-Math.PI/2;this.guide.visible=false;this.scene.add(this.guide);
+   this.guidePlane=new THREE.Plane();this.guidePoint=new THREE.Vector3();this.guideNormal=new THREE.Vector3();this.guideDown=new THREE.Raycaster();
+  }
+  const g=this.guide;
+  if(!this.setRay({clientX:x,clientY:y})){g.visible=false;return;}
+  const point=this.guidePoint,normal=this.guideNormal,plane=stroke?this.plane:this.guidePlane;
+  if(stroke)normal.fromArray(stroke.normal);
+  else{this.camera.getWorldDirection(normal);plane.setFromNormalAndCoplanarPoint(normal,point.copy(p).addScaledVector(normal,settings.distance));}
+  if(!this.ray.ray.intersectPlane(plane,point)||!spacePaintPointAllowed(point.toArray())){g.visible=false;return;}
+  // Project vertically onto the highest supporting surface beneath the brush.
+  const top=point.y+.003;
+  let floor=Math.max(0,arena.displayPlatforms?.ground(point.x,point.z,top)||0,cityGroundHeight(point.x,point.z,top,arena.world?.cityDamage||{}));
+  if(top>=floor){
+   this.guideDown.ray.origin.set(point.x,top,point.z);this.guideDown.ray.direction.set(0,-1,0);
+   this.guideDown.far=Math.max(0,top-floor);
+   // The existing spatial index avoids a full mesh raycast over empty ground.
+   if(this.saved&&spacePaintFloor(this.renderedStrokes,point.x,point.z,top+2)>floor){
+    const hit=this.guideDown.intersectObject(this.saved,false)[0];if(hit)floor=Math.max(floor,hit.point.y);
+   }
+   if(this.preview){const hit=this.guideDown.intersectObject(this.preview,false)[0];if(hit)floor=Math.max(floor,hit.point.y);}
+  }
+  g.position.set(point.x,floor+.025,point.z);g.scale.set(size,size,1);g.material.color.set(color);g.visible=true;
+ }
+ down(event,{tool,color,size,thickness,distance},capture=true){
   if(this.pointer!==null||!this.setRay(event))return;
   if(tool==='eraser'){
    if(!this.saved)return;
@@ -161,7 +197,7 @@ export class SpacePainter{
   this.camera.getWorldDirection(this.normal);
   this.plane.setFromNormalAndCoplanarPoint(this.normal,this.point.copy(this.camera.position).addScaledVector(this.normal,distance));
   if(!this.ray.ray.intersectPlane(this.plane,this.point)||!spacePaintPointAllowed(this.point.toArray())){this.ui.toast('Aim inside the 3D paint area');return;}
-  this.pointer=event.pointerId;this.canvas.setPointerCapture(event.pointerId);
+  this.pointer=event.pointerId;if(capture)this.canvas.setPointerCapture(event.pointerId);
   this.gesture=globalThis.crypto.randomUUID();this.gestureEpoch=this.ownerEpoch;this.begin({color,size,thickness,normal:this.normal.toArray()});this.append(this.point);
  }
  begin(settings){this.stroke={...settings,id:globalThis.crypto.randomUUID(),points:[]};}
@@ -182,11 +218,11 @@ export class SpacePainter{
   }
   this.append(this.point);
  }
- end(event){
+ end(event,retainCapture=false){
   if(event&&event.pointerId!==this.pointer)return;
   const pointer=this.pointer;this.pointer=null;
   if(event?.type==='pointerup'&&this.stroke&&this.stroke.points.length<SPACE_PAINT_MAX_POINTS&&this.setRay(event)&&this.ray.ray.intersectPlane(this.plane,this.point))this.append(this.point);
-  if(pointer!==null&&this.canvas.hasPointerCapture(pointer))this.canvas.releasePointerCapture(pointer);
+  if(!retainCapture&&pointer!==null&&this.canvas.hasPointerCapture(pointer))this.canvas.releasePointerCapture(pointer);
   this.finish();
  }
  finish(){

@@ -81,7 +81,7 @@ test('Worker decouples combat tick rate from heavy full-world broadcasts',()=>{
  const worker=read('cloudflare/worker.js');
  assert.match(worker,/now-\(this\.lastCombatWorldAt\|\|0\)>=180/);
  assert.match(worker,/this\.installCombat\(world,encoded,rows\)/);
- assert.match(worker,/createWorldPatch\(previous,common,true,serializeCityRecord\)/);
+ assert.match(worker,/createWorldPatch\(previous,common,true,serializeCityRecord,meta\.surfaceDelta===true\)/);
  assert.match(worker,/commonPatches\.set\(baselineKey,patch\)/);
  assert.match(worker,/cityRecordJSON=new Map\(\)/);
  assert.match(worker,/this\.broadcastStructureEvents\(artworkVisualEvents\.filter/,'all architecture events must still be broadcast');

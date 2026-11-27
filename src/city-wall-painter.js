@@ -34,6 +34,7 @@ export class CityWallPainter{
   }
   this.active=false;this.tool='brush';this.color='#e73b33';this.size=.17;
   this.pointer=null;this.stroke=null;this.pending=Promise.resolve();
+  this.paintTouches=new Map();this.touchCamera=false;this.touchDrawing=false;this.touchPair=null;this.mouseOrbit=null;this.guidePointer=null;
   this.button=document.getElementById('paint-button');
   this.toolbar=document.getElementById('paint-toolbar');
   this.brush=document.getElementById('paint-brush');
@@ -61,6 +62,9 @@ export class CityWallPainter{
   canvas.addEventListener('pointerup',e=>this.up(e),true);
   canvas.addEventListener('pointercancel',e=>this.up(e),true);
   canvas.addEventListener('lostpointercapture',e=>this.up(e),true);
+  canvas.addEventListener('contextmenu',e=>{if(this.active)e.preventDefault();});
+  for(const type of ['touchend','touchcancel'])window.addEventListener(type,e=>this.reconcilePaintTouches(e),{capture:true,passive:true});
+  window.addEventListener('blur',()=>{if(this.active){this.finishTouchStroke(false);this.resetPaintPointers();this.space.hideGuide();}});
   window.addEventListener('keydown',e=>{
    if(this.mode3D&&(e.ctrlKey||e.metaKey)&&!(/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName))&&['KeyZ','KeyY'].includes(e.code)){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat)this.space.history(e.code==='KeyY'||e.shiftKey);return;}
    if(this.active&&e.code==='Escape'){
@@ -87,7 +91,7 @@ export class CityWallPainter{
   if(enabled&&(!this.active||!this.can3D()||this.role()!=='fighter'))return;
   if(enabled===this.mode3D)return;
   if(this.mode3D){if(!this.can3D())this.space.stroke=null;this.space.end();}else{this.finish();const pointer=this.pointer;this.pointer=null;if(pointer!==null&&this.canvas.hasPointerCapture(pointer))this.canvas.releasePointerCapture(pointer);}
-  this.mode3D=enabled;this.clearFlight();this.controller()?.setPaintFlight(enabled);if(this.flightControls)this.flightControls.hidden=!enabled;this.spaceToggle?.classList.toggle('active',enabled);this.spaceToggle?.setAttribute('aria-pressed',String(enabled));if(this.spaceSettings)this.spaceSettings.hidden=!enabled;
+  this.resetPaintPointers();this.space.hideGuide();this.mode3D=enabled;this.clearFlight();this.controller()?.setPaintFlight(enabled);if(this.flightControls)this.flightControls.hidden=!enabled;this.spaceToggle?.classList.toggle('active',enabled);this.spaceToggle?.setAttribute('aria-pressed',String(enabled));if(this.spaceSettings)this.spaceSettings.hidden=!enabled;
  }
  setTool(tool){
   this.tool=tool;this.brush?.classList.toggle('active',tool==='brush');
@@ -98,7 +102,7 @@ export class CityWallPainter{
  setActive(active){
   if(active&&this.role()!=='fighter'){this.ui.toast('Enter the arena to paint');return;}
   if(this.active===active)return;
-  if(!active){this.setMode3D(false);this.finish();}
+  if(!active){this.setMode3D(false);this.finish();this.resetPaintPointers();this.space.hideGuide();}
   if(active)this.beforeStart();
   this.active=active;this.refresh3D();
   if(this.toolbar)this.toolbar.hidden=!active;
@@ -135,16 +139,120 @@ export class CityWallPainter{
  consume(event){
   event.preventDefault();event.stopImmediatePropagation();
  }
+ updateGuide(){
+  if(!this.mode3D||this.tool!=='brush'){this.space.hideGuide();return;}
+  const pointer=!this.touchCamera&&this.paintTouches.size===1?[...this.paintTouches.values()][0].last:this.guidePointer;
+  this.space.updateGuide(pointer,{color:this.color,size:this.size,thickness:this.thickness,distance:this.distance},this.arena);
+ }
+ resetPaintPointers(){
+  const ids=[...this.paintTouches.keys()];if(this.mouseOrbit)ids.push(this.mouseOrbit.id);
+  this.paintTouches.clear();this.touchCamera=false;this.touchDrawing=false;this.touchPair=null;this.mouseOrbit=null;this.guidePointer=null;
+  for(const id of ids)if(this.canvas.hasPointerCapture(id))this.canvas.releasePointerCapture(id);
+ }
+ finishTouchStroke(retainCapture=true){
+  if(this.mode3D)this.space.end(null,retainCapture);
+  else{const id=this.pointer;this.pointer=null;this.finish();if(!retainCapture&&id!==null&&this.canvas.hasPointerCapture(id))this.canvas.releasePointerCapture(id);}
+  this.touchDrawing=false;
+ }
+ pairMetrics(){
+  if(this.paintTouches.size!==2)return null;
+  const [a,b]=[...this.paintTouches.values()].map(t=>t.last);
+  return {x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2,span:Math.max(1,Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY))};
+ }
+ cameraGesture(pair){
+  const player=this.controller(),previous=this.touchPair;this.touchPair=pair;
+  if(!pair||!previous||!player?.enabled||player.status.freeze)return;
+  player.distance=clamp(player.distance*previous.span/pair.span,3,50);
+  player.orbitEditCamera(pair.x-previous.x,pair.y-previous.y);
+ }
+ touchDown(event){
+  this.consume(event);this.guidePointer=null;
+  if(this.paintTouches.has(event.pointerId)||this.mouseOrbit||(!this.paintTouches.size&&(this.pointer!=null||this.space.pointer!=null)))return;
+  this.canvas.setPointerCapture(event.pointerId);
+  this.paintTouches.set(event.pointerId,{start:event,last:event});
+  if(this.paintTouches.size>1){
+   if(!this.touchCamera&&this.touchDrawing)this.finishTouchStroke();
+   this.touchCamera=true;this.touchPair=this.pairMetrics();
+  }
+ }
+ touchMove(event){
+  const touch=this.paintTouches.get(event.pointerId);if(!touch)return;
+  this.consume(event);touch.last=event;
+  if(this.touchCamera){this.cameraGesture(this.pairMetrics());return;}
+  if(!this.touchDrawing){
+   if(Math.hypot(event.clientX-touch.start.clientX,event.clientY-touch.start.clientY)<3)return;
+   this.touchDrawing=true;this.paintDown(touch.start,false);
+  }
+  this.paintMove(event);
+ }
+ touchUp(event){
+  const touch=this.paintTouches.get(event.pointerId);if(!touch)return;
+  this.consume(event);this.paintTouches.delete(event.pointerId);
+  if(!this.touchCamera){
+   if(event.type==='pointerup'&&!this.touchDrawing)this.paintDown(touch.start,false);
+   if(this.touchDrawing||event.type==='pointerup')this.paintUp(event);
+  }
+  if(this.canvas.hasPointerCapture(event.pointerId))this.canvas.releasePointerCapture(event.pointerId);
+  this.touchPair=this.pairMetrics();
+  if(!this.paintTouches.size){this.touchCamera=false;this.touchDrawing=false;this.touchPair=null;}
+ }
+ reconcilePaintTouches(event){
+  if(!this.paintTouches.size)return;
+  const live=[...event.touches].filter(t=>t.target===this.canvas);
+  if(live.length>=this.paintTouches.size)return;
+  const keep=new Set();
+  for(const finger of live){
+   let nearest=null,distance=Infinity;
+   for(const [id,t] of this.paintTouches){
+    if(keep.has(id))continue;
+    const d=Math.hypot(finger.clientX-t.last.clientX,finger.clientY-t.last.clientY);
+    if(d<distance){nearest=id;distance=d;}
+   }
+   if(nearest!==null)keep.add(nearest);
+  }
+  for(const [id,t] of [...this.paintTouches])if(!keep.has(id)){
+   const ended={pointerId:id,pointerType:'touch',type:event.type==='touchend'?'pointerup':'pointercancel',clientX:t.last.clientX,clientY:t.last.clientY,preventDefault(){},stopImmediatePropagation(){}};
+   this.touchUp(ended);
+  }
+ }
  down(event){
+  if(!this.active)return;
+  if(event.pointerType==='touch'){this.touchDown(event);return;}
+  if(event.pointerType==='mouse'&&event.button===2){
+   this.consume(event);if(this.pointer!==null||this.space.pointer!==null||this.paintTouches.size)return;
+   this.mouseOrbit={id:event.pointerId,x:event.clientX,y:event.clientY};this.canvas.setPointerCapture(event.pointerId);return;
+  }
+  if(this.paintTouches.size||this.mouseOrbit){this.consume(event);return;}
+  this.paintDown(event);
+ }
+ move(event){
+  if(!this.active)return;
+  if(event.pointerType==='touch'){this.touchMove(event);return;}
+  if(event.pointerType==='mouse'||event.pointerType==='pen')this.guidePointer={clientX:event.clientX,clientY:event.clientY};
+  if(this.mouseOrbit?.id===event.pointerId){
+   this.consume(event);const orbit=this.mouseOrbit,player=this.controller();
+   if(player?.enabled&&!player.status.freeze)player.orbitEditCamera(event.clientX-orbit.x,event.clientY-orbit.y);
+   orbit.x=event.clientX;orbit.y=event.clientY;return;
+  }
+  this.paintMove(event);
+ }
+ up(event){
+  if(event.pointerType==='touch'){this.touchUp(event);return;}
+  if(this.mouseOrbit?.id===event.pointerId){
+   this.consume(event);this.mouseOrbit=null;if(this.canvas.hasPointerCapture(event.pointerId))this.canvas.releasePointerCapture(event.pointerId);return;
+  }
+  this.paintUp(event);
+ }
+ paintDown(event,capture=true){
   if(!this.active||this.pointer!==null)return;
   // Reserve middle mouse for GM camera orbit, not paint input swallowing.
   if(event.button!==0&&event.pointerType==='mouse')return;
   this.consume(event);
-  if(this.mode3D){this.space.down(event,{tool:this.tool,color:this.color,size:this.size,thickness:this.thickness,distance:this.distance});return;}
+  if(this.mode3D){this.space.down(event,{tool:this.tool,color:this.color,size:this.size,thickness:this.thickness,distance:this.distance},capture);return;}
   const hit=this.pick(event);
   if(!hit){this.ui.toast('Aim at a nearby wall, sign, pink disc or 3D surface');return;}
   this.pointer=event.pointerId;
-  this.canvas.setPointerCapture(event.pointerId);
+  if(capture)this.canvas.setPointerCapture(event.pointerId);
   this.start(hit);
  }
  start(hit){
@@ -177,7 +285,7 @@ export class CityWallPainter{
   (this.stroke.wall==='top'?this.arena.displayPlatforms.paint:this.arena.outerCity.wallPaint).preview(this.stroke);
   return true;
  }
- move(event){
+ paintMove(event){
   if(this.mode3D){if(event.pointerId===this.space.pointer){this.consume(event);this.space.move(event);}return;}
   if(!this.active||event.pointerId!==this.pointer)return;
   if(event.pointerType==='mouse'&&(event.buttons&4))return;
@@ -195,7 +303,7 @@ export class CityWallPainter{
    this.start(hit);
   }
  }
- up(event){
+ paintUp(event){
   if(this.mode3D){if(event.pointerId===this.space.pointer&&!(event.type==='pointerup'&&event.pointerType==='mouse'&&event.button!==0)){this.consume(event);this.space.end(event);}return;}
   if(!this.active&&this.pointer===null)return;
   if(event.pointerType==='mouse'&&event.type==='pointerup'&&event.button!==0)return;

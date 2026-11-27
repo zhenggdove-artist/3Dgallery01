@@ -1298,7 +1298,7 @@ canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;gpuFrames.
 function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.10,elapsed/1000);last=now;if(!assetsReady||!joined||document.hidden||contextLost)return;const started=performance.now();
  // An unexpected model/animation exception cannot prevent the render pass.
  // Individual effects are also contained at source; this is a final guard.
- if(now>externalUntil)try{update(dt,now/1000,Math.min(.24,elapsed/1000));}catch(error){
+ if(now>externalUntil)try{update(dt,now/1000,Math.min(.24,elapsed/1000));if(wallPainter.mode3D)wallPainter.updateGuide();}catch(error){
   if(now-lastFrameFaultAt>2000){lastFrameFaultAt=now;console.error('Gameplay update fault; render frame preserved',error);}
  }
  const updated=performance.now();
