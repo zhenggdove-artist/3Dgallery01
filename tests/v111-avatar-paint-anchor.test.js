@@ -29,13 +29,16 @@ test('avatar-anchored center and idle landing guide stay fixed across camera zoo
  }
 });
 test('avatar translation, orientation and brush distance move the anchor; the active stroke frame stays planar',()=>{
- const {painter,player}=fixture(),a=new THREE.Vector3(),b=new THREE.Vector3();
+ const {painter,player,camera}=fixture(),a=new THREE.Vector3(),b=new THREE.Vector3();
  painter.setDrawingFrame(settings.distance);painter.drawingPoint(null,a);
  player.root.position.add(new THREE.Vector3(2,3,4));painter.setDrawingFrame(settings.distance);painter.drawingPoint(null,b);near(b,a.clone().add(new THREE.Vector3(2,3,4)));
  player.yaw+=Math.PI/2;painter.setDrawingFrame(settings.distance);painter.drawingPoint(null,a);assert.ok(a.distanceTo(b)>1);
  const initial=a.clone();painter.setDrawingFrame(settings.distance+4);painter.drawingPoint(null,b);near(b,initial.clone().addScaledVector(painter.paintNormal,4));
+ // Point the real camera toward the frozen plane before testing ray intersection.
+ // The old fixture still faced the initial direction after a 90-degree turn.
+ camera.position.copy(b).addScaledVector(painter.paintNormal,-7);camera.lookAt(b);camera.updateMatrixWorld(true);
  player.root.position.x+=5;player.yaw+=.2;
- painter.drawingPoint(event(130,140),a);assert.ok(Math.abs(a.clone().sub(b).dot(painter.paintNormal))<1e-8);
+ assert.ok(painter.drawingPoint(event(130,140),a));assert.ok(Math.abs(a.clone().sub(b).dot(painter.paintNormal))<1e-8);
 });
 test('brush start, drag, release and preview share the same avatar-anchored plane',()=>{
  const {painter,zoom}=fixture(),points=[];

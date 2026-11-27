@@ -26,12 +26,14 @@ export class TempleNetwork extends EventTarget{
   async join({name,color='#43b59a',firebaseIdToken='',mode='firebase'}) {
     this.ensureConfigured();
     const health=await this.request('/health',{auth:false,timeoutMs:6000});
-    this.paintOwnershipV115=health?.features?.paintOwnershipV115===true;
     if(health?.service==='Temple'&&(health.features?.wearableCatalog!==SHOP_CATALOG_REVISION||health.cityLayoutSignature!==CITY_LAYOUT_SIGNATURE))throw Error('Temple server is updating. Client/server city and shop versions must match.');
     if(mode==='guest'&&firebaseIdToken)throw Error('Cannot use guest mode after Google authentication');
     const data=await this.request('/api/join',{
       method:'POST',body:{name,color,...(mode==='guest'?{mode:'guest'}:{})},auth:false,identityToken:firebaseIdToken,timeoutMs:20_000
     });
+    // The actual authenticated room, not a potentially stale edge health reply,
+    // confirms the paint protocol. The same capability is refreshed on welcome.
+    this.paintOwnershipV115=data.paintOwnershipV115===true;
     this.token=data.token;this.joinData=data;this.closedByUser=false;this.spawnConfirmed=false;
     sessionStorage.setItem('temple-session-token',this.token);
     // Gameplay entry never blocks on websocket establishment.
@@ -56,7 +58,7 @@ export class TempleNetwork extends EventTarget{
       if(message.type==='combat-result'){this.resolveCombatSocket(socket,message.data);return;}
       if(message.type==='state-ack')this.acknowledgeState(message.data);
       if(message.type==='state-rejected')this.rejectedState(message.data);
-      if(message.type==='welcome'){this.wireWorld=message.data.world;this.compactCombat=message.data.compactCombat===true;this.combatSocketActions=message.data.combatSocketActions===true;this.fastActionsV087=message.data.fastActionsV087===true;this.fastCastV089=message.data.fastCastV089===true;this.contactFastV093=message.data.contactFastV093===true;}
+      if(message.type==='welcome'){this.paintOwnershipV115=message.data.paintOwnershipV115===true;this.wireWorld=message.data.world;this.compactCombat=message.data.compactCombat===true;this.combatSocketActions=message.data.combatSocketActions===true;this.fastActionsV087=message.data.fastActionsV087===true;this.fastCastV089=message.data.fastCastV089===true;this.contactFastV093=message.data.contactFastV093===true;}
       if(message.type==='world'){const wings=mergeWingCatalog(this.wireWorld?.customWings||[],message.data.customWings||[]);this.wireWorld={...message.data,customWings:wings};message.data=this.wireWorld;}
       if(message.type==='wing-catalog'&&this.wireWorld){this.wireWorld={...this.wireWorld,customWings:mergeWingCatalog(this.wireWorld.customWings||[],message.data?.wings||[])};}
       if(message.type==='world-patch'){
@@ -141,7 +143,7 @@ export class TempleNetwork extends EventTarget{
    }
   }
   async action(action,data={},options={}){
-   if(!this.paintOwnershipV115&&(['gm-erase-3d','gm-edit-3d','paint-space-surface'].includes(action)||(['paint-building','paint-disc'].includes(action)&&data.stroke?.tool==='eraser')))throw Error('Paint ownership update is not active on this server. Reconnect after update.');
+   if(!this.paintOwnershipV115&&(['gm-erase-3d','gm-edit-3d','paint-space-surface'].includes(action)||(['paint-building','paint-disc'].includes(action)&&data.stroke?.tool==='eraser')))throw Error('Paint server version is outdated. Refresh after the server update.');
    const compactCombat=action==='attack'&&this.compactCombat&&this.socket?.readyState===WebSocket.OPEN;
    const started=performance.now();
    const fastAction=this.fastActionsV087&&isRealtimeAction(action)&&this.socket?.readyState===WebSocket.OPEN;
