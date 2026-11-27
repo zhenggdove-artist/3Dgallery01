@@ -19,12 +19,11 @@ import {ECONOMY,ITEMS,SHOP_ITEMS,STARTER_LOADOUT,EQUIPPABLE_SLOTS,attackStats,it
 import {ARENA_RADIUS,GROUND_DROP_POINTS,MONSTER_SPAWNS,PLATFORMS,PLAYER_SPAWNS,SAFE_ZONE,distance2d,insideArena,insideSafeZone} from './arena.js';
 import {CITY_LOTS,CITY_MAX_HP,SIGN_HP,citySignSpecs,structureSignSpecs,signPaintWall,signPaintAvailable,signPaintPoint,paintPointInReach,structurePaintLot,signWorldPosition,signRayDistance,cityRaycast,cityStage,cityDamageTier,cityBlocked,cityWallPoint,CITY_PAINT_WALLS,cityCollisionCandidates,cityLocal,cityRoofHeightAtHp,cityFacadeFloor} from './city-layout.js';
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
-import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
 import {playerStats,refreshStats,refreshMana,manaCapacity,ultimateManaCost,levelXpRequired} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
 import {fuseTemple} from './temple-fusion.js';
-import {ensureFusionIdentity,ensureWeaponAffixes,appendInventoryInstance,removeInventoryInstance,selectEquipmentInstance,swapInventoryInstances,removeInventoryInstances} from './fusion-instances.js';
+import {ensureFusionIdentity,ensureWeaponAffixes,appendInventoryInstance,appendInventoryInstances,removeInventoryInstance,selectEquipmentInstance,swapInventoryInstances,removeInventoryInstances} from './fusion-instances.js';
 import {sniperMaterialStat} from './fusion-balance.js';
 import {advanceIslandEnemy,ISLAND_ENEMIES,ENEMY_HEIGHT,ENEMY_RADIUS} from './island-combat.js';
 import {spawnMonsterPack,MONSTER_PACK_SIZE} from './monster-pack.js';
@@ -309,7 +308,7 @@ export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true,
     })),
     collector:clone(world.collector),collectorSale:clone(world.lastCollectorSale),
     delistedShopItems:clone(world.delistedShopItems||{}),removedShopAssets:clone(world.removedShopAssets||{}),discPaint:scene(world.discPaint||{}),spacePaint:scene(world.spacePaint||[]),spacePaintRevision:world.spacePaintRevision||0,spacePaintSurface:scene(world.spacePaintSurface||{}),spacePaintSurfaceRevision:world.spacePaintSurfaceRevision||0,pickupReceipts:clone(world.pickupReceipts||[]),wantedSettings:wantedSettings(world),chatDefault:clone(world.chatDefault||null),artworkPromptPositions:clone(world.artworkPromptPositions||{}),shopPrices:clone(world.shopPrices||{}),equipmentTuning:clone(world.equipmentTuning||{}),profile:worldProfileView(world,actorKey,now),
-    reletter:originalView(world),economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
+    reletter:{},economy:ECONOMY,damageEvents:clone((world.damageEvents||[]).filter(e=>now-e.time<8000)),killEvents:clone((world.killEvents||[]).filter(e=>now-e.time<8000)),monsterDeathEvents:clone((world.monsterDeathEvents||[]).filter(e=>now-e.time>=0&&now-e.time<8000))};
 }
 
 function requireFighter(actor){return actor.role==='fighter'?null:{error:'Spectators cannot perform this action'};}
@@ -794,7 +793,6 @@ export function applyAction(world,actor,body,context={}){
     actor={...actor,position:[...journey.landing]};
   }
   if(!inventoryAction&&!insideArena(actor.position,2))return {error:'Invalid actor position'};
-  if(ORIGINAL_ACTIONS.has(body.action)){const result=originalAction(world,profile,actor,body,now,rng);if(!result.error)world.revision++;return result;}
   let result;
   switch(body.action){
     case 'pickup-coin':result=pickupCoin(world,profile,actor,body,now);break;
@@ -932,8 +930,7 @@ function buy(world,profile,body){
  const unitPrice=shopPrice(item,world.shopPrices),total=unitPrice*quantity;
  if(!Number.isSafeInteger(total)||total<0)return {error:'Invalid purchase amount'};
  if(!spend(profile,total,world))return {error:'Not enough coins'};
- for(let i=0;i<quantity;i++)
-  appendInventoryInstance(profile,base.id,'shop',weaponChoice?item.shopTier:null,profile.admin?unitPrice:unitPrice);
+ appendInventoryInstances(profile,base.id,'shop',weaponChoice?item.shopTier:null,unitPrice,quantity);
  profile.itemOrigins??={};profile.itemOrigins[base.id]='shop';
  const charged=profile.admin?0:total;
  return {notice:`PURCHASE SUCCESSFUL · ${item.name} ×${quantity} · ${charged} coins`,
@@ -1682,7 +1679,7 @@ export function tickWorld(world,{now=Date.now(),rng=Math.random,activeFighters=0
   for(const mob of world.monsters||[])if(mob?.active)changed=tickStatus(mob,now,(owner,amount)=>damageMonster(world,world.profiles[owner],amount,now,rng,'status',mob))||changed;
   for(const target of actors){const p=world.profiles[target.key];if(p&&!(p.admin&&p.gmInvincible!==false)&&(p.spawnProtectedUntil||0)<=now&&p.hp>0)changed=tickStatus(p,now,(owner,amount)=>damagePlayer(world,world.profiles[owner],target,Math.min(amount,2),now,
     (owner==='monster'||world.monster?.id===owner||(world.monsters||[]).some(m=>m.id===owner))?'monster':'status',target.position))||changed;}
-  world.groundDrops=world.groundDrops.filter(drop=>drop.expiresAt>now);if(world.groundDrops.length>ECONOMY.maxGroundDrops)world.groundDrops.splice(0,world.groundDrops.length-ECONOMY.maxGroundDrops);
+  if(world.groundDrops.some(drop=>!(drop.expiresAt>now)))world.groundDrops=world.groundDrops.filter(drop=>drop.expiresAt>now);if(world.groundDrops.length>ECONOMY.maxGroundDrops)world.groundDrops.splice(0,world.groundDrops.length-ECONOMY.maxGroundDrops);
   if(activeFighters>0){changed=replenishHearts(world,now)||changed;changed=spawnMonsterPack(world,now,rng)||changed;}
   if(activeFighters>0&&now>=world.nextGroundDropAt&&world.groundDrops.length<ECONOMY.maxGroundDrops){const point=GROUND_DROP_POINTS[Math.floor(rng()*GROUND_DROP_POINTS.length)],rolled=groundDropRoll(rng,world.delistedShopItems,world.relistedShopItems);world.groundDrops.push({id:id(),...rolled,position:[...point],createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});world.nextGroundDropAt=now+ECONOMY.groundSpawnMinMs+rng()*(ECONOMY.groundSpawnMaxMs-ECONOMY.groundSpawnMinMs);world.activity.itemsSpawned++;changed=true;}
   if(activeFighters>0&&!world.monster.active&&now>=world.monster.nextSpawnAt){const spawn=MONSTER_SPAWNS[Math.floor(rng()*MONSTER_SPAWNS.length)],variant=['warden','drowned','signal'][Math.floor(rng()*3)],maxHp={warden:420,drowned:520,signal:360}[variant];world.monster={active:true,id:id(),variant,position:[...spawn],hp:maxHp,maxHp,generation:(world.monster.generation||0)+1,spawnedAt:now,nextAttackAt:now+2_000,nextSpawnAt:now+ECONOMY.monsterIntervalMs};changed=true;}

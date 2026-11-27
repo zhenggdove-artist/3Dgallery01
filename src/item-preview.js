@@ -25,21 +25,31 @@ export function setRemovedPreviewAssets(removed={}){
 }
 const excludedPreview=item=>!!item&&Object.hasOwn(removedPreviewAssets,item.id);
 const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0)+(item.id==='outfit-luroufan-bowl-disguise'?':v065':item.id==='outfit-pooh-plush-disguise'?':v070':'');
-// Exact release-scoped PNGs: same resolution, no second WebGL render.
-const previewRelease=new URL(import.meta.url).searchParams.get('temple-release');
-// V053 changes combat billing, not the authored models or portrait renderer.
-// Reuse V052's identical full-resolution PNGs; later art releases invalidate normally.
-const previewArtRelease=['20261126-v085-r169','20261126-v084-r168'].includes(previewRelease)?'20261126-v084-r168':['20261125-v053-r125','20261125-v054-r126','20261125-v055-r127','20261125-v055-r128','20261126-v056-r129','20261126-v056-r130','20261126-v056-r131','20261126-v057-r132','20261126-v057-r133','20261126-v058-r134','20261126-v059-r135','20261126-v059-r136','20261126-v060-r137','20261126-v061-r138','20261126-v061-r139','20261126-v061-r140','20261126-v062-r141','20261126-v062-r142','20261126-v063-r143','20261126-v064-r144','20261126-v065-r145','20261126-v065-r146','20261126-v065-r147','20261126-v066-r148','20261126-v066-r149','20261126-v066-r150'].includes(previewRelease)?'20261125-v052-r124':previewRelease;
-const previewCacheName=previewArtRelease?'ggtemple-preview-'+previewArtRelease:null;
-let previewCachePromise;
+// Bump only the affected visual generation when model/material/portrait art changes.
+// A renderer-wide visual change requires bumping every entry. Gameplay-only
+// releases reuse identical full-resolution PNGs across deployments.
+export const previewVisualGenerations=Object.freeze({weapon:'134',outfit:'134',head:'134',wings:'134',shield:'134',armor:'134',rod:'134',tool:'134',consumable:'134'});
+const previewCacheName='ggtemple-preview-visual-v1';
+const legacyPreviewCacheName='ggtemple-preview-20261128-v134-tree-normals-r225';
+let previewCachePromise,legacyCachePromise;
 function previewCache(){
- if(!previewCacheName||!globalThis.caches)return Promise.resolve(null);
+ if(!globalThis.caches)return Promise.resolve(null);
  return previewCachePromise??=globalThis.caches.open(previewCacheName).catch(()=>null);
 }
-const previewCacheKey=(item,key=keyOf(item))=>new URL('./__temple_preview__/'+encodeURIComponent(key)+'.png',import.meta.url).href;
+function legacyPreviewCache(){
+ if(!globalThis.caches)return Promise.resolve(null);
+ return legacyCachePromise??=globalThis.caches.has(legacyPreviewCacheName).then(exists=>exists?globalThis.caches.open(legacyPreviewCacheName):null).catch(()=>null);
+}
+const legacyPreviewKey=key=>new URL('./__temple_preview__/'+encodeURIComponent(key)+'.png',import.meta.url).href;
+export const previewAssetKey=item=>(previewVisualGenerations[item.slot]||'134')+':'+keyOf(item);
+const previewCacheKey=item=>legacyPreviewKey(previewAssetKey(item));
 async function cachedPreview(item){
  try{const cache=await previewCache();let response=await cache?.match(previewCacheKey(item));
-  if(!response&&item.family==='saber')response=await cache?.match(previewCacheKey(item,item.id+':'+(item.updatedAt||0)));
+  if(!response&&previewVisualGenerations[item.slot]==='134'){
+   const old=await legacyPreviewCache();response=await old?.match(legacyPreviewKey(keyOf(item)));
+   if(!response&&item.family==='saber')response=await old?.match(legacyPreviewKey(item.id+':'+(item.updatedAt||0)));
+   if(response&&cache)await cache.put(previewCacheKey(item),response.clone()).catch(()=>{});
+  }
   return response?await response.blob():null;}catch{return null;}
 }
 async function storePreview(item,blob){
@@ -93,7 +103,7 @@ export async function warmItemPreviews(items,onProgress=()=>{}){
  const unique=[...new Map(activePreviewItems(items,removedPreviewAssets).map(i=>[keyOf(i),i])).values()];
  warmingPreviews=true;
  if(previewCacheName&&globalThis.caches)try{
-  for(const name of await globalThis.caches.keys())if(name.startsWith('ggtemple-preview-')&&name!==previewCacheName)await globalThis.caches.delete(name);
+  for(const name of await globalThis.caches.keys())if(name.startsWith('ggtemple-preview-')&&name!==previewCacheName&&name!==legacyPreviewCacheName)await globalThis.caches.delete(name);
  }catch{}
  try{for(let i=0;i<unique.length;i++){
   await itemPreview(unique[i]);
@@ -280,7 +290,7 @@ async function renderPreview(item){
   camera=new THREE.PerspectiveCamera(35,1,.01,1000);
  }
  const creatureSuit=item.slot==='outfit';
- const portraitMask=['trump-mask','huang-mask','musk-mask','xi-mask','putin-mask','kim-mask'].includes(item.design);const resolution=portraitMask?768:creatureSuit?768:192;renderer.setSize(resolution,resolution);
+ const portraitMask=['trump-mask','huang-mask','musk-mask','xi-mask','putin-mask','kim-mask'].includes(item.design);const resolution=portraitMask?768:creatureSuit?768:192;if(renderer.domElement.width!==resolution||renderer.domElement.height!==resolution)renderer.setSize(resolution,resolution);
  const model=item.family==='saber'?saberProductPortrait():creatureSuit?creatureOutfitProductPortrait(item):shapeModel(item);
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
@@ -290,7 +300,9 @@ async function renderPreview(item){
  camera.lookAt(center);
  try{
   if(model.portraitReady)await model.portraitReady;
-  await renderer.compileAsync(scene,camera);
+  // During boot render() already compiles all needed programs synchronously.
+  // Avoid a second compile traversal and asynchronous shader-poll timer per PNG.
+  if(!warmingPreviews)await renderer.compileAsync(scene,camera);
   renderer.render(scene,camera);
   const portrait=creatureSuit?cropCreatureOutfitPortrait(renderer.domElement):renderer.domElement;
   let blob;

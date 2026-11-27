@@ -25,6 +25,14 @@ export const GROUND_DROP_POINTS = Object.freeze([
 
 export const MONSTER_SPAWNS = Object.freeze([[0,0,-72],[72,0,0],[0,0,72],[-72,0,0]]);
 
+const nearbyIndexCache=new WeakMap(),NEARBY_CELL=8;
+export function nearbySnapshotRows(rows,x,z,radius){
+ if(!Array.isArray(rows)||rows.length<24||!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(radius)||radius<0)return rows||[];
+ let grid=nearbyIndexCache.get(rows);
+ if(!grid){grid=new Map();for(let i=0;i<rows.length;i++){const p=rows[i]?.position;if(!p||!Number.isFinite(p[0])||!Number.isFinite(p[2]))return rows;const key=Math.floor(p[0]/NEARBY_CELL)+':'+Math.floor(p[2]/NEARBY_CELL);let cell=grid.get(key);if(!cell)grid.set(key,cell=[]);cell.push(i);}nearbyIndexCache.set(rows,grid);}
+ const hits=[];for(let cx=Math.floor((x-radius)/NEARBY_CELL);cx<=Math.floor((x+radius)/NEARBY_CELL);cx++)for(let cz=Math.floor((z-radius)/NEARBY_CELL);cz<=Math.floor((z+radius)/NEARBY_CELL);cz++){const cell=grid.get(cx+':'+cz);if(cell)for(const i of cell)hits.push(i);}
+ hits.sort((a,b)=>a-b);return hits.map(i=>rows[i]);
+}
 export function distance2d(a,b){return Math.hypot((a?.[0]||0)-(b?.[0]||0),(a?.[2]||0)-(b?.[2]||0));}
 export function insideArena(position,pad=0){return Array.isArray(position)&&position.length===3&&position.every(Number.isFinite)&&Math.hypot(position[0],position[2])<=ARENA_RADIUS+pad&&position[1]>=-4&&position[1]<=64;}
 export function insideSafeZone(position){return distance2d(position,[SAFE_ZONE.x,0,SAFE_ZONE.z])<SAFE_ZONE.radius;}

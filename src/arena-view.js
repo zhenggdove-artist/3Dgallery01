@@ -11,7 +11,7 @@ import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork,updateArtworkTi
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
-import {PLATFORMS,SAFE_ZONE,distance2d} from './shared/arena.js';
+import {PLATFORMS,SAFE_ZONE,distance2d,nearbySnapshotRows} from './shared/arena.js';
 import {itemById,groundDropVisualKind} from './shared/catalog.js';
 import {createCashDropGeometry,cashDropMaterial} from './comfort-cash-art.js';
 import {buildReletterEnvironment,reletterPlatformMaterial,ReletterPresentation,disposeVisual} from './reletter-presentation.js';
@@ -596,9 +596,9 @@ export class TempleArena{
       if(coin?.available)consider('coin',p.id,distance2d(position,p.coinPosition));
     }
     if(artwork)return artwork;
-    for(const drop of this.world.groundDrops||[])consider('drop',drop.id,distance2d(position,drop.position));
-    for(const structure of this.world.structures||[])consider('structure',structure.id,distance2d(position,structure.position));
-    for(const plant of this.world.plants||[])consider('plant',plant.id,distance2d(position,plant.position));
+    for(const drop of nearbySnapshotRows(this.world.groundDrops,position[0],position[2],4.4))consider('drop',drop.id,distance2d(position,drop.position));
+    for(const structure of nearbySnapshotRows(this.world.structures,position[0],position[2],4.4))consider('structure',structure.id,distance2d(position,structure.position));
+    for(const plant of nearbySnapshotRows(this.world.plants,position[0],position[2],4.4))consider('plant',plant.id,distance2d(position,plant.position));
     return candidate;
   }
   groundHeight(x,z,y=0){

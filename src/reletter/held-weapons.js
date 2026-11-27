@@ -3,10 +3,9 @@ import * as THREE from 'three';
 import {createToken} from './token-model.js';
 import {createOddWeapon,animateOddWeapon} from './odd-weapon-art.js';
 let globalTime=0;
-const fstate=()=>({sessions:{}}),fishingPoseFor=()=>false;
 function glowMaterial(color,opacity=1){return new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide});}
 export function setHeldTime(time){globalTime=time;}
-const boneCache=new WeakMap(),handPosition=new THREE.Vector3(),handRotation=new THREE.Quaternion(),auraRotation=new THREE.Quaternion();
+const boneCache=new WeakMap(),handPosition=new THREE.Vector3(),handRotation=new THREE.Quaternion(),auraRotation=new THREE.Quaternion(),inverseAura=new THREE.Matrix4(),matrixPosition=new THREE.Vector3(),matrixScale=new THREE.Vector3(),worldQ=new THREE.Quaternion(),up=new THREE.Vector3(),desired=new THREE.Vector3(),correction=new THREE.Quaternion(),parent=new THREE.Quaternion();
 function rightHand(model){if(!boneCache.has(model)){let hand;model.traverse(b=>{if(b.isBone&&b.name.replace(/[^a-z]/gi,'').endsWith('RightHand'))hand=b;});boneCache.set(model,hand);}return boneCache.get(model);}
 function makeHeldWeapon(item){
  if(item.exotic)return createOddWeapon(THREE,item);
@@ -31,13 +30,16 @@ function makeHeldWeapon(item){
  }return group;
 }
 function attachHeldWeapon(player,aura,blade,fx){
- const activeCast=fstate().sessions?.[player.character];if(activeCast&&fishingPoseFor(player.character)){blade.visible=false;return;}const hand=rightHand(player.model);if(!hand){blade.visible=false;return;}blade.visible=true;
- player.model.updateMatrixWorld(true);aura.updateMatrixWorld(true);hand.getWorldPosition(handPosition);blade.position.copy(aura.worldToLocal(handPosition));hand.getWorldQuaternion(handRotation);aura.getWorldQuaternion(auraRotation);blade.quaternion.copy(auraRotation.invert().multiply(handRotation)).normalize();if(['swatter','pan'].includes(blade.userData.family))blade.rotateY(.55);
+ const hand=rightHand(player.model);if(!hand){blade.visible=false;return;}blade.visible=true;
+ // The hand's ancestor chain includes the avatar and aura. Update it once,
+ // never recursively walk unrelated outfit, wing and weapon meshes.
+ hand.updateWorldMatrix(true,false);hand.matrixWorld.decompose(handPosition,handRotation,matrixScale);aura.matrixWorld.decompose(matrixPosition,auraRotation,matrixScale);
+ blade.position.copy(handPosition).applyMatrix4(inverseAura.copy(aura.matrixWorld).invert());parent.copy(auraRotation).invert();blade.quaternion.copy(parent).multiply(handRotation).normalize();if(['swatter','pan'].includes(blade.userData.family))blade.rotateY(.55);
  // Stop large rigid weapons at the ground rather than burying their visible head.
- if(!blade.userData.lash){const worldQ=blade.getWorldQuaternion(new THREE.Quaternion()),up=new THREE.Vector3(0,1,0).applyQuaternion(worldQ),gripY=hand.getWorldPosition(new THREE.Vector3()).y,minY=THREE.MathUtils.clamp((.2-gripY)/((blade.userData.reach||2)*(blade.userData.heldScale||1)),-.95,.95);if(up.y<minY){const desired=up.clone();desired.y=0;if(desired.lengthSq()<.001)desired.set(0,0,1);desired.normalize().multiplyScalar(Math.sqrt(1-minY*minY));desired.y=minY;const correction=new THREE.Quaternion().setFromUnitVectors(up,desired),parent=aura.getWorldQuaternion(new THREE.Quaternion()).invert();blade.quaternion.copy(parent.multiply(correction).multiply(worldQ));}}
+ if(!blade.userData.lash){blade.updateWorldMatrix(false,false);blade.matrixWorld.decompose(matrixPosition,worldQ,matrixScale);up.set(0,1,0).applyQuaternion(worldQ);const gripY=handPosition.y,minY=THREE.MathUtils.clamp((.2-gripY)/((blade.userData.reach||2)*(blade.userData.heldScale||1)),-.95,.95);if(up.y<minY){desired.copy(up);desired.y=0;if(desired.lengthSq()<.001)desired.set(0,0,1);desired.normalize().multiplyScalar(Math.sqrt(1-minY*minY));desired.y=minY;correction.setFromUnitVectors(up,desired);blade.quaternion.copy(parent).multiply(correction).multiply(worldQ);}}
  // Grip origin remains at the hand in idle, running and all attack poses.
- if(blade.userData.lash){const attr=blade.userData.lash.geometry.attributes.position,age=fx?.age||0,energy=fx?Math.sin(Math.min(1,age/fx.duration)*Math.PI):0,combo=fx?.combo||0;let tip;
-  for(let n=0;n<=48;n++){const t=n/48,length=1.3+energy*(3.4+(blade.userData.tier-1)*1.5),a=t*Math.PI*(2+(combo%3))+globalTime*3,x=Math.sin(a-age*10)*t*(.2+energy*.8),y=.23+t*(.7+energy*2.4)-(1-energy)*t*t*1.8,z=t*length*energy+Math.cos(a)*t*.18;for(let j=0;j<8;j++){const q=j*Math.PI/4,r=.03*(1-t)+.006;attr.setXYZ(n*8+j,x+Math.cos(q)*r,y+Math.sin(q)*r,z);}const braid=blade.userData.braid.geometry.attributes.position,twist=t*55;braid.setXYZ(n,x+Math.cos(twist)*.035,y+Math.sin(twist)*.035,z);tip=[x,y,z];}blade.userData.braid.geometry.attributes.position.needsUpdate=true;attr.needsUpdate=true;blade.userData.tip.position.fromArray(tip);
+ if(blade.userData.lash){const attr=blade.userData.lash.geometry.attributes.position,age=fx?.age||0,energy=fx?Math.sin(Math.min(1,age/fx.duration)*Math.PI):0,combo=fx?.combo||0;const braid=blade.userData.braid.geometry.attributes.position;
+  for(let n=0;n<=48;n++){const t=n/48,length=1.3+energy*(3.4+(blade.userData.tier-1)*1.5),a=t*Math.PI*(2+(combo%3))+globalTime*3,x=Math.sin(a-age*10)*t*(.2+energy*.8),y=.23+t*(.7+energy*2.4)-(1-energy)*t*t*1.8,z=t*length*energy+Math.cos(a)*t*.18;for(let j=0;j<8;j++){const q=j*Math.PI/4,r=.03*(1-t)+.006;attr.setXYZ(n*8+j,x+Math.cos(q)*r,y+Math.sin(q)*r,z);}const twist=t*55;braid.setXYZ(n,x+Math.cos(twist)*.035,y+Math.sin(twist)*.035,z);if(n===48)blade.userData.tip.position.set(x,y,z);}braid.needsUpdate=true;attr.needsUpdate=true;
  }
 }
 

@@ -6,7 +6,9 @@ export function changedWorldFields(previous,next,skip=new Set()){
   if(skip.has(key)||value===undefined)continue;
   if(key==='spacePaint'&&previous.spacePaint!==undefined&&previous.spacePaintRevision===next.spacePaintRevision)continue;
   if(key==='spacePaintSurface'&&previous.spacePaintSurface!==undefined&&previous.spacePaintSurfaceRevision===next.spacePaintSurfaceRevision)continue;
-  if(value!==previous[key]&&JSON.stringify(value)!==JSON.stringify(previous[key]))fields[key]=value;
+  const old=previous[key];if(value===old)continue;
+  if(typeof value==='string'&&typeof old==='string'||typeof value==='boolean'&&typeof old==='boolean'||typeof value==='number'&&typeof old==='number'&&Number.isFinite(value)&&Number.isFinite(old)){fields[key]=value;continue;}
+  if(JSON.stringify(value)!==JSON.stringify(old))fields[key]=value;
  }
  return fields;
 }

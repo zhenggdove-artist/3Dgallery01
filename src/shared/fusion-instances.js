@@ -84,11 +84,13 @@ export function ensureWeaponAffixes(profile,rng=Math.random){
 export function ensureFusionIdentity(profile){
  profile.inventory??=[];
  const previous=Array.isArray(profile.inventoryInstances)?profile.inventoryInstances:[];
- const used=new Set();
+ const used=new Set();let candidates=null;const cursors=new Map();
+ function firstUnused(itemId){if(!candidates){candidates=new Map();for(const row of previous){if(!row)continue;let list=candidates.get(row.itemId);if(!list)candidates.set(row.itemId,list=[]);list.push(row);}}
+  const list=candidates.get(itemId)||[];let i=cursors.get(itemId)||0;while(i<list.length&&used.has(list[i].uid))i++;cursors.set(itemId,i);return list[i];}
  const current=profile.inventory.map((itemId,index)=>{
   let found=previous[index];
   if(!found||found.itemId!==itemId||used.has(found.uid))
-   found=previous.find(record=>record?.itemId===itemId&&!used.has(record.uid));
+   found=firstUnused(itemId);
   const uid=found?.uid||newUid();
   used.add(uid);
   // Per-instance provenance. Never infer a newly purchased item's stats from catalog ID.
@@ -150,8 +152,7 @@ export function ensureFusionIdentity(profile){
  }
  for(const row of current)migrateSniperEcho(profile.fusionByInstance[row.uid],row.itemId);
  for(const [itemId,record] of Object.entries(profile.fusion))migrateSniperEcho(record,itemId);
- const valid=new Set(current.map(v=>v.uid));
- for(const uid of Object.keys(profile.fusionByInstance))if(!valid.has(uid))
+ for(const uid of Object.keys(profile.fusionByInstance))if(!used.has(uid))
   delete profile.fusionByInstance[uid];
  return profile;
 }
@@ -206,7 +207,14 @@ export function selectEquipmentInstance(profile,slot,index){
 }
 
 export function appendInventoryInstance(profile,itemId,origin='ground',shopTier=null,paidUnitPrice=null){
+ ensureFusionIdentity(profile);appendNormalizedInstance(profile,itemId,origin,shopTier,paidUnitPrice);
+}
+export function appendInventoryInstances(profile,itemId,origin,shopTier,paidUnitPrice,quantity){
  ensureFusionIdentity(profile);
+ const unresolved=Object.entries(profile.equipment||{}).some(([slot,id])=>id===itemId&&!profile.equippedInstanceIds?.[slot]);
+ for(let i=0;i<quantity;i++){if(i&&unresolved)ensureFusionIdentity(profile);appendNormalizedInstance(profile,itemId,origin,shopTier,paidUnitPrice);}
+}
+function appendNormalizedInstance(profile,itemId,origin,shopTier,paidUnitPrice){
  profile.inventory.push(itemId);
  const uid=newUid();
  profile.inventoryInstances.push({uid,itemId,origin,acquiredAt:Date.now(),viewed:false,...(Number.isSafeInteger(paidUnitPrice)?{paidUnitPrice}:{}),

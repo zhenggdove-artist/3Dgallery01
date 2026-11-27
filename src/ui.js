@@ -31,6 +31,8 @@ const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(
 // Item inspection is a read receipt. Ignore only the 'viewed' bit when
 // deciding whether a full BAG re-render is necessary, preserving the selected
 // cell and open description while NEW is removed in place.
+function setHudText(id,value){const node=$(id);if(node.textContent!==value)node.textContent=value;}
+function setHudMeter(node,max,value){if(node.max!==max)node.max=max;if(node.value!==value)node.value=value;}
 export function inventoryPanelSignature(profile){
  return JSON.stringify([
   profile?.inventory,profile?.equipment,profile?.equippedInstanceIds,profile?.wallet,profile?.fusion,profile?.inventoryCapacity,profile?.admin,
@@ -386,7 +388,7 @@ export class TempleUI extends EventTarget{
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.layoutArtworkPrompt();if(this.panelName&&!['bag','wanted','wanted-gm','terrain-style','operation-prompt-layout'].includes(this.panelName))this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();if(this.panelName==='gm')this.refreshGmPlayerTargets();}
   setWorld(world){const promptChanged=JSON.stringify(this.world?.artworkPromptPositions||{})!==JSON.stringify(world.artworkPromptPositions||{});this.world=world;if(promptChanged)this.layoutArtworkPrompt();this.chatLayout?.applyDefault(world.chatDefault);this.refreshHUD();if(['bag','shop','shop-prices','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(['shop','shop-prices'].includes(this.panelName)&&this.shopPriceSignature!==JSON.stringify([world.shopPrices||{},world.equipmentTuning||{},world.delistedShopItems||{},world.removedShopAssets||{}])))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
-  refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){$('wallet').textContent=`${profile.wallet}`;$('hp').max=profile.maxHp||100;$('hp').value=profile.hp||0;$('hp-label').textContent=Math.ceil(profile.hp||0)+'/'+profile.maxHp;$('player-level').textContent='LV. '+(profile.level||1);if(this.panelName==='bag'&&this.bagCategory==='equipment'){const xp=this.content.querySelector('[data-equip-xp]'),label='XP '+Math.floor(profile.xp||0)+' / '+levelXpRequired(profile.level);if(xp&&xp.textContent!==label)xp.textContent=label;
+  refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){setHudText('wallet',`${profile.wallet}`);setHudMeter($('hp'),profile.maxHp||100,profile.hp||0);setHudText('hp-label',Math.ceil(profile.hp||0)+'/'+profile.maxHp);setHudText('player-level','LV. '+(profile.level||1));if(this.panelName==='bag'&&this.bagCategory==='equipment'){const xp=this.content.querySelector('[data-equip-xp]'),label='XP '+Math.floor(profile.xp||0)+' / '+levelXpRequired(profile.level);if(xp&&xp.textContent!==label)xp.textContent=label;
   const summary=this.content.querySelector('.equip-stat-summary');
   if(summary)for(const row of equipmentStatRows(profile)){
    const el=summary.querySelector('[data-equip-stat="'+row.label+'"]');if(!el)continue;
@@ -396,19 +398,19 @@ export class TempleUI extends EventTarget{
    }
   }
  }
- const mp=$('mana-bar'),mpLabel=$('mana-label');if(mp&&mpLabel){mp.max=profile.maxMana||100;mp.value=profile.mana??mp.max;mpLabel.textContent=Math.floor(mp.value)+'/'+mp.max;}
+ const mp=$('mana-bar'),mpLabel=$('mana-label');if(mp&&mpLabel){setHudMeter(mp,profile.maxMana||100,profile.mana??(profile.maxMana||100));const text=Math.floor(mp.value)+'/'+mp.max;if(mpLabel.textContent!==text)mpLabel.textContent=text;}
  const shieldItem=itemById(profile.equipment?.shield),shieldDisplay=$('shield-readout');
  if(shieldDisplay){
   const hasShield=shieldItem?.slot==='shield';shieldDisplay.hidden=!hasShield;
   if(hasShield){
    const max=Math.max(0,Math.ceil(Number(profile.shield?.maxHp??shieldItem.capacity*10)||0));
    const current=Math.min(max,Math.max(0,Math.ceil(Number(profile.shield?.hp??max)||0)));
-   $('shield-label').textContent=current+'/'+max;
+   setHudText('shield-label',current+'/'+max);
   }
  }
  const held=itemById(profile.equipment?.weapon);
- $('weapon').textContent=(held?weaponPresentation(held,profile.fusion?.[held.id]).title:'UNARMED').toUpperCase();
-}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;$('online').textContent=`${fighters}/4 · ${spectators}/100`;this.renderRoster();this.renderQuickBar(profile);
+ setHudText('weapon',(held?weaponPresentation(held,profile.fusion?.[held.id]).title:'UNARMED').toUpperCase());
+}const fighters=this.players.filter(p=>p.role==='fighter').length,spectators=this.players.length-fighters;setHudText('online',`${fighters}/4 · ${spectators}/100`);this.renderRoster();this.renderQuickBar(profile);
     const gift=$('wing-gift-button');
     if(gift)gift.hidden=!(Number(profile?.wingDesignCredits)||0);
      this.showCanvasGrant(profile);

@@ -170,9 +170,9 @@ function rng(d){d.seed=(Math.imul(d.seed,1664525)+1013904223)>>>0;return d.seed/
 function emit(d,b,x,y,z,speed,up,size,life){
  const p=b.particles[b.next++%b.particles.length],a=rng(d)*TAU;
  p.age=0;p.life=life;p.size=size;p.angle=rng(d)*TAU;p.floor=d.floor??d.pos.y;
- p.p.copy(d.g.localToWorld(d.origin.set(x,y,z)));p.v.set(Math.cos(a)*speed,up,Math.sin(a)*speed);if(d.kind==='postbox-disguise'){p.v.set((rng(d)-.5)*.8,0,1).transformDirection(d.g.matrixWorld).multiplyScalar(speed);p.v.y=up;}
+ p.p.copy(d.origin.set(x,y,z)).applyMatrix4(d.g.matrixWorld);p.v.set(Math.cos(a)*speed,up,Math.sin(a)*speed);if(d.kind==='postbox-disguise'){p.v.set((rng(d)-.5)*.8,0,1).transformDirection(d.g.matrixWorld).multiplyScalar(speed);p.v.y=up;}
 }
-function updateBatch(d,b,dt,scale){
+function updateBatch(d,b,dt){
  let n=0;const dummy=d.dummy;
  for(const p of b.particles){if(p.age>=p.life)continue;p.age+=dt;if(p.age>=p.life)continue;
   if(d.kind==='tree-disguise'){p.v.y=Math.max(-1.9,p.v.y-2.3*dt);p.v.x+=Math.sin(p.age*8+p.angle)*.9*dt;p.v.z+=Math.cos(p.age*7+p.angle)*.9*dt;}else p.v.y-=9.8*dt;p.p.addScaledVector(p.v,dt);if(p.p.y<p.floor+.035){p.p.y=p.floor+.035;p.v.y=0;p.v.x*=.65;p.v.z*=.65;}
@@ -189,7 +189,8 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
  if(!airborne||teleport)d.floor=d.pos.y;
  const active=streetMotionStep(d,dt,moving,airborne,teleport);
  d.energy+=((moving||airborne?1:0)-d.energy)*(1-Math.exp(-dt*10));d.elapsed+=dt;
- d.g.updateWorldMatrix(true,false);d.inverse.copy(d.g.matrixWorld).invert();const scale=Math.max(.001,d.g.getWorldScale(d.worldScale).y);
+ let scale=1;
+ if(d.batches.length||d.smoke||d.rat){d.g.updateWorldMatrix(true,false);d.inverse.copy(d.g.matrixWorld).invert();if(d.rat){d.g.matrixWorld.decompose(d.origin,d.dummy.quaternion,d.worldScale);scale=Math.max(.001,d.worldScale.y);}}
  if(teleport){d.credit=0;for(const b of d.batches)for(const p of b.particles)p.age=p.life;if(d.smoke)for(const p of d.smoke.particles){p.age=p.life;p.sprite.visible=false;}d.energy=0;if(d.rat){d.ratAge=99;d.rat.visible=false;}}
  for(const soft of record.softMeshes||[]){const a=soft.mesh.geometry.attributes.position,b=soft.base;if(d.energy<.002&&soft.resting)continue;soft.resting=d.energy<.002;
   for(let i=0;i<a.count;i++){const x=b[i*3],y=b[i*3+1],z=b[i*3+2],weight=soft.kind==='pharmacy'?Math.min(1,Math.abs(y-.87)*2.4):1,phase=time*9+y*6+x*5;const w=soft.amp*d.energy*weight;a.setXYZ(i,x+w*Math.sin(phase),y+w*.37*Math.sin(phase*1.4+z*6),z+w*Math.cos(phase+x*7));}a.needsUpdate=true;soft.mesh.geometry.computeVertexNormals();
@@ -206,13 +207,13 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
   for(let i=0;i<fish.fish.length;i++){const {f,tail}=fish.fish[i],a=time*(i?-.8:1)+i*Math.PI,r=.35+.05*Math.sin(time*1.4+i),u=Math.max(0,Math.min(1,(fish.jumpAge-i*.11)/.75)),leap=fish.jumpAge>=i*.11&&fish.jumpAge<i*.11+.75?Math.sin(u*Math.PI)*.71:0;f.position.set(Math.cos(a)*r,.65+.045*Math.sin(time*3+i)+leap,Math.sin(a)*r);f.rotation.y=-a+(i?Math.PI:0);f.rotation.z=leap>0?Math.cos(u*Math.PI)*.55:0;tail.rotation.y=Math.sin(time*15+i)*.65;}
  }
  if(d.rat){const open=active?1:0;d.lidOpen=(d.lidOpen||0)+(open-(d.lidOpen||0))*(1-Math.exp(-dt*9));if(record.trashLid)record.trashLid.rotation.x=-1.6*d.lidOpen;
-  d.ratAge+=dt;if(active&&d.lidOpen>.65&&d.ratAge>2.8){d.ratAge=0;d.ratPos.copy(d.g.localToWorld(d.origin.set(0,1.04,.12)));d.ratDirection.set((rng(d)-.5)*.65,0,1).transformDirection(d.g.matrixWorld);d.ratVelocity.copy(d.ratDirection).multiplyScalar(1.65);d.ratVelocity.y=1.5;d.ratFloor=d.floor??d.pos.y;}
+  d.ratAge+=dt;if(active&&d.lidOpen>.65&&d.ratAge>2.8){d.ratAge=0;d.ratPos.copy(d.origin.set(0,1.04,.12)).applyMatrix4(d.g.matrixWorld);d.ratDirection.set((rng(d)-.5)*.65,0,1).transformDirection(d.g.matrixWorld);d.ratVelocity.copy(d.ratDirection).multiplyScalar(1.65);d.ratVelocity.y=1.5;d.ratFloor=d.floor??d.pos.y;}
   d.rat.visible=d.ratAge<2.6;if(d.rat.visible){d.ratVelocity.y-=9.8*dt;d.ratPos.addScaledVector(d.ratVelocity,dt);if(d.ratPos.y<d.ratFloor+.11*scale){d.ratPos.y=d.ratFloor+.11*scale;d.ratVelocity.y=0;}d.rat.position.copy(d.local.copy(d.ratPos).applyMatrix4(d.inverse));d.local.copy(d.ratDirection).transformDirection(d.inverse);d.rat.rotation.y=Math.atan2(-d.local.z,d.local.x);for(let j=0;j<d.ratLegs.length;j++)d.ratLegs[j].rotation.z=Math.sin(time*22+j*Math.PI*.75)*.5;}
   for(let i=0;i<d.flies.length;i++){const {f,w1,w2}=d.flies[i],a=time*(2.1+i*.07)+i*2.4;f.visible=d.lidOpen>.2;const approach=.5+(1-d.lidOpen)*1.6;f.position.set(Math.cos(a)*(approach+.11*Math.sin(a*2)),1.15+.25*Math.sin(a*1.7+i),Math.sin(a)*approach);f.rotation.y=-a;w1.rotation.z=Math.sin(time*70+i)*.7;w2.rotation.z=-w1.rotation.z;}
  }
  const smoke=d.smoke;
  if(smoke){const rate=teleport?0:5+Math.min(9,speed*.75)+(airborne?6:0);d.credit+=rate*dt;
-  while(d.credit>=1){d.credit--;const p=smoke.particles[smoke.next++%smoke.particles.length];p.age=0;p.life=2.1;p.size=.22;p.p.copy(d.g.localToWorld(d.origin.set((rng(d)-.5)*.16,3.02,(rng(d)-.5)*.16)));p.v.set((rng(d)-.5)*.35,.55+speed*.035,(rng(d)-.5)*.35);}
+  while(d.credit>=1){d.credit--;const p=smoke.particles[smoke.next++%smoke.particles.length];p.age=0;p.life=2.1;p.size=.22;p.p.copy(d.origin.set((rng(d)-.5)*.16,3.02,(rng(d)-.5)*.16)).applyMatrix4(d.g.matrixWorld);p.v.set((rng(d)-.5)*.35,.55+speed*.035,(rng(d)-.5)*.35);}
   for(const p of smoke.particles){p.age+=dt;p.sprite.visible=p.age<p.life;if(!p.sprite.visible)continue;p.p.addScaledVector(p.v,dt);p.sprite.position.copy(d.local.copy(p.p).applyMatrix4(d.inverse));const u=p.age/p.life;p.sprite.scale.setScalar((p.size+u*.58)*Math.min(1,(1-u)*3));}
   return;
  }
@@ -227,7 +228,7 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
    case 'goldfish-bowl-disguise':emit(d,b,Math.cos(a)*.52,1.12,Math.sin(a)*.52,1.3,1.6,.022+rng(d)*.021,1.2);break;
   }
  }}else d.credit=0;
- for(const b of d.batches)updateBatch(d,b,dt,scale);
+ for(const b of d.batches)updateBatch(d,b,dt);
 }
 export function createColaStream(T,g,record,mat){
  const n=64,sides=28,positions=new Float32Array(n*sides*3),uv=new Float32Array(n*sides*2),indices=[];

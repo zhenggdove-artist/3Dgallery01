@@ -1,5 +1,6 @@
 // Detect contact in the existing simulation frame; keep the old 300ms
 // retry interval for the same target, not first contact with a new target.
+import {nearbySnapshotRows} from './shared/arena.js';
 export class PickupScheduler{
  constructor(platforms,send,clock=()=>performance.now()){this.platforms=platforms;this.send=send;this.clock=clock;this.pending=new Set();this.retry=new Map();this.owner=null;this.last=null;this.nextScan=0;}
  reset(owner){this.owner=owner;this.pending=new Set();this.retry=new Map();this.last=null;this.nextScan=0;}
@@ -28,7 +29,7 @@ export class PickupScheduler{
   // Preserve the exact previous reach, coin priority, and owner lock.
   const coin=this.platforms.find(c=>coins?.[c.id]?.available&&available('pickup-coin:'+c.id)&&(x-c.coinPosition[0])**2+(z-c.coinPosition[2])**2<2.8**2&&Math.abs(y-c.coinPosition[1])<3.1);
   if(coin)return this.request('pickup-coin',coin.id,'platformId',true);
-  const drop=drops?.find(d=>{
+  const drop=nearbySnapshotRows(drops,x,z,2.2).find(d=>{
    if(!available('pickup-drop:'+d.id)||(x-d.position[0])**2+(y-d.position[1])**2+(z-d.position[2])**2>=2.2**2)return false;
    if(d.owner===owner&&wallTime<d.ownerLockedUntil){this.nextScan=Math.min(this.nextScan,now+d.ownerLockedUntil-wallTime);return false;}
    return true;

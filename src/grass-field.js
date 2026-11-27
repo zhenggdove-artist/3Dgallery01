@@ -191,8 +191,10 @@ export class GrassField{
   view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
   for(const [mesh,data] of [[this.mesh,this.innerVisibility],[this.outerMesh,this.outerVisibility]]){
    mesh.updateWorldMatrix(true,false);
-   frustum.setFromProjectionMatrix(local.multiplyMatrices(view,mesh.matrixWorld));
-   data.prepare(frustum,length);
+   local.multiplyMatrices(view,mesh.matrixWorld);
+   if(data.lastView?.equals(local)&&data.lastLength===length)continue;
+   (data.lastView??=new THREE.Matrix4()).copy(local);data.lastLength=length;
+   frustum.setFromProjectionMatrix(local);data.prepare(frustum,length);
   }
  }
  setTerrainStyle(environment){
