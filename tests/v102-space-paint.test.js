@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {applySpacePaint,validateSpacePaint,SPACE_PAINT_MAX_POINTS,SPACE_PAINT_POINT_BUDGET} from '../src/shared/space-paint.js';
+import {applySpacePaint,validateSpacePaint,SPACE_PAINT_MAX_POINTS} from '../src/shared/space-paint.js';
 import {spacePaintGeometry} from '../src/space-painter.js';
 import {createWorldPatch,applyWorldPatch} from '../src/shared/world-patch.js';
 import {encodeCombatWorld,forkCombatWorld} from '../cloudflare/combat-world-cache.js';
@@ -34,10 +34,12 @@ test('3D paint is immutable, versioned and erased independently',()=>{
  assert.equal(fork.spacePaint.length,0);assert.equal(world.spacePaint.length,1);
  assert.equal(fork.spacePaintRevision,2);
 });
-test('archive budget rejects writes without altering existing data',()=>{
- const world=makeWorld();world.spacePaint=[{id:'existing',points:Array(SPACE_PAINT_POINT_BUDGET).fill([0,0,0])}];
- assert.ok(applySpacePaint(world,gm,{action:'gm-paint-3d',stroke:stroke()}).error);
- assert.equal(world.revision,5);assert.equal(world.spacePaint.length,1);
+test('archive grows beyond the former 256 strokes and 8192 points while per-stroke validation remains',()=>{
+ const world=makeWorld();world.spacePaint=Array.from({length:300},(_,i)=>({...stroke('existing-'+i),ownerKey:gm.key,points:Array.from({length:32},(_,j)=>[j*.01,2,6])}));
+ assert.ok(applySpacePaint(world,gm,{action:'gm-paint-3d',stroke:stroke()}).spacePaintStroke);
+ assert.equal(world.revision,6);assert.equal(world.spacePaint.length,301);
+ assert.ok(applySpacePaint(world,gm,{action:'gm-erase-3d',id:'stroke-0001'}).erasedStroke);
+ assert.equal(world.spacePaint.length,300);
 });
 test('migration, authoritative action and world view include the archive',()=>{
  const world=createInitialWorld();delete world.spacePaint;delete world.spacePaintRevision;

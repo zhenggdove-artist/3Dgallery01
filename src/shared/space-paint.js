@@ -2,7 +2,7 @@ import {ARENA_RADIUS} from './arena.js';
 import {normalizeSurfaceStroke} from './space-paint-surface.js';
 import {isSurfaceCheckpoint} from './space-paint-raster.js';
 
-export const SPACE_PAINT_MAX_POINTS=256, SPACE_PAINT_POINT_BUDGET=8192, SPACE_PAINT_STROKE_BUDGET=256;
+export const SPACE_PAINT_MAX_POINTS=256, SPACE_PAINT_MAX_HISTORY_STROKES=256;
 const finite3=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
 const validId=id=>typeof id==='string'&&/^[a-zA-Z0-9-]{8,80}$/.test(id);
 export function spacePaintPointAllowed(p){
@@ -70,7 +70,7 @@ export function applySpacePaint(world,actor,body,context={}){
  const removedRecord=s=>{const graffiti=(surfaces[s.id]||[]).filter(v=>isSurfaceCheckpoint(v)||v.owner===actor.key);return {...s,...(graffiti.length?{graffiti}:{})};};
  if(action==='gm-edit-3d'){
   const remove=body.remove,add=body.add;
-  if(!Array.isArray(remove)||!Array.isArray(add)||remove.length+add.length<1||remove.length+add.length>SPACE_PAINT_STROKE_BUDGET||
+  if(!Array.isArray(remove)||!Array.isArray(add)||remove.length+add.length<1||remove.length+add.length>SPACE_PAINT_MAX_HISTORY_STROKES||
     !remove.every(validId)||new Set(remove).size!==remove.length)return {error:'Invalid 3D history edit'};
   const ids=new Set(remove),removed=list.filter(s=>ids.has(s.id));
   if(removed.length!==remove.length||removed.some(s=>!canRemove(s)))return {error:'3D history has changed or permission denied'};
@@ -93,7 +93,6 @@ export function applySpacePaint(world,actor,body,context={}){
     if(verified.length)paint[s.id]=verified;
    }
   }
-  if(next.length>SPACE_PAINT_STROKE_BUDGET||next.reduce((n,s)=>n+s.points.length,0)>SPACE_PAINT_POINT_BUDGET)return {error:'3D paint archive full'};
   world.spacePaint=next;world.spacePaintSurface=paint;bump(true,true);return {spacePaintEdited:true,removedStrokes:removed.map(removedRecord)};
  }
  if(action==='gm-erase-3d'){
@@ -107,6 +106,5 @@ export function applySpacePaint(world,actor,body,context={}){
  if(body.ownerEpoch!==undefined&&body.ownerEpoch!==(profile.spacePaintEpoch||0))return {error:'3D drawing was cleared by GM'};
  const s=owned(body.stroke);
  if(!s||list.some(p=>p.id===s.id))return {error:'Invalid 3D stroke'};
- if(list.length>=SPACE_PAINT_STROKE_BUDGET||list.reduce((n,p)=>n+p.points.length,0)+s.points.length>SPACE_PAINT_POINT_BUDGET)return {error:'3D paint archive full; erase a stroke first'};
  world.spacePaint=[...list,s];bump(true);return {spacePaintStroke:s};
 }

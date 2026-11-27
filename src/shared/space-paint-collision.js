@@ -1,5 +1,5 @@
 // Shared deterministic swept collision, cached per immutable stroke archive.
-const cache=new WeakMap(),EMPTY=[];
+const cache=new WeakMap(),strokeCache=new WeakMap(),EMPTY=[];
 const R=.218,H=.75,C=.968,EPS=.003;
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
@@ -26,17 +26,22 @@ function build(items){
  items.sort((a,b)=>a.center[axis]-b.center[axis]);const mid=items.length>>1;
  return {min,max,left:build(items.slice(0,mid)),right:build(items.slice(mid))};
 }
-function index(list){
- if(!list?.length)return null;if(cache.has(list))return cache.get(list);
- const boxes=[];
- for(const s of list){
-  const p=s.points;if(!p?.length)continue;
-  if(p.length===1){const box=segment(p[0],p[0],s);if(box)boxes.push(box);continue;}
-  const n=unit(s.normal);if(!n)continue;
+function strokeTree(s){
+ if(strokeCache.has(s))return strokeCache.get(s);
+ const boxes=[],p=s.points;
+ if(!p?.length)return null;
+ if(p.length===1){const box=segment(p[0],p[0],s);if(box)boxes.push(box);}
+ else{
+  const n=unit(s.normal);if(!n)return null;
   const sides=p.map((q,i)=>{const project=d=>unit(d.map((v,j)=>v-dot(d,n)*n[j]));const t=project(sub(p[Math.min(p.length-1,i+1)],p[Math.max(0,i-1)]))||project(sub(p[Math.min(p.length-1,i+1)],q))||project(sub(q,p[Math.max(0,i-1)]));return t?unit(cross(n,t)):null;});
   for(let i=1;i<p.length;i++){const box=segment(p[i-1],p[i],s,sides[i-1],sides[i]);if(box)boxes.push(box);}
  }
- const tree=build(boxes);cache.set(list,tree);return tree;
+ const tree=build(boxes);if(tree)tree.center=tree.min.map((v,i)=>(v+tree.max[i])/2);
+ strokeCache.set(s,tree);return tree;
+}
+function index(list){
+ if(!list?.length)return null;if(cache.has(list))return cache.get(list);
+ const tree=build(list.map(strokeTree).filter(Boolean));cache.set(list,tree);return tree;
 }
 function overlaps(node,a,b){return [0,1,2].every(i=>Math.max(a[i],b[i])>=node.min[i]&&Math.min(a[i],b[i])<=node.max[i]);}
 function contact(box,a,b){
@@ -55,7 +60,7 @@ export function spacePaintMoveFraction(list=EMPTY,from,to){
  if(!list.length)return 1;const tree=index(list);if(!tree)return 1;
  const a=[from[0],from[1]+C,from[2]],b=[to[0],to[1]+C,to[2]];let best=1;
  function visit(node){if(!node||best===0||!overlaps(node,a,b))return;
-  if(node.items){for(const box of node.items)if(overlaps(box,a,b))best=Math.min(best,contact(box,a,b));}
+  if(node.items){for(const box of node.items)if(overlaps(box,a,b)){if(box.axes)best=Math.min(best,contact(box,a,b));else visit(box);}}
   else{visit(node.left);visit(node.right);}
  }
  visit(tree);

@@ -14,8 +14,9 @@ const headerKeys=new Set(['cityDamage','revision','serverTime']);
 const commonHeaderKeys=new Set([...headerKeys,'profile']);
 const serializeCityRecord=(_id,record)=>JSON.stringify(record);
 const surfaceHeaderKeys=new Set([...headerKeys,'spacePaintSurface']),surfaceCommonHeaderKeys=new Set([...commonHeaderKeys,'spacePaintSurface']);
-export function createWorldPatch(previous,next,ignoreProfile=false,serializeNextCityRecord=serializeCityRecord,surfaceDelta=false){
- const fields=changedWorldFields(previous,next,surfaceDelta?(ignoreProfile?surfaceCommonHeaderKeys:surfaceHeaderKeys):(ignoreProfile?commonHeaderKeys:headerKeys)),city={};
+export function createWorldPatch(previous,next,ignoreProfile=false,serializeNextCityRecord=serializeCityRecord,surfaceDelta=false,paintDelta=false){
+ const skip=surfaceDelta?(ignoreProfile?surfaceCommonHeaderKeys:surfaceHeaderKeys):(ignoreProfile?commonHeaderKeys:headerKeys);
+ const fields=changedWorldFields(previous,next,paintDelta?new Set([...skip,'spacePaint']):skip),city={};
  const oldCity=previous.cityDamage||{},newCity=next.cityDamage||{};
  for(const [id,record] of Object.entries(newCity))if(serializeNextCityRecord(id,record)!==JSON.stringify(oldCity[id]))city[id]=record;
  for(const id of Object.keys(oldCity))if(!Object.hasOwn(newCity,id))city[id]=null;
@@ -25,7 +26,15 @@ export function createWorldPatch(previous,next,ignoreProfile=false,serializeNext
   for(const [id,value] of Object.entries(fresh))if(value!==old[id]&&JSON.stringify(value)!==JSON.stringify(old[id]))spaceSurface[id]=value;
   for(const id of Object.keys(old))if(!Object.hasOwn(fresh,id))spaceSurface[id]=null;
  }
- return {base:previous.revision,revision:next.revision,serverTime:next.serverTime,fields,...(Object.keys(city).length?{city}:{}),...(spaceSurface&&Object.keys(spaceSurface).length?{spaceSurface}:{})};
+ let spaceGeometry;
+ if(paintDelta&&(previous.spacePaintRevision!==next.spacePaintRevision||previous.spacePaint===undefined)){
+  const old=previous.spacePaint||[],fresh=next.spacePaint||[],before=new Map(old.map(s=>[s.id,s])),after=new Set(fresh.map(s=>s.id));
+  const remove=old.filter(s=>!after.has(s.id)).map(s=>s.id),add=fresh.filter(s=>!before.has(s.id)||before.get(s.id)!==s&&JSON.stringify(before.get(s.id))!==JSON.stringify(s));
+  const expected=[...old.filter(s=>after.has(s.id)).map(s=>s.id),...add.filter(s=>!before.has(s.id)).map(s=>s.id)];
+  const order=expected.length!==fresh.length||fresh.some((s,i)=>s.id!==expected[i])?fresh.map(s=>s.id):undefined;
+  if(remove.length||add.length||order)spaceGeometry={remove,add,...(order?{order}:{})};
+ }
+ return {base:previous.revision,revision:next.revision,serverTime:next.serverTime,fields,...(Object.keys(city).length?{city}:{}),...(spaceSurface&&Object.keys(spaceSurface).length?{spaceSurface}:{}),...(spaceGeometry?{spaceGeometry}:{})};
 }
 
 export function applyWorldPatch(previous,patch){
@@ -39,7 +48,13 @@ export function applyWorldPatch(previous,patch){
   spacePaintSurface={...(spacePaintSurface||{})};
   for(const [id,value] of Object.entries(patch.spaceSurface))if(value===null)delete spacePaintSurface[id];else Object.defineProperty(spacePaintSurface,id,{value,writable:true,configurable:true,enumerable:true});
  }
- return {...previous,...patch.fields,...(patch.spaceSurface?{spacePaintSurface}:{}),profile,cityDamage,revision:patch.revision,serverTime:patch.serverTime};
+ let spacePaint=previous.spacePaint;
+ if(patch.spaceGeometry){
+  const map=new Map((spacePaint||[]).map(s=>[s.id,s]));for(const id of patch.spaceGeometry.remove)map.delete(id);for(const s of patch.spaceGeometry.add)map.set(s.id,s);
+  spacePaint=patch.spaceGeometry.order?patch.spaceGeometry.order.map(id=>map.get(id)):[...map.values()];
+  if(spacePaint.some(s=>!s))return null;
+ }
+ return {...previous,...patch.fields,...(patch.spaceGeometry?{spacePaint}:{}),...(patch.spaceSurface?{spacePaintSurface}:{}),profile,cityDamage,revision:patch.revision,serverTime:patch.serverTime};
 }
 
 // Catalog updates are independent of combat revisions. A previously queued

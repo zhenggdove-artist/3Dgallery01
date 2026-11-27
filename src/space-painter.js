@@ -3,7 +3,7 @@ import {surfaceInfo,surfaceFace} from './shared/space-paint-surface.js';
 import {SpacePaintTexture} from './space-paint-texture.js';
 import {isSurfaceCheckpoint} from './shared/space-paint-raster.js';
 import {cityGroundHeight} from './shared/city-layout.js';
-import {SPACE_PAINT_MAX_POINTS,SPACE_PAINT_POINT_BUDGET,SPACE_PAINT_STROKE_BUDGET,spacePaintPointAllowed} from './shared/space-paint.js';
+import {SPACE_PAINT_MAX_POINTS,spacePaintPointAllowed} from './shared/space-paint.js';
 
 const SIDES=12;
 // A camera-facing drawing plane provides independent width and depth.
@@ -115,7 +115,7 @@ export class SpacePainter{
   this.archive=[];this.revision=-1;this.pending=new Map();this.erasing=new Set();this.queue=Promise.resolve();this.undoStack=[];this.redoStack=[];this.gesture=null;this.surfaceArchive={};this.surfaceRevision=-1;this.surfacePending=new Map();this.surfacePreview=null;this.surfaceFrame=0;this.atlas=null;this.renderedStrokes=[];this.ownerEpoch=null;
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
-  this.guide=null;this.guideKey=null;this.previewRanges=[];
+  this.guide=null;this.guideKey=null;this.previewRanges=[];this.pages=[];this.pageById=new Map();this.geometryVersion=0;
   this.paintCenter=new THREE.Vector3();this.paintNormal=new THREE.Vector3();this.paintPlane=new THREE.Plane();this.connected=false;this.paintOffset=new THREE.Vector3();this.connectPoint=new THREE.Vector3();this.connectKey=null;
  }
  mesh(which,strokes){
@@ -127,12 +127,56 @@ export class SpacePainter{
   if(which==='preview')this.previewRanges=ranges;
   return ranges;
  }
+ // Keep completed geometry in bounded batches. Adding a stroke replaces
+ // only its batch, not the entire scene or every painted surface atlas.
  rebuild(){
-  this.atlas?.dispose();this.atlas=null;
   const ids=new Set(this.archive.map(s=>s.id));
   this.renderedStrokes=[...this.archive,...[...this.pending.values()].filter(s=>!ids.has(s.id))];
-  this.ranges=this.mesh('saved',this.renderedStrokes);this.refreshSurface();
+  const groups=[];let group=[],points=0;
+  for(const s of this.renderedStrokes){
+   if(group.length&&(group.length>=16||points+s.points.length>2048)){groups.push(group);group=[];points=0;}
+   group.push(s);points+=s.points.length;
+  }
+  if(group.length)groups.push(group);
+  const previous=this.pages,next=[],byId=new Map();let changed=previous.length!==groups.length;
+  for(let i=0;i<groups.length;i++){
+   const strokes=groups[i],old=previous[i];
+   // Owner/epoch metadata can change at acknowledgement; the shape need not.
+   const same=old&&old.strokes.length===strokes.length&&strokes.every((s,j)=>{
+    const p=old.strokes[j];
+    return s===p||s.id===p.id&&s.color===p.color&&s.size===p.size&&s.thickness===p.thickness&&JSON.stringify(s.normal)===JSON.stringify(p.normal)&&JSON.stringify(s.points)===JSON.stringify(p.points);
+   });
+   let page;
+   if(same){page=old;page.strokes=strokes;}
+   else{
+    changed=true;const {geometry,ranges}=spacePaintGeometry(strokes);
+    this.material??=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});
+    geometry.computeBoundingBox();
+    const mesh=new THREE.Mesh(geometry,this.material);mesh.name='3D Paint saved';this.scene.add(mesh);
+    page={mesh,ranges,strokes,bounds:geometry.boundingBox.clone(),atlas:null};
+    if(old)this.disposePage(old);
+   }
+   next.push(page);
+   for(const s of strokes)byId.set(s.id,page);
+  }
+  for(let i=groups.length;i<previous.length;i++)this.disposePage(previous[i]);
+  this.pages=next;this.pageById=byId;this.saved=next[0]?.mesh||null;this.ranges=next[0]?.ranges||[];
+  if(changed){this.geometryVersion++;this.guideKey=null;}
+  const priorPages=new Set(previous);
+  for(const page of next)if(!priorPages.has(page))this.refreshPage(page);
+  this.atlas=next[0]?.atlas||null;
   if(!this.saved&&!this.preview&&this.material){this.material.dispose();this.material=null;}
+ }
+ disposePage(page){page.atlas?.dispose();page.mesh.removeFromParent();page.mesh.geometry.dispose();}
+ nearestHit(){
+  let best=null,range=null;
+  for(const page of this.pages){
+   if(!this.ray.ray.intersectsBox(page.bounds))continue;
+   page.mesh.updateMatrixWorld(true);
+   const hit=this.ray.intersectObject(page.mesh,false)[0];
+   if(hit&&(!best||hit.distance<best.distance)){best=hit;range=page.ranges.find(r=>hit.faceIndex>=r.start&&hit.faceIndex<r.end);}
+  }
+  return best&&range?{hit:best,range}:null;
  }
  sync(world){
   const epoch=world.profile?.spacePaintEpoch;
@@ -140,20 +184,25 @@ export class SpacePainter{
   if(epoch!==undefined)this.ownerEpoch=epoch;
   const previousSurface=this.surfaceArchive,rev=world.spacePaintRevision||0,srev=world.spacePaintSurfaceRevision||0,changed=srev!==this.surfaceRevision;
   if(changed){this.surfaceRevision=srev;this.surfaceArchive=world.spacePaintSurface||{};for(const [key,pending] of this.surfacePending)if(pending.ackRevision!==undefined&&pending.ackRevision<=srev)this.surfacePending.delete(key);}
-  if(rev!==this.revision){this.revision=rev;this.archive=world.spacePaint||[];this.rebuild();}
-  else if(changed){if(!this.atlas)this.refreshSurface();else for(const id of new Set([...Object.keys(previousSurface),...Object.keys(this.surfaceArchive)])){if(previousSurface[id]!==this.surfaceArchive[id]&&JSON.stringify(previousSurface[id])!==JSON.stringify(this.surfaceArchive[id]))this.refreshSurface(id);}}
+  if(rev!==this.revision){this.revision=rev;this.archive=world.spacePaint||[];for(const s of this.archive)this.pending.delete(s.id);for(const [id,p] of this.pending)if(Number.isFinite(p.ackRevision)&&p.ackRevision<=world.revision)this.pending.delete(id);this.rebuild();}
+  if(changed)for(const id of new Set([...Object.keys(previousSurface),...Object.keys(this.surfaceArchive)])){if(previousSurface[id]!==this.surfaceArchive[id]&&JSON.stringify(previousSurface[id])!==JSON.stringify(this.surfaceArchive[id]))this.refreshSurface(id);}
  }
  surfacePaints(id){
   return [...(this.surfaceArchive[id]||[]),...[...this.surfacePending.values()].filter(s=>s.id===id),...(this.surfacePreview?.id===id?[this.surfacePreview]:[])];
  }
- refreshSurface(id=null){
-  if(!this.saved||typeof document==='undefined')return;
-  if(!this.atlas){
-   if(!Object.keys(this.surfaceArchive).length&&!this.surfacePending.size&&!this.surfacePreview)return;
-   this.atlas=new SpacePaintTexture(this.saved,this.ranges,this.renderedStrokes,this.loadRaster);id=null;
+ refreshPage(page,id=null){
+  if(typeof document==='undefined')return;
+  if(!page.atlas){
+   if(!page.strokes.some(s=>this.surfaceArchive[s.id]?.length||this.surfacePreview?.id===s.id||[...this.surfacePending.values()].some(p=>p.id===s.id)))return;
+   page.atlas=new SpacePaintTexture(page.mesh,page.ranges,page.strokes,this.loadRaster);id=null;
   }
-  if(id)this.atlas.repaint(id,this.surfacePaints(id));
-  else for(const s of this.renderedStrokes)this.atlas.repaint(s.id,this.surfacePaints(s.id));
+  if(id)page.atlas.repaint(id,this.surfacePaints(id));
+  else for(const s of page.strokes)page.atlas.repaint(s.id,this.surfacePaints(s.id));
+ }
+ refreshSurface(id=null){
+  if(id){const page=this.pageById.get(id);if(page)this.refreshPage(page,id);}
+  else for(const page of this.pages)this.refreshPage(page);
+  this.atlas=this.pages[0]?.atlas||null;
  }
  previewSurface(stroke){
   this.surfacePreview=stroke;
@@ -168,11 +217,8 @@ export class SpacePainter{
  }
  pickColor(event){
   if(!this.saved||!this.setRay(event))return null;
-  this.saved.updateMatrixWorld(true);
-  const hit=this.ray.intersectObject(this.saved,false)[0];
-  if(!hit)return null;
-  const range=this.ranges.find(r=>hit.faceIndex>=r.start&&hit.faceIndex<r.end);
-  if(!range)return null;
+  const picked=this.nearestHit();if(!picked)return null;
+  const {range}=picked;
   // Face ranges map both indexed and atlas-converted meshes to the saved stroke.
   // Read the original sRGB hex string, never a shaded framebuffer or graffiti texture.
   const color=this.renderedStrokes.find(s=>s.id===range.id)?.color;
@@ -180,11 +226,10 @@ export class SpacePainter{
  }
  pickSurface(event,player){
   if(!this.saved||!player||!this.setRay(event))return null;
-  this.saved.updateMatrixWorld(true);const hit=this.ray.intersectObject(this.saved,false)[0];
-  if(!hit||hit.point.distanceTo(player.clone().add(new THREE.Vector3(0,1.4,0)))>19)return null;
-  const range=this.ranges.find(r=>hit.faceIndex>=r.start&&hit.faceIndex<r.end);
-  if(!range||!this.archive.some(s=>s.id===range.id))return null;
-  const face=surfaceFace(range.info,hit.faceIndex-range.start),pos=this.saved.geometry.attributes.position;
+  const picked=this.nearestHit();if(!picked)return null;
+  const {hit,range}=picked;
+  if(hit.point.distanceTo(player.clone().add(new THREE.Vector3(0,1.4,0)))>19||!this.archive.some(s=>s.id===range.id))return null;
+  const face=surfaceFace(range.info,hit.faceIndex-range.start),pos=hit.object.geometry.attributes.position;
   const verts=[hit.face.a,hit.face.b,hit.face.c].map(i=>new THREE.Vector3().fromBufferAttribute(pos,i));
   const bary=THREE.Triangle.getBarycoord(hit.point,...verts,new THREE.Vector3());if(!bary||bary.x<-.001)return null;
   const weights=bary.toArray(),uv=[0,1].map(i=>Math.max(0,Math.min(1,face.uv.reduce((n,v,j)=>n+v[i]*weights[j],0))));
@@ -241,11 +286,15 @@ export class SpacePainter{
  // Ground is always a valid candidate, not just a fallback after searching
  // every stroke. Its distance bounds the nearest-surface search.
  connectedStart(point,arena=this.arena){
-  const floor=this.baseFloor(point,arena),geometry=this.saved?.geometry,k=this.connectKey;
-  if(!k||k[0]!==geometry||k[1]!==point.x||k[2]!==point.y||k[3]!==point.z||k[4]!==floor){
+  const floor=this.baseFloor(point,arena),version=this.geometryVersion,k=this.connectKey;
+  if(!k||k[0]!==version||k[1]!==point.x||k[2]!==point.y||k[3]!==point.z||k[4]!==floor){
    this.connectPoint.set(point.x,floor,point.z);
-   if(geometry)nearestSpacePaintPoint(geometry,this.ranges,point,this.connectPoint,(point.y-floor)**2);
-   this.connectKey=[geometry,point.x,point.y,point.z,floor];
+   let best=(point.y-floor)**2;
+   for(const page of this.pages){
+    if(page.bounds.distanceToPoint(point)**2>best)continue;
+    if(nearestSpacePaintPoint(page.mesh.geometry,page.ranges,point,this.connectPoint,best))best=this.connectPoint.distanceToSquared(point);
+   }
+   this.connectKey=[version,point.x,point.y,point.z,floor];
   }
   return this.connectPoint;
  }
@@ -255,7 +304,7 @@ export class SpacePainter{
   const x=event?.clientX??r.left+r.width/2,y=event?.clientY??r.top+r.height/2;
   const player=this.controller(),p=player?.root?.position,stroke=this.stroke,color=stroke?.color??settings.color,size=stroke?.size??settings.size,thickness=stroke?.thickness??settings.thickness;
   if(!p){this.hideGuide();return;}
-  const key=[x,y,!!event,r.left,r.top,r.width,r.height,p.x,p.y,p.z,player.yaw,player.pitch,this.camera.fov,this.connected,size,color,thickness,settings.distance,stroke?.id,this.saved?.geometry,this.preview?.geometry,arena.world?.cityDamage,arena.displayPlatforms?.discs];
+  const key=[x,y,!!event,r.left,r.top,r.width,r.height,p.x,p.y,p.z,player.yaw,player.pitch,this.camera.fov,this.connected,size,color,thickness,settings.distance,stroke?.id,this.geometryVersion,this.preview?.geometry,arena.world?.cityDamage,arena.displayPlatforms?.discs];
   if(event){const cp=this.camera.position,q=this.camera.quaternion;key.push(cp.x,cp.y,cp.z,q.x,q.y,q.z,q.w,this.camera.zoom,this.camera.aspect);}
   if(this.guideKey&&key.every((v,i)=>v===this.guideKey[i]))return;
   this.guideKey=key;
@@ -276,7 +325,10 @@ export class SpacePainter{
   // point marks the true 3D brush position, even on a vertical or hidden face.
   this.guideAnchor.position.copy(point);this.guideAnchor.scale.setScalar(Math.max(.045,Math.min(.12,size*.35)));this.guideAnchor.visible=true;
   let floor=this.baseFloor(point,arena);
-  if(this.saved)floor=spacePaintGuideHeight(this.saved.geometry,this.ranges,point.x,point.z,floor);
+  for(const page of this.pages){
+   const {min,max}=page.bounds;
+   if(point.x>=min.x&&point.x<=max.x&&point.z>=min.z&&point.z<=max.z&&max.y>=floor)floor=spacePaintGuideHeight(page.mesh.geometry,page.ranges,point.x,point.z,floor);
+  }
   if(this.preview)floor=spacePaintGuideHeight(this.preview.geometry,this.previewRanges,point.x,point.z,floor);
   g.position.set(point.x,floor+.025,point.z);g.scale.set(size,size,1);g.material.color.set(color);g.visible=true;
  }
@@ -284,8 +336,7 @@ export class SpacePainter{
   if(this.pointer!==null)return;
   if(tool==='eraser'){
    if(!this.saved||!this.setRay(event))return;
-   this.saved.updateMatrixWorld(true);
-   const hit=this.ray.intersectObject(this.saved,false)[0];const id=hit&&this.ranges.find(r=>hit.faceIndex>=r.start&&hit.faceIndex<r.end)?.id;
+   const id=this.nearestHit()?.range.id;
    const owner=this.ownerKey();
    if(id&&(!owner||this.renderedStrokes.find(s=>s.id===id)?.ownerKey!==owner)){this.ui.toast('You can only erase your own 3D paint');return;}
    if(id&&(this.surfaceArchive[id]||[]).some(v=>isSurfaceCheckpoint(v)?!Array.isArray(v.owners)||v.owners.some(key=>key!==owner):v.tool==='brush'&&v.owner!==owner)){this.ui.toast('This structure contains another artist’s graffiti');return;}
@@ -297,8 +348,6 @@ export class SpacePainter{
    }
    return;
   }
-  const stored=new Set(this.archive.map(s=>s.id)),pending=[...this.pending.values()].filter(s=>!stored.has(s.id));
-  if(this.archive.length+pending.length>=SPACE_PAINT_STROKE_BUDGET||this.archive.concat(pending).reduce((n,s)=>n+s.points.length,0)>=SPACE_PAINT_POINT_BUDGET){this.ui.toast('3D paint archive full; erase a stroke first');return;}
   if(this.pending.size>=8){this.ui.toast('3D paint is still saving');return;}
   if(!this.setDrawingFrame(distance)||!this.drawingPoint(event,this.point)||!spacePaintPointAllowed(this.point.toArray())){this.ui.toast('Aim inside the 3D paint area');return;}
   // Translate the whole new planar stroke by a single offset. No per-move
@@ -342,9 +391,10 @@ export class SpacePainter{
   if(!s?.points.length)return;
   this.pending.set(s.id,{...s,ownerKey:this.ownerKey()});this.rebuild();
   this.queue=this.queue.catch(()=>{}).then(async()=>{
-   try{const result=await this.send('gm-paint-3d',{stroke:s,...(epoch===null?{}:{ownerEpoch:epoch})});if(!result?.spacePaintStroke)throw Error('3D paint could not be saved');if(epoch===this.ownerEpoch)this.record({gesture,add:[result.spacePaintStroke],remove:[]});}
+   let accepted=false;
+   try{const result=await this.send('gm-paint-3d',{stroke:s,...(epoch===null?{}:{ownerEpoch:epoch})});if(!result?.spacePaintStroke)throw Error('3D paint could not be saved');accepted=true;if(epoch===this.ownerEpoch){this.record({gesture,add:[result.spacePaintStroke],remove:[]});if(!this.archive.some(p=>p.id===s.id)&&this.pending.has(s.id))this.pending.set(s.id,{...result.spacePaintStroke,ackRevision:result.worldRevision});}}
    catch(e){this.ui.toast(e.message||'3D paint could not be saved');}
-   finally{this.pending.delete(s.id);if(!this.archive.some(p=>p.id===s.id))this.rebuild();}
+   finally{if(!accepted||this.archive.some(p=>p.id===s.id)){this.pending.delete(s.id);if(!accepted)this.rebuild();}}
   });
  }
 }

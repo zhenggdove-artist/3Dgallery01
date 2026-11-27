@@ -53,14 +53,14 @@ export function encodeCombatWorld(world,prior=null){
   if(record.json!==undefined)staticJSON.push(JSON.stringify(key)+':'+record.json);
  }
  const dynamicBase=JSON.stringify(dynamic);
- let dynamicPayload,payload;
+ let dynamicPayload,payload,checkpointPayload;
  return {records,profiles,profileRows,hasProfiles,dynamicBase,get dynamicPayload(){
   if(dynamicPayload===undefined){
    const tail=hasProfiles?'"profiles":{'+[...profiles].map(([id,record])=>JSON.stringify(id)+':'+record.json).join(',')+'}':'';
    dynamicPayload=tail?dynamicBase.slice(0,-1)+(dynamicBase.length>2?',':'')+tail+'}':dynamicBase;
   }
   return dynamicPayload;
- },get payload(){if(payload===undefined){const base=this.dynamicPayload,tail=staticJSON.join(',');payload=tail?base.slice(0,-1)+(base.length>2?',':'')+tail+'}':base;}return payload;}};
+ },get checkpointPayload(){if(checkpointPayload===undefined){const base=this.dynamicPayload,tail=[...records].filter(([key])=>key!=='spacePaint'&&key!=='spacePaintSurface').filter(([,r])=>r.json!==undefined).map(([key,r])=>JSON.stringify(key)+':'+r.json).concat(['"spacePaint":[]','"spacePaintSurface":{}','"spacePaintExternalV118":true']).join(',');checkpointPayload=base.slice(0,-1)+(base.length>2?',':'')+tail+'}';}return checkpointPayload;},get payload(){if(payload===undefined){const base=this.dynamicPayload,tail=staticJSON.join(',');payload=tail?base.slice(0,-1)+(base.length>2?',':'')+tail+'}':base;}return payload;}};
 }
 export function forkCombatWorld(encoded){
  const world=JSON.parse(encoded.dynamicBase);

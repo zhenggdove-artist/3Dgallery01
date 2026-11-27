@@ -2,9 +2,10 @@
 // a durable, atomic journal of the latest changed fields (not an event log).
 // A cold start reconstructs EXACTLY the last committed world, including deletes.
 // Only unchanged large fields are omitted from each SQLite write.
-export function combatRows(world,encoded){
+export function combatRows(world,encoded,externalPaint=false){
  const rows=new Map();
  for(const [key,value] of Object.entries(world)){
+  if(externalPaint&&(key==='spacePaint'||key==='spacePaintSurface'))continue;
   if(key==='profiles'){
    if(encoded?.hasProfiles){for(const [rowKey,json] of encoded.profileRows)rows.set(rowKey,json);}
    else for(const [id,profile] of Object.entries(value||{}))

@@ -53,7 +53,7 @@ export class TempleNetwork extends EventTarget{
   async connect(){
     if(!this.token)throw new Error('Join Temple first');if(this.socket){this.rejectCombatSocket(this.socket);this.socket.onclose=null;this.socket.close();}
     this.compactCombat=false;this.combatSocketActions=false;this.fastActionsV087=false;this.fastCastV089=false;this.contactFastV093=false;
-    const url=new URL(this.base);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/socket';url.searchParams.set('token',this.token);url.searchParams.set('patch','2');url.searchParams.set('surfaceDelta','1');
+    const url=new URL(this.base);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/socket';url.searchParams.set('token',this.token);url.searchParams.set('patch','2');url.searchParams.set('surfaceDelta','1');url.searchParams.set('paintDelta','1');
     await new Promise((resolve,reject)=>{const socket=new WebSocket(url);this.socket=socket;const timer=setTimeout(()=>{socket.close();reject(new Error('Realtime connection timed out'));},10_000);socket.onopen=()=>{clearTimeout(timer);this.reconnectAttempt=0;this.dispatch('connection',{connected:true});resolve();};socket.onerror=()=>{clearTimeout(timer);reject(new Error('Realtime connection failed'));};socket.onmessage=event=>{if(socket!==this.socket||event.data==='pong')return;try{const message=JSON.parse(event.data);
       if(message.type==='combat-result'){this.resolveCombatSocket(socket,message.data);return;}
       if(message.type==='state-ack')this.acknowledgeState(message.data);
@@ -147,7 +147,7 @@ export class TempleNetwork extends EventTarget{
    const compactCombat=action==='attack'&&this.compactCombat&&this.socket?.readyState===WebSocket.OPEN;
    const started=performance.now();
    const fastAction=this.fastActionsV087&&isRealtimeAction(action)&&this.socket?.readyState===WebSocket.OPEN;
-   const body={action,requestId:crypto.randomUUID(),...data,...(compactCombat?{compactCombat:true}:{}),...(fastAction?{fastActionV087:true}:{})};
+   const paintBaseline=this.wireWorld,body={action,requestId:crypto.randomUUID(),...data,paintDeltaV118:true,...(paintBaseline?{paintGeometryRevision:paintBaseline.spacePaintRevision,paintSurfaceRevision:paintBaseline.spacePaintSurfaceRevision}:{}),...(compactCombat?{compactCombat:true}:{}),...(fastAction?{fastActionV087:true}:{})};
    // V035 used the independent HTTP mutation path for combat. Keep motion,
    // inventory and pickup traffic on the realtime socket; do not queue attacks behind them.
    const socket=!options.preferHttp&&(fastAction||(compactCombat&&this.combatSocketActions))?this.socket:null;
@@ -158,6 +158,7 @@ export class TempleNetwork extends EventTarget{
     method:'POST',body,
     timeoutMs:['gm-wing-publish','gm-wing-update','redeem-wing-design'].includes(action)?30000:0
    }));
+   if(result.world&&paintBaseline){if(result.world.spacePaint===undefined&&result.world.spacePaintRevision===paintBaseline.spacePaintRevision)result.world.spacePaint=paintBaseline.spacePaint;if(result.world.spacePaintSurface===undefined&&result.world.spacePaintSurfaceRevision===paintBaseline.spacePaintSurfaceRevision)result.world.spacePaintSurface=paintBaseline.spacePaintSurface;}
    this.actionTimings.push({action,phase:data.phase||null,transport:socket?'ws':'http',elapsedMs:Math.round(performance.now()-started),at:Date.now()});
    if(this.actionTimings.length>64)this.actionTimings.shift();
    if(result.worldRevision>(this.wireWorld?.revision??-1)){
