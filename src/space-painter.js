@@ -84,7 +84,7 @@ export class SpacePainter{
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
   this.guide=null;this.guideKey=null;this.previewRanges=[];
-  this.paintCenter=new THREE.Vector3();this.paintNormal=new THREE.Vector3();this.paintRight=new THREE.Vector3();this.paintUp=new THREE.Vector3();this.paintScale=0;
+  this.paintCenter=new THREE.Vector3();this.paintNormal=new THREE.Vector3();this.paintRight=new THREE.Vector3();this.paintUp=new THREE.Vector3();this.paintScale=0;this.paintPlane=new THREE.Plane();this.fixedScale=false;
  }
  mesh(which,strokes){
   if(!strokes.length){if(this[which]){this[which].removeFromParent();this[which].geometry.dispose();this[which]=null;}if(which==='preview')this.previewRanges=[];return [];}
@@ -190,14 +190,23 @@ export class SpacePainter{
   this.paintUp.crossVectors(this.paintRight,this.paintNormal);
   this.paintCenter.copy(player.root.position);this.paintCenter.y+=1.5;
   this.paintCenter.addScaledVector(this.paintNormal,distance);
+  this.paintPlane.setFromNormalAndCoplanarPoint(this.paintNormal,this.paintCenter);
   // Match the existing default third-person viewing distance (7). Camera
   // zoom changes presentation only, never the drawing-coordinate scale.
   this.paintScale=(distance+7)*Math.tan(this.camera.fov*Math.PI/360);
   return true;
  }
+ setFixedScale(enabled){
+  if(this.pointer!==null)return false;
+  this.fixedScale=!!enabled;this.guideKey=null;return true;
+ }
  drawingPoint(event,out){
+  if(!event){out.copy(this.paintCenter);return true;}
+  // Default: the actual camera ray meets the avatar-anchored drawing plane.
+  // Only the optional fixed-scale mode uses zoom-independent screen offsets.
+  if(!this.fixedScale)return this.setRay(event)&&!!this.ray.ray.intersectPlane(this.paintPlane,out);
   const r=this.canvas.getBoundingClientRect();if(!r.width||!r.height)return false;
-  const x=event?(event.clientX-r.left)/r.width*2-1:0,y=event?1-(event.clientY-r.top)/r.height*2:0;
+  const x=(event.clientX-r.left)/r.width*2-1,y=1-(event.clientY-r.top)/r.height*2;
   out.copy(this.paintCenter).addScaledVector(this.paintRight,x*this.paintScale*r.width/r.height).addScaledVector(this.paintUp,y*this.paintScale);
   return true;
  }
@@ -207,7 +216,8 @@ export class SpacePainter{
   const x=event?.clientX??r.left+r.width/2,y=event?.clientY??r.top+r.height/2;
   const player=this.controller(),p=player?.root?.position,stroke=this.stroke,color=stroke?.color??settings.color,size=stroke?.size??settings.size,thickness=stroke?.thickness??settings.thickness;
   if(!p){this.hideGuide();return;}
-  const key=[x,y,r.left,r.top,r.width,r.height,p.x,p.y,p.z,player.yaw,player.pitch,this.camera.fov,size,color,thickness,settings.distance,stroke?.id,this.saved?.geometry,this.preview?.geometry,arena.world?.cityDamage,arena.displayPlatforms?.discs];
+  const key=[x,y,!!event,r.left,r.top,r.width,r.height,p.x,p.y,p.z,player.yaw,player.pitch,this.camera.fov,this.fixedScale,size,color,thickness,settings.distance,stroke?.id,this.saved?.geometry,this.preview?.geometry,arena.world?.cityDamage,arena.displayPlatforms?.discs];
+  if(event&&!this.fixedScale){const cp=this.camera.position,q=this.camera.quaternion;key.push(cp.x,cp.y,cp.z,q.x,q.y,q.z,q.w,this.camera.zoom,this.camera.aspect);}
   if(this.guideKey&&key.every((v,i)=>v===this.guideKey[i]))return;
   this.guideKey=key;
   if(!this.guide){
@@ -217,7 +227,7 @@ export class SpacePainter{
   }
   const g=this.guide;
   const point=this.guidePoint;
-  if((!stroke&&!this.setDrawingFrame(settings.distance))||!this.drawingPoint({clientX:x,clientY:y},point)||!spacePaintPointAllowed(point.toArray())){g.visible=false;return;}
+  if((!stroke&&!this.setDrawingFrame(settings.distance))||!this.drawingPoint(event,point)||!spacePaintPointAllowed(point.toArray())){g.visible=false;return;}
   // Keep the same X/Z prediction; use the uppermost 3D surface even when
   // the drawing plane is inside or below a structure.
   const top=point.y+.003;

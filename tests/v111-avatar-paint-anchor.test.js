@@ -12,6 +12,7 @@ function fixture(){
  const player={root:{position:new THREE.Vector3(0,8,0)},yaw:.3,pitch:-.25,distance:7};
  const canvas={getBoundingClientRect:()=>({left:0,top:0,width:200,height:200})};
  const painter=new SpacePainter({scene,canvas,camera,controller:()=>player,ui:{toast:()=>assert.fail('unexpected toast')}});
+ painter.setFixedScale(true);
  const zoom=distance=>{player.distance=distance;camera.position.copy(player.root.position).add(new THREE.Vector3(0,2,distance));camera.lookAt(player.root.position);camera.updateMatrixWorld(true);};
  return {painter,player,camera,zoom};
 }
