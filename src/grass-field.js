@@ -86,7 +86,7 @@ void main(){
 const GRASS_TILE=24,GRASS_BOUND_PAD=8;
 class GrassVisibility{
  constructor(geometry,seed,count){
-  this.geometry=geometry;this.count=count;this.source=seed;this.tileOf=new Uint16Array(count);
+  this.geometry=geometry;this.count=count;this.tileOf=new Uint16Array(count);
   this.boxes=[];this.covered=count;
   const index=new Map();
   for(let i=0;i<count;i++){
@@ -105,9 +105,13 @@ class GrassVisibility{
   }
   this.active=new Uint8Array(this.boxes.length);this.active.fill(1);
   this.next=new Uint8Array(this.boxes.length);
-  for(const [name,data,size] of [['aOffset',seed.points,2],['aHeight',seed.heights,1],
-   ['aAngle',seed.angles,1],['aPhase',seed.phases,1],['aShade',seed.shades,1]])
-   geometry.setAttribute(name,new THREE.InstancedBufferAttribute(data.slice(),size).setUsage(THREE.DynamicDrawUsage));
+  // Same six floats, same original order, one interleaved GPU upload.
+  // Pack the immutable seed once, not five independent array copies on turns.
+  this.packed=new Float32Array(count*6);
+  for(let i=0;i<count;i++){const j=i*6;this.packed[j]=seed.points[i*2];this.packed[j+1]=seed.points[i*2+1];this.packed[j+2]=seed.heights[i];this.packed[j+3]=seed.angles[i];this.packed[j+4]=seed.phases[i];this.packed[j+5]=seed.shades[i];}
+  this.buffer=new THREE.InstancedInterleavedBuffer(this.packed.slice(),6,1).setUsage(THREE.DynamicDrawUsage);
+  for(const [name,size,offset] of [['aOffset',2,0],['aHeight',1,2],['aAngle',1,3],['aPhase',1,4],['aShade',1,5]])
+   geometry.setAttribute(name,new THREE.InterleavedBufferAttribute(this.buffer,size,offset));
   geometry.instanceCount=count;
  }
  prepare(frustum,length){
@@ -121,19 +125,14 @@ class GrassVisibility{
   // Don't upload new buffers for minor movement while turning or shaking.
   if(!uncovered&&needed>=this.covered*.74)return;
   this.active.set(this.next);this.covered=needed;
-  const {geometry,source,active,tileOf,count}=this;
-  const [p,h,a,t,s]=['aOffset','aHeight','aAngle','aPhase','aShade'].map(name=>geometry.getAttribute(name));
+  const {geometry,packed,buffer,active,tileOf,count}=this,dst=buffer.array;
   let n=0;
   for(let i=0;i<count;i++)if(active[tileOf[i]]){
-   // Copy a subsequence in the seed's original order. Intersecting blades
-   // keep their depth and draw ordering even at identical pixel depth.
-   p.array[n*2]=source.points[i*2];p.array[n*2+1]=source.points[i*2+1];
-   h.array[n]=source.heights[i];a.array[n]=source.angles[i];t.array[n]=source.phases[i];s.array[n]=source.shades[i];n++;
+   const j=i*6,k=n*6;
+   dst[k]=packed[j];dst[k+1]=packed[j+1];dst[k+2]=packed[j+2];dst[k+3]=packed[j+3];dst[k+4]=packed[j+4];dst[k+5]=packed[j+5];n++;
   }
   geometry.instanceCount=n;
-  if(n)for(const attr of [p,h,a,t,s]){
-   attr.clearUpdateRanges();attr.addUpdateRange(0,n*attr.itemSize);attr.needsUpdate=true;
-  }
+  if(n){buffer.clearUpdateRanges();buffer.addUpdateRange(0,n*6);buffer.needsUpdate=true;}
  }
 }
 export class GrassField{

@@ -62,6 +62,7 @@ export const SOUND_PROFILES=Object.freeze({
  shot:{duration:.21,freq:480,end:135,shape:'sawtooth',noise:.7,gain:.85},
  hit:{duration:.25,freq:210,end:65,shape:'triangle',noise:.9,gain:1},
  explosion:{duration:.92,freq:120,end:34,shape:'sawtooth',noise:1,gain:1.25},
+ 'level-up':{duration:1,freq:660,end:1320,shape:'sine',noise:0,gain:.85},
  coin:{duration:.29,freq:970,end:1540,shape:'sine',noise:0,gain:.75},
  drink:{duration:.43,freq:430,end:160,shape:'sine',noise:.18,gain:.65},
  'fusion-success':{duration:.65,freq:520,end:1180,shape:'sine',noise:.23,gain:.85},
@@ -247,6 +248,14 @@ export class GameAudio{
    [[.085,.0001],[.108,.092],[.18,.064],[.24,.0001]],.25);
  }
 
+ playLevelUp(ctx,now,amp,pitch){
+  for(const [i,note] of [659.25,783.99,1046.5,1318.51,1567.98].entries()){
+   const start=now+i*.105,end=now+Math.min(1,i*.105+.52),osc=ctx.createOscillator(),gain=ctx.createGain();
+   osc.type=i%2?'triangle':'sine';osc.frequency.setValueAtTime(note*pitch,start);osc.frequency.exponentialRampToValueAtTime(note*pitch*1.045,start+.065);
+   gain.gain.setValueAtTime(.0001,start);gain.gain.exponentialRampToValueAtTime(Math.max(.0002,.13*amp),start+.018);gain.gain.exponentialRampToValueAtTime(.0001,end);
+   osc.connect(gain);gain.connect(this.sfx);this.voices++;osc.onended=()=>{osc.disconnect();gain.disconnect();this.voices=Math.max(0,this.voices-1);};osc.start(start);osc.stop(end);
+  }
+ }
  // Rounded, playful descending landing plop; no noise or percussion.
  playCuteLand(ctx,now,amp,pitch){
   const voice=(shape,notes,envelope,stop)=>{
@@ -310,6 +319,7 @@ export class GameAudio{
   if(amp<=0)return; // An exact zero slider setting must be truly silent.
   if(key==='jump'){this.playCuteJump(ctx,now,amp,pitch);return;}
   if(key==='land'){this.playCuteLand(ctx,now,amp,pitch);return;}
+  if(key==='level-up'){this.playLevelUp(ctx,now,amp,pitch);return;}
   if(key==='fire'){this.playFireHiss(ctx,now,amp);return;}
   const createVoice=(source,filter,amount)=>{
    const gain=ctx.createGain();gain.gain.setValueAtTime(.0001,now);

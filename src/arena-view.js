@@ -602,9 +602,13 @@ export class TempleArena{
     return candidate;
   }
   groundHeight(x,z,y=0){
+    // The preceding movement step already evaluated this exact support.
+    // Reuse only identical coordinates and unchanged collision sources.
+    const discs=this.displayPlatforms?.discs,damage=this.world?.cityDamage||this.outerCity?.damage||EMPTY_CITY_DAMAGE,paint=this.world?.spacePaint,c=this.groundMemo;
+    if(c&&c.x===x&&c.z===z&&c.y===y&&c.discs===discs&&c.damage===damage&&c.paint===paint)return c.height;
     const platforms=this.displayPlatforms?.ground(x,z,y)||0;
-    const city=cityGroundHeight(x,z,y,this.world?.cityDamage||this.outerCity?.damage||{});
-    return Math.max(platforms,city,spacePaintFloor(this.world?.spacePaint,x,z,y));
+    const city=cityGroundHeight(x,z,y,damage),height=Math.max(platforms,city,spacePaintFloor(paint,x,z,y));
+    const memo=this.groundMemo??={};memo.x=x;memo.z=z;memo.y=y;memo.discs=discs;memo.damage=damage;memo.paint=paint;memo.height=height;return height;
   }
   spacePaintClip(from,to){return spacePaintMoveFraction(this.world?.spacePaint,from,to);}
   blocked(x,z,y=0){if(cityBlocked(x,z,y,this.world?.cityDamage||this.outerCity?.damage||{}))return true;if(gmHouseBlocked(this.world?.structures,x,z,y,.35))return true;for(const s of this.world?.structures||[]){if(s.gmHouse)continue;const dims={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4],house:[5,3.8,4],tree:[1.2,4,1.2]}[s.kind]||[2,2,2];if(y<dims[1]&&Math.abs(x-s.position[0])<dims[0]/2+.35&&Math.abs(z-s.position[2])<dims[2]/2+.35)return true;}return false;}

@@ -5,6 +5,10 @@ import {itemById} from './catalog.js';
 import {originalEquipmentGame,equippedItem} from './fusion-adapter.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
 
+// All primary attributes grow with level. Diminishing gain avoids runaway
+// movement speed at GM-set level 999; level 1 is byte-for-byte neutral.
+export function levelAttributeScale(level=1){const n=Math.max(0,(Number(level)||1)-1);return 1+n/(100+n);}
+export function levelXpRequired(level=1){return Math.max(1,Math.floor(Number(level)||1))*100;}
 // Mana is authoritative; ordinary attacks never consume it.
 export function manaCapacity(level=1){return 100+4*Math.max(0,(Number(level)||1)-1);}
 export function manaRegen(profile,world){
@@ -25,7 +29,7 @@ export function ultimateManaCost(weapon,stats,quality,channel=false,fusionCount=
 export function playerStats(world,profile,now=Date.now()){
   // Only equipped items contribute to traits. Do not rebuild every owned
   // inventory instance on each movement frame or combat broadcast.
-  const key=profile.key,traits=traitStats(originalEquipmentGame(profile,world,true),key,now);
+  const scale=levelAttributeScale(profile.level),key=profile.key,traits=traitStats(originalEquipmentGame(profile,world,true),key,now);
   let fusedAttack=0,fusedDefense=0;
   for(const [slot,id] of Object.entries(profile.equipment||{})){
     const base=itemById(id),stats=profile.fusion?.[id]?.templeStats;
@@ -37,9 +41,9 @@ export function playerStats(world,profile,now=Date.now()){
   const rawWing=itemById(profile.equipment.wings),wing=rawWing&&tunedEquipment(world,equippedItem(profile,rawWing));
   const wingTuning=equipmentTuning(world,wing);
   const abilities=wing?.design==='painted-wing'?(wing.abilities??[wing.ability]):[];
-  return {maxMana:manaCapacity(profile.level),manaRegen:manaRegen(profile,world),maxHp:+((100+(profile.level-1)*4+traits.hp*10)*(1+weaponEnchants.hp/100)).toFixed(3),
-    attack:(traits.attack+fusedAttack)*(1+weaponEnchants.attack/100)*(1-(effectActive(profile,'weak',now)?.power||0)),speed:traits.speed*(1+weaponEnchants.speed/100)*(abilities.includes('swift')?(wingTuning.swiftScale??1.1):1)*(1-(effectActive(profile,'slow',now)?.power||0))*(effectActive(profile,'stun',now)||effectActive(profile,'root',now)?0:1),
-    jump:traits.jump*(1+weaponEnchants.jump/100)*(abilities.includes('aerial')?(wingTuning.aerialScale??1.15):1),defense:Math.max(.35,traits.defense*(abilities.includes('guardian')?(wingTuning.guardianScale??.9):1)*(1+(effectActive(profile,'expose',now)?.power||0))*(1-Math.min(.5,fusedDefense/300))*(1-weaponEnchants.defense/100)),
+  return {levelScale:scale,maxMana:manaCapacity(profile.level),manaRegen:manaRegen(profile,world),maxHp:+((100+(profile.level-1)*4+traits.hp*10)*(1+weaponEnchants.hp/100)).toFixed(3),
+    attack:scale*(traits.attack+fusedAttack)*(1+weaponEnchants.attack/100)*(1-(effectActive(profile,'weak',now)?.power||0)),speed:scale*traits.speed*(1+weaponEnchants.speed/100)*(abilities.includes('swift')?(wingTuning.swiftScale??1.1):1)*(1-(effectActive(profile,'slow',now)?.power||0))*(effectActive(profile,'stun',now)||effectActive(profile,'root',now)?0:1),
+    jump:scale*traits.jump*(1+weaponEnchants.jump/100)*(abilities.includes('aerial')?(wingTuning.aerialScale??1.15):1),defense:Math.max(.35,traits.defense*(abilities.includes('guardian')?(wingTuning.guardianScale??.9):1)*(1+(effectActive(profile,'expose',now)?.power||0))*(1-Math.min(.5,fusedDefense/300))*(1-weaponEnchants.defense/100))/scale,
     gravity:(wing?.gravity||1)*(abilities.includes('glide')?(wingTuning.glideScale??.85):1),impulse:wing?.impulse||0,flapMs:wing?.flapMs||0};
 }
 export function refreshStats(world,profile,now=Date.now()){

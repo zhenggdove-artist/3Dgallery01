@@ -21,7 +21,7 @@ import {CITY_LOTS,CITY_MAX_HP,SIGN_HP,citySignSpecs,structureSignSpecs,signPaint
 import layoutDefaults from '../../temple-artwork-layout.json' with {type:'json'};
 import {ORIGINAL_ACTIONS,originalAction,originalView} from './reletter-actions.js';
 import {applyStatus,tickStatus,effectActive,applyElementalHit} from './combat-status.js';
-import {playerStats,refreshStats,refreshMana,manaCapacity,ultimateManaCost} from './player-stats.js';
+import {playerStats,refreshStats,refreshMana,manaCapacity,ultimateManaCost,levelXpRequired} from './player-stats.js';
 import {fuseOriginal,equippedItem} from './fusion-adapter.js';
 import {fuseTemple} from './temple-fusion.js';
 import {ensureFusionIdentity,ensureWeaponAffixes,appendInventoryInstance,removeInventoryInstance,selectEquipmentInstance,swapInventoryInstances,removeInventoryInstances} from './fusion-instances.js';
@@ -360,7 +360,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
     const horizontal=Math.hypot(next.position[0]-previous.position[0],
       next.position[2]-previous.position[2]);
     const deltaY=next.position[1]-previous.position[1];
-    const boostedSpeed=clamp(Number(mobility?.stats?.speed)||1,.5,6);
+    const levelScale=clamp(Number(mobility?.stats?.levelScale)||1,1,2),boostedSpeed=clamp(Number(mobility?.stats?.speed)||1,.5,6*levelScale);
     const hasWings=!!mobility?.stats?.impulse;
     const recentHit=now-(mobility?.hitReaction?.time||0)<1800;
     const recentImpulse=now-(mobility?.impulse?.time||0)<1800;
@@ -380,7 +380,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
     // Descending from a 30m platform reaches ~39m/s before landing,
     // while ordinary upward jumps start at 10m/s. Validate both axes
     // without turning gravity into a forbidden lateral wall.
-    const verticalSpeed=deltaY<0?42:(hasWings?32:18);
+    const verticalSpeed=deltaY<0?42:(hasWings?32:18)*levelScale;
     const verticalAllowance=(verticalSpeed+(recentHit||recentImpulse?14:0))*elapsed+
       5.5;
     if((horizontal>allowance||Math.abs(deltaY)>verticalAllowance)&&
@@ -1422,7 +1422,7 @@ function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosit
   countWantedDeath(target,sourceProfile);
   target.deadUntil=now+5_000;target.lastKilledBy={key:sourceProfile?.key||null,name:cause==='monster'?'Art Master':sourceProfile?.name||(cause==='collector'?'COLLECTOR':'ENVIRONMENT'),time:now};
   world.killEvents??=[];world.killEvents.push({id:id(),time:now,killerKey:sourceProfile?.key||null,killerName:target.lastKilledBy.name,victimKey:target.key,victimName:target.name||targetActor.name||'PLAYER',cause});if(world.killEvents.length>24)world.killEvents.splice(0,world.killEvents.length-24);
-  releasePlayerWorldState(world,targetActor.key,now);if(sourceProfile&&sourceProfile.key!==target.key)addXp(sourceProfile,60);const lost=Math.floor(target.wallet*ECONOMY.deathCoinFraction);target.wallet-=lost;
+  releasePlayerWorldState(world,targetActor.key,now);if(sourceProfile&&sourceProfile.key!==target.key)addXp(world,sourceProfile,60,now);const lost=Math.floor(target.wallet*ECONOMY.deathCoinFraction);target.wallet-=lost;
   if(lost>0)world.groundDrops.push({id:id(),kind:'coin',amount:lost,position:[...dropPosition],owner:targetActor.key,ownerLockedUntil:now+2_000,createdAt:now,expiresAt:now+ECONOMY.groundDropLifetimeMs});
   return {target:targetActor.key,damage,defeated:true,lostCoins:lost,cause};
 }
@@ -1454,8 +1454,11 @@ export function releasePlayerWorldState(world,playerKey,now=Date.now()){
   let changed=false;if(world.profiles?.[playerKey]?.writeJourney){world.profiles[playerKey].writeJourney=null;changed=true;}for(const art of Object.values(world.artworks||{}))if(art.holder===playerKey){art.holder=null;art.throwEvent=null;art.availableAt=now+ARTWORK_RESPAWN_MS;changed=true;}return changed;
 }
 
-function addXp(profile,amount){
-  profile.xp=(profile.xp||0)+amount;let needed=profile.level*100;while(profile.xp>=needed){profile.xp-=needed;profile.level++;profile.maxHp=100+(profile.level-1)*4;profile.hp=Math.min(profile.maxHp,profile.hp+12);needed=profile.level*100;}
+export function addXp(world,profile,amount,now){
+  const prior=profile.level,oldHp=profile.hp;
+  profile.xp=(profile.xp||0)+amount;let needed=levelXpRequired(profile.level);
+  while(profile.xp>=needed){profile.xp-=needed;profile.level++;needed=levelXpRequired(profile.level);}
+  if(profile.level!==prior){refreshStats(world,profile,now);if(oldHp>0)profile.hp=Math.min(profile.maxHp,oldHp+12*(profile.level-prior));}
 }
 
 export function canPlaceArtworkAt(world,actorPosition,position){
@@ -2876,7 +2879,7 @@ function damageMonster(world,profile,amount,now,rng,kind='normal',monster=world.
  world.monsterDeathEvents??=[];
  world.monsterDeathEvents.push({id:id(),monsterId:monster.id,time:now,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]]});
  if(world.monsterDeathEvents.length>48)world.monsterDeathEvents.splice(0,world.monsterDeathEvents.length-48);
- if(profile)addXp(profile,120);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
+ if(profile)addXp(world,profile,120,now);return {monsterId:monster.id,position:[monster.position[0],monster.position[1]+ENEMY_HEIGHT*.5,monster.position[2]],damage:+amount.toFixed(1),hp:0,defeated:true};}
 // Both ambient patrol and combat pathfinding share these server-owned solid
 // house colliders. Sweep each stride to prevent tunnelling across thin walls;
 // deterministic sliding preserves movement without entering a facade.

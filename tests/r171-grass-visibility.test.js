@@ -9,7 +9,7 @@ test('grass visibility retains seed order and refreshes a newly visible tile bef
  view.position.set(102,4,-50);
  try{
   const sources=[grass.mesh,grass.outerMesh].map(mesh=>{
-   const geo=mesh.geometry,offsets=geo.getAttribute('aOffset').array.slice(),heights=geo.getAttribute('aHeight').array.slice();
+   const geo=mesh.geometry,p=geo.getAttribute('aOffset'),h=geo.getAttribute('aHeight'),offsets=Array.from({length:h.count*2},(_,i)=>i%2?p.getY(i>>1):p.getX(i>>1)),heights=Array.from({length:h.count},(_,i)=>h.getX(i));
    const ids=new Map();for(let i=0;i<heights.length;i++)ids.set(offsets[i*2]+':'+offsets[i*2+1],i);
    return {geo,offsets,heights,ids};
   });
@@ -28,7 +28,7 @@ test('grass visibility retains seed order and refreshes a newly visible tile bef
      if(Math.abs(point.x)<.995&&Math.abs(point.y)<.995&&Math.abs(point.z)<.9999)
       assert.ok(seen.has(i),'a blade rooted in the view is already resident in this frame');
     }
-    const version=attr.version;grass.prepareVisibility(view);assert.equal(attr.version,version,'a repeated view uploads nothing');
+    const version=attr.data.version;grass.prepareVisibility(view);assert.equal(attr.data.version,version,'a repeated view uploads nothing');
    }
   }
  }finally{grass.dispose();}

@@ -350,16 +350,16 @@ export class PlayerController{
     if(this.cameraLocked&&!force)return;
     if(this.role==='spectator'&&!this.followTarget){
       // One invisible free camera for public spectators and GM test.
-      this.camera.position.copy(this.root.position).add(new THREE.Vector3(0,1.5,0));
-      const direction=new THREE.Vector3(
+      this.camera.position.copy(this.root.position);this.camera.position.y+=1.5;
+      const direction=(this.cameraDirection??=new THREE.Vector3()).set(
        -Math.sin(this.yaw)*Math.cos(this.pitch),-Math.sin(this.pitch),
        -Math.cos(this.yaw)*Math.cos(this.pitch));
-      this.camera.lookAt(this.camera.position.clone().add(direction));
+      this.camera.lookAt((this.cameraLook??=new THREE.Vector3()).copy(this.camera.position).add(direction));
       this.target.copy(this.root.position);
       return;
     }
     const focus=this.artworkEditTarget?.position|| (this.followTarget?.visible?this.followTarget.position:this.root.position);
-   this.target.lerp(new THREE.Vector3(focus.x,focus.y+(this.artworkEditTarget?0:1.5),focus.z),Math.min(1,dt*4));
+   this.target.lerp((this.cameraFocus??=new THREE.Vector3()).set(focus.x,focus.y+(this.artworkEditTarget?0:1.5),focus.z),Math.min(1,dt*4));
    // Pull back the third-person view for the lightning/prism pair only.
    // Separate the player silhouette from the original vendor's long beam.
    const id=this.root.userData.weaponId||'';
