@@ -111,6 +111,18 @@ export class SpacePainter{
   if(Number.isFinite(revision)&&revision>this.surfaceRevision){stroke.ackRevision=revision;return;}
   this.surfacePending.delete(stroke.clientId);this.refreshSurface(stroke.id);
  }
+ pickColor(event){
+  if(!this.saved||!this.setRay(event))return null;
+  this.saved.updateMatrixWorld(true);
+  const hit=this.ray.intersectObject(this.saved,false)[0];
+  if(!hit)return null;
+  const range=this.ranges.find(r=>hit.faceIndex>=r.start&&hit.faceIndex<r.end);
+  if(!range)return null;
+  // Face ranges map both indexed and atlas-converted meshes to the saved stroke.
+  // Read the original sRGB hex string, never a shaded framebuffer or graffiti texture.
+  const color=this.renderedStrokes.find(s=>s.id===range.id)?.color;
+  return /^#[0-9a-f]{6}$/i.test(color||'')?color.toLowerCase():null;
+ }
  pickSurface(event,player){
   if(!this.saved||!player||!this.setRay(event))return null;
   this.saved.updateMatrixWorld(true);const hit=this.ray.intersectObject(this.saved,false)[0];

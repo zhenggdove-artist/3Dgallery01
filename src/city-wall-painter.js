@@ -39,11 +39,13 @@ export class CityWallPainter{
   this.toolbar=document.getElementById('paint-toolbar');
   this.brush=document.getElementById('paint-brush');
   this.eraser=document.getElementById('paint-eraser');
+  this.eyedropper=document.getElementById('paint-3d-eyedropper');
   this.colorInput=document.getElementById('paint-color');
   this.sizeInput=document.getElementById('paint-size');
   this.button?.addEventListener('click',()=>this.setActive(!this.active));
   this.brush?.addEventListener('click',()=>this.setTool('brush'));
   this.eraser?.addEventListener('click',()=>this.setTool('eraser'));
+  this.eyedropper?.addEventListener('click',()=>{if(this.mode3D&&this.can3D()&&this.space.pointer===null&&!this.paintTouches.size)this.setTool(this.tool==='eyedropper'?'brush':'eyedropper');});
   this.colorInput?.addEventListener('input',event=>{this.color=event.target.value;});
   const sizeLabel=document.getElementById('paint-size-value');
   const updateSize=()=>{this.size=clamp(Number(this.sizeInput.value),.04,.95);if(sizeLabel)sizeLabel.value=this.size.toFixed(2);};
@@ -92,12 +94,23 @@ export class CityWallPainter{
   if(enabled===this.mode3D)return;
   if(this.mode3D){if(!this.can3D())this.space.stroke=null;this.space.end();}else{this.finish();const pointer=this.pointer;this.pointer=null;if(pointer!==null&&this.canvas.hasPointerCapture(pointer))this.canvas.releasePointerCapture(pointer);}
   this.resetPaintPointers();this.space.hideGuide();this.mode3D=enabled;this.clearFlight();this.controller()?.setPaintFlight(enabled);if(this.flightControls)this.flightControls.hidden=!enabled;this.spaceToggle?.classList.toggle('active',enabled);this.spaceToggle?.setAttribute('aria-pressed',String(enabled));if(this.spaceSettings)this.spaceSettings.hidden=!enabled;
+  if(!enabled&&this.tool==='eyedropper')this.setTool('brush');
  }
  setTool(tool){
   this.tool=tool;this.brush?.classList.toggle('active',tool==='brush');
   this.eraser?.classList.toggle('active',tool==='eraser');
   this.brush?.setAttribute('aria-pressed',String(tool==='brush'));
   this.eraser?.setAttribute('aria-pressed',String(tool==='eraser'));
+  this.eyedropper?.classList.toggle('active',tool==='eyedropper');
+  this.eyedropper?.setAttribute('aria-pressed',String(tool==='eyedropper'));
+  if(tool==='eyedropper')this.space.hideGuide();
+ }
+ pick3DColor(event){
+  if(!this.active||!this.mode3D||!this.can3D()||this.tool!=='eyedropper')return false;
+  const color=this.space.pickColor(event);
+  if(!color){this.ui.toast('Aim at an existing 3D stroke');return false;}
+  this.color=color;if(this.colorInput)this.colorInput.value=color;
+  this.setTool('brush');return true;
  }
  setActive(active){
   if(active&&this.role()!=='fighter'){this.ui.toast('Enter the arena to paint');return;}
@@ -179,6 +192,8 @@ export class CityWallPainter{
   const touch=this.paintTouches.get(event.pointerId);if(!touch)return;
   this.consume(event);touch.last=event;
   if(this.touchCamera){this.cameraGesture(this.pairMetrics());return;}
+  // Eyedropper samples only on release, never on the first finger of a pinch.
+  if(this.mode3D&&this.tool==='eyedropper')return;
   if(!this.touchDrawing){
    if(Math.hypot(event.clientX-touch.start.clientX,event.clientY-touch.start.clientY)<3)return;
    this.touchDrawing=true;this.paintDown(touch.start,false);
@@ -189,8 +204,11 @@ export class CityWallPainter{
   const touch=this.paintTouches.get(event.pointerId);if(!touch)return;
   this.consume(event);this.paintTouches.delete(event.pointerId);
   if(!this.touchCamera){
-   if(event.type==='pointerup'&&!this.touchDrawing)this.paintDown(touch.start,false);
-   if(this.touchDrawing||event.type==='pointerup')this.paintUp(event);
+   if(this.mode3D&&this.tool==='eyedropper'){if(event.type==='pointerup')this.pick3DColor(event);}
+   else{
+    if(event.type==='pointerup'&&!this.touchDrawing)this.paintDown(touch.start,false);
+    if(this.touchDrawing||event.type==='pointerup')this.paintUp(event);
+   }
   }
   if(this.canvas.hasPointerCapture(event.pointerId))this.canvas.releasePointerCapture(event.pointerId);
   this.touchPair=this.pairMetrics();
@@ -248,7 +266,7 @@ export class CityWallPainter{
   // Reserve middle mouse for GM camera orbit, not paint input swallowing.
   if(event.button!==0&&event.pointerType==='mouse')return;
   this.consume(event);
-  if(this.mode3D){this.space.down(event,{tool:this.tool,color:this.color,size:this.size,thickness:this.thickness,distance:this.distance},capture);return;}
+  if(this.mode3D){if(this.tool==='eyedropper'){this.pick3DColor(event);return;}this.space.down(event,{tool:this.tool,color:this.color,size:this.size,thickness:this.thickness,distance:this.distance},capture);return;}
   const hit=this.pick(event);
   if(!hit){this.ui.toast('Aim at a nearby wall, sign, pink disc or 3D surface');return;}
   this.pointer=event.pointerId;
