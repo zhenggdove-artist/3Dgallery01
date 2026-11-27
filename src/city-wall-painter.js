@@ -11,6 +11,8 @@ export class CityWallPainter{
   this.spaceToggle?.addEventListener('click',()=>this.setMode3D(!this.mode3D));
   const fixedScale=document.getElementById('paint-3d-fixed-scale');
   if(fixedScale){fixedScale.checked=false;fixedScale.addEventListener('change',()=>{if(!this.mode3D||this.paintTouches.size||!this.space.setFixedScale(fixedScale.checked))fixedScale.checked=this.space.fixedScale;});}
+  const connect=document.getElementById('paint-3d-connect');
+  if(connect){connect.checked=false;connect.addEventListener('change',()=>{if(!this.mode3D||this.paintTouches.size||!this.space.setConnected(connect.checked))connect.checked=this.space.connected;});}
   this.flightControls=document.getElementById('paint-3d-flight');this.flightPointers=new Map();
   const updateAxes=()=>{const axes=[0,0,0];for(const [axis,dir] of this.flightPointers.values())axes[axis]+=dir;const player=this.controller();if(player)player.paintAxes=axes.map(v=>clamp(v,-1,1));};
   this.clearFlight=()=>{this.flightPointers.clear();updateAxes();};

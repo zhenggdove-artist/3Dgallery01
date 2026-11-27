@@ -77,6 +77,37 @@ export function spacePaintGuideHeight(geometry,ranges,x,z,floor){
  }
  return floor;
 }
+// Find the closest actual surface only at stroke start. Existing tube ranges
+// provide conservative segment bounds, so distant triangles are never tested.
+export function nearestSpacePaintPoint(geometry,ranges,point,out){
+ const p=geometry.attributes.position,index=geometry.index?.array;
+ const triangle=new THREE.Triangle(),candidate=new THREE.Vector3();
+ let best=Infinity;
+ const near=(a,b,r)=>{
+  const dx=Math.max(0,Math.min(a[0],b[0])-r-point.x,point.x-Math.max(a[0],b[0])-r);
+  const dy=Math.max(0,Math.min(a[1],b[1])-r-point.y,point.y-Math.max(a[1],b[1])-r);
+  const dz=Math.max(0,Math.min(a[2],b[2])-r-point.z,point.z-Math.max(a[2],b[2])-r);
+  return dx*dx+dy*dy+dz*dz<=best;
+ };
+ const scan=(start,end)=>{
+  for(let f=start;f<end;f++){
+   const i=f*3;
+   triangle.a.fromBufferAttribute(p,index?index[i]:i);
+   triangle.b.fromBufferAttribute(p,index?index[i+1]:i+1);
+   triangle.c.fromBufferAttribute(p,index?index[i+2]:i+2);
+   triangle.closestPointToPoint(point,candidate);
+   const d=candidate.distanceToSquared(point);
+   if(d<best&&spacePaintPointAllowed(candidate.toArray())){best=d;out.copy(candidate);}
+  }
+ };
+ for(const {start,end,info} of ranges){
+  const points=info.points,r=Math.max(info.a,info.b)+.001;
+  for(let i=1;i<points.length;i++)if(near(points[i-1],points[i],r))scan(start+(i-1)*SIDES*2,start+i*SIDES*2);
+  const first=points[0],last=points.at(-1);
+  if(near(first,first,r)||near(last,last,r))scan(start+info.sideFaces,end);
+ }
+ return Number.isFinite(best);
+}
 export class SpacePainter{
  constructor({scene,canvas,camera,send,ui,loadRaster,controller=()=>null}){
   Object.assign(this,{scene,canvas,camera,send,ui,loadRaster,controller});
@@ -84,7 +115,7 @@ export class SpacePainter{
   this.ray=new THREE.Raycaster();this.ndc=new THREE.Vector2();this.point=new THREE.Vector3();
   this.pointer=null;this.stroke=null;this.frame=0;this.material=null;this.saved=null;this.preview=null;this.ranges=[];
   this.guide=null;this.guideKey=null;this.previewRanges=[];
-  this.paintCenter=new THREE.Vector3();this.paintNormal=new THREE.Vector3();this.paintRight=new THREE.Vector3();this.paintUp=new THREE.Vector3();this.paintScale=0;this.paintPlane=new THREE.Plane();this.fixedScale=false;
+  this.paintCenter=new THREE.Vector3();this.paintNormal=new THREE.Vector3();this.paintRight=new THREE.Vector3();this.paintUp=new THREE.Vector3();this.paintScale=0;this.paintPlane=new THREE.Plane();this.fixedScale=false;this.connected=false;this.paintOffset=new THREE.Vector3();this.connectPoint=new THREE.Vector3();
  }
  mesh(which,strokes){
   if(!strokes.length){if(this[which]){this[which].removeFromParent();this[which].geometry.dispose();this[which]=null;}if(which==='preview')this.previewRanges=[];return [];}
@@ -190,7 +221,7 @@ export class SpacePainter{
   this.paintUp.crossVectors(this.paintRight,this.paintNormal);
   this.paintCenter.copy(player.root.position);this.paintCenter.y+=1.5;
   this.paintCenter.addScaledVector(this.paintNormal,distance);
-  this.paintPlane.setFromNormalAndCoplanarPoint(this.paintNormal,this.paintCenter);
+  this.paintPlane.setFromNormalAndCoplanarPoint(this.paintNormal,this.paintCenter);this.paintOffset.set(0,0,0);
   // Match the existing default third-person viewing distance (7). Camera
   // zoom changes presentation only, never the drawing-coordinate scale.
   this.paintScale=(distance+7)*Math.tan(this.camera.fov*Math.PI/360);
@@ -200,14 +231,18 @@ export class SpacePainter{
   if(this.pointer!==null)return false;
   this.fixedScale=!!enabled;this.guideKey=null;return true;
  }
+ setConnected(enabled){
+  if(this.pointer!==null)return false;
+  this.connected=!!enabled;this.guideKey=null;return true;
+ }
  drawingPoint(event,out){
-  if(!event){out.copy(this.paintCenter);return true;}
+  if(!event){out.copy(this.paintCenter).add(this.paintOffset);return true;}
   // Default: the actual camera ray meets the avatar-anchored drawing plane.
   // Only the optional fixed-scale mode uses zoom-independent screen offsets.
-  if(!this.fixedScale)return this.setRay(event)&&!!this.ray.ray.intersectPlane(this.paintPlane,out);
+  if(!this.fixedScale){if(!this.setRay(event)||!this.ray.ray.intersectPlane(this.paintPlane,out))return false;out.add(this.paintOffset);return true;}
   const r=this.canvas.getBoundingClientRect();if(!r.width||!r.height)return false;
   const x=(event.clientX-r.left)/r.width*2-1,y=1-(event.clientY-r.top)/r.height*2;
-  out.copy(this.paintCenter).addScaledVector(this.paintRight,x*this.paintScale*r.width/r.height).addScaledVector(this.paintUp,y*this.paintScale);
+  out.copy(this.paintCenter).addScaledVector(this.paintRight,x*this.paintScale*r.width/r.height).addScaledVector(this.paintUp,y*this.paintScale).add(this.paintOffset);
   return true;
  }
  hideGuide(){if(this.guide)this.guide.visible=false;this.guideKey=null;}
@@ -254,6 +289,11 @@ export class SpacePainter{
   if(this.archive.length+pending.length>=SPACE_PAINT_STROKE_BUDGET||this.archive.concat(pending).reduce((n,s)=>n+s.points.length,0)>=SPACE_PAINT_POINT_BUDGET){this.ui.toast('3D paint archive full; erase a stroke first');return;}
   if(this.pending.size>=8){this.ui.toast('3D paint is still saving');return;}
   if(!this.setDrawingFrame(distance)||!this.drawingPoint(event,this.point)||!spacePaintPointAllowed(this.point.toArray())){this.ui.toast('Aim inside the 3D paint area');return;}
+  // Translate the whole new planar stroke by a single offset. No per-move
+  // snapping, bridge to the original touch point, or mutation of old strokes.
+  if(this.connected&&this.saved&&nearestSpacePaintPoint(this.saved.geometry,this.ranges,this.point,this.connectPoint)){
+   this.paintOffset.subVectors(this.connectPoint,this.point);this.point.copy(this.connectPoint);
+  }
   this.pointer=event.pointerId;if(capture)this.canvas.setPointerCapture(event.pointerId);
   this.gesture=globalThis.crypto.randomUUID();this.gestureEpoch=this.ownerEpoch;this.begin({color,size,thickness,normal:this.paintNormal.toArray()});this.append(this.point);
  }
