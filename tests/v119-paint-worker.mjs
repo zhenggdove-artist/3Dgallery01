@@ -68,4 +68,15 @@ try{
  const atk=equipmentStatRows(lv100).find(r=>r.label==='ATK');
  assert.equal(atk.level,49.7);assert.ok(Math.abs(atk.gear-(lv1.stats.attack-1)*levelAttributeScale(100)*100)<.11);
  console.log('V127 isolated Worker level 100 authority and EQUIP breakdown verified: '+JSON.stringify(atk));
+ await act('equip',{itemId:'hat-dragon'});
+ await act('equip',{itemId:'outfit-creature-rooster'});
+ const geared=(await call('/api/world',undefined,join.token)).world.profile;
+ assert.equal(geared.equipment.head,'hat-dragon');assert.equal(geared.equipment.outfit,'outfit-creature-rooster');
+ assert.ok(geared.stats.attack>lv100.stats.attack*1.2,'equipped attack bonuses must be present in server stats');
+ assert.ok(geared.stats.speed>lv100.stats.speed,'outfit speed must reach server stats');
+ assert.ok(equipmentStatRows(geared).find(r=>r.label==='ATK').gear>0);
+ await act('unequip',{slot:'head'});await act('unequip',{slot:'outfit'});
+ const stripped=(await call('/api/world',undefined,join.token)).world.profile;
+ assert.ok(stripped.stats.attack<geared.stats.attack);assert.ok(stripped.stats.speed<geared.stats.speed);
+ console.log('V128 isolated Worker equip/unequip changes effective attack and speed: '+JSON.stringify({before:lv100.stats,geared:geared.stats,after:stripped.stats}));
 }finally{socket?.close();await mf.dispose();}

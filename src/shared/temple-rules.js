@@ -1253,7 +1253,9 @@ function attack(world,profile,actor,body,context,now){
   if(channel){profile.manaChannelPaid=true;profile.channelManaPulseCost=quote.pulse;profile.channelManaNextAt=now+channelInterval(weapon);}
   profile.lastAttackAt=now;if(channel)profile.lastChannelPulseAt=now;
   if(!channel)profile.chargeStartedAt=0;
-  const origin=castOrigin,combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;stats.damage=+(stats.damage*playerStats(world,profile,now).attack*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
+  const origin=castOrigin,combo=stats.ultimate?6:now-(profile.lastComboAt||0)<1200?((profile.combo||0)+1)%6:0;
+  const attackPower=playerStats(world,profile,now).attack;
+  stats.damage=+(stats.damage*attackPower*.1).toFixed(3);profile.combo=combo;profile.lastComboAt=now;
   const groundForSpell=(x,z,y)=>spellGroundHeight(world,x,z,y);
   // The goldfish ultimate is an actual travelling creature, not a splash at a distant ground marker.
   const prismChannel=channel&&weapon.family==='beam'&&!weapon.exotic;
@@ -1264,7 +1266,26 @@ function attack(world,profile,actor,body,context,now){
   const fusionEchoes=[];
   const sniperMaterialBonus=(profile.fusion?.[weapon.id]?.sources||[]).filter(s=>s.id==='black-cat'&&!s.echo).reduce((sum,s)=>sum+sniperMaterialStat(itemById('black-cat'),stats.ultimate?'chargeDamage':'damage')*.3,0);
   const sniperMaterialRatio=1+sniperMaterialBonus/Math.max(1,Number(itemById(weapon.id)?.[stats.ultimate?'chargeDamage':'damage'])||1);
-  const pvpDamage=(sustained?sustained.hit*quality.damage*(1+(enchants.damage+enchants.attack)/100)*(1+enchants.charge/100):pvpShotDamage(weapon,stats,quality))*tuningRatio*sniperMaterialRatio;
+  // PvP's authored base balance already contains the weapon attack affix.
+  // Apply the remaining character ATK exactly once, including levels,
+  // headgear, outfit, legacy traits and current statuses.
+  const attributeScale=attackPower/(1+enchants.attack/100);
+  const damageField=stats.ultimate?'chargeDamage':'damage';
+  // Compare only actual fused damage to the same-quality baseline.
+  // Preserve the existing sniper-specific ratio, and add the remaining
+  // material power without ever counting the sniper contribution twice.
+  const record=profile.fusion?.[weapon.id];
+  let materialRatio=sniperMaterialRatio;
+  if(Number.isFinite(record?.templeStats?.[damageField])||Number.isFinite(record?.original?.stats?.[damageField])){
+   const baseWeapon=equippedItem(profile,itemById(weapon.id),{shopTier:record.shopTier});
+   const basePower=Math.max(.001,Number(baseWeapon[damageField])||1);
+   materialRatio+=Math.max(0,(Number(weapon[damageField])||0)-basePower-sniperMaterialBonus)/basePower;
+  }
+  if(sustained)stats.damage=+(stats.damage*materialRatio).toFixed(3);
+  const pvpDamage=(sustained?sustained.hit*quality.damage*(1+(enchants.damage+enchants.attack)/100)*(1+enchants.charge/100):pvpShotDamage(weapon,stats,quality))*tuningRatio*materialRatio*attributeScale;
+  const pvpCapScale=attributeScale*(1+(enchants.damage+enchants.attack)/100)*(stats.ultimate?1+enchants.charge/100:1);
+  const shotgunPowerScale=attackPower*(1+enchants.damage/100)*(stats.ultimate?1+enchants.charge/100:1);
+  const goldfishPowerScale=attackPower*materialRatio*(1+enchants.damage/100)*(1+enchants.charge/100);
   if(tidalChannel){
    // Three authenticated homing streams, each intentionally weaker than the
    // single-target prism; regular water taps still use their original ray.
@@ -1293,7 +1314,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:attackId,kind:waveVortex?'vortex':swimmingFish?'goldfish':returningGiraffe?'giraffe':'fan',owner:actor.key,
       origin:[...goldfishOrigin],direction:[...goldfishDirection],launchDirection:[...goldfishDirection],range:stats.range,position:[...goldfishOrigin],travelled:0,hitTimes:{},
-      damage:stats.damage+bonus*.1*tuningRatio,pvpDamage,gmTuning:tuning,damageRatio:tuningRatio,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
+      damage:stats.damage+bonus*.1*tuningRatio,pvpDamage,pvpCapScale,goldfishPowerScale,gmTuning:tuning,damageRatio:tuningRatio,radius:stats.radius,tier:quality.tier, // already quality-adjusted and 60%-sized, exactly as the warning
       createdAt:now,lastAt:now,expiresAt:now+duration,channel:!!channel,
       outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[]
     });
@@ -1314,7 +1335,7 @@ function attack(world,profile,actor,body,context,now){
     world.persistentAttacks.push({
       id:id(),kind:'projectile',owner:actor.key,weapon:weapon.id,
       origin:[...origin],direction:[...direction],range:stats.range,
-      radius:stats.radius,area,damage:stats.damage+bonus*.1*tuningRatio*(weapon.id==='jellybrella'?.5:1),pvpDamage,gmTuning:tuning,damageRatio:tuningRatio*sniperMaterialRatio,charge,critChance:weapon.critChance,
+      radius:stats.radius,area,damage:stats.damage+bonus*.1*tuningRatio*(weapon.id==='jellybrella'?.5:1),pvpDamage,pvpCapScale,shotgunPowerScale,gmTuning:tuning,damageRatio:tuningRatio*materialRatio,charge,critChance:weapon.critChance,
       qualityDuration:quality.duration,qualityScale:quality.visual,tier:quality.tier,channel,iceGround,
       shoulderSpread:false,
       flightMs:duration,hitTimes:{},pellets:pellets?.map(p=>({...p,radius:p.radius*quality.visual*(stats.ultimate?(tuning.radiusScale??1):1)}))||null,
@@ -1352,12 +1373,12 @@ function attack(world,profile,actor,body,context,now){
         exotic==='giraffe'?2300:exotic==='fan'?Math.round((1400+sourceQuality.tier*850)*sourceQuality.duration):
         source.family==='ice'?ICE_ERUPTION_TRAVEL_MS+ICE_ERUPTION_VISIBLE_MS:Math.max(flight,visibleCollisionLifetimeMs(source,true));
        const echoScale=weapon.id==='black-cat'?.08:.2;
-       const echoId=id(),echoDamage=+Math.min(full.damage*echoScale,weapon.id==='black-cat'?32:Infinity).toFixed(3);
-       const echoPvP=+Math.min(pvpShotDamage(source,full,sourceQuality)*echoRatio*echoScale,weapon.id==='black-cat'?3.5:Infinity).toFixed(3);
+       const echoId=id(),echoDamage=+(Math.min(full.damage*echoScale,weapon.id==='black-cat'?32:Infinity)*attackPower).toFixed(3);
+       const echoPvP=+(Math.min(pvpShotDamage(source,full,sourceQuality)*echoRatio*echoScale,weapon.id==='black-cat'?3.5:Infinity)*attackPower).toFixed(3);
       const secondaryPellets=source.pattern==='scatter'?calicoPellets(direction,true,now):null;
       world.persistentAttacks.push({id:echoId,kind:exotic||'projectile',echo:true,fusionSlot,channel:echoChannel,owner:actor.key,weapon:source.id,
         origin:[...origin],direction:[...direction],launchDirection:[...direction],position:[...origin],travelled:0,range:secondary.range,radius:secondary.radius,area:echoArea,parentFootprint:primaryFootprint,
-        damage:echoDamage,pvpDamage:echoPvP,gmTuning:echoTuning,damageRatio:echoRatio,charge:1,qualityDuration:sourceQuality.duration*echoScale,
+        damage:echoDamage,pvpDamage:echoPvP,pvpCapScale:attackPower,goldfishPowerScale:attackPower,gmTuning:echoTuning,damageRatio:echoRatio,charge:1,qualityDuration:sourceQuality.duration*echoScale,
         tier:sourceQuality.tier,flightMs:flight,iceGround:source.family==='ice',hitTimes:{},hits:[],pelletHits:{},areaResolved:false,
         pellets:secondaryPellets?.map(v=>({...v,radius:v.radius*sourceQuality.visual*.5*(echoTuning.radiusScale??1)}))||null,
         outHits:[],backHits:[],fanHits:{},fishHits:[],fishConsumed:[],
@@ -1414,7 +1435,7 @@ function damagePlayer(world,sourceProfile,targetActor,amount,now,cause,dropPosit
   let damage=amount<=0?0:fixedDamage?Math.max(0,+Number(amount).toFixed(1)):
     Math.max(1,+((amount)*(forceKill?1:1-reduction)*(forceKill?1:stats.defense)*(1+(effectActive(target,'soaked',now)?.power||0))).toFixed(1));
   if(forceKill)damage=Math.max(damage,target.hp); // A verified sniper headshot ignores armour and shields.
-  if(shotgunPellet){const scale=typeof shotgunPellet==='object'?shotgunPellet.scale:typeof shotgunPellet==='number'?shotgunPellet:1;damage=+(Math.max(5,Math.min(20,damage))*scale).toFixed(1);} // Per pellet after armour; shields still absorb.
+  if(shotgunPellet){const scale=typeof shotgunPellet==='object'?shotgunPellet.scale:typeof shotgunPellet==='number'?shotgunPellet:1;damage=+(Math.min(20,damage)*scale).toFixed(1);} // Per pellet after armour; shields still absorb.
    if(target.shield&&!forceKill&&!fixedDamage){const absorbed=Math.min(Math.max(0,target.shield.hp),damage);if(absorbed>0){target.shield.hp=Math.max(0,target.shield.hp-absorbed);target.shield.lastHit=now;target.shield.lastAbsorbed=+absorbed.toFixed(2);target.shield.hitId=id();recordTempleDamage(world,{amount:absorbed,kind:'shield',position:hitPosition||[targetActor.position[0],targetActor.position[1]+1.3,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);}damage-=absorbed;}
   const hpLost=Math.min(target.hp,damage);target.hp=Math.max(0,target.hp-hpLost);if(hpLost>0){const from=dropPosition||targetActor.position,dx=targetActor.position[0]-from[0],dz=targetActor.position[2]-from[2],length=Math.hypot(dx,dz)||1;target.hitReaction={id:id(),time:now,stunMs:100,vector:[dx/length,0,dz/length]};}
   recordTempleDamage(world,{amount:damage,kind,position:hitPosition||[targetActor.position[0],targetActor.position[1]+1,targetActor.position[2]],owner:sourceProfile?.key,target:targetActor.key},now);
@@ -1438,7 +1459,7 @@ function build(world,profile,actor,body,now,rng){
   const position=body.position;if(!validBuildPosition(world,actor,position))return {error:'Invalid build position'};
   if(!spend(profile,cost,world))return {error:'Not enough coins'};const structure={id:id(),kind,surface:typeof body.surface==='string'?body.surface:null,variant:Math.floor(rng()*4),position:position.map(n=>+n.toFixed(2)),rotation:+(Number(body.rotation)||0).toFixed(3),owner:actor.key,hp:kind==='house'?220:kind==='tree'?90:140,maxHp:kind==='house'?220:kind==='tree'?90:140,createdAt:now};world.structures.push(structure);return {notice:`Built ${kind}`,structure};
 }
-function destroy(world,profile,actor,body,now){const structure=world.structures.find(entry=>entry.id===body.structureId);if(!structure)return {error:'Structure is gone'};if(distance2d(actor.position,structure.position)>12)return {error:'Move closer to the structure'};if(isDelisted(world,profile.equipment.weapon||STARTER_LOADOUT.weapon))return {error:'Weapon is delisted'};const weapon=itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon);if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};profile.lastAttackAt=now;const damage=Math.max(8,weapon.damage+(profile.fusion[weapon.id]?.bonus||0));structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;structure.hp=Math.max(0,structure.hp-damage);const structureHit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};let structureDestroyed=null;if(structure.hp<=0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}return {notice:structureDestroyed?'Structure destroyed':`${Math.ceil(structure.hp)} structure HP`,structureDestroyed,structureHit,attackEvent:{id:id(),owner:actor.key,origin:actor.position,direction:normalDirection(body.direction)||[0,0,-1],weapon:weapon.id,time:now}};}
+function destroy(world,profile,actor,body,now){const structure=world.structures.find(entry=>entry.id===body.structureId);if(!structure)return {error:'Structure is gone'};if(distance2d(actor.position,structure.position)>12)return {error:'Move closer to the structure'};if(isDelisted(world,profile.equipment.weapon||STARTER_LOADOUT.weapon))return {error:'Weapon is delisted'};const weapon=itemById(profile.equipment.weapon)||itemById(STARTER_LOADOUT.weapon);if(now-profile.lastAttackAt<weapon.cooldown)return {error:'Weapon is recovering'};profile.lastAttackAt=now;const damage=Math.max(8,(equippedItem(profile,weapon).damage+(profile.fusion[weapon.id]?.bonus||0))*playerStats(world,profile,now).attack);structure.maxHp??=structure.kind==='house'?220:structure.kind==='tree'?90:140;structure.hp=Math.max(0,structure.hp-damage);const structureHit={id:id(),structureId:structure.id,kind:structure.kind,position:[...structure.position],hp:structure.hp,maxHp:structure.maxHp,damage,time:now};let structureDestroyed=null;if(structure.hp<=0){structureDestroyed=structureEvent(structure,now);world.structures.splice(world.structures.indexOf(structure),1);}return {notice:structureDestroyed?'Structure destroyed':`${Math.ceil(structure.hp)} structure HP`,structureDestroyed,structureHit,attackEvent:{id:id(),owner:actor.key,origin:actor.position,direction:normalDirection(body.direction)||[0,0,-1],weapon:weapon.id,time:now}};}
 
 function removeStructure(world,profile,actor,body,now){
   const structure=(world.structures||[]).find(s=>s.id===body.structureId);
@@ -2362,12 +2383,12 @@ function tickPersistentAttacks(world,actors,now,rng){
     const falloff=scatter?shotgunDistanceScale(along,fx.range):1;
     const shotgunPellet=!fx.echo&&isPlayer&&scatter;
     const ratio=fx.damageRatio??1;
-    const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap*ratio):rawDamage)*(frostProc?1.5:1)*(shotgunPellet?1:falloff);
+    const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap*ratio*(fx.pvpCapScale??1)):rawDamage)*(frostProc?1.5:1)*(shotgunPellet?1:falloff);
     const lethalHeadshot=!fx.echo&&fx.charge<1&&!fx.shoulderSpread&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
      fx.origin,fx.direction,fx.range,enemy.position);
     const hitKind=lethalHeadshot?(modifiers.critical?'critical-headshot':'headshot'):modifiers.kind;
     let applied;
-    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,hitKind,position,lethalHeadshot,shotgunPellet?{scale:falloff*ratio}:false);
+    if(isPlayer)applied=damagePlayer(world,owner,enemy,damage,now,'pvp',fx.origin,hitKind,position,lethalHeadshot,shotgunPellet?{scale:falloff*ratio*(fx.shotgunPowerScale??1)}:false);
     else applied=damageMonster(world,owner,damage,now,rng,modifiers.kind,enemy,position);
     if(applied&&!applied.immune){
      if(fx.channel){
@@ -2792,9 +2813,9 @@ function tickPersistentAttacks(world,actors,now,rng){
      // Persistent hit tracking already grants each fish ONE hit per target.
      // Preserve the 20%-strength rule for an inherited fusion echo.
      fx.damageSpent??={};
-     const totalBudget=goldfishDirectHitBudget(fx.tier,fx.echo);
+     const totalBudget=goldfishDirectHitBudget(fx.tier,fx.echo)*(fx.goldfishPowerScale??1);
      const remaining=Math.max(0,totalBudget-(fx.damageSpent[key]||0));
-     const perFishCap=GOLDFISH_T1_DAMAGE_PER_FISH*Math.max(1,Math.min(5,fx.tier||1))*(fx.echo?.2:1);
+     const perFishCap=GOLDFISH_T1_DAMAGE_PER_FISH*Math.max(1,Math.min(5,fx.tier||1))*(fx.echo?.2:1)*(fx.goldfishPowerScale??1);
      const baseFish=fx.damage*1.25*GOLDFISH_DAMAGE_PER_FISH;
      const direct=Math.min(remaining,contacts*Math.min(perFishCap,baseFish));
      if(direct<=0)continue;

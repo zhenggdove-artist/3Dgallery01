@@ -28,7 +28,7 @@ test('level effect only starts on increases, follows avatar, and releases active
  const scene=new THREE.Scene(),root=new THREE.Group();scene.add(root);const fx=new LevelUpEffect(scene);
  assert.equal(observeLevel(root,20),false);assert.equal(observeLevel(root,21),true);assert.equal(observeLevel(root,21),false);assert.equal(observeLevel(root,19),false);
  fx.play(root);const e=fx.active.get(root);assert.equal(e.mesh.geometry,fx.geometry);assert.equal(fx.geometry.attributes.position.count,960);
- root.position.set(3,4,5);fx.update(e.start+500,800);assert.deepEqual(e.mesh.position.toArray(),[3,4,5]);assert.equal(e.mesh.material.uniforms.age.value,.5);
+ root.position.set(3,4,5);fx.update(e.start+500,800);assert.deepEqual(e.mesh.position.toArray(),[3,4,5]);assert.ok(Math.abs(e.mesh.material.uniforms.age.value-.5)<1e-9);
  fx.update(e.start+1400,800);assert.equal(fx.active.size,0);assert.equal(e.mesh.parent,null);fx.material.dispose();fx.geometry.dispose();
 });
 test('all grass attributes share one buffer and retain exact original seed values',()=>{
