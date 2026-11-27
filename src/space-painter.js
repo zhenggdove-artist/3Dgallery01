@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {SPACE_PAINT_MAX_POINTS,spacePaintPointAllowed} from './shared/space-paint.js';
+import {SPACE_PAINT_MAX_POINTS,SPACE_PAINT_POINT_BUDGET,SPACE_PAINT_STROKE_BUDGET,spacePaintPointAllowed} from './shared/space-paint.js';
 
 const SIDES=12;
 // A camera-facing drawing plane provides independent width and depth.
@@ -95,6 +95,9 @@ export class SpacePainter{
    }
    return;
   }
+  const stored=new Set(this.archive.map(s=>s.id)),pending=[...this.pending.values()].filter(s=>!stored.has(s.id));
+  if(this.archive.length+pending.length>=SPACE_PAINT_STROKE_BUDGET||this.archive.concat(pending).reduce((n,s)=>n+s.points.length,0)>=SPACE_PAINT_POINT_BUDGET){this.ui.toast('3D paint archive full; erase a stroke first');return;}
+  if(this.pending.size>=8){this.ui.toast('3D paint is still saving');return;}
   this.camera.getWorldDirection(this.normal);
   this.plane.setFromNormalAndCoplanarPoint(this.normal,this.point.copy(this.camera.position).addScaledVector(this.normal,distance));
   if(!this.ray.ray.intersectPlane(this.plane,this.point)||!spacePaintPointAllowed(this.point.toArray())){this.ui.toast('Aim inside the 3D paint area');return;}
@@ -113,16 +116,16 @@ export class SpacePainter{
  move(event){
   if(event.pointerId!==this.pointer||!this.stroke||!this.setRay(event))return;
   if(!this.ray.ray.intersectPlane(this.plane,this.point))return;
-  this.append(this.point);
   if(this.stroke.points.length>=SPACE_PAINT_MAX_POINTS){
    const {color,size,thickness,normal,points}=this.stroke,last=points.at(-1);
-   this.finish();this.begin({color,size,thickness,normal});this.stroke.points.push(last);
+   this.finish();if(this.pending.size>=8){this.end();this.ui.toast('3D paint is still saving');return;}this.begin({color,size,thickness,normal});this.stroke.points.push(last);
   }
+  this.append(this.point);
  }
  end(event){
   if(event&&event.pointerId!==this.pointer)return;
   const pointer=this.pointer;this.pointer=null;
-  if(event?.type==='pointerup'&&this.stroke&&this.setRay(event)&&this.ray.ray.intersectPlane(this.plane,this.point))this.append(this.point);
+  if(event?.type==='pointerup'&&this.stroke&&this.stroke.points.length<SPACE_PAINT_MAX_POINTS&&this.setRay(event)&&this.ray.ray.intersectPlane(this.plane,this.point))this.append(this.point);
   if(pointer!==null&&this.canvas.hasPointerCapture(pointer))this.canvas.releasePointerCapture(pointer);
   this.finish();
  }
@@ -135,7 +138,7 @@ export class SpacePainter{
   this.queue=this.queue.catch(()=>{}).then(async()=>{
    try{const result=await this.send('gm-paint-3d',{stroke:s});if(!result?.spacePaintStroke)throw Error('3D paint could not be saved');}
    catch(e){this.ui.toast(e.message||'3D paint could not be saved');}
-   finally{this.pending.delete(s.id);this.rebuild();}
+   finally{this.pending.delete(s.id);if(!this.archive.some(p=>p.id===s.id))this.rebuild();}
   });
  }
 }
