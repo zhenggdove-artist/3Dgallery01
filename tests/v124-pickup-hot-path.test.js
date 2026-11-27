@@ -1,0 +1,70 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {PickupScheduler} from '../src/auto-pickup.js';
+import {createInitialWorld,ensureProfile,applyAction} from '../src/shared/temple-rules.js';
+import {PLATFORMS,PLAYER_SPAWNS} from '../src/shared/arena.js';
+import {encodeCombatWorld,forkCombatWorld} from '../cloudflare/combat-world-cache.js';
+import {combatRows,writeCombatDelta,restoreCombatOverlay} from '../cloudflare/combat-persistence.js';
+
+test('first contact starts in the current frame, never waits for a 300ms polling boundary',async()=>{
+ let now=0;const calls=[],p=new PickupScheduler([],async(action,data)=>{calls.push({action,data,now});return {ok:true}},()=>now);
+ const world={coins:{},groundDrops:[{id:'d',position:[0,0,0]}]};
+ assert.equal(p.poll(world,{x:4,y:0,z:0},'a',now,now),null);
+ now=16;const pick=p.poll(world,{x:2,y:0,z:0},'a',now,now);
+ assert.ok(pick);assert.deepEqual(calls,[{action:'pickup-drop',data:{dropId:'d'},now:16}]);
+ assert.equal(p.request('pickup-drop','d','dropId'),null);
+ await pick;
+ now=32;assert.equal(p.poll(world,{x:2,y:0,z:0},'a',now,now),null);
+ world.groundDrops=[{id:'e',position:[2,0,0]}];now=48;
+ await p.poll(world,{x:2,y:0,z:0},'a',now,now);assert.equal(calls.at(-1).data.dropId,'e');
+ assert.equal(calls.length,2);
+});
+test('coin priority, exact reach, owner lock, retry interval and old-session cleanup',async()=>{
+ let now=100;const calls=[],p=new PickupScheduler([{id:'c',coinPosition:[0,0,0]}],async(action,data)=>{calls.push({action,data});return null},()=>now);
+ const world={coins:{c:{available:true}},groundDrops:[{id:'d',position:[0,0,0],owner:'a',ownerLockedUntil:500}]};
+ const pos={x:0,y:0,z:0};
+ await p.poll(world,pos,'a',now,now);assert.equal(calls[0].action,'pickup-coin');
+ world.coins={c:{available:false}};now=110;assert.equal(p.poll(world,pos,'a',now,now),null);
+ now=500;await p.poll(world,pos,'a',now,now);assert.equal(calls.at(-1).data.dropId,'d');
+ now=600;assert.equal(p.poll(world,pos,'a',now,now),null);
+ now=800;await p.poll(world,pos,'a',now,now);assert.equal(calls.length,3);
+ const before=calls.length;await p.poll(world,pos,'b',now,now);assert.equal(calls.length,before+1);
+});
+test('loaded world pickup retains exact rules, frozen paint and offline profiles, with durable delta recovery',()=>{
+ const now=100000000,w=createInitialWorld(now),position=[...PLAYER_SPAWNS[0]],a={key:'alice',name:'Alice',color:'#123456',role:'fighter',position};
+ const p=ensureProfile(w,a.key,a.name,a.color,now,false);p.hp=60;
+ w.wallPaint={fixture:[{points:Array.from({length:5000},()=>[.1,.2]),color:'#ff00aa'}]};
+ w.spacePaint=Array.from({length:300},(_,i)=>({id:'s'+i,ownerKey:'alice',points:[[1,2,3]],color:'#ff00aa'}));
+ for(let i=0;i<20;i++)w.profiles['offline'+i]={key:'offline'+i,inventory:Array(1000).fill('saber-2')};
+ w.groundDrops=[{id:'coin',kind:'coin',amount:17,position,expiresAt:now+100000},{id:'heart',kind:'heart',amount:25,position,expiresAt:now+100000}];
+ const baseline=encodeCombatWorld(w),before=combatRows(w,baseline,true),legacy=JSON.parse(baseline.payload),fast=forkCombatWorld(baseline);
+ const body={action:'pickup-drop',dropId:'coin'};
+ const result=applyAction(fast,a,body,{now:now+1000,actors:[a]}),control=applyAction(legacy,a,body,{now:now+1000,actors:[a]});
+ assert.ok(!result.error,result.error);assert.deepEqual(result,control);assert.deepEqual(JSON.parse(JSON.stringify(fast)),legacy);
+ const next=encodeCombatWorld(fast,baseline),after=combatRows(fast,next,true);
+ assert.equal(next.records.get('wallPaint'),baseline.records.get('wallPaint'));assert.equal(next.records.get('spacePaint'),baseline.records.get('spacePaint'));
+ const changed=[...after.keys()].filter(k=>after.get(k)!==before.get(k));
+ assert.ok(!changed.some(k=>k.startsWith('p:offline')||k==='w:wallPaint'||k==='w:spacePaint'));
+ const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE combat_world_overlay(key TEXT PRIMARY KEY,payload TEXT)');
+ const write=writeCombatDelta({exec:(q,...args)=>db.prepare(q).run(...args)},before,after);
+ assert.ok(write.bytes<baseline.payload.length/10,JSON.stringify(write));
+ assert.deepEqual(restoreCombatOverlay(JSON.parse(baseline.payload),db.prepare('SELECT key,payload FROM combat_world_overlay').all()),legacy);db.close();
+ assert.ok(applyAction(fast,a,{action:'pickup-drop',dropId:'heart'},{now:now+1100,actors:[a]}).profile);
+ assert.equal(fast.profiles.alice.hp,85);assert.ok(applyAction(fast,a,{action:'pickup-drop',dropId:'heart'},{now:now+1200,actors:[a]}).error);
+});
+test('frozen cache accepts remaining hot inventory actions without mutating unrelated scene data',()=>{
+ const now=100000000,w=createInitialWorld(now),a={key:'a',name:'A',color:'#abcdef',role:'fighter',position:[...PLATFORMS[0].coinPosition]};
+ const p=ensureProfile(w,a.key,a.name,a.color,now,true);p.hp=50;
+ const run=(body,i)=>{
+  const cache=encodeCombatWorld(w);const next=forkCombatWorld(cache),old=JSON.parse(cache.payload);
+  const r=applyAction(next,{...a,admin:true},body,{now:now+i*1000,actors:[a]});
+  const expected=applyAction(old,{...a,admin:true},body,{now:now+i*1000,actors:[a]});
+  assert.ok(!r.error,body.action+': '+r.error);assert.deepEqual(r,expected);assert.deepEqual(JSON.parse(JSON.stringify(next)),old);
+  return old;
+ };
+ run({action:'pickup-coin',platformId:PLATFORMS[0].id},1);
+ run({action:'equip',itemId:p.starterWeaponId,slot:'weapon'},2);
+ run({action:'unequip',slot:'weapon'},3);
+ run({action:'inspect-item',itemId:p.starterWeaponId},4);
+});

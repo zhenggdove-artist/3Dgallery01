@@ -1,3 +1,4 @@
+import {PickupScheduler} from './auto-pickup.js';
 import {terrainStyle,TERRAIN_DEFAULTS} from './shared/terrain-style.js';
 import {bindWantedList,syncWantedButton} from './wanted-list.js';
 import {tunedEquipment,weaponManaQuote,restorativeCooldown,equipmentTuning} from './shared/equipment-tuning.js';
@@ -83,16 +84,17 @@ function currentTunedWeapon(){
  }
  return tunedWeaponValue;
 }
-let artBombUploading=false;let assetsReady=false,joined=false,self=null,world=null,players=[],controller=null,localRoot=null,wasDead=false,last=performance.now(),externalUntil=0,toastErrorAt=0,lastAutoCoinAt=0,frameSamples=[],fps=0,fpsFrames=0,fpsAt=performance.now(),buildPlacement=null,spectatorFollowIndex=-1;
-const roots=new Map(),remoteTargets=new Map(),effects=[],pendingAutoPickups=new Set();
+let artBombUploading=false;let assetsReady=false,joined=false,self=null,world=null,players=[],controller=null,localRoot=null,wasDead=false,last=performance.now(),externalUntil=0,toastErrorAt=0,frameSamples=[],fps=0,fpsFrames=0,fpsAt=performance.now(),buildPlacement=null,spectatorFollowIndex=-1;
+const roots=new Map(),remoteTargets=new Map(),effects=[];
+const pickups=new PickupScheduler(PLATFORMS,(action,data)=>sendAction(action,data));
 let heldArtworkSource=null,heldArtworkOwner=null,heldArtworkCached=false;
 function hasHeldArtwork(artworks,owner){
  if(heldArtworkSource!==artworks||heldArtworkOwner!==owner){heldArtworkSource=artworks;heldArtworkOwner=owner;heldArtworkCached=Object.values(artworks||{}).some(art=>art.holder===owner);}
  return heldArtworkCached;
 }
-function autoPickup(action,id,field){
- const key=action+':'+id;if(pendingAutoPickups.has(key))return;
- pendingAutoPickups.add(key);void sendAction(action,{[field]:id}).finally(()=>pendingAutoPickups.delete(key));
+function requestPickup(action,id,field){
+ if(pickups.owner!==self?.key)pickups.reset(self?.key);
+ void pickups.request(action,id,field);
 }
 const speechLayer=document.getElementById('chat-speech-layer'),speechBubbles=new Map(),speechPoint=new THREE.Vector3();
 function showPlayerSpeech(message){
@@ -1113,7 +1115,7 @@ function performAttack(charge=0,phase=null,captured=null,extra={},pendingCharge=
  }
  return action;
 }
-function performInteract(target=null){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=target||arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')sendAction('pickup-coin',{platformId:near.id});if(near.type==='drop')sendAction('pickup-drop',{dropId:near.id});if(near.type==='artwork')sendAction('pickup-artwork',{platformId:near.id});}
+function performInteract(target=null){if(!controller||self?.role!=='fighter')return;const held=Object.entries(world?.artworks||{}).find(([,art])=>art.holder===self.key);if(held){artworkThrow.begin();return;}const near=target||arena.nearest(controller.root.position.toArray());if(!near)return;if(near.type==='plant')return;if(near.type==='coin')requestPickup('pickup-coin',near.id,'platformId');if(near.type==='drop')requestPickup('pickup-drop',near.id,'dropId');if(near.type==='artwork')requestPickup('pickup-artwork',near.id,'platformId');}
 
 const localContactPreviews=new Map();
 function cancelContactPreview(inputId){localContactPreviews.delete(inputId);arena.outerCity?.finishPredictedContact(inputId);}
@@ -1176,7 +1178,7 @@ function update(dt,time,movementDt=dt){
     const substeps=Math.max(1,Math.ceil(simulationDt/(1/40)));
     let state;
     for(let step=0;step<substeps;step++)state=controller.update(simulationDt/substeps);
-    if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);const remotePositionAlpha=1-Math.exp(-dt*11),remoteRotationAlpha=1-Math.exp(-dt*12);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,remotePositionAlpha);root.rotation.y=lerpAngle(root.rotation.y,target.rotation,remoteRotationAlpha);arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=hasHeldArtwork(world?.artworks,self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter'&&performance.now()-lastAutoCoinAt>300){lastAutoCoinAt=performance.now();const p=localRoot.position;const coin=PLATFORMS.find(c=>!pendingAutoPickups.has('pickup-coin:'+c.id)&&world?.coins?.[c.id]?.available&&(p.x-c.coinPosition[0])**2+(p.z-c.coinPosition[2])**2<2.8**2&&Math.abs(p.y-c.coinPosition[1])<3.1),drop=coin?null:world?.groundDrops?.find(d=>!pendingAutoPickups.has('pickup-drop:'+d.id)&&(p.x-d.position[0])**2+(p.y-d.position[1])**2+(p.z-d.position[2])**2<2.2**2&&!(d.owner===self.key&&nowMs<d.ownerLockedUntil));if(coin||drop){if(coin)autoPickup('pickup-coin',coin.id,'platformId');else autoPickup('pickup-drop',drop.id,'dropId');}}const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
+    if(!wasGrounded&&controller.grounded)audio.play('land',.95);arena.setPlayerAnimation(localRoot,state.animation);if(!(writer.active&&writer.legacy)&&self?.role==='fighter')network.sendState(state);const remotePositionAlpha=1-Math.exp(-dt*11),remoteRotationAlpha=1-Math.exp(-dt*12);for(const [key,target] of remoteTargets){const root=roots.get(key);if(!root)continue;root.position.lerp(target.position,remotePositionAlpha);root.rotation.y=lerpAngle(root.rotation.y,target.rotation,remoteRotationAlpha);arena.setPlayerAnimation(root,target.animation);}const near=arena.nearest(localRoot.position.toArray()),holding=hasHeldArtwork(world?.artworks,self.key);if(!holding&&artworkThrow.started!==null)artworkThrow.cancel();controller.holdingArt=holding;ui.setNear(near,holding);if(buildPlacement){buildPlacement.position=controller.buildPosition(buildPlacement.kind==='art-bomb'?3.2:5);buildPlacement.valid=(buildPlacement.kind==='art-bomb'?canPlaceArtworkAt:canBuildAt)(world,controller.root.position.toArray(),buildPlacement.position);arena.setBuildPreview(buildPlacement.kind,buildPlacement.position,buildPlacement.rotation,buildPlacement.valid,buildPlacement.artwork?.size||1,buildPlacement.artwork?.previewFile||null);}if(self?.role==='fighter')void pickups.poll(world,localRoot.position,self.key,performance.now(),nowMs);const profile=world?.profile;if(profile?.deadUntil>Date.now())ui.death(profile.deadUntil,profile.lastKilledBy?.name||'');}
   platformDelete.update();
   collectorView.update(time,camera);
   statusVisuals.update(dt);

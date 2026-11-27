@@ -28,12 +28,12 @@ export class AdventureView{
  // for loot art, but do not tick the inactive RELETTER fishing runtime.
  beforeAnimation(){}
  takeLoot(id,drop=null){let mesh=this.loot.get(id);if(mesh)this.loot.delete(id);else if(drop&&itemById(drop.itemId)){mesh=createVisibleDrop(itemById(drop.itemId),this.original);mesh.position.fromArray(drop.position);mesh.position.y+=mesh.userData.weaponDrop?.95:1.2;}return mesh;}
- sync(world){this.world=world;const active=new Set((world.groundDrops||[]).map(d=>d.id));for(const [id,mesh] of this.loot)if(!active.has(id)){disposeGardenModel(mesh);this.loot.delete(id);}}
+ sync(world){const previous=this.world;this.world=world;if(previous&&previous.groundDrops===world.groundDrops)return;const active=new Set((world.groundDrops||[]).map(d=>d.id));for(const [id,mesh] of this.loot)if(!active.has(id)){disposeGardenModel(mesh);this.loot.delete(id);}}
  reconcile(cache,records,create,remove=disposeGardenModel){const live=new Set();for(const record of records){live.add(record.id);if(!cache.has(record.id))cache.set(record.id,create(record));}for(const [id,o] of cache)if(!live.has(id)){remove(o);cache.delete(id);}}
  update(dt,time,roots,camera){
   if(!this.world)return;
   if(time>=this.nextSync){this.nextSync=time+.5;
-   this.reconcile(this.loot,this.world.groundDrops.filter(d=>groundDropVisualKind(d)==='equipment'),d=>{const o=createVisibleDrop(itemById(d.itemId),this.original);o.userData.drop=d;this.scene.add(o);return o;});
+   if(this.lootSource!==this.world.groundDrops){this.lootSource=this.world.groundDrops;this.reconcile(this.loot,this.world.groundDrops.filter(d=>groundDropVisualKind(d)==='equipment'),d=>{const o=createVisibleDrop(itemById(d.itemId),this.original);o.userData.drop=d;this.scene.add(o);return o;});}
    // Detailed original plants are distance bounded. All entries remain persistent/readable.
    const {x,y,z}=camera.position;
    const distance=p=>(p.position[0]-x)**2+(p.position[1]-y)**2+(p.position[2]-z)**2;

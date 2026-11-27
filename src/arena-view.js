@@ -267,8 +267,9 @@ export class TempleArena{
   }
   if(!previous||previous.groundDrops!==world.groundDrops){
    const active=new Set((world.groundDrops||[]).map(d=>d.id));
+   const receipts=new Set((world.pickupReceipts||[]).map(r=>r.id));
    for(const prior of previous?.groundDrops||[]){
-    if(!active.has(prior.id)&&(world.pickupReceipts||[]).some(r=>r.id===prior.id))this.spawnDropCoinFlight(prior);
+    if(!active.has(prior.id)&&receipts.has(prior.id))this.spawnDropCoinFlight(prior);
    }
    this.syncHearts();this.syncDrops();
   }
@@ -342,17 +343,26 @@ export class TempleArena{
   syncDrops(){
    const drops=(this.world?.groundDrops||[]).filter(d=>['coin','cash'].includes(groundDropVisualKind(d))),signature=drops.map(d=>d.id+':'+d.kind+':'+(d.itemId||'')+':'+d.position.join(',')).join('|');
    if(signature===this.dropSignature)return;this.dropSignature=signature;
-   for(const mesh of this.dropMeshes){mesh.removeFromParent();mesh.dispose();mesh.material.dispose();}this.dropMeshes=[];
-   const groups=new Map();
+   const groups=new Map(),previous=new Map(this.dropMeshes.map(mesh=>[mesh.userData.dropKey,mesh])),next=[];
    for(const drop of drops){const kind=groundDropVisualKind(drop),key=kind==='cash'?drop.itemId:'coin';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(drop);}
    for(const [key,records] of groups){
     const cash=key!=='coin',item=cash?itemById(key):null,shape=cash?'cash':'coin';
-    const geometry=this.groundDropGeometry(shape),material=cash?cashDropMaterial(THREE,item):this.coinMesh.material.clone();
-    const mesh=new THREE.InstancedMesh(geometry,material,records.length);mesh.userData.records=records;mesh.userData.dropShape=shape;mesh.frustumCulled=false;
-    records.forEach((drop,i)=>{setDropMatrix(mesh,drop,i,shape,this.clock);if(!cash)mesh.setColorAt(i,new THREE.Color('#f2cf55'));});
-    mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
-    mesh.name=cash?'Ground loot · cash '+item.denomination:'Ground loot · coin';this.scene.add(mesh);this.dropMeshes.push(mesh);
+    let mesh=previous.get(key);previous.delete(key);
+    if(!mesh||mesh.instanceMatrix.count<records.length){
+     const geometry=this.groundDropGeometry(shape),material=mesh?.material??(cash?cashDropMaterial(THREE,item):this.coinMesh.material.clone());
+     if(mesh){mesh.removeFromParent();mesh.dispose();}
+     const capacity=2**Math.ceil(Math.log2(Math.max(1,records.length)));
+     mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.userData.dropKey=key;mesh.userData.dropShape=shape;mesh.frustumCulled=false;
+     if(!cash){const color=new THREE.Color('#f2cf55');for(let i=0;i<capacity;i++)mesh.setColorAt(i,color);mesh.instanceColor.needsUpdate=true;}
+     mesh.name=cash?'Ground loot · cash '+item.denomination:'Ground loot · coin';this.scene.add(mesh);
+    }
+    const old=mesh.userData.records;
+    const changed=!old||old.length!==records.length||records.some((d,i)=>d.id!==old[i].id||d.position.some((v,j)=>v!==old[i].position[j]));
+    mesh.count=records.length;mesh.userData.records=records;
+    if(changed){records.forEach((drop,i)=>setDropMatrix(mesh,drop,i,shape,this.clock));mesh.instanceMatrix.needsUpdate=true;}next.push(mesh);
    }
+   for(const mesh of previous.values()){mesh.removeFromParent();mesh.dispose();mesh.material.dispose();}
+   this.dropMeshes=next;
   }
   syncStructures(){
    const revision=this.world?.revision??-1;
