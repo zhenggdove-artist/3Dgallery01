@@ -37,7 +37,7 @@ test('noodle lid lifts on movement, faster motion raises steam and spills strand
 test('wheelchair rotates and seats the real skeleton; fire uses cola activation and pose is reversible',()=>withCanvas(()=>{
  const {root,model,hips}=rig(),record=attachOutfit(T,model,itemById('outfit-wheelchair-disguise')),d=record.extraStreetMotion,chair=record.chairProp,original=hips.position.clone(),restore=[];
  poseWheelchair(record,restore);const seat=chair.g.localToWorld(new T.Vector3(0,.85,-.09));assert.ok(hips.getWorldPosition(new T.Vector3()).distanceTo(seat)<1e-6);
- for(const l of record.seatedPose.legs){const delta=l.shin.getWorldPosition(new T.Vector3()).sub(l.thigh.getWorldPosition(new T.Vector3()));assert.ok(delta.z>.3);}
+ for(const l of record.seatedPose.legs){const delta=l.shin.getWorldPosition(new T.Vector3()).sub(l.thigh.getWorldPosition(new T.Vector3()));assert.ok(delta.z>.3);const side=l.thigh.name.includes('Left')?1:-1,rest=chair.footrests.find(r=>r.side===side),foot=chair.g.worldToLocal(l.foot.getWorldPosition(new T.Vector3()));assert.ok(Math.abs(foot.y-rest.group.position.y-.075)<.06);assert.ok(Math.abs(foot.z-rest.group.position.z+.08)<.06);}
  for(const [o,key,value] of restore.reverse())o[key].copy(value);assert.ok(hips.position.equals(original));
  animateOutfit(record,0,root,.1);drive(record,root,29,.1);assert.equal(chair.wheels[0].hot.visible,false);assert.ok(chair.wheels[0].group.rotation.x<0);drive(record,root,5,.1,2.9);assert.ok(chair.wheels.every(w=>w.hot.visible));assert.ok(d.smoke.mesh.count>0&&d.fire.mesh.count>0);
  animateOutfit(record,4,root,.1);assert.ok(chair.wheels.every(w=>!w.hot.visible));disposeOutfit(record);

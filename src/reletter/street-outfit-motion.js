@@ -416,14 +416,17 @@ function buildMobilityStreetProp(T,g,kind,record,mat){
   blue.roughness=.49;pad.roughness=.63;
   // Tubular folding frame, stitched vinyl, footrests, push rims and spoked wheels.
   b([0,.78,-.06],[.71,.075,.72],blue);b([0,1.08,-.42],[.72,.59,.055],blue);
+  const footrests=[];
   for(const sx of [-1,1]){const x=sx*.37;
    rod([x,.20,-.38],[x,.80,-.38],.023,chrome);rod([x,.20,-.38],[x,.20,.52],.023,chrome);
    rod([x,.20,.52],[x,.77,.27],.023,chrome);rod([x,.77,.27],[x,.77,-.40],.023,chrome);
    rod([x,.77,-.43],[x,1.45,-.43],.023,chrome);rod([x,1.45,-.43],[x,1.45,-.61],.028,rubber);
    rod([x,.78,.23],[x,1.04,.23],.021,chrome);rod([x,1.04,.23],[x,1.04,-.34],.021,chrome);
    b([x,1.07,-.06],[.105,.075,.55],pad);b([x,.87,-.03],[.035,.23,.58],edge);
-   rod([x,.72,.25],[sx*.25,.14,.71],.022,chrome);b([sx*.25,.12,.70],[.26,.045,.32],hub);
-   for(let j=0;j<9;j++)b([sx*.25,.145,.58+j*.029],[.23,.009,.008],chrome);
+   const footrest=new T.Group();footrest.position.set(sx*.25,.38,.43);g.add(footrest);
+   const rail=rod([x,.72,.25],footrest.position.toArray(),.022,chrome);b([0,0,0],[.26,.045,.32],hub,footrest);
+   for(let j=0;j<9;j++)b([0,.025,-.12+j*.029],[.23,.009,.008],chrome,footrest);
+   footrests.push({side:sx,group:footrest,rail,start:new T.Vector3(x,.72,.25)});
    for(let j=0;j<5;j++)b([sx*.30+j*.035*sx,1.10,-.389],[.004,.46,.004],edge);
   }
   rod([-.35,.25,-.25],[.35,.72,.23],.018,chrome);rod([.35,.25,-.25],[-.35,.72,.23],.018,chrome);
@@ -439,7 +442,7 @@ function buildMobilityStreetProp(T,g,kind,record,mat){
    const glow=mat('#ff6911');glow.emissive.set('#ff4b02');glow.emissiveIntensity=2;const hot=part(T,group,new T.TorusGeometry(radius-.032,.04,8,48),glow);hot.rotation.y=Math.PI/2;hot.visible=false;
    wheels.push({group,radius,hot});
   }
-  record.chairProp={g,wheels};return {seated:true};
+  record.chairProp={g,wheels,footrests};return {seated:true};
  }
  const metal=mat('#ffffff',.58),rim=mat('#77706a',.65),stand=mat('#a9a399',.54),dark=mat('#382721'),glow=mat('#e36b15');
  metal.roughness=.76;glow.emissive.set('#ff5109');glow.emissiveIntensity=.9;metal.side=T.DoubleSide;

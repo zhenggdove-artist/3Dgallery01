@@ -712,6 +712,16 @@ function prepareWheelchairPose(T,record,bones,g,model){
  const hips=bones.get('Hips'),legs=[];
  for(const side of ['Left','Right']){const thigh=bones.get(side+'UpLeg'),shin=bones.get(side+'Leg'),foot=bones.get(side+'Foot');if(thigh&&shin&&foot)legs.push({thigh,shin,foot,thighAxis:shin.position.clone().normalize(),shinAxis:foot.position.clone().normalize()});}
  if(!hips)return;
+ // Fit footplates once to the actual imported rig's leg lengths; no per-frame
+ // geometry replacement or separate motion state. Seat and wheel proportions stay fixed.
+ const modelScale=model.getWorldScale(new T.Vector3()),scale=Math.max(.00001,Math.abs(modelScale.y*g.scale.y));
+ const direction=new T.Vector3(),a=new T.Vector3(),b=new T.Vector3(),origin=hips.getWorldPosition(new T.Vector3());model.worldToLocal(origin);
+ for(const l of legs){const side=l.thigh.name.includes('Left')?1:-1,rest=record.chairProp.footrests.find(r=>r.side===side);if(!rest)continue;
+  const upper=l.thigh.getWorldPosition(a).distanceTo(l.shin.getWorldPosition(b))/scale,lower=l.shin.getWorldPosition(a).distanceTo(l.foot.getWorldPosition(b))/scale;
+  l.thigh.getWorldPosition(a);model.worldToLocal(a);a.sub(origin).applyQuaternion(g.quaternion.clone().invert()).divideScalar(g.scale.y);
+  rest.group.position.set(a.x,.85-upper*.0995037-lower*.976644-.075,-.09+upper*.995037+lower*.214862+.08);
+  direction.copy(rest.group.position).sub(rest.start);rest.rail.position.copy(rest.start).addScaledVector(direction,.5);rest.rail.scale.y=direction.length()/rest.rail.geometry.parameters.height;rest.rail.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction.normalize());
+ }
  const saved=[[hips,'position',hips.position.clone()]];for(const leg of legs)for(const bone of [leg.thigh,leg.shin])saved.push([bone,'quaternion',bone.quaternion.clone()]);
  record.seatedPose={T,g,model,hips,legs,saved,target:new T.Vector3(),axis:new T.Vector3(),direction:new T.Vector3(),parentQ:new T.Quaternion(),deltaQ:new T.Quaternion()};
 }
