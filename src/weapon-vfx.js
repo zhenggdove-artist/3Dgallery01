@@ -333,7 +333,7 @@ export class WeaponVFX{
   entry.group.removeFromParent();entry.group.visible=false;
   const pool=this.orbPools.get(entry.family)||[];
   if(pool.length<12){entry.idleSince=performance.now();pool.push(entry);this.orbPools.set(entry.family,pool);}
-  else entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
+  else entry.group.traverse(child=>{if(child.isInstancedMesh)child.dispose();child.geometry?.dispose();child.material?.dispose();});
  }
  async warmStaffOrbs(renderer,camera){
   const stage=new THREE.Scene(),entries=[];
@@ -622,6 +622,6 @@ export class WeaponVFX{
   // additional instanced channels as a unit, including aborted casts.
   for(const e of [...this.waterStreams.values()])this.release(e);
   this.waterStreams.clear();this.plantUltimates.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
-  for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{child.geometry?.dispose();child.material?.dispose();});
+  for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{if(child.isInstancedMesh)child.dispose();child.geometry?.dispose();child.material?.dispose();});
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }

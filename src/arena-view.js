@@ -8,7 +8,7 @@ import {cityGroundHeight,cityBlocked,structureSignSpecs,signWorldPosition} from 
 import {DisplayPlatforms} from './display-platforms.js';
 import {artworkPosition,artworkLanding,artworkRenderFlight} from './shared/artwork-flight.js';
 import {artworkDefinitions,artworkPickupReach} from './shared/artwork-library.js';
-import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork,updateArtworkTitleVisibility,releaseArtworkAnimation,artworkImageResidency} from './artwork-surface.js';
+import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork,updateArtworkTitleVisibility,releaseArtworkAnimation,releaseArtworkTitlePixels,artworkImageResidency} from './artwork-surface.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
@@ -631,12 +631,12 @@ function disposeArtworkRoot(root){
  if(!root)return;
  const video=root.userData.video;
  if(video){video.pause();video.removeAttribute('src');video.load();}
- releaseArtworkAnimation(root);
+ releaseArtworkAnimation(root);releaseArtworkTitlePixels(root);artworkImageResidency.delete(root);
  const geometries=new Set(),materials=new Set(),textures=new Set();
  root.traverse(obj=>{
   if(obj.isInstancedMesh)obj.dispose();
   if(obj.isSkinnedMesh)obj.skeleton?.dispose?.();
-  if(obj.geometry)geometries.add(obj.geometry);
+  if(obj.geometry&&!obj.isSprite)geometries.add(obj.geometry);
   for(const mat of Array.isArray(obj.material)?obj.material:obj.material?[obj.material]:[]){
    materials.add(mat);
    for(const val of Object.values(mat))if(val?.isTexture)textures.add(val);

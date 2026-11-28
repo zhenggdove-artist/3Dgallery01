@@ -3,7 +3,7 @@
 export class GPUFrameQueue {
  constructor(gl,enabled=true,limit=2){
   this.gl=gl;this.limit=limit;this.pending=[];this.skipped=0;this.peak=0;this.failures=0;
-  this.enabled=!!(enabled&&gl&&typeof gl.fenceSync==='function'&&typeof gl.clientWaitSync==='function');
+  this.requested=enabled;this.restore(gl);
  }
  canSubmit(){
   if(!this.enabled)return true;
@@ -30,6 +30,7 @@ export class GPUFrameQueue {
    this.gl.flush();
   }catch{this.disable();}
  }
+ restore(gl=this.gl){this.reset();this.gl=gl;this.enabled=!!(this.requested&&gl&&typeof gl.fenceSync==='function'&&typeof gl.clientWaitSync==='function');}
  reset(){
   for(const fence of this.pending){try{this.gl.deleteSync(fence);}catch{}}
   this.pending.length=0;

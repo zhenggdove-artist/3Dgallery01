@@ -66,9 +66,9 @@ export class EquipmentPortraitViewport{
   if(this.model){
    disposePortraitClone(this.model);
   }
-  this.model=null;this.source=null;this.paintRevision++;
+  this.model=null;this.source=null;this.player=null;this.anchors?.clear();this.attachments?.clear();this.bodyBounds=null;this.focus=null;this.paintRevision++;
   this.renderer?.dispose();
-  if(this.renderer){this.renderer.forceContextLoss();if(this.canvas)this.canvas.dataset.portraitRetired='1';}
+  if(this.renderer){this.renderer.forceContextLoss();if(this.canvas){this.canvas.dataset.portraitRetired='1';this.canvas.width=1;this.canvas.height=1;}}
   this.renderer=null;this.scene=null;this.camera=null;this.canvas=null;
   this.signature='';this.error=null;
  }
