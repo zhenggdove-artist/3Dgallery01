@@ -42,3 +42,15 @@ test('plant, restoration, and burn effects are visible to the common pool manage
  assert.ok(groups.some(g=>g.kind==='restorationVfx'&&g.keep===1));
  assert.ok(groups.some(g=>g.kind==='statusFireball'&&g.keep===8));v.dispose();status.dispose();
 });
+
+test('idle surplus retirement continues within each frame budget without evicting reacquired entries',async()=>{
+ const {RenderMemoryManager}=await import('../src/render-residency.js');
+ const m=new RenderMemoryManager({mobile:true});m.maintenanceMs=Infinity;
+ const list=Array.from({length:8},(_,id)=>({id,root:new T.Group(),since:id})),disposed=[];
+ const group={kind:'probe',list,keep:2,idleMs:30,root:e=>e.root,since:e=>e.since,dispose:e=>disposed.push(e.id)};
+ assert.equal(m.sweepPools([group],100),2);assert.deepEqual(disposed,[2,3]);
+ list.find(e=>e.id===4).since=100;
+ m.beginFrame();assert.equal(m.advancePoolRetirement(),2);assert.deepEqual(disposed,[2,3,5,6]);
+ m.beginFrame();assert.equal(m.advancePoolRetirement(),1);assert.deepEqual(disposed,[2,3,5,6,7]);
+ assert.deepEqual(list.map(e=>e.id),[0,1,4]);
+});

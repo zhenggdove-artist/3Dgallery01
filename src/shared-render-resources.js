@@ -21,7 +21,7 @@ export function releaseOutfitTexture(key,t){return outfitTextureResources.releas
 // One ownership contract for headwear, outfits, their nested headpieces and previews.
 // Weak keys never retain an abandoned model; counts are diagnostic, not an eviction policy.
 const wearableOwners=new WeakMap();
-const wearableCounts=Object.fromEntries(['head','outfit','wing','weapon','effect'].map(kind=>[kind,{active:0,created:0,released:0}]));
+const wearableCounts=Object.fromEntries(['head','outfit','wing','weapon','effect','shield','pickup'].map(kind=>[kind,{active:0,created:0,released:0}]));
 export function registerWearable(owner,kind){
  if(!owner||!wearableCounts[kind])throw Error('Invalid wearable owner');
  if(wearableOwners.has(owner))throw Error('Wearable registered twice');

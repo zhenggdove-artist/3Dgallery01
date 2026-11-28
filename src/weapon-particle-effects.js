@@ -1,3 +1,4 @@
+import {registerRenderOwner,disposeOwnedVisual} from './shared-render-resources.js';
 import * as THREE from 'three';
 
 // Additive, fine-grained GPU particles supplement the verified MIT 00GameDevs
@@ -392,7 +393,7 @@ export class WeaponParticleEffects{
     vertexShader:vertex,fragmentShader:fragment,
     transparent:true,depthTest:true,depthWrite:false,blending:THREE.AdditiveBlending
   });
-  const root=new THREE.Points(geometry,material);
+  const root=registerRenderOwner(new THREE.Points(geometry,material),'effect');
   root.name='Fine particle '+recipe+' skill';root.frustumCulled=false;root.renderOrder=24;
   return {root,age:0,duration,recipe,material,geometry,poolKey:key};
  }
@@ -496,7 +497,7 @@ export class WeaponParticleEffects{
    }catch(error){
     const index=this.active.indexOf(entry);if(index>=0)this.active.splice(index,1);
     if(this.charger===entry)this.charger=null;
-    try{entry.root.removeFromParent();entry.geometry.dispose();entry.material.dispose();}catch{}
+    try{disposeOwnedVisual(entry.root);}catch{}
     this.failedParticleEffects??=new Set();
     if(!this.failedParticleEffects.has(entry.recipe)){
      this.failedParticleEffects.add(entry.recipe);
@@ -512,15 +513,15 @@ export class WeaponParticleEffects{
   entry.channeling=false;entry.charging=false;entry.host=null;entry.weapon=null;entry.channelKey=null;entry.homingTarget=null;entry.aimDirection=null;entry.idleSince=performance.now();
   let list=this.pools.get(entry.poolKey);if(!list){list=[];this.pools.set(entry.poolKey,list);}
   if(list.length<3&&this.pooledCount<96){list.push(entry);this.pooledCount++;}
-  else{entry.geometry.dispose();entry.material.dispose();}
+  else{disposeOwnedVisual(entry.root);}
  }
- idlePoolGroups(){return Array.from(this.pools,([key,list])=>({kind:'particleVfx',list,keep:Math.max(1,this.warmReserve.get(key)||0),idleMs:30000,root:e=>e.root,since:e=>e.idleSince,dispose:e=>{this.pooledCount--;e.geometry.dispose();e.material.dispose();}}));}
+ idlePoolGroups(){return Array.from(this.pools,([key,list])=>({kind:'particleVfx',list,keep:Math.max(1,this.warmReserve.get(key)||0),idleMs:30000,root:e=>e.root,since:e=>e.idleSince,dispose:e=>{this.pooledCount--;disposeOwnedVisual(e.root);}}));}
  trimIdlePools(now=performance.now()){
   for(const g of this.idlePoolGroups())for(let i=g.list.length-1;i>=g.keep;i--){const e=g.list[i],since=g.since(e);if(!g.root(e)?.parent&&Number.isFinite(since)&&now-since>=g.idleMs){g.list.splice(i,1);g.dispose(e);}}
  }
  dispose(){
   for(const entry of [...this.active])this.remove(entry);
-  for(const list of this.pools.values())for(const entry of list){entry.geometry.dispose();entry.material.dispose();}
+  for(const list of this.pools.values())for(const entry of list)disposeOwnedVisual(entry.root);
   this.pools.clear();this.pooledCount=0;
  }
 }

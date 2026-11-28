@@ -1,4 +1,4 @@
-import {disposeOwnedVisual,manageNativeEffect,registerRenderOwner} from './shared-render-resources.js';
+import {disposeOwnedVisual,manageNativeEffect,registerRenderOwner,renderOwnerKind} from './shared-render-resources.js';
 import {createFlexibleGiraffe,animateFlexibleGiraffe} from './reletter/flexible-giraffe.js';
 import * as THREE from 'three';
 import {itemById} from './shared/catalog.js';
@@ -28,6 +28,7 @@ export class WeaponSignatureEffects {
   this.recycledCount--;return list.pop();
  }
  add(obj,duration,update,key=null){
+  if(!renderOwnerKind(obj))registerRenderOwner(obj,'effect');
   if(this.active.length>=this.maxActive)this.remove(this.active[0]);
   const e={obj,age:0,duration,update,key};this.scene.add(obj);this.active.push(e);return e;
  }

@@ -1,3 +1,4 @@
+import {registerRenderOwner} from './shared-render-resources.js';
 import * as THREE from 'three';
 import {originalWorldVisuals} from './reletter/world-visuals.js';
 import {disposeGardenModel} from './reletter/garden-art.js';
@@ -7,7 +8,7 @@ import {makeHeldWeapon} from './reletter/held-weapons.js';
 import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
 
 function createVisibleDrop(item,original){
- if(item?.slot!=='weapon')return original.createItemDrop(item);
+ if(item?.slot!=='weapon')return registerRenderOwner(original.createItemDrop(item),'pickup');
  // The original world loot uses a billboard icon and a blurry glow.
  // Reuse the actual held weapon's 3D geometry for world pickups instead.
  const group=new THREE.Group();
@@ -19,7 +20,7 @@ function createVisibleDrop(item,original){
  model.scale.setScalar(factor);
  model.position.y=-(bounds.min.y+bounds.max.y)*.5*factor;
  group.add(model);group.userData.weaponDrop=true;group.userData.itemId=item.id;
- return group;
+ return registerRenderOwner(group,'pickup');
 }
 
 export class AdventureView{

@@ -1,4 +1,4 @@
-import {disposeOwnedVisual} from './shared-render-resources.js';
+import {disposeOwnedVisual,registerRenderOwner,runtimeResource} from './shared-render-resources.js';
 import {animateFlightVehicle} from './reletter/flight-vehicle.js';
 import * as THREE from 'three';
 import {CITY_OUTER_RADIUS} from './shared/city-layout.js';
@@ -65,7 +65,7 @@ export class ReletterPresentation{
        blending:THREE.NormalBlending,side:THREE.DoubleSide,toneMapped:false
       }));
       redFlash.scale.setScalar(1.025);redFlash.renderOrder=2;
-      d.shield.add(redFlash);d.shield.userData.redFlash=redFlash;
+      d.shield.add(redFlash);runtimeResource(d.shield,'redFlash',redFlash);registerRenderOwner(d.shield,'shield');
       root.add(d.shield);}
     }
     if(!d.bones){d.bones=new Map();d.model.traverse(o=>{if(o.isBone)d.bones.set(o.name.replace(/[^a-z0-9]/gi,'').replace(/^mixamorig\d*/,''),o);});}

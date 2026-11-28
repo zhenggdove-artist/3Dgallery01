@@ -6,6 +6,8 @@ import {outfitTextureResources,wearableResourceSnapshot} from './shared-render-r
 // pin every offscreen artwork/paint texture in GPU memory.
 const sphere=new THREE.Sphere(),matrix=new THREE.Matrix4(),frustum=new THREE.Frustum(),eye=new THREE.Vector3();
 const view={frustum,eye,distance:0};
+const sampleRef=value=>typeof WeakRef==='function'?new WeakRef(value):value;
+const sampleNode=ref=>typeof WeakRef==='function'&&ref instanceof WeakRef?ref.deref():ref;
 export function residencyView(camera,retirementDistance=Infinity){
  camera.updateWorldMatrix(true,false);
  frustum.setFromProjectionMatrix(matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
@@ -56,7 +58,7 @@ export class RenderMemoryManager{
   this.retireLimit=mobile?2:4;this.maintenanceMs=mobile?1.5:3;
   this.counts=Object.create(null);this.wakes=Object.create(null);
   this.poolSnapshot={idle:0,reserved:0,surplus:0,eligible:0,estimatedBufferBytes:0};
-  this.accountNodeLimit=mobile?48:96;this.accounting=null;this.accountedNodes=0;this.sceneSnapshot=null;
+  this.accountNodeLimit=mobile?48:96;this.accounting=null;this.accountedNodes=0;this.sceneSnapshot=null;this.retireCandidates=[];
   this.beginFrame();
  }
  beginFrame(){this.frameRetires=0;this.frameMaintenanceMs=0;}
@@ -77,15 +79,25 @@ export class RenderMemoryManager{
    }
   }
   candidates.sort((a,b)=>a.since-b.since);
+  this.retireCandidates=candidates;
+  this.poolSnapshot={...this.poolSnapshot,idle,reserved,surplus:Math.max(0,idle-reserved),eligible:candidates.length};
+  const retired=this.advancePoolRetirement();
+  if(!this.accounting){const roots=[];for(const g of groups)for(const e of g.list){const root=g.root(e);if(root&&!root.parent)roots.push(sampleRef(root));}this.accounting={stack:roots,seen:new WeakSet(),bytes:0,nodes:0,scene,phase:'pools',textures:new WeakSet(),textureCount:0,textureBytes:0};}
+  return retired;
+ }
+ // Finish already eligible retirement over later frames, not only at 5-second
+ // sampling boundaries. Revalidate pool membership, age and reserved count.
+ advancePoolRetirement(){
   let retired=0;
-  for(const {g,e} of candidates){
-   if(retired>=this.retireLimit)break;
-   const i=g.list.indexOf(e);if(i<g.keep||g.root(e)?.parent)continue;
+  while(this.retireCandidates.length&&this.frameRetires<this.retireLimit&&this.frameMaintenanceMs<this.maintenanceMs){
+   const {g,e,since}=this.retireCandidates[0],i=g.list.indexOf(e);
+   if(i<g.keep||g.root(e)?.parent||g.since(e)!==since){this.retireCandidates.shift();continue;}
    if(!this.retire(g.kind,()=>{g.list.splice(i,1);g.dispose(e);}))break;
-   retired++;
+   this.retireCandidates.shift();retired++;
   }
-  this.poolSnapshot={...this.poolSnapshot,idle:idle-retired,reserved,surplus:Math.max(0,idle-reserved-retired),eligible:Math.max(0,candidates.length-retired)};
-  if(!this.accounting){const roots=[];for(const g of groups)for(const e of g.list){const root=g.root(e);if(root&&!root.parent)roots.push(root);}this.accounting={stack:roots,seen:new WeakSet(),bytes:0,nodes:0,scene,phase:'pools',textures:new WeakSet(),textureCount:0,textureBytes:0};}
+  this.poolSnapshot.idle=Math.max(0,this.poolSnapshot.idle-retired);
+  this.poolSnapshot.surplus=Math.max(0,this.poolSnapshot.surplus-retired);
+  this.poolSnapshot.eligible=this.retireCandidates.length;
   return retired;
  }
  // Incremental observational accounting. Never traverses an entire scene in one call;
@@ -96,18 +108,18 @@ export class RenderMemoryManager{
   const start=performance.now();let n=0;
   const add=attribute=>{const b=attribute?.buffer;if(b&&!a.seen.has(b)){a.seen.add(b);a.bytes+=b.byteLength;}};
   while(a.stack.length&&n<this.accountNodeLimit&&performance.now()-start<available){
-   const o=a.stack.pop();if(!o)continue;n++;const g=o.geometry;
+   const o=sampleNode(a.stack.pop());if(!o)continue;n++;const g=o.geometry;
    if(g){add(g.index?.array);for(const attr of Object.values(g.attributes||{}))add(attr.array||attr.data?.array);}
    add(o.instanceMatrix?.array);add(o.instanceColor?.array);
    if(a.phase==='scene')for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[]){
     for(const value of Object.values(m))if(value?.isTexture)accountTexture(a,value);
     for(const uniform of Object.values(m.uniforms||{}))if(uniform?.value?.isTexture)accountTexture(a,uniform.value);
    }
-   for(const child of o.children||[])a.stack.push(child);
+   for(const child of o.children||[])a.stack.push(sampleRef(child));
   }
   a.nodes+=n;this.frameMaintenanceMs+=performance.now()-start;
   if(!a.stack.length){
-   if(a.phase==='pools'){this.poolSnapshot.estimatedBufferBytes=a.bytes;this.accountedNodes=a.nodes;if(a.scene){a.stack=[a.scene];a.phase='scene';a.seen=new WeakSet();a.bytes=0;a.nodes=0;}else this.accounting=null;}
+   if(a.phase==='pools'){this.poolSnapshot.estimatedBufferBytes=a.bytes;this.accountedNodes=a.nodes;if(a.scene){a.stack=[sampleRef(a.scene)];a.phase='scene';a.seen=new WeakSet();a.bytes=0;a.nodes=0;}else this.accounting=null;}
    else{this.sceneSnapshot={nodes:a.nodes,estimatedGeometryBytes:a.bytes,textureCount:a.textureCount,estimatedTextureBytes:a.textureBytes};this.accounting=null;}
   }
   return n;

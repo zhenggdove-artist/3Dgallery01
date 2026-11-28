@@ -102,6 +102,27 @@ try{
  console.log('WEBKIT_TEXTURE_LIFECYCLE='+JSON.stringify(lifecycle));
  const stable=lifecycle.rows[0];
  for(const row of lifecycle.rows){assert.ok(row.shared&&row.alive&&row.released);assert.equal(row.refs,lifecycle.before.refs);assert.equal(row.glError,0);assert.equal(row.textures,stable.textures);assert.equal(row.geometries,stable.geometries);}
+ const weapons=await page.evaluate(async()=>{
+  const T=await import('three'),{makeHeldWeapon}=await import('/src/reletter/held-weapons.js'),{makeSpellEquipment}=await import('/src/spell-equipment.js'),{itemById}=await import('/src/shared/catalog.js'),{WeaponVFX}=await import('/src/weapon-vfx.js'),{disposeOwnedVisual,wearableResourceSnapshot,outfitTextureResources}=await import('/src/shared-render-resources.js');
+  const renderer=templeTest.renderer,prior=renderer.getRenderTarget(),target=new T.WebGLRenderTarget(64,64),stage=new T.Scene(),camera=new T.PerspectiveCamera(45,1,.1,40);
+  camera.position.set(0,2,7);camera.lookAt(0,1,0);stage.add(new T.HemisphereLight(0xffffff,0x333333,3));
+  const vfx=new WeaponVFX(stage),rows=[],before=wearableResourceSnapshot(),refs=outfitTextureResources.snapshot().references;
+  try{
+   renderer.setRenderTarget(target);
+   for(let i=0;i<12;i++){
+    const giraffe=makeHeldWeapon(itemById('giraffe')),token=makeHeldWeapon(itemById('chiang-token')),staff=makeSpellEquipment(itemById('prism-3'));
+    const fx=vfx.create('tidal-surge');fx.update(.18);
+    stage.add(giraffe,token,staff,fx.group);renderer.render(stage,camera);
+    let skeleton;giraffe.traverse(o=>{if(o.isSkinnedMesh)skeleton=o.skeleton;});
+    const hadBoneTexture=!!skeleton?.boneTexture;disposeOwnedVisual(giraffe);disposeOwnedVisual(token);disposeOwnedVisual(staff);fx.dispose();
+    renderer.render(stage,camera);
+    const owners=wearableResourceSnapshot();rows.push({textures:renderer.info.memory.textures,geometries:renderer.info.memory.geometries,refs:outfitTextureResources.snapshot().references,weapon:owners.weapon.active,effect:owners.effect.active,hadBoneTexture,boneReleased:!skeleton?.boneTexture,glError:renderer.getContext().getError()});
+   }
+  }finally{renderer.setRenderTarget(prior);target.dispose();vfx.dispose();}
+  return {rows,before,refs};
+ });
+ console.log('WEBKIT_WEAPON_LIFECYCLE='+JSON.stringify(weapons));
+ for(const row of weapons.rows){assert.ok(row.hadBoneTexture&&row.boneReleased);assert.equal(row.glError,0);assert.equal(row.refs,weapons.refs);assert.equal(row.weapon,weapons.before.weapon.active);assert.equal(row.effect,weapons.before.effect.active);assert.equal(row.textures,weapons.rows[0].textures);assert.equal(row.geometries,weapons.rows[0].geometries);}
  console.log('WebKit Safari module graph booted: '+JSON.stringify({timings:loaded,errorCount:messages.length}));
  await page.screenshot({path:'output/temple-safari-startup/success.png'});
 } finally{await browser.close();}
