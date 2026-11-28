@@ -1,4 +1,4 @@
-import {viewWidth,viewHeight,gmMobilePreviewActive,setGmMobilePreview} from './gm-mobile-preview.js';
+import {viewWidth,viewHeight,gmMobilePreviewActive,setGmMobilePreview,previewLocalRect} from './gm-mobile-preview.js';
 import {equipmentStatRows,levelXpRequired} from './shared/player-stats.js';
 import {terrainStyle,TERRAIN_DEFAULTS,TERRAIN_SLIDERS} from './shared/terrain-style.js';
 import {equippedItem} from './shared/fusion-adapter.js';
@@ -506,12 +506,12 @@ export class TempleUI extends EventTarget{
       // Previous scale was .4: enlarge 1.3x, shrink an additional 10%
       // only when viewport bounds or other HUD elements would be covered.
       roster.style.setProperty('--roster-scale','.52');
-      const box=roster.getBoundingClientRect();
+      const box=previewLocalRect(roster.getBoundingClientRect());
       const overlap=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
       const ids=['wallet','identity','chat-hud','dock','mobile-stick','map-cluster','gm-help'];
       const obstructed=ids.some(id=>{
         const node=$(id);if(!node||node.hidden||getComputedStyle(node).display==='none')return false;
-        return overlap(box,node.getBoundingClientRect());
+        return overlap(box,previewLocalRect(node.getBoundingClientRect()));
       });
       if(obstructed||box.left<6||box.right>viewWidth()-6||box.top<6||box.bottom>viewHeight()-6)
         roster.style.setProperty('--roster-scale','.468');

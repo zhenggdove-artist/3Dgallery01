@@ -1,4 +1,4 @@
-import {viewWidth,viewHeight,viewVisualViewport,gmMobilePreviewActive} from './gm-mobile-preview.js';
+import {viewWidth,viewHeight,viewVisualViewport,gmMobilePreviewActive,previewLocalRect} from './gm-mobile-preview.js';
 // Three-step chat sizing: max -> two-line medium -> + only -> max.
 // Tap + to expand and − to reduce size; drag 5px or hold 180ms to move it. The expanded panel keeps its 1s hold.
 // The manual-position key is stable across game releases. Default placement
@@ -22,7 +22,7 @@ export function bindChatLayout(){
  const obstacleSelector='#dock button,#mobile-stick,#comfort-hotbar,#map-cluster,#gm-menu,#gm-help,#gm-spectator-test-exit,#identity,#player-roster,#vitals,#shield-readout,#spectator-fly-controls,#gallery-guide,#paint-toolbar,#build-mode';
  const blocking=()=>[...document.querySelectorAll(obstacleSelector)]
   .filter(el=>el&&el.isConnected&&getComputedStyle(el).display!=='none'&&getComputedStyle(el).visibility!=='hidden')
-  .map(el=>el.getBoundingClientRect()).filter(r=>r.width>0&&r.height>0);
+  .map(el=>previewLocalRect(el.getBoundingClientRect())).filter(r=>r.width>0&&r.height>0);
  const collide=(a,b)=>a.left<b.right+8&&a.right>b.left-8&&a.top<b.bottom+8&&a.bottom>b.top-8;
  const clearInline=()=>{for(const property of ['left','top','right','bottom','transform'])panel.style.removeProperty(property);};
  const resetPosition=()=>{
@@ -55,13 +55,13 @@ export function bindChatLayout(){
   panel.style.setProperty('bottom','auto','important');panel.style.transform='none';
   return true;
  }
- const save=()=>{if(!manualPosition)return;try{const r=panel.getBoundingClientRect();
+ const save=()=>{if(!manualPosition)return;try{const r=previewLocalRect(panel.getBoundingClientRect());
   manualAnchor=anchorAt(r.left,r.top);
   if(!gmMobilePreviewActive())localStorage.setItem(STORAGE_KEY,JSON.stringify({...manualAnchor,revision:globalRevision}));}catch{}};
  function fitSafely(){
   if(!panel.offsetWidth||!panel.offsetHeight||panel.closest('[hidden]')||getComputedStyle(panel).visibility==='hidden')return;
   if(active?.mode==='move'||miniDrag?.mode==='move')return;
-  if(document.body.classList.contains('chat-typing')){const b=bounds(),r=panel.getBoundingClientRect();panel.style.setProperty('left',limit(r.left,b.left,b.right)+'px','important');panel.style.setProperty('top',limit(r.top,b.top,b.bottom)+'px','important');panel.style.setProperty('bottom','auto','important');panel.style.right='auto';panel.style.transform='none';return;}
+  if(document.body.classList.contains('chat-typing')){const b=bounds(),r=previewLocalRect(panel.getBoundingClientRect());panel.style.setProperty('left',limit(r.left,b.left,b.right)+'px','important');panel.style.setProperty('top',limit(r.top,b.top,b.bottom)+'px','important');panel.style.setProperty('bottom','auto','important');panel.style.right='auto';panel.style.transform='none';return;}
   const anchor=manualPosition?manualAnchor:globalDefault;
   // Fit must never change the selected size or search for a different HUD
   // position. The saved GM/user anchor (or the original CSS default) wins.
@@ -115,7 +115,7 @@ export function bindChatLayout(){
  toggle.addEventListener('pointerdown',e=>{
   if(e.button!==0||miniDrag)return;
   e.preventDefault();e.stopPropagation();
-  const r=panel.getBoundingClientRect();
+  const r=previewLocalRect(panel.getBoundingClientRect());
   miniDrag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,mode:'pending',expanded:size==='max',startedAt:performance.now(),moved:false};
   try{toggle.setPointerCapture(e.pointerId);}catch{}
   miniTimer=setTimeout(()=>{
@@ -150,7 +150,7 @@ export function bindChatLayout(){
  if(mobile){
   panel.addEventListener('touchstart',e=>{
    if(e.touches.length!==1||e.target.closest('button,input,textarea,select,form')||size==='min')return;
-   const p=e.touches[0],r=panel.getBoundingClientRect();
+   const p=e.touches[0],r=previewLocalRect(panel.getBoundingClientRect());
    active={id:p.identifier,x:p.clientX,y:p.clientY,left:r.left,top:r.top,mode:'pending'};
    clearTimeout(timer);
    timer=setTimeout(()=>{if(active?.id===p.identifier){
@@ -180,7 +180,7 @@ export function bindChatLayout(){
   panel.addEventListener('pointerdown',e=>{
    if(e.button!==0||active||size==='min'||
       e.target.closest('button,input,textarea,select,form'))return;
-   const r=panel.getBoundingClientRect();
+   const r=previewLocalRect(panel.getBoundingClientRect());
    active={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,
     mode:'pending'};
    try{panel.setPointerCapture(e.pointerId);}catch{}
@@ -226,5 +226,5 @@ export function bindChatLayout(){
  // not on world snapshots or game frames.
  if(typeof ResizeObserver==='function'){const observer=new ResizeObserver(scheduleFit);observer.observe(panel);for(const el of document.querySelectorAll(obstacleSelector))observer.observe(el);}
  if(typeof MutationObserver==='function'){const observer=new MutationObserver(scheduleFit);for(const el of [document.body,document.getElementById('hud'),...document.querySelectorAll(obstacleSelector)])if(el)observer.observe(el,{attributes:true,attributeFilter:el===document.body||el.id==='hud'?['hidden','class']:['hidden']});}
- return {applyDefault,refit:scheduleFit,position:()=>{const r=panel.getBoundingClientRect();return anchorAt(r.left,r.top);},prepare:()=>{setSize('medium');}};
+ return {applyDefault,refit:scheduleFit,position:()=>{const r=previewLocalRect(panel.getBoundingClientRect());return anchorAt(r.left,r.top);},prepare:()=>{setSize('medium');}};
 }

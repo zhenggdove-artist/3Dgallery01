@@ -1,4 +1,4 @@
-import {viewWidth,viewHeight,gmMobilePreviewActive} from './gm-mobile-preview.js';
+import {viewWidth,viewHeight,gmMobilePreviewActive,viewClientLeft,viewClientTop} from './gm-mobile-preview.js';
 import * as THREE from 'three';
 import {weaponMuzzle} from './weapon-muzzle.js';
 import {SNIPER_RANGE} from './shared/combat-balance.js';
@@ -28,7 +28,7 @@ export class GunController {
     // Capture before canvas firing handlers: only a TOUCH on the black mask
     // dismisses zoom. Mouse buttons (including pointer lock) always fire.
     addEventListener('pointerdown',e=>{
-      if(e.target.closest?.('.sniper-fire-button')||this.mode!==2||e.button>0||!shouldDismissScopePointer(e.pointerType,e.clientX,e.clientY,viewWidth(),viewHeight()))return;
+      if(e.target.closest?.('.sniper-fire-button')||this.mode!==2||e.button>0||!shouldDismissScopePointer(e.pointerType,e.clientX-viewClientLeft(),e.clientY-viewClientTop(),viewWidth(),viewHeight()))return;
       e.preventDefault();e.stopImmediatePropagation();this.end();
     },true);
     // Right mouse button cycles shoulder/scope without firing.

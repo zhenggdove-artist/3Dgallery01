@@ -1,11 +1,11 @@
-import {viewWidth,viewHeight,gmMobilePreviewActive} from './gm-mobile-preview.js';
+import {viewWidth,viewHeight,gmMobilePreviewActive,previewLocalRect} from './gm-mobile-preview.js';
 import {operationPromptLayout,promptPlacement,PROMPT_LIMITS} from './shared/operation-prompt.js';
 
 const $=id=>document.getElementById(id);
 const device=()=>gmMobilePreviewActive()||matchMedia('(max-width:720px),(pointer:coarse)').matches?'mobile':'desktop';
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 function anchor(){
- const r=$('attack-button')?.getBoundingClientRect();
+ const r=previewLocalRect($('attack-button')?.getBoundingClientRect());
  return r?.width&&r?.height?r:{left:viewWidth()-116,top:Math.max(16,viewHeight()-96),width:64,height:64};
 }
 const viewport=()=>({width:viewWidth(),height:viewHeight()});

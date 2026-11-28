@@ -1,4 +1,4 @@
-import {viewWidth,viewHeight} from './gm-mobile-preview.js';
+import {viewWidth,viewHeight,viewClientLeft,viewClientTop} from './gm-mobile-preview.js';
 import * as THREE from 'three';
 import {mediaMarkup} from './media-ui.js';
 
@@ -56,8 +56,8 @@ export function bindPlantHover({canvas,camera,arena,controller,ui}){
    if(hit.entry?.createdAt){const stamp=document.createElement('time');stamp.dateTime=new Date(hit.entry.createdAt).toISOString();stamp.textContent=new Date(hit.entry.createdAt).toLocaleString('zh-TW');label.append(stamp);}
   }
   label.hidden=false;
-  label.style.left=Math.max(8,Math.min(viewWidth()-label.offsetWidth-8,e.clientX+16))+'px';
-  label.style.top=Math.max(8,Math.min(viewHeight()-label.offsetHeight-8,e.clientY+20))+'px';
+  label.style.left=Math.max(8,Math.min(viewWidth()-label.offsetWidth-8,e.clientX-viewClientLeft()+16))+'px';
+  label.style.top=Math.max(8,Math.min(viewHeight()-label.offsetHeight-8,e.clientY-viewClientTop()+20))+'px';
  }
  canvas.addEventListener('pointermove',e=>{if(e.buttons)return;if(performance.now()-last<45)return;last=performance.now();show(e,pick(e));});
  canvas.addEventListener('pointerdown',e=>{down={id:e.pointerId,x:e.clientX,y:e.clientY};});

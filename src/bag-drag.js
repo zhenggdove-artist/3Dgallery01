@@ -1,3 +1,4 @@
+import {previewLocalRect} from './gm-mobile-preview.js';
 // Touch-native BAG gestures: a short swipe scrolls naturally; a 280ms
 // stationary press lifts an item for vertical/horizontal drag. Scrolling and
 // drop target detection use the ACTUAL #bag-items viewport, not #panel-content.
@@ -57,7 +58,7 @@ export function bindBagDrag(ui){
   if(ui.panelName!=='bag'||held||e.touches.length!==1)return;
   const grid=itemGrid(),cell=e.target.closest?.('[data-inventory-index]');
   if(!grid||!cell||!grid.contains(cell))return;
-  const t=e.changedTouches[0],r=cell.getBoundingClientRect();
+  const t=e.changedTouches[0],r=previewLocalRect(cell.getBoundingClientRect());
   const h={id:t.identifier,itemId:cell.dataset.bagItem,
    index:Number(cell.dataset.inventoryIndex),x:t.clientX,y:t.clientY,
    sx:t.clientX,sy:t.clientY,rect:r,ready:false,ghost:null,frame:0,timer:0};
