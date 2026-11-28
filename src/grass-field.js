@@ -76,6 +76,7 @@ uniform float uPushRadius;
 uniform float uPushStrength;
 uniform vec3 uPlayers[6];
 uniform float uPlayerCount;
+uniform vec4 uPlayerBounds;
 varying float vHeight;
 varying float vShade;
 varying float vWind;
@@ -90,6 +91,11 @@ void main(){
  wind+=vec2(sin(clock*2.1+aPhase),cos(clock*1.7+aPhase))*.035;
  wind*=uWindStrength;
  vec2 trample=vec2(0.);float pressure=0.;
+ // A plant outside the union of all player influence rectangles cannot bend.
+ // A small margin protects the original smoothstep at floating-point boundaries.
+ if(uPlayerCount>0.&&uPushStrength>0.&&
+    all(greaterThanEqual(aOffset,uPlayerBounds.xy-vec2(uPushRadius+.01)))&&
+    all(lessThanEqual(aOffset,uPlayerBounds.zw+vec2(uPushRadius+.01)))){
  for(int i=0;i<6;i++){
   if(float(i)>=uPlayerCount)break;
   vec2 push=aOffset-uPlayers[i].xz;
@@ -99,6 +105,7 @@ void main(){
   float press=1.-smoothstep(.12,uPushRadius,dist);
   trample+=push/max(.15,dist)*press*1.05*uPushStrength;
   pressure=max(pressure,press);
+ }
  }
  vec2 bend=(wind+trample)*t*t;
  vec3 p=vec3(aOffset.x+blade.x+bend.x,.014+t*aHeight*uGrassLength*(1.-min(.48,pressure*.34*uPushStrength)*t),aOffset.y+blade.y+bend.y);
@@ -143,7 +150,9 @@ const GRASS_TILE=24,GRASS_BOUND_PAD=13;
 export const MEADOW_COUNTS=Object.freeze({mobile:37500,desktop:97500,outerMobile:110000,outerDesktop:250000});
 class GrassVisibility{
  constructor(geometry,seed,count){
-  this.geometry=geometry;this.count=count;this.tileOf=new Uint16Array(count);
+  this.geometry=geometry;this.count=count;const tileOf=new Uint16Array(count);
+  const position=geometry.getAttribute('position');this.maxT=0;this.maxR=0;
+  for(let i=0;i<position.count;i++){this.maxT=Math.max(this.maxT,position.getY(i));this.maxR=Math.max(this.maxR,Math.hypot(position.getX(i),position.getZ(i)));}
   this.boxes=[];this.covered=count;
   const index=new Map();
   for(let i=0;i<count;i++){
@@ -154,9 +163,10 @@ class GrassVisibility{
     // Bounds cover all six simultaneous maximum-strength pushes, max wind and width.
     const box=new THREE.Box3(new THREE.Vector3(x*GRASS_TILE-GRASS_BOUND_PAD,-.1,z*GRASS_TILE-GRASS_BOUND_PAD),
      new THREE.Vector3((x+1)*GRASS_TILE+GRASS_BOUND_PAD,4.3,(z+1)*GRASS_TILE+GRASS_BOUND_PAD));
-    this.boxes.push({box,count:0});
+    this.boxes.push({box,count:0,minX:Infinity,minZ:Infinity,maxX:-Infinity,maxZ:-Infinity,maxHeight:0});
    }
-   this.tileOf[i]=tile;this.boxes[tile].count++;
+   tileOf[i]=tile;const b=this.boxes[tile];b.count++;
+   const px=seed.points[i*2],pz=seed.points[i*2+1];b.minX=Math.min(b.minX,px);b.maxX=Math.max(b.maxX,px);b.minZ=Math.min(b.minZ,pz);b.maxZ=Math.max(b.maxZ,pz);b.maxHeight=Math.max(b.maxHeight,seed.heights[i]);
   }
   this.active=new Uint8Array(this.boxes.length);this.active.fill(1);
   this.next=new Uint8Array(this.boxes.length);
@@ -164,7 +174,7 @@ class GrassVisibility{
   // Repacking on camera movement copies only contiguous visible tile spans.
   this.packed=new Float32Array(count*6);
   let offset=0;for(const tile of this.boxes){tile.start=offset;tile.cursor=offset;offset+=tile.count*6;}
-  for(let i=0;i<count;i++){const tile=this.boxes[this.tileOf[i]],j=tile.cursor;tile.cursor+=6;
+  for(let i=0;i<count;i++){const tile=this.boxes[tileOf[i]],j=tile.cursor;tile.cursor+=6;
    this.packed[j]=seed.points[i*2];this.packed[j+1]=seed.points[i*2+1];this.packed[j+2]=seed.heights[i];this.packed[j+3]=seed.angles[i];this.packed[j+4]=seed.phases[i];this.packed[j+5]=seed.shades[i];}
   for(const tile of this.boxes){tile.full=this.packed.subarray(tile.start,tile.cursor);tile.selected=tile.full;}
   this.buffer=new THREE.InstancedInterleavedBuffer(this.packed.slice(),6,1).setUsage(THREE.DynamicDrawUsage);
@@ -188,10 +198,11 @@ class GrassVisibility{
   }
   this.repack();this.lastView=null;
  }
- prepare(frustum,length){
+ prepare(frustum,length,pad){
   let needed=0,uncovered=false;
   for(let i=0;i<this.boxes.length;i++){
-   const {box,count}=this.boxes[i];box.max.y=2.1*length+.10;
+   const tile=this.boxes[i],{box,count}=tile;
+   box.min.set(tile.minX-pad,-.1,tile.minZ-pad);box.max.set(tile.maxX+pad,tile.maxHeight*this.maxT*length+.10,tile.maxZ+pad);
    const visible=frustum.intersectsBox(box);this.next[i]=+visible;
    if(visible){needed+=count;uncovered||=!this.active[i];}
   }
@@ -233,7 +244,7 @@ export class GrassField{
   this.innerVisibility=new GrassVisibility(geo,seed,this.count);
   const positions=Array.from({length:6},()=>new THREE.Vector3(10000,0,10000));
   const material=new THREE.ShaderMaterial({vertexShader:vertex,fragmentShader:fragment,side:THREE.DoubleSide,depthWrite:true,
-   uniforms:{uTime:{value:0},uPlayers:{value:positions},uPlayerCount:{value:0},uGrassLength:{value:1},uPlantWidth:{value:1},uWindSpeed:{value:1},uWindStrength:{value:1},uPushRadius:{value:2.4},uPushStrength:{value:1},uGrassDelta:{value:new THREE.Vector3()}}});
+   uniforms:{uTime:{value:0},uPlayers:{value:positions},uPlayerCount:{value:0},uPlayerBounds:{value:new THREE.Vector4()},uGrassLength:{value:1},uPlantWidth:{value:1},uWindSpeed:{value:1},uWindStrength:{value:1},uPushRadius:{value:2.4},uPushStrength:{value:1},uGrassDelta:{value:new THREE.Vector3()}}});
   this.mesh=new THREE.Mesh(geo,material);this.mesh.name='JS procedural wind and footsteps grass';this.mesh.frustumCulled=false;
   scene.add(this.mesh);
   // Match central grass with living wind/trample blades across every street,
@@ -295,12 +306,15 @@ export class GrassField{
   view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
   for(const [mesh,data] of this.visibilityPairs){
    if(data.density===0)continue;
-   const length=mesh.material.uniforms.uGrassLength.value;
+   const u=mesh.material.uniforms,length=u.uGrassLength.value;
+   // Exact conservative displacement envelope: blade width + maximum wind +
+   // six simultaneous pushes, multiplied by the highest authored bend weight.
+   const pad=data.maxR*u.uPlantWidth.value+(.34*u.uWindStrength.value+6*1.05*u.uPushStrength.value)*data.maxT**2+.06;
    mesh.updateWorldMatrix(true,false);
    local.multiplyMatrices(view,mesh.matrixWorld);
-   if(data.lastView?.equals(local)&&data.lastLength===length)continue;
-   (data.lastView??=new THREE.Matrix4()).copy(local);data.lastLength=length;
-   frustum.setFromProjectionMatrix(local);data.prepare(frustum,length);
+   if(data.lastView?.equals(local)&&data.lastLength===length&&data.lastPad===pad)continue;
+   (data.lastView??=new THREE.Matrix4()).copy(local);data.lastLength=length;data.lastPad=pad;
+   frustum.setFromProjectionMatrix(local);data.prepare(frustum,length,pad);
   }
  }
  setTerrainStyle(environment){
@@ -319,11 +333,13 @@ export class GrassField{
  }
  update(time,roots){
   const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;
-  let i=0;for(const root of roots.values()){
+  let i=0,minX=Infinity,minZ=Infinity,maxX=-Infinity,maxZ=-Infinity;
+  for(const root of roots.values()){
    if(i>=6)break;if(!root?.visible)continue;
-   uniform.uPlayers.value[i].copy(root.position);i++;
+   const pos=root.position;uniform.uPlayers.value[i].copy(pos);i++;
+   minX=Math.min(minX,pos.x);minZ=Math.min(minZ,pos.z);maxX=Math.max(maxX,pos.x);maxZ=Math.max(maxZ,pos.z);
   }
-  uniform.uPlayerCount.value=i;
+  uniform.uPlayerCount.value=i;uniform.uPlayerBounds.value.set(i?minX:0,i?minZ:0,i?maxX:0,i?maxZ:0);
  }
  dispose(){this.flowerMesh.removeFromParent();this.flowerMesh.geometry.dispose();this.outerFlowerMesh.removeFromParent();this.outerFlowerMesh.geometry.dispose();this.flowerMesh.material.dispose();this.mesh.removeFromParent();this.mesh.geometry.dispose();this.outerMesh.removeFromParent();this.outerMesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.outerCanopy.removeFromParent();this.outerCanopy.geometry.dispose();this.canopy.material.dispose();this.groundTexture.dispose();}
 }

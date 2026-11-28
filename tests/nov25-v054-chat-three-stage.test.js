@@ -32,7 +32,7 @@ test('chat button cycles once per pointer tap on desktop and touch even with no 
    for(const expected of ['min','max','medium','min','max','medium']){
     toggle.fire('pointerdown');toggle.fire('pointerup');toggle.fire('click');flush();
     assert.equal(panel.dataset.chatSize,expected);
-    assert.equal(toggle.textContent,'＋');assert.equal(values.has('left'),false);assert.equal(values.has('top'),false);assert.equal(saved,null);
+    assert.equal(toggle.textContent,expected==='min'?'＋':'－');assert.equal(values.has('left'),false);assert.equal(values.has('top'),false);assert.equal(saved,null);
    }
    layout.applyDefault({revision:9,x:.25,y:.8});flush();
    const expectedTop=8+(780-panel.offsetHeight-16)*.8;

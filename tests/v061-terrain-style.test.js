@@ -63,3 +63,14 @@ test('V137 tileable soil contains real granular variation, mipmaps and no per-fr
  const tex=f.groundTexture;f.setTerrainStyle({terrain:{soilExposure:.9}});assert.equal(f.canopy.material.uniforms.uSoilExposure.value,.9);assert.equal(f.groundTexture,tex);
  assert.equal(f.flowerVisibility.count,11);assert.equal(MEADOW_COUNTS.mobile,37500);f.dispose();
 });
+
+test('V138 shared player envelope is exact, excludes invisible actors and updates all flower shaders',()=>{
+ const scene=new THREE.Scene(),f=new GrassField(scene,{mobile:true,count:50});
+ const a=f.mesh.material.uniforms,b=f.flowerMesh.material.uniforms;
+ f.update(2,new Map([['a',{visible:true,position:new THREE.Vector3(-2,0,8)}],['b',{visible:true,position:new THREE.Vector3(5,0,-7)}],['hidden',{visible:false,position:new THREE.Vector3(99,0,99)}]]));
+ assert.equal(a.uPlayerCount.value,2);assert.equal(a.uPlayerBounds,b.uPlayerBounds);assert.deepEqual(a.uPlayerBounds.value.toArray(),[-2,-7,5,8]);
+ const view=new THREE.PerspectiveCamera(54,1.33,.1,575);view.position.set(0,4,0);view.lookAt(50,0,0);f.prepareVisibility(view);
+ const base=f.innerVisibility.lastPad;f.setTerrainStyle({terrain:{grassPushStrength:1.5,windStrength:2,grassWidth:1.5,grassLength:3}});f.prepareVisibility(view);assert.ok(f.innerVisibility.lastPad>base);
+ for(const [,batch] of f.visibilityPairs){for(const tile of batch.boxes){assert.ok(tile.box.min.x<=tile.minX&&tile.box.max.x>=tile.maxX);}}
+ f.update(3,new Map());assert.equal(a.uPlayerCount.value,0);assert.deepEqual(a.uPlayerBounds.value.toArray(),[0,0,0,0]);f.dispose();
+});

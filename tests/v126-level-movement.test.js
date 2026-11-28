@@ -36,9 +36,12 @@ test('all grass attributes share one buffer and retain exact original seed value
  try{
   const p=g.getAttribute('aOffset'),h=g.getAttribute('aHeight'),a=g.getAttribute('aAngle'),t=g.getAttribute('aPhase'),s=g.getAttribute('aShade');
   for(const attr of [h,a,t,s])assert.equal(attr.data,p.data);
-  for(let i=0;i<1800;i++)assert.deepEqual([p.getX(i),p.getY(i),h.getX(i),a.getX(i),t.getX(i),s.getX(i)],[seed.points[i*2],seed.points[i*2+1],seed.heights[i],seed.angles[i],seed.phases[i],seed.shades[i]]);
+  const ids=new Map(Array.from({length:1800},(_,i)=>[seed.points[i*2]+':'+seed.points[i*2+1],i]));
+  const order=new Map(),seen=new Set();
+  for(let i=0;i<1800;i++){const key=p.getX(i)+':'+p.getY(i),n=ids.get(key);assert.ok(n!==undefined&&!seen.has(n));seen.add(n);order.set(key,i);assert.deepEqual([h.getX(i),a.getX(i),t.getX(i),s.getX(i)],[seed.heights[n],seed.angles[n],seed.phases[n],seed.shades[n]]);}
+  assert.equal(seen.size,1800);
   const view=new THREE.PerspectiveCamera(55,1.33,.1,1000);view.position.set(0,4,0);view.lookAt(40,0,0);grass.prepareVisibility(view);
-  const ids=new Map(Array.from({length:1800},(_,i)=>[seed.points[i*2]+':'+seed.points[i*2+1],i]));let last=-1;
-  for(let i=0;i<g.instanceCount;i++){const n=ids.get(p.getX(i)+':'+p.getY(i));assert.ok(n>last);last=n;assert.deepEqual([h.getX(i),a.getX(i),t.getX(i),s.getX(i)],[seed.heights[n],seed.angles[n],seed.phases[n],seed.shades[n]]);}
+  let last=-1;
+  for(let i=0;i<g.instanceCount;i++){const key=p.getX(i)+':'+p.getY(i),n=ids.get(key),k=order.get(key);assert.ok(k>last);last=k;assert.deepEqual([h.getX(i),a.getX(i),t.getX(i),s.getX(i)],[seed.heights[n],seed.angles[n],seed.phases[n],seed.shades[n]]);}
  }finally{grass.dispose();}
 });

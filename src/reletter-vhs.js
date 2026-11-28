@@ -27,12 +27,17 @@ const VHSShader={
     void main(){
       vec2 uv=vUv;
       // Local victim only: the dizzy spell twists the entire view for 3s.
-      vec2 centered=uv-vec2(.5);
-      float radius=length(centered);
-      float spin=dizzy*(1.0-smoothstep(.05,.72,radius))*
-        (1.75+sin(time*9.0)*.65);
-      float cs=cos(spin),sn=sin(spin);
-      uv=vec2(centered.x*cs-centered.y*sn,centered.x*sn+centered.y*cs)+vec2(.5);
+      if(dizzy>0.0){
+        vec2 centered=uv-vec2(.5);
+        float radius=length(centered);
+        float spin=dizzy*(1.0-smoothstep(.05,.72,radius))*
+          (1.75+sin(time*9.0)*.65);
+        float cs=cos(spin),sn=sin(spin);
+        uv=vec2(centered.x*cs-centered.y*sn,centered.x*sn+centered.y*cs)+vec2(.5);
+      }else{
+        // Preserve the original zero-angle UV round trip exactly.
+        uv=(uv-vec2(.5))+vec2(.5);
+      }
 
       // === 波浪扭曲（慢） ===
       // 12.0=波浪密度（越大波紋越密）  2.5=晃動速度  0.0021=扭曲幅度（越大越歪）
@@ -89,7 +94,13 @@ const VHSShader={
 };
 export function createVHS(renderer){
  const target=new THREE.WebGLRenderTarget(1,1,{type:THREE.HalfFloatType});
- const material=new THREE.ShaderMaterial(VHSShader),quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),material),scene=new THREE.Scene(),camera=new THREE.Camera();scene.add(quad);
+ // One fullscreen triangle: identical viewport UV interpolation, no diagonal
+ // edge helper fragments and no depth tests/writes for the final composite.
+ const material=new THREE.ShaderMaterial({...VHSShader,uniforms:THREE.UniformsUtils.clone(VHSShader.uniforms),depthTest:false,depthWrite:false});
+ const geometry=new THREE.BufferGeometry();
+ geometry.setAttribute('position',new THREE.Float32BufferAttribute([-1,-1,0,3,-1,0,-1,3,0],3));
+ geometry.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,2,0,0,2],2));
+ const quad=new THREE.Mesh(geometry,material),scene=new THREE.Scene(),camera=new THREE.Camera();quad.frustumCulled=false;scene.add(quad);
  let width=0,height=0;const size=new THREE.Vector2();
  return {setDizzy(amount){material.uniforms.dizzy.value=Math.max(0,Math.min(1,amount));},render(world,view,time,renderWorld=null,fullScreenNative=false){/* Always composite native flame/ice passes through VHS. */renderer.getDrawingBufferSize(size);if(width!==size.x||height!==size.y){width=size.x;height=size.y;target.setSize(width,height);material.uniforms.resolution.value.copy(size);}const autoReset=renderer.info.autoReset;renderer.info.autoReset=false;renderer.info.reset();const previous=renderer.getRenderTarget();try{renderer.setRenderTarget(target);if(renderWorld)renderWorld(renderer,world,view);else renderer.render(world,view);renderer.setRenderTarget(previous);material.uniforms.tDiffuse.value=target.texture;material.uniforms.time.value=time;renderer.render(scene,camera);}finally{renderer.setRenderTarget(previous);renderer.info.autoReset=autoReset;}}};
 }

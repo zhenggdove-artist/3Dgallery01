@@ -76,7 +76,7 @@ export class TempleArena{
     const root=new THREE.Group(),model=cloneSkeleton(this.characterAsset.scene);model.scale.setScalar(100);model.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(model);model.position.y=-bounds.min.y;tintCharacter(model,color,admin);root.add(model);
     const ring=new THREE.Mesh(new THREE.RingGeometry(.46,.53,24),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.65,side:THREE.DoubleSide,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;root.add(ring);const label=makeNameSprite(name,admin);label.position.y=-.25;root.add(label);const weaponMount=new THREE.Group();weaponMount.position.set(.48,1.05,.1);weaponMount.rotation.set(0,0,-.55);root.add(weaponMount);const mixer=new THREE.AnimationMixer(model),actions={};for(const clip of this.characterAsset.animations)actions[clip.name]=mixer.clipAction(clip);actions.idle?.play();mixer.update(.001);model.updateMatrixWorld(true);model.position.y-=new THREE.Box3().setFromObject(model,true).min.y;model.updateMatrixWorld(true);const chatHeadY=new THREE.Box3().setFromObject(model,true).max.y+.4;root.userData={model,mixer,actions,current:'idle',ring,label,displayName:name,weaponMount,weaponId:null,chatHeadY,portraitBase:{position:model.position.clone(),quaternion:model.quaternion.clone(),scale:model.scale.clone()}};this.mixers.push(mixer);return root;
   }
-  setPlayerName(root,name,admin){if(!root||root.userData.displayName===name)return;const old=root.userData.label;if(old){const label=makeNameSprite(name,admin);label.position.copy(old.position);root.add(label);old.removeFromParent();old.material.map?.dispose();old.material.dispose();root.userData.label=label;}root.userData.displayName=name;}
+  setPlayerName(root,name,admin){if(!root||root.userData.displayName===name)return;const old=root.userData.label;if(old){const label=makeNameSprite(name,admin);label.position.copy(old.position);root.add(label);old.removeFromParent();disposeNameSprite(old);root.userData.label=label;}root.userData.displayName=name;}
   setPlayerEquipment(root,equipment){if(root)this.presentation.equipment(root,equipment);}
   removePlayer(root){
    const {model,mixer,ring,label}=root.userData;
@@ -91,7 +91,7 @@ export class TempleArena{
    });
    skeletons.forEach(s=>s.dispose());
    ring?.geometry.dispose();ring?.material.dispose();
-   label?.material.map?.dispose();label?.material.dispose();
+   if(label)disposeNameSprite(label);
    root.removeFromParent();
   }
   setBuildPreview(kind,position,rotation=0,valid=true,size=1,previewFile=null){if(!this.buildPreview||this.buildPreview.userData.kind!==kind){this.clearBuildPreview();const group=new THREE.Group();group.userData.kind=kind;const material=new THREE.MeshStandardMaterial({color:'#85d9bd',transparent:true,opacity:.34,depthWrite:false,roughness:.5,emissive:'#2c705c',emissiveIntensity:.3});for(const mesh of previewMeshes(kind,material))group.add(mesh);
@@ -650,5 +650,6 @@ function tintCharacter(model,color,admin){
         diffuseColor.rgb = mix(templeSource, templeTint * templeShade, templeCool);
       `);};material.customProgramCacheKey=()=>'temple-player-tint-v2';if(material.emissive){material.emissive.set(0);material.emissiveIntensity=0;}material.needsUpdate=true;return material;});node.material=Array.isArray(node.material)?materials:materials[0];});
 }
+function disposeNameSprite(sprite){const t=sprite.material.map,image=t?.image;t?.dispose();if(t?.isCanvasTexture&&image)image.width=image.height=0;sprite.material.dispose();}
 function makeNameSprite(name,admin){const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;const context=canvas.getContext('2d');context.font='700 46px Arial, sans-serif';context.textAlign='center';context.textBaseline='middle';context.shadowColor='#000';context.shadowBlur=14;context.fillStyle=admin?'#f0cd65':'#f5eed8';context.fillText(String(name||'Pilgrim').slice(0,24),256,58);context.font='600 22px system-ui';context.fillStyle=admin?'#f0cd65':'#9cc9bd';context.fillText(admin?'GM':'',256,101);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.minFilter=THREE.LinearFilter;texture.generateMipmaps=false;const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false,toneMapped:false}));sprite.scale.set(2.5,.63,1);sprite.renderOrder=8;return sprite;}
 import {updateHitFlash} from './hit-flash.js';

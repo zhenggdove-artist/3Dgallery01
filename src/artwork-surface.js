@@ -85,12 +85,21 @@ export function addArtworkTitlePlate(root,title,background='#000000',options={})
  const signature=JSON.stringify([value,backdrop,color,fontSize,width,height,offsetX,offsetY,author]);
  if(root.userData.titlePlateSignature===signature)return root.userData.titlePlate||null;
  const prior=root.userData.titlePlate;
+ const pixelsSignature=JSON.stringify([value,backdrop,color,author]);
+ // Moving/resizing a label or changing its world-space font scale is not a
+ // texture edit. Reuse the original full-resolution canvas and GPU texture.
+ if(prior&&root.userData.titlePlatePixelsSignature===pixelsSignature){
+  const text=prior.userData.textSprite,textWorldWidth=3.5*fontSize/44;
+  prior.scale.set(width,height,1);text.scale.set(textWorldWidth/width,(textWorldWidth*320/1024)/height,1);
+  prior.position.set(offsetX,root.userData.titlePlateBaseY-height/2-.13+offsetY,.18);
+  root.userData.titlePlateSignature=signature;return prior;
+ }
  if(prior){
   prior.removeFromParent();
-  prior.traverse(node=>{node.material?.map?.dispose();node.material?.dispose();});
+  prior.traverse(node=>{const tex=node.material?.map;const image=tex?.image;tex?.dispose();if(tex?.isCanvasTexture&&image){image.width=image.height=0;}node.material?.dispose();});
   delete root.userData.titlePlate;
  }
- root.userData.titlePlateSignature=signature;
+ root.userData.titlePlateSignature=signature;root.userData.titlePlatePixelsSignature=pixelsSignature;
  if(!value)return null;
  const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
  if(!ctx)return null;
