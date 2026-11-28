@@ -1,3 +1,4 @@
+import {viewWidth,viewHeight,viewVisualViewport,gmMobilePreviewActive} from './gm-mobile-preview.js';
 // Three-step chat sizing: max -> two-line medium -> + only -> max.
 // Tap + to expand and − to reduce size; drag 5px or hold 180ms to move it. The expanded panel keeps its 1s hold.
 // The manual-position key is stable across game releases. Default placement
@@ -14,10 +15,10 @@ export function bindChatLayout(){
  const DRAG_HOLD_MS=1000;
  const MINI_DRAG_HOLD_MS=180,MINI_DRAG_SLOP=5;
  const sizes=['max','medium','min'];
- let size='medium',active=null,timer=null,ignoreClickUntil=0,manualPosition=false,manualAnchor=null,globalDefault=null,globalRevision=-1;
+ let size='medium',active=null,timer=null,ignoreClickUntil=0,manualPosition=false,manualAnchor=null,globalDefault=null,globalRevision=-1,previewChatState=null;
  const limit=(n,min,max)=>Math.max(min,Math.min(Math.max(min,max),n));
  const mediumHeight=92;
- const maxHeight=()=>Math.min(220,Math.max(114,innerHeight*.42));
+ const maxHeight=()=>Math.min(220,Math.max(114,viewHeight()*.42));
  const obstacleSelector='#dock button,#mobile-stick,#comfort-hotbar,#map-cluster,#gm-menu,#gm-help,#gm-spectator-test-exit,#identity,#player-roster,#vitals,#shield-readout,#spectator-fly-controls,#gallery-guide,#paint-toolbar,#build-mode';
  const blocking=()=>[...document.querySelectorAll(obstacleSelector)]
   .filter(el=>el&&el.isConnected&&getComputedStyle(el).display!=='none'&&getComputedStyle(el).visibility!=='hidden')
@@ -29,10 +30,10 @@ export function bindChatLayout(){
   try{localStorage.removeItem(STORAGE_KEY);}catch{}
  };
  function bounds(){
-  const v=window.visualViewport;
+  const v=viewVisualViewport();
   const left=(v?.offsetLeft||0)+8,top=(v?.offsetTop||0)+8;
-  return {left,top,right:Math.max(left,(v?.offsetLeft||0)+(v?.width||innerWidth)-panel.offsetWidth-8),
-   bottom:Math.max(top,(v?.offsetTop||0)+(v?.height||innerHeight)-panel.offsetHeight-8)};
+  return {left,top,right:Math.max(left,(v?.offsetLeft||0)+(v?.width||viewWidth())-panel.offsetWidth-8),
+   bottom:Math.max(top,(v?.offsetTop||0)+(v?.height||viewHeight())-panel.offsetHeight-8)};
  }
  function anchorAt(left,top){
   const b=bounds();return {x:limit((left-b.left)/Math.max(1,b.right-b.left),0,1),y:limit((top-b.top)/Math.max(1,b.bottom-b.top),0,1)};
@@ -56,7 +57,7 @@ export function bindChatLayout(){
  }
  const save=()=>{if(!manualPosition)return;try{const r=panel.getBoundingClientRect();
   manualAnchor=anchorAt(r.left,r.top);
-  localStorage.setItem(STORAGE_KEY,JSON.stringify({...manualAnchor,revision:globalRevision}));}catch{}};
+  if(!gmMobilePreviewActive())localStorage.setItem(STORAGE_KEY,JSON.stringify({...manualAnchor,revision:globalRevision}));}catch{}};
  function fitSafely(){
   if(!panel.offsetWidth||!panel.offsetHeight||panel.closest('[hidden]')||getComputedStyle(panel).visibility==='hidden')return;
   if(active?.mode==='move'||miniDrag?.mode==='move')return;
@@ -76,6 +77,7 @@ export function bindChatLayout(){
   if(revision===globalRevision)return;
   globalRevision=revision;
   globalDefault=value&&Number.isFinite(value.x)&&Number.isFinite(value.y)?{x:limit(value.x,0,1),y:limit(value.y,0,1)}:null;
+  if(gmMobilePreviewActive()){manualPosition=false;manualAnchor=null;requestAnimationFrame(fitSafely);return;}
   try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
    manualPosition=!!saved&&saved.revision===revision&&Number.isFinite(saved.x)&&Number.isFinite(saved.y);
    manualAnchor=manualPosition?{x:limit(saved.x,0,1),y:limit(saved.y,0,1)}:null;
@@ -213,6 +215,8 @@ export function bindChatLayout(){
  let fitFrame=0;
  const scheduleFit=()=>{if(!fitFrame)fitFrame=requestAnimationFrame(()=>{fitFrame=0;fitSafely();});};
  const onViewportResize=()=>{
+  if(gmMobilePreviewActive()&&!previewChatState){previewChatState={manualPosition,manualAnchor,revision:globalRevision};manualPosition=false;manualAnchor=null;}
+  else if(!gmMobilePreviewActive()&&previewChatState){manualPosition=previewChatState.revision===globalRevision&&previewChatState.manualPosition;manualAnchor=manualPosition?previewChatState.manualAnchor:null;previewChatState=null;}
   if(size==='max')panel.style.setProperty('--chat-height',maxHeight()+'px');
   scheduleFit();
  };

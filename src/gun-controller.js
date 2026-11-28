@@ -1,3 +1,4 @@
+import {viewWidth,viewHeight,gmMobilePreviewActive} from './gm-mobile-preview.js';
 import * as THREE from 'three';
 import {weaponMuzzle} from './weapon-muzzle.js';
 import {SNIPER_RANGE} from './shared/combat-balance.js';
@@ -27,7 +28,7 @@ export class GunController {
     // Capture before canvas firing handlers: only a TOUCH on the black mask
     // dismisses zoom. Mouse buttons (including pointer lock) always fire.
     addEventListener('pointerdown',e=>{
-      if(e.target.closest?.('.sniper-fire-button')||this.mode!==2||e.button>0||!shouldDismissScopePointer(e.pointerType,e.clientX,e.clientY,innerWidth,innerHeight))return;
+      if(e.target.closest?.('.sniper-fire-button')||this.mode!==2||e.button>0||!shouldDismissScopePointer(e.pointerType,e.clientX,e.clientY,viewWidth(),viewHeight()))return;
       e.preventDefault();e.stopImmediatePropagation();this.end();
     },true);
     // Right mouse button cycles shoulder/scope without firing.
@@ -56,7 +57,7 @@ export class GunController {
     },true);
     addEventListener('blur',()=>this.end());document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement){this.held=false;ui.emit('attack-cancel');}});
   }
-  cycle(){const c=this.controller(),w=this.weapon();if(!c?.enabled||!w?.firstPerson)return;if(!this.mode){this.savedFov=this.camera.fov;this.weaponId=w.id;this.mode=w.id==='black-cat'?2:1;}else return this.end();this.held=false;this.ui.emit('attack-cancel');this.update();if(matchMedia('(pointer:fine)').matches){try{this.canvas.requestPointerLock()?.catch(()=>{});}catch{}}}
+  cycle(){const c=this.controller(),w=this.weapon();if(!c?.enabled||!w?.firstPerson)return;if(!this.mode){this.savedFov=this.camera.fov;this.weaponId=w.id;this.mode=w.id==='black-cat'?2:1;}else return this.end();this.held=false;this.ui.emit('attack-cancel');this.update();if(!gmMobilePreviewActive()&&matchMedia('(pointer:fine)').matches){try{this.canvas.requestPointerLock()?.catch(()=>{});}catch{}}}
   end(){document.body.classList.remove('sniper-scoped');if(!this.mode)return;this.mode=0;this.held=false;this.recoilAmount=0;this.recoilOffset=0;this.lookPointer=null;this.overlay.hidden=true;this.ui.emit('attack-cancel');this.camera.fov=this.savedFov;this.camera.updateProjectionMatrix();const root=this.controller()?.root;if(root){root.userData.model.visible=true;if(root.userData.blade)root.userData.blade.visible=true;}if(document.pointerLockElement===this.canvas)document.exitPointerLock();}
   direction(){const c=this.controller();return new THREE.Vector3(-Math.sin(c.yaw)*Math.cos(c.pitch),-Math.sin(c.pitch),-Math.cos(c.yaw)*Math.cos(c.pitch));}
   shot(){const ray=new THREE.Raycaster();this.camera.updateMatrixWorld();ray.setFromCamera(this.mode===2?new THREE.Vector2(0,0):crosshairNdc(),this.camera);const c=this.controller(),sniper=this.weapon().id==='black-cat',range=sniper?SNIPER_RANGE:(this.weapon().id==='goldfish'?this.weapon().range:(this.weapon().chargedRange||this.weapon().range)),origin=sniper?ray.ray.origin.clone():(weaponMuzzle(c.root,this.weapon())||c.root.position.clone().add(new THREE.Vector3(0,1,0)));let point=ray.ray.at(range,new THREE.Vector3());

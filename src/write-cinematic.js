@@ -1,3 +1,4 @@
+import {viewWidth,viewHeight} from './gm-mobile-preview.js';
 import * as THREE from 'three';
 import {journeyPose,WRITE_HEIGHT} from './shared/write-journey.js';
 
@@ -49,8 +50,8 @@ export class WriteCinematic{
   const chunks=[];
   for(let i=0;i<count;i++)chunks.push(chars.slice(i*4,i*4+9).join('')||'...');
   const rect=this.ui.panel?.getBoundingClientRect();
-  const startX=rect?.width?rect.left+rect.width*.5:innerWidth*.7;
-  const startY=rect?.height?rect.top+rect.height*.6:innerHeight*.65;
+  const startX=rect?.width?rect.left+rect.width*.5:viewWidth()*.7;
+  const startY=rect?.height?rect.top+rect.height*.6:viewHeight()*.65;
   this.letters=chunks.map((value,i)=>{
    const el=document.createElement('span');el.textContent=value;
    el.style.cssText='position:absolute;left:0;top:0;white-space:nowrap;font:700 16px serif;color:#ffe3a0;text-shadow:0 0 12px #dca84d;opacity:0;will-change:transform,opacity';
@@ -76,7 +77,7 @@ export class WriteCinematic{
   if(!this.letters.length)return;
   const c=this.controller(),camera=c?.camera;if(!camera)return;
   const point=this.mouthPosition().project(camera);
-  const endX=(point.x+1)*innerWidth/2,endY=(1-point.y)*innerHeight/2;
+  const endX=(point.x+1)*viewWidth()/2,endY=(1-point.y)*viewHeight()/2;
   const elapsed=performance.now()-this.textStarted;
   for(const l of this.letters){
    const t=smooth((elapsed-l.delay)/850);

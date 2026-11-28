@@ -1,3 +1,4 @@
+import {viewWidth,viewHeight,gmMobilePreviewActive,setGmMobilePreview} from './gm-mobile-preview.js';
 import {equipmentStatRows,levelXpRequired} from './shared/player-stats.js';
 import {terrainStyle,TERRAIN_DEFAULTS,TERRAIN_SLIDERS} from './shared/terrain-style.js';
 import {equippedItem} from './shared/fusion-adapter.js';
@@ -305,7 +306,8 @@ export class TempleUI extends EventTarget{
        this.gmChatLoading=true;this.gmChatError='';this.renderGm();
        this.emit('gm-chat-history-request',action==='gm-chat-older'?this.gmChatCursor:null);
       }
-      else if(action==='operation-prompt-edit')this.operationPrompts.edit();
+      else if(action==='mobile-preview'){this.closePanel();try{setGmMobilePreview(!gmMobilePreviewActive());}catch(error){this.toast(error.message);}}
+       else if(action==='operation-prompt-edit')this.operationPrompts.edit();
       else if(action==='chat-position-edit'){this.closePanel();this.chatLayout?.prepare();this.toast('拖曳 CHAT 的 ＋ 至指定位置，再開啟 GM 控制中心儲存');}
       else if(action==='chat-position-save'){this.closePanel();requestAnimationFrame(()=>{const position=this.chatLayout?.position();if(position)this.emit('server-action',{action:'gm-chat-default',...position});});}
       else if(action==='recover-misplaced-artwork')this.emit('server-action',{action:'recover-misplaced-artwork'});
@@ -404,7 +406,7 @@ export class TempleUI extends EventTarget{
      $('gm-spectator-test-exit').hidden=!(this.self?.profile?.admin&&this.self?.gmSpectatorPreview);
    }
    enter(data){document.activeElement?.blur();this.clearChat();this.gmChatMessages=[];this.gmChatCursor=null;this.gmChatLoaded=false;this.gmChatError='';this.gmKnownPlayers=new Map();this.gmPresenceData=null;this.gmTargetKey='';this.gmTargetPage=0;this.self=data.self;this.refreshGalleryGuideAttention();this.authMode=data.authMode||'firebase';this.world=data.world;this.chatLayout?.applyDefault(data.world?.chatDefault);this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.append($('toast'));this.layoutArtworkPrompt();document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.joinBusy(false);}
-  setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.layoutArtworkPrompt();if(this.panelName&&!['bag','wanted','wanted-gm','terrain-style','operation-prompt-layout'].includes(this.panelName))this.renderPanel();}
+  setSelf(self){this.self={...this.self,...self};if(!this.self?.profile?.admin&&gmMobilePreviewActive())setGmMobilePreview(false);$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.layoutArtworkPrompt();if(this.panelName&&!['bag','wanted','wanted-gm','terrain-style','operation-prompt-layout'].includes(this.panelName))this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();if(this.panelName==='gm'||this.shopGift&&this.panelName==='shop')this.refreshGmPlayerTargets();}
   setWorld(world){const promptChanged=JSON.stringify(this.world?.artworkPromptPositions||{})!==JSON.stringify(world.artworkPromptPositions||{});this.world=world;if(promptChanged)this.layoutArtworkPrompt();this.chatLayout?.applyDefault(world.chatDefault);this.refreshHUD();if(['bag','shop','shop-prices','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(['shop','shop-prices'].includes(this.panelName)&&this.shopPriceSignature!==JSON.stringify([world.shopPrices||{},world.equipmentTuning||{},world.delistedShopItems||{},world.removedShopAssets||{}])))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
   refreshHUD(){const profile=this.world?.profile||this.self?.profile;if(profile){setHudText('wallet',`${profile.wallet}`);setHudMeter($('hp'),profile.maxHp||100,profile.hp||0);setHudText('hp-label',Math.ceil(profile.hp||0)+'/'+profile.maxHp);setHudText('player-level','LV. '+(profile.level||1));if(this.panelName==='bag'&&this.bagCategory==='equipment'){const xp=this.content.querySelector('[data-equip-xp]'),label='XP '+Math.floor(profile.xp||0)+' / '+levelXpRequired(profile.level);if(xp&&xp.textContent!==label)xp.textContent=label;
@@ -511,7 +513,7 @@ export class TempleUI extends EventTarget{
         const node=$(id);if(!node||node.hidden||getComputedStyle(node).display==='none')return false;
         return overlap(box,node.getBoundingClientRect());
       });
-      if(obstructed||box.left<6||box.right>innerWidth-6||box.top<6||box.bottom>innerHeight-6)
+      if(obstructed||box.left<6||box.right>viewWidth()-6||box.top<6||box.bottom>viewHeight()-6)
         roster.style.setProperty('--roster-scale','.468');
     });
   }
@@ -528,7 +530,7 @@ export class TempleUI extends EventTarget{
     if(this.seenKillEvents.size>128)this.seenKillEvents.clear();
   }
   layoutArtworkPrompt(){this.operationPrompts?.schedule();}
-  setNear(near,holding=false){this.near=near;const prompt=$('prompt');let text='';const touch=matchMedia('(pointer:coarse)').matches;if(this.platformToolMode==='place')text='GM PLACE · ENTER / E / PLACE · ESC';else if(this.platformToolMode==='edit')text='GM EDIT · CLICK DISC / PEDESTAL → BLUE';else if(this.buildKind)text=touch?'A · PLACE':'E · PLACE  R · ROTATE  ESC · CANCEL';else if(holding)text='HOLD A · CHARGE THROW';else if(near?.type==='coin'||near?.type==='drop')text='';else if(near?.type==='artwork')text='A · TAKE ARTWORK';else if(near?.type==='plant')text='';else if(near?.type==='structure')text='ATTACK · DAMAGE STRUCTURE';if(prompt.textContent===text&&this.nearPromptText===text)return;this.nearPromptText=text;prompt.textContent=text;prompt.classList.toggle('artwork-pickup-hint',text==='A · TAKE ARTWORK');prompt.classList.toggle('artwork-throw-hint',text==='HOLD A · CHARGE THROW');prompt.classList.toggle('visible',!!text);this.layoutArtworkPrompt();}
+  setNear(near,holding=false){this.near=near;const prompt=$('prompt');let text='';const touch=gmMobilePreviewActive()||matchMedia('(pointer:coarse)').matches;if(this.platformToolMode==='place')text='GM PLACE · ENTER / E / PLACE · ESC';else if(this.platformToolMode==='edit')text='GM EDIT · CLICK DISC / PEDESTAL → BLUE';else if(this.buildKind)text=touch?'A · PLACE':'E · PLACE  R · ROTATE  ESC · CANCEL';else if(holding)text='HOLD A · CHARGE THROW';else if(near?.type==='coin'||near?.type==='drop')text='';else if(near?.type==='artwork')text='A · TAKE ARTWORK';else if(near?.type==='plant')text='';else if(near?.type==='structure')text='ATTACK · DAMAGE STRUCTURE';if(prompt.textContent===text&&this.nearPromptText===text)return;this.nearPromptText=text;prompt.textContent=text;prompt.classList.toggle('artwork-pickup-hint',text==='A · TAKE ARTWORK');prompt.classList.toggle('artwork-throw-hint',text==='HOLD A · CHARGE THROW');prompt.classList.toggle('visible',!!text);this.layoutArtworkPrompt();}
   showCollectorSale(sale,key){
    // Fresh server-confirmed sale notifications are displayed exactly once.
    // Once visible, the appraisal NEVER times out or disappears on world sync.
@@ -744,7 +746,8 @@ ${this.world?.environment?.spacePaintSuspended===true?'<small>3D PAINT 暫停使
       <h3>GM 功能</h3><div class="gm-tools">
         <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-gm-platform-tool="place" data-gm-platform-kind="house">GM 蓋房子</button><button type="button" data-gm-platform-tool="edit" data-gm-platform-kind="house">GM 編輯房屋</button><button type="button" data-gm-action="wanted">Wanted List 管理</button><button type="button" data-open-sky-color>星空環境底色</button><button type="button" data-open-terrain-style>草地／地板／迷霧距離</button><button type="button" data-gm-action="chat-position-edit">調整全服 CHAT 預設位置</button><button type="button" data-gm-action="chat-position-save">儲存目前 CHAT 位置為全服預設</button><button type="button" data-open-shop-prices>商品售價／裝備數值編輯</button>
          <button type="button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button>
-        <button type="button" data-gm-action="help" aria-label="GM instructions and shortcuts">！ GM 說明與快捷鍵</button>
+        <button type="button" data-gm-action="mobile-preview">切換手機版畫面預覽（19:6）</button>
+         <button type="button" data-gm-action="help" aria-label="GM instructions and shortcuts">！ GM 說明與快捷鍵</button>
         <button type="button" data-gm-action="wing-painter">畫翅膀／上架翅膀</button><button type="button" data-gm-action="wing-player-preview">測試玩家已開通的繪圖介面</button>
         <button type="button" data-gm-action="wing-manage">翅膀上架管理／刪除／中獎率</button>
 

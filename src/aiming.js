@@ -1,3 +1,4 @@
+import {viewHeight} from './gm-mobile-preview.js';
 import * as THREE from 'three';
 import {meleeFamilies} from './reletter/melee-motion.js';
 import {isChannelStaff} from './shared/weapon-abilities.js';
@@ -6,7 +7,7 @@ export const AIM_RAISE_PX=30;
 export const BEAM_RETICLE_DISTANCE=90; // World-space target is beyond the avatar, not at the wand tip.
 // NDC Y is positive upward. Both the reticle and ALL weapon rays share this
 // thirty-CSS-pixel offset, including iPhone-sized viewports and sniper optics.
-export const crosshairNdc=(height=globalThis.innerHeight||720)=>new THREE.Vector2(0,2*AIM_RAISE_PX/Math.max(1,height));
+export const crosshairNdc=(height=viewHeight()||720)=>new THREE.Vector2(0,2*AIM_RAISE_PX/Math.max(1,height));
 const ray=new THREE.Raycaster(),box=new THREE.Box3(),sphere=new THREE.Sphere(),hit=new THREE.Vector3(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 export function cameraAimDirection(camera){
  camera.updateMatrixWorld();

@@ -1,13 +1,14 @@
+import {viewWidth,viewHeight,gmMobilePreviewActive} from './gm-mobile-preview.js';
 import {operationPromptLayout,promptPlacement,PROMPT_LIMITS} from './shared/operation-prompt.js';
 
 const $=id=>document.getElementById(id);
-const device=()=>matchMedia('(max-width:720px),(pointer:coarse)').matches?'mobile':'desktop';
+const device=()=>gmMobilePreviewActive()||matchMedia('(max-width:720px),(pointer:coarse)').matches?'mobile':'desktop';
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 function anchor(){
  const r=$('attack-button')?.getBoundingClientRect();
- return r?.width&&r?.height?r:{left:innerWidth-116,top:Math.max(16,innerHeight-96),width:64,height:64};
+ return r?.width&&r?.height?r:{left:viewWidth()-116,top:Math.max(16,viewHeight()-96),width:64,height:64};
 }
-const viewport=()=>({width:innerWidth,height:innerHeight});
+const viewport=()=>({width:viewWidth(),height:viewHeight()});
 function setPosition(node,p){
  node.style.setProperty('--operation-x',p.x+'px');
  node.style.setProperty('--operation-y',p.y+'px');
@@ -15,7 +16,7 @@ function setPosition(node,p){
  node.style.setProperty('--operation-opacity',String(p.opacity));
 }
 function prepare(node){
- node.style.maxWidth=Math.max(40,innerWidth-12)+'px';
+ node.style.maxWidth=Math.max(40,viewWidth()-12)+'px';
  return {width:node.offsetWidth,height:node.offsetHeight};
 }
 export class OperationPromptLayout{
@@ -59,7 +60,7 @@ export class OperationPromptLayout{
    if(!drag||drag.id!==e.pointerId||busy)return;
    e.preventDefault();e.stopPropagation();const p=load(selected),dx=e.clientX-drag.x,dy=e.clientY-drag.y;
    if(drag.resize)p.scale=clamp(drag.layout.scale+(dx+dy*.5)/drag.width,...PROMPT_LIMITS.scale);
-   else{p.x=clamp(drag.layout.x+dx/innerWidth,...PROMPT_LIMITS.x);p.gap=clamp(drag.layout.gap-dy/innerHeight,...PROMPT_LIMITS.gap);}
+   else{p.x=clamp(drag.layout.x+dx/viewWidth(),...PROMPT_LIMITS.x);p.gap=clamp(drag.layout.gap-dy/viewHeight(),...PROMPT_LIMITS.gap);}
    render();
   });
   for(const type of ['pointerup','pointercancel','lostpointercapture'])sample.addEventListener(type,e=>{if(drag?.id===e.pointerId)drag=null;});

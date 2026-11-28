@@ -1,3 +1,4 @@
+import {viewVisualViewport,gmMobilePreviewActive} from './gm-mobile-preview.js';
 // Movable, resizable GM artwork inspector. Mobile starts as a compact
 // floating tool window instead of the legacy full-viewport modal.
 const STORAGE_KEY='temple-gm-artwork-floating-v1';
@@ -29,7 +30,7 @@ export class FloatingGmEditorPanel{
  constructor(panel,{host=window,store=window.localStorage,storageKey=STORAGE_KEY,force=false}={}){
   this.panel=panel;this.host=host;this.store=store;this.storageKey=storageKey;this.force=force;
   this.mobile=false;this.pointer=null;
-  this.layout=null;this.collapsed=false;
+  this.layout=null;this.collapsed=false;this.previewLayout=null;
   try{
    const saved=JSON.parse(store?.getItem(this.storageKey)||'null');
    if(saved&&typeof saved==='object'){
@@ -49,13 +50,13 @@ export class FloatingGmEditorPanel{
     e.preventDefault();this.reset();
    }
   });
-  host.addEventListener('resize',()=>this.reflow());
+  host.addEventListener('resize',()=>this.onViewportResize());
   host.addEventListener('orientationchange',()=>this.reflow());
   host.visualViewport?.addEventListener('resize',()=>this.reflow());
   host.visualViewport?.addEventListener('scroll',()=>this.reflow());
  }
  viewport(){
-  const vv=this.host.visualViewport;
+  const vv=viewVisualViewport(this.host);
   // iOS keyboard and browser chrome affect the visual viewport, not always
   // innerHeight. Keep the header reachable when either changes.
   return {
@@ -65,7 +66,7 @@ export class FloatingGmEditorPanel{
   };
  }
  isMobile(){
-  return this.host.matchMedia?.('(max-width: 720px), (pointer: coarse)').matches||
+  return gmMobilePreviewActive()||this.host.matchMedia?.('(max-width: 720px), (pointer: coarse)').matches||
    this.host.innerWidth<=720;
  }
  open(){
@@ -73,6 +74,11 @@ export class FloatingGmEditorPanel{
   this.panel.classList.toggle('gm-mobile-floating',this.mobile);
   if(!this.mobile)return;
   this.layout??=defaultFloatingPanelLayout(this.viewport());
+  this.reflow();
+ }
+ onViewportResize(){
+  if(gmMobilePreviewActive()&&!this.previewLayout)this.previewLayout={layout:this.layout?{...this.layout}:null,collapsed:this.collapsed};
+  else if(!gmMobilePreviewActive()&&this.previewLayout){this.layout=this.previewLayout.layout;this.collapsed=this.previewLayout.collapsed;this.previewLayout=null;if(this.mobile&&!this.force&&!this.isMobile()){this.mobile=false;this.panel.classList.toggle('gm-mobile-floating',false);}}
   this.reflow();
  }
  reflow(){
@@ -106,7 +112,7 @@ export class FloatingGmEditorPanel{
   this.reflow();this.persist();
  }
  persist(){
-  if(!this.mobile||!this.layout)return;
+  if(!this.mobile||!this.layout||gmMobilePreviewActive())return;
   try{this.store?.setItem(this.storageKey,JSON.stringify({...this.layout,collapsed:this.collapsed}));}catch{}
  }
  start(e){

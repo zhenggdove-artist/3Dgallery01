@@ -1,3 +1,4 @@
+import {viewWidth,viewHeight,gmMobilePreviewActive} from './gm-mobile-preview.js';
 import {useStablePaintPixels} from './paint-texture-source.js';
 import {PickupScheduler} from './auto-pickup.js';
 import {residencyView,RenderMemoryManager} from './render-residency.js';
@@ -65,8 +66,8 @@ if(coarse){
     document.addEventListener(type,event=>{if(!editable(event.target))event.preventDefault();},{passive:false});
 }
 const renderer=new THREE.WebGLRenderer({canvas,antialias:!coarse,powerPreference:'high-performance',alpha:false});
-renderer.setPixelRatio(Math.min(devicePixelRatio,settings.pixelRatio|| (coarse?1:1.35)));renderer.setSize(innerWidth,innerHeight,false);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.82;
-const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,1000),arena=new TempleArena(scene,renderer),ui=new TempleUI(),network=new TempleNetwork();
+renderer.setPixelRatio(Math.min(devicePixelRatio,settings.pixelRatio|| (coarse?1:1.35)));renderer.setSize(viewWidth(),viewHeight(),false);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.82;
+const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,viewWidth()/viewHeight(),.1,1000),arena=new TempleArena(scene,renderer),ui=new TempleUI(),network=new TempleNetwork();
 // GPU warmup must see the scene from a real camera, not the default origin.
 // Set it BEFORE the asynchronous VFX warm tasks are kicked off.
 camera.position.set(0,13,30);camera.lookAt(0,2,0);camera.updateMatrixWorld(true);
@@ -127,7 +128,7 @@ function updatePlayerSpeech(now=performance.now()){
   speechPoint.set(root.position.x,root.position.y+(root.userData.chatHeadY||2.8),root.position.z).project(camera);
   const visible=speechPoint.z>=-1&&speechPoint.z<=1&&Math.abs(speechPoint.x)<=1.25&&Math.abs(speechPoint.y)<=1.25;
   entry.element.hidden=!visible;
-  if(visible){entry.element.style.left=((speechPoint.x+1)*innerWidth/2)+'px';entry.element.style.top=((1-speechPoint.y)*innerHeight/2-8)+'px';}
+  if(visible){entry.element.style.left=((speechPoint.x+1)*viewWidth()/2)+'px';entry.element.style.top=((1-speechPoint.y)*viewHeight()/2-8)+'px';}
  }
  // SUPPORT is a fully opaque Win98 window. Keep socket/inputs responsive
  // without rendering the hidden 3D scene beneath it.
@@ -427,7 +428,7 @@ function showFastLocalHealth(){
  if(hp&&label){const max=fast.maxHp||100,value=fast.hp||0,text=Math.ceil(value)+'/'+fast.maxHp;if(hp.max!==max)hp.max=max;if(hp.value!==value)hp.value=value;if(label.textContent!==text)label.textContent=text;}
 }
 function receiveCombatDamage(packet){
- if(!joined||!packet)return;damageNumbers.receive(packet.events||[]);damageNumbers.update(camera,innerWidth,innerHeight);
+ if(!joined||!packet)return;damageNumbers.receive(packet.events||[]);damageNumbers.update(camera,viewWidth(),viewHeight());
  for(const value of packet.vitals||[]){
   if(!Number.isFinite(packet.revision)||packet.revision<=(world?.revision??-1)||packet.revision<(combatVitals.get(value.key)?.revision??-1))continue;
   combatVitals.set(value.key,{...value,revision:packet.revision});
@@ -633,7 +634,7 @@ ui.addEventListener('quick-use',event=>{
 // camera: standard > shoulder > sniper scope > standard; canvas tap fires.
 ui.addEventListener('attack-start',event=>{
  if(wallPainter.active||!controller?.enabled||self?.role!=='fighter')return;
- if(coarse&&buildPlacement){confirmBuildPlacement();return;}
+ if((coarse||gmMobilePreviewActive())&&buildPlacement){confirmBuildPlacement();return;}
  // A held artwork overrides the currently equipped firearm/camera mode.
  // Query the live world as holdingArt can lag behind a pickup response.
  const carryingArtwork=Object.values(world?.artworks||{}).some(art=>art.holder===self.key);
@@ -1181,7 +1182,7 @@ function update(dt,time,movementDt=dt){
   if(queuedWorld){const pending=queuedWorld;queuedWorld=null;acceptWorldView(pending);}
   for(const [key,value] of combatVitals)if(value.revision<=(world?.revision??-1))combatVitals.delete(key);
   showFastLocalHealth();const currentVitals=combatVital(self?.key,world?.profile);
-  damageNumbers.update(camera,innerWidth,innerHeight);vitalModels?.update(time,currentVitals?.hp||0,currentVitals?.maxHp||100);
+  damageNumbers.update(camera,viewWidth(),viewHeight());vitalModels?.update(time,currentVitals?.hp||0,currentVitals?.maxHp||100);
   if(joined)minimap.update(time,roots,self?.key,world?.monster,world?.monsters||[],world?.collector);
   if(joined&&controller){
    const debuffs=world?.profile?.effects||{};
@@ -1355,13 +1356,13 @@ function playAttackAudio(item,gain,ultimate,local){audio.playWeapon(item,gain,ul
 const heardAttacks=new Set();function showAttack(event){if(!heardAttacks.has(event.id)){heardAttacks.add(event.id);if(heardAttacks.size>128)heardAttacks.delete(heardAttacks.values().next().value);const item=itemById(event.weapon),gain=event.owner===self?.key?1:.38;const predicted=event.owner===self?.key&&(arena.presentation.normalPreviews?.has(event.inputId)||arena.presentation.ultimatePreviews?.has(event.inputId));if(!predicted)playAttackAudio(item,gain,!!event.ultimate,event.owner===self?.key);if(!predicted&&event.ultimate&&item?.family!=='fire'){audio.play('ultimate',gain*.45);if(['pan','swatter','lightning','wave','beam','planter','palm'].includes(item?.family)||Number(event.area?.radius)>1.5)audio.play('explosion',gain*.95);}}arena.presentation.play(event,roots.get(event.owner));}
 function showThrowPulse(event){artworkThrow.queue(event);}
 const editorRendererSize=new THREE.Vector2();
-function applyEditorSettings(next){const ratio=Math.min(devicePixelRatio,next.pixelRatio);if(renderer.getPixelRatio()!==ratio)renderer.setPixelRatio(ratio);renderer.getSize(editorRendererSize);if(editorRendererSize.x!==innerWidth||editorRendererSize.y!==innerHeight)renderer.setSize(innerWidth,innerHeight,false);localFogDensity=next.fog;applyDistanceFog(activeFogDistance);arena.artFloat=next.artFloat;}
+function applyEditorSettings(next){const ratio=Math.min(devicePixelRatio,next.pixelRatio);if(renderer.getPixelRatio()!==ratio)renderer.setPixelRatio(ratio);renderer.getSize(editorRendererSize);if(editorRendererSize.x!==viewWidth()||editorRendererSize.y!==viewHeight())renderer.setSize(viewWidth(),viewHeight(),false);localFogDensity=next.fog;applyDistanceFog(activeFogDistance);arena.artFloat=next.artFloat;}
 function loadEditorSettings(){try{return JSON.parse(localStorage.getItem('temple-editor-settings')||'{}');}catch{return {};}}
 function lerpAngle(a,b,t){let d=(b-a+Math.PI)%(Math.PI*2)-Math.PI;if(d<-Math.PI)d+=Math.PI*2;return a+d*t;}
 function distance2d3(a,b){return Math.hypot(a[0]-b[0],a[2]-b[2]);}
 
 let viewportResizeFrame=0;
-addEventListener('resize',()=>{if(viewportResizeFrame)return;viewportResizeFrame=requestAnimationFrame(()=>{viewportResizeFrame=0;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();const size=renderer.getSize(new THREE.Vector2());if(size.x!==innerWidth||size.y!==innerHeight)renderer.setSize(innerWidth,innerHeight,false);});});
+addEventListener('resize',()=>{if(viewportResizeFrame)return;viewportResizeFrame=requestAnimationFrame(()=>{viewportResizeFrame=0;camera.aspect=viewWidth()/viewHeight();camera.updateProjectionMatrix();const size=renderer.getSize(new THREE.Vector2());if(size.x!==viewWidth()||size.y!==viewHeight())renderer.setSize(viewWidth(),viewHeight(),false);});});
 document.addEventListener('visibilitychange',()=>{last=performance.now();if(document.hidden){if(portraitViewport.renderer)portraitViewport.close();arena.pauseArtworkVideos();}});
 addEventListener('pagehide',()=>{gpuFrames.reset();network.close();});
 
