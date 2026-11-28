@@ -16,11 +16,12 @@ test('equipment names, descriptions, affixes and comfort consumables stay Englis
    assert.doesNotMatch(explainEquipment(item),/[\u3400-\u9fff]/,'consumable details '+item.id);
    continue;
   }
-  assert.doesNotMatch(item.name,/[\u3400-\u9fff]/,'name '+item.id);
+  const explicitName={'outfit-naughty-snack-disguise':'不乖餅乾袋','outfit-taiwan-beer-disguise':'台灣啤酒'}[item.id];
+  if(explicitName)assert.equal(item.name,explicitName);else assert.doesNotMatch(item.name,/[\u3400-\u9fff]/,'name '+item.id);
   assert.doesNotMatch(String(item.description||''),/[\u3400-\u9fff]/,'catalog description '+item.id);
   assert.doesNotMatch(explainEquipment(item),/[\u3400-\u9fff]/,'details '+item.id);
   const visual=weaponPresentation(item);
-  assert.doesNotMatch(visual.title,/[\u3400-\u9fff]/,'title '+item.id);
+  if(!explicitName)assert.doesNotMatch(visual.title,/[\u3400-\u9fff]/,'title '+item.id);
   assert.doesNotMatch(visual.traits.map(t=>t.name+' '+t.details).join(' '),/[\u3400-\u9fff]/,'traits '+item.id);
  }
  for(const affix of WEAPON_AFFIXES){
