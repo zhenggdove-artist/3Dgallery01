@@ -10,7 +10,7 @@ import {bindBagDrag} from './bag-drag.js';
 import {PLATFORMS} from './shared/arena.js';
 import {playerArtworkAppearanceMarkup} from './art-editor-panel.js';
 import {ECONOMY,RARITIES,SHOP_ITEMS,SHOP_WEAPON_GRADES,shopWeaponGroups,EQUIPPABLE_SLOTS,ITEMS,itemById,attackStats,shopWeaponVariant,inventoryCapacity,shopOutfitCollection,shopPrice} from './shared/catalog.js';
-import {shopGroupDelisted,isRemovedShopAsset,shopQualityIds} from './shared/shop-retirement.js';
+import {shopGroupDelisted,isRemovedShopAsset,shopQualityIds,isDelisted} from './shared/shop-retirement.js';
 import {SOUND_PROFILES} from './game-audio.js';
 import {pvpShotDamage} from './shared/combat-balance.js';
 import {weaponQuality} from './shared/weapon-abilities.js';
@@ -26,6 +26,12 @@ import {bindChatLayout} from './chat-layout.js';
 import {comfortCashImage} from './comfort-cash-art.js';
 import {OperationPromptLayout} from './operation-prompt-layout.js';
 
+const GM_ROSTER_PAGE=40;
+const gmSearchText=value=>String(value??'').normalize('NFKC').toLocaleLowerCase();
+export function filterGmTargets(targets,query='',filter='all'){
+ const terms=gmSearchText(query).trim().split(/\s+/).filter(Boolean);
+ return targets.filter(p=>(filter==='all'||filter==='online'&&p.online||filter==='offline'&&!p.online||filter==='saved'&&p.persistent!==false)&&terms.every(t=>gmSearchText(p.name+' '+p.key).includes(t)));
+}
 const $=id=>document.getElementById(id),escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
 // Item inspection is a read receipt. Ignore only the 'viewed' bit when
@@ -257,11 +263,19 @@ export class TempleUI extends EventTarget{
   const label=el.parentElement.querySelector('output');
   if(label)label.value=el.hasAttribute('data-gm-fusion-chance')?el.value+'%':Math.round(Number(el.value)*100)+'%';
  });
+ this.content.addEventListener('input',event=>{
+  if(!this.self?.profile?.admin)return;
+  if(event.target.matches('[data-gm-player-search]')){this.gmTargetKey='';this.gmTargetPage=0;this.refreshGmPlayerTargets();}
+  if(event.target.matches('[data-gm-gift-search]'))this.refreshGmGiftItems();
+ });
  this.content.addEventListener('change',event=>{
   if(!this.self?.profile?.admin)return;
+  if(event.target.matches('[data-gm-player-filter]')){this.gmTargetKey='';this.gmTargetPage=0;this.refreshGmPlayerTargets();return;}
   if(event.target.matches('[data-gm-player]')){
+   this.gmTargetKey=event.target.value;
    const target=this.gmPlayerTargets().find(p=>p.key===event.target.value),field=this.content.querySelector('[data-gm-level]');
    if(field)field.value=target?.level||1;
+   this.refreshGmPlayerTargets();
    return;
   }
   const chance=event.target.closest('[data-gm-fusion-chance]');
@@ -270,14 +284,28 @@ export class TempleUI extends EventTarget{
   if(invincible)this.emit('gm-invincible',{enabled:invincible.checked});
  });
      this.content.addEventListener('click',event=>{const action=event.target.closest('[data-gm-action]')?.dataset.gmAction;if(!action||!this.self?.profile?.admin)return;if(action==='refresh')this.requestGmPresence();else if(action==='editor')this.openPanel('editor');else if(action==='wanted')this.openPanel('wanted-gm');else if(action==='help')this.openPanel('help');else if(action==='wing-painter')this.openPanel('wing-painter');else if(action==='wing-player-preview')this.openPanel('wing-player-preview');else if(action==='wing-manage')this.openPanel('wing-manage');
-      else if(['self-level','player-level','player-canvas','player-3d-grant','player-3d-revoke','player-3d-clear'].includes(action)){
+      else if(action==='player-prev'||action==='player-next'){this.gmTargetPage=Math.max(0,(this.gmTargetPage||0)+(action==='player-next'?1:-1));this.gmTargetKey='';this.refreshGmPlayerTargets();}
+      else if(['self-level','player-level','player-canvas','player-3d-grant','player-3d-revoke','player-3d-clear','player-gift-item','player-gift-coins'].includes(action)){
        if(this.gmPlayerActionPending)return;
        if(action.startsWith('player-3d-')&&this.world?.environment?.spacePaintSuspended===true)return;
        const selfOnly=action==='self-level',targetKey=selfOnly?this.self.key:this.content.querySelector('[data-gm-player]')?.value;
        if(!targetKey)return this.toast('請選擇玩家');
        const target=this.gmPlayerTargets().find(p=>p.key===targetKey);
        if(!target)return this.toast('找不到玩家資料');
-       if(action==='player-3d-grant'||action==='player-3d-revoke'){if(targetKey===this.self.key)return this.toast('GM 已具有 3D 畫筆權限');if(action==='player-3d-grant'&&!target.online&&target.persistent===false)return this.toast('訪客已離線，請指定仍在線或 Google 登入的玩家');this.emit('server-action',{action:'gm-space-paint-access',targetKey,enabled:action==='player-3d-grant'});}
+       if(action==='player-gift-item'||action==='player-gift-coins'){
+        if(!target.online&&target.persistent===false)return this.toast('離線訪客無法領取贈送');
+        if(action==='player-gift-item'){
+         const value=this.content.querySelector('[data-gm-gift-item]')?.value;if(!value)return this.toast('請選擇商品');
+         const [itemId,rank]=value.split('|'),quantity=Number(this.content.querySelector('[data-gm-gift-quantity]')?.value);
+         if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)return this.toast('數量須為 1–99');
+         const option=this.content.querySelector('[data-gm-gift-item]').selectedOptions[0];
+         if(confirm('贈送 '+target.name+'（'+target.key.slice(-8)+'） '+option.textContent+' ×'+quantity+'？'))this.emit('server-action',{action:'gm-gift-item',targetKey,itemId,...(rank?{qualityTier:Number(rank)}:{}),quantity});
+        }else{
+         const amount=Number(this.content.querySelector('[data-gm-gift-coins]')?.value);
+         if(!Number.isSafeInteger(amount)||amount<1)return this.toast('請輸入正整數金幣數量');
+         if(confirm('贈送 '+target.name+'（'+target.key.slice(-8)+'） '+amount.toLocaleString()+' 金幣？'))this.emit('server-action',{action:'gm-gift-coins',targetKey,amount});
+        }
+       }else if(action==='player-3d-grant'||action==='player-3d-revoke'){if(targetKey===this.self.key)return this.toast('GM 已具有 3D 畫筆權限');if(action==='player-3d-grant'&&!target.online&&target.persistent===false)return this.toast('訪客已離線，請指定仍在線或 Google 登入的玩家');this.emit('server-action',{action:'gm-space-paint-access',targetKey,enabled:action==='player-3d-grant'});}
        else if(action==='player-3d-clear'){if(confirm('永久移除 '+target.name+' 的所有 3D 筆跡及其表面塗鴉？'))this.emit('server-action',{action:'gm-space-paint-clear',targetKey});}
        else if(action==='player-canvas'){if(!target.online&&target.persistent===false)return this.toast('訪客帳號不保留登入身分，請待玩家上線後贈送');this.emit('server-action',{action:'gm-wing-canvas',targetKey});}
        else{const level=Number(this.content.querySelector(selfOnly?'[data-gm-self-level]':'[data-gm-level]')?.value);if(!Number.isInteger(level)||level<1||level>999)return this.toast('等級須為 1–999');this.emit('server-action',{action:'gm-player-level',targetKey,level});}
@@ -385,7 +413,7 @@ export class TempleUI extends EventTarget{
      $('spectator-fly-controls').hidden=!isViewer;
      $('gm-spectator-test-exit').hidden=!(this.self?.profile?.admin&&this.self?.gmSpectatorPreview);
    }
-   enter(data){document.activeElement?.blur();this.clearChat();this.gmChatMessages=[];this.gmChatCursor=null;this.gmChatLoaded=false;this.gmChatError='';this.self=data.self;this.refreshGalleryGuideAttention();this.authMode=data.authMode||'firebase';this.world=data.world;this.chatLayout?.applyDefault(data.world?.chatDefault);this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.append($('toast'));this.layoutArtworkPrompt();document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.joinBusy(false);}
+   enter(data){document.activeElement?.blur();this.clearChat();this.gmChatMessages=[];this.gmChatCursor=null;this.gmChatLoaded=false;this.gmChatError='';this.gmKnownPlayers=new Map();this.gmPresenceData=null;this.gmTargetKey='';this.gmTargetPage=0;this.self=data.self;this.refreshGalleryGuideAttention();this.authMode=data.authMode||'firebase';this.world=data.world;this.chatLayout?.applyDefault(data.world?.chatDefault);this.players=data.players||[];this.joinedAt=Date.now();this.entry.hidden=true;this.firebaseIdToken='';this.hud.hidden=false;document.body.append($('toast'));this.layoutArtworkPrompt();document.body.classList.toggle('spectator',data.role==='spectator');$('hud-name').textContent=data.self.name;$('hud-role').textContent=data.role.toUpperCase()+(data.self.profile?.admin?' · GM':'');$('gm-help').hidden=!data.self.profile?.admin||!!data.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.joinBusy(false);}
   setSelf(self){this.self={...this.self,...self};$('hud-name').textContent=this.self.name;$('hud-role').textContent=String(this.self.role||'fighter').toUpperCase()+(this.self.profile?.admin?' · GM':'');document.body.classList.toggle('spectator',this.self.role==='spectator');$('gm-help').hidden=!this.self.profile?.admin||!!this.self.gmSpectatorPreview;this.syncGmTitle();$('wing-shop-button').hidden=false;this.refreshSpectatorControls();this.refreshHUD();this.layoutArtworkPrompt();if(this.panelName&&!['bag','wanted','wanted-gm','terrain-style','operation-prompt-layout'].includes(this.panelName))this.renderPanel();}
   setPlayers(players){this.players=players||[];this.refreshHUD();if(this.panelName==='gm')this.refreshGmPlayerTargets();}
   setWorld(world){const promptChanged=JSON.stringify(this.world?.artworkPromptPositions||{})!==JSON.stringify(world.artworkPromptPositions||{});this.world=world;if(promptChanged)this.layoutArtworkPrompt();this.chatLayout?.applyDefault(world.chatDefault);this.refreshHUD();if(['bag','shop','shop-prices','wing-shop'].includes(this.panelName)&&(this.panelSignature!==inventoryPanelSignature(world.profile)||(['shop','shop-prices'].includes(this.panelName)&&this.shopPriceSignature!==JSON.stringify([world.shopPrices||{},world.equipmentTuning||{},world.delistedShopItems||{},world.removedShopAssets||{}])))&&!(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&this.content.contains(document.activeElement)))this.renderPanel();}
@@ -620,6 +648,7 @@ export class TempleUI extends EventTarget{
   }
   requestGmPresence(){
     if(!this.self?.profile?.admin)return;
+    if(this.gmPresenceLoading)return;
     this.gmPresenceError='';this.gmPresenceLoading=true;
     if(this.panelName==='gm')this.renderGm();
     this.emit('gm-presence-request');
@@ -627,6 +656,7 @@ export class TempleUI extends EventTarget{
   setGmPresence(data){
     if(!this.self?.profile?.admin)return;
     this.gmPresenceData={online:Array.isArray(data?.online)?data.online:[],events:Array.isArray(data?.events)?data.events:[],knownPlayers:Array.isArray(data?.knownPlayers)?data.knownPlayers:[]};
+    this.gmKnownPlayers??=new Map();for(const p of this.gmPresenceData.knownPlayers)if(p.key)this.gmKnownPlayers.set(p.key,{...this.gmKnownPlayers.get(p.key),...p});
     this.gmPresenceLoading=false;this.gmPresenceError='';
     if(this.panelName==='gm')this.renderGm();
   }
@@ -635,28 +665,53 @@ export class TempleUI extends EventTarget{
     if(this.panelName==='gm')this.renderGm();
   }
   gmPlayerTargets(){
-   const own={key:this.self.key,name:this.self.name,level:this.world?.profile?.level||this.self.profile?.level||1,online:true,spacePaintEnabled:this.world?.environment?.spacePaintSuspended!==true};
-   const known=(this.gmPresenceData?.knownPlayers||[]).filter(p=>p.key&&p.key!==own.key).map(p=>({...p,online:false}));
-   const online=(this.players||[]).filter(p=>p.key&&p.key!==own.key).map(p=>({key:p.key,name:p.name,level:p.profile?.level||1,online:true,persistent:!p.key.startsWith('guest:'),spacePaintEnabled:!!p.profile?.spacePaintEnabled}));
-   const merged=[...new Map([...known,...online].map(p=>[p.key,p])).values()];
-   merged.sort((a,b)=>Number(b.online)-Number(a.online)||String(a.name).localeCompare(String(b.name)));
+   const own={key:this.self.key,name:this.self.name,level:this.world?.profile?.level||this.self.profile?.level||1,online:true,persistent:true,spacePaintEnabled:this.world?.environment?.spacePaintSuspended!==true};
+   const known=this.gmKnownPlayers??=new Map(),online=new Set();
+   // Remember players observed since the last directory fetch, even after they log out.
+   for(const p of this.players||[])if(p.key&&p.key!==own.key){online.add(p.key);known.set(p.key,{...known.get(p.key),key:p.key,name:p.name,level:p.profile?.level||known.get(p.key)?.level||1,role:p.role,persistent:!p.key.startsWith('guest:'),spacePaintEnabled:!!p.profile?.spacePaintEnabled});}
+   const merged=[...known.values()].filter(p=>p.key!==own.key).map(p=>({...p,online:online.has(p.key)}));
+   merged.sort((a,b)=>Number(b.online)-Number(a.online)||Number(b.persistent!==false)-Number(a.persistent!==false)||String(a.name).localeCompare(String(b.name))||a.key.localeCompare(b.key));
    return [own,...merged];
   }
   refreshGmPlayerTargets(){
    const select=this.content.querySelector('[data-gm-player]');if(!select)return;
-   const targets=this.gmPlayerTargets(),signature=JSON.stringify(targets);
-   if(select.dataset.rosterSignature===signature)return;
-   const previous=select.value;
-   select.innerHTML=targets.map(p=>`<option value="${escape(p.key)}">${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':p.persistent===false?'離線訪客（無法領取）':'離線'} · 3D ${p.spacePaintEnabled?'ON':'OFF'}</option>`).join('');
-   select.value=targets.some(p=>p.key===previous)?previous:this.self.key;
-   select.dataset.rosterSignature=signature;
-   if(select.value!==previous){const field=this.content.querySelector('[data-gm-level]');if(field)field.value=targets.find(p=>p.key===select.value)?.level||1;}
+   const targets=this.gmPlayerTargets(),query=this.content.querySelector('[data-gm-player-search]')?.value||'',filter=this.content.querySelector('[data-gm-player-filter]')?.value||'all';
+   const matches=filterGmTargets(targets,query,filter),selected=matches.find(p=>p.key===this.gmTargetKey);
+   if(!selected)this.gmTargetKey='';
+   const pages=Math.max(1,Math.ceil(matches.length/GM_ROSTER_PAGE));
+   this.gmTargetPage=Math.min(pages-1,Math.max(0,this.gmTargetPage||0));
+   const visible=matches.slice(this.gmTargetPage*GM_ROSTER_PAGE,(this.gmTargetPage+1)*GM_ROSTER_PAGE);
+   if(selected&&!visible.some(p=>p.key===selected.key))visible.unshift(selected);
+   const signature=JSON.stringify([visible.map(p=>[p.key,p.name,p.level,p.online,p.persistent,p.spacePaintEnabled]),this.gmTargetKey]);
+   if(select.dataset.rosterSignature!==signature){
+    const scroll=select.scrollTop;
+    select.innerHTML='<option value="">— 請選擇玩家 —</option>'+visible.map(p=>'<option value="'+escape(p.key)+'">'+escape((p.key===this.self.key?'自己 · ':'')+p.name+' · LV '+p.level+' · '+(p.online?'在線':p.persistent===false?'離線訪客':'離線')+' · #'+p.key.slice(-8))+'</option>').join('');
+    select.value=this.gmTargetKey||'';select.scrollTop=scroll;select.dataset.rosterSignature=signature;
+   }
+   const count=this.content.querySelector('[data-gm-player-count]');if(count)count.textContent=matches.length+'／'+targets.length+' 位 · 第 '+(this.gmTargetPage+1)+'／'+pages+' 頁';
+   const detail=this.content.querySelector('[data-gm-player-detail]');
+   if(detail)detail.textContent=selected?selected.name+' · #'+selected.key.slice(-8)+' · '+(selected.online?'在線':selected.persistent===false?'離線訪客（無法領取）':'離線存檔')+' · LV '+selected.level+' · 3D '+(selected.spacePaintEnabled?'ON':'OFF'):'尚未選擇玩家';
+   const pending=this.gmPlayerActionPending;
+   for(const button of this.content.querySelectorAll('.gm-player-controls [data-gm-action^="player-"]')){
+    const action=button.dataset.gmAction;
+    button.disabled=!!pending||(action==='player-prev'?this.gmTargetPage===0:action==='player-next'?this.gmTargetPage>=pages-1:!selected||((action==='player-canvas'||action.startsWith('player-gift-'))&&!selected.online&&selected.persistent===false));
+   }
+  }
+  refreshGmGiftItems(){
+   const select=this.content.querySelector('[data-gm-gift-item]');if(!select)return;
+   const previous=select.value,terms=gmSearchText(this.content.querySelector('[data-gm-gift-search]')?.value).trim().split(/\s+/).filter(Boolean);
+   const colors=['白','綠','藍','金','紫'];
+   const items=shopWeaponGroups(SHOP_ITEMS.filter(i=>!isDelisted(this.world,i.id))).flatMap(g=>g.variants).filter(Boolean);
+   const options=items.map(item=>({value:item.id+'|'+(item.slot==='weapon'?item.shopTier:''),label:item.name+' · '+(colors[(item.shopTier||item.tier||1)-1]||'')+' · '+item.slot+' · '+item.id})).filter(p=>terms.every(t=>gmSearchText(p.label).includes(t)));
+   select.innerHTML='<option value="">— 請選擇商品及品質 —</option>'+options.map(p=>'<option value="'+escape(p.value)+'">'+escape(p.label)+'</option>').join('');
+   if(options.some(p=>p.value===previous))select.value=previous;
   }
   setGmPlayerActionState(pending,message=''){
    this.gmPlayerActionPending=pending;this.gmPlayerActionMessage=message;
    const card=this.content.querySelector('.gm-player-controls');if(!card)return;
    for(const button of card.querySelectorAll('button'))button.disabled=pending;
    const status=card.querySelector('[data-gm-player-status]');if(status)status.textContent=message;
+   if(!pending)this.refreshGmPlayerTargets();
   }
   setGmChatHistory(data,append){
    this.gmChatLoading=false;this.gmChatLoaded=true;this.gmChatError='';
@@ -672,17 +727,26 @@ export class TempleUI extends EventTarget{
     const slider=(key,label)=>{const value=Math.max(0,Math.min(2,Number(volumes[key]??1)));return `<label style="display:grid;grid-template-columns:minmax(90px,1fr) minmax(80px,2fr) 3em;align-items:center;gap:10px;padding:3px 0"><span>${escape(label)}</span><input data-gm-volume="${escape(key)}" type="range" min="0" max="2" step=".05" value="${value}" aria-label="${escape(label)}"><output>${Math.round(value*100)}%</output></label>`;};
     const soundControls=['master','music',...Object.keys(SOUND_PROFILES)].map(key=>slider(key,key==='master'?'總音量':key==='music'?'背景音樂':key)).join('');
     const weaponControls=ITEMS.filter(item=>item.slot==='weapon').map(item=>slider('weapon-'+item.id,item.name||item.id)).join('');
-    const selectedTarget=this.content.querySelector('[data-gm-player]')?.value||this.self.key,selectedLevel=this.content.querySelector('[data-gm-level]')?.value,selfLevel=this.content.querySelector('[data-gm-self-level]')?.value;
-    const targets=this.gmPlayerTargets(),target=targets.find(p=>p.key===selectedTarget)||targets[0],disabled=this.gmPlayerActionPending?'disabled':'';
+    const selectedTarget=this.gmTargetKey||'',selectedLevel=this.content.querySelector('[data-gm-level]')?.value,selfLevel=this.content.querySelector('[data-gm-self-level]')?.value;
+    const targets=this.gmPlayerTargets(),target=targets.find(p=>p.key===selectedTarget),disabled=this.gmPlayerActionPending?'disabled':'';
+    const saved=Object.fromEntries(['player-search','player-filter','gift-search','gift-item','gift-quantity','gift-coins'].map(k=>[k,this.content.querySelector('[data-gm-'+k+']')?.value]));
+    const focused=document.activeElement,focusKey=Object.keys(saved).find(k=>focused?.matches('[data-gm-'+k+']')),caret=focusKey&&focused.selectionStart,scroll=this.content.scrollTop;
     this.content.innerHTML=`<section class="gm-admin">
       <section class="gm-player-controls" aria-label="GM 玩家測試與贈送">
        <h3>GM 玩家測試與贈送</h3>
        <label for="gm-self-level">自身等級 · LV ${targets[0].level}</label>
        <div class="gm-player-row"><input id="gm-self-level" data-gm-self-level type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(selfLevel??targets[0].level)}"><button type="button" data-gm-action="self-level" ${disabled}>調整自身等級</button></div>
        <label for="gm-target-player">指定玩家</label>
-       <select id="gm-target-player" data-gm-player>${targets.map(p=>`<option value="${escape(p.key)}" ${p.key===target.key?'selected':''}>${p.key===this.self.key?'自己 · ':''}${escape(p.name)} · LV ${p.level} · ${p.online?'在線':p.persistent===false?'離線訪客（無法領取）':'離線'} · 3D ${p.spacePaintEnabled?'ON':'OFF'}</option>`).join('')}</select>
-       <div class="gm-player-row"><input data-gm-level aria-label="指定玩家等級" type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(target.key===selectedTarget?(selectedLevel??target.level):target.level)}"><button type="button" data-gm-action="player-level" ${disabled}>調整玩家等級</button></div>
+       <div class="gm-roster-search"><input data-gm-player-search type="search" placeholder="搜尋玩家名稱或 ID" aria-label="搜尋玩家" value="${escape(saved['player-search']||'')}"><select data-gm-player-filter aria-label="玩家狀態"><option value="all">全部玩家</option><option value="online">在線</option><option value="offline">離線</option><option value="saved">有存檔</option></select></div>
+       <select id="gm-target-player" data-gm-player size="7" aria-label="指定玩家"><option value="">— 請選擇玩家 —</option></select>
+       <div class="gm-roster-nav"><button type="button" data-gm-action="player-prev">上一頁</button><small data-gm-player-count></small><button type="button" data-gm-action="player-next">下一頁</button><button type="button" data-gm-action="refresh">重新整理</button></div>
+       <small data-gm-player-detail role="status"></small>
+       <div class="gm-player-row"><input data-gm-level aria-label="指定玩家等級" type="number" inputmode="numeric" min="1" max="999" step="1" value="${escape(target?(selectedLevel??target.level):1)}"><button type="button" data-gm-action="player-level" ${disabled}>調整玩家等級</button></div>
        <button class="gm-canvas-gift" type="button" data-gm-action="player-canvas" ${disabled}>贈送翅膀畫布 ×1</button>
+       <label>贈送商店物品<input data-gm-gift-search type="search" placeholder="搜尋商品名稱、品質或 ID" value="${escape(saved['gift-search']||'')}"></label>
+       <select data-gm-gift-item aria-label="商品及品質"><option value="">— 請選擇商品及品質 —</option></select>
+       <div class="gm-player-row"><input data-gm-gift-quantity type="number" inputmode="numeric" min="1" max="99" step="1" value="${escape(saved['gift-quantity']??1)}" aria-label="商品數量"><button type="button" data-gm-action="player-gift-item" ${disabled}>贈送商品</button></div>
+       <label>贈送金幣</label><div class="gm-player-row"><input data-gm-gift-coins type="number" inputmode="numeric" min="1" step="1" value="${escape(saved['gift-coins']??'')}" placeholder="金幣數量" aria-label="金幣數量"><button type="button" data-gm-action="player-gift-coins" ${disabled}>贈送金幣</button></div>
 ${this.world?.environment?.spacePaintSuspended===true?'<small>3D PAINT 暫停使用（全服）</small>':`       <div class="gm-player-row"><button type="button" data-gm-action="player-3d-grant" ${disabled}>開通 3D PAINT</button><button type="button" data-gm-action="player-3d-revoke" ${disabled}>回收 3D PAINT</button></div>
        <button type="button" data-gm-action="player-3d-clear" ${disabled}>移除指定玩家全部 3D 筆跡</button>`}
        <small data-gm-player-status role="status">${escape(this.gmPlayerActionMessage||'可贈送曾登入的玩家（包含離線）。')}</small>
@@ -724,6 +788,11 @@ ${this.world?.environment?.spacePaintSuspended===true?'<small>3D PAINT 暫停使
       ${this.gmPresenceError?`<p role="alert">${escape(this.gmPresenceError)}</p>`:''}
       <div class="gm-presence-list" role="log">${events.map(e=>`<div class="gm-presence-row"><strong>${escape(e.name)} · ${e.event==='online'?'上線':'下線'} · ${e.role==='fighter'?'玩家':'觀眾'}</strong><time>${escape(date(e.time))}</time></div>`).join('')||(this.gmPresenceLoading?'<p>正在取得紀錄…</p>':'<p>目前沒有可顯示的上下線紀錄。</p>')}</div>
     </section>`;
+    this.content.querySelector('[data-gm-player-filter]').value=saved['player-filter']||'all';
+    this.refreshGmPlayerTargets();this.refreshGmGiftItems();
+    const giftSelect=this.content.querySelector('[data-gm-gift-item]');if(saved['gift-item']&&[...giftSelect.options].some(o=>o.value===saved['gift-item']))giftSelect.value=saved['gift-item'];
+    if(focusKey){const next=this.content.querySelector('[data-gm-'+focusKey+']');next?.focus({preventScroll:true});if(typeof caret==='number'&&next?.setSelectionRange)try{next.setSelectionRange(caret,caret);}catch{}}
+    this.content.scrollTop=scroll;
   }
   renderSave(){
     if(this.authMode==='firebase'){

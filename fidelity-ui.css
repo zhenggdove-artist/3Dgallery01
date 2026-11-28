@@ -1209,3 +1209,11 @@ body.panel-open #panel.terrain-style-floating{width:min(300px,calc(100vw - 16px)
 #panel .terrain-meadow-controls summary{cursor:pointer;padding:4px 0}
 #panel .terrain-meadow-controls .terrain-meadow-row{grid-template-columns:65px minmax(0,1fr) 40px;gap:3px}
 #panel .terrain-meadow-row output{font-size:10px;text-align:right}
+
+/* GM gifting directory: scoped to the GM player card only. */
+#panel .gm-roster-search{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:6px}
+#panel [data-gm-player]{height:180px;overflow:auto}
+#panel .gm-roster-nav{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+#panel .gm-roster-nav small{flex:1;min-width:80px;text-align:center}
+#panel [data-gm-player-detail]{padding:7px;background:#fff;border:1px solid #d3c1e4}
+#panel .gm-player-controls button:disabled{opacity:.5;cursor:default}

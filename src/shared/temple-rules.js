@@ -401,6 +401,7 @@ export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,
 
 export function applyAction(world,actor,body,context={}){
   if(SPACE_PAINT_ACTIONS.includes(body.action))return applySpacePaint(world,actor,body,context);
+  if(['gm-gift-item','gm-gift-coins'].includes(body.action))return gmGift(world,actor,body,context);
   const now=context.now??Date.now(),rng=context.rng??Math.random,
    // The premium draw checks PERSISTED admin status before any ensureProfile
    // mutation. Existing game/GM actions retain their original role semantics.
@@ -914,6 +915,34 @@ function throwArtwork(world,profile,actor,body,context,now){
 
 }
 
+// Reuse the authoritative catalog, unique inventory instances and bag limits.
+// Only a persisted authenticated GM may grant assets.
+function gmGift(world,actor,body,context){
+ if(actor.admin!==true||world.profiles?.[actor.key]?.admin!==true)return {error:'GM only'};
+ const key=body.targetKey;
+ if(typeof key!=='string'||!Object.hasOwn(world.profiles,key))return {error:'Player not found'};
+ const target=world.profiles[key];
+ if(key.startsWith('guest:')&&!context.activeProfileKeys?.has(key))return {error:'Guest is offline'};
+ if(body.action==='gm-gift-coins'){
+  const amount=body.amount;
+  if(!Number.isSafeInteger(amount)||amount<1)return {error:'Coins must be a positive integer'};
+  if(target.admin)return {error:'GM already has unlimited coins'};
+  if(!Number.isSafeInteger(target.wallet+amount)||!Number.isSafeInteger((world.activity.coinMinted||0)+amount))return {error:'Coin amount exceeds safe balance'};
+  earn(target,amount,world);
+  world.revision=(world.revision||0)+1;
+  return {notice:'COINS GRANTED · '+target.name+' · '+amount,gift:{targetKey:key,targetName:target.name,amount}};
+ }
+ const base=SHOP_ITEMS.find(item=>item.id===body.itemId&&!isDelisted(world,item.id));
+ const item=base&&shopPurchaseVariant(base.id,body.qualityTier);
+ if(!item)return {error:'Item is not sold or invalid quality'};
+ const quantity=body.quantity??1;
+ if(!Number.isSafeInteger(quantity)||quantity<1||quantity>99)return {error:'Quantity must be an integer from 1 to 99'};
+ if(target.inventory.length+quantity>inventoryCapacity(target))return {error:'Recipient inventory full ('+inventoryCapacity(target)+' items maximum)'};
+ appendInventoryInstances(target,base.id,'grant',base.slot==='weapon'?item.shopTier:null,null,quantity);
+ target.itemOrigins??={};target.itemOrigins[base.id]='grant';
+ world.revision=(world.revision||0)+1;
+ return {notice:'ITEM GRANTED · '+target.name+' · '+item.name+' ×'+quantity,gift:{targetKey:key,targetName:target.name,itemId:base.id,itemName:item.name,qualityTier:base.slot==='weapon'?item.shopTier:null,quantity}};
+}
 function buy(world,profile,body){
  const base=SHOP_ITEMS.find(entry=>entry.id===body.itemId&&!isDelisted(world,entry.id));
  if(!base)return {error:'Item is not sold'};
