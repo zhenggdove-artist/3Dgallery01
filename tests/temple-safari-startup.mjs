@@ -110,7 +110,7 @@ try{
   try{
    renderer.setRenderTarget(target);
    for(let i=0;i<12;i++){
-    const giraffe=makeHeldWeapon(itemById('giraffe')),token=makeHeldWeapon(itemById('chiang-token')),staff=makeSpellEquipment(itemById('prism-3'));
+    const giraffe=makeHeldWeapon(itemById('giraffe')),token=makeHeldWeapon({id:'chiang-token',family:'token'}),staff=makeSpellEquipment(itemById('prism-3'));
     const fx=vfx.create('tidal-surge');fx.update(.18);
     stage.add(giraffe,token,staff,fx.group);renderer.render(stage,camera);
     let skeleton;giraffe.traverse(o=>{if(o.isSkinnedMesh)skeleton=o.skeleton;});
