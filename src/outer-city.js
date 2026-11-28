@@ -8,6 +8,7 @@ import {CityWallPaint} from './city-wall-paint.js';
 import {paintAtlasBands,useStablePaintPixels} from './paint-texture-source.js';
 import {CityFireField} from './city-fire-field.js';
 import {CitySplinterField} from './city-splinter-field.js';
+import {CityVisibleIndices} from './city-visible-indices.js';
 
 // All 432 lots remain present on mobile. Simplification changes only geometry
 // detail, never collision or position; a single batched mesh draws the district.
@@ -462,6 +463,7 @@ export class OuterCity{
     mesh.frustumCulled=false; // The vertex positions change during staged structural collapse.
     installDeformation(mesh,this.gpuPose);
    }
+  this.visibilityBatches=[this.walls,this.signs,this.graffiti].map(mesh=>new CityVisibleIndices(mesh.geometry,mesh));
   this.root.add(this.walls,this.signs,this.graffiti,wires(this.lots));
   this.wallPaint=new CityWallPaint(this.root,this);
   const rand=random(78142),bins=mobile?16:30;
@@ -1080,6 +1082,15 @@ export class OuterCity{
   this.pruneDeformationBasis();
   // Ruined buildings are already grounded; the fragment pools handle all
   // falling motion without iterating through every destroyed house each frame.
+ }
+ prepareVisibility(camera){
+  if(!this.visibilityBatches)return;
+  camera.updateWorldMatrix(true,false);
+  const matrix=this.cityVisibleMatrix??=new THREE.Matrix4(),frustum=this.cityVisibleFrustum??=new THREE.Frustum();
+  matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
+  if(this.cityLastView?.equals(matrix))return;
+  (this.cityLastView??=new THREE.Matrix4()).copy(matrix);frustum.setFromProjectionMatrix(matrix);
+  for(const batch of this.visibilityBatches)batch.prepare(frustum);
  }
  updateRubbleResidency(camera){
   if(!camera||!this.chunks.size)return;

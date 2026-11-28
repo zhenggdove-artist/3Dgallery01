@@ -18,8 +18,8 @@ try{
    mod.render.call(context);
    const q=s=>content.querySelector(s),color=q('[data-terrain-color]'),change=(el,val)=>{el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));};
    change(color,'#aa0022');q('[data-terrain-tab="grassColor"]').click();change(color,'#0044dd');q('[data-terrain-tab="floorColor"]').click();change(color,'#ef9944');change(q('[data-terrain-length]'),'185');
-   change(q('[data-terrain-param="soilExposure"]'),'60');change(q('[data-terrain-param="flowerDensity"]'),'75');change(q('[data-terrain-param="grassPushRadius"]'),'310');q('[data-terrain-tab="flowerBlue"]').click();change(color,'#2266ff');
-   const draft=events.at(-1).value,correct=draft.soilExposure===.6&&draft.flowerDensity===.75&&draft.grassPushRadius===3.1&&draft.flowerBlue==='#2266ff'&&draft.meadowColor==='#aa0022'&&draft.grassColor==='#0044dd'&&draft.floorColor==='#ef9944'&&draft.grassLength===1.85;
+   change(q('[data-terrain-param="fogDistance"]'),'125');change(q('[data-terrain-param="soilExposure"]'),'60');change(q('[data-terrain-param="flowerDensity"]'),'75');change(q('[data-terrain-param="grassPushRadius"]'),'310');q('[data-terrain-tab="flowerBlue"]').click();change(color,'#2266ff');
+   const draft=events.at(-1).value,correct=draft.fogDistance===125&&draft.soilExposure===.6&&draft.flowerDensity===.75&&draft.grassPushRadius===3.1&&draft.flowerBlue==='#2266ff'&&draft.meadowColor==='#aa0022'&&draft.grassColor==='#0044dd'&&draft.floorColor==='#ef9944'&&draft.grassLength===1.85;
    const oneTab=content.querySelectorAll('[data-terrain-tab][aria-pressed=true]').length===1;
    const length=q('[data-terrain-length]').nextElementSibling.textContent==='185%';
    const bounds=document.getElementById('panel').getBoundingClientRect(),fits=bounds.right<=innerWidth&&bounds.bottom<=innerHeight;

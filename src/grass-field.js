@@ -81,6 +81,7 @@ varying float vHeight;
 varying float vShade;
 varying float vWind;
 varying float vLeafEdge;
+varying float vFogDepth;
 void main(){
  float t=position.y;
  float c=cos(aAngle),s=sin(aAngle);
@@ -110,7 +111,7 @@ void main(){
  vec2 bend=(wind+trample)*t*t;
  vec3 p=vec3(aOffset.x+blade.x+bend.x,.014+t*aHeight*uGrassLength*(1.-min(.48,pressure*.34*uPushStrength)*t),aOffset.y+blade.y+bend.y);
  vHeight=t;vShade=aShade;vWind=length(wind+trample);vLeafEdge=uv.x;
- gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);
+ vec4 eye=modelViewMatrix*vec4(p,1.);vFogDepth=-eye.z;gl_Position=projectionMatrix*eye;
 }`;
 const fragment=`
 precision mediump float;
@@ -119,6 +120,10 @@ varying float vShade;
 varying float vWind;
 varying float vLeafEdge;
 uniform vec3 uGrassDelta;
+varying float vFogDepth;
+uniform vec3 uDistanceFogColor;
+uniform float uDistanceFogDensity;
+vec3 distanceFog(vec3 rgb){float d=max(0.,vFogDepth)*uDistanceFogDensity;return mix(rgb,uDistanceFogColor,1.-exp(-d*d));}
 void main(){
  vec3 dark=vec3(.075,.19,.075),green=vec3(.32,.53,.20),straw=vec3(.65,.66,.31);
  vec3 tone=mix(dark,green,clamp(vHeight*.78+vShade*.38,0.,1.));
@@ -128,7 +133,7 @@ void main(){
  tone+=vec3(.035,.055,.012)*rib*vHeight;
  tone-=vec3(.018,.026,.009)*edge;
  tone+=vec3(.06,.08,.02)*clamp(vWind*.3,0.,1.)*vHeight;
- gl_FragColor=vec4(clamp(tone+uGrassDelta,0.,1.),1.);
+ gl_FragColor=vec4(distanceFog(clamp(tone+uGrassDelta,0.,1.)),1.);
 }`;
 const flowerFragment=`
 precision mediump float;
@@ -139,12 +144,16 @@ uniform vec3 uGrassDelta;
 uniform vec3 uFlowerYellow;
 uniform vec3 uFlowerPurple;
 uniform vec3 uFlowerBlue;
+varying float vFogDepth;
+uniform vec3 uDistanceFogColor;
+uniform float uDistanceFogDensity;
+vec3 distanceFog(vec3 rgb){float d=max(0.,vFogDepth)*uDistanceFogDensity;return mix(rgb,uDistanceFogColor,1.-exp(-d*d));}
 void main(){
  vec3 tone;
  if(vLeafEdge<.5){tone=mix(vec3(.09,.24,.08),vec3(.34,.53,.17),vHeight)+uGrassDelta;}
  else if(vLeafEdge<1.5){tone=vShade<.3333?uFlowerYellow:(vShade<.6667?uFlowerPurple:uFlowerBlue);tone*=.8+.2*vHeight;}
  else{tone=vShade<.3333?vec3(.83,.46,.08):vec3(.94,.78,.36);}
- gl_FragColor=vec4(clamp(tone,0.,1.),1.);
+ gl_FragColor=vec4(distanceFog(clamp(tone,0.,1.)),1.);
 }`;
 const GRASS_TILE=24,GRASS_BOUND_PAD=13;
 export const MEADOW_COUNTS=Object.freeze({mobile:37500,desktop:97500,outerMobile:110000,outerDesktop:250000});
@@ -244,7 +253,7 @@ export class GrassField{
   this.innerVisibility=new GrassVisibility(geo,seed,this.count);
   const positions=Array.from({length:6},()=>new THREE.Vector3(10000,0,10000));
   const material=new THREE.ShaderMaterial({vertexShader:vertex,fragmentShader:fragment,side:THREE.DoubleSide,depthWrite:true,
-   uniforms:{uTime:{value:0},uPlayers:{value:positions},uPlayerCount:{value:0},uPlayerBounds:{value:new THREE.Vector4()},uGrassLength:{value:1},uPlantWidth:{value:1},uWindSpeed:{value:1},uWindStrength:{value:1},uPushRadius:{value:2.4},uPushStrength:{value:1},uGrassDelta:{value:new THREE.Vector3()}}});
+   uniforms:{uTime:{value:0},uPlayers:{value:positions},uPlayerCount:{value:0},uPlayerBounds:{value:new THREE.Vector4()},uDistanceFogColor:{value:new THREE.Color()},uDistanceFogDensity:{value:0},uGrassLength:{value:1},uPlantWidth:{value:1},uWindSpeed:{value:1},uWindStrength:{value:1},uPushRadius:{value:2.4},uPushStrength:{value:1},uGrassDelta:{value:new THREE.Vector3()}}});
   this.mesh=new THREE.Mesh(geo,material);this.mesh.name='JS procedural wind and footsteps grass';this.mesh.frustumCulled=false;
   scene.add(this.mesh);
   // Match central grass with living wind/trample blades across every street,
@@ -275,9 +284,13 @@ export class GrassField{
   // Continuous terrain underneath the 3D meadow, with naturally exposed soil.
   this.groundTexture=meadowGroundTexture();
   this.canopy=new THREE.Mesh(new THREE.CircleGeometry(CITY_INNER_RADIUS,128),new THREE.ShaderMaterial({
-   uniforms:{uMeadowDelta:{value:new THREE.Vector3()},uFloorDelta:{value:new THREE.Vector3()},uGround:{value:this.groundTexture},uSoilExposure:{value:.4}},
-   vertexShader:`varying vec2 grassPoint;void main(){grassPoint=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+   uniforms:{uMeadowDelta:{value:new THREE.Vector3()},uFloorDelta:{value:new THREE.Vector3()},uGround:{value:this.groundTexture},uSoilExposure:{value:.4},uDistanceFogColor:material.uniforms.uDistanceFogColor,uDistanceFogDensity:material.uniforms.uDistanceFogDensity},
+   vertexShader:`varying vec2 grassPoint;varying float vFogDepth;void main(){grassPoint=position.xy;vec4 eye=modelViewMatrix*vec4(position,1.);vFogDepth=-eye.z;gl_Position=projectionMatrix*eye;}`,
    fragmentShader:`precision highp float;varying vec2 grassPoint;uniform vec3 uMeadowDelta;uniform vec3 uFloorDelta;uniform sampler2D uGround;uniform float uSoilExposure;
+    varying float vFogDepth;
+uniform vec3 uDistanceFogColor;
+uniform float uDistanceFogDensity;
+vec3 distanceFog(vec3 rgb){float d=max(0.,vFogDepth)*uDistanceFogDensity;return mix(rgb,uDistanceFogColor,1.-exp(-d*d));}
     void main(){
      vec3 fine=texture2D(uGround,grassPoint*.48).rgb;
      vec3 macro=texture2D(uGround,grassPoint*.047+vec2(.37,.19)).rgb;
@@ -286,7 +299,7 @@ export class GrassField{
      soil=mix(soil,vec3(.48,.44,.35),fine.b*.65)+uFloorDelta;
      vec3 moss=mix(vec3(.065,.12,.034),vec3(.24,.32,.10),fine.r)+uMeadowDelta;
      vec3 col=mix(soil,moss,cover);
-     gl_FragColor=vec4(clamp(col,0.,1.),1.);
+     gl_FragColor=vec4(distanceFog(clamp(col,0.,1.)),1.);
     }`,side:THREE.DoubleSide,depthWrite:true}));
   this.canopy.name='Continuous dense grass canopy';
   this.canopy.rotation.x=-Math.PI/2;this.canopy.position.y=.006;scene.add(this.canopy);
@@ -317,6 +330,7 @@ export class GrassField{
    frustum.setFromProjectionMatrix(local);data.prepare(frustum,length,pad);
   }
  }
+ setDistanceFog(fog){const u=this.mesh.material.uniforms;fog.color.getRGB(u.uDistanceFogColor.value,THREE.SRGBColorSpace);u.uDistanceFogDensity.value=fog.density;}
  setTerrainStyle(environment){
   const s=terrainStyle(environment),key=JSON.stringify(s);if(key===this.terrainSignature)return;this.terrainSignature=key;
   const grass=this.mesh.material.uniforms,canopy=this.canopy.material.uniforms;

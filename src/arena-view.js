@@ -7,7 +7,7 @@ import {cityGroundHeight,cityBlocked,structureSignSpecs,signWorldPosition} from 
 import {DisplayPlatforms} from './display-platforms.js';
 import {artworkPosition,artworkLanding,artworkRenderFlight} from './shared/artwork-flight.js';
 import {artworkDefinitions,artworkPickupReach} from './shared/artwork-library.js';
-import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork,updateArtworkTitleVisibility,releaseArtworkAnimation} from './artwork-surface.js';
+import {addArtworkDepth,applyArtworkAppearance,loadCustomArtwork,updateArtworkTitleVisibility,releaseArtworkAnimation,artworkImageResidency} from './artwork-surface.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
@@ -506,7 +506,7 @@ export class TempleArena{
     // No textures are regenerated and no shared player styling is changed.
     for(const root of this.artworks.values()){
      if(root.userData.titlePlate)updateArtworkTitleVisibility(root,viewerRoot?.position);
-     const d=root.userData,v=d.video;if(!v)continue;
+     const d=root.userData,v=d.video;this.updateImageResidency(root,camera,frameNow);if(!v)continue;
      const wanted=root.visible&&!document.hidden&&camera.position.distanceToSquared(root.position)<900;
      if(!wanted){if(d.videoPlaying||!v.paused)v.pause();d.videoPlaying=false;continue;}
      if(!d.videoPlaying&&performance.now()>=(d.videoRetryAt||0)){
@@ -561,6 +561,20 @@ export class TempleArena{
      this.presentation.update(dt,time,camera,this.world);this.adventure.update(dt,time,playerRoots,camera);if(time-this.lastLightUpdate>.35){this.lastLightUpdate=time;this.updateArtLights(camera);}
   }
   updateArtLights(camera){const visible=[...this.artworks.values()].filter(o=>o.visible).sort((a,b)=>a.position.distanceToSquared(camera.position)-b.position.distanceToSquared(camera.position));this.lightPool.forEach((light,i)=>{const art=visible[i];light.intensity=art?(i?18:24):0;if(art){light.position.copy(art.position).add(new THREE.Vector3(0,2,2.5));light.color.set(i%2?'#d6dfff':'#ffe1b8');}});}
+  updateImageResidency(root,camera,now){
+   const d=root.userData,image=artworkImageResidency.get(root);if(!image)return;
+   // Only evict the GPU copy of an image entirely beyond the far plane.
+   // Its original decoded source and all world/edit/collision data remain.
+   // The radius includes the authored depth, rotation and nonuniform scale.
+   const s=root.scale,depth=Math.max(0,Number(d.appearance?.depth)||0);
+   const radius=Math.hypot(image.width*Math.abs(s.x)/2,image.height*Math.abs(s.y)/2,depth*Math.abs(s.z)/2);
+   const eye=this.residencyEye??=new THREE.Vector3();
+   eye.copy(root.position).applyMatrix4(camera.matrixWorldInverse);
+   const far=-eye.z-radius>camera.far+12&&!d.editing;
+   if(!far){image.farSince=null;if(image.released){image.texture.needsUpdate=true;image.released=false;}return;}
+   if(image.farSince===null)image.farSince=now;
+   if(!image.released&&now-image.farSince>15000){image.texture.dispose();image.released=true;}
+  }
   pauseArtworkVideos(){for(const root of this.artworks.values()){const d=root.userData;if(d.video){d.video.pause();d.videoPlaying=false;}}}
   artworkRenderDefinitions(){
    // Only custom artwork definitions and layout affect this render cache.

@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import {artworkAppearanceDefaults,LABEL_STYLE_DEFAULTS} from './shared/artwork-library.js';
 const artworkAnimations=new WeakMap();
+export const artworkImageResidency=new WeakMap();
 export function releaseArtworkAnimation(root){const record=artworkAnimations.get(root);if(!record)return;const {arena,mixer,model}=record;mixer.stopAllAction();mixer.uncacheRoot(model);const i=arena.mixers.indexOf(mixer);if(i>=0)arena.mixers.splice(i,1);artworkAnimations.delete(root);}
 export function addArtworkDepth(root,texture,width,height){
- const front=root.children.find(o=>o.isMesh&&o.geometry?.type==='PlaneGeometry');if(!front)return;front.material.alphaTest=.035;front.material.transparent=false;
+ const front=root.children.find(o=>o.isMesh&&o.geometry?.type==='PlaneGeometry');if(!front)return;
+ // Only this artwork owns the image; front, back and side share it.
+ if(!texture.isVideoTexture)artworkImageResidency.set(root,{texture,width,height,farSince:null,released:false});front.material.alphaTest=.035;front.material.transparent=false;
  front.material.side=THREE.FrontSide;
  const back=new THREE.Mesh(front.geometry.clone(),front.material.clone());back.material.side=THREE.BackSide;root.add(back);
  const positions=[],uv=[],size=128,canvas=document.createElement('canvas');canvas.width=canvas.height=size;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(texture.image,0,0,size,size);const pixels=ctx.getImageData(0,0,size,size).data,solid=(x,y)=>x>=0&&y>=0&&x<size&&y<size&&pixels[(y*size+x)*4+3]>9;

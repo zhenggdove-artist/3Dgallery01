@@ -74,3 +74,12 @@ test('V138 shared player envelope is exact, excludes invisible actors and update
  for(const [,batch] of f.visibilityPairs){for(const tile of batch.boxes){assert.ok(tile.box.min.x<=tile.minX&&tile.box.max.x>=tile.maxX);}}
  f.update(3,new Map());assert.equal(a.uPlayerCount.value,0);assert.deepEqual(a.uPlayerBounds.value.toArray(),[0,0,0,0]);f.dispose();
 });
+
+test('V139 fog distance is server-authorized, preserved with other settings and applied to all vegetation',()=>{
+ const w={environment:{},revision:1};assert.equal(terrainStyle(w.environment).fogDistance,180);
+ assert.ok(setTerrainStyle(w,false,{fogDistance:100}).error);assert.ok(setTerrainStyle(w,true,{fogDistance:59}).error);assert.equal(w.revision,1);
+ const result=setTerrainStyle(w,true,{fogDistance:125});assert.equal(result.environment.terrain.fogDistance,125);
+ const scene=new THREE.Scene(),f=new GrassField(scene,{mobile:true,count:20}),fog=new THREE.FogExp2('#12284d',.017);
+ f.setDistanceFog(fog);const u=f.mesh.material.uniforms;
+ assert.equal(u.uDistanceFogDensity.value,.017);assert.equal(f.flowerMesh.material.uniforms.uDistanceFogColor,u.uDistanceFogColor);assert.equal(f.canopy.material.uniforms.uDistanceFogDensity,u.uDistanceFogDensity);f.dispose();
+});
