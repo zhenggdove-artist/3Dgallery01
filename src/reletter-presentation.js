@@ -9,7 +9,7 @@ import {itemById} from './shared/catalog.js';
 import {makePlant} from './reletter/plants.js';
 import {makeHeldWeapon,attachHeldWeapon,setHeldTime} from './reletter/held-weapons.js';
 import {attachHeadgear,disposeHeadgear,animateHeadgear} from './reletter/headgear-model.js';
-import {attachOutfit,disposeOutfit,animateOutfit} from './reletter/outfit-model.js';
+import {attachOutfit,disposeOutfit,animateOutfit,poseWheelchair} from './reletter/outfit-model.js';
 import {attachWings,disposeGardenModel} from './reletter/garden-art.js';
 import {animateEpicDust} from './reletter/epic-specimens.js';
 import {sampleMeleePose,meleeDuration,meleeFamilies} from './reletter/melee-motion.js';
@@ -158,6 +158,7 @@ export class ReletterPresentation{
   charging(root,progress){this.vfx.charging(root,progress,itemById(root?.userData.weaponId));}
   update(dt,time,camera,world=null){
     setHeldTime(time);for(const root of this.players){if(!root.parent){this.players.delete(root);continue;}const d=root.userData,fx=d.attack;animateHeadgear(d.headgear,time,d.current!=='idle');animateOutfit(d.outfit,time,root,dt);if(d.deadUntil>Date.now()){d.deathLean=Math.min(Math.PI/2,(d.deathLean||0)+dt*4);this.restore.push([d.model,'quaternion',d.model.quaternion.clone()]);d.model.rotateZ(d.deathLean);}else d.deathLean=0;if(fx){fx.age+=dt;if(fx.age<fx.duration){const pose=sampleMeleePose(fx.data.family,fx.combo,fx.age);this.restore.push([d.model,'position',d.model.position.clone()],[d.model,'quaternion',d.model.quaternion.clone()]);d.model.position.add(new THREE.Vector3(...pose.offset).applyAxisAngle(new THREE.Vector3(0,1,0),d.model.rotation.y));d.model.rotateY(pose.turn);d.model.rotateX(pose.bones.Spine2[0]*.35);d.model.rotateZ(pose.bones.Spine2[2]*.3);for(const [name,angles] of Object.entries(pose.bones)){const bone=d.bones?.get(name);if(bone){this.restore.push([bone,'quaternion',bone.quaternion.clone()]);bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...angles)));}}}else d.attack=null;}
+      if(d.outfit?.seatedPose&&!(d.deadUntil>Date.now()))poseWheelchair(d.outfit,this.restore);
       if(d.blade){attachHeldWeapon({model:d.model,character:root.uuid},root,d.blade,d.attack);if(d.blade.userData.spell){
          const casting=!!(d.staffCasting||performance.now()<(d.staffCastingUntil||0));
          d.staffRaise=advanceStaffRaise(d.staffRaise||0,casting,dt);
@@ -176,7 +177,7 @@ export class ReletterPresentation{
        }
       }const flying=d.current==='jump'||d.current==='fall'||d.current==='fly';
       if(d.wings&&!animateFlightVehicle(d.wings,time,flying))for(let i=0;i<Math.min(2,d.wings.children.length);i++)d.wings.children[i].rotation.y=Math.sin(time*(flying?11:2))*.24*(i?-1:1);
-      if(flying&&['pedal-helicopter','zeppelin'].includes(d.wings?.userData.flightVehicle)){for(const side of ['Left','Right'])for(const [part,angle] of [['UpLeg',-1.05],['Leg',1.30]]){const bone=d.bones?.get(side+part);if(!bone)continue;this.restore.push([bone,'quaternion',bone.quaternion.clone()]);const pedal=d.wings.userData.flightVehicle==='pedal-helicopter'?Math.sin(time*8+(side==='Left'?0:Math.PI))*.32:0;bone.rotateX(angle+pedal);}}
+      if(flying&&!d.outfit?.seatedPose&&['pedal-helicopter','zeppelin'].includes(d.wings?.userData.flightVehicle)){for(const side of ['Left','Right'])for(const [part,angle] of [['UpLeg',-1.05],['Leg',1.30]]){const bone=d.bones?.get(side+part);if(!bone)continue;this.restore.push([bone,'quaternion',bone.quaternion.clone()]);const pedal=d.wings.userData.flightVehicle==='pedal-helicopter'?Math.sin(time*8+(side==='Left'?0:Math.PI))*.32:0;bone.rotateX(angle+pedal);}}
       if(d.wings)animateEpicDust(d.wings,time,time*(flying?11:2));
     }
     this.vfx.update(dt,camera,world);

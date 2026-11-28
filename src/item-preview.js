@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import {makeHeldWeapon} from './reletter/held-weapons.js';
 import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
 import {createHeadgear,disposeHeadgear} from './reletter/headgear-model.js';
-import {attachOutfit,disposeOutfit} from './reletter/outfit-model.js';
+import {attachOutfit,disposeOutfit,poseWheelchair} from './reletter/outfit-model.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {orientPortraitModel} from './equipment-portrait.js';
 import {wingIcon,createWings,disposeGardenModel} from './reletter/garden-art.js';
@@ -25,7 +25,7 @@ export function setRemovedPreviewAssets(removed={}){
  for(const id of Object.keys(removedPreviewAssets)){if(Object.hasOwn(previous,id))continue;const item=itemById(id);if(!item)continue;const key=keyOf(item),url=finished.get(key);if(url?.startsWith('blob:'))URL.revokeObjectURL(url);finished.delete(key);failed.delete(key);failUntil.delete(key);void previewCache().then(cache=>cache?.delete(previewCacheKey(item))).catch(()=>{});}
 }
 const excludedPreview=item=>!!item&&Object.hasOwn(removedPreviewAssets,item.id);
-const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0)+(item.id==='outfit-luroufan-bowl-disguise'?':v065':item.id==='outfit-pooh-plush-disguise'?':v070':String(item.id).includes('cardboard-disguise')?':v143':'');
+const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0)+(item.id==='outfit-luroufan-bowl-disguise'?':v065':item.id==='outfit-pooh-plush-disguise'?':v070':String(item.id).includes('cardboard-disguise')?':v143':item.id==='outfit-mutton-sign-disguise'?':v151':'');
 // Bump only the affected visual generation when model/material/portrait art changes.
 // A renderer-wide visual change requires bumping every entry. Gameplay-only
 // releases reuse identical full-resolution PNGs across deployments.
@@ -220,6 +220,7 @@ function creatureOutfitProductPortrait(item){
  orientPortraitModel(model,{precise:false});
  const outfit=attachOutfit(THREE,model,item,{hood:true});
  if(!outfit)throw Error('Creature outfit could not attach to skeleton: '+item.id);
+ poseWheelchair(outfit);
  model.userData.previewOutfitRecord=outfit;
  // No size-driven or screen-roll rotation after attaching large accessories.
  model.updateMatrixWorld(true);
@@ -296,7 +297,7 @@ async function renderPreview(item){
  scene.add(model);model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
  const size=box.getSize(new THREE.Vector3()),distance=creatureSuit?Math.max(size.x,size.y,.00001)*.5/Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*1.24+size.z*.5:Math.max(size.x,size.y,size.z,.1)*(portraitMask?1.8:2.2);
- camera.position.copy(center).add((item.design==='disguise'?new THREE.Vector3(0,.02,1):item.family==='saber'||item.slot==='outfit'||['trump-mask','huang-mask','musk-mask','xi-mask','putin-mask','kim-mask'].includes(item.design)?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
+ camera.position.copy(center).add((item.creature==='wheelchair-disguise'?new THREE.Vector3(.62,.18,1):item.design==='disguise'?new THREE.Vector3(0,.02,1):item.family==='saber'||item.slot==='outfit'||['trump-mask','huang-mask','musk-mask','xi-mask','putin-mask','kim-mask'].includes(item.design)?new THREE.Vector3(0,.02,1):new THREE.Vector3(.65,.35,1)).normalize().multiplyScalar(distance));
  camera.near=Math.max(.001,distance*.01);camera.far=Math.max(100,distance*8);camera.updateProjectionMatrix();
  camera.lookAt(center);
  try{

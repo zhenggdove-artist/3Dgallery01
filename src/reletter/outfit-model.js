@@ -234,7 +234,7 @@ function attachRockDisguise(T,model,bones,height,record,mat){
 
 function buildOutfit(T,model,item,{hood=true}={}){if(!item)return null;model.updateMatrixWorld(true);const bones=new Map();model.traverse(o=>{if(o.isBone)bones.set(o.name.replace(/^mixamorig/,''),o);});const head=bones.get('Head');if(!head)return null;const top=bones.get('HeadTop_End'),height=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28,forward=head.getWorldQuaternion(new T.Quaternion()),fabricRef=acquireFabric(T,item),texture=fabricRef.texture,record={id:item.id,parts:[],surfaces:[],texture,fabricKey:fabricRef.key};
  const meshes=[];model.traverse(o=>{if(o.isSkinnedMesh&&o.geometry.attributes.skinIndex)meshes.push(o);});
- for(const mesh of meshes){const originalGeometry=mesh.geometry,originalMaterial=mesh.material,geometry=originalGeometry.clone(),si=geometry.attributes.skinIndex,sw=geometry.attributes.skinWeight,mask=new Float32Array(si.count);for(let i=0;i<si.count;i++)for(let k=0;k<4;k++){const idx=si.array[i*si.itemSize+k],name=mesh.skeleton.bones[idx]?.name||'';if(/Hips|Spine|Arm|Leg|Foot|Toe/.test(name))mask[i]+=sw.array[i*sw.itemSize+k];}geometry.setAttribute('outfitMask',new T.BufferAttribute(mask,1));const mats=(Array.isArray(originalMaterial)?originalMaterial:[originalMaterial]).map(source=>{const m=source.clone(),before=source.onBeforeCompile,key=source.customProgramCacheKey();m.onBeforeCompile=function(shader){before.call(m,shader);shader.uniforms.outfitFabric={value:texture};shader.vertexShader='attribute float outfitMask;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvOutfitMask=outfitMask;vOutfitUV=uv*3.;');shader.fragmentShader='uniform sampler2D outfitFabric;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+ if(item.creature!=='wheelchair-disguise')for(const mesh of meshes){const originalGeometry=mesh.geometry,originalMaterial=mesh.material,geometry=originalGeometry.clone(),si=geometry.attributes.skinIndex,sw=geometry.attributes.skinWeight,mask=new Float32Array(si.count);for(let i=0;i<si.count;i++)for(let k=0;k<4;k++){const idx=si.array[i*si.itemSize+k],name=mesh.skeleton.bones[idx]?.name||'';if(/Hips|Spine|Arm|Leg|Foot|Toe/.test(name))mask[i]+=sw.array[i*sw.itemSize+k];}geometry.setAttribute('outfitMask',new T.BufferAttribute(mask,1));const mats=(Array.isArray(originalMaterial)?originalMaterial:[originalMaterial]).map(source=>{const m=source.clone(),before=source.onBeforeCompile,key=source.customProgramCacheKey();m.onBeforeCompile=function(shader){before.call(m,shader);shader.uniforms.outfitFabric={value:texture};shader.vertexShader='attribute float outfitMask;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvOutfitMask=outfitMask;vOutfitUV=uv*3.;');shader.fragmentShader='uniform sampler2D outfitFabric;varying float vOutfitMask;varying vec2 vOutfitUV;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
  ${item.exposedHead||item.creature==='rock-disguise'?'if(vOutfitMask>.48) discard;':''}\n vec3 cloth=texture2D(outfitFabric,vOutfitUV).rgb;float shade=clamp(dot(diffuseColor.rgb,vec3(.2126,.7152,.0722)),.4,1.);diffuseColor.rgb=mix(diffuseColor.rgb,cloth*(.82+.18*shade),smoothstep(.35,.8,vOutfitMask));`);};m.customProgramCacheKey=()=>key+'-outfit-'+item.id;m.needsUpdate=true;return m;});mesh.geometry=geometry;mesh.material=Array.isArray(originalMaterial)?mats:mats[0];record.surfaces.push({mesh,originalGeometry,originalMaterial,geometry,mats});}
  const materials=[],mat=(color,metal=0)=>{return wearableMaterial(T,materials,color,.72,metal);},main=mat(item.color),cream=mat('#e8dfcf'),dark=mat('#514b62'),trim=mat('#c9b58b',.3),pink=mat('#c597a2');record.materials=materials;
  function anchor(name){const bone=bones.get(name)||head,g=new T.Group(),scale=bone.getWorldScale(new T.Vector3());g.name=item.id;g.userData.outfit=item.id;bone.add(g);g.quaternion.copy(bone.getWorldQuaternion(new T.Quaternion()).invert().multiply(forward));g.scale.set(height/scale.x,height/scale.y,height/scale.z);record.parts.push(g);return g;}
@@ -463,13 +463,15 @@ function buildOutfit(T,model,item,{hood=true}={}){if(!item)return null;model.upd
   const factor=frame.height*item.disguiseHeight/Math.max(.001,widest?Math.max(extent.x,extent.y,extent.z):extent.y);
   g.scale.setScalar(factor);g.quaternion.copy(frame.rotation);
   g.position.copy(frame.base).addScaledVector(frame.up,-bounds.min.y*factor);
-  if(street?.waterHead){
+  if(street?.seated){
+   prepareWheelchairPose(T,record,bones,g,model);
+  }else if(street?.waterHead){
    const headCenter=frame.head.clone().addScaledVector(frame.up,frame.unit*.42);g.position.copy(headCenter).addScaledVector(frame.up,-street.openingY*factor-frame.unit*.35);
   }else if(item.exposedHead&&giant){
    const front=new T.Vector3(0,0,1).applyQuaternion(frame.rotation);
    const headCenter=frame.head.clone().addScaledVector(frame.up,frame.unit*.42);
    const headY=headCenter.clone().sub(frame.base).dot(frame.up)/factor+bounds.min.y;
-   const preferred=street?(street.openingY??headY):kind==='luroufan-bowl-disguise'? .46:kind==='bubble-tea-disguise'? .68:kind==='tin-pipe-disguise'? .55:kind==='cardboard-disguise'? .52:kind==='mutton-sign-disguise'?1.42:kind.endsWith('sign-disguise')? .56:headY;
+   const preferred=street?(street.groundAligned?headY:street.openingY??headY):kind==='luroufan-bowl-disguise'? .46:kind==='bubble-tea-disguise'? .68:kind==='tin-pipe-disguise'? .55:kind==='cardboard-disguise'? .52:kind==='mutton-sign-disguise'?1.42:kind.endsWith('sign-disguise')? .56:headY;
    const y=T.MathUtils.clamp(preferred,bounds.min.y+extent.y*.17,bounds.max.y-extent.y*.17);
    // One uniform scale for the entire prop, including the opening. The head
    // projects from the front wall instead of being moved above a squashed prop.
@@ -701,4 +703,30 @@ function animateTeaMotion(d,time,root,dt){
  d.group.updateWorldMatrix(true,false);d.inverse.copy(d.group.matrixWorld).invert();
  while(d.credit>=1){d.credit--;const part=d.particles[d.next];d.next=(d.next+1)%d.particles.length;const a=Math.atan2(tz,tx)+(Math.sin(d.next*8.2+time)*.8);part.age=0;part.p.set(Math.cos(a)*.55,1.51,Math.sin(a)*.55).applyMatrix4(d.group.matrixWorld);part.v.set(Math.cos(a)*1.8,1.3+Math.abs(vertical)*.12,Math.sin(a)*1.8).applyQuaternion(d.q.clone().invert()).addScaledVector(d.velocity,.45);}
  for(let i=0;i<d.particles.length;i++){const part=d.particles[i];part.age+=dt;if(part.age<1){part.v.y-=8.4*dt;part.v.multiplyScalar(Math.exp(-.6*dt));part.p.addScaledVector(part.v,dt);d.dummy.position.copy(part.p).applyMatrix4(d.inverse);const size=.035*(1-part.age*.5);d.dummy.scale.set(size,size*(1+Math.abs(part.v.y)*.13),size);}else{d.dummy.position.set(0,1.45,0);d.dummy.scale.setScalar(0);}d.dummy.rotation.set(0,0,0);d.dummy.updateMatrix();d.drops.setMatrixAt(i,d.dummy.matrix);}d.drops.instanceMatrix.needsUpdate=true;
+}
+
+
+// Seat the actual skinned player, not a second avatar. Changes are cosmetic
+// and restored by presentation.beforeAnimation before the next mixer step.
+function prepareWheelchairPose(T,record,bones,g,model){
+ const hips=bones.get('Hips'),legs=[];
+ for(const side of ['Left','Right']){const thigh=bones.get(side+'UpLeg'),shin=bones.get(side+'Leg'),foot=bones.get(side+'Foot');if(thigh&&shin&&foot)legs.push({thigh,shin,foot,thighAxis:shin.position.clone().normalize(),shinAxis:foot.position.clone().normalize()});}
+ if(!hips)return;
+ const saved=[[hips,'position',hips.position.clone()]];for(const leg of legs)for(const bone of [leg.thigh,leg.shin])saved.push([bone,'quaternion',bone.quaternion.clone()]);
+ record.seatedPose={T,g,model,hips,legs,saved,target:new T.Vector3(),axis:new T.Vector3(),direction:new T.Vector3(),parentQ:new T.Quaternion(),deltaQ:new T.Quaternion()};
+}
+export function poseWheelchair(record,restore=null){
+ const s=record?.seatedPose;if(!s)return;
+ const {g,hips,legs,target,axis,direction,parentQ,deltaQ}=s;
+ for(const entry of s.saved){entry[2].copy(entry[0][entry[1]]);if(restore)restore.push(entry);}
+ g.updateWorldMatrix(true,false);hips.parent.updateWorldMatrix(true,false);
+ hips.position.copy(hips.parent.worldToLocal(g.localToWorld(target.set(0,.85,-.09))));
+ hips.updateWorldMatrix(true,true);
+ const aim=(bone,rest,x,y,z)=>{
+  bone.parent.getWorldQuaternion(parentQ).invert();
+  direction.set(x,y,z).transformDirection(g.matrixWorld).applyQuaternion(parentQ).normalize();
+  axis.copy(rest).applyQuaternion(bone.quaternion).normalize();
+  if(axis.lengthSq()>.5){deltaQ.setFromUnitVectors(axis,direction);bone.quaternion.premultiply(deltaQ);bone.updateWorldMatrix(true,true);}
+ };
+ for(const l of legs){aim(l.thigh,l.thighAxis,0,-.10,1);aim(l.shin,l.shinAxis,0,-1,.22);}
 }
