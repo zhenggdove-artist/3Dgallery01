@@ -5,7 +5,7 @@ import {createHeadgear,disposeHeadgear} from './reletter/headgear-model.js';
 import {attachOutfit,disposeOutfit} from './reletter/outfit-model.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {orientPortraitModel} from './equipment-portrait.js';
-import {wingIcon,createWings} from './reletter/garden-art.js';
+import {wingIcon,createWings,disposeGardenModel} from './reletter/garden-art.js';
 import {itemById} from './shared/catalog.js';
 import {activePreviewItems} from './shared/shop-retirement.js';
 import {comfortCashImage} from './comfort-cash-art.js';
@@ -310,7 +310,7 @@ async function renderPreview(item){
   finally{if(portrait!==renderer.domElement)portrait.width=portrait.height=0;}
   if(!blob)throw Error('WebGL preview image encoding failed');
   // Decode during loading, not when the inventory is first opened.
-  void storePreview(item,blob);
+  await storePreview(item,blob);
   const url=URL.createObjectURL(blob);
   // Keep the same full-resolution encoded image; decoding an entire catalog
   // at boot leaves hundreds of MB of unused decoded bitmaps on mobile Safari.
@@ -318,7 +318,7 @@ async function renderPreview(item){
   return url;
  }finally{
   if(model.userData.previewOutfitRecord){disposeOutfit(model.userData.previewOutfitRecord);delete model.userData.previewOutfitRecord;}
-  if(item.slot==='head'){disposeHeadgear(model);}else{
+  if(item.slot==='head'){disposeHeadgear(model);}else if(item.slot==='wings'){disposeGardenModel(model);}else{
   model.portraitDisposed=true;model.portraitTexture?.dispose();
   model.removeFromParent();
   const geometries=new Set(),materials=new Set();

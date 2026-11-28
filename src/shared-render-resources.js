@@ -53,3 +53,19 @@ export function disposeWearableParts(roots,materials=[],geometries=[]){
  for(const g of geo)g.dispose();
  for(const m of mats)m.dispose();
 }
+
+// Root leases extend the same shared registry to wings and pickup sprites.
+// Keep ownership out of userData: Three clones/serializes that object.
+const rootTextureLeases=new WeakMap();
+export function acquireRootTexture(root,key,create,dispose=disposeOutfitTexture){
+ const texture=outfitTextureResources.acquire(key,create,dispose,t=>(t.image?.width||0)*(t.image?.height||0)*4);
+ texture.userData.sharedGarden=true;
+ let leases=rootTextureLeases.get(root);if(!leases){leases=[];rootTextureLeases.set(root,leases);}
+ leases.push({key,texture});return texture;
+}
+export function releaseRootTextures(root){
+ const leases=rootTextureLeases.get(root);if(!leases)return false;
+ rootTextureLeases.delete(root);for(const {key,texture} of leases)outfitTextureResources.release(key,texture);return true;
+}
+// All visual inputs are part of the key, including custom drawing revisions.
+export function wingRenderKey(item){return 'wing:'+JSON.stringify([item.id,item.design,item.updatedAt,item.createdAt,item.tier,item.color,item.accent,item.style,item.motif,item.specimen,item.patternVariant,item.visualComplexity,item.outline,item.strokes,item.shapes,item.layers]);}

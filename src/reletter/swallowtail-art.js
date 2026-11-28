@@ -1,3 +1,4 @@
+import {acquireRootTexture,wingRenderKey} from '../shared-render-resources.js';
 import {epicSpecimenCanvas,addEpicDust} from './epic-specimens.js';
 import {craftedWingCanvas} from './crafted-wing-art.js';
 import {paintedWingCanvas} from './painted-wing-art.js';
@@ -134,8 +135,9 @@ export function swallowtailModel(T,item){
  const root=new T.Group();root.userData.wingId=item.id;
  // Runtime diagnostic: painted canvases map without inversion to local -X.
  root.userData.wingCanvasSide=item.design==='painted-wing'?'left':'legacy';
- const texture=new T.CanvasTexture(swallowtailCanvas(item));
- texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=2;
+ const texture=acquireRootTexture(root,wingRenderKey(item),()=>{
+  const t=new T.CanvasTexture(swallowtailCanvas(item,false));t.colorSpace=T.SRGBColorSpace;t.anisotropy=2;return t;
+ });
  const material=new T.MeshPhysicalMaterial({
   map:texture,transparent:true,alphaTest:.075,side:T.DoubleSide,
   metalness:item.tier===4?.28:.06,roughness:item.tier===4?.26:.52,

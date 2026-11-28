@@ -26,7 +26,7 @@ import {ARTWORK_DISCS,discGroundHeight} from './shared/artwork-discs.js';
 import {samplePanBlastPosition} from './shared/pan-blast-flight.js';
 import {gmHouseBlocked} from './shared/arena.js';
 import {spacePaintMoveFraction,spacePaintFloor} from './shared/space-paint-collision.js';
-import {originalBuildSizes,buildGeometry,buildMaterial,houseWallMaterial,createGmHouseMesh,disposeGmHouseMesh} from './build-style.js';
+import {originalBuildSizes,buildGeometry,buildMaterial,houseWallMaterial,createGmHouseMesh,disposeGmHouseMesh,retireUnusedBuildTextures,buildTextureCount} from './build-style.js';
 import {inPlaceLocomotion} from './locomotion-clips.js';
 
 const touch=matchMedia('(pointer:coarse)').matches;
@@ -562,6 +562,8 @@ export class TempleArena{
      this.presentation.update(dt,time,camera,this.world);this.adventure.update(dt,time,playerRoots,camera);if(time-this.lastLightUpdate>.35){this.lastLightUpdate=time;this.updateArtLights(camera);}
   }
   updateArtLights(camera){const visible=[...this.artworks.values()].filter(o=>o.visible).sort((a,b)=>a.position.distanceToSquared(camera.position)-b.position.distanceToSquared(camera.position));this.lightPool.forEach((light,i)=>{const art=visible[i];light.intensity=art?(i?18:24):0;if(art){light.position.copy(art.position).add(new THREE.Vector3(0,2,2.5));light.color.set(i%2?'#d6dfff':'#ffe1b8');}});}
+  retireUnusedBuildTextures(manager){return retireUnusedBuildTextures([this.structureGroup,...this.collapsingShells],manager);}
+  buildTextureCount(){return buildTextureCount();}
   updateImageResidency(view,now,manager=null){
    for(const root of this.artworks.values()){
     const image=artworkImageResidency.get(root),d=root.userData;if(!image)continue;
@@ -645,7 +647,8 @@ function disposeArtworkRoot(root){
  root.removeFromParent();
  for(const g of geometries)g.dispose();
  for(const m of materials)m.dispose();
- for(const tex of textures)tex.dispose();
+ const bitmaps=new Set();for(const tex of textures){const image=tex.image;tex.dispose();if(root.userData.model&&typeof ImageBitmap!=='undefined'&&image instanceof ImageBitmap&&!THREE.Cache.enabled)bitmaps.add(image);}
+ for(const image of bitmaps)image.close();
 }
 function disposeChildren(group){for(const child of [...group.children]){group.remove(child);disposeArtworkRoot(child);}}
 function seededRandom(seed){let state=seed||1;return()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};}

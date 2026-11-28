@@ -3,6 +3,14 @@ import {houseSignSpecs,gmRooftopVisual,highRiseCompanySign} from './shared/city-
 import {drawSignArtwork,drawRooftopSignArtwork,installRooftopSignLighting,rooftopBillboardParts,rooftopBillboardFaces} from './sign-art.js';
 export const originalBuildSizes={cube:[2,2,2],bar:[6,2,2],cylinder:[2,2,2],wall:[5,2.5,.45],column:[1.4,4,1.4],platform:[4,.7,4]};
 const textures=new Map();
+// The cache retains only surfaces still used by buildings or their collapse shells.
+// Retirement is governed by the existing global maintenance budget, not a new timer.
+export function retireUnusedBuildTextures(roots,manager){
+ if(!textures.size)return 0;const live=new Set();
+ for(const root of roots)root?.traverse(o=>{for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])if(m.map)live.add(m.map);});
+ let n=0;for(const [key,t] of textures){if(live.has(t))continue;if(!manager.retire('buildTexture',()=>{textures.delete(key);t.dispose();}))break;n++;}return n;
+}
+export function buildTextureCount(){return textures.size;}
 export function buildMaterial(surface){const material=new THREE.MeshStandardMaterial({color:'#c6a5dc',roughness:.72,metalness:.03});if(surface){if(!textures.has(surface)){const t=new THREE.TextureLoader().load(window.TEMPLE_CONFIG.backendUrl+'/api/media/'+surface);t.colorSpace=THREE.SRGBColorSpace;textures.set(surface,t);}material.map=textures.get(surface);material.color.set('#ffffff');}return material;}
 export function buildGeometry(kind){return kind==='cylinder'?new THREE.CylinderGeometry(.5,.5,1,24):new THREE.BoxGeometry(1,1,1);}
 
@@ -66,4 +74,4 @@ export function createGmHouseMesh(spec,{preview=false,seed=0}={}){
  if(preview)for(const m of materials){m.transparent=true;m.opacity=.86;}
  root.userData.gmHouseMaterials=materials;return root;
 }
-export function disposeGmHouseMesh(root){if(!root)return;root.removeFromParent();root.traverse(o=>o.geometry?.dispose());for(const m of root.userData.gmHouseMaterials||[]){if(m.userData.ownedSignMap)m.map?.dispose();m.dispose();}}
+export function disposeGmHouseMesh(root){if(!root)return;root.removeFromParent();root.traverse(o=>o.geometry?.dispose());for(const m of root.userData.gmHouseMaterials||[]){if(m.userData.ownedSignMap&&m.map){const t=m.map;t.dispose();if(t.isCanvasTexture&&t.image)t.image.width=t.image.height=0;}m.dispose();}}

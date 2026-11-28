@@ -1,3 +1,4 @@
+import {acquireRootTexture,releaseRootTextures} from '../shared-render-resources.js';
 // Verbatim original crop, aquarium, fish, fishing pose/rod and loot builders.
 import * as THREE from 'three';
 import {seedById} from './garden-catalog.js';
@@ -15,7 +16,7 @@ const remotePlayers=new Map(),cropTextures=new Map(),fishTextures=new Map(),fish
 let fishing={holes:[],ponds:[],sessions:{}};
 const fstate=()=>fishing,openCatchViewer=onCatch;
 const itemRarity=item=>({id:item.rarity||'common',color:item.color||'#ddc5f0'});
-function disposeAdventure(g){g.removeFromParent();const mats=new Set(),geos=new Set();g.traverse(o=>{if(o.geometry)geos.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])mats.add(m);});geos.forEach(x=>x.dispose());mats.forEach(x=>x.dispose());}
+function disposeAdventure(g){g.removeFromParent();releaseRootTextures(g);const mats=new Set(),geos=new Set();g.traverse(o=>{if(o.geometry&&!o.isSprite)geos.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])mats.add(m);});geos.forEach(x=>x.dispose());mats.forEach(x=>x.dispose());}
 function makeCropModel(species,stage){const s=seedById(species),root=new THREE.Group(),artStage=stage<=1?0:stage===2?1:stage<5?2:3,textureKey=species+':'+artStage;let texture=cropTextures.get(textureKey);if(!texture){texture=new THREE.CanvasTexture(botanicalCanvas(species,s.color,artStage));texture.colorSpace=THREE.SRGBColorSpace;texture.userData.sharedGarden=true;cropTextures.set(textureKey,texture);}const mat=new THREE.MeshStandardMaterial({map:texture,transparent:true,alphaTest:.18,side:THREE.DoubleSide,roughness:1}),growth=(stage-1)/19,height=(species===20||species===26?9:species>20?4.5:6)*growth,spread=3.2*growth,n=stage<5?1:Math.min(18,stage-2),cards=new THREE.InstancedMesh(new THREE.PlaneGeometry(1.5,2.25),mat,n*2),matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),v=new THREE.Vector3(),scale=new THREE.Vector3();const branchMat=new THREE.MeshStandardMaterial({color:species>20?'#77936d':'#73916a',roughness:1}),branches=new THREE.InstancedMesh(new THREE.CylinderGeometry(.018,.032,1,6),branchMat,Math.max(1,n));
 for(let i=0;i<n;i++){const angle=i*2.39996+species*.37,r=i===0?0:spread*Math.sqrt(i/n),y=i===0?height*.8:height*(.2+.6*(1-i/n)),x=Math.cos(angle)*r,z=Math.sin(angle)*r,cardScale=stage<5?.45+stage*.12:.6+growth*.28;for(let side=0;side<2;side++){q.setFromAxisAngle(new THREE.Vector3(0,1,0),side*Math.PI/2+angle);matrix.compose(v.set(x,y+cardScale,z),q,scale.setScalar(cardScale));cards.setMatrixAt(i*2+side,matrix);}const start=new THREE.Vector3(0,i===0?0:Math.max(0,y*.45),0),end=new THREE.Vector3(x,y+.2,z),direction=end.clone().sub(start),length=direction.length();q.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.normalize());matrix.compose(start.add(end).multiplyScalar(.5),q,scale.set(1+growth*2,Math.max(.1,length),1+growth*2));branches.setMatrixAt(i,matrix);}
 root.add(cards);if(stage>=5)root.add(branches);else{branches.geometry.dispose();branchMat.dispose();}cards.computeBoundingSphere();if(stage>=5)branches.computeBoundingSphere();return root;}
@@ -140,13 +141,20 @@ function updateFishingRods(f){
 }
 
 
-const lootTextures=new Map();let lootHalo;
+let lootHalo;
+const retiredLootTextures=new WeakSet();
+function createLootTexture(item){
+ const t=new THREE.Texture();t.colorSpace=THREE.SRGBColorSpace;
+ const load=url=>{if(!url||retiredLootTextures.has(t))return;new THREE.ImageLoader().load(url,image=>{if(retiredLootTextures.has(t))return;t.image=image;t.needsUpdate=true;});};
+ if(item.creature)void itemPreview(item).then(load);else load(itemIcon(item));return t;
+}
+function disposeLootTexture(t){retiredLootTextures.add(t);t.dispose();t.image=null;}
 function lootGlow(color){if(!lootHalo){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'#ffffffaa');g.addColorStop(.35,'#ffffff55');g.addColorStop(1,'#ffffff00');x.fillStyle=g;x.fillRect(0,0,128,128);lootHalo=new THREE.CanvasTexture(c);lootHalo.userData.sharedGarden=true;}return new THREE.Sprite(new THREE.SpriteMaterial({map:lootHalo,color,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));}
 function createItemDrop(item,affixed=false){const g=new THREE.Group(),rarity=itemRarity(affixed?{...item,affixId:'dread'}:item);g.name='Loot: '+item.name;g.userData.itemId=item.id;g.userData.rarity=rarity.id;if(item.slot==='head'){
  const model=createHeadgear(THREE,item),bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3());
  const scale=1.55/Math.max(.15,size.x,size.y,size.z);model.scale.setScalar(scale);
  model.position.copy(bounds.getCenter(new THREE.Vector3()).multiplyScalar(-scale));g.add(model);return g;
-}const glow=lootGlow(rarity.color);glow.scale.set(3.5,3.5,1);g.add(glow);let texture=lootTextures.get(item.id);if(!texture){texture=item.creature?new THREE.Texture():new THREE.TextureLoader().load(itemIcon(item));if(item.creature){const target=texture;void itemPreview(item).then(url=>{if(!url)return;const image=new Image();image.onload=()=>{target.image=image;target.needsUpdate=true;};image.src=url;});}texture.colorSpace=THREE.SRGBColorSpace;texture.userData.sharedGarden=true;lootTextures.set(item.id,texture);}const icon=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,toneMapped:false}));icon.scale.set(1.65,1.65,1);g.add(icon);return g;}
+}const glow=lootGlow(rarity.color);glow.scale.set(3.5,3.5,1);g.add(glow);const texture=acquireRootTexture(g,'loot:'+item.id+':'+(item.updatedAt||0),()=>createLootTexture(item),disposeLootTexture);const icon=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,toneMapped:false}));icon.scale.set(1.65,1.65,1);g.add(icon);return g;}
 
 return {makeCropModel,waterFeature,swimmingFish,createItemDrop,disposeAdventure,
  beforeAnimation:restoreFishingPoses,
