@@ -1,3 +1,5 @@
+import {isManagedHeadwear} from '../shared-render-resources.js';
+import {disposeHeadgear} from './headgear-model.js';
 import {createFlightVehicle} from './flight-vehicle.js';
 import {disguiseFrame} from './outfit-model.js';
 import {swallowtailCanvas,swallowtailModel} from './swallowtail-art.js';
@@ -38,4 +40,4 @@ export function attachWings(T,model,item){if(!item)return null;if(item.design===
  model.updateMatrixWorld(true);const top=bones.get('HeadTop_End'),h=top?head.getWorldPosition(new T.Vector3()).distanceTo(top.getWorldPosition(new T.Vector3())):.28;
  const frame=disguiseFrame(T,model,bones,h),root=createWings(T,item);const bamboo=item.motif==='bamboo-copter';root.scale.setScalar(frame.height*(bamboo?.52:.83));root.quaternion.copy(frame.rotation);root.position.copy(frame.base).addScaledVector(frame.up,bamboo?frame.height*1.08:-frame.height*.04);model.add(root);return root;
  }let bone;model.traverse(o=>{if(o.isBone&&/Spine2$/i.test(o.name))bone=o;});if(!bone)return null;model.updateMatrixWorld(true);const scale=bone.getWorldScale(new T.Vector3()),root=createWings(T,item);root.scale.set(1/scale.x,1/scale.y,1/scale.z);root.position.z=-.18/scale.z;bone.add(root);return root;}
-export function disposeGardenModel(root){if(!root)return;root.removeFromParent();const mats=new Set(),geos=new Set();root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry)geos.add(o.geometry);if(o.material)mats.add(o.material);});geos.forEach(g=>g.dispose());mats.forEach(m=>{if(!m.map?.userData.sharedGarden)m.map?.dispose();m.dispose();});}
+export function disposeGardenModel(root){if(!root)return;if(isManagedHeadwear(root)){disposeHeadgear(root);return;}const headwear=[];root.traverse(o=>{if(isManagedHeadwear(o))headwear.push(o);});for(const o of headwear)disposeHeadgear(o);root.removeFromParent();const mats=new Set(),geos=new Set();root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry)geos.add(o.geometry);if(o.material)mats.add(o.material);});geos.forEach(g=>g.dispose());mats.forEach(m=>{if(!m.map?.userData.sharedGarden)m.map?.dispose();m.dispose();});}

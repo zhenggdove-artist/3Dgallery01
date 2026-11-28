@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {makeHeldWeapon} from './reletter/held-weapons.js';
 import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
-import {createHeadgear} from './reletter/headgear-model.js';
+import {createHeadgear,disposeHeadgear} from './reletter/headgear-model.js';
 import {attachOutfit,disposeOutfit} from './reletter/outfit-model.js';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {orientPortraitModel} from './equipment-portrait.js';
@@ -318,6 +318,7 @@ async function renderPreview(item){
   return url;
  }finally{
   if(model.userData.previewOutfitRecord){disposeOutfit(model.userData.previewOutfitRecord);delete model.userData.previewOutfitRecord;}
+  if(item.slot==='head'){disposeHeadgear(model);}else{
   model.portraitDisposed=true;model.portraitTexture?.dispose();
   model.removeFromParent();
   const geometries=new Set(),materials=new Set();
@@ -329,5 +330,6 @@ async function renderPreview(item){
   geometries.forEach(g=>{if(!g.userData?.sharedPreview)g.dispose();});
   materials.forEach(m=>{if(!m.userData?.sharedPreview)m.dispose();});
   if(!model.userData.texture?.userData.sharedGarden)model.userData.texture?.dispose();
+  }
  }
 }

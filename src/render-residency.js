@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {outfitTextureResources} from './shared-render-resources.js';
+import {outfitTextureResources,wearableResourceSnapshot} from './shared-render-resources.js';
 // Keep a guard band and the full native bounding sphere. Never retire any
 // resource that could be drawn by the current camera.
 const sphere=new THREE.Sphere(),matrix=new THREE.Matrix4(),frustum=new THREE.Frustum(),eye=new THREE.Vector3();
@@ -103,5 +103,5 @@ export class RenderMemoryManager{
   if(!a.stack.length){this.poolSnapshot.estimatedBufferBytes=a.bytes;this.accountedNodes=a.nodes;this.accounting=null;}
   return n;
  }
- snapshot(){return {retired:{...this.counts},wakes:{...this.wakes},pools:{...this.poolSnapshot,accountingPending:!!this.accounting,accountedNodes:this.accountedNodes},sharedOutfitTextures:outfitTextureResources.snapshot()};}
+ snapshot(){return {retired:{...this.counts},wakes:{...this.wakes},pools:{...this.poolSnapshot,accountingPending:!!this.accounting,accountedNodes:this.accountedNodes},sharedOutfitTextures:outfitTextureResources.snapshot(),wearables:wearableResourceSnapshot()};}
 }

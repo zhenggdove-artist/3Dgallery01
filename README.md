@@ -33,3 +33,7 @@ npm run test:browser
 The public client uses `https://temple-arena.zhenggdove-artist.workers.dev`. Deployment notes and isolation guarantees are in [`docs/temple/deployment.md`](docs/temple/deployment.md) and [`docs/temple/architecture-audit.md`](docs/temple/architecture-audit.md).
 
 The GM credential is never stored in this repository. It must exist only as the Cloudflare Worker secret `TEMPLE_ADMIN_KEY`.
+
+## Development contract
+
+For every change, including AI-assisted changes, read [`AGENTS.md`](AGENTS.md) before editing. Wearable construction, ownership and regression requirements are maintained there; outfit and headwear use the existing common resource lifecycle.
