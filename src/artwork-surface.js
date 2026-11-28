@@ -3,6 +3,14 @@ import {artworkAppearanceDefaults,LABEL_STYLE_DEFAULTS} from './shared/artwork-l
 const artworkAnimations=new WeakMap();
 export const artworkImageResidency=new WeakMap();
 export function releaseArtworkAnimation(root){const record=artworkAnimations.get(root);if(!record)return;const {arena,mixer,model}=record;mixer.stopAllAction();mixer.uncacheRoot(model);const i=arena.mixers.indexOf(mixer);if(i>=0)arena.mixers.splice(i,1);artworkAnimations.delete(root);}
+// Merge only contiguous collinear boundaries, retaining exact shape and UV.
+export function forEachMaskEdge(size,solid,edge){
+ const runs=(test,emit)=>{for(let fixed=0;fixed<size;fixed++)for(let a=0;a<size;){if(!test(a,fixed)){a++;continue;}let b=a+1;while(b<size&&test(b,fixed))b++;emit(a,b,fixed);a=b;}};
+ runs((y,x)=>solid(x,y)&&!solid(x-1,y),(a,b,x)=>edge(x,b,x,a));
+ runs((y,x)=>solid(x,y)&&!solid(x+1,y),(a,b,x)=>edge(x+1,a,x+1,b));
+ runs((x,y)=>solid(x,y)&&!solid(x,y-1),(a,b,y)=>edge(a,y,b,y));
+ runs((x,y)=>solid(x,y)&&!solid(x,y+1),(a,b,y)=>edge(b,y+1,a,y+1));
+}
 export function addArtworkDepth(root,texture,width,height){
  const front=root.children.find(o=>o.isMesh&&o.geometry?.type==='PlaneGeometry');if(!front)return;
  // Only this artwork owns the image; front, back and side share it.
@@ -11,7 +19,7 @@ export function addArtworkDepth(root,texture,width,height){
  const back=new THREE.Mesh(front.geometry.clone(),front.material.clone());back.material.side=THREE.BackSide;root.add(back);
  const positions=[],uv=[],size=128,canvas=document.createElement('canvas');canvas.width=canvas.height=size;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(texture.image,0,0,size,size);const pixels=ctx.getImageData(0,0,size,size).data,solid=(x,y)=>x>=0&&y>=0&&x<size&&y<size&&pixels[(y*size+x)*4+3]>9;
  const edge=(x1,y1,x2,y2)=>{const a=[(x1/size-.5)*width,(.5-y1/size)*height],b=[(x2/size-.5)*width,(.5-y2/size)*height];for(const [p,z]of [[a,-.5],[b,-.5],[b,.5],[a,-.5],[b,.5],[a,.5]]){positions.push(p[0],p[1],z);uv.push(p[0]/width+.5,p[1]/height+.5);}};
- for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(solid(x,y)){if(!solid(x-1,y))edge(x,y+1,x,y);if(!solid(x+1,y))edge(x+1,y,x+1,y+1);if(!solid(x,y-1))edge(x,y,x+1,y);if(!solid(x,y+1))edge(x+1,y+1,x,y+1);}
+ forEachMaskEdge(size,solid,edge);
  canvas.width=canvas.height=0;const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.computeVertexNormals();const side=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:texture,roughness:.8,side:THREE.DoubleSide}));root.add(side);root.userData.depthParts={front,back,side};
 }
 export function applyArtworkAppearance(root,value){const appearance={...artworkAppearanceDefaults(root.userData.record),...value,...root.userData.previewAppearance},signature=JSON.stringify(appearance);const title=root.userData.editTitleDraft??root.userData.titleOverride??(root.userData.record?.mediaId?root.userData.record.title:'');if(title||root.userData.titlePlate)addArtworkTitlePlate(root,title,appearance.labelBackground,appearance);if(root.userData.appearanceSignature===signature)return;root.userData.appearanceSignature=signature;root.userData.appearance=appearance;const p=root.userData.depthParts;if(p){p.back.visible=appearance.depth>0;const side=appearance.depth>0?THREE.FrontSide:THREE.DoubleSide;if(p.front.material.side!==side){p.front.material.side=side;p.front.material.needsUpdate=true;}p.front.position.z=appearance.depth/2;p.back.position.z=-appearance.depth/2;p.side.scale.z=Math.max(.00001,appearance.depth);p.side.visible=appearance.depth>0;}

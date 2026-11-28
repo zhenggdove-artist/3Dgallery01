@@ -61,7 +61,7 @@ export const previewCount=()=>({ready:finished.size,pending:pending.size,failed:
 export function itemPreview(item){
  if(!item||excludedPreview(item))return Promise.resolve(null);
  const key=keyOf(item);
- if(item.design==='painted-wing'){const image=wingIcon(item);finished.set(key,image);return Promise.resolve(image);}
+ if(item.design==='painted-wing'){const image=wingIcon(item);for(const old of finished.keys())if(old!==key&&old.startsWith(item.id+':'))finished.delete(old);finished.set(key,image);return Promise.resolve(image);}
  if(item.slot==='consumable'){
   const image=comfortCashImage(item);
   finished.set(key,image);

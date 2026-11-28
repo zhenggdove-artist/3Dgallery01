@@ -5,11 +5,11 @@ import {paintedWingCanvas} from './painted-wing-art.js';
 // silhouettes applied to skinned 3D-character wing planes. Only create
 // canvases for actually visible wings; high detail is paint, not draw calls.
 const atlases=new Map();
-export function swallowtailCanvas(item){
+export function swallowtailCanvas(item,retain=true){
  if(item.design==='painted-wing')return paintedWingCanvas(item);
- if(item.design==='crafted-wing')return craftedWingCanvas(item);
- if(atlases.has(item.id))return atlases.get(item.id);
- if(item.tier===4&&item.specimen){const art=epicSpecimenCanvas(item);atlases.set(item.id,art);return art;}
+ if(item.design==='crafted-wing')return craftedWingCanvas(item,retain);
+ if(retain&&atlases.has(item.id))return atlases.get(item.id);
+ if(item.tier===4&&item.specimen){const art=epicSpecimenCanvas(item);if(retain)atlases.set(item.id,art);return art;}
  const canvas=document.createElement('canvas');
  canvas.width=768;canvas.height=640;
  const c=canvas.getContext('2d');
@@ -116,7 +116,7 @@ export function swallowtailCanvas(item){
   }
  }
  c.globalAlpha=1;
- atlases.set(item.id,canvas);
+ if(retain)atlases.set(item.id,canvas);
  return canvas;
 }
 

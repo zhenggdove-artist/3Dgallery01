@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {farMesh,updateResidency} from './render-residency.js';
 import {surfaceInfo,surfaceFace} from './shared/space-paint-surface.js';
 import {SpacePaintTexture} from './space-paint-texture.js';
 import {isSurfaceCheckpoint} from './shared/space-paint-raster.js';
@@ -228,11 +229,17 @@ export class SpacePainter{
   if(typeof document==='undefined')return;
   if(!page.atlas){
    if(!page.strokes.some(s=>this.surfaceArchive[s.id]?.length||this.surfacePreview?.id===s.id||[...this.surfacePending.values()].some(p=>p.id===s.id)))return;
-   try{page.atlas=new SpacePaintTexture(page.mesh,page.ranges,page.strokes,this.loadRaster,this.renderer);}catch(error){if(!page.atlasWarning){page.atlasWarning=true;console.warn('3D surface texture deferred; keeping original geometry colours',error);}return;}id=null;
+   try{page.atlas=new SpacePaintTexture(page.mesh,page.ranges,page.strokes,this.loadRaster,this.renderer);if(page.residency?.dormant)page.atlas.suspendGPU();}catch(error){if(!page.atlasWarning){page.atlasWarning=true;console.warn('3D surface texture deferred; keeping original geometry colours',error);}return;}id=null;
   }
   if(id)page.atlas.repaint(id,this.surfacePaints(id));
   else for(const s of page.strokes)page.atlas.repaint(s.id,this.surfacePaints(s.id));
  }
+ updateResidency(view,now){
+  let retired=false;for(const page of this.pages){const state=page.residency??={};
+   if(updateResidency(state,farMesh(page.mesh,view),now,()=>{page.atlas?.suspendGPU();page.mesh.geometry.dispose();},()=>page.atlas?.resumeGPU(),!retired))retired=true;
+  }
+ }
+ residencyStats(){let dormant=0,atlasBytes=0;for(const p of this.pages){if(p.residency?.dormant)dormant++;const a=p.atlas;if(a)atlasBytes+=a.pixels?.byteLength??(a.packedPixels?a.packedPixels.reduce((n,t)=>n+(typeof t==='number'?4:t.byteLength),0):a.side*a.side*4);}return {pages:this.pages.length,dormant,atlasBytes};}
  restoreSurfaceTextures(){for(const page of this.pages){if(page.atlas)page.atlas.restoreTexture();else this.refreshPage(page);}}
  refreshSurface(id=null){
   if(id){const page=this.pageById.get(id);if(page)this.refreshPage(page,id);}

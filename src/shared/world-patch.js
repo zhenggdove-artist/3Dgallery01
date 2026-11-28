@@ -84,7 +84,11 @@ export function reuseHttpSceneFields(previous,next){
  for(const key of sceneSnapshotKeys){
   const old=previous[key],fresh=next[key];
   if(old===fresh||old==null||fresh==null||typeof old!=='object'||typeof fresh!=='object')continue;
-  if(JSON.stringify(old)===JSON.stringify(fresh)){if(result===next)result={...next};result[key]=old;}
+  // The authoritative stroke/surface revisions already gate socket deltas.
+  // Identical valid revisions allow reuse without serializing the archive.
+  const revisionKey=key==='spacePaint'?'spacePaintRevision':key==='spacePaintSurface'?'spacePaintSurfaceRevision':null;
+  const unchanged=revisionKey&&Number.isSafeInteger(previous[revisionKey])&&previous[revisionKey]===next[revisionKey];
+  if(unchanged||JSON.stringify(old)===JSON.stringify(fresh)){if(result===next)result={...next};result[key]=old;}
  }
  return result;
 }

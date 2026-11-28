@@ -2,9 +2,9 @@
 // never the pigment. The canvas represents the avatar's LEFT wing.
 const cache=new Map();
 const P=Math.PI*2;
-export function craftedWingCanvas(item){
+export function craftedWingCanvas(item,retain=true){
  const key=item.id+':'+item.motif;
- if(cache.has(key))return cache.get(key);
+ if(retain&&cache.has(key))return cache.get(key);
  const canvas=document.createElement('canvas');canvas.width=768;canvas.height=640;
  const c=canvas.getContext('2d'),motif=item.motif||'wood';
  let state=0x9e3779b9;
@@ -232,5 +232,5 @@ export function craftedWingCanvas(item){
   path([[60,351],[111,339],[128,399],[70,414]],motif==='steampunk'?'#6b462d':'#424455','#e6d7bc',4);
   for(let i=0;i<3;i++)ellipse(84+i*13,375,3.8,3.8,'#efce80',0,'#4b3c33',1);
  }
- cache.set(key,canvas);return canvas;
+ if(retain)cache.set(key,canvas);return canvas;
 }

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {surfaceInfo,surfaceFace} from './shared/space-paint-surface.js';
 import {surfaceChartRect,isSurfaceCheckpoint,iterateSurfaceLayers,RASTER_TILE} from './shared/space-paint-raster.js';
 import {paintOwnerStrokes} from './paint-composite.js';
+import {packTile,packAtlas,unpackAtlas} from './render-residency.js';
 import {useStablePaintPixels,rgbaTexture,copyFlippedRows,fillPaintTile} from './paint-texture-source.js';
 // A bounded atlas per geometry batch, with one reusable ink tile.
 // Do not replay historical graffiti and the entire growing brush on each frame.
@@ -114,8 +115,10 @@ export class SpacePaintTexture{
     // not legitimate black graffiti; retain the last valid CPU/GPU image.
     if(source[3]!==255||source[source.length-1]!==255)throw Error('3D paint tile backing lost');
     const bottom=this.side-e.y-this.tile;
-    if(!this.uploadTexture){this.tilePixels=new Uint8Array(source.length);this.uploadTexture=rgbaTexture(THREE,this.tilePixels,this.tile,this.tile);}
+    this.tilePixels??=new Uint8Array(source.length);
     copyFlippedRows(source,this.tile,this.tile,this.tilePixels);
+    if(this.gpuDormant){this.packedPixels[(bottom/this.tile)*this.grid+e.x/this.tile]=packTile(this.tilePixels,this.tile,this.tile,0,0);return true;}
+    if(!this.uploadTexture)this.uploadTexture=rgbaTexture(THREE,this.tilePixels,this.tile,this.tile);
     for(let row=0;row<this.tile;row++)this.pixels.set(this.tilePixels.subarray(row*this.tile*4,(row+1)*this.tile*4),((bottom+row)*this.side+e.x)*4);
     if(!renderer?.initTexture||!renderer?.copyTextureToTexture||renderer.getContext().isContextLost()){this.texture.needsUpdate=true;return true;}
     renderer.initTexture(this.texture);this.uploadPosition.set(e.x,bottom);
@@ -130,6 +133,7 @@ export class SpacePaintTexture{
     console.warn('3D surface stable-pixel fallback',error);return false;
    }
   }
+  if(this.gpuDormant)return;
   if(!renderer?.initTexture||!renderer?.copyTextureToTexture||renderer.getContext().isContextLost()){this.texture.needsUpdate=true;return;}
   try{
    if(!this.uploadCanvas){
@@ -193,6 +197,18 @@ export class SpacePaintTexture{
    if(e.hasInk!==hasInk){e.hasInk=hasInk;this.inkFlags.array.fill(hasInk?1:0,e.start,e.end);this.inkFlags.addUpdateRange(e.start,e.end-e.start);this.inkFlags.needsUpdate=true;}
   }
  }
- restoreTexture(){this.texture.needsUpdate=true;this.checkedUpload=false;this.inkId=null;this.inkState=null;}
- dispose(){this.disposed=true;for(const e of this.entries.values())this.releaseBase(e);this.entries.clear();this.mesh.material=this.originalMaterial;this.material.dispose();this.texture.dispose();this.uploadTexture?.dispose();this.inkState=null;this.pixels=null;this.tilePixels=null;this.canvas.width=this.canvas.height=this.scratch.width=this.scratch.height=0;if(this.uploadCanvas)this.uploadCanvas.width=this.uploadCanvas.height=0;}
+ suspendGPU(){
+  if(this.gpuDormant)return;
+  if(this.stablePixels){this.packedPixels=packAtlas(this.pixels,this.side,this.tile);this.pixels=null;this.texture.image.data=null;}
+  this.texture.dispose();this.uploadTexture?.dispose();this.uploadTexture=null;this.tilePixels=null;
+  if(this.uploadCanvas){this.uploadCanvas.width=this.uploadCanvas.height=0;this.uploadCanvas=null;this.uploadContext=null;}
+  this.gpuDormant=true;this.checkedUpload=false;
+ }
+ resumeGPU(){
+  if(!this.gpuDormant)return;
+  if(this.stablePixels){this.pixels=unpackAtlas(this.packedPixels,this.side,this.tile);this.texture.image.data=this.pixels;this.packedPixels=null;}
+  this.gpuDormant=false;this.texture.needsUpdate=true;this.checkedUpload=false;
+ }
+ restoreTexture(){if(!this.gpuDormant)this.texture.needsUpdate=true;this.checkedUpload=false;this.inkId=null;this.inkState=null;}
+ dispose(){this.disposed=true;for(const e of this.entries.values())this.releaseBase(e);this.entries.clear();this.mesh.material=this.originalMaterial;this.material.dispose();this.texture.dispose();this.uploadTexture?.dispose();this.inkState=null;this.pixels=null;this.packedPixels=null;this.tilePixels=null;this.canvas.width=this.canvas.height=this.scratch.width=this.scratch.height=0;if(this.uploadCanvas)this.uploadCanvas.width=this.uploadCanvas.height=0;}
 }

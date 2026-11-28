@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {farMesh,updateResidency} from './render-residency.js';
 import {paintOwnerStrokes} from './paint-composite.js';
 const SIZE=512;
 export class DiscPaintView{
@@ -9,7 +10,8 @@ export class DiscPaintView{
  queuePreview(v){const s=this.slot(v.lotId);if(s){s.preview=null;s.pending.push(v);this.draw(v.lotId,s);}}
  ackPreview(v,server){const s=this.slot(v.lotId);if(s){if(!s.strokes.some(a=>a.id===server.id))s.strokes=[...s.strokes,server];s.pending=s.pending.filter(a=>a.clientId!==v.clientId);this.draw(v.lotId,s);}}
  rejectPreview(v){const s=this.slots.get(v.lotId);if(s){s.pending=s.pending.filter(a=>a.clientId!==v.clientId);this.draw(v.lotId,s);}}
- sync(data){this.data=data||{};for(const [key,strokes] of Object.entries(this.data)){if(!strokes.length)continue;const s=this.slot(key);if(s&&JSON.stringify(s.strokes)!==JSON.stringify(strokes)){s.strokes=strokes;this.draw(key,s);}else if(s&&!s.drawn){this.draw(key,s);s.drawn=true;}}for(const [key,s] of this.slots){if(!this.data[key]?.length&&s.strokes.length){s.strokes=[];if(s.pending.length||s.preview)this.draw(key,s);}if(!this.platforms.discs.some(d=>d.key===key)||(!this.data[key]?.length&&!s.pending.length&&!s.preview)){s.mesh.removeFromParent();s.mesh.geometry.dispose();s.mesh.material.dispose();s.texture.dispose();this.slots.delete(key);}}}
+ sync(data){this.data=data||{};for(const [key,strokes] of Object.entries(this.data)){if(!strokes.length)continue;const s=this.slot(key);if(s&&JSON.stringify(s.strokes)!==JSON.stringify(strokes)){s.strokes=strokes;this.draw(key,s);}else if(s&&!s.drawn){this.draw(key,s);s.drawn=true;}}for(const [key,s] of this.slots){if(!this.data[key]?.length&&s.strokes.length){s.strokes=[];if(s.pending.length||s.preview)this.draw(key,s);}if(!this.platforms.discs.some(d=>d.key===key)||(!this.data[key]?.length&&!s.pending.length&&!s.preview)){s.mesh.removeFromParent();s.mesh.geometry.dispose();s.mesh.material.dispose();s.texture.dispose();s.canvas.width=s.canvas.height=0;this.slots.delete(key);}}}
+ updateResidency(view,now){for(const s of this.slots.values())updateResidency(s.residency??={},farMesh(s.mesh,view)&&!s.preview&&!s.pending.length,now,()=>{s.texture.dispose();s.mesh.geometry.dispose();},()=>{s.texture.needsUpdate=true;});}
  transform(key,position,radius,visible=true){const s=this.slots.get(key);if(s){s.mesh.position.copy(position);s.mesh.position.y+=.207;s.mesh.scale.set(radius,radius,1);s.mesh.visible=visible;}}
  pick(origin,direction){const platforms=this.platforms;if(!platforms.mesh)return null;const ray=new THREE.Raycaster(new THREE.Vector3(...origin),new THREE.Vector3(...direction),0,100);const hits=ray.intersectObject(platforms.mesh,false);for(const hit of hits){if(hit.face?.normal?.y<.9)continue;const disc=platforms.discs[hit.instanceId];if(!disc)continue;const m=new THREE.Matrix4();platforms.mesh.getMatrixAt(hit.instanceId,m);const p=hit.point.clone().applyMatrix4(m.invert());if(Math.hypot(p.x,p.z)>1.001)continue;return {lotId:disc.key,wall:'top',u:Math.max(0,Math.min(1,(p.x+1)/2)),v:Math.max(0,Math.min(1,(p.z+1)/2)),distance:hit.distance,point:hit.point};}return null;}
 }

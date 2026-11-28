@@ -1,5 +1,6 @@
 import {disposeGardenModel} from './reletter/garden-art.js';
 import * as THREE from 'three';
+import {farMesh,updateResidency} from './render-residency.js';
 import {GrassField} from './grass-field.js';
 import {OuterCity} from './outer-city.js';
 import {loadSignPortraits,signPortraitSeed} from './sign-art.js';
@@ -506,7 +507,7 @@ export class TempleArena{
     // No textures are regenerated and no shared player styling is changed.
     for(const root of this.artworks.values()){
      if(root.userData.titlePlate)updateArtworkTitleVisibility(root,viewerRoot?.position);
-     const d=root.userData,v=d.video;this.updateImageResidency(root,camera,frameNow);if(!v)continue;
+     const d=root.userData,v=d.video;if(!v)continue;
      const wanted=root.visible&&!document.hidden&&camera.position.distanceToSquared(root.position)<900;
      if(!wanted){if(d.videoPlaying||!v.paused)v.pause();d.videoPlaying=false;continue;}
      if(!d.videoPlaying&&performance.now()>=(d.videoRetryAt||0)){
@@ -561,19 +562,13 @@ export class TempleArena{
      this.presentation.update(dt,time,camera,this.world);this.adventure.update(dt,time,playerRoots,camera);if(time-this.lastLightUpdate>.35){this.lastLightUpdate=time;this.updateArtLights(camera);}
   }
   updateArtLights(camera){const visible=[...this.artworks.values()].filter(o=>o.visible).sort((a,b)=>a.position.distanceToSquared(camera.position)-b.position.distanceToSquared(camera.position));this.lightPool.forEach((light,i)=>{const art=visible[i];light.intensity=art?(i?18:24):0;if(art){light.position.copy(art.position).add(new THREE.Vector3(0,2,2.5));light.color.set(i%2?'#d6dfff':'#ffe1b8');}});}
-  updateImageResidency(root,camera,now){
-   const d=root.userData,image=artworkImageResidency.get(root);if(!image)return;
-   // Only evict the GPU copy of an image entirely beyond the far plane.
-   // Its original decoded source and all world/edit/collision data remain.
-   // The radius includes the authored depth, rotation and nonuniform scale.
-   const s=root.scale,depth=Math.max(0,Number(d.appearance?.depth)||0);
-   const radius=Math.hypot(image.width*Math.abs(s.x)/2,image.height*Math.abs(s.y)/2,depth*Math.abs(s.z)/2);
-   const eye=this.residencyEye??=new THREE.Vector3();
-   eye.copy(root.position).applyMatrix4(camera.matrixWorldInverse);
-   const far=-eye.z-radius>camera.far+12&&!d.editing;
-   if(!far){image.farSince=null;if(image.released){image.texture.needsUpdate=true;image.released=false;}return;}
-   if(image.farSince===null)image.farSince=now;
-   if(!image.released&&now-image.farSince>15000){image.texture.dispose();image.released=true;}
+  updateImageResidency(view,now){
+   for(const root of this.artworks.values()){
+    const image=artworkImageResidency.get(root),d=root.userData;if(!image)continue;
+    const p=d.depthParts;
+    const far=!d.editing&&p&&farMesh(p.front,view)&&farMesh(p.back,view)&&farMesh(p.side,view);
+    updateResidency(image,far,now,()=>{image.texture.dispose();},()=>{image.texture.needsUpdate=true;});
+   }
   }
   pauseArtworkVideos(){for(const root of this.artworks.values()){const d=root.userData;if(d.video){d.video.pause();d.videoPlaying=false;}}}
   artworkRenderDefinitions(){
