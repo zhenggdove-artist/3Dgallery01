@@ -18,7 +18,8 @@ try{
    mod.render.call(context);
    const q=s=>content.querySelector(s),color=q('[data-terrain-color]'),change=(el,val)=>{el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));};
    change(color,'#aa0022');q('[data-terrain-tab="grassColor"]').click();change(color,'#0044dd');q('[data-terrain-tab="floorColor"]').click();change(color,'#ef9944');change(q('[data-terrain-length]'),'185');
-   const draft=events.at(-1).value,correct=draft.meadowColor==='#aa0022'&&draft.grassColor==='#0044dd'&&draft.floorColor==='#ef9944'&&draft.grassLength===1.85;
+   change(q('[data-terrain-param="flowerDensity"]'),'75');change(q('[data-terrain-param="grassPushRadius"]'),'310');q('[data-terrain-tab="flowerBlue"]').click();change(color,'#2266ff');
+   const draft=events.at(-1).value,correct=draft.flowerDensity===.75&&draft.grassPushRadius===3.1&&draft.flowerBlue==='#2266ff'&&draft.meadowColor==='#aa0022'&&draft.grassColor==='#0044dd'&&draft.floorColor==='#ef9944'&&draft.grassLength===1.85;
    const oneTab=content.querySelectorAll('[data-terrain-tab][aria-pressed=true]').length===1;
    const length=q('[data-terrain-length]').nextElementSibling.textContent==='185%';
    const bounds=document.getElementById('panel').getBoundingClientRect(),fits=bounds.right<=innerWidth&&bounds.bottom<=innerHeight;
@@ -36,7 +37,7 @@ try{
   const THREE=await import('three'),{GrassField}=await import('./src/grass-field.js');
   const scene=new THREE.Scene(),renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true});renderer.setSize(64,64);
   const camera=new THREE.PerspectiveCamera(60,1,.1,300);camera.position.set(0,20,50);camera.lookAt(0,0,30);
-  const field=new GrassField(scene,{mobile:true,count:500});field.outerMesh.visible=false;field.outerCanopy.visible=false;
+  const field=new GrassField(scene,{mobile:true,count:500});field.outerMesh.visible=false;field.outerCanopy.visible=false;field.outerFlowerMesh.visible=false;
   const sample=()=>{renderer.render(scene,camera);const pixels=new Uint8Array(64*64*4),gl=renderer.getContext();gl.readPixels(0,0,64,64,gl.RGBA,gl.UNSIGNED_BYTE,pixels);return Array.from(pixels);};
   const before=sample();field.setTerrainStyle({terrain:{meadowColor:'#ff0000',grassColor:'#ffffff',floorColor:'#0000ff',grassLength:2}});const after=sample();field.setTerrainStyle({});const restored=sample();
   const result={changed:before.some((v,i)=>v!==after[i]),restored:before.every((v,i)=>v===restored[i]),programs:renderer.info.programs.length>0};field.dispose();renderer.dispose();return result;
