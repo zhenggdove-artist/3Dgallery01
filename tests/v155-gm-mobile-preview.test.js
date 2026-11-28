@@ -2,29 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {gmPreviewDimensions,gmPreviewMediaMatches,gmPreviewUnits,gmMobilePreviewActive} from '../src/gm-mobile-preview.js';
-test('19:6 phone-scale viewport fits the browser and reserves the exit control',()=>{
+test('9:16 portrait phone-scale viewport fits the browser and reserves the exit control',()=>{
  for(const [w,h] of [[1920,1080],[1280,720],[600,400],[400,250],[800,150]]){
   const v=gmPreviewDimensions(w,h);
-  assert.equal(v.width*6,v.height*19);assert.ok(v.width<=w&&v.height+48<=h);
+  assert.equal(v.width*16,v.height*9);assert.ok(v.width<=w&&v.height+48<=h);
  }
- assert.deepEqual(gmPreviewDimensions(1280,720),{width:950,height:300,offsetLeft:0,offsetTop:0});
+ assert.deepEqual(gmPreviewDimensions(1280,720),{width:378,height:672,offsetLeft:0,offsetTop:0});
+ assert.deepEqual(gmPreviewDimensions(1920,1080),{width:450,height:800,offsetLeft:0,offsetTop:0});
+ assert.deepEqual(gmPreviewDimensions(390,844),{width:387,height:688,offsetLeft:0,offsetTop:0});
  assert.equal(gmMobilePreviewActive(),false);
 });
-test('existing coarse-pointer mobile landscape CSS is selected at the simulated width',()=>{
- const match=q=>gmPreviewMediaMatches(q,950,300,()=>false);
+test('existing coarse-pointer mobile portrait CSS is selected at the simulated width',()=>{
+ const match=q=>gmPreviewMediaMatches(q,450,800,()=>false);
  assert.equal(match('(max-width: 720px), (pointer: coarse)'),true);
- assert.equal(match('(pointer: coarse) and (orientation: landscape) and (min-width: 601px)'),true);
+ assert.equal(match('(pointer: coarse) and (orientation: landscape) and (min-width: 601px)'),false);
  assert.equal(match('(min-width: 840px) and (min-height: 650px)'),false);
- assert.equal(match('(max-width: 600px) and (orientation: portrait)'),false);
+ assert.equal(match('(max-width: 600px) and (orientation: portrait)'),true);
  assert.equal(match('(pointer: fine)'),false);
  assert.equal(match('(any-pointer: coarse)'),true);
  assert.equal(match('(prefers-reduced-motion: reduce)'),false);
 });
 test('viewport units track simulated width and height without modifying other values',()=>{
- assert.equal(gmPreviewUnits('calc(100vw - 24px)',950,300),'calc(950px - 24px)');
- assert.equal(gmPreviewUnits('max(12px, 40dvh)',950,300),'max(12px, 120px)');
- assert.equal(gmPreviewUnits('10vmin 10vmax -2.5vw',950,300),'30px 95px -23.75px');
- assert.equal(gmPreviewUnits('env(safe-area-inset-bottom) 50%',950,300),'env(safe-area-inset-bottom) 50%');
+ assert.equal(gmPreviewUnits('calc(100vw - 24px)',450,800),'calc(450px - 24px)');
+ assert.equal(gmPreviewUnits('max(12px, 40dvh)',450,800),'max(12px, 320px)');
+ assert.equal(gmPreviewUnits('10vmin 10vmax -2.5vw',450,800),'45px 80px -11.25px');
+ assert.equal(gmPreviewUnits('env(safe-area-inset-bottom) 50%',450,800),'env(safe-area-inset-bottom) 50%');
 });
 test('GM preview is local, has an independent exit, and uses the same live renderer',()=>{
  const ui=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');

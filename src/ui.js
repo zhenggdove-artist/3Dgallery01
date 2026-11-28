@@ -746,7 +746,7 @@ ${this.world?.environment?.spacePaintSuspended===true?'<small>3D PAINT 暫停使
       <h3>GM 功能</h3><div class="gm-tools">
         <button type="button" data-gm-action="editor">作品與圓盤編輯</button><button type="button" data-gm-platform-tool="place" data-gm-platform-kind="house">GM 蓋房子</button><button type="button" data-gm-platform-tool="edit" data-gm-platform-kind="house">GM 編輯房屋</button><button type="button" data-gm-action="wanted">Wanted List 管理</button><button type="button" data-open-sky-color>星空環境底色</button><button type="button" data-open-terrain-style>草地／地板／迷霧距離</button><button type="button" data-gm-action="chat-position-edit">調整全服 CHAT 預設位置</button><button type="button" data-gm-action="chat-position-save">儲存目前 CHAT 位置為全服預設</button><button type="button" data-open-shop-prices>商品售價／裝備數值編輯</button>
          <button type="button" data-gm-action="spectator-test">${this.self.gmSpectatorPreview?'結束測試／返回 GM':'以觀眾模式遊玩（實際測試）'}</button>
-        <button type="button" data-gm-action="mobile-preview">切換手機版畫面預覽（19:6）</button>
+        <button type="button" data-gm-action="mobile-preview">切換手機版畫面預覽（直式 9:16）</button>
          <button type="button" data-gm-action="help" aria-label="GM instructions and shortcuts">！ GM 說明與快捷鍵</button>
         <button type="button" data-gm-action="wing-painter">畫翅膀／上架翅膀</button><button type="button" data-gm-action="wing-player-preview">測試玩家已開通的繪圖介面</button>
         <button type="button" data-gm-action="wing-manage">翅膀上架管理／刪除／中獎率</button>
