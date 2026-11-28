@@ -298,9 +298,9 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
 }
 // Each stream has a moving breakup length, a curved liquid body and a rounded closed end.
 // Droplets leave the actual tip at their own emission time, following its tangent.
-function colaEnd(k,t){return k===0?1+.035*Math.sin(t*8.1)+.018*Math.sin(t*15.3):.94+.075*Math.sin(t*5.7+k*2.17)+.038*Math.sin(t*11.4+k*.91);}
+function colaEnd(k,t){return k===0?1+.035*Math.sin(t*8.1)+.018*Math.sin(t*15.3):.68+.045*Math.sin(t*5.7+k*2.17)+.025*Math.sin(t*11.4+k*.91);}
 function colaPath(k,u,t,ca,sa,out){
- const arm=k>0,p=t*10-u*15+k*1.7,breakup=Math.max(0,(u-.60)/.40),w=breakup*breakup;
+ const arm=k>0,p=t*10-u*15+k*1.7,breakup=arm?Math.max(0,Math.min(1,(u-.45)/.30)):Math.max(0,(u-.60)/.40),w=breakup*breakup;
  if(arm){
   const r=.03+.72*u+.035*w*Math.sin(p*1.3),side=.025*Math.sin(p)*u+.060*w*Math.sin(p*1.7+k);
   out[0]=ca*r-sa*side;out[1]=1.98+1.02+3.8*u-4.5*u*u+.055*w*Math.sin(p*1.2+k);out[2]=sa*r+ca*side;
@@ -328,9 +328,11 @@ export function createColaStream(T,g,record,mat){
  }
  const geo=new T.BufferGeometry();geo.setAttribute('position',new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage));geo.setIndex(indices);geo.computeVertexNormals();
  geo.attributes.normal.setUsage(T.DynamicDrawUsage);
- const liquid=mat('#71331b');liquid.roughness=.15;liquid.metalness=.04;
+ // Slightly translucent volumetric tubes; standard lighting retains liquid highlights
+ // without a costly full-scene transmission framebuffer or layered alpha sheets.
+ const liquid=mat('#884326');liquid.roughness=.11;liquid.metalness=0;liquid.transparent=true;liquid.opacity=.72;liquid.depthWrite=false;liquid.side=T.FrontSide;
  const mesh=part(T,g,geo,liquid);mesh.visible=false;mesh.frustumCulled=false;
- const splash=mat('#a35b32');splash.roughness=.13;splash.metalness=.03;
+ const splash=mat('#ae633a');splash.roughness=.10;splash.metalness=0;splash.transparent=true;splash.opacity=.78;splash.depthWrite=false;splash.side=T.FrontSide;
  const dropCount=64,drops=new T.InstancedMesh(new T.SphereGeometry(1,8,6),splash,dropCount);
  drops.instanceMatrix.setUsage(T.DynamicDrawUsage);drops.count=0;drops.visible=false;drops.frustumCulled=false;g.add(drops);
  record.colaMotion.jet={mesh,n,sides,streams,drops,dropCount,ring,dummy:new T.Object3D(),up:new T.Vector3(0,1,0),direction:new T.Vector3(),tangent:new T.Vector3(),normal:new T.Vector3(),binormal:new T.Vector3(),p:new Float64Array(3),q:new Float64Array(3)};
@@ -346,7 +348,7 @@ export function updateColaStream(d,time){
    colaPath(k,u,time,ca,sa,p);colaPath(k,u+.002,time,ca,sa,q);
    tangent.set(q[0]-p[0],q[1]-p[1],q[2]-p[2]).normalize();
    binormal.set(arm?-sa:0,0,arm?ca:1);normal.crossVectors(tangent,binormal).normalize();binormal.crossVectors(normal,tangent).normalize();
-   const radius=colaRadius(k,u,time),capAngle=cap?(j-body+1)/4*1.46:0,axial=radius*Math.sin(capAngle),round=Math.cos(capAngle);
+   const radius=colaRadius(k,u,time),capAngle=cap?(j-body+1)/4*1.32:0,axial=radius*.48*Math.sin(capAngle),round=Math.cos(capAngle);
    const cx=p[0]+tangent.x*axial,cy=p[1]+tangent.y*axial,cz=p[2]+tangent.z*axial;
    const s1=Math.sin(phase),c1=Math.cos(phase);
    for(let i=0;i<sides;i++){
@@ -359,7 +361,7 @@ export function updateColaStream(d,time){
  }
  a.needsUpdate=true;mesh.geometry.computeVertexNormals();
  for(let i=0;i<dropCount;i++){
-  const k=i%streams,lifetime=.42+(i%7)*.039,phase=((time/lifetime+i*.61803398875)%1+1)%1,age=phase*lifetime,emitTime=time-age;
+  const k=i%streams,lifetime=.30+(i%7)*.025,phase=((time/lifetime+i*.61803398875)%1+1)%1,age=phase*lifetime,emitTime=time-age;
   const u=colaEnd(k,emitTime),angle=(k-1)*TAU/(streams-1)+.11*Math.sin(emitTime*2+k),ca=Math.cos(angle),sa=Math.sin(angle);
   colaPath(k,u,emitTime,ca,sa,p);colaPath(k,u+.002,emitTime,ca,sa,q);
   tangent.set(q[0]-p[0],q[1]-p[1],q[2]-p[2]).normalize();
@@ -367,7 +369,7 @@ export function updateColaStream(d,time){
   dummy.position.set((p[0]+vx*age)*open,1.98+(p[1]-1.98+vy*age-3.9*age*age)*open,(p[2]+vz*age)*open);
   direction.set(vx,vy-7.8*age,vz).normalize();dummy.quaternion.setFromUnitVectors(up,direction);
   const size=(.006+(i%11)*.0014)*open*Math.min(1,(1-phase)*9,phase*15+.1);
-  dummy.scale.set(size,size*(1.4+Math.hypot(vx,vy-7.8*age,vz)*.4),size);dummy.updateMatrix();drops.setMatrixAt(i,dummy.matrix);
+  dummy.scale.set(size,size*Math.min(1.85,1.12+Math.hypot(vx,vy-7.8*age,vz)*.22),size);dummy.updateMatrix();drops.setMatrixAt(i,dummy.matrix);
  }
  drops.count=dropCount;drops.instanceMatrix.needsUpdate=true;
 }

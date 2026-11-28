@@ -44,3 +44,22 @@ test('prefix packing preserves exact values, pending uploads, and draw-only shri
  const v=attr.version;assert.equal(repackVisibleSpans(attr,[b,c],[b]),2);assert.equal(attr.version,v);
  assert.equal(repackVisibleSpans(attr,[b],[a,b,c]),6);assert.deepEqual([...attr.array],[1,2,3,4,5,6]);
 });
+
+test('cola translucency and shortened falling arcs preserve the crest and rounded moving ends',()=>{
+ const r={colaMotion:{open:1}};createColaStream(T,new T.Group(),r,color=>new T.MeshStandardMaterial({color}));
+ const j=r.colaMotion.jet,a=j.mesh.geometry.attributes.position;
+ assert.ok(j.mesh.material.transparent&&j.mesh.material.opacity>.5&&j.mesh.material.opacity<.85);
+ assert.equal(j.mesh.material.depthWrite,false);assert.equal(j.mesh.material.side,T.FrontSide);
+ const center=(k,ring)=>{const v=new T.Vector3();for(let i=0;i<j.sides;i++)v.add(new T.Vector3().fromBufferAttribute(a,(k*j.n+ring)*j.sides+i));return v.multiplyScalar(1/j.sides);};
+ for(let t=0;t<4;t+=.125){
+  updateColaStream(r.colaMotion,t);
+  for(let k=1;k<j.streams;k++){
+   let crest=-Infinity;for(let ring=0;ring<j.n;ring++)crest=Math.max(crest,center(k,ring).y);
+   const tip=center(k,j.n-1),base=center(k,j.n-5);
+   assert.ok(crest-1.98>1.75,'outer arc retains original upward crest');
+   assert.ok(crest-tip.y<.65,'continuous downward tail is short');
+   assert.ok(tip.distanceTo(base)<.03,'cap is rounded without an elongated spike');
+  }
+  assert.equal(j.drops.count,64);
+ }
+});
