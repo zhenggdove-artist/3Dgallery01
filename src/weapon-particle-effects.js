@@ -342,7 +342,7 @@ function populate(recipe,amount,range,palette){
  return {positions,seed,colors};
 }
 export class WeaponParticleEffects{
- constructor(scene){this.scene=scene;this.active=[];this.charger=null;this.maxActive=14;this.pools=new Map();this.pooledCount=0;}
+ constructor(scene){this.scene=scene;this.active=[];this.charger=null;this.maxActive=14;this.pools=new Map();this.pooledCount=0;this.warmReserve=new Map();}
  async warm(renderer,camera){
   // Compile, GPU-upload and RETAIN every native particle silhouette and
   // normal/ultimate count variant before live play. Ranges and item IDs are
@@ -367,6 +367,7 @@ export class WeaponParticleEffects{
     const pool=this.pools.get(e.poolKey)||[];
     pool.push(e);this.pools.set(e.poolKey,pool);this.pooledCount++;
    }
+   this.warmReserve=new Map(Array.from(this.pools,([key,list])=>[key,list.length]));
   }
  }
  make(recipe,item,{duration=2.1,range=20,amount=2300,charge=1}={}){
@@ -513,8 +514,9 @@ export class WeaponParticleEffects{
   if(list.length<3&&this.pooledCount<96){list.push(entry);this.pooledCount++;}
   else{entry.geometry.dispose();entry.material.dispose();}
  }
- trimIdlePools(now){
-  for(const list of this.pools.values())for(let i=list.length-1;i>=1;i--){const e=list[i];if(now-(e.idleSince??now)>30000){list.splice(i,1);this.pooledCount--;e.geometry.dispose();e.material.dispose();}}
+ idlePoolGroups(){return Array.from(this.pools,([key,list])=>({kind:'particleVfx',list,keep:Math.max(1,this.warmReserve.get(key)||0),idleMs:30000,root:e=>e.root,since:e=>e.idleSince,dispose:e=>{this.pooledCount--;e.geometry.dispose();e.material.dispose();}}));}
+ trimIdlePools(now=performance.now()){
+  for(const g of this.idlePoolGroups())for(let i=g.list.length-1;i>=g.keep;i--){const e=g.list[i],since=g.since(e);if(!g.root(e)?.parent&&Number.isFinite(since)&&now-since>=g.idleMs){g.list.splice(i,1);g.dispose(e);}}
  }
  dispose(){
   for(const entry of [...this.active])this.remove(entry);

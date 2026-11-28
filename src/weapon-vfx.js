@@ -602,11 +602,14 @@ export class WeaponVFX{
    }
   }
  }
+ idlePoolGroups(){
+  const groups=[];
+  for(const list of this.pools.values())groups.push({kind:'nativeVfx',list,keep:2,idleMs:30000,root:e=>e.group,since:e=>e.group.userData.templeIdleSince,dispose:e=>e.dispose()});
+  for(const list of this.orbPools.values())groups.push({kind:'staffOrb',list,keep:2,idleMs:30000,root:e=>e.group,since:e=>e.idleSince,dispose:e=>e.group.traverse(o=>{if(o.isInstancedMesh)o.dispose();o.geometry?.dispose();o.material?.dispose();})});
+  return groups.concat(this.numberedEffects.idlePoolGroups(),this.particleSkills.idlePoolGroups(),this.signatureEffects.idlePoolGroups());
+ }
  trimIdlePools(now=performance.now()){
-  // Retain baseline warmed effects; retire only surplus inactive copies.
-  for(const list of this.pools.values())for(let i=list.length-1;i>=2;i--){const fx=list[i];if(now-(fx.group.userData.templeIdleSince??now)>30000){list.splice(i,1);fx.dispose();}}
-  for(const list of this.orbPools.values())for(let i=list.length-1;i>=2;i--){const entry=list[i];if(now-(entry.idleSince??now)>30000){list.splice(i,1);entry.group.traverse(o=>{if(o.isInstancedMesh)o.dispose();o.geometry?.dispose();o.material?.dispose();});}}
-  this.numberedEffects.trimIdlePools(now);this.particleSkills.trimIdlePools(now);
+  for(const g of this.idlePoolGroups())for(let i=g.list.length-1;i>=g.keep;i--){const e=g.list[i],since=g.since(e);if(!g.root(e)?.parent&&Number.isFinite(since)&&now-since>=g.idleMs){g.list.splice(i,1);g.dispose(e);}}
  }
  reportAnimationFailure(id,error){
   this.failedAnimations??=new Set();

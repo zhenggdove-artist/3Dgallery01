@@ -730,11 +730,9 @@ export class NumberedWeaponEffects {
   }
   this.recycle(e.spec,e.fx);
  }
- trimIdlePools(now){
-  // Never evict an active skill. Retain the startup overlap reserve (including
-  // the original six crests), and reclaim only extra inactive native copies.
-  const reserve={ 'tidal-surge':6,'energy-vortex':2,'revival-bloom':2,'ice-lance-study':2,'rolling-fireburst':3,'black-hole':3 };
-  for(const [asset,list] of this.prewarmed){const keep=reserve[asset]||1;for(let i=list.length-1;i>=keep;i--){const fx=list[i];if(now-(fx.group.userData.templeIdleSince??now)>30000){list.splice(i,1);fx.dispose();}}}
+ idlePoolGroups(){const reserve={ 'tidal-surge':6,'energy-vortex':2,'revival-bloom':2,'ice-lance-study':2,'rolling-fireburst':3,'black-hole':3 };return Array.from(this.prewarmed,([asset,list])=>({kind:'numberedVfx',list,keep:reserve[asset]||1,idleMs:30000,root:e=>e.group,since:e=>e.group.userData.templeIdleSince,dispose:e=>e.dispose()}));}
+ trimIdlePools(now=performance.now()){
+  for(const g of this.idlePoolGroups())for(let i=g.list.length-1;i>=g.keep;i--){const e=g.list[i],since=g.since(e);if(!g.root(e)?.parent&&Number.isFinite(since)&&now-since>=g.idleMs){g.list.splice(i,1);g.dispose(e);}}
  }
  dispose(){for(const e of [...this.active])this.remove(e);for(const list of this.prewarmed.values())for(const fx of list){fx.group.removeFromParent();fx.dispose();}this.prewarmed.clear();}
 }

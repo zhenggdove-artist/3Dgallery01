@@ -148,7 +148,7 @@ export class CityWallPaint{
  }
  updateSignVisibility(slot){if(!signPaintWall(slot.wall))return;const part=slot.wall.split(':')[0];slot.mesh.visible=signPaintAvailable(slot.lot,slot.wall,this.city.damage||{})&&(slot.lot.structure||!this.city.partsHidden?.has(slot.lot.index+':'+part));}
  hideSign(index,part){for(const slot of this.surfaces.values())if(!slot.lot.structure&&slot.lot.index===index&&slot.wall.startsWith(part+':'))slot.mesh.visible=false;}
- updateResidency(view,now){for(const slot of this.surfaces.values())updateResidency(slot.residency??={},farMesh(slot.mesh,view)&&!slot.preview&&!slot.pending.length,now,()=>{slot.texture.dispose();slot.mesh.geometry.dispose();},()=>{slot.texture.needsUpdate=true;});}
+ updateResidency(view,now,manager=null){for(const slot of this.surfaces.values())updateResidency(slot.residency??={},farMesh(slot.mesh,view)&&!slot.preview&&!slot.pending.length,now,()=>{slot.texture.dispose();slot.mesh.geometry.dispose();},()=>{slot.texture.needsUpdate=true;},true,manager,'wallPaint');}
  disposeSlot(slot){
   slot.mesh.removeFromParent();slot.mesh.geometry.dispose();
   slot.mesh.material.dispose();slot.texture.dispose();slot.canvas.width=slot.canvas.height=0;

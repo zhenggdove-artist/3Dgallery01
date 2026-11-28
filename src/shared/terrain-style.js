@@ -1,6 +1,6 @@
 // Visual-only environment settings; existing saved palette and length are preserved.
-export const TERRAIN_DEFAULTS=Object.freeze({meadowColor:'#295218',grassColor:'#4a8a38',floorColor:'#2e6658',grassLength:1,grassDensity:1,grassWidth:1,windSpeed:1,windStrength:1,grassPushRadius:2.4,grassPushStrength:1,flowerDensity:.8,flowerSize:1,soilExposure:.4,fogDistance:180,flowerYellow:'#f1cb40',flowerPurple:'#9464ce',flowerBlue:'#649fea'});
-export const TERRAIN_COLOR_KEYS=Object.freeze(['meadowColor','grassColor','floorColor','flowerYellow','flowerPurple','flowerBlue']);
+export const TERRAIN_DEFAULTS=Object.freeze({meadowColor:'#295218',grassColor:'#4a8a38',floorColor:'#2e6658',grassLength:1,grassDensity:1,grassWidth:1,windSpeed:1,windStrength:1,grassPushRadius:2.4,grassPushStrength:1,flowerDensity:.8,flowerSize:1,soilExposure:.4,fogDistance:180,fogColor:'#12284d',flowerYellow:'#f1cb40',flowerPurple:'#9464ce',flowerBlue:'#649fea'});
+export const TERRAIN_COLOR_KEYS=Object.freeze(['meadowColor','grassColor','floorColor','flowerYellow','flowerPurple','flowerBlue','fogColor']);
 export const GRASS_LENGTH_MIN=.1,GRASS_LENGTH_MAX=3;
 export const TERRAIN_SLIDERS=Object.freeze([
  ['grassDensity','草密度',0,1],['grassWidth','草葉寬度',.5,1.5],

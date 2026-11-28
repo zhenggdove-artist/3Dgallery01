@@ -20,7 +20,7 @@ const lineMat=(color,opacity=.8)=>new THREE.MeshBasicMaterial({color,transparent
 const stable=(n)=>((Math.sin(n*127.1+17.7)*43758.5453)%1+1)%1;
 
 export class WeaponSignatureEffects {
- constructor(scene){this.scene=scene;this.active=[];this.maxActive=18;this.recycled=new Map();this.recycledCount=0;}
+ constructor(scene){this.scene=scene;this.active=[];this.maxActive=18;this.recycled=new Map();this.recycledCount=0;this.warmReserve=new Map();}
  take(key){
   const list=this.recycled.get(key);
   if(!list?.length)return null;
@@ -41,7 +41,7 @@ export class WeaponSignatureEffects {
   let list=this.recycled.get(e.key);
   if(e.key&&(!list||list.length<3)&&this.recycledCount<15){
    if(!list){list=[];this.recycled.set(e.key,list);}
-   list.push(e.obj);this.recycledCount++;return;
+   e.obj.userData.templeIdleSince=performance.now();list.push(e.obj);this.recycledCount++;return;
   }
   this.disposeGroup(e.obj);
  }
@@ -69,8 +69,10 @@ export class WeaponSignatureEffects {
    }
   }finally{
    for(const e of [...this.active])this.remove(e);
+   this.warmReserve=new Map(Array.from(this.recycled,([key,list])=>[key,list.length]));
   }
  }
+ idlePoolGroups(){return Array.from(this.recycled,([key,list])=>({kind:'signatureVfx',list,keep:Math.max(1,this.warmReserve.get(key)||0),idleMs:60000,root:e=>e,since:e=>e.userData.templeIdleSince,dispose:e=>{this.recycledCount--;this.disposeGroup(e);}}));}
  goldfishBubble(event){
   const key='goldfish-bubble',group=this.take(key)||new THREE.Group();
   if(!group.children.length){

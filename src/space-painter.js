@@ -242,9 +242,9 @@ export class SpacePainter{
   if(id)page.atlas.repaint(id,this.surfacePaints(id));
   else for(const s of page.strokes)page.atlas.repaint(s.id,this.surfacePaints(s.id));
  }
- updateResidency(view,now){
+ updateResidency(view,now,manager=null){
   let retired=false;for(const page of this.pages){const state=page.residency??={};
-   if(updateResidency(state,farMesh(page.mesh,view),now,()=>{page.atlas?.suspendGPU();page.mesh.geometry.dispose();},()=>page.atlas?.resumeGPU(),!retired))retired=true;
+   if(updateResidency(state,farMesh(page.mesh,view),now,()=>{page.atlas?.suspendGPU();page.mesh.geometry.dispose();},()=>page.atlas?.resumeGPU(),!retired,manager,'spacePaint'))retired=true;
   }
  }
  residencyStats(){let dormant=0,atlasBytes=0;for(const p of this.pages){if(p.residency?.dormant)dormant++;const a=p.atlas;if(a)atlasBytes+=a.pixels?.byteLength??(a.packedPixels?a.packedPixels.reduce((n,t)=>n+(typeof t==='number'?4:t.byteLength),0):a.side*a.side*4);}return {pages:this.pages.length,dormant,atlasBytes};}

@@ -83,3 +83,15 @@ test('V139 fog distance is server-authorized, preserved with other settings and 
  f.setDistanceFog(fog);const u=f.mesh.material.uniforms;
  assert.equal(u.uDistanceFogDensity.value,.017);assert.equal(f.flowerMesh.material.uniforms.uDistanceFogColor,u.uDistanceFogColor);assert.equal(f.canopy.material.uniforms.uDistanceFogDensity,u.uDistanceFogDensity);f.dispose();
 });
+
+test('V142 fog tint validates atomically, preserves distance, sky and paint suspension',()=>{
+ const w={environment:{skyBaseColor:'#123456',spacePaintSuspended:true,terrain:{fogDistance:125}},revision:4};
+ assert.equal(terrainStyle(w.environment).fogColor,'#12284d');
+ assert.ok(setTerrainStyle(w,false,{fogColor:'#aabbcc'}).error);
+ assert.ok(setTerrainStyle(w,true,{fogColor:'red'}).error);assert.equal(w.revision,4);
+ const result=setTerrainStyle(w,true,{fogColor:'#AABBCC'});assert.equal(result.environment.terrain.fogColor,'#aabbcc');assert.equal(result.environment.terrain.fogDistance,125);assert.equal(result.environment.skyBaseColor,'#123456');assert.equal(result.environment.spacePaintSuspended,true);
+ const before={revision:4,serverTime:1,environment:{terrain:{fogDistance:125}}},after={revision:5,serverTime:2,environment:result.environment};
+ assert.equal(applyWorldPatch(before,createWorldPatch(before,after)).environment.terrain.fogColor,'#aabbcc');
+ const scene=new THREE.Scene(),f=new GrassField(scene,{mobile:true,count:20}),fog=new THREE.FogExp2('#aabbcc',.017);f.setDistanceFog(fog);
+ const u=f.mesh.material.uniforms;assert.equal(u.uDistanceFogColor.value.getHexString(THREE.LinearSRGBColorSpace),'aabbcc');assert.equal(f.flowerMesh.material.uniforms.uDistanceFogColor,u.uDistanceFogColor);f.dispose();
+});

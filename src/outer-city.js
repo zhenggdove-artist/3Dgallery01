@@ -1103,14 +1103,15 @@ export class OuterCity{
    if(!effect.staticRubble||!effect.worldBounds)continue;
    const visible=frustum.intersectsBox(effect.worldBounds);
    effect.root.visible=visible;
-   if(visible){effect.lastVisibleAt=now;effect.gpuReleased=false;continue;}
+   if(visible){effect.lastVisibleAt=now;if(effect.gpuReleased)this.memoryManager?.recordWake('rubble');effect.gpuReleased=false;continue;}
    // Full original geometry remains in CPU memory; release only GPU buffers
    // of distant, off-camera static rubble. Three reuploads the identical
    // geometry automatically upon its next render. Never remove a ruin.
    if(!effect.gpuReleased&&now-effect.lastVisibleAt>30000&&effect.worldBounds.distanceToPoint(camera.position)>75){
-    const geometries=new Set(),materials=new Set();
-    effect.root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);});
-    geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());effect.gpuReleased=true;
+    const retire=()=>{const geometries=new Set(),materials=new Set();
+     effect.root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);});
+     geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());effect.gpuReleased=true;
+    };if(this.memoryManager)this.memoryManager.retire('rubble',retire);else retire();
    }
   }
  }

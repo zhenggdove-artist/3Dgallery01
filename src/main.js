@@ -1,5 +1,5 @@
 import {PickupScheduler} from './auto-pickup.js';
-import {residencyView} from './render-residency.js';
+import {residencyView,RenderMemoryManager} from './render-residency.js';
 import {terrainStyle,TERRAIN_DEFAULTS} from './shared/terrain-style.js';
 import {bindWantedList,syncWantedButton} from './wanted-list.js';
 import {tunedEquipment,weaponManaQuote,restorativeCooldown,equipmentTuning} from './shared/equipment-tuning.js';
@@ -891,18 +891,18 @@ ui.addEventListener('sky-color-save',async event=>{
 });
 ui.addEventListener('panel',event=>{if(ui.panelName!=='sky-color'&&skyColorPreview!==null){skyColorPreview=null;applySkyColor(savedSkyColor());}});
 let terrainPreview=null,terrainSaving=false,appliedTerrainKey='';
-let localFogDensity=.0008,activeFogDistance=TERRAIN_DEFAULTS.fogDistance;
-function applyDistanceFog(distance){
- activeFogDistance=distance;
+let localFogDensity=.0008,activeFogDistance=TERRAIN_DEFAULTS.fogDistance,activeFogColor=TERRAIN_DEFAULTS.fogColor;
+function applyDistanceFog(distance,color=activeFogColor){
+ activeFogDistance=distance;activeFogColor=color;
  if(camera.far!==distance){camera.far=distance;camera.updateProjectionMatrix();}
- // FogExp2 remains the existing atmospheric model and retains its original color.
+ // Keep existing atmospheric density and clipping; only edit the requested tint.
  // At the clip plane less than 0.1% of the unfogged scene remains.
- if(scene.fog){scene.fog.density=Math.max(localFogDensity,Math.sqrt(Math.log(1000))/distance);arena.grass?.setDistanceFog(scene.fog);}
+ if(scene.fog){scene.fog.color.set(activeFogColor);scene.fog.density=Math.max(localFogDensity,Math.sqrt(Math.log(1000))/distance);arena.grass?.setDistanceFog(scene.fog);}
 }
 const savedTerrain=()=>terrainStyle(world?.environment);
 function applyTerrain(style){
  if(!arena.grass)return;const key=JSON.stringify(style);if(key===appliedTerrainKey)return;appliedTerrainKey=key;
- arena.grass.setTerrainStyle({terrain:style});applyDistanceFog(style.fogDistance);
+ arena.grass.setTerrainStyle({terrain:style});applyDistanceFog(style.fogDistance,style.fogColor);
  const ground=scene.userData.terrainGround?.material;
  if(ground){ground.color.set(style.floorColor);if(style.floorColor===TERRAIN_DEFAULTS.floorColor)ground.emissive.set('#0c302b');else ground.emissive.set(style.floorColor).multiplyScalar(.18);}
 }
@@ -1311,18 +1311,19 @@ let lastFrameFaultAt=0,lastRenderFaultAt=0,contextLost=false,lastHealthSampleAt=
 const runtimeHealthKey='temple-render-health-v032';
 const gpuFrames=new GPUFrameQueue(renderer.getContext(),coarse,2);
 let previousRuntimeHealth=null;try{previousRuntimeHealth=JSON.parse(localStorage.getItem(runtimeHealthKey)||localStorage.getItem('temple-render-health-v029')||localStorage.getItem('temple-render-health-v024')||localStorage.getItem('temple-render-health-v023')||'null');}catch{}
+const renderMemory=new RenderMemoryManager({mobile:coarse});
 const renderDiagnostics=window.templeRenderDiagnostics={contextLosses:0,contextRestores:0,renderFaults:0,lastError:null,previousRuntimeHealth};
 function recordRenderHealth(now){
  if(now-lastHealthSampleAt<5000)return;lastHealthSampleAt=now;
  const vfx=arena.presentation.vfx,poolSize=map=>Array.from(map.values()).reduce((n,v)=>n+v.length,0);
- const sample={version:'V141',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,points:renderer.info.render.points,bufferWidth:renderer.domElement.width,bufferHeight:renderer.domElement.height,grassInstances:arena.grass?.visibilityPairs?.map(([mesh])=>mesh.geometry.instanceCount)||[],fogDistance:camera.far,cityIndices:arena.outerCity?.visibilityBatches?.map(b=>b.geometry.drawRange.count)||[],programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools),cityRuins:arena.outerCity?.chunks.size||0,spacePaint:wallPainter.space.residencyStats(),wallPaintSurfaces:arena.outerCity?.wallPaint?.surfaces.size||0,discPaintSurfaces:arena.displayPlatforms?.paint.slots.size||0,artworkCount:arena.artworks.size,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
- renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
- // Each pool only releases its own inactive surplus, even if another weapon is busy.
- vfx.trimIdlePools(now);
+ const sample={version:'V142',time:Date.now(),fps:Math.round(fps),gpuPending:gpuFrames.pending.length,gpuPeak:gpuFrames.peak,gpuSkipped:gpuFrames.skipped,gpuFenceFailures:gpuFrames.failures,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,points:renderer.info.render.points,bufferWidth:renderer.domElement.width,bufferHeight:renderer.domElement.height,grassInstances:arena.grass?.visibilityPairs?.map(([mesh])=>mesh.geometry.instanceCount)||[],fogDistance:camera.far,cityIndices:arena.outerCity?.visibilityBatches?.map(b=>b.geometry.drawRange.count)||[],programs:renderer.info.programs?.length||0,activeVfx:vfx.active.length+vfx.numberedEffects.active.length+vfx.particleSkills.active.length+vfx.signatureEffects.active.length,pooledVfx:poolSize(vfx.pools)+poolSize(vfx.numberedEffects.prewarmed)+vfx.particleSkills.pooledCount+poolSize(vfx.orbPools)+vfx.signatureEffects.recycledCount,cityRuins:arena.outerCity?.chunks.size||0,spacePaint:wallPainter.space.residencyStats(),wallPaintSurfaces:arena.outerCity?.wallPaint?.surfaces.size||0,discPaintSurfaces:arena.displayPlatforms?.paint.slots.size||0,artworkCount:arena.artworks.size,contextLosses:renderDiagnostics.contextLosses,renderFaults:renderDiagnostics.renderFaults};
+ // Use one shared maintenance budget across scene owners and idle VFX.
+ renderMemory.sweepPools(vfx.idlePoolGroups(),now);
+ sample.memoryManager=renderMemory.snapshot();renderDiagnostics.latest=sample;try{localStorage.setItem(runtimeHealthKey,JSON.stringify(sample));}catch{}
 }
-canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();contextLost=true;gpuFrames.reset();renderDiagnostics.contextLosses++;renderDiagnostics.lastError='WebGL context lost';try{localStorage.setItem(runtimeHealthKey,JSON.stringify({...renderDiagnostics.latest,version:'V141',time:Date.now(),contextLosses:renderDiagnostics.contextLosses,lastError:renderDiagnostics.lastError}));}catch{}});
+canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();contextLost=true;gpuFrames.reset();renderDiagnostics.contextLosses++;renderDiagnostics.lastError='WebGL context lost';try{localStorage.setItem(runtimeHealthKey,JSON.stringify({...renderDiagnostics.latest,version:'V142',time:Date.now(),contextLosses:renderDiagnostics.contextLosses,lastError:renderDiagnostics.lastError}));}catch{}});
 canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;gpuFrames.reset();wallPainter.space.restoreSurfaceTextures();renderDiagnostics.contextRestores++;last=performance.now();});
-function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.10,elapsed/1000);last=now;if(!assetsReady||!joined||document.hidden||contextLost)return;const started=performance.now();
+function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.min(.10,elapsed/1000);last=now;if(!assetsReady||!joined||document.hidden||contextLost)return;const started=performance.now();renderMemory.beginFrame();if(arena.outerCity)arena.outerCity.memoryManager=renderMemory;
  // An unexpected model/animation exception cannot prevent the render pass.
  // Individual effects are also contained at source; this is a final guard.
  if(now>externalUntil)try{update(dt,now/1000,Math.min(.24,elapsed/1000));if(wallPainter.mode3D)wallPainter.updateGuide();}catch(error){
@@ -1335,7 +1336,7 @@ function frame(now){requestAnimationFrame(frame);const elapsed=now-last,dt=Math.
   if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}
   try{recordRenderHealth(now);}catch{}return;
  }
- refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);const shake=gun.mode===2?0:Math.max(0,(screenShakeUntil-performance.now())/350),savedPosition=shake>0?camera.position.clone():null;if(shake>0){camera.position.x+=(Math.random()-.5)*shake*.16;camera.position.y+=(Math.random()-.5)*shake*.10;}try{arena.grass?.prepareVisibility(camera);arena.outerCity?.prepareVisibility(camera);const residency=residencyView(camera);if(world?.environment?.spacePaintSuspended!==true)wallPainter.space.updateResidency(residency,now);arena.outerCity?.wallPaint?.updateResidency(residency,now);arena.displayPlatforms?.paint.updateResidency(residency,now);arena.updateImageResidency(residency,now);vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view));arena.presentation.vfx.markPresented();for(const entry of window.templeAttackInputDiagnostics||[])if(entry.submittedAt===null)entry.submittedAt=performance.now();}catch(error){renderDiagnostics.renderFaults++;renderDiagnostics.lastError=String(error?.message||error);if(now-lastRenderFaultAt>2000){lastRenderFaultAt=now;console.error('Render fault',error);}}finally{if(savedPosition)camera.position.copy(savedPosition);gpuFrames.submitted();}const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}try{recordRenderHealth(now);}catch(error){console.warn('Render health sample failed',error);}}
+ refreshEquipmentPortrait();vhs.setDizzy(world?.profile?.effects?.dazzle?.until>Date.now()?1:0);const shake=gun.mode===2?0:Math.max(0,(screenShakeUntil-performance.now())/350),savedPosition=shake>0?camera.position.clone():null;if(shake>0){camera.position.x+=(Math.random()-.5)*shake*.16;camera.position.y+=(Math.random()-.5)*shake*.10;}try{arena.grass?.prepareVisibility(camera);arena.outerCity?.prepareVisibility(camera);const residency=residencyView(camera);if(world?.environment?.spacePaintSuspended!==true)wallPainter.space.updateResidency(residency,now,renderMemory);arena.outerCity?.wallPaint?.updateResidency(residency,now,renderMemory);arena.displayPlatforms?.paint.updateResidency(residency,now,renderMemory);arena.updateImageResidency(residency,now,renderMemory);vhs.render(scene,camera,performance.now()/1000,(gl,world,view)=>arena.presentation.vfx.numberedEffects.render(gl,world,view));arena.presentation.vfx.markPresented();for(const entry of window.templeAttackInputDiagnostics||[])if(entry.submittedAt===null)entry.submittedAt=performance.now();}catch(error){renderDiagnostics.renderFaults++;renderDiagnostics.lastError=String(error?.message||error);if(now-lastRenderFaultAt>2000){lastRenderFaultAt=now;console.error('Render fault',error);}}finally{if(savedPosition)camera.position.copy(savedPosition);gpuFrames.submitted();}const ended=performance.now();for(const [key,value] of [['frame',elapsed],['logic',updated-started],['submit',ended-updated]]){performanceSamples[key].push(value);if(performanceSamples[key].length>240)performanceSamples[key].shift();}frameSamples.push(elapsed);if(frameSamples.length>180)frameSamples.shift();fpsFrames++;if(now-fpsAt>1000){fps=fpsFrames*1000/(now-fpsAt);fpsFrames=0;fpsAt=now;}try{recordRenderHealth(now);}catch(error){console.warn('Render health sample failed',error);}}
 requestAnimationFrame(frame);
 
 function playAttackAudio(item,gain,ultimate,local){audio.playWeapon(item,gain,ultimate);if(local&&(item?.firstPerson||item?.id==='calico-cat'))gun.kick(item);}
