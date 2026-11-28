@@ -1,3 +1,4 @@
+import {viewScale} from './gm-mobile-preview.js';
 // Touch identifiers and PointerEvent IDs are different namespaces. On WebKit
 // use the native TouchList as the authority for the joystick, independently
 // of the pointer capture used by the attack, jump and camera controls.
@@ -18,8 +19,8 @@ export function bindMobileStick(stick,{enabled,write,win=window,doc=document,nat
  }
  function move(x,y){
   if(!enabled()||!Number.isFinite(x)||!Number.isFinite(y)){reset();return;}
-  const r=stick.getBoundingClientRect(),dx=x-r.left-r.width/2,dy=y-r.top-r.height/2;
-  const radius=Math.max(20,(r.width-knob.offsetWidth)/2-4);
+  const r=stick.getBoundingClientRect(),scale=viewScale(),dx=(x-r.left-r.width/2)/scale,dy=(y-r.top-r.height/2)/scale;
+  const radius=Math.max(20,(r.width/scale-knob.offsetWidth)/2-4);
   const f=radius/Math.max(radius,Math.hypot(dx,dy));
   write(dx*f/radius,dy*f/radius);knob.style.transform='translate('+dx*f+'px,'+dy*f+'px)';
  }

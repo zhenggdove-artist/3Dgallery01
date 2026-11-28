@@ -1,4 +1,4 @@
-import {previewLocalRect} from './gm-mobile-preview.js';
+import {previewLocalRect,viewScale} from './gm-mobile-preview.js';
 // Touch-native BAG gestures: a short swipe scrolls naturally; a 280ms
 // stationary press lifts an item for vertical/horizontal drag. Scrolling and
 // drop target detection use the ACTUAL #bag-items viewport, not #panel-content.
@@ -89,8 +89,8 @@ export function bindBagDrag(ui){
   }
   e.preventDefault();
   if(h.ghost){
-   h.ghost.style.left=h.rect.left+h.x-h.sx+'px';
-   h.ghost.style.top=h.rect.top+h.y-h.sy+'px';
+   h.ghost.style.left=h.rect.left+(h.x-h.sx)/viewScale()+'px';
+   h.ghost.style.top=h.rect.top+(h.y-h.sy)/viewScale()+'px';
   }
  };
  const end=e=>{

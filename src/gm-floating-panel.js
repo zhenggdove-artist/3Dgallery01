@@ -1,4 +1,4 @@
-import {viewVisualViewport,gmMobilePreviewActive} from './gm-mobile-preview.js';
+import {viewVisualViewport,gmMobilePreviewActive,viewScale} from './gm-mobile-preview.js';
 // Movable, resizable GM artwork inspector. Mobile starts as a compact
 // floating tool window instead of the legacy full-viewport modal.
 const STORAGE_KEY='temple-gm-artwork-floating-v1';
@@ -134,7 +134,7 @@ export class FloatingGmEditorPanel{
  move(e){
   const p=this.pointer;if(!p||p.id!==e.pointerId)return;
   e.preventDefault();e.stopPropagation();
-  const dx=e.clientX-p.x,dy=e.clientY-p.y;
+  const dx=(e.clientX-p.x)/viewScale(),dy=(e.clientY-p.y)/viewScale();
   const candidate={...p.layout};
   if(p.type==='drag'){candidate.x+=dx;candidate.y+=dy;}
   else{

@@ -1,4 +1,4 @@
-import {viewWidth,viewHeight} from './gm-mobile-preview.js';
+import {viewWidth,viewHeight,viewScale} from './gm-mobile-preview.js';
 import * as THREE from 'three';
 import {bindMobileStick} from './mobile-stick.js';
 import {ARENA_RADIUS,PLAYER_SPAWNS} from './shared/arena.js';
@@ -30,8 +30,8 @@ export class PlayerController{
       const dx=Number(e.movementX)||(!last?0:e.clientX-last.x);
       const dy=Number(e.movementY)||(!last?0:e.clientY-last.y);
       this.channelMouseLast={x:e.clientX,y:e.clientY};
-      this.yaw-=dx/viewWidth()*4;
-      this.pitch=THREE.MathUtils.clamp(this.pitch+dy/viewHeight()*2,-1.15,1.4);
+      this.yaw-=dx/viewScale()/viewWidth()*4;
+      this.pitch=THREE.MathUtils.clamp(this.pitch+dy/viewScale()/viewHeight()*2,-1.15,1.4);
      },true);
     // A gesture belongs to the pointers that actually started on the canvas.
     // Losing capture or lifting either finger must retire the pinch immediately;
@@ -73,8 +73,8 @@ export class PlayerController{
       // One active touch is ALWAYS an orbit, never a zoom.
       if(this.pointers.size!==1||this.drag?.id!==e.pointerId)return;
       if(this.channelAiming&&e.pointerType==='mouse')return;
-      this.yaw=this.drag.yaw-(e.clientX-this.drag.x)/viewWidth()*4;
-      this.pitch=THREE.MathUtils.clamp(this.drag.pitch+(e.clientY-this.drag.y)/viewHeight()*2,-1.15,1.4);
+      this.yaw=this.drag.yaw-(e.clientX-this.drag.x)/viewScale()/viewWidth()*4;
+      this.pitch=THREE.MathUtils.clamp(this.drag.pitch+(e.clientY-this.drag.y)/viewScale()/viewHeight()*2,-1.15,1.4);
     });
     const release=e=>{
       if(!this.pointers.delete(e.pointerId))return;
@@ -333,8 +333,8 @@ export class PlayerController{
   // are disabled by TransformControls / artwork or platform edit modes.
   orbitEditCamera(deltaX,deltaY){
    if(!Number.isFinite(deltaX)||!Number.isFinite(deltaY))return;
-   this.wantedArtworkView=null;this.yaw-=deltaX/viewWidth()*4;
-   this.pitch=THREE.MathUtils.clamp(this.pitch+deltaY/viewHeight()*2,-1.15,1.4);
+   this.wantedArtworkView=null;this.yaw-=deltaX/viewScale()/viewWidth()*4;
+   this.pitch=THREE.MathUtils.clamp(this.pitch+deltaY/viewScale()/viewHeight()*2,-1.15,1.4);
    this.updateCamera(1,true);
   }
   frameWantedArtwork(bounds,heading){

@@ -1,4 +1,4 @@
-import {viewWidth,viewHeight,gmMobilePreviewActive,viewClientLeft,viewClientTop} from './gm-mobile-preview.js';
+import {viewWidth,viewHeight,gmMobilePreviewActive,viewClientX,viewClientY,viewScale} from './gm-mobile-preview.js';
 import * as THREE from 'three';
 import {weaponMuzzle} from './weapon-muzzle.js';
 import {SNIPER_RANGE} from './shared/combat-balance.js';
@@ -28,14 +28,14 @@ export class GunController {
     // Capture before canvas firing handlers: only a TOUCH on the black mask
     // dismisses zoom. Mouse buttons (including pointer lock) always fire.
     addEventListener('pointerdown',e=>{
-      if(e.target.closest?.('.sniper-fire-button')||this.mode!==2||e.button>0||!shouldDismissScopePointer(e.pointerType,e.clientX-viewClientLeft(),e.clientY-viewClientTop(),viewWidth(),viewHeight()))return;
+      if(e.target.closest?.('.sniper-fire-button')||this.mode!==2||e.button>0||!shouldDismissScopePointer(e.pointerType,viewClientX(e.clientX),viewClientY(e.clientY),viewWidth(),viewHeight()))return;
       e.preventDefault();e.stopImmediatePropagation();this.end();
     },true);
     // Right mouse button cycles shoulder/scope without firing.
     addEventListener('contextmenu',e=>{if(weapon()?.firstPerson&&controller()?.enabled&&!e.target.closest?.('input,textarea,[contenteditable="true"]'))e.preventDefault();},true);
     addEventListener('pointerdown',e=>{if(e.button!==2||!weapon()?.firstPerson||!controller()?.enabled||controller()?.holdingArt||ui.panelName||e.target.closest?.('button,input,textarea,select,a,[contenteditable="true"],#panel,#entry,#chat-hud'))return;e.preventDefault();e.stopImmediatePropagation();this.cycle();},true);
     addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)||ui.panelName)return;if(e.code==='KeyV'&&weapon()?.firstPerson&&!e.repeat){e.preventDefault();e.stopImmediatePropagation();this.cycle();}if(e.code==='Escape'&&this.mode){this.end();}},true);
-    addEventListener('pointermove',e=>{if(!this.mode||controller()?.status?.freeze||(e.target!==canvas&&document.pointerLockElement!==canvas))return;e.stopImmediatePropagation();const c=controller(),s=.002*(this.mode===2?.3:1);const previous=this.lookPointer?.id===e.pointerId?this.lookPointer:null,dx=e.pointerType==='touch'?(previous?e.clientX-previous.x:0):e.movementX,dy=e.pointerType==='touch'?(previous?e.clientY-previous.y:0):e.movementY;if(e.pointerType==='touch')this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};c.yaw-=dx*s;c.pitch=THREE.MathUtils.clamp(c.pitch+dy*s,-1.1,1.2);},true);
+    addEventListener('pointermove',e=>{if(!this.mode||controller()?.status?.freeze||(e.target!==canvas&&document.pointerLockElement!==canvas))return;e.stopImmediatePropagation();const c=controller(),s=.002*(this.mode===2?.3:1);const previous=this.lookPointer?.id===e.pointerId?this.lookPointer:null,dx=e.pointerType==='touch'?(previous?e.clientX-previous.x:0):e.movementX,dy=e.pointerType==='touch'?(previous?e.clientY-previous.y:0):e.movementY;if(e.pointerType==='touch')this.lookPointer={id:e.pointerId,x:e.clientX,y:e.clientY};c.yaw-=dx*s/viewScale();c.pitch=THREE.MathUtils.clamp(c.pitch+dy*s/viewScale(),-1.1,1.2);},true);
     for(const type of ['pointerdown','pointerup','pointercancel'])addEventListener(type,e=>{
       const button=e.target.closest?.('#attack-button');if(!weapon()?.firstPerson||!controller()?.enabled||controller()?.holdingArt)return;
       // A/Q cycles CAMERA only. Direct canvas taps shoot while aiming;

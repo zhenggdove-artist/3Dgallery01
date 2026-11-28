@@ -1,4 +1,4 @@
-import {viewWidth,viewHeight,viewVisualViewport,gmMobilePreviewActive,previewLocalRect} from './gm-mobile-preview.js';
+import {viewWidth,viewHeight,viewVisualViewport,gmMobilePreviewActive,previewLocalRect,viewScale} from './gm-mobile-preview.js';
 // Three-step chat sizing: max -> two-line medium -> + only -> max.
 // Tap + to expand and − to reduce size; drag 5px or hold 180ms to move it. The expanded panel keeps its 1s hold.
 // The manual-position key is stable across game releases. Default placement
@@ -62,7 +62,7 @@ export function bindChatLayout(){
   if(!panel.offsetWidth||!panel.offsetHeight||panel.closest('[hidden]')||getComputedStyle(panel).visibility==='hidden')return;
   if(active?.mode==='move'||miniDrag?.mode==='move')return;
   if(document.body.classList.contains('chat-typing')){const b=bounds(),r=previewLocalRect(panel.getBoundingClientRect());panel.style.setProperty('left',limit(r.left,b.left,b.right)+'px','important');panel.style.setProperty('top',limit(r.top,b.top,b.bottom)+'px','important');panel.style.setProperty('bottom','auto','important');panel.style.right='auto';panel.style.transform='none';return;}
-  const anchor=manualPosition?manualAnchor:globalDefault;
+  const anchor=manualPosition?manualAnchor:gmMobilePreviewActive()&&size==='min'?{x:.94,y:.586}:globalDefault;
   // Fit must never change the selected size or search for a different HUD
   // position. The saved GM/user anchor (or the original CSS default) wins.
   // Obstacle avoidance remains available only during an explicit drag.
@@ -125,7 +125,7 @@ export function bindChatLayout(){
  });
  toggle.addEventListener('pointermove',e=>{
   if(!miniDrag||miniDrag.id!==e.pointerId)return;
-  const dx=e.clientX-miniDrag.x,dy=e.clientY-miniDrag.y;
+  const dx=(e.clientX-miniDrag.x)/viewScale(),dy=(e.clientY-miniDrag.y)/viewScale();
   if(Math.hypot(dx,dy)>=MINI_DRAG_SLOP)miniDrag.moved=true;
   if(!miniDrag.expanded&&miniDrag.mode==='pending'&&Math.hypot(dx,dy)>=MINI_DRAG_SLOP){
    clearTimeout(miniTimer);miniDrag.mode='move';panel.classList.add('chat-dragging');
@@ -160,7 +160,7 @@ export function bindChatLayout(){
   panel.addEventListener('touchmove',e=>{
    if(!active)return;
    const p=[...e.changedTouches].find(v=>v.identifier===active.id);if(!p)return;
-   const dx=p.clientX-active.x,dy=p.clientY-active.y;
+   const dx=(p.clientX-active.x)/viewScale(),dy=(p.clientY-active.y)/viewScale();
    if(active.mode==='pending'){
     if(Math.hypot(dx,dy)>11){clearTimeout(timer);active=null;}return;
    }
@@ -191,7 +191,7 @@ export function bindChatLayout(){
   });
   panel.addEventListener('pointermove',e=>{
    if(!active||active.id!==e.pointerId)return;
-   const dx=e.clientX-active.x,dy=e.clientY-active.y;
+   const dx=(e.clientX-active.x)/viewScale(),dy=(e.clientY-active.y)/viewScale();
    if(active.mode==='move'){
     e.preventDefault();
     if(relocate(active.left+dx,active.top+dy))manualPosition=true;

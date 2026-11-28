@@ -1,3 +1,4 @@
+import {viewScale,viewClientX,viewClientY,previewLocalRect} from './gm-mobile-preview.js';
 import {renderPaintedWing} from './reletter/painted-wing-art.js';
 import {normalizePaintedWing,wingContours,MAX_WING_CONTOURS} from './shared/custom-wings.js';
 
@@ -142,7 +143,7 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
   canvas.style.cursor=tool==='pan'?'move':tool==='scale'?'default':'crosshair';
   if(tool==='scale'&&hasContour()){
    const b=wingBounds(design),w=canvas.width,h=canvas.height,r=canvas.getBoundingClientRect();
-   const rx=6*w/Math.max(1,r.width),ry=6*h/Math.max(1,r.height);
+   const rx=6*w/Math.max(1,r.width/viewScale()),ry=6*h/Math.max(1,r.height/viewScale());
    ctx.save();ctx.strokeStyle='#087df5';ctx.fillStyle='#fff';ctx.lineWidth=2*w/Math.max(1,r.width);
    ctx.strokeRect(b.left*w,b.top*h,(b.right-b.left)*w,(b.bottom-b.top)*h);
    for(const q of wingHandles(b)){ctx.fillRect(q.x*w-rx,q.y*h-ry,2*rx,2*ry);ctx.strokeRect(q.x*w-rx,q.y*h-ry,2*rx,2*ry);}
@@ -235,7 +236,7 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
  // No predefined shapes: freehand vertices are the authoritative silhouette.
  const start=e=>{
   if(pointerId!==null)return;pointerId=e.pointerId;try{checker.setPointerCapture(e.pointerId);}catch{};strokeBefore=artState();
-  if(tool==='pan'){active={start:[e.clientX,e.clientY],pan:[...pan]};return;}
+  if(tool==='pan'){active={start:[viewClientX(e.clientX),viewClientY(e.clientY)],pan:[...pan]};return;}
   if(tool==='scale'){const r=canvas.getBoundingClientRect(),point=viewPoint(e),b=wingBounds(design);const q=wingHandles(b).map(h=>({...h,dist:Math.hypot((h.x-point[0])*r.width,(h.y-point[1])*r.height)})).sort((a,b)=>a.dist-b.dist)[0];if(!q||q.dist>22)return;snapshot();active={tool,handle:q,bounds:b,original:artState(),start:point};return;}
   if(!hasContour()&&tool!=='outline'){hint();return;}
   if(tool==='outline'&&design.contours.length>=MAX_WING_CONTOURS){report('輪廓上限 24 個');return;}
@@ -249,19 +250,19 @@ export function mountWingPainter(ui,{personal=false,preview=false}={}){
  const cancelStroke=()=>{if(active&&strokeBefore&&tool!=='pan'){Object.assign(design,strokeBefore);history.pop();}active=null;pointerId=null;strokeBefore=null;};
  checker.addEventListener('pointerdown',e=>{
   e.preventDefault();if(e.pointerType==='touch'){
-   touches.set(e.pointerId,[e.clientX,e.clientY]);try{checker.setPointerCapture(e.pointerId);}catch{}
+   touches.set(e.pointerId,[viewClientX(e.clientX),viewClientY(e.clientY)]);try{checker.setPointerCapture(e.pointerId);}catch{}
    if(touches.size>=2){cancelStroke();pinch={...pair(),zoom,pan:[...pan]};gestureConsumed=true;draw();return;}
    if(gestureConsumed)return;
   }
   start(e);
  });
  checker.addEventListener('pointermove',e=>{
-  if(touches.has(e.pointerId)){touches.set(e.pointerId,[e.clientX,e.clientY]);
-   if(pinch&&touches.size>=2){const r=checker.getBoundingClientRect(),v=pair(),next=pinchWingView(pinch,v.mid,v.distance,[r.left+r.width/2,r.top+r.height/2]);zoom=next.zoom;pan=next.pan;draw();return;}
+  if(touches.has(e.pointerId)){touches.set(e.pointerId,[viewClientX(e.clientX),viewClientY(e.clientY)]);
+   if(pinch&&touches.size>=2){const r=previewLocalRect(checker.getBoundingClientRect()),v=pair(),next=pinchWingView(pinch,v.mid,v.distance,[r.left+r.width/2,r.top+r.height/2]);zoom=next.zoom;pan=next.pan;draw();return;}
    if(gestureConsumed)return;
   }
   if(e.pointerId!==pointerId||!active)return;
-  if(tool==='pan'){pan=[active.pan[0]+e.clientX-active.start[0],active.pan[1]+e.clientY-active.start[1]];}
+  if(tool==='pan'){pan=[active.pan[0]+viewClientX(e.clientX)-active.start[0],active.pan[1]+viewClientY(e.clientY)-active.start[1]];}
   else if(active.tool==='scale'){Object.assign(design,wingScaleFromDrag(active.original,active.bounds,active.handle,active.start,viewPoint(e)));}
   else{
    const point=imagePoint(e),last=active.points.at(-1);

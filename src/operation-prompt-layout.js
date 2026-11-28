@@ -1,4 +1,4 @@
-import {viewWidth,viewHeight,gmMobilePreviewActive,previewLocalRect} from './gm-mobile-preview.js';
+import {viewWidth,viewHeight,gmMobilePreviewActive,previewLocalRect,viewScale} from './gm-mobile-preview.js';
 import {operationPromptLayout,promptPlacement,PROMPT_LIMITS} from './shared/operation-prompt.js';
 
 const $=id=>document.getElementById(id);
@@ -58,7 +58,7 @@ export class OperationPromptLayout{
   });
   sample.addEventListener('pointermove',e=>{
    if(!drag||drag.id!==e.pointerId||busy)return;
-   e.preventDefault();e.stopPropagation();const p=load(selected),dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+   e.preventDefault();e.stopPropagation();const p=load(selected),dx=(e.clientX-drag.x)/viewScale(),dy=(e.clientY-drag.y)/viewScale();
    if(drag.resize)p.scale=clamp(drag.layout.scale+(dx+dy*.5)/drag.width,...PROMPT_LIMITS.scale);
    else{p.x=clamp(drag.layout.x+dx/viewWidth(),...PROMPT_LIMITS.x);p.gap=clamp(drag.layout.gap-dy/viewHeight(),...PROMPT_LIMITS.gap);}
    render();

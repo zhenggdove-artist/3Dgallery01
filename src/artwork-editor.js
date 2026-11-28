@@ -1,4 +1,4 @@
-import {previewLocalRect} from './gm-mobile-preview.js';
+import {previewLocalRect,viewScale} from './gm-mobile-preview.js';
 import * as THREE from 'three';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
 import {artworkDefinitions,artworkAppearanceDefaults,isArtwork22} from './shared/artwork-library.js';
@@ -226,7 +226,7 @@ export class ArtworkEditor{
    if(!drag||drag.pointer!==e.pointerId)return;
    e.preventDefault();e.stopPropagation();
    const [x,y]=handleCoordinates[drag.index],s=drag.style;
-   const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+   const dx=(e.clientX-drag.x)/viewScale(),dy=(e.clientY-drag.y)/viewScale();
    let width=s.labelWidth??3.5,height=s.labelHeight??.492;
    const oldWidth=width,oldHeight=height;
    if(x&&y){
