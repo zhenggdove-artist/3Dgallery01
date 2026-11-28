@@ -4,14 +4,16 @@ import {TERRAIN_DEFAULTS,terrainStyle,terrainColorDelta} from './shared/terrain-
 
 // Instanced GPU vegetation; shared wind and player positions, no per-plant objects.
 // All meshes and wind/trample rules are generated in JS; no external assets.
-export function grassPositions(count=65000,seed=17331,inner=11,outer=CITY_INNER_RADIUS-2){
+export function grassPositions(count=97500,seed=17331,inner=11,outer=CITY_INNER_RADIUS-2){
  const points=new Float32Array(count*2),heights=new Float32Array(count),angles=new Float32Array(count),phases=new Float32Array(count),shades=new Float32Array(count);
  let state=seed>>>0;const rand=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
  for(let i=0;i<count;i++){
   const r=Math.sqrt(inner*inner+(outer*outer-inner*inner)*rand()),a=rand()*Math.PI*2;
   points[i*2]=Math.cos(a)*r;points[i*2+1]=Math.sin(a)*r;
   const patch=.5+.5*Math.sin(points[i*2]*.19+Math.sin(points[i*2+1]*.23)*1.4);
-  heights[i]=(.48+rand()*.82)*(.78+.22*patch);angles[i]=rand()*Math.PI*2;
+  const h=rand();
+  // Short groundcover, ordinary meadow leaves and occasional tall clumps.
+  heights[i]=(.24+1.66*Math.pow(h,1.45))*(.76+.24*patch);angles[i]=rand()*Math.PI*2;
   phases[i]=rand()*100;shades[i]=rand();
  }
  return {points,heights,angles,phases,shades};
@@ -21,16 +23,18 @@ function bladeGeometry({segments=3,blades=4}={}){
  const positions=[],indices=[],uvs=[];
  for(let j=0;j<blades;j++){
   const phi=j*2.39996,cs=Math.cos(phi),sn=Math.sin(phi);
-  const lean=.26+.16*Math.sin(j*4.17),yScale=.73+(j%3)*.16;
+  const lean=.19+.23*(.5+.5*Math.sin(j*4.17)),yScale=[.52,.79,1.05,.66][j%4];
+  const spread=.06+.07*(j%3);
   const base=positions.length/3;
   for(let i=0;i<=segments;i++){
-   const t=i/segments,w=(1-t)**1.12*(.075+.025*Math.cos(j*2.7))+.001,drift=lean*t*t;
+   const t=i/segments,w=(1-t)**1.07*(.12+.045*Math.cos(j*2.7)),drift=spread+lean*t*t;
+   if(i===segments){positions.push(-drift*sn,t*yScale,drift*cs);uvs.push(.5,t);const b=base+(i-1)*2;indices.push(b,b+1,b+2);continue;}
    for(const side of [-1,1]){
     const x=side*w,z=drift;
     positions.push(x*cs-z*sn,t*yScale,x*sn+z*cs);
     uvs.push(side<0?0:1,t);
    }
-   if(i<segments){const b=base+i*2;indices.push(b,b+1,b+2,b+1,b+3,b+2);}
+   if(i>0){const b=base+(i-1)*2;indices.push(b,b+1,b+2,b+1,b+3,b+2);}
   }
  }
  const geo=new THREE.InstancedBufferGeometry();
@@ -41,8 +45,8 @@ function bladeGeometry({segments=3,blades=4}={}){
 }
 // Small individual wildflowers, with crossed stems, leaves, faceted petals and a raised centre.
 function flowerGeometry(){
- const positions=[],uvs=[];
- const tri=(part,a,b,c)=>{for(const v of [a,b,c]){positions.push(...v);uvs.push(part,0);}};
+ const positions=[],uvs=[],indices=[],vertices=new Map();
+ const tri=(part,a,b,c)=>{for(const v of [a,b,c]){const key=part+':'+v.join(',');let i=vertices.get(key);if(i===undefined){i=positions.length/3;vertices.set(key,i);positions.push(...v);uvs.push(part,0);}indices.push(i);}};
  for(let j=0;j<2;j++){const a=j*Math.PI/2,x=Math.cos(a)*.012,z=Math.sin(a)*.012;
   tri(0,[-x,0,-z],[x,0,z],[-x*.45,.86,-z*.45]);tri(0,[x,0,z],[x*.45,.86,z*.45],[-x*.45,.86,-z*.45]);
  }
@@ -55,7 +59,7 @@ function flowerGeometry(){
   tri(1,b,l,ridge);tri(1,l,tip,ridge);tri(1,tip,r,ridge);tri(1,r,b,ridge);
   const next=a+2*Math.PI/5;tri(2,[0,.911,0],[x*.036,.884,z*.036],[Math.cos(next)*.036,.884,Math.sin(next)*.036]);
  }
- const g=new THREE.InstancedBufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));return g;
+ const g=new THREE.InstancedBufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(indices);return g;
 }
 const vertex=`
 attribute vec2 aOffset;
@@ -89,7 +93,9 @@ void main(){
  for(int i=0;i<6;i++){
   if(float(i)>=uPlayerCount)break;
   vec2 push=aOffset-uPlayers[i].xz;
-  float dist=length(push);
+  float d2=dot(push,push);
+  if(d2>=uPushRadius*uPushRadius)continue;
+  float dist=sqrt(d2);
   float press=1.-smoothstep(.12,uPushRadius,dist);
   trample+=push/max(.15,dist)*press*1.05*uPushStrength;
   pressure=max(pressure,press);
@@ -133,7 +139,8 @@ void main(){
  else{tone=vShade<.3333?vec3(.83,.46,.08):vec3(.94,.78,.36);}
  gl_FragColor=vec4(clamp(tone,0.,1.),1.);
 }`;
-const GRASS_TILE=24,GRASS_BOUND_PAD=12;
+const GRASS_TILE=24,GRASS_BOUND_PAD=13;
+export const MEADOW_COUNTS=Object.freeze({mobile:37500,desktop:97500,outerMobile:110000,outerDesktop:250000});
 class GrassVisibility{
  constructor(geometry,seed,count){
   this.geometry=geometry;this.count=count;this.tileOf=new Uint16Array(count);
@@ -153,20 +160,38 @@ class GrassVisibility{
   }
   this.active=new Uint8Array(this.boxes.length);this.active.fill(1);
   this.next=new Uint8Array(this.boxes.length);
-  // Same six floats, same original order, one interleaved GPU upload.
-  // Pack the immutable seed once, not five independent array copies on turns.
+  // Group instances by spatial tile once. Within each tile the seed order is stable.
+  // Repacking on camera movement copies only contiguous visible tile spans.
   this.packed=new Float32Array(count*6);
-  for(let i=0;i<count;i++){const j=i*6;this.packed[j]=seed.points[i*2];this.packed[j+1]=seed.points[i*2+1];this.packed[j+2]=seed.heights[i];this.packed[j+3]=seed.angles[i];this.packed[j+4]=seed.phases[i];this.packed[j+5]=seed.shades[i];}
+  let offset=0;for(const tile of this.boxes){tile.start=offset;tile.cursor=offset;offset+=tile.count*6;}
+  for(let i=0;i<count;i++){const tile=this.boxes[this.tileOf[i]],j=tile.cursor;tile.cursor+=6;
+   this.packed[j]=seed.points[i*2];this.packed[j+1]=seed.points[i*2+1];this.packed[j+2]=seed.heights[i];this.packed[j+3]=seed.angles[i];this.packed[j+4]=seed.phases[i];this.packed[j+5]=seed.shades[i];}
+  for(const tile of this.boxes){tile.full=this.packed.subarray(tile.start,tile.cursor);tile.selected=tile.full;}
   this.buffer=new THREE.InstancedInterleavedBuffer(this.packed.slice(),6,1).setUsage(THREE.DynamicDrawUsage);
   for(const [name,size,offset] of [['aOffset',2,0],['aHeight',1,2],['aAngle',1,3],['aPhase',1,4],['aShade',1,5]])
    geometry.setAttribute(name,new THREE.InterleavedBufferAttribute(this.buffer,size,offset));
   geometry.instanceCount=count;this.density=1;
  }
- setDensity(density){if(density===this.density)return;this.density=density;this.repack();this.lastView=null;}
+ setDensity(density){
+  if(density===this.density)return;this.density=density;
+  // Density changes only on GM settings, not each camera frame.
+  // Keep the selection deterministic and nested as density increases.
+  if(density>0&&density<1&&!this.filtered)this.filtered=new Float32Array(this.packed.length);
+  for(const tile of this.boxes){
+   if(density===1){tile.selected=tile.full;continue;}
+   if(density===0){tile.selected=tile.full.subarray(0,0);continue;}
+   let n=tile.start;
+   for(let i=tile.start;i<tile.cursor;i+=6)if((Math.imul(i/6+1,0x9e3779b1)>>>0)/4294967296<density){
+    for(let k=0;k<6;k++)this.filtered[n+k]=this.packed[i+k];n+=6;
+   }
+   tile.selected=this.filtered.subarray(tile.start,n);
+  }
+  this.repack();this.lastView=null;
+ }
  prepare(frustum,length){
   let needed=0,uncovered=false;
   for(let i=0;i<this.boxes.length;i++){
-   const {box,count}=this.boxes[i];box.max.y=1.4*length+.10;
+   const {box,count}=this.boxes[i];box.max.y=2.1*length+.10;
    const visible=frustum.intersectsBox(box);this.next[i]=+visible;
    if(visible){needed+=count;uncovered||=!this.active[i];}
   }
@@ -176,19 +201,34 @@ class GrassVisibility{
   this.active.set(this.next);this.covered=needed;this.repack();
  }
  repack(){
-  const {geometry,packed,buffer,active,tileOf,count,density}=this,dst=buffer.array;
+  const {geometry,buffer,active,boxes}=this,dst=buffer.array;
   let n=0;
-  for(let i=0;i<count;i++)if(active[tileOf[i]]&&(density===1||(Math.imul(i+1,0x9e3779b1)>>>0)/4294967296<density)){
-   const j=i*6,k=n*6;
-   dst[k]=packed[j];dst[k+1]=packed[j+1];dst[k+2]=packed[j+2];dst[k+3]=packed[j+3];dst[k+4]=packed[j+4];dst[k+5]=packed[j+5];n++;
-  }
-  geometry.instanceCount=n;
-  if(n){buffer.clearUpdateRanges();buffer.addUpdateRange(0,n*6);buffer.needsUpdate=true;}
+  for(let i=0;i<boxes.length;i++)if(active[i]){const src=boxes[i].selected;dst.set(src,n);n+=src.length;}
+  geometry.instanceCount=n/6;
+  if(n){buffer.clearUpdateRanges();buffer.addUpdateRange(0,n);buffer.needsUpdate=true;}
  }
+}
+// One tileable mipmapped texture encodes soil granules, compacted earth,
+// small stones, moss and dry plant fibres. Generated once, never per frame.
+export function meadowGroundTexture(size=512){
+ const bytes=new Uint8Array(size*size*4);
+ const hash=(x,y)=>{let h=Math.imul(x+17,374761393)^Math.imul(y+91,668265263);h=Math.imul(h^(h>>>13),1274126177);return ((h^(h>>>16))>>>0)/4294967295;};
+ const noise=(u,v,n)=>{const x=u*n,y=v*n,ix=Math.floor(x),iy=Math.floor(y);let a=x-ix,b=y-iy;a=a*a*(3-2*a);b=b*b*(3-2*b);const m=n-1,h0=hash(ix&m,iy&m),h1=hash((ix+1)&m,iy&m),h2=hash(ix&m,(iy+1)&m),h3=hash((ix+1)&m,(iy+1)&m);return (h0+(h1-h0)*a)*(1-b)+(h2+(h3-h2)*a)*b;};
+ for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+  const u=x/size,v=y/size,n=noise(u,v,8),clod=noise(u,v,32),grain=noise(u,v,128),speck=hash(x,y);
+  const stone=grain>.68&&clod>.48?Math.min(1,(grain-.68)*4):0;
+  const fibre=noise(u,v,64)>.70&&speck>.78?.16:0;
+  const i=(y*size+x)*4;
+  bytes[i]=Math.round(255*Math.min(1,.25+.28*n+.23*clod+.15*grain+.075*speck+.15*stone));
+  bytes[i+1]=Math.round(255*Math.min(1,.18+.63*noise(u+.17,v+.31,16)+.15*grain));
+  bytes[i+2]=Math.round(255*Math.min(1,stone+fibre));
+  bytes[i+3]=255;
+ }
+ const t=new THREE.DataTexture(bytes,size,size,THREE.RGBAFormat);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.needsUpdate=true;return t;
 }
 export class GrassField{
  constructor(scene,{mobile=false,count}={}){
-  this.count=count??(mobile?25000:65000);
+  this.count=count??(mobile?MEADOW_COUNTS.mobile:MEADOW_COUNTS.desktop);
   const geo=bladeGeometry(),seed=grassPositions(this.count);
   this.innerVisibility=new GrassVisibility(geo,seed,this.count);
   const positions=Array.from({length:6},()=>new THREE.Vector3(10000,0,10000));
@@ -199,7 +239,7 @@ export class GrassField{
   // Match central grass with living wind/trample blades across every street,
   // backed by an unbroken green canopy, so the sandy ground never leaks out.
   // Instanced GPU rendering keeps all 432 collision buildings intact.
-  this.outerCount=mobile?85000:190000;
+  this.outerCount=mobile?MEADOW_COUNTS.outerMobile:MEADOW_COUNTS.outerDesktop;
   const cityGeo=bladeGeometry({segments:2,blades:3}),city=grassPositions(this.outerCount,73917,
    CITY_INNER_RADIUS-.5,CITY_OUTER_RADIUS+.5);
   this.outerVisibility=new GrassVisibility(cityGeo,city,this.outerCount);
@@ -213,41 +253,37 @@ export class GrassField{
   const flowerMaterial=new THREE.ShaderMaterial({vertexShader:vertex,fragmentShader:flowerFragment,side:THREE.DoubleSide,depthWrite:true,uniforms:flowerUniforms});
   const addFlowers=(count,seed,inner,outer)=>{
    const g=flowerGeometry(),samples=grassPositions(count,seed,inner,outer);
-   for(let i=0;i<count;i++){const shade=samples.shades[i];samples.heights[i]*=shade>=.3333&&shade<.6667?1.05:.7;}
+   for(let i=0;i<count;i++){const shade=samples.shades[i];samples.heights[i]=(.38+samples.heights[i]*.75)*(shade>=.3333&&shade<.6667?1.12:.82);}
    const visibility=new GrassVisibility(g,samples,count),mesh=new THREE.Mesh(g,flowerMaterial);
    mesh.name='Interactive instanced wildflowers';mesh.frustumCulled=false;scene.add(mesh);return {mesh,visibility};
   };
-  const innerFlowers=addFlowers(Math.ceil(this.count*.055),48119,11,CITY_INNER_RADIUS-2);
-  const outerFlowers=addFlowers(Math.ceil(this.outerCount*.055),84227,CITY_INNER_RADIUS-.5,CITY_OUTER_RADIUS+.5);
+  const innerFlowers=addFlowers(Math.ceil(this.count*.11),48119,11,CITY_INNER_RADIUS-2);
+  const outerFlowers=addFlowers(Math.ceil(this.outerCount*.11),84227,CITY_INNER_RADIUS-.5,CITY_OUTER_RADIUS+.5);
   this.flowerMesh=innerFlowers.mesh;this.flowerVisibility=innerFlowers.visibility;
   this.outerFlowerMesh=outerFlowers.mesh;this.outerFlowerVisibility=outerFlowers.visibility;
-  // Continuous fine-blade grass canopy covers every small gap between tufts;
-  // no bare underlying meadow plane is visible while walking or looking down.
+  // Continuous terrain underneath the 3D meadow, with naturally exposed soil.
+  this.groundTexture=meadowGroundTexture();
   this.canopy=new THREE.Mesh(new THREE.CircleGeometry(CITY_INNER_RADIUS,128),new THREE.ShaderMaterial({
-   uniforms:{uMeadowDelta:{value:new THREE.Vector3()},uFloorDelta:{value:new THREE.Vector3()}},
+   uniforms:{uMeadowDelta:{value:new THREE.Vector3()},uFloorDelta:{value:new THREE.Vector3()},uGround:{value:this.groundTexture},uSoilExposure:{value:.4}},
    vertexShader:`varying vec2 grassPoint;void main(){grassPoint=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-   fragmentShader:`precision mediump float;varying vec2 grassPoint;uniform vec3 uMeadowDelta;uniform vec3 uFloorDelta;
-    float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-    void main(){vec2 p=grassPoint*28.;vec2 g=floor(p);vec2 f=fract(p);
-     float n=hash(g),n2=hash(g+vec2(17.,47.));
-     float stripe=sin((f.x+n*.7)*28.+sin(f.y*17.+n*6.)*1.7);
-     float fine=sin((f.x*.64+f.y*.77+n2)*42.);
-     float patch=.5+.5*sin(grassPoint.x*.23+sin(grassPoint.y*.21)*1.6);
-     vec3 dark=vec3(.068,.15,.055),mid=vec3(.15,.29,.085),bright=vec3(.31,.45,.16);
-     // The visible ground between the textured grass strokes follows the
-     // floor color, independently of the grass canopy's own color.
-     dark+=uFloorDelta;
-     mid+=uMeadowDelta;bright+=uMeadowDelta;
-     vec3 col=mix(dark,mid,.20+.46*n+.20*patch);
-     col=mix(col,bright,clamp(stripe*.13+fine*.095+n2*.22,0.,.45));
+   fragmentShader:`precision highp float;varying vec2 grassPoint;uniform vec3 uMeadowDelta;uniform vec3 uFloorDelta;uniform sampler2D uGround;uniform float uSoilExposure;
+    void main(){
+     vec3 fine=texture2D(uGround,grassPoint*.48).rgb;
+     vec3 macro=texture2D(uGround,grassPoint*.047+vec2(.37,.19)).rgb;
+     float cover=smoothstep(.33,.67,mix(fine.g,macro.g,.62)+( .4-uSoilExposure)*.55);
+     vec3 soil=mix(vec3(.105,.074,.043),vec3(.43,.32,.20),fine.r);
+     soil=mix(soil,vec3(.48,.44,.35),fine.b*.65)+uFloorDelta;
+     vec3 moss=mix(vec3(.065,.12,.034),vec3(.24,.32,.10),fine.r)+uMeadowDelta;
+     vec3 col=mix(soil,moss,cover);
      gl_FragColor=vec4(clamp(col,0.,1.),1.);
     }`,side:THREE.DoubleSide,depthWrite:true}));
   this.canopy.name='Continuous dense grass canopy';
   this.canopy.rotation.x=-Math.PI/2;this.canopy.position.y=.006;scene.add(this.canopy);
   this.outerCanopy=new THREE.Mesh(new THREE.RingGeometry(CITY_INNER_RADIUS-.25,CITY_OUTER_RADIUS+1,192),this.canopy.material);
-  this.outerCanopy.name='Full city green grass canopy with no exposed earth';
+  this.outerCanopy.name='Full city meadow and textured natural soil';
   this.outerCanopy.rotation.x=-Math.PI/2;this.outerCanopy.position.y=.007;scene.add(this.outerCanopy);
   // The grass edge meets the full-sphere nebula directly. No ocean or horizon mesh.
+  this.visibilityPairs=[[this.mesh,this.innerVisibility],[this.outerMesh,this.outerVisibility],[this.flowerMesh,this.flowerVisibility],[this.outerFlowerMesh,this.outerFlowerVisibility]];
   this.setTerrainStyle({});
  }
  prepareVisibility(camera){
@@ -257,7 +293,7 @@ export class GrassField{
   const view=this.visibilityView??=new THREE.Matrix4(),local=this.visibilityLocal??=new THREE.Matrix4();
   const frustum=this.visibilityFrustum??=new THREE.Frustum();
   view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
-  for(const [mesh,data] of [[this.mesh,this.innerVisibility],[this.outerMesh,this.outerVisibility],[this.flowerMesh,this.flowerVisibility],[this.outerFlowerMesh,this.outerFlowerVisibility]]){
+  for(const [mesh,data] of this.visibilityPairs){
    if(data.density===0)continue;
    const length=mesh.material.uniforms.uGrassLength.value;
    mesh.updateWorldMatrix(true,false);
@@ -279,6 +315,7 @@ export class GrassField{
   grass.uGrassDelta.value.fromArray(terrainColorDelta(s.grassColor,TERRAIN_DEFAULTS.grassColor));
   canopy.uMeadowDelta.value.fromArray(terrainColorDelta(s.meadowColor,TERRAIN_DEFAULTS.meadowColor));
   canopy.uFloorDelta.value.fromArray(terrainColorDelta(s.floorColor,TERRAIN_DEFAULTS.floorColor));
+  canopy.uSoilExposure.value=s.soilExposure;
  }
  update(time,roots){
   const uniform=this.mesh.material.uniforms;uniform.uTime.value=time;
@@ -288,5 +325,5 @@ export class GrassField{
   }
   uniform.uPlayerCount.value=i;
  }
- dispose(){this.flowerMesh.removeFromParent();this.flowerMesh.geometry.dispose();this.outerFlowerMesh.removeFromParent();this.outerFlowerMesh.geometry.dispose();this.flowerMesh.material.dispose();this.mesh.removeFromParent();this.mesh.geometry.dispose();this.outerMesh.removeFromParent();this.outerMesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.outerCanopy.removeFromParent();this.outerCanopy.geometry.dispose();this.canopy.material.dispose();}
+ dispose(){this.flowerMesh.removeFromParent();this.flowerMesh.geometry.dispose();this.outerFlowerMesh.removeFromParent();this.outerFlowerMesh.geometry.dispose();this.flowerMesh.material.dispose();this.mesh.removeFromParent();this.mesh.geometry.dispose();this.outerMesh.removeFromParent();this.outerMesh.geometry.dispose();this.mesh.material.dispose();this.canopy.removeFromParent();this.canopy.geometry.dispose();this.outerCanopy.removeFromParent();this.outerCanopy.geometry.dispose();this.canopy.material.dispose();this.groundTexture.dispose();}
 }

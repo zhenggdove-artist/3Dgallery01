@@ -1,5 +1,5 @@
 // Three-step chat sizing: max -> two-line medium -> + only -> max.
-// Tap + to change size; drag 5px or hold 180ms to move it. The expanded panel keeps its 1s hold.
+// Tap + to expand and − to reduce size; drag 5px or hold 180ms to move it. The expanded panel keeps its 1s hold.
 // The manual-position key is stable across game releases. Default placement
 // is CSS-anchored above the quickbar and never stored as a manual drag.
 export function bindChatLayout(){
@@ -90,7 +90,7 @@ export function bindChatLayout(){
   panel.classList.toggle('chat-max',size==='max');
   panel.dataset.chatSize=size;
   panel.style.setProperty('--chat-height',(size==='medium'?mediumHeight:maxHeight())+'px');
-  toggle.textContent='＋';
+  toggle.textContent=size==='min'?'＋':'－';
   toggle.setAttribute('aria-expanded',String(size!=='min'));
   toggle.setAttribute('aria-label',size==='min'?'Expand chat; hold to move':
    size==='medium'?'Minimize chat; drag to move':'Show two chat lines; hold to move');
@@ -210,15 +210,17 @@ export function bindChatLayout(){
   };
   for(const type of ['pointerup','pointercancel','lostpointercapture'])panel.addEventListener(type,finish);
  }
+ let fitFrame=0;
+ const scheduleFit=()=>{if(!fitFrame)fitFrame=requestAnimationFrame(()=>{fitFrame=0;fitSafely();});};
  const onViewportResize=()=>{
   if(size==='max')panel.style.setProperty('--chat-height',maxHeight()+'px');
-  requestAnimationFrame(fitSafely);
+  scheduleFit();
  };
  addEventListener('resize',onViewportResize);
  window.visualViewport?.addEventListener('resize',onViewportResize);
  // The HUD starts hidden at login. Refit only when layout dimensions change,
  // not on world snapshots or game frames.
- if(typeof ResizeObserver==='function'){const observer=new ResizeObserver(()=>requestAnimationFrame(fitSafely));observer.observe(panel);for(const el of document.querySelectorAll(obstacleSelector))observer.observe(el);}
- if(typeof MutationObserver==='function'){let queued=false;const observer=new MutationObserver(()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;fitSafely();});});for(const el of [document.body,document.getElementById('hud'),...document.querySelectorAll(obstacleSelector)])if(el)observer.observe(el,{attributes:true,attributeFilter:el===document.body||el.id==='hud'?['hidden','class']:['hidden']});}
- return {applyDefault,refit:()=>requestAnimationFrame(fitSafely),position:()=>{const r=panel.getBoundingClientRect();return anchorAt(r.left,r.top);},prepare:()=>{setSize('medium');}};
+ if(typeof ResizeObserver==='function'){const observer=new ResizeObserver(scheduleFit);observer.observe(panel);for(const el of document.querySelectorAll(obstacleSelector))observer.observe(el);}
+ if(typeof MutationObserver==='function'){const observer=new MutationObserver(scheduleFit);for(const el of [document.body,document.getElementById('hud'),...document.querySelectorAll(obstacleSelector)])if(el)observer.observe(el,{attributes:true,attributeFilter:el===document.body||el.id==='hud'?['hidden','class']:['hidden']});}
+ return {applyDefault,refit:scheduleFit,position:()=>{const r=panel.getBoundingClientRect();return anchorAt(r.left,r.top);},prepare:()=>{setSize('medium');}};
 }

@@ -7,7 +7,7 @@ import {CITY_OUTER_RADIUS} from '../src/shared/city-layout.js';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('V035 grass meets the nebula with no ocean or extra ground annulus',()=>{
  const scene=new THREE.Scene(),grass=new GrassField(scene,{mobile:true,count:8});
- assert.equal(scene.children.length,4);
+ assert.deepEqual(new Set(scene.children),new Set([grass.mesh,grass.outerMesh,grass.canopy,grass.outerCanopy,grass.flowerMesh,grass.outerFlowerMesh]));
  assert.equal(grass.outerCanopy.geometry.parameters.outerRadius,CITY_OUTER_RADIUS+1);
  assert.equal(grass.ocean,undefined);assert.equal(grass.horizon,undefined);
  grass.update(4,new Map());assert.equal(grass.mesh.material.uniforms.uTime.value,4);

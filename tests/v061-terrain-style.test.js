@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as THREE from 'three';
 import {TERRAIN_DEFAULTS,terrainStyle,setTerrainStyle,terrainColorDelta} from '../src/shared/terrain-style.js';
-import {GrassField} from '../src/grass-field.js';
+import {GrassField,meadowGroundTexture,MEADOW_COUNTS} from '../src/grass-field.js';
 import {createWorldPatch,applyWorldPatch} from '../src/shared/world-patch.js';
 test('legacy terrain uses exact original colors and grass length, with no mutations',()=>{
  assert.deepEqual(terrainStyle({skyBaseColor:'#123456'}),TERRAIN_DEFAULTS);
@@ -54,4 +54,12 @@ test('V136 vegetation shares wind and player uniforms, density does not replace 
  assert.equal(f.mesh.geometry,g);assert.equal(g.getAttribute('aOffset'),b);assert.ok(g.instanceCount>450&&g.instanceCount<550);
  assert.equal(f.flowerMesh.geometry.instanceCount,0);assert.equal(f.outerFlowerMesh.geometry.instanceCount,0);assert.equal(grass.uPushRadius.value,3);assert.deepEqual(flower.uFlowerBlue.value.toArray(),[0,0,1]);
  f.setTerrainStyle({});assert.equal(g.instanceCount,1000);assert.ok(f.flowerMesh.geometry.instanceCount>0);f.dispose();assert.equal(scene.children.length,0);
+});
+
+test('V137 tileable soil contains real granular variation, mipmaps and no per-frame rebuild',()=>{
+ const t=meadowGroundTexture(64),data=t.image.data;assert.ok(new Set(data.filter((_,i)=>i%4===0)).size>50);
+ assert.equal(t.generateMipmaps,true);assert.equal(t.wrapS,THREE.RepeatWrapping);t.dispose();
+ const scene=new THREE.Scene(),f=new GrassField(scene,{mobile:true,count:100});
+ const tex=f.groundTexture;f.setTerrainStyle({terrain:{soilExposure:.9}});assert.equal(f.canopy.material.uniforms.uSoilExposure.value,.9);assert.equal(f.groundTexture,tex);
+ assert.equal(f.flowerVisibility.count,11);assert.equal(MEADOW_COUNTS.mobile,37500);f.dispose();
 });

@@ -71,13 +71,14 @@ test('procedural grass distribution is deterministic, slender, and excludes cent
  const a=grassPositions(256,17456),b=grassPositions(256,17456);
  assert.deepEqual(a.points,b.points);
  assert.equal(a.heights.length,256);
- assert.ok(a.heights.every(h=>h>=.48&&h<=1.30));
+ assert.ok(a.heights.every(h=>h>=.18&&h<=1.90));
+ assert.ok(a.heights.some(h=>h<.4)&&a.heights.some(h=>h>1.4));
  for(let i=0;i<256;i++)assert.ok(Math.hypot(a.points[i*2],a.points[i*2+1])>=10.99);
  const src=readFileSync(new URL('../src/grass-field.js',import.meta.url),'utf8');
  assert.match(src,/uPlayers\[6\]/);
  assert.match(src,/trample/);
  assert.match(src,/wind/);
- assert.match(src,/mobile\?25000:65000/);
+ assert.match(src,/mobile:37500,desktop:97500/);
  assert.match(src,/Continuous dense grass canopy/);
  assert.match(src,/blades=4/);
 });
