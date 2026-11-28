@@ -43,7 +43,7 @@ test('ten outfit collections each expose five individual styles and eleven creat
  }
  assert.equal(groups.filter(g=>g.base.creature&&!g.base.r106Wearable&&!g.base.r113Wearable&&g.variants.length===1).length,11);
  const w=createInitialWorld(now),actor={key:'outfit',name:'Outfit',color:'#ffffff',role:'fighter',position:[75,0,0]};
- const p=ensureProfile(w,actor.key,actor.name,actor.color,now,false);p.wallet=50000;
+ const p=ensureProfile(w,actor.key,actor.name,actor.color,now,false);p.wallet=100000;
  const item=itemById('outfit-pajamas-5');
  assert.equal(applyAction(w,actor,{action:'buy',itemId:item.id,quantity:2},{now:now+1}).purchased.total,item.price*2);
  assert.ok(p.inventory.filter(id=>id===item.id).length===2);
