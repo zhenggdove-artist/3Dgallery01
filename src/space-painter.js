@@ -213,7 +213,15 @@ export class SpacePainter{
   }
   return best&&range?{hit:best,range}:null;
  }
+ suspend(world){
+  if(this.suspended)return;this.suspended=true;
+  this.stroke=null;this.end();this.hideGuide();for(const mesh of [this.guide,this.guideAnchor])if(mesh){mesh.removeFromParent();mesh.geometry.dispose();mesh.material.dispose();}this.guide=this.guideAnchor=null;this.connectKey=null;if(this.surfaceFrame){cancelAnimationFrame(this.surfaceFrame);this.surfaceFrame=0;}
+  this.pending.clear();this.erasing.clear();this.surfacePending.clear();this.surfacePreview=null;this.undoStack.length=0;this.redoStack.length=0;
+  this.archive=[];this.archiveIds.clear();this.surfaceArchive={};this.ownerEpoch=world.profile?.spacePaintEpoch??null;this.revision=world.spacePaintRevision||0;this.surfaceRevision=world.spacePaintSurfaceRevision||0;this.rebuild();
+ }
  sync(world){
+  if(world.environment?.spacePaintSuspended===true){this.suspend(world);return;}
+  if(this.suspended){this.suspended=false;this.revision=-1;this.surfaceRevision=-1;}
   const epoch=world.profile?.spacePaintEpoch;
   if(epoch!==undefined&&this.ownerEpoch!==null&&epoch!==this.ownerEpoch){this.undoStack.length=0;this.redoStack.length=0;this.pending.clear();if(this.stroke){this.stroke=null;this.end();}}
   if(epoch!==undefined)this.ownerEpoch=epoch;
@@ -433,6 +441,7 @@ export class SpacePainter{
   if(!s?.points.length)return;
   this.pending.set(s.id,{...s,ownerKey:this.ownerKey()});this.rebuild();
   this.queue=this.queue.catch(()=>{}).then(async()=>{
+   if(this.suspended)return;
    let accepted=false;
    try{const result=await this.send('gm-paint-3d',{stroke:s,...(epoch===null?{}:{ownerEpoch:epoch})});if(!result?.spacePaintStroke)throw Error('3D paint could not be saved');accepted=true;if(epoch===this.ownerEpoch){this.record({gesture,add:[result.spacePaintStroke],remove:[]});if(!this.archive.some(p=>p.id===s.id)&&this.pending.has(s.id))this.pending.set(s.id,{...result.spacePaintStroke,ackRevision:result.worldRevision});}}
    catch(e){this.ui.toast(e.message||'3D paint could not be saved');}

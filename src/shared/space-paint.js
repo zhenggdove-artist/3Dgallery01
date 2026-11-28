@@ -22,9 +22,18 @@ export function validateSpacePaint(s){
  return {id:s.id,color:s.color.toLowerCase(),size:s.size,thickness:s.thickness,normal,points};
 }
 // Permission and ownership come only from the persisted profile, never a client role.
-export function canSpacePaint(profile){return profile?.admin===true||profile?.spacePaintEnabled===true;}
+export function canSpacePaint(profile,suspended=false){return !suspended&&profile?.spacePaintSuspended!==true&&(profile?.admin===true||profile?.spacePaintEnabled===true);}
+// One-time world migration; keep original grants for a future explicit re-enable.
+export function suspendSpacePaint(world){
+ if(world.environment?.spacePaintSuspended===true)return false;
+ world.spacePaint=[];world.spacePaintSurface={};
+ world.spacePaintRevision=(world.spacePaintRevision||0)+1;world.spacePaintSurfaceRevision=(world.spacePaintSurfaceRevision||0)+1;
+ for(const profile of Object.values(world.profiles||{}))profile.spacePaintEpoch=(profile.spacePaintEpoch||0)+1;
+ world.environment={...world.environment,spacePaintSuspended:true};world.revision=(world.revision||0)+1;return true;
+}
 export const SPACE_PAINT_ACTIONS=['gm-paint-3d','gm-erase-3d','gm-edit-3d','gm-space-paint-access','gm-space-paint-clear','paint-space-surface'];
 export function applySpacePaint(world,actor,body,context={}){
+ if(world.environment?.spacePaintSuspended===true)return {error:'3D PAINT temporarily disabled'};
  const profile=world.profiles?.[actor.key],gm=actor.admin===true&&profile?.admin===true;
  const action=body.action,list=world.spacePaint||[],surfaces=world.spacePaintSurface||{};
  const bump=(geometry=false,surface=false)=>{if(geometry)world.spacePaintRevision=(world.spacePaintRevision||0)+1;if(surface)world.spacePaintSurfaceRevision=(world.spacePaintSurfaceRevision||0)+1;world.revision=(world.revision||0)+1;};

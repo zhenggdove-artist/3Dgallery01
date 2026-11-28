@@ -17,6 +17,7 @@ import {isRealtimeAction} from '../src/shared/realtime-actions.js';
 import {encodeCombatWorld,forkCombatWorld} from './combat-world-cache.js';
 import {combatRows,writeCombatDelta,restoreCombatOverlay} from './combat-persistence.js';
 import {SpacePaintArchiveStore,externalPaintCheckpoint} from './space-paint-archive.js';
+import {SPACE_PAINT_ACTIONS,suspendSpacePaint,canSpacePaint} from '../src/shared/space-paint.js';
 import {initializeLargeReceipts,readActionReceipt,writeActionReceipt} from './large-action-receipts.js';
 
 const MUSIC_CHUNK_BYTES=512*1024,MAX_GM_MUSIC_BYTES=7_500_000;
@@ -27,7 +28,7 @@ const SPECTATOR_SEATS=Array.from({length:MAX_SPECTATORS},(_,i)=>MAX_FIGHTERS+i);
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,rooftopPaintV100:true,spacePaintV102:true,spacePaintV103:true,spacePaintHistoryV104:true,spacePaintAccessV105:true,spacePaintUnlimitedV106:true,paintOwnershipV115:true,paintOwnershipSyncV117:true,paintArchiveV118:true,paintArchiveDeployV119:true,paintFlight2DV120:true,pickupHotPathV124:true,instantPickupV125:true,levelGrowthV126:true,authoritativeEquipV127:true,combatAttributesV128:true,shopAssetRemovalV131:true,shopGroupRemovalV132:true,performancePassV135:true,interactiveMeadowV136:true,meadowSoilChatV137:true,renderMemoryV138:true,fogResidencyV139:true,losslessResidencyV140:true,operationPromptV101:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,fastActionsV087:true,fastCastV089:true,instantAttackV090:true,v35CombatV091:true,combatLatencyV092:true,contactFastV093:true,v35ContactV094:true,impactFeedbackV095:true,contactLedgerV097:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
+    if(url.pathname==='/health')return withCors(request,json({ok:true,service:'Temple',room:ROOM_ID,database:'durable-object-sqlite',realtime:'websocket',apiVersion:7,inventoryCapacity:3000,shopCatalogIds:SHOP_CATALOG_IDS,cityLayoutSignature:CITY_LAYOUT_SIGNATURE,cityBuildingCount:CITY_BUILDING_COUNT,features:{combatBuildingV082:true,castAlignmentV081:true,contextualSignArtV080:true,portraitSignsV079:true,signArtPaintV077:true,rooftopPaintV100:true,spacePaintV102:true,spacePaintV103:true,spacePaintHistoryV104:true,spacePaintAccessV105:true,spacePaintUnlimitedV106:true,paintOwnershipV115:true,paintOwnershipSyncV117:true,paintArchiveV118:true,paintArchiveDeployV119:true,paintFlight2DV120:true,pickupHotPathV124:true,instantPickupV125:true,levelGrowthV126:true,authoritativeEquipV127:true,combatAttributesV128:true,shopAssetRemovalV131:true,shopGroupRemovalV132:true,performancePassV135:true,interactiveMeadowV136:true,meadowSoilChatV137:true,renderMemoryV138:true,fogResidencyV139:true,losslessResidencyV140:true,spacePaintSuspensionV141:true,operationPromptV101:true,houseSignAllClearanceV075:true,houseSignClearanceV074:true,houseSignsV073:true,gmHouseV070:true,shopRelistV069:true,sessionChatV067:true,gmChatArchiveV067:true,artworkPromptPositionV067:true,shopRecallV066:true,discGraffitiV066:true,pickupAscensionV066:true,streetOutfitsV065:true,wantedPerimeterV062:true,terrainStyleV061:true,wantedStyleV060:true,wantedListV059:true,wantedBackgroundCropV058:true,wantedListV057:true,wantedListV056:true,bagStableDomV055:true,chatThreeStageV054:true,sustainedSpellBalanceV053:true,fireChannelContactV052:true,normalOnlySniperV051:true,scopeOnlySniperV050:true,restorativeGroundDropV049:true,qualitySkillScaling:true,muttonSignOutfit:true,linkedQualityTuning:true,independentRestorativeCooldowns:true,ultimateManaTuning:true,equipmentTuning:true,exponentialShotgun:true,multiWingContours:true,offlineWingGift:true,wingSaveReceipt:true,mana:true,shotgunDistanceFalloff:true,gmPlayerLevel:true,gmWingCanvas:true,restorativeCooldown:true,artMediaUpload:true,artBombPlace:true,gmReset:true,worldPatch:true,compactCombat:true,combatSocketActions:true,fastActionsV087:true,fastCastV089:true,instantAttackV090:true,v35CombatV091:true,combatLatencyV092:true,contactFastV093:true,v35ContactV094:true,impactFeedbackV095:true,contactLedgerV097:true,motionAuthority:true,guestLogin:true,artworkCoordinateRecovery:true,fighterOverflow:true,spectatorWrite:true,gmSpectatorPreview:true,bulkSell:true,gmCollectorRepeatSales:true,wingScaleHandles:true,wingMultiAbility:true,personalWingDust:true,wearableCatalog:SHOP_CATALOG_REVISION,supportCheckout:paymentMode(env)==='production'}}),env);
     if(url.pathname.startsWith('/api/wing-pay/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     if(url.pathname.startsWith('/api/'))return env.TEMPLE_ROOM.getByName(ROOM_ID).fetch(request);
     return env.ASSETS.fetch(request);
@@ -61,8 +62,25 @@ export class TempleRoom extends DurableObject{
      initializeWingOrders(this.sql);initializeSpacePaintCheckpoints(this.sql);this.paintArchiveStore=new SpacePaintArchiveStore(this.sql);initializeLargeReceipts(this.sql);
     if(!this.sql.exec('SELECT id FROM world_state WHERE id=1').toArray().length)this.sql.exec('INSERT INTO world_state VALUES(1,?)',JSON.stringify(createInitialWorld()));
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'));
+    if(String(env.SPACE_PAINT_SUSPENDED)==='true')this.suspendSpacePaintOnce();
   }
 
+  suspendSpacePaintOnce(){
+   // Read the durable overlay, but do not restore the discarded large archive.
+   const raw=JSON.parse(this.sql.exec('SELECT payload FROM world_state WHERE id=1').toArray()[0].payload);
+   const world=restoreCombatOverlay(raw,this.sql.exec('SELECT key,payload FROM combat_world_overlay').toArray());
+   if(!suspendSpacePaint(world))return;
+   this.ctx.storage.transactionSync(()=>{
+    this.sql.exec('DELETE FROM space_paint_checkpoint_parts');
+    this.sql.exec('DELETE FROM space_paint_checkpoints');
+    this.sql.exec('DELETE FROM space_paint_archive_rows');this.paintArchiveStore.cache=null;
+    this.paintArchiveStore.write(world);
+    this.sql.exec('INSERT OR REPLACE INTO world_state VALUES(1,?)',externalPaintCheckpoint(world));
+    this.sql.exec('DELETE FROM combat_world_overlay');
+   });
+   this.paintExternal=true;this.readSnapshot=null;
+   this.broadcastWorld(this.readWorld(),true);
+  }
   persistedWorld(){
    const base=JSON.parse(this.committedPayload??this.sql.exec('SELECT payload FROM world_state WHERE id=1').toArray()[0]?.payload??'{}');
    const world=restoreCombatOverlay(base,this.sql.exec('SELECT key,payload FROM combat_world_overlay').toArray());
@@ -118,6 +136,10 @@ export class TempleRoom extends DurableObject{
        }),this.env);
       }
       if(path==='/health')return withCors(request,json({ok:true,service:'TempleRoom',database:'sqlite',players:this.roster().length,apiVersion:3,features:{artMediaUpload:true,artBombPlace:true,gmReset:true}}),this.env);
+      if(path==='/api/space-paint-status'&&request.method==='GET'){
+       const world=this.readWorld(),count=table=>Number(this.sql.exec('SELECT COUNT(*) AS n FROM '+table).toArray()[0].n);
+       return withCors(request,json({suspended:world.environment?.spacePaintSuspended===true,strokes:world.spacePaint?.length||0,surfaces:Object.keys(world.spacePaintSurface||{}).length,archiveRows:Number(this.sql.exec("SELECT COUNT(*) AS n FROM space_paint_archive_rows WHERE key!='meta'").toArray()[0].n),checkpoints:count('space_paint_checkpoints'),checkpointParts:count('space_paint_checkpoint_parts'),geometryRevision:world.spacePaintRevision||0,surfaceRevision:world.spacePaintSurfaceRevision||0}),this.env);
+      }
       if(path==='/api/shop-assets'&&request.method==='GET')return withCors(request,json({removedShopAssets:this.readWorld().removedShopAssets||{}}),this.env);
       if(path==='/api/join'&&request.method==='POST')return withCors(request,await this.join(request),this.env);
        if(path==='/api/gm/music'&&['GET','HEAD'].includes(request.method))return withCors(request,this.gmMusicResponse(request,url),this.env);
@@ -313,7 +335,7 @@ export class TempleRoom extends DurableObject{
     if(session.role!=='fighter')return;
     const now=Date.now();if(now-meta.lastStateAt<70)return;
     if(meta.wantedJumpUntil>now&&Array.isArray(meta.wantedJumpPosition)){const pos=event.data?.position;if(!Array.isArray(pos)||Math.hypot(pos[0]-meta.wantedJumpPosition[0],pos[2]-meta.wantedJumpPosition[2])>8)return;delete meta.wantedJumpUntil;delete meta.wantedJumpPosition;ws.serializeAttachment(meta);}
-    const previous=session.state?JSON.parse(session.state):null,world=this.readWorld(),profile=world.profiles[session.profile_key],mobility=profile?{stats:playerStats(world,profile,now),channeling:isLiveStaffChannel(profile,now),effects:profile.effects,hitReaction:profile.hitReaction,impulse:profile.impulse,lastRespawnAt:profile.lastRespawnAt,lastWriteLanding:profile.lastWriteLanding,lastWriteLandingAt:profile.lastWriteLandingAt,cityDamage:world.cityDamage,structures:world.structures,spacePaint:world.spacePaint,admin:profile.admin===true,spacePaintEnabled:profile.spacePaintEnabled===true}:null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],profile?.writeJourney,now,mobility);
+    const previous=session.state?JSON.parse(session.state):null,world=this.readWorld(),profile=world.profiles[session.profile_key],mobility=profile?{stats:playerStats(world,profile,now),channeling:isLiveStaffChannel(profile,now),effects:profile.effects,hitReaction:profile.hitReaction,impulse:profile.impulse,lastRespawnAt:profile.lastRespawnAt,lastWriteLanding:profile.lastWriteLanding,lastWriteLandingAt:profile.lastWriteLandingAt,cityDamage:world.cityDamage,structures:world.structures,spacePaint:world.spacePaint,admin:profile.admin===true,spacePaintEnabled:profile.spacePaintEnabled===true,spacePaintSuspended:world.environment?.spacePaintSuspended===true}:null,result=validateState(previous,event.data,now-meta.lastStateAt,session.role,PLAYER_SPAWNS[session.seat],profile?.writeJourney,now,mobility);
     const seq=Number.isSafeInteger(event.data?.seq)&&event.data.seq>0?event.data.seq:0;
     if(result.error){
       // Reject the specific input sample, not an unspecified older pose:
@@ -342,7 +364,8 @@ export class TempleRoom extends DurableObject{
   async action(request,session,parsedBody=null){
     const body=parsedBody??await readBody(request,320_000),requestId=String(body.requestId||'');if(!/^[A-Za-z0-9:_-]{8,100}$/.test(requestId))return json({error:'Valid requestId required'},400);
     const receivedAt=Date.now();
-    const receipt=this.sql.exec('SELECT response FROM request_receipts WHERE session_id=? AND request_id=?',session.id,requestId).toArray()[0];if(receipt)return json(JSON.parse(readActionReceipt(this.sql,session.id,requestId,receipt.response)));
+    if(SPACE_PAINT_ACTIONS.includes(body.action)&&this.readWorld().environment?.spacePaintSuspended===true)return json({error:'3D PAINT temporarily disabled'},403);
+    const receipt=this.sql.exec('SELECT response FROM request_receipts WHERE session_id=? AND request_id=?',session.id,requestId).toArray()[0];if(receipt){const result=JSON.parse(readActionReceipt(this.sql,session.id,requestId,receipt.response));if(this.readWorld().environment?.spacePaintSuspended===true){if(result.world){result.world.spacePaint=[];result.world.spacePaintSurface={};result.world.environment={...result.world.environment,spacePaintSuspended:true};if(result.world.profile)result.world.profile.spacePaintEnabled=false;}if(result.profile)result.profile.spacePaintEnabled=false;}return json(result);}
      if(['gm-paint-3d','gm-erase-3d','gm-edit-3d'].includes(body.action)&&!this.consumeRate('paint3d:'+session.profile_key,120,60_000))return json({error:'3D painting rate limit reached'},429);
      if(['paint-building','paint-space-surface'].includes(body.action)&&!this.consumeRate('paint:'+session.profile_key,180,60_000))return json({error:'Painting rate limit reached'},429);
     const state=session.state?JSON.parse(session.state):null;
@@ -358,6 +381,7 @@ export class TempleRoom extends DurableObject{
     const previousDamageSequence=world.damageSequence||0;
     const surfaceAction=['paint-space-surface','gm-edit-3d','gm-erase-3d','gm-space-paint-clear'].includes(body.action),previousSurfaces=surfaceAction?world.spacePaintSurface:null;
     const result=applyAction(world,actor,body,{now:body.action==='attack'?receivedAt:Date.now(),actors,seatIndex:session.seat,...(body.action==='gm-edit-3d'?{verifySurfaceCheckpoint:(strokeId,id)=>verifySpacePaintCheckpoint(this.sql,strokeId,id),surfaceCheckpointOwners:(strokeId,id)=>readSpacePaintCheckpointOwners(this.sql,strokeId,id)}:{})});if(result.error)return json({error:result.error},400);
+    if(world.environment?.spacePaintSuspended===true&&result.profile)result.profile.spacePaintEnabled=false;
     const surfaceWrites=surfaceAction?prepareSpacePaintCheckpoints(this.sql,world,body.action,body):[];
     // Account only for actual server elapsed time during action processing;
     // do not trust client clocks or jump a projectile to its final target.
@@ -570,10 +594,10 @@ export class TempleRoom extends DurableObject{
     const events=this.sql.exec('SELECT name,role,event,time FROM presence_events ORDER BY id DESC LIMIT 200').toArray();
     const online=this.roster().map(({key,name,role,profile})=>({key,name,role,level:profile?.level||1}));
     const activeKeys=new Set(online.map(p=>p.key));
-    const knownPlayers=Object.values(this.world().profiles||{}).filter(p=>p?.key&&p?.name).map(p=>({key:p.key,name:p.name,level:p.level||1,online:activeKeys.has(p.key),persistent:!p.key.startsWith('guest:'),spacePaintEnabled:!!(p.admin||p.spacePaintEnabled),lastSeen:p.updatedAt||p.createdAt||0})).sort((a,b)=>Number(b.online)-Number(a.online)||b.lastSeen-a.lastSeen);
+    const knownPlayers=Object.values(this.world().profiles||{}).filter(p=>p?.key&&p?.name).map(p=>({key:p.key,name:p.name,level:p.level||1,online:activeKeys.has(p.key),persistent:!p.key.startsWith('guest:'),spacePaintEnabled:canSpacePaint(p,this.readWorld().environment?.spacePaintSuspended===true),lastSeen:p.updatedAt||p.createdAt||0})).sort((a,b)=>Number(b.online)-Number(a.online)||b.lastSeen-a.lastSeen);
     return json({ok:true,online,events,knownPlayers});
   }
-  roster(){this.prune();const world=this.readWorld();return this.sql.exec('SELECT id,profile_key,name,color,role,seat,state FROM sessions WHERE expires>? ORDER BY seat',Date.now()).toArray().map(row=>({id:row.id,key:row.profile_key,name:row.name,color:row.color,role:row.role,seat:row.seat,state:row.state?JSON.parse(row.state):null,profile:world.profiles[row.profile_key]?publicProfile(world.profiles[row.profile_key]):null}));}
+  roster(){this.prune();const world=this.readWorld();return this.sql.exec('SELECT id,profile_key,name,color,role,seat,state FROM sessions WHERE expires>? ORDER BY seat',Date.now()).toArray().map(row=>({id:row.id,key:row.profile_key,name:row.name,color:row.color,role:row.role,seat:row.seat,state:row.state?JSON.parse(row.state):null,profile:world.profiles[row.profile_key]?publicProfile(world.profiles[row.profile_key],world.environment?.spacePaintSuspended===true):null}));}
   actors(){
    // Combat uses physical actors only, never a clone of public profiles or
    // spectators. The /players roster still performs its own expiry cleanup.
@@ -581,7 +605,7 @@ export class TempleRoom extends DurableObject{
    return rows.map(row=>({id:row.id,key:row.profile_key,name:row.name,color:row.color,role:row.role,
     seat:row.seat,position:JSON.parse(row.state).position})).filter(actor=>Array.isArray(actor.position));
   }
-  self(session){const world=this.readWorld(),profile=world.profiles[session.profile_key];return {id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,gmSpectatorPreview:session.role==='spectator'&&Number.isInteger(session.preview_seat),saveCode:session.save_code||null,profile:profile?publicProfile(profile):null};}
+  self(session){const world=this.readWorld(),profile=world.profiles[session.profile_key];return {id:session.id,key:session.profile_key,name:session.name,color:session.color,role:session.role,seat:session.seat,gmSpectatorPreview:session.role==='spectator'&&Number.isInteger(session.preview_seat),saveCode:session.save_code||null,profile:profile?publicProfile(profile,world.environment?.spacePaintSuspended===true):null};}
   prune(){const now=Date.now();for(const row of this.sql.exec('SELECT id FROM sessions WHERE expires<=?',now).toArray())this.disconnectSession(row.id,false);this.sql.exec('DELETE FROM rate_limits WHERE window_start<?',now-3_600_000);}
   disconnectSession(id,broadcast=true){const row=this.sql.exec('SELECT profile_key,name,role FROM sessions WHERE id=?',id).toArray()[0];for(const ws of this.ctx.getWebSockets(id)){this.closed.add(ws);try{ws.close(1000,'Disconnected');}catch{}}this.sql.exec('DELETE FROM sessions WHERE id=?',id);if(row){this.recordPresence(row,'offline');const world=this.world();if(releasePlayerWorldState(world,row.profile_key,Date.now())){this.save(world);this.broadcastWorld(world);}}if(broadcast)this.broadcastRoster();}
   broadcast(type,data,except){const text=JSON.stringify({type,data});for(const ws of this.sockets())if(ws!==except)try{ws.send(text);}catch{this.closed.add(ws);}}

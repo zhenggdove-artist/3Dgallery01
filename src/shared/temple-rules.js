@@ -274,16 +274,16 @@ export function ensureProfile(world,key,name,color,now=Date.now(),admin=false){
 export function validColor(value){return typeof value==='string'&&/^#[0-9a-f]{6}$/i.test(value);}
 export function validName(value){return typeof value==='string'&&value.trim().length>=1&&value.trim().length<=24&&!/[<>\u0000-\u001f]/.test(value);}
 
-export function publicProfile(profile){
+export function publicProfile(profile,spacePaintSuspended=false){
   return {key:profile.key,name:profile.name,color:profile.color,wallet:profile.admin?'∞':profile.wallet,hp:profile.hp,maxHp:profile.maxHp,
     level:profile.level,xp:profile.xp,mana:profile.mana??manaCapacity(profile.level),maxMana:manaCapacity(profile.level),consumableCooldownUntil:0,restorativeCooldowns:clone(profile.restorativeCooldowns||{health:profile.consumableCooldownUntil||0,mana:profile.consumableCooldownUntil||0}),lastWingCanvasGrant:clone(profile.lastWingCanvasGrant||null),wingTrialDraws:profile.wingTrialDraws||0,wingPaidDraws:Math.max(0,Number(profile.wingPaidDraws)||0),wingDesignCredits:Math.max(0,Number(profile.wingDesignCredits)||0),deadUntil:profile.deadUntil,lastRespawnAt:profile.lastRespawnAt||0,
     respawnPosition:clone(profile.respawnPosition||null),
-    spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),shield:clone(profile.shield||null),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,tidePush:profile.tidePush||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,spacePaintEnabled:canSpacePaint(profile),spacePaintEpoch:profile.spacePaintEpoch||0,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
+    spawnProtectedUntil:profile.spawnProtectedUntil||0,lastKilledBy:profile.lastKilledBy||null,equipment:clone(profile.equipment),shield:clone(profile.shield||null),hitReaction:profile.hitReaction||null,whipPull:profile.whipPull||null,tidePush:profile.tidePush||null,vortexSpin:profile.vortexSpin||null,effects:clone(profile.effects||{}),admin:profile.admin,spacePaintEnabled:canSpacePaint(profile,spacePaintSuspended),spacePaintEpoch:profile.spacePaintEpoch||0,gmInvincible:profile.admin&&profile.gmInvincible!==false,gmFusionChance:profile.admin?(Number.isFinite(profile.gmFusionChance)?profile.gmFusionChance:1):undefined};
 }
 
 export function worldProfileView(world,actorKey,now){
  const profile=world.profiles[actorKey];
- return profile?{...publicProfile(profile),stats:playerStats(world,profile,now),wanted:clone(profile.wanted||null),starterWeaponId:profile.starterWeaponId,inventoryCapacity:inventoryCapacity(profile),inventoryCount:profile.inventory.length,inventory:clone(profile.inventory),quickSlots:clone(profile.quickSlots||[null,null,null]),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
+ return profile?{...publicProfile(profile,world.environment?.spacePaintSuspended===true),stats:playerStats(world,profile,now),wanted:clone(profile.wanted||null),starterWeaponId:profile.starterWeaponId,inventoryCapacity:inventoryCapacity(profile),inventoryCount:profile.inventory.length,inventory:clone(profile.inventory),quickSlots:clone(profile.quickSlots||[null,null,null]),inventoryInstances:clone(profile.inventoryInstances||[]),fusionByInstance:clone(profile.fusionByInstance||{}),equippedInstanceIds:clone(profile.equippedInstanceIds||{}),fusionIdentityMigrated:!!profile.fusionIdentityMigrated,fusionSuccessOnlyMigrated:!!profile.fusionSuccessOnlyMigrated,fusion:clone(profile.fusion),impulse:profile.impulse||null}:null;
 }
 
 export function worldView(world,actorKey,now=Date.now(),includeCustomWings=true,shareFrozenScene=false){
@@ -328,6 +328,7 @@ export function isLiveStaffChannel(profile,now=Date.now(),world){
  return latest>0&&now-latest<=grace;
 }
 export function validateState(previous,next,elapsedMs,role='fighter',spawn=null,journey=null,now=Date.now(),mobility=null){
+  if(mobility?.spacePaintSuspended===true&&next?.paintFlight===true)return {error:'3D PAINT temporarily disabled',state:previous||null};
   const pose=journeyPose(journey,now);
   if(pose&&role==='fighter')return {state:{position:pose.position,rotation:Math.PI,animation:pose.animation,visible:true},authority:{kind:'write'}};
   // Pan recoil can lift someone standing on a 30m GM deck above the
