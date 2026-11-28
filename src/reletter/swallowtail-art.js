@@ -1,4 +1,4 @@
-import {acquireRootTexture,wingRenderKey} from '../shared-render-resources.js';
+import {acquireRootTexture,wingRenderKey,runtimeResource} from '../shared-render-resources.js';
 import {epicSpecimenCanvas,addEpicDust} from './epic-specimens.js';
 import {craftedWingCanvas} from './crafted-wing-art.js';
 import {paintedWingCanvas} from './painted-wing-art.js';
@@ -161,6 +161,6 @@ export function swallowtailModel(T,item){
   }
  }
  if(item.tier===4||item.personalWing||(item.abilities??[item.ability]).includes('sparkle'))addEpicDust(T,root);
- root.userData.texture=texture;
+ runtimeResource(root,'texture',texture);
  return root;
 }

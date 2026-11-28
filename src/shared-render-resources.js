@@ -68,4 +68,9 @@ export function releaseRootTextures(root){
  rootTextureLeases.delete(root);for(const {key,texture} of leases)outfitTextureResources.release(key,texture);return true;
 }
 // All visual inputs are part of the key, including custom drawing revisions.
-export function wingRenderKey(item){return 'wing:'+JSON.stringify([item.id,item.design,item.updatedAt,item.createdAt,item.tier,item.color,item.accent,item.style,item.motif,item.specimen,item.patternVariant,item.visualComplexity,item.outline,item.strokes,item.shapes,item.layers]);}
+export function wingRenderKey(item){return 'wing:'+JSON.stringify([item.id,item.design,item.updatedAt,item.createdAt,item.tier,item.color,item.accent,item.style,item.motif,item.specimen,item.patternVariant,item.visualComplexity,item.outline,item.contours,item.strokes,item.shape,item.scaleX,item.scaleY,item.offsetX,item.offsetY,item.shapes,item.layers]);}
+
+// Runtime ownership metadata must not be serialized by Object3D.clone().
+// Three's userData JSON clone otherwise serializes material/texture images
+// (including PNG data URLs) while constructing the equipment portrait.
+export function runtimeResource(owner,key,value){Object.defineProperty(owner.userData,key,{value,writable:true,configurable:true,enumerable:false});return value;}

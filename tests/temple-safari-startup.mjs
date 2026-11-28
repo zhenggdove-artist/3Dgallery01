@@ -77,6 +77,31 @@ try{
   assert.ok(result.bright>60,result.item+' native beam must produce visible high-intensity pixels on mobile WebKit: '+JSON.stringify(result));
   assert.equal(result.glError,0);
  }
+ // Repeated real WebGL uploads and disposal on the same live renderer.
+ // Count resources after the first cycle (renderer internal caches are warm).
+ const lifecycle=await page.evaluate(async()=>{
+  const T=await import('three'),{createWings,disposeGardenModel}=await import('/src/reletter/garden-art.js'),{createHeadgear,disposeHeadgear}=await import('/src/reletter/headgear-model.js'),{itemById}=await import('/src/shared/catalog.js'),{outfitTextureResources}=await import('/src/shared-render-resources.js');
+  const renderer=templeTest.renderer,prior=renderer.getRenderTarget(),target=new T.WebGLRenderTarget(64,64),stage=new T.Scene(),camera=new T.PerspectiveCamera(45,1,.1,20);
+  camera.position.set(0,1,5);camera.lookAt(0,0,0);stage.add(new T.HemisphereLight(0xffffff,0x333333,3));
+  const counts=()=>({textures:renderer.info.memory.textures,geometries:renderer.info.memory.geometries,refs:outfitTextureResources.snapshot().references});
+  const before=counts(),rows=[];
+  try{
+   renderer.setRenderTarget(target);
+   for(let i=0;i<16;i++){
+    const item={id:'wing-webkit-probe',design:'painted-wing',tier:1,color:'#dd77bb',shape:'rounded',scaleX:1,scaleY:1,abilities:[]};
+    const a=createWings(T,item),b=createWings(T,item),h=createHeadgear(T,itemById('hat-elephant'));
+    b.position.x=.2;stage.add(a,b,h);renderer.render(stage,camera);
+    const shared=a.userData.texture===b.userData.texture,canvas=a.userData.texture.image;
+    disposeGardenModel(a);const alive=canvas.width>0;disposeGardenModel(b);disposeHeadgear(h);
+    renderer.render(stage,camera);
+    rows.push({...counts(),shared,alive,released:canvas.width===0&&canvas.height===0,glError:renderer.getContext().getError()});
+   }
+  }finally{renderer.setRenderTarget(prior);target.dispose();}
+  return {before,rows};
+ });
+ console.log('WEBKIT_TEXTURE_LIFECYCLE='+JSON.stringify(lifecycle));
+ const stable=lifecycle.rows[0];
+ for(const row of lifecycle.rows){assert.ok(row.shared&&row.alive&&row.released);assert.equal(row.refs,lifecycle.before.refs);assert.equal(row.glError,0);assert.equal(row.textures,stable.textures);assert.equal(row.geometries,stable.geometries);}
  console.log('WebKit Safari module graph booted: '+JSON.stringify({timings:loaded,errorCount:messages.length}));
  await page.screenshot({path:'output/temple-safari-startup/success.png'});
 } finally{await browser.close();}

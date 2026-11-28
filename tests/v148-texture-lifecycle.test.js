@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import * as T from 'three';
-import {acquireRootTexture,releaseRootTextures,outfitTextureResources,wingRenderKey} from '../src/shared-render-resources.js';
+import {acquireRootTexture,releaseRootTextures,outfitTextureResources,wingRenderKey,runtimeResource} from '../src/shared-render-resources.js';
 import {disposeGardenModel,createWings} from '../src/reletter/garden-art.js';
 import {readFileSync} from 'node:fs';
 test('shared wing and loot texture leases balance over repeated creation and disposal',()=>{
@@ -38,4 +38,14 @@ test('warm previews and ground loot use the same disposal route, not a permanent
  assert.doesNotMatch(read('src/reletter/world-visuals.js'),/const lootTextures=new Map/);
  assert.match(read('src/reletter/world-visuals.js'),/retiredLootTextures.has\(t\)/);
  assert.match(read('src/build-style.js'),/manager.retire\('buildTexture'/);
+});
+
+test('cloning portrait nodes does not serialize live texture or material resources',()=>{
+ const group=new T.Group();group.userData.wingId='test';const texture=new T.Texture();
+ texture.toJSON=()=>assert.fail('Runtime texture must never be serialized');
+ runtimeResource(group,'texture',texture);
+ assert.equal(group.userData.texture,texture);
+ const clone=group.clone();assert.equal(clone.userData.wingId,'test');assert.equal(clone.userData.texture,undefined);
+ const item={id:'wing-x',design:'painted-wing',updatedAt:1,scaleX:1};
+ assert.notEqual(wingRenderKey(item),wingRenderKey({...item,scaleX:1.5}));
 });
