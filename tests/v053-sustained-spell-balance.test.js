@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {sustainedSpellBalance,channelInterval} from '../src/shared/weapon-abilities.js';
+import {sustainedSpellBalance,channelInterval,weaponQuality} from '../src/shared/weapon-abilities.js';
 import {weaponManaQuote} from '../src/shared/equipment-tuning.js';
 import {itemById} from '../src/shared/catalog.js';
 import {refreshMana} from '../src/shared/player-stats.js';
@@ -10,7 +10,7 @@ test('native sustained elements have ordered base hits and mana budgets at all f
  for(let tier=1;tier<=5;tier++){
   const items=['ember','storm','prism','nova','tide'].map(id=>itemById(id+'-'+tier));
   const balance=items.map(sustainedSpellBalance);
-  assert.deepEqual(balance.map(b=>b.hit),[16,12,4,3,1.5]);
+  for(const [i,b] of balance.entries())assert.ok(Math.abs(b.hit*weaponQuality(items[i]).damage*1000/[1000,1500,250,500,200][i]-[30,28,26,24,22][i]*weaponQuality(items[i]).damage/1.26)<.00001);
   assert.deepEqual(balance.map(b=>b.mpPerSecond),[20,13,10,13,7]);
   for(const [i,item] of items.entries()){
    const q=weaponManaQuote(null,item);

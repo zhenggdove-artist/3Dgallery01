@@ -5,7 +5,7 @@ import {applySpacePaint,SPACE_PAINT_ACTIONS,canSpacePaint} from './space-paint.j
 import {spacePaintMoveFraction,SPACE_PAINT_FLIGHT_LIMIT} from './space-paint-collision.js';
 import {setTerrainStyle} from './terrain-style.js';
 import {wantedSettings,countWantedDeath} from './wanted-list.js';
-import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown,migrateSkillQuality,applySkillAreaScale,bloomHealRate} from './equipment-tuning.js';
+import {tuningVariant,linkedEquipmentTuning,tunedEquipment,equipmentTuning,tuningDamageRatio,weaponManaQuote,restorativeType,restorativeCooldown,migrateSkillQuality,applySkillAreaScale,bloomHealRate,migrateStaffBalance} from './equipment-tuning.js';
 import {journeyPose,journeyAction} from './write-journey.js';
 import {recoverArtworks,recoverMisplacedArtworkPosition} from './artwork-recovery.js';
 import {chargedArea,insideChargedArea,insideSpellFootprint,spellFootprint,spellGroundHeight,scaleUltimateFootprint,resolveCastOrigin,fusionEchoAnchor,iceEruptionContact,ICE_ERUPTION_TRAVEL_MS,ICE_ERUPTION_VISIBLE_MS} from './charge-area.js';
@@ -32,7 +32,7 @@ import {calicoPellets,shotgunDistanceScale} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
-import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs,sustainedSpellBalance,channelInterval} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs,sustainedSpellBalance,channelInterval,isBalancedStaff,staffBaseDamage} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {validPromptLayout} from './operation-prompt.js';
 import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS,vortexSegmentDistance} from './vortex-flight.js';
@@ -64,7 +64,7 @@ const initialStructures=now=>[
 export function createInitialWorld(now=Date.now()){
   return {
     version:WORLD_VERSION,revision:1,createdAt:now,
-    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},relistedShopItems:{},removedShopAssets:{},discPaint:{},spacePaint:[],spacePaintRevision:0,spacePaintSurface:{},spacePaintSurfaceRevision:0,pickupReceipts:[],equipmentTuning:{},environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
+    profiles:{},customWings:[],shopPrices:{},delistedShopItems:{},relistedShopItems:{},removedShopAssets:{},discPaint:{},spacePaint:[],spacePaintRevision:0,spacePaintSurface:{},spacePaintSurfaceRevision:0,pickupReceipts:[],equipmentTuning:{},staffBalanceV150:true,environment:{skyBaseColor:'#101b36'},removedArtworkIds:[],
     coins:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0}])),
     artworks:Object.fromEntries(PLATFORMS.map(p=>[p.id,{availableAt:0,holder:null,throwEvent:null}])),
     artworkLayout:clone(layoutDefaults.artworkLayout||{}),floatingPlatforms:clone(layoutDefaults.floatingPlatforms||[]),customPedestals:[],platformOverrides:{},removedPlatformIds:[],persistentAttacks:[],prismLocks:{},tidalLocks:{},pendingArtworkFlights:[],groundDrops:[],structures:[],cityDamage:{},wallPaint:{},wallPaintRevision:0,plants:[],sceneCleanupVersion:1,
@@ -78,7 +78,7 @@ export function createInitialWorld(now=Date.now()){
 export function migrateWorld(raw,now=Date.now()){
   const world=raw&&typeof raw==='object'?raw:createInitialWorld(now);
   if(!world.version)world.version=1;
-  world.profiles??={};world.equipmentTuning??={};migrateSkillQuality(world);world.customWings??=[];registerCustomWings(world.customWings);
+  world.profiles??={};world.equipmentTuning??={};migrateSkillQuality(world);migrateStaffBalance(world);world.customWings??=[];registerCustomWings(world.customWings);
   world.environment??={skyBaseColor:'#101b36'};world.removedArtworkIds??=[];world.coins??={};world.artworks??={};world.artworkLayout??={};world.floatingPlatforms??=clone(layoutDefaults.floatingPlatforms||[]);world.customPedestals??=[];world.platformOverrides??={};world.removedPlatformIds??=[];world.persistentAttacks??=[];world.prismLocks??={};world.pendingArtworkFlights??=[];world.groundDrops??=[];world.structures??=[];world.cityDamage??={};world.wallPaint??={};world.wallPaintRevision??=0;world.plants??=[];
   world.activity??={coinMinted:0,coinBurned:0,itemsSpawned:0,itemsClaimed:0};
   for(const p of PLATFORMS){world.coins[p.id]??={availableAt:0};if(world.removedArtworkIds.includes(p.id)){delete world.artworks[p.id];delete world.artworkLayout[p.id];continue;}world.artworks[p.id]??={availableAt:0,holder:null,throwEvent:null};if(!world.artworkLayout[p.id]&&layoutDefaults.artworkLayout?.[p.id])world.artworkLayout[p.id]=clone(layoutDefaults.artworkLayout[p.id]);}
@@ -1197,7 +1197,8 @@ function attack(world,profile,actor,body,context,now){
   const enchants=weaponAffixTotals(weapon),sustained=channel?sustainedSpellBalance(weapon):null;
   // Retain quality, affixes, fusion bonuses and GM ratios; only replace the
   // primary sustained hit's authored base power. Normal/release casts stay intact.
-  if(sustained)stats.damage=sustained.hit*10;
+  if(isBalancedStaff(weapon))stats.damage=staffBaseDamage(weapon,stats.ultimate,quality)*10/quality.damage;
+  else if(sustained)stats.damage=sustained.hit*10;
   stats.damage=+(stats.damage*quality.damage*(1+enchants.damage/100)*
    (stats.ultimate?1+enchants.charge/100:1)).toFixed(3);
   // A held staff actually projects forward. Its visual spray and authoritative
@@ -1280,8 +1281,8 @@ function attack(world,profile,actor,body,context,now){
    const basePower=Math.max(.001,Number(baseWeapon[damageField])||1);
    materialRatio+=Math.max(0,(Number(weapon[damageField])||0)-basePower-sniperMaterialBonus)/basePower;
   }
-  if(sustained)stats.damage=+(stats.damage*materialRatio).toFixed(3);
-  const pvpDamage=(sustained?sustained.hit*quality.damage*(1+(enchants.damage+enchants.attack)/100)*(1+enchants.charge/100):pvpShotDamage(weapon,stats,quality))*tuningRatio*materialRatio*attributeScale;
+  if(sustained||isBalancedStaff(weapon))stats.damage=+(stats.damage*materialRatio).toFixed(3);
+  const pvpDamage=(sustained&&!isBalancedStaff(weapon)?sustained.hit*quality.damage*(1+(enchants.damage+enchants.attack)/100)*(1+enchants.charge/100):pvpShotDamage(weapon,stats,quality))*tuningRatio*materialRatio*attributeScale;
   const pvpCapScale=attributeScale*(1+(enchants.damage+enchants.attack)/100)*(stats.ultimate?1+enchants.charge/100:1);
   const shotgunPowerScale=attackPower*(1+enchants.damage/100)*(stats.ultimate?1+enchants.charge/100:1);
   const goldfishPowerScale=attackPower*materialRatio*(1+enchants.damage/100)*(1+enchants.charge/100);
@@ -1348,6 +1349,7 @@ function attack(world,profile,actor,body,context,now){
     for(const [fusionSlot,sourceId] of (profile.fusion?.[weapon.id]?.effects||[]).filter(id=>id!=='black-cat').slice(0,2).entries()){
       const source=tunedEquipment(world,itemById(sourceId));if(source?.slot!=='weapon')continue;
       const sourceQuality=weaponQuality(source),full=attackStats(source,1),echoTuning=equipmentTuning(world,source),echoRatio=tuningDamageRatio(world,source,true);
+      if(isBalancedStaff(source))full.damage=staffBaseDamage(source,true,sourceQuality);
       full.damage*=echoRatio;
       // All borrowed skills terminate at the primary weapon's warned target.
       const anchor=fusionEchoAnchor(primaryFootprint,origin);
@@ -1498,7 +1500,7 @@ export function canBuildAt(world,actorPosition,position){
 
 function validBuildPosition(world,actor,position){return canBuildAt(world,actor.position,position);}
 
-// Authoritative 1 HP/s while flower-crown's authenticated sustained cast
+// Authoritative quality-scaled HP/s while flower-crown's authenticated sustained cast
 // is active. No free HP from ordinary attacks, inactive/expired channels,
 // repeated network packets, or from visuals and client-side clocks.
 export function tickBloomChannelHeal(profile,now,world){
@@ -1964,7 +1966,8 @@ export function previewImmediateBuildingDamage(world,weapon,data,now=Date.now())
  if(!world?.profile||!weapon||!data?.origin||!data.direction)return [];
  const p=world.profile,quality=weaponQuality(weapon,p.fusion?.[weapon.id]),enchants=weaponAffixTotals(weapon);
  const charge=data.ultimate?1:0,stats={...data},sustained=data.channel?sustainedSpellBalance(weapon):null;
- if(sustained)stats.damage=sustained.hit*10;
+ if(isBalancedStaff(weapon))stats.damage=staffBaseDamage(weapon,stats.ultimate,quality)*10/quality.damage;
+ else if(sustained)stats.damage=sustained.hit*10;
  stats.damage=+(stats.damage*quality.damage*(1+enchants.damage/100)*(stats.ultimate?1+enchants.charge/100:1)).toFixed(3);
  const ratio=tuningDamageRatio(world,weapon,stats.ultimate);
  stats.damage*=ratio;
@@ -2382,7 +2385,7 @@ function tickPersistentAttacks(world,actors,now,rng){
     const falloff=scatter?shotgunDistanceScale(along,fx.range):1;
     const shotgunPellet=!fx.echo&&isPlayer&&scatter;
     const ratio=fx.damageRatio??1;
-    const damage=(shotgunPellet?5+15*rng():isPlayer?Math.min(rawDamage,pvpCap*ratio*(fx.pvpCapScale??1)):rawDamage)*(frostProc?1.5:1)*(shotgunPellet?1:falloff);
+    const damage=(shotgunPellet?5+15*rng():isPlayer&&!isBalancedStaff(weapon)?Math.min(rawDamage,pvpCap*ratio*(fx.pvpCapScale??1)):rawDamage)*(frostProc?1.5:1)*(shotgunPellet?1:falloff);
     const lethalHeadshot=!fx.echo&&fx.charge<1&&!fx.shoulderSpread&&isPlayer&&weapon.id==='black-cat'&&sniperHitsHead(
      fx.origin,fx.direction,fx.range,enemy.position);
     const hitKind=lethalHeadshot?(modifiers.critical?'critical-headshot':'headshot'):modifiers.kind;

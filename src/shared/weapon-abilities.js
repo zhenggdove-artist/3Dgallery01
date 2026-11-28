@@ -37,6 +37,17 @@ export function chargeProgress(heldMs,weaponChargeMs){return Math.max(0,Math.min
 export function isStaffTap(item,heldMs){
  return isChannelStaff(item)&&Number.isFinite(heldMs)&&heldMs>=0&&heldMs<=STAFF_TAP_MAX_MS;
 }
+// Native tiered staffs: single-target direct HP/s at blue grade, before
+// affixes, character ATK, defense, criticals and existing elemental effects.
+// Normal shots and sustained contacts use their own unchanged cadence.
+const STAFF_BASE=Object.freeze({fire:[30,1000,1000],lightning:[28,700,1500],beam:[26,1400,250],wave:[24,1600,500],water:[22,650,200],petal:[20,800,1650],ice:[20,900,0]});
+export function isBalancedStaff(item){return !!item&&!item.exotic&&/^(ember|storm|prism|nova|tide|bloom|frost)-[1-5]$/.test(item.id)&&!!STAFF_BASE[item.family];}
+export function staffBaseDps(item,quality=weaponQuality(item)){return isBalancedStaff(item)?STAFF_BASE[item.family][0]*quality.damage/1.26:null;}
+export function staffBaseDamage(item,ultimate=false,quality=weaponQuality(item)){
+ if(!isBalancedStaff(item))return null;
+ const [dps,cooldown,contact]=STAFF_BASE[item.family],grade=Math.max(1,Math.min(5,Number(item.tier)||1)),scale=quality.damage/1.26;
+ return +(ultimate?(contact?dps*scale*contact/1000:25*scale):dps*scale*(cooldown-(grade-1)*35)/1000).toFixed(6);
+}
 // Sustained spells only. Lightning and wind share the second-shortest mana budget.
 // Hit power is per native damage contact, before quality, equipment and target effects.
 const CHANNEL_BALANCE=Object.freeze({
@@ -49,7 +60,9 @@ const CHANNEL_BALANCE=Object.freeze({
 });
 export function sustainedSpellBalance(item){
  if(!isChannelStaff(item)||item.family==='ice')return null;
- return CHANNEL_BALANCE[item.id==='clam'?'water':item.family]||null;
+ const base=CHANNEL_BALANCE[item.id==='clam'?'water':item.family]||null;
+ if(!base||!isBalancedStaff(item))return base;
+ return {...base,hit:staffBaseDamage(item,true)/weaponQuality(item).damage};
 }
 export const ICE_FREEZE_INTERVAL_MS=6000;
 export function channelInterval(item){return item?.family==='ice'?ICE_FREEZE_INTERVAL_MS:Math.max(260,Number(item?.cooldown)||700);}

@@ -7,11 +7,11 @@ test('all five quality defaults, flower healing and linked changes preserve purp
  const w={equipmentTuning:{}};
  for(let tier=1;tier<=5;tier++){
  const item=tuningVariant('bloom-'+tier,tier),factor=[.6,.7,.8,.9,1][tier-1],t=equipmentTuning(w,item);
- assert.equal(t.radiusScale,factor);assert.equal(t.effectPower,factor);assert.equal(t.effectDuration,factor);assert.ok(Math.abs(bloomHealRate(w,item)-factor)<1e-8);
+ assert.equal(t.radiusScale,factor);assert.equal(t.effectPower,factor);assert.equal(t.effectDuration,factor);assert.equal(bloomHealRate(w,item),tier);
  const stats={ultimate:true,range:20,radius:10};applySkillAreaScale(stats,item,t);assert.equal(stats.radius,10*factor);
  }
- const change=linkedEquipmentTuning(w,tuningVariant('bloom-5',5),{healPerSecond:2,effectDuration:2});w.equipmentTuning=change.overrides;
- assert.ok(Math.abs(bloomHealRate(w,tuningVariant('bloom-1',1))-1.2)<1e-8);
+ const change=linkedEquipmentTuning(w,tuningVariant('bloom-5',5),{healPerSecond:10,effectDuration:2});w.equipmentTuning=change.overrides;
+ assert.ok(Math.abs(bloomHealRate(w,tuningVariant('bloom-1',1))-2)<1e-8);
  assert.equal(equipmentTuning(w,tuningVariant('bloom-3',3)).effectDuration,1.6);
 });
 test('migration respects current highest override and leaves unrelated stats intact',()=>{

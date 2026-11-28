@@ -13,7 +13,7 @@ const familySkills={
  fire:'Normal: spray fire forward. Ultimate: maintain a burning field that ignites targets on contact.',
  lightning:'Normal: strike with an electric arc. Ultimate: channel a stream of lightning that locks onto and tracks an enemy.',
  beam:'Normal: attack with a beam. Ultimate: focus on one enemy, increasing damage through continuous hits.',
- petal:'Normal: fire petals and magical shots. Ultimate: create a thorn-and-petal field; channeling restores 1 HP per second and displays +1 even at full HP.',
+ petal:'Normal: fire petals and magical shots. Ultimate: create a thorn-and-petal field; channeling restores HP every second according to quality and displays the configured healing even at full HP.',
  wave:'Normal: release a wave. Ultimate: summon a homing vortex that damages enemies along its path.',
  saber:'Normal: chain close-range sword slashes. Ultimate: send a blade fissure toward the reticle.',
  whip:'Normal: perform successive whip strikes. Ultimate: hit enemies in front and pull them closer.',

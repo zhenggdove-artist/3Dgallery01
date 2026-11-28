@@ -1,4 +1,5 @@
 import {weaponAffixTotals} from './weapon-affixes.js';
+import {isBalancedStaff,staffBaseDamage} from './weapon-abilities.js';
 export const JELLYBRELLA_ULTIMATE_DAMAGE_SCALE=.35;
 export const PALM_STORM_DURATION_MS=3000;
 export const PALM_STORM_TICK_MS=2000;
@@ -35,6 +36,11 @@ export function sniperHitsHead(origin,direction,range,position){
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const MELEE=new Set(['saber','whip','swatter','pan','planter','palm']);
 export function pvpShotDamage(weapon,stats,quality={tier:1}){
+ if(isBalancedStaff(weapon)){
+  const q=Number.isFinite(quality.damage)?quality:{...quality,damage:1+(Math.max(1,quality.tier||1)-1)*.13};
+  const enchant=weaponAffixTotals(weapon);
+  return +(staffBaseDamage(weapon,!!stats?.ultimate,q)*(1+(enchant.damage+enchant.attack)/100)*(stats?.ultimate?1+enchant.charge/100:1)).toFixed(3);
+ }
  const reach=Number(weapon.range)||8,cd=clamp(Number(weapon.cooldown)||800,200,4500);
  const radius=Math.max(.1,Number(weapon.radius)||.5);
  const near=reach<=10||weapon.id==='calico-cat',far=reach>=22&&!near;
