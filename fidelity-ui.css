@@ -1203,7 +1203,7 @@ body.panel-open #panel.terrain-style-floating{width:min(300px,calc(100vw - 16px)
 
 /* Insufficient mana is intentionally independent of the GM prompt layout. */
 #mana-notice{position:fixed;left:50%;top:23%;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 20px);padding:10px 16px;border:1px solid #d8afd4;border-radius:14px;background:#fff1f9ed;color:#553b64;font:12px/1.4 Arial,sans-serif;text-align:center;pointer-events:none;z-index:102;opacity:0;transition:opacity .15s}
-#mana-notice.visible{opacity:.3}
+#mana-notice.visible{opacity:.75}
 
 /* Only the terrain editor's new controls; no other panel styling changes. */
 #panel .terrain-meadow-controls summary{cursor:pointer;padding:4px 0}

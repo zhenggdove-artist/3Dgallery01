@@ -15,26 +15,73 @@ export function buildSoftGarbage(T,g,record,mat){
  const flap=part(T,g,new T.PlaneGeometry(.27,.19,8,5),plastic,-.13,.91,0);flap.rotation.z=.6;flexible(record,flap,.035,'flap');
 }
 
+function paintCardboard(x,w,h,printed){
+ let seed=92831;const rand=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+ x.fillStyle='#b99a69';x.fillRect(0,0,w,h);
+ for(let i=0;i<2400;i++){const a=rand()*w,b=rand()*h;x.fillStyle=i%3?'rgba(79,52,26,.075)':'rgba(247,224,172,.16)';x.fillRect(a,b,1+rand()*5,.6+rand()*2);}
+ if(printed){
+  const red='#aa332e',green='#38664a';x.fillStyle=red;
+  for(const y of [38,51,77,90])x.fillRect(0,y,w,4);
+  // Traditional fruit carton: ribbon, vertical red lettering, Taiwan mark and paired yellow fruit.
+  x.save();x.translate(256,65);x.strokeStyle=red;x.lineWidth=9;x.lineJoin='round';
+  for(const sign of [-1,1]){x.save();x.scale(sign,1);x.beginPath();x.moveTo(4,0);x.bezierCurveTo(20,-37,75,-47,77,-12);x.bezierCurveTo(80,18,30,18,4,0);x.moveTo(9,6);x.quadraticCurveTo(32,36,69,47);x.moveTo(15,3);x.quadraticCurveTo(36,23,76,27);x.stroke();x.restore();}
+  x.beginPath();x.ellipse(0,0,9,15,0,0,TAU);x.stroke();x.restore();
+  x.textAlign='center';x.font='bold 67px "Noto Serif TC","PingFang TC","Microsoft JhengHei",serif';x.fillStyle=red;
+  x.fillText('高',452,195);x.fillText('級',452,274);x.fillText('水',60,333);x.fillText('果',60,414);
+  x.fillStyle=green;x.fillRect(22,136,155,22);x.fillStyle='#e1c79a';x.font='bold 17px sans-serif';x.fillText('台灣鮮果',95,152);
+  x.fillStyle=green;x.beginPath();x.moveTo(123,105);x.lineTo(136,91);x.lineTo(145,97);x.lineTo(143,114);x.lineTo(136,129);x.lineTo(128,151);x.lineTo(118,170);x.lineTo(111,159);x.lineTo(115,141);x.lineTo(111,126);x.closePath();x.fill();
+  x.save();x.translate(263,356);x.strokeStyle=green;x.lineWidth=9;x.beginPath();x.moveTo(4,3);x.quadraticCurveTo(3,-63,57,-98);x.moveTo(6,-35);x.quadraticCurveTo(-32,-73,-77,-62);x.stroke();
+  for(const [a,b,rot,rx,ry] of [[-63,-77,-.3,50,20],[-24,-112,.37,44,22],[51,-80,-.6,38,17],[-78,-30,-.7,37,17],[19,88,-.9,36,16]]){
+   x.save();x.translate(a,b);x.rotate(rot);x.fillStyle=green;x.beginPath();x.moveTo(-rx,0);x.quadraticCurveTo(0,-ry*1.7,rx,0);x.quadraticCurveTo(0,ry*1.7,-rx,0);x.fill();x.strokeStyle='#9a9c57';x.lineWidth=1.6;x.beginPath();x.moveTo(-rx*.83,0);x.quadraticCurveTo(0,-4,rx*.83,0);x.stroke();x.restore();
+  }
+  for(const [a,b,rot,rx,ry] of [[-34,13,-.35,52,64],[45,-3,.16,55,62]]){
+   x.save();x.translate(a,b);x.rotate(rot);x.fillStyle='#d4b848';x.strokeStyle=green;x.lineWidth=4;x.beginPath();x.moveTo(0,-ry*.86);x.bezierCurveTo(-rx,-ry*1.1,-rx*1.25,-ry*.13,-rx*.82,ry*.55);x.bezierCurveTo(-rx*.44,ry*1.15,rx*.48,ry*1.15,rx*.85,ry*.48);x.bezierCurveTo(rx*1.19,-ry*.28,rx*.82,-ry*1.05,0,-ry*.86);x.fill();x.stroke();
+   x.strokeStyle='#8c9146';x.lineWidth=2;x.beginPath();x.ellipse(-3,3,rx*.82,ry*.82,0,.3,Math.PI*1.8);x.stroke();
+   x.fillStyle='rgba(78,102,50,.32)';for(let j=0;j<115;j++){const px=(rand()-.5)*rx*1.6,py=(rand()-.5)*ry*1.6;if(px*px/(rx*rx)+py*py/(ry*ry)<.7)x.fillRect(px,py,1.1+rand()*1.2,1.2);}
+   x.restore();
+  }x.restore();
+  x.fillStyle='#745731';x.font='bold 17px sans-serif';x.fillText('產地：台灣　　嚴禁重壓',256,486);
+ }else{
+  x.strokeStyle='#63744d';x.lineWidth=3;x.strokeRect(32,50,w-64,135);x.beginPath();x.moveTo(32,100);x.lineTo(w-32,100);x.moveTo(32,145);x.lineTo(w-32,145);x.stroke();
+  x.fillStyle='#63744d';x.font='bold 22px sans-serif';x.fillText('品名：水果',45,84);x.fillText('產地：台灣',45,133);x.fillText('重量：________',45,175);
+ }
+ // Creases and grime are printed into the same UV surface, not floating decals.
+ for(let i=0;i<27;i++){const a=rand()*w,b=rand()*h,len=25+rand()*145,dx=(rand()-.5)*len,dy=10+rand()*len;
+  x.strokeStyle='rgba(75,46,25,.20)';x.lineWidth=1+rand()*4;x.beginPath();x.moveTo(a,b);x.lineTo(a+dx*.36,b+dy*.44);x.lineTo(a+dx,b+dy);x.stroke();
+  x.strokeStyle='rgba(240,216,167,.35)';x.lineWidth=1.3;x.beginPath();x.moveTo(a+2,b);x.lineTo(a+dx*.36+2,b+dy*.44);x.lineTo(a+dx+2,b+dy);x.stroke();}
+ for(let i=0;i<160;i++){const edge=i%4,a=edge===0?rand()*45:edge===1?w-rand()*45:rand()*w,b=edge===2?rand()*55:edge===3?h-rand()*80:rand()*h;x.fillStyle='rgba(62,42,23,.09)';x.beginPath();x.ellipse(a,b,2+rand()*17,1+rand()*8,rand()*TAU,0,TAU);x.fill();}
+}
 export function buildSoftCardboard(T,g,record,mat){
- const card=mat('#b08b57'),inner=mat('#795b39');card.side=T.DoubleSide;inner.side=T.DoubleSide;card.roughness=.96;
+ const card=mat('#ffffff'),printed=mat('#ffffff'),inner=mat('#795b39');
+ for(const m of [card,printed,inner]){m.side=T.DoubleSide;m.roughness=.96;}
+ card.map=tex(T,record,512,512,(x,w,h)=>paintCardboard(x,w,h,false));
+ printed.map=tex(T,record,512,512,(x,w,h)=>paintCardboard(x,w,h,true));
  record.cardboard={walls:[],flaps:[]};
  for(let side=0;side<4;side++){
-  const width=side%2?.65:.78,geo=new T.PlaneGeometry(width,.96,18,22),wall=part(T,g,geo,card,0,.53,0);
-  wall.rotation.y=side*Math.PI/2;wall.position.x=Math.sin(wall.rotation.y)*.39;wall.position.z=Math.cos(wall.rotation.y)*.325;if(side%2)wall.position.x=Math.sin(wall.rotation.y)*.39;
-  record.cardboard.walls.push({mesh:wall,base:geo.attributes.position.array.slice(),side,width});
+  const width=side%2?.65:.78,geo=new T.PlaneGeometry(width,.96,18,22),a=geo.attributes.position;
+  for(let i=0;i<a.count;i++){
+   const x=a.getX(i),y=a.getY(i),e=Math.max(0,1-4*x*x/(width*width))*Math.max(0,1-4*y*y/(.96*.96));
+   const fold=Math.exp(-((x+y*.35-.09*Math.sin(side+1))**2)/.0025),fold2=Math.exp(-((y-x*.63+.19)**2)/.0035);
+   const dent=.065*Math.exp(-((x+.14*Math.cos(side))**2+(y-.17)**2)/.025);
+   a.setZ(i,e*(-dent-.033*fold-.022*fold2+.012*Math.sin(x*37+y*19+side)));
+  }geo.computeVertexNormals();
+  const wall=part(T,g,geo,side%2?card:printed,0,.53,0);
+  wall.rotation.y=side*Math.PI/2;wall.position.x=Math.sin(wall.rotation.y)*.39;wall.position.z=Math.cos(wall.rotation.y)*.325;
+  record.cardboard.walls.push({mesh:wall,base:a.array.slice(),side,width});
   const hinge=new T.Group();hinge.position.copy(wall.position);hinge.position.y=1.01;hinge.rotation.order='YXZ';hinge.rotation.y=wall.rotation.y;g.add(hinge);
-  const flap=part(T,hinge,new T.PlaneGeometry(width,.32,14,8),card,0,0,-.16);flap.rotation.x=-Math.PI/2;record.cardboard.flaps.push({hinge,flap,side,base:flap.geometry.attributes.position.array.slice()});
+  const flap=part(T,hinge,new T.PlaneGeometry(width,.32,14,8),card,0,0,-.16);flap.rotation.x=-Math.PI/2;
+  const fa=flap.geometry.attributes.position;for(let i=0;i<fa.count;i++){const x=fa.getX(i),y=fa.getY(i),weight=(y+.16)/.32;fa.setZ(i,weight*(.015*Math.sin(x*19+side)-.018*Math.exp(-((x-y*.8)**2)/.008)));}flap.geometry.computeVertexNormals();
+  record.cardboard.flaps.push({hinge,flap,side,base:fa.array.slice()});
  }
  part(T,g,new T.BoxGeometry(.78,.025,.65),inner,0,.05,0);
- const tape=mat('#a38c67');for(const x of [-.25,.25]){const p=part(T,g,new T.PlaneGeometry(.08,.17),tape,x,.23,.328);p.rotation.z=x*1.1;}
 }
 function animateCardboard(record,d,time){
  const box=record.cardboard;if(!box)return;
  for(const {mesh,base,side,width} of box.walls){const a=mesh.geometry.attributes.position;for(let i=0;i<a.count;i++){
   const x=base[i*3],y=base[i*3+1],envelope=Math.max(0,1-4*x*x/(width*width))*Math.max(0,1-4*y*y/(.96*.96)),dent=(.05+.085*(.5+.5*Math.sin(time*9+side*1.8+y*10)))*d.energy*envelope;
-  a.setXYZ(i,x,y,-dent+.015*d.energy*Math.sin(x*25+y*14+time*7)*envelope);
+  a.setXYZ(i,x,y,base[i*3+2]-dent+.015*d.energy*Math.sin(x*25+y*14+time*7)*envelope);
  }a.needsUpdate=true;mesh.geometry.computeVertexNormals();}
- for(const {hinge,flap,side,base} of box.flaps){flap.rotation.x=-Math.PI/2;hinge.rotation.x=d.energy*(1.50+.22*Math.sin(time*8+side));const a=flap.geometry.attributes.position;for(let i=0;i<a.count;i++){const x=base[i*3],y=base[i*3+1],weight=(y+.16)/.32;a.setXYZ(i,x,y,.055*d.energy*weight*Math.sin(time*10+x*11+side));}a.needsUpdate=true;flap.geometry.computeVertexNormals();}
+ for(const {hinge,flap,side,base} of box.flaps){flap.rotation.x=-Math.PI/2;hinge.rotation.x=d.energy*(1.50+.22*Math.sin(time*8+side));const a=flap.geometry.attributes.position;for(let i=0;i<a.count;i++){const x=base[i*3],y=base[i*3+1],weight=(y+.16)/.32;a.setXYZ(i,x,y,base[i*3+2]+.055*d.energy*weight*Math.sin(time*10+x*11+side));}a.needsUpdate=true;flap.geometry.computeVertexNormals();}
 }
 export function addSwayingPoleWires(T,g,record,mat,wire){
  const cables=[];for(const y of [2.56,2.88])for(const x of [-.49,0,.49]){
@@ -132,10 +179,21 @@ function batch(T,g,geo,mat,count){
  const mesh=new T.InstancedMesh(geo,mat,count);mesh.count=0;mesh.frustumCulled=false;g.add(mesh);
  return {mesh,particles:Array.from({length:count},()=>({age:99,life:0,p:new T.Vector3(),v:new T.Vector3(),angle:0,size:1,floor:0})),next:0};
 }
+const CHIMNEY_DENSITY=5;
 function smokeBatch(T,g,record){
  const texture=tex(T,record,64,64,(x)=>{const radial=x.createRadialGradient(32,32,1,32,32,31);radial.addColorStop(0,'rgba(17,16,18,.78)');radial.addColorStop(.4,'rgba(22,20,22,.55)');radial.addColorStop(1,'rgba(25,24,25,0)');x.fillStyle=radial;x.fillRect(0,0,64,64);});
- const material=new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false});record.materials.push(material);let geometry;
- return {particles:Array.from({length:24},()=>{const sprite=new T.Sprite(material);geometry??=sprite.geometry.clone();sprite.geometry=geometry;sprite.visible=false;sprite.scale.setScalar(0);g.add(sprite);return {sprite,p:new T.Vector3(),v:new T.Vector3(),age:99,life:0,size:1};}),next:0};
+ const material=new T.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false});record.materials.push(material);
+ // One camera-facing instanced batch replaces individual sprite draws.
+ material.onBeforeCompile=shader=>{shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>',`
+  mat4 puffMV=modelViewMatrix*instanceMatrix;
+  vec4 mvPosition=puffMV*vec4(0.0,0.0,0.0,1.0);
+  mvPosition.xy+=position.xy*vec2(length(puffMV[0].xyz),length(puffMV[1].xyz));
+  gl_Position=projectionMatrix*mvPosition;
+ `);};
+ material.customProgramCacheKey=()=> 'chimney-billboard-v143';
+ const count=24*CHIMNEY_DENSITY,mesh=new T.InstancedMesh(new T.PlaneGeometry(1,1),material,count);
+ mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;g.add(mesh);
+ return {mesh,particles:Array.from({length:count},()=>({p:new T.Vector3(),v:new T.Vector3(),age:99,life:0,size:1})),next:0};
 }
 function envelopeGeometry(T){const shape=new T.Shape();shape.moveTo(-.11,-.07);shape.lineTo(.11,-.07);shape.lineTo(.11,.07);shape.lineTo(-.11,.07);shape.closePath();const geo=new T.ShapeGeometry(shape),uv=geo.attributes.uv,a=geo.attributes.position;for(let i=0;i<uv.count;i++)uv.setXY(i,a.getX(i)/.22+.5,a.getY(i)/.14+.5);return geo;}
 export function attachStreetMotion(T,g,kind,record,mat){
@@ -191,7 +249,7 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
  d.energy+=((moving||airborne?1:0)-d.energy)*(1-Math.exp(-dt*10));d.elapsed+=dt;
  let scale=1;
  if(d.batches.length||d.smoke||d.rat){d.g.updateWorldMatrix(true,false);d.inverse.copy(d.g.matrixWorld).invert();if(d.rat){d.g.matrixWorld.decompose(d.origin,d.dummy.quaternion,d.worldScale);scale=Math.max(.001,d.worldScale.y);}}
- if(teleport){d.credit=0;for(const b of d.batches)for(const p of b.particles)p.age=p.life;if(d.smoke)for(const p of d.smoke.particles){p.age=p.life;p.sprite.visible=false;}d.energy=0;if(d.rat){d.ratAge=99;d.rat.visible=false;}}
+ if(teleport){d.credit=0;for(const b of d.batches)for(const p of b.particles)p.age=p.life;if(d.smoke){for(const p of d.smoke.particles)p.age=p.life;d.smoke.mesh.count=0;d.smoke.mesh.visible=false;}d.energy=0;if(d.rat){d.ratAge=99;d.rat.visible=false;}}
  for(const soft of record.softMeshes||[]){const a=soft.mesh.geometry.attributes.position,b=soft.base;if(d.energy<.002&&soft.resting)continue;soft.resting=d.energy<.002;
   for(let i=0;i<a.count;i++){const x=b[i*3],y=b[i*3+1],z=b[i*3+2],weight=soft.kind==='pharmacy'?Math.min(1,Math.abs(y-.87)*2.4):1,phase=time*9+y*6+x*5;const w=soft.amp*d.energy*weight;a.setXYZ(i,x+w*Math.sin(phase),y+w*.37*Math.sin(phase*1.4+z*6),z+w*Math.cos(phase+x*7));}a.needsUpdate=true;soft.mesh.geometry.computeVertexNormals();
  }
@@ -212,9 +270,11 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
   for(let i=0;i<d.flies.length;i++){const {f,w1,w2}=d.flies[i],a=time*(2.1+i*.07)+i*2.4;f.visible=d.lidOpen>.2;const approach=.5+(1-d.lidOpen)*1.6;f.position.set(Math.cos(a)*(approach+.11*Math.sin(a*2)),1.15+.25*Math.sin(a*1.7+i),Math.sin(a)*approach);f.rotation.y=-a;w1.rotation.z=Math.sin(time*70+i)*.7;w2.rotation.z=-w1.rotation.z;}
  }
  const smoke=d.smoke;
- if(smoke){const rate=teleport?0:5+Math.min(9,speed*.75)+(airborne?6:0);d.credit+=rate*dt;
+ if(smoke){const rate=teleport?0:CHIMNEY_DENSITY*(5+Math.min(9,speed*.75)+(airborne?6:0));d.credit+=rate*dt;
   while(d.credit>=1){d.credit--;const p=smoke.particles[smoke.next++%smoke.particles.length];p.age=0;p.life=2.1;p.size=.22;p.p.copy(d.origin.set((rng(d)-.5)*.16,3.02,(rng(d)-.5)*.16)).applyMatrix4(d.g.matrixWorld);p.v.set((rng(d)-.5)*.35,.55+speed*.035,(rng(d)-.5)*.35);}
-  for(const p of smoke.particles){p.age+=dt;p.sprite.visible=p.age<p.life;if(!p.sprite.visible)continue;p.p.addScaledVector(p.v,dt);p.sprite.position.copy(d.local.copy(p.p).applyMatrix4(d.inverse));const u=p.age/p.life;p.sprite.scale.setScalar((p.size+u*.58)*Math.min(1,(1-u)*3));}
+  let n=0;const dummy=d.dummy;dummy.rotation.set(0,0,0);
+   for(const p of smoke.particles){p.age+=dt;if(p.age>=p.life)continue;p.p.addScaledVector(p.v,dt);dummy.position.copy(d.local.copy(p.p).applyMatrix4(d.inverse));const u=p.age/p.life;dummy.scale.setScalar((p.size+u*.58)*Math.min(1,(1-u)*3));dummy.updateMatrix();smoke.mesh.setMatrixAt(n++,dummy.matrix);}
+   smoke.mesh.count=n;smoke.mesh.visible=n>0;if(n)smoke.mesh.instanceMatrix.needsUpdate=true;
   return;
  }
  const producing=!teleport&&(d.kind==='fried-chicken-disguise'?moving:active);
@@ -231,23 +291,49 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
  for(const b of d.batches)updateBatch(d,b,dt);
 }
 export function createColaStream(T,g,record,mat){
- const n=64,sides=28,positions=new Float32Array(n*sides*3),uv=new Float32Array(n*sides*2),indices=[];
- for(let j=0;j<n;j++)for(let i=0;i<sides;i++){const k=j*sides+i;positions[k*3+1]=1.96;uv[k*2]=i/sides;uv[k*2+1]=j/(n-1);if(j<n-1){const b=j*sides+(i+1)%sides;indices.push(k,b,k+sides,b,b+sides,k+sides);}}
- const sheets=[],clock={value:0};
- for(let k=0;k<3;k++){
-  const cola=mat(k===0?'#7b3419':k===1?'#a45a31':'#c58b55');cola.roughness=.19;cola.transparent=true;cola.opacity=k===0?.88:k===1?.60:.40;cola.side=T.DoubleSide;cola.depthWrite=false;
-  cola.onBeforeCompile=shader=>{shader.uniforms.colaTime=clock;shader.vertexShader='varying vec2 vColaUV;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvColaUV=uv;');shader.fragmentShader='uniform float colaTime; varying vec2 vColaUV;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\nfloat u=vColaUV.y; float a=vColaUV.x*6.2831853; float streak=sin(a*19.0+u*72.0-colaTime*16.0)*sin(a*11.0-u*51.0+colaTime*9.0); float wisps=0.5+0.5*sin(a*37.0+u*115.0-colaTime*23.0); float grain=0.5+0.5*sin(a*61.0-u*194.0+colaTime*31.0); float crest=smoothstep(0.52,0.96,u); diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*1.7,0.38*max(streak,0.0)+0.22*crest); diffuseColor.a*=mix(0.85+0.15*wisps,(0.18+0.82*wisps*grain),crest)*(1.0-smoothstep(0.83,1.0,u));');};cola.customProgramCacheKey=()=> 'cola-fluid-sheet-v132-'+k;
-  const geo=new T.BufferGeometry();geo.setAttribute('position',new T.BufferAttribute(positions.slice(),3).setUsage(T.DynamicDrawUsage));geo.setAttribute('uv',new T.BufferAttribute(uv.slice(),2));geo.setIndex(indices);geo.computeVertexNormals();const mesh=part(T,g,geo,cola);mesh.visible=false;mesh.frustumCulled=false;mesh.renderOrder=5+k;sheets.push(mesh);
+ // A solid rising liquid core, eight cylindrical curved jets, and fine detached droplets.
+ // Reuse fixed buffers; no transparency sheets or per-frame mesh allocations.
+ const n=40,sides=12,streams=9,positions=new Float32Array(streams*n*sides*3),indices=[];
+ for(let k=0;k<streams;k++)for(let j=0;j<n;j++)for(let i=0;i<sides;i++){
+  const a=(k*n+j)*sides+i,b=(k*n+j)*sides+(i+1)%sides;positions[a*3+1]=1.96;
+  if(j<n-1)indices.push(a,a+sides,b,b,a+sides,b+sides);
  }
- record.colaMotion.jet={mesh:sheets[0],sheets,n,sides,clock};
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage));geo.setIndex(indices);geo.computeVertexNormals();
+ const liquid=mat('#71331b');liquid.roughness=.15;liquid.metalness=.04;
+ const mesh=part(T,g,geo,liquid);mesh.visible=false;mesh.frustumCulled=false;
+ const splash=mat('#a35b32');splash.roughness=.13;splash.metalness=.03;
+ const dropCount=64,drops=new T.InstancedMesh(new T.SphereGeometry(1,8,6),splash,dropCount);
+ drops.instanceMatrix.setUsage(T.DynamicDrawUsage);drops.count=0;drops.visible=false;drops.frustumCulled=false;g.add(drops);
+ record.colaMotion.jet={mesh,n,sides,streams,drops,dropCount,dummy:new T.Object3D(),up:new T.Vector3(0,1,0),direction:new T.Vector3()};
 }
 export function updateColaStream(d,time){
- if(!d.jet)return;const {sheets,n,sides,clock}=d.jet;clock.value=time;
- for(let k=0;k<sheets.length;k++){const mesh=sheets[k];mesh.visible=d.open>.03;if(!mesh.visible)continue;const a=mesh.geometry.attributes.position;
-  for(let j=0;j<n;j++){const u=j/(n-1),phase=time*6-u*7+k*.8,cx=Math.sin(phase)*.13*u*d.open,cz=.11*u*u*d.open;
-   const y=1.98+(2.70*u-.86*u*u)*d.open,rad=(.062+.16*Math.pow(u,2.2)+k*.055*u)*d.open;
-   for(let i=0;i<sides;i++){const theta=i*TAU/sides,ragged=1+.18*Math.sin(theta*7+phase*2)+.10*Math.sin(theta*13-phase*3),tip=.10*Math.pow(u,3)*Math.sin(theta*9+phase*4);a.setXYZ(j*sides+i,cx+Math.cos(theta)*rad*ragged,y+tip*d.open,cz+Math.sin(theta)*rad*ragged);}
-  }a.needsUpdate=true;mesh.geometry.computeVertexNormals();
+ if(!d.jet)return;const {mesh,n,sides,streams,drops,dropCount,dummy,up,direction}=d.jet;
+ const open=d.open;mesh.visible=drops.visible=open>.03;if(!mesh.visible){drops.count=0;return;}
+ const a=mesh.geometry.attributes.position;
+ for(let k=0;k<streams;k++)for(let j=0;j<n;j++){
+  const u=j/(n-1),phase=time*10-u*15+k*1.7,angle=(k-1)*TAU/(streams-1)+.11*Math.sin(time*2+k);
+  const ca=Math.cos(angle),sa=Math.sin(angle),arm=k>0;
+  const r=arm?(.03+.72*u):0,cy=arm?1.98+1.02+3.8*u-4.5*u*u:1.98+1.84*u;
+  const cx=arm?ca*r:.075*Math.sin(phase)*u,cz=arm?sa*r:.07*Math.cos(phase)*u;
+  const slope=arm?3.8-9*u:1,radial=arm?.72:0,inv=1/Math.hypot(slope,radial);
+  const nx=arm?ca*slope*inv:1,ny=arm?-radial*inv:0,nz=arm?sa*slope*inv:0,bx=arm?-sa:0,bz=arm?ca:1;
+  const radius=arm?(.036+.014*Math.sin(phase))*(.92-.80*u*u):(.069+.037*Math.sin(Math.PI*u)+.011*Math.sin(phase))*Math.max(.035,1-Math.pow(u,12));
+  for(let i=0;i<sides;i++){
+   const theta=i*TAU/sides,w=radius*(1+.14*Math.sin(theta*3+phase)+.08*Math.cos(theta*5-phase));
+   const c=Math.cos(theta)*w,ss=Math.sin(theta)*w;
+   a.setXYZ((k*n+j)*sides+i,(cx+nx*c+bx*ss)*open,1.98+(cy-1.98+ny*c)*open,(cz+nz*c+bz*ss)*open);
+  }
  }
+ a.needsUpdate=true;mesh.geometry.computeVertexNormals();
+ for(let i=0;i<dropCount;i++){
+  const phase=(time*(.76+(i%7)*.035)+i*.61803398875)%1,u=phase,angle=i*2.39996323+.1*Math.sin(time*2+i),ca=Math.cos(angle),sa=Math.sin(angle);
+  const radial=.15+(i%9)*.037,travel=.12+radial*u,vy=3.15+(i%5)*.12,gravity=4.7;
+  const y=1.98+1.04+vy*u-gravity*u*u;
+  dummy.position.set(ca*travel*open,1.98+(y-1.98)*open,sa*travel*open);
+  direction.set(ca*radial,vy-2*gravity*u,sa*radial).normalize();dummy.quaternion.setFromUnitVectors(up,direction);
+  const size=(.006+(i%11)*.0014)*open*Math.min(1,(1-u)*9,u*15+.1);
+  dummy.scale.set(size,size*(1.6+Math.abs(vy-2*gravity*u)*.42),size);dummy.updateMatrix();drops.setMatrixAt(i,dummy.matrix);
+ }
+ drops.count=dropCount;drops.instanceMatrix.needsUpdate=true;
 }
 export function animateFaultyMutton(mat,time){const t=((time%8.1)+8.1)%8.1;const off=(t>.12&&t<.24)||(t>.36&&t<.57)||(t>1.64&&t<1.71)||(t>3.18&&t<3.92)||(t>4.03&&t<4.10)||(t>4.18&&t<4.39)||(t>6.8&&t<7.4);mat.emissiveIntensity=off?0:2.2;mat.color.setScalar(off?.015:1);}
