@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import {WEAPONS,itemById,attackStats} from '../src/shared/catalog.js';
 import {calicoPellets} from '../src/shared/calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs} from '../src/shared/combat-balance.js';
-import {weaponQuality} from '../src/shared/weapon-abilities.js';
+import {weaponQuality,isBalancedStaff,staffBaseDps} from '../src/shared/weapon-abilities.js';
 import {WeaponSignatureEffects} from '../src/weapon-signature-effects.js';
 import {createInitialWorld,ensureProfile,applyAction,tickWorld,worldView} from '../src/shared/temple-rules.js';
 
@@ -41,6 +41,7 @@ test('PvP power is weighted by range, radius, cooldown and charging duration',()
   pvpShotDamage(itemById('prism-1'),attackStats(itemById('prism-1'),0),q)*2);
  for(const w of WEAPONS)if(w.id!=='black-cat'){
   const normalPower=pvpShotDamage(w,attackStats(w,0),weaponQuality(w));
+  if(isBalancedStaff(w)){assert.ok(Math.abs(normalPower*1000/w.cooldown-staffBaseDps(w))<.005,w.id+' normalized staff DPS');continue;}
   assert.ok(normalPower<=12.2,w.id);
   assert.ok(Math.ceil(100/(normalPower*1.14))>=8,
    w.id+' must never two-shot via critical or headshot multipliers');

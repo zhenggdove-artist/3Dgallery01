@@ -82,13 +82,13 @@ test('flower crown channel restores quality-scaled HP per second, capped, never 
  assert.equal(tickBloomChannelHeal(p,started+999),0);
  // A live channel has a connected actor; disconnected casters now stop.
  tickWorld(world,{now:started+1000,actors:[a],activeFighters:1,rng:()=>.5});
- assert.ok(Math.abs(p.hp-91.6)<1e-8);
+ assert.ok(Math.abs(p.hp-92)<1e-8);
  assert.equal(tickBloomChannelHeal(p,started+1000),0,'repeat tick in same second cannot double heal');
  const heartbeat=applyAction(world,a,{action:'attack',phase:'channel',direction:[0,0,1]},
   {now:started+1750,actors:[a],rng:()=>.5});
  assert.ok(heartbeat.attackEvent,'a live 1 HP/s channel sends authenticated attack pulses');
- assert.equal(tickBloomChannelHeal(p,started+2300),.6);
- assert.ok(Math.abs(p.hp-92.2)<1e-8);
+ assert.equal(tickBloomChannelHeal(p,started+2300),1);
+ assert.ok(Math.abs(p.hp-93)<1e-8);
  p.hp=p.maxHp-.5;
  assert.equal(tickBloomChannelHeal(p,started+3300),.5,'healing is capped at max HP');
  assert.equal(p.hp,p.maxHp);

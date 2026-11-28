@@ -1,7 +1,8 @@
 import {attackStats} from './catalog.js';
 import {weaponRangeClass} from '../reletter/odd-weapons.js';
 import {pvpShotDamage,SNIPER_RANGE} from './combat-balance.js';
-import {weaponQuality,forwardCastRadius,GOLDFISH_SWIM_RADIUS} from './weapon-abilities.js';
+import {weaponQuality,forwardCastRadius,GOLDFISH_SWIM_RADIUS,isBalancedStaff,staffBaseDps,staffBaseDamage} from './weapon-abilities.js';
+import {bloomHealRate} from './equipment-tuning.js';
 import {scaleUltimateFootprint} from './charge-area.js';
 import {GOLDFISH_SCHOOL_RADIUS} from './goldfish-school.js';
 import {normalizedWeaponAffixes,weaponAffixLabel,weaponAffixTotals} from './weapon-affixes.js';
@@ -13,7 +14,7 @@ const familySkills={
  fire:'Normal: spray fire forward. Ultimate: maintain a burning field that ignites targets on contact.',
  lightning:'Normal: strike with an electric arc. Ultimate: channel a stream of lightning that locks onto and tracks an enemy.',
  beam:'Normal: attack with a beam. Ultimate: focus on one enemy, increasing damage through continuous hits.',
- petal:'Normal: fire petals and magical shots. Ultimate: create a thorn-and-petal field; channeling restores HP every second according to quality and displays the configured healing even at full HP.',
+ petal:'Normal: fire petals and magical shots. Ultimate: create a thorn-and-petal field; channeling restores {heal} HP per second and displays the configured healing even at full HP.',
  wave:'Normal: release a wave. Ultimate: summon a homing vortex that damages enemies along its path.',
  saber:'Normal: chain close-range sword slashes. Ultimate: send a blade fissure toward the reticle.',
  whip:'Normal: perform successive whip strikes. Ultimate: hit enemies in front and pull them closer.',
@@ -71,11 +72,14 @@ export function explainWeapon(item,fusion=null){
  if(item.id==='goldfish')charged.radius=GOLDFISH_SCHOOL_RADIUS*quality.visual;
  if(item.id==='giraffe')charged.range=+(item.chargedRange*quality.range).toFixed(2);
  const cls=({near:'Close-Range',mid:'Mid-Range',far:'Long-Range'})[weaponClass(item)]||'Special';
- const description=specials[item.id]||familySkills[item.family]||item.description||'Hold the attack button to charge an ultimate with a different range and damage profile.';
+ const description=(specials[item.id]||familySkills[item.family]||item.description||'Hold the attack button to charge an ultimate with a different range and damage profile.').replace('{heal}',num(bloomHealRate({equipmentTuning:{[item.id+':'+(item.shopTier??item.tier??1)]:item.gmTuning||{}}},item),2));
  const extent=item.id==='accordion'
   ?'Ultimate collision corridor: '+num(charged.range)+' m long, '+num(charged.radius*2)+' m wide; each target can be hit at most once per second'
   :'Ultimate preview: range '+num(charged.range)+' m, approximately '+num(charged.radius)+' m radius';
- const damage='Approximate PvP base damage per hit: '+num(pvpShotDamage(item,normal,quality),2)+
+ const normalRatio=isBalancedStaff(item)?(item.gmTuning?.damage??staffBaseDamage(item))/staffBaseDamage(item):1;
+ const ultimateBase=isBalancedStaff(item)?(item.family==='ice'?staffBaseDamage(item,true):staffBaseDps(item)):1;
+ const ultimateRatio=isBalancedStaff(item)?(item.gmTuning?.ultimateDamage??ultimateBase)/ultimateBase:1;
+ const damage=isBalancedStaff(item)?'Base normal DPS: '+num(pvpShotDamage(effective,normal,quality)*normalRatio*1000/effective.cooldown,2)+(item.family==='ice'?'; ultimate HP/hit: '+num(pvpShotDamage(effective,charged,quality)*ultimateRatio,2):'; base channel DPS: '+num(staffBaseDps(item,quality)*ultimateRatio,2))+' (before character stats and elemental effects)':'Approximate PvP base damage per hit: '+num(pvpShotDamage(item,normal,quality),2)+
   '; ultimate: '+num(pvpShotDamage(item,charged,quality),2)+' (actual damage depends on hit count, critical hits and damage reduction)';
  return [cls+' Weapon',description,
   'Normal effective range: '+num(normal.range)+' m',extent,

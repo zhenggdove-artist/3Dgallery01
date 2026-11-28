@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {itemById} from '../src/shared/catalog.js';
 import {staffBaseDamage,staffBaseDps,weaponQuality,channelInterval} from '../src/shared/weapon-abilities.js';
 import {tuningFields,tuningVariant,equipmentTuning,weaponManaQuote,bloomHealRate,migrateStaffBalance} from '../src/shared/equipment-tuning.js';
-import {createInitialWorld,ensureProfile,applyAction,tickBloomChannelHeal} from '../src/shared/temple-rules.js';
+import {createInitialWorld,ensureProfile,applyAction,tickBloomChannelHeal,advanceCombatContacts} from '../src/shared/temple-rules.js';
 import {playerStats} from '../src/shared/player-stats.js';
 import {pvpShotDamage} from '../src/shared/combat-balance.js';
 const families=['ember','storm','prism','nova','tide','bloom'],expected=[30,28,26,24,22,20],interval=[1000,1500,250,500,200,1650];
@@ -50,4 +50,19 @@ test('one-time migration resets only staff damage/mana/heal, preserves later edi
  const w={equipmentTuning:{'bloom-3:3':{damage:99,ultimateDamage:99,manaCost:88,healPerSecond:1,radiusScale:.8},'saber-3:3':{damage:99}}};
  migrateStaffBalance(w);assert.deepEqual(w.equipmentTuning,{'bloom-3:3':{radiusScale:.8},'saber-3:3':{damage:99}});
  w.equipmentTuning['bloom-3:3'].healPerSecond=9;migrateStaffBalance(w);assert.equal(w.equipmentTuning['bloom-3:3'].healPerSecond,9);
+});
+
+test('ordinary staff projectiles debit server monster HP and GM zero disables the next attack',()=>{
+ const T=100000000,world=createInitialWorld(T),actor={key:'gm',name:'GM',role:'fighter',admin:true,color:'#ffffff',position:[75,0,0]};
+ const p=ensureProfile(world,actor.key,actor.name,actor.color,T,true);
+ world.monster={id:'target',active:true,position:[75,0,3],hp:10000,maxHp:10000,bodyRadius:1,bodyHeight:2.5,skills:[],nextAttackAt:T+100000};
+ p.equipment.weapon='ember-3';p.inventory.push('ember-3');const item=itemById('ember-3');
+ const act=(now,body)=>applyAction(world,actor,body,{now,actors:[actor],rng:()=>.99});
+ const shot=act(T+1000,{action:'attack',direction:[0,0,1],charge:0});assert.ok(shot.attackEvent,shot.error);
+ advanceCombatContacts(world,[actor],T+1240,()=>.99);
+ assert.ok(world.monster.hp<10000);
+ const previous=world.monster.hp;
+ assert.ok(!act(T+2000,{action:'gm-equipment-tuning',itemId:item.id,qualityTier:3,values:{damage:0}}).error);
+ const zero=act(T+3000,{action:'attack',direction:[0,0,1],charge:0});assert.ok(zero.attackEvent);assert.equal(zero.attackEvent.damage,0);
+ advanceCombatContacts(world,[actor],T+3240,()=>.99);assert.equal(world.monster.hp,previous);
 });

@@ -182,5 +182,5 @@ export function bloomHealRate(world,item){
  const t=equipmentTuning(world,item);
  // Healing has its own absolute quality-scaled field; effect power modifies
  // it relative to that grade's baseline, avoiding a second default nerf.
- return (t.healPerSecond??1)*(t.effectPower??1)/skillGradeScale(item);
+ return (t.healPerSecond??1)*((t.effectPower??1)/skillGradeScale(item));
 }
