@@ -32,7 +32,7 @@ import {calicoPellets,shotgunDistanceScale} from './calico-pellets.js';
 import {pvpShotDamage,projectileFlightMs,sniperHitsHead,contactDamageIntervalMs,visibleCollisionLifetimeMs,SNIPER_RANGE,PALM_STORM_DURATION_MS,PALM_STORM_TICK_MS} from './combat-balance.js';
 import {normalMeleeFootprint} from './melee-contact.js';
 import {weaponAffixTotals} from './weapon-affixes.js';
-import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs,sustainedSpellBalance,channelInterval,isBalancedStaff,staffBaseDamage} from './weapon-abilities.js';
+import {isChannelStaff,weaponQuality,channelVisualRadius,forwardCastRadius,channelReachMultiplier,ICE_FREEZE_INTERVAL_MS,GOLDFISH_SWIM_MS,GOLDFISH_SWIM_RADIUS,TIDE_PUSH_INTERVAL_MS,TIDE_PUSH_DURATION_MS,TIDE_PUSH_DISTANCE,TIDE_DAMAGE_TICK_MS,WHIP_PULL_SPEED,whipPullDurationMs,sustainedSpellBalance,channelInterval,isBalancedStaff,staffBaseDamage,isNovaStaff,normalCastRadius} from './weapon-abilities.js';
 import {recordTempleDamage} from './damage-events.js';
 import {validPromptLayout} from './operation-prompt.js';
 import {advanceHomingVortex,vortexSpinPoint,VORTEX_FLIGHT_MS,VORTEX_DAMAGE_INTERVAL_MS,VORTEX_SPIN_MS,VORTEX_SPIN_LOCK_MS,vortexSegmentDistance} from './vortex-flight.js';
@@ -1239,7 +1239,7 @@ function attack(world,profile,actor,body,context,now){
   }
   // The narrow server collision tube must agree with the visible spray and
   // the original blue #59 rectangle. Non-channel charged AoEs stay intact.
-  stats.radius=forwardCastRadius(weapon,quality,stats.radius,channel||(weapon.family==='ice'&&stats.ultimate));
+  stats.radius=stats.ultimate?forwardCastRadius(weapon,quality,stats.radius,channel||(weapon.family==='ice'&&stats.ultimate)):normalCastRadius(weapon,quality,stats.radius);
    // Restrict ordinary whip contacts to the visible, narrow forward-moving lash.
    if(weapon.family==='whip'&&!weapon.exotic&&!stats.ultimate){stats.range=+(Math.min(stats.range,4.7+(Math.max(1,weapon.tier||1)-1)*1.5)/3).toFixed(3);stats.radius=.16;}
     if(weapon.family==='swatter'&&!weapon.exotic&&!stats.ultimate){stats.range=Math.min(stats.range,1.55+(Math.max(1,weapon.tier||1)-1)*.2);stats.radius=.18;}
@@ -1985,7 +1985,7 @@ function immediateStructureDamage(world,weapon,stats,area,origin,direction,charg
   // The city's structural impact follows weapon damage and charged strength,
   // without changing PvP damage or displaying health numbers on the building.
   const structuralDamage=tuningRatio===0?0:Math.max(8,Math.round((stats.damage+bonus*.1*tuningRatio)*(charge>=1?1.5:1.1)));
-  const city=deferredStructures||returningGiraffe||waveVortex||!structuralDamage?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now,weapon.pattern==='scatter',stats.radius);
+  const city=deferredStructures||returningGiraffe||waveVortex||!structuralDamage?{hits:[],destroyed:[]}:cityWeaponHits(world,origin,direction,stats.range,area,structuralDamage,now,weapon.pattern==='scatter',stats.radius,isNovaStaff(weapon)&&!stats.ultimate);
  for(const impact of city.hits){structureHit??=impact;structureHits.push(impact);}
  for(const fallen of city.destroyed){structureDestroyed??=fallen;structureDestroyedEvents.push(fallen);}
 
@@ -2046,7 +2046,7 @@ export function previewActorContacts(data,targets,fromMs,toMs){
  return contact;
 }
 
-function cityWeaponHits(world,origin,direction,range,area,damage,now,scatter=false,radius=0){
+function cityWeaponHits(world,origin,direction,range,area,damage,now,scatter=false,radius=0,novaTap=false){
  const impactDamage=point=>scatter?Math.round(damage*shotgunDistanceScale(Math.max(0,project(origin,direction,point)),range)):damage;
  const hits=[],destroyed=[];
  if(area&&['area','sector'].includes(area.mode)){
@@ -2066,8 +2066,22 @@ function cityWeaponHits(world,origin,direction,range,area,damage,now,scatter=fal
   if(!target){
    const at=origin.map((v,i)=>v+direction[i]*range*.5);
    for(const lot of cityCollisionCandidates(at[0],at[2],range*.5+radius+8)){
-    const distance=firstBoxContact(cityBoxes(lot,world),origin,direction,range,radius);
-    if(distance!==null&&(!target||distance<target.distance))target={lot,distance,part:'masonry',position:origin.map((v,i)=>v+direction[i]*distance)};
+    const boxes=cityBoxes(lot,world);
+     if(novaTap){
+      // Expanded slab contact locates the orb CENTER, not the wall.
+      // Project onto the exact contacted floor so chips/smoke never spawn
+      // in mid-air at the caster when a nearby facade is grazed.
+      for(const box of boxes){
+       const distance=firstBoxContact([box],origin,direction,range,radius);
+       if(distance!==null&&(!target||distance<target.distance)){
+        const center=origin.map((v,i)=>v+direction[i]*distance);
+        target={lot,distance,part:'masonry',position:closestBoxPoint(box,center)};
+       }
+      }
+     }else{
+      const distance=firstBoxContact(boxes,origin,direction,range,radius);
+      if(distance!==null&&(!target||distance<target.distance))target={lot,distance,part:'masonry',position:origin.map((v,i)=>v+direction[i]*distance)};
+     }
    }
   }
   if(target){

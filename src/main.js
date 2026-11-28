@@ -26,7 +26,7 @@ import {setHealthBar,faceHealthBar} from './health-bars.js';
 import {attackDirection,cameraAimDirection} from './aiming.js';
 import {castBaseOrigin} from './shared/charge-area.js';
 import {lateralBeamInput,targetOnBeam} from './native-beam-curve.js';
-import {isChannelStaff,isStaffTap,channelInterval,chargeProgress,STAFF_TAP_MAX_MS,CAST_MOVE_FACTOR,weaponQuality,forwardCastRadius} from './shared/weapon-abilities.js';
+import {isChannelStaff,isStaffTap,channelInterval,chargeProgress,STAFF_TAP_MAX_MS,CAST_MOVE_FACTOR,weaponQuality,normalCastRadius} from './shared/weapon-abilities.js';
 import {uploadArtwork} from './artwork-upload.js';
 import {VitalModels} from './vital-models.js';
 import {createVHS} from './reletter-vhs.js';
@@ -1097,7 +1097,7 @@ function captureReleasedCast(item,charge){
 function normalVisualData(item,sample){
  const quality=weaponQuality(item,world?.profile?.fusion?.[item.id]),stats=attackStats(item,0);
  stats.range=+(stats.range*quality.range).toFixed(2);
- stats.radius=forwardCastRadius(item,quality,stats.radius,false);
+ stats.radius=normalCastRadius(item,quality,stats.radius);
  if(item.family==='whip'&&!item.exotic){stats.range=+(Math.min(stats.range,4.7+(Math.max(1,item.tier||1)-1)*1.5)/3).toFixed(3);stats.radius=.16;}
  if(item.family==='swatter'&&!item.exotic){stats.range=Math.min(stats.range,1.55+(Math.max(1,item.tier||1)-1)*.2);stats.radius=.18;}
  if(item.family==='saber'){stats.range=Math.min(stats.range,(4.7+(Math.max(1,item.tier||1)-1)*1.5)/3);stats.radius=Math.min(stats.radius,.16);}

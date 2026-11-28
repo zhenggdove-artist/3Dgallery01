@@ -9,7 +9,7 @@ import {WeaponSignatureEffects} from './weapon-signature-effects.js';
 import {NumberedWeaponEffects} from './numbered-weapon-effects.js';
 import {VerdantRestorationChannel} from './verdant-restoration-channel.js';
 import {PlantUltimateEffects} from './plant-ultimate-effects.js';
-import {isChannelStaff} from './shared/weapon-abilities.js';
+import {isChannelStaff,STAFF_ORB_SHELL_RADIUS,STAFF_ORB_SHELL_PULSE,staffOrbVisualScale} from './shared/weapon-abilities.js';
 import {projectileFlightMs} from './shared/combat-balance.js';
 import sweep from '../vendor/00gamedevs/azure-sweep.js';
 import smear from '../vendor/00gamedevs/weapon-smear.js';
@@ -290,7 +290,7 @@ export class WeaponVFX{
    const group=new THREE.Group();group.name='Pulsing '+family+' elemental orb';
    const core=new THREE.Mesh(new THREE.IcosahedronGeometry(.35,2),
     new THREE.MeshBasicMaterial({color:colors[0],toneMapped:false}));
-   const shell=new THREE.Mesh(new THREE.IcosahedronGeometry(.47,1),
+   const shell=new THREE.Mesh(new THREE.IcosahedronGeometry(STAFF_ORB_SHELL_RADIUS,1),
     new THREE.MeshBasicMaterial({color:colors[1],transparent:true,opacity:.24,
      depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,side:THREE.DoubleSide}));
    const n=64,positions=new Float32Array(n*3);
@@ -326,7 +326,7 @@ export class WeaponVFX{
   entry.origin=origin.clone();entry.direction=direction.clone();
   entry.age=0;entry.range=Math.max(1,Number(data.range)||12);
   entry.duration=Math.max(.16,Number(data.flightMs)||projectileFlightMs(item,false,entry.range))/1000;
-  entry.group.position.copy(origin);entry.group.scale.setScalar(Math.max(.7,Math.min(1.6,Number(data.qualityScale)||1)));
+  entry.group.position.copy(origin);entry.group.scale.setScalar(staffOrbVisualScale(data.qualityScale));
   entry.firstFramePending=!!data.localPredicted;entry.group.visible=true;this.scene.add(entry.group);this.staffOrbs.push(entry);
  }
  releaseStaffOrb(entry){
@@ -555,7 +555,7 @@ export class WeaponVFX{
    orb.group.position.copy(orb.origin).addScaledVector(orb.direction,orb.range*t);
    orb.group.rotation.z=orb.age*2.8;orb.cloud.rotation.y=orb.age*7;
     if(orb.arcs){orb.arcs.rotation.x=orb.age*5.4;orb.arcs.rotation.y=orb.age*9.3;orb.arcs.material.opacity=.72+.23*Math.sin(orb.age*36);}
-    orb.shell.scale.setScalar(1+.18*Math.sin(orb.age*18));
+    orb.shell.scale.setScalar(1+STAFF_ORB_SHELL_PULSE*Math.sin(orb.age*18));
     orb.core.scale.setScalar(.93+.11*Math.sin(orb.age*22));
     orb.cloud.material.opacity=.52+.12*Math.sin(orb.age*16);
    if(orb.age>=orb.duration)this.releaseStaffOrb(orb);

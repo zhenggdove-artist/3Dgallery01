@@ -1,7 +1,7 @@
 import {viewHeight} from './gm-mobile-preview.js';
 import * as THREE from 'three';
 import {meleeFamilies} from './reletter/melee-motion.js';
-import {isChannelStaff} from './shared/weapon-abilities.js';
+import {isChannelStaff,isNovaStaff} from './shared/weapon-abilities.js';
 import {ENEMY_RADIUS,ENEMY_HEIGHT} from './shared/island-combat.js';
 export const AIM_RAISE_PX=30;
 export const BEAM_RETICLE_DISTANCE=90; // World-space target is beyond the avatar, not at the wand tip.
@@ -41,6 +41,9 @@ export function attackDirection(controller,camera,arena,roots,item,charge,muzzle
  const heading=controller.root.rotation.y;
  if(meleeFamilies.includes(item.family)&&!(item.exotic&&charge>=1))return [Math.sin(heading),0,Math.cos(heading)];
  if(item.firstPerson)return cameraAimDirection(camera).toArray();
+ // Nova taps follow the fixed raised reticle, independent of nearby
+ // enemies, structures and ground intersections. Charged vortex is unchanged.
+ if(isNovaStaff(item)&&charge<1)return raisedBeamDirection(camera,muzzle).toArray();
  // Straight lightning / prism spells must follow the camera's FULL 3D
  // reticle ray, including upward pitch. The generic muzzle-to-intersection
  // correction may select a nearby ground/structure point BELOW the raised

@@ -24,6 +24,16 @@ export function forwardCastRadius(item,quality=weaponQuality(item),statsRadius=1
  if(item?.family==='palm')return +(1.35*quality.visual).toFixed(3);
  return +(statsRadius*quality.radius).toFixed(2);
 }
+// Nova taps are the small, straight elemental orb, not the charged vortex.
+export const isNovaStaff=item=>!!item&&!item.exotic&&/^nova-[1-5]$/.test(item.id);
+export const STAFF_ORB_SHELL_RADIUS=.47,STAFF_ORB_SHELL_PULSE=.18;
+export const staffOrbVisualScale=qualityScale=>Math.max(.7,Math.min(1.6,Number(qualityScale)||1));
+export function normalCastRadius(item,quality,statsRadius){
+ // Match the existing visible shell at its maximum pulse; never inherit
+ // the old wave area radius (up to 36.63m) on an ordinary Nova projectile.
+ if(isNovaStaff(item))return STAFF_ORB_SHELL_RADIUS*(1+STAFF_ORB_SHELL_PULSE)*staffOrbVisualScale(quality.visual);
+ return forwardCastRadius(item,quality,statsRadius,false);
+}
 export const channelReachMultiplier=item=>item?.family==='ice'?2:1;
 export const STAFF_TAP_MAX_MS=250;
 export const CAST_MOVE_FACTOR=.05;
