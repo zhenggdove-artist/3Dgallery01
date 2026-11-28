@@ -1,3 +1,4 @@
+import {disposeOwnedVisual,renderOwnerKind} from './shared-render-resources.js';
 import * as THREE from 'three';
 import {makeHeldWeapon} from './reletter/held-weapons.js';
 import {isSpellWeapon,makeSpellEquipment} from './spell-equipment.js';
@@ -318,7 +319,7 @@ async function renderPreview(item){
   return url;
  }finally{
   if(model.userData.previewOutfitRecord){disposeOutfit(model.userData.previewOutfitRecord);delete model.userData.previewOutfitRecord;}
-  if(item.slot==='head'){disposeHeadgear(model);}else if(item.slot==='wings'){disposeGardenModel(model);}else{
+  if(item.slot==='head'){disposeHeadgear(model);}else if(item.slot==='wings'){disposeGardenModel(model);}else if(renderOwnerKind(model)==='weapon'){disposeOwnedVisual(model);}else{
   model.portraitDisposed=true;model.portraitTexture?.dispose();
   model.removeFromParent();
   const geometries=new Set(),materials=new Set();

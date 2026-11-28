@@ -21,6 +21,15 @@ The user calls head-slot items headwear, headgear, or HEAD. All future outfits a
 7. Memory diagnostics: src/render-residency.js is the common maintenance coordinator. Shared texture accounting and wearable owner counts feed its snapshot. New resources must use existing ownership/retirement conventions; no competing memory manager. Counts are diagnostic, not measured VRAM. Do not evict active assets or warmed reserves to meet an arbitrary cap.
 8. Every new wearable needs tests covering catalog and actual model construction, finite geometry, attach/animate/unequip, repeated disposal, shared ownership, and applicable SHOP/BAG/EQUIP/ground-loot rendering. Add regression coverage for special effects. Validate on desktop and mobile/WebKit when possible. Update this contract and the existing helpers if a new resource type is necessary; do not silently bypass them.
 
+## Mandatory common render asset pipeline (V149+)
+
+Applies to every future wing, outfit, headwear, held weapon, projectile, skill, fused effect, shield, pickup and other reusable render object. Use one owner registry and one maintenance coordinator, not new per-item caches or independent loops. Preserve authored geometry, shaders, effects, collision and timing.
+
+- Register standalone weapon and wing roots through registerRenderOwner (the same registry as registerWearable). Use acquireRootTexture for identical immutable pixels and stable namespaced visual keys. Never dispose a borrowed avatar/scene texture or geometry; use explicit ownership.
+- Equipped models, SHOP/BAG previews and ground drops use the same factories and disposeOwnedVisual / owner-specific adapter. Native effects use manageNativeEffect, which retains the vendor disposer (including its private render targets) and releases instance buffers and owned skeletons once. Keep specialized animation and material behavior; unification is a lifecycle contract, not identical geometry.
+- Use runtimeResource for live Object3D, material, texture and animation references in userData, so portrait clones cannot serialize them.
+- Every idle VFX pool exposes idlePoolGroups to RenderMemoryManager; preserve existing prewarmed reserves, effect counts and active cadence. Record owner counts and pool memory. Test repeated actual WebGL allocate/draw/dispose and confirm shared resources survive until last release.
+
 ## Release verification
 
 For runtime changes, update the visible release and import-map token in index.html, including any new first-party modules in the manifest. Run npm run check and npm test; use the existing GitHub Pages and Cloudflare deployment workflow. Verify the exact commit's Worker health and Pages deployment before claiming success; distinguish automated testing from real-device visual/profiling verification.

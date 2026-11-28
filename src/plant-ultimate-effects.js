@@ -1,3 +1,4 @@
+import {manageNativeEffect} from './shared-render-resources.js';
 import * as THREE from 'three';
 import {PALM_STORM_DURATION_MS} from './shared/combat-balance.js';
 // Unmodified MIT-licensed 00GameDevs source modules. Do not substitute a drawn
@@ -23,6 +24,7 @@ function makeNative(kind){
  });
  if(!fx?.group?.isObject3D||typeof fx.update!=='function'||typeof fx.dispose!=='function')
   throw Error('Invalid official botanical scene-object: '+definition.id);
+ manageNativeEffect(fx);
  const group=new THREE.Group();
  group.name=definition.name;
  group.userData.vfxSource='00GameDevs';
@@ -66,7 +68,7 @@ export class PlantUltimateEffects{
     entry.group.removeFromParent();
     entry.fx.reset?.();
     entry.fx.group.visible=false;
-    this.pools[entry.kind].push(entry);
+    entry.idleSince=performance.now();this.pools[entry.kind].push(entry);
    }
   }
  }
@@ -100,11 +102,11 @@ export class PlantUltimateEffects{
   return true;
  }
  recycle(entry){
-  const idx=this.active.indexOf(entry);if(idx>=0)this.active.splice(idx,1);
+  const idx=this.active.indexOf(entry);if(idx<0)return;this.active.splice(idx,1);
   entry.group.removeFromParent();entry.fx.group.visible=false;
   entry.fx.reset?.();
   const pool=this.pools[entry.kind];
-  if(pool.length<1)pool.push(entry);else entry.fx.dispose();
+  if(pool.length<1){entry.idleSince=performance.now();pool.push(entry);}else entry.fx.dispose();
  }
  update(dt){
   const delta=Number.isFinite(dt)?clamp(dt,0,.12):0;
@@ -118,6 +120,7 @@ export class PlantUltimateEffects{
    }
   }
  }
+ idlePoolGroups(){return Object.values(this.pools).map(list=>({kind:'plantVfx',list,keep:1,idleMs:60000,root:e=>e.group,since:e=>e.idleSince,dispose:e=>e.fx.dispose()}));}
  dispose(){
   for(const entry of [...this.active]){
    this.active.splice(this.active.indexOf(entry),1);

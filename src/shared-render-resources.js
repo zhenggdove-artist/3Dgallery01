@@ -21,7 +21,7 @@ export function releaseOutfitTexture(key,t){return outfitTextureResources.releas
 // One ownership contract for headwear, outfits, their nested headpieces and previews.
 // Weak keys never retain an abandoned model; counts are diagnostic, not an eviction policy.
 const wearableOwners=new WeakMap();
-const wearableCounts={head:{active:0,created:0,released:0},outfit:{active:0,created:0,released:0}};
+const wearableCounts=Object.fromEntries(['head','outfit','wing','weapon','effect'].map(kind=>[kind,{active:0,created:0,released:0}]));
 export function registerWearable(owner,kind){
  if(!owner||!wearableCounts[kind])throw Error('Invalid wearable owner');
  if(wearableOwners.has(owner))throw Error('Wearable registered twice');
@@ -37,7 +37,9 @@ export function releaseWearable(owner,cleanup){
  try{cleanup();}finally{if(state.kind){const c=wearableCounts[state.kind];c.active--;c.released++;}}
  return true;
 }
-export function wearableResourceSnapshot(){return {head:{...wearableCounts.head},outfit:{...wearableCounts.outfit}};}
+export function wearableResourceSnapshot(){return Object.fromEntries(Object.entries(wearableCounts).map(([kind,value])=>[kind,{...value}]));}
+export function renderOwnerKind(owner){return wearableOwners.get(owner)?.kind||null;}
+export function registerRenderOwner(owner,kind){return registerWearable(owner,kind);}
 export function wearableMaterial(T,materials,color,roughness,metalness){
  const material=new T.MeshStandardMaterial({color,roughness,metalness});materials.push(material);return material;
 }
@@ -74,3 +76,41 @@ export function wingRenderKey(item){return 'wing:'+JSON.stringify([item.id,item.
 // Three's userData JSON clone otherwise serializes material/texture images
 // (including PNG data URLs) while constructing the equipment portrait.
 export function runtimeResource(owner,key,value){Object.defineProperty(owner.userData,key,{value,writable:true,configurable:true,enumerable:false});return value;}
+
+// Unified owned-model disposal. Borrowed scene/character assets are excluded
+// explicitly. Textures use leases; generic cleanup never guesses ownership.
+export function disposeOwnedVisual(root,{borrowGeometry=g=>!!g.userData?.sharedPreview,borrowMaterial=m=>!!m.userData?.sharedPreview,disposeMaps=false}={}){
+ return releaseWearable(root,()=>{
+  const children=[];root.traverse(o=>{if(o!==root&&(renderOwnerKind(o)==='weapon'||renderOwnerKind(o)==='wing'))children.push(o);});
+  for(const child of children)disposeOwnedVisual(child,{borrowGeometry,borrowMaterial,disposeMaps});
+  const geometries=new Set(),materials=new Set(),skeletons=new Set(),instances=new Set(),textures=new Set(),owners=[];
+  root.traverse(o=>{
+   owners.push(o);
+   if(o.isInstancedMesh)instances.add(o);
+   if(o.isSkinnedMesh&&o.skeleton)skeletons.add(o.skeleton);
+   if(o.geometry&&!o.isSprite&&!borrowGeometry(o.geometry))geometries.add(o.geometry);
+   for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])if(!borrowMaterial(m))materials.add(m);
+  });
+  root.removeFromParent();
+  for(const o of instances)o.dispose();
+  for(const sk of skeletons)sk.dispose();
+  for(const g of geometries)g.dispose();
+  for(const m of materials){if(disposeMaps&&m.map&&!m.map.userData?.sharedGarden)textures.add(m.map);m.dispose();}
+  for(const t of textures)t.dispose();
+  for(const o of owners)releaseRootTextures(o);
+ });
+}
+// Vendor disposal remains authoritative for private render targets and textures.
+const nativeEffects=new WeakSet();
+export function manageNativeEffect(fx){
+ if(nativeEffects.has(fx))return fx;
+ nativeEffects.add(fx);registerRenderOwner(fx.group,'effect');
+ const nativeDispose=fx.dispose.bind(fx);
+ fx.dispose=()=>releaseWearable(fx.group,()=>{
+  const instances=new Set(),skeletons=new Set();
+  fx.group.traverse(o=>{if(o.isInstancedMesh)instances.add(o);if(o.isSkinnedMesh&&o.skeleton)skeletons.add(o.skeleton);});
+  for(const o of instances)o.dispose();for(const sk of skeletons)sk.dispose();
+  try{nativeDispose();}finally{fx.group.removeFromParent();releaseRootTextures(fx.group);}
+ });
+ return fx;
+}

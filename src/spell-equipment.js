@@ -1,3 +1,4 @@
+import {registerRenderOwner} from './shared-render-resources.js';
 import * as THREE from 'three';
 
 // Every spell receives a hand-held model rather than the old generic lash or
@@ -108,5 +109,5 @@ export function makeSpellEquipment(item){
  if(tier===5)for(let i=0;i<5;i++){const a=i*Math.PI*2/5;sphere(.045,Math.cos(a)*.31,h+.48,Math.sin(a)*.31,bright);}
  g.name=item.name+' / '+item.id;
  g.userData={family:item.family,spell:true,reach:1.6,weaponId:item.id,muzzleHeight:h+.52};
- return g;
+ return registerRenderOwner(g,'weapon');
 }

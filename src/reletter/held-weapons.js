@@ -1,3 +1,4 @@
+import {registerRenderOwner,runtimeResource} from '../shared-render-resources.js';
 // Extracted from RELETTER index.html. Host supplies time/fishing adapter only.
 import * as THREE from 'three';
 import {createToken} from './token-model.js';
@@ -7,7 +8,7 @@ function glowMaterial(color,opacity=1){return new THREE.MeshBasicMaterial({color
 export function setHeldTime(time){globalTime=time;}
 const boneCache=new WeakMap(),handPosition=new THREE.Vector3(),handRotation=new THREE.Quaternion(),auraRotation=new THREE.Quaternion(),inverseAura=new THREE.Matrix4(),matrixPosition=new THREE.Vector3(),matrixScale=new THREE.Vector3(),worldQ=new THREE.Quaternion(),up=new THREE.Vector3(),desired=new THREE.Vector3(),correction=new THREE.Quaternion(),parent=new THREE.Quaternion();
 function rightHand(model){if(!boneCache.has(model)){let hand;model.traverse(b=>{if(b.isBone&&b.name.replace(/[^a-z]/gi,'').endsWith('RightHand'))hand=b;});boneCache.set(model,hand);}return boneCache.get(model);}
-function makeHeldWeapon(item){
+function buildHeldWeapon(item){
  if(item.exotic)return createOddWeapon(THREE,item);
  if(item.id==='chiang-token')return createToken(THREE);
  if(['swatter','pan','planter','palm'].includes(item.family))return makeNovelWeapon(item);
@@ -25,8 +26,8 @@ function makeHeldWeapon(item){
   const runes=new THREE.Group();for(let i=0;i<6+tier*2;i++){const gem=new THREE.Mesh(new THREE.OctahedronGeometry(.023),glowMaterial(i%2?'#fff7dd':item.color,.8));gem.position.set(0,.48+i*(length-.3)/(6+tier*2),.055*width);gem.rotation.z=Math.PI/4;runes.add(gem);}group.add(runes);
  }else{
   const geo=new THREE.BufferGeometry(),positions=new Float32Array(49*8*3),indices=[];for(let n=0;n<48;n++)for(let j=0;j<8;j++){const a=n*8+j,b=n*8+(j+1)%8;indices.push(a,b,a+8,b,b+8,a+8);}geo.setAttribute('position',new THREE.BufferAttribute(positions,3));const normals=new Float32Array(positions.length);for(let n=0;n<49;n++)for(let j=0;j<8;j++){normals[(n*8+j)*3]=Math.cos(j*Math.PI/4);normals[(n*8+j)*3+1]=Math.sin(j*Math.PI/4);}geo.setAttribute('normal',new THREE.BufferAttribute(normals,3));geo.setIndex(indices);
-  const lash=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:item.color,emissive:item.color,emissiveIntensity:.65,metalness:.45,roughness:.28}));lash.frustumCulled=false;group.add(lash);group.userData.lash=lash;const braid=new THREE.BufferGeometry();braid.setAttribute('position',new THREE.BufferAttribute(new Float32Array(49*3),3));const braidLine=new THREE.Line(braid,new THREE.LineBasicMaterial({color:'#ffe3b4',transparent:true,opacity:.85}));braidLine.frustumCulled=false;group.add(braidLine);group.userData.braid=braidLine;
-  const tip=new THREE.Mesh(new THREE.IcosahedronGeometry(.075,1),glowMaterial('#fff4d9',.9));group.add(tip);group.userData.tip=tip;
+  const lash=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:item.color,emissive:item.color,emissiveIntensity:.65,metalness:.45,roughness:.28}));lash.frustumCulled=false;group.add(lash);runtimeResource(group,'lash',lash);const braid=new THREE.BufferGeometry();braid.setAttribute('position',new THREE.BufferAttribute(new Float32Array(49*3),3));const braidLine=new THREE.Line(braid,new THREE.LineBasicMaterial({color:'#ffe3b4',transparent:true,opacity:.85}));braidLine.frustumCulled=false;group.add(braidLine);runtimeResource(group,'braid',braidLine);
+  const tip=new THREE.Mesh(new THREE.IcosahedronGeometry(.075,1),glowMaterial('#fff4d9',.9));group.add(tip);runtimeResource(group,'tip',tip);
  }return group;
 }
 function attachHeldWeapon(player,aura,blade,fx){
@@ -84,4 +85,5 @@ function makeNovelWeapon(item){
  g.userData.reach=new THREE.Box3().setFromObject(g).max.y+.2;return g;
 }
 
+function makeHeldWeapon(item){return registerRenderOwner(buildHeldWeapon(item),'weapon');}
 export {makeHeldWeapon,makeNovelWeapon,attachHeldWeapon,rightHand};

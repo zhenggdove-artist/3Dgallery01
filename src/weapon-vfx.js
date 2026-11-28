@@ -1,3 +1,4 @@
+import {manageNativeEffect,disposeOwnedVisual,registerRenderOwner} from './shared-render-resources.js';
 import * as THREE from 'three';
 import {createOddEffect,updateOddEffect} from './reletter/odd-weapon-effects.js';
 import {chargedArea} from './shared/charge-area.js';
@@ -42,7 +43,7 @@ export const WEAPON_VFX=Object.freeze({
 export function effectFor(item,ultimate=false){const pair=WEAPON_VFX[item.id]||WEAPON_VFX[item.family];if(!pair)throw Error('Unmapped weapon: '+item.id);return pair[ultimate?1:0];}
 export class WeaponVFX{
  constructor(scene){this.scene=scene;this.active=[];this.snipers=[];this.staffOrbs=[];this.orbPools=new Map();this.channelStreams=new Map();this.waterStreams=new Map();this.iceEruptions=[];this.pools=new Map();this.charger=null;this.aura=new ElementalCharge(scene);this.saberImpact=new SaberImpact(scene);this.created=0;this.replayed=0;this.particleSkills=new WeaponParticleEffects(scene);this.signatureEffects=new WeaponSignatureEffects(scene);this.numberedEffects=new NumberedWeaponEffects(scene,(root,item,fallback)=>this.channelMuzzle(root,item,fallback));this.restoration=new VerdantRestorationChannel(scene);this.plantUltimates=new PlantUltimateEffects(scene);}
- create(id){this.created++;const fx=factories[id]();const dispose=fx.dispose.bind(fx);let disposed=false;fx.dispose=()=>{if(disposed)return;disposed=true;fx.group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});dispose();};fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
+ create(id){this.created++;const fx=manageNativeEffect(factories[id]());fx.group.userData.vfxSource='00GameDevs';fx.group.userData.vfxId=id;return fx;}
  async warm(renderer,camera){
   const warmScene=new THREE.Scene(),fxs=[];
   for(const id of Object.keys(factories)){const fx=this.create(id);fx.update(.18);warmScene.add(fx.group);fxs.push([id,fx]);}
@@ -300,7 +301,7 @@ export class WeaponVFX{
    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
    const cloud=new THREE.Points(geometry,new THREE.PointsMaterial({color:colors[1],size:.14,
     transparent:true,opacity:.64,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true}));
-   cloud.frustumCulled=false;group.add(core,shell,cloud);entry={group,core,shell,cloud,family};
+   cloud.frustumCulled=false;group.add(core,shell,cloud);registerRenderOwner(group,'effect');entry={group,core,shell,cloud,family};
    if(family==='lightning'){
     // Local crackling arcs revolve around the projectile itself, never a laser
     // extending from the staff. Construct once and reuse from the orb pool.
@@ -329,11 +330,11 @@ export class WeaponVFX{
   entry.firstFramePending=!!data.localPredicted;entry.group.visible=true;this.scene.add(entry.group);this.staffOrbs.push(entry);
  }
  releaseStaffOrb(entry){
-  const index=this.staffOrbs.indexOf(entry);if(index>=0)this.staffOrbs.splice(index,1);
+  const index=this.staffOrbs.indexOf(entry);if(index<0)return;this.staffOrbs.splice(index,1);
   entry.group.removeFromParent();entry.group.visible=false;
   const pool=this.orbPools.get(entry.family)||[];
   if(pool.length<12){entry.idleSince=performance.now();pool.push(entry);this.orbPools.set(entry.family,pool);}
-  else entry.group.traverse(child=>{if(child.isInstancedMesh)child.dispose();child.geometry?.dispose();child.material?.dispose();});
+  else disposeOwnedVisual(entry.group);
  }
  async warmStaffOrbs(renderer,camera){
   const stage=new THREE.Scene(),entries=[];
@@ -605,8 +606,8 @@ export class WeaponVFX{
  idlePoolGroups(){
   const groups=[];
   for(const list of this.pools.values())groups.push({kind:'nativeVfx',list,keep:2,idleMs:30000,root:e=>e.group,since:e=>e.group.userData.templeIdleSince,dispose:e=>e.dispose()});
-  for(const list of this.orbPools.values())groups.push({kind:'staffOrb',list,keep:2,idleMs:30000,root:e=>e.group,since:e=>e.idleSince,dispose:e=>e.group.traverse(o=>{if(o.isInstancedMesh)o.dispose();o.geometry?.dispose();o.material?.dispose();})});
-  return groups.concat(this.numberedEffects.idlePoolGroups(),this.particleSkills.idlePoolGroups(),this.signatureEffects.idlePoolGroups());
+  for(const list of this.orbPools.values())groups.push({kind:'staffOrb',list,keep:2,idleMs:30000,root:e=>e.group,since:e=>e.idleSince,dispose:e=>disposeOwnedVisual(e.group)});
+  return groups.concat(this.numberedEffects.idlePoolGroups(),this.particleSkills.idlePoolGroups(),this.signatureEffects.idlePoolGroups(),this.plantUltimates.idlePoolGroups(),this.restoration.idlePoolGroups());
  }
  trimIdlePools(now=performance.now()){
   for(const g of this.idlePoolGroups())for(let i=g.list.length-1;i>=g.keep;i--){const e=g.list[i],since=g.since(e);if(!g.root(e)?.parent&&Number.isFinite(since)&&now-since>=g.idleMs){g.list.splice(i,1);g.dispose(e);}}
@@ -622,6 +623,6 @@ export class WeaponVFX{
   // additional instanced channels as a unit, including aborted casts.
   for(const e of [...this.waterStreams.values()])this.release(e);
   this.waterStreams.clear();this.plantUltimates.dispose();this.restoration.dispose();this.numberedEffects.dispose();this.channelStreams.clear();for(const orb of [...this.staffOrbs])this.releaseStaffOrb(orb);
-  for(const pool of this.orbPools.values())for(const entry of pool)entry.group.traverse(child=>{if(child.isInstancedMesh)child.dispose();child.geometry?.dispose();child.material?.dispose();});
+  for(const pool of this.orbPools.values())for(const entry of pool)disposeOwnedVisual(entry.group);
   this.orbPools.clear();this.saberImpact.dispose();this.aura.dispose();this.particleSkills.dispose();this.signatureEffects.dispose();for(const f of this.snipers){f.root.removeFromParent();f.root.material.dispose();}this.snipers=[];for(const e of [...this.active]){e.fx.dispose();e.fx.group.removeFromParent();}this.active=[];for(const pool of this.pools.values())for(const fx of pool)fx.dispose();this.pools.clear();}
 }

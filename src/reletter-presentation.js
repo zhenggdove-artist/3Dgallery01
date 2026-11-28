@@ -1,3 +1,4 @@
+import {disposeOwnedVisual} from './shared-render-resources.js';
 import {animateFlightVehicle} from './reletter/flight-vehicle.js';
 import * as THREE from 'three';
 import {CITY_OUTER_RADIUS} from './shared/city-layout.js';
@@ -28,7 +29,7 @@ export function buildReletterEnvironment(scene,renderer){
   return reletterPlatformMaterial();
 }
 export function reletterPlatformMaterial(){return new THREE.MeshPhysicalMaterial({color:'#E84887',roughness:.2,metalness:.1,clearcoat:1,clearcoatRoughness:.15,iridescence:1,iridescenceIOR:1.3,iridescenceThicknessRange:[100,800],specularIntensity:.9,specularColor:new THREE.Color('#FFB0D0'),sheen:.6,sheenColor:new THREE.Color('#FF6B9D'),envMapIntensity:1.4,emissive:'#E84887',emissiveIntensity:.08});}
-export function disposeVisual(root){if(!root)return;const geometry=new Set(),materials=new Set();root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry)geometry.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);});geometry.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());root.removeFromParent();}
+export function disposeVisual(root){if(root)return disposeOwnedVisual(root);}
 
 export class ReletterPresentation{
   removeOdd(f){f.root.removeFromParent();if(!f.root.geometry.userData.sharedOdd)f.root.geometry.dispose();f.root.material.dispose();}

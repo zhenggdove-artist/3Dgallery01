@@ -1,3 +1,4 @@
+import {manageNativeEffect} from './shared-render-resources.js';
 import * as THREE from 'three';
 import {VORTEX_FLIGHT_MS,VORTEX_VISUAL_SPIN_RATE} from './shared/vortex-flight.js';
 import {installNativeCurve,updateNativeCurve,targetOnBeam} from './native-beam-curve.js';
@@ -165,9 +166,7 @@ export class NumberedWeaponEffects {
    throw Error('Invalid original 00GameDevs VFX #'+spec.number);
   // The native disposer owns materials/geometries; InstancedMesh also owns
   // separate instance buffers in Three.js that must receive its dispose event.
-  const disposeNative=fx.dispose.bind(fx);
-  let disposed=false;
-  fx.dispose=()=>{if(disposed)return;disposed=true;fx.group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});disposeNative();};
+  manageNativeEffect(fx);
   fx.group.name=!spec.number?'00GameDevs original VFX '+spec.asset:spec.asset==='charged-beam'?'00GameDevs original VFX charged-beam':'00GameDevs original VFX #'+String(spec.number).padStart(2,'0')+' '+spec.asset;
   fx.group.userData.vfxSource='00GameDevs';
   fx.group.userData.vfxId=spec.asset;

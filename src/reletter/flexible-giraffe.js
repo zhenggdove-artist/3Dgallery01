@@ -1,3 +1,4 @@
+import {runtimeResource} from '../shared-render-resources.js';
 // A true articulated rubber rod: GPU-skinned tube and spring-damped segments.
 // The same asset is used by the hand-held toy and its airborne boomerang.
 export function createFlexibleGiraffe(T){
@@ -53,12 +54,12 @@ export function createFlexibleGiraffe(T){
  nose.position.set(0,.11,.13);nose.scale.set(.13,.085,.12);tip.add(nose);
  const base=new T.Mesh(spotGeo,skinMat);
  base.scale.set(.17,.16,.15);base.position.y=low;root.add(base);
- root.userData.flexBones=bones;
- root.userData.flexState={
+ runtimeResource(root,'flexBones',bones);
+ runtimeResource(root,'flexState',{
   angleX:new Float32Array(segments),velocityX:new Float32Array(segments),
   angleZ:new Float32Array(segments),velocityZ:new Float32Array(segments),
   lastTime:null
- };
+ });
  root.userData.reach=length+.48;
  return root;
 }

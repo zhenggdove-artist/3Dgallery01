@@ -1,3 +1,4 @@
+import {manageNativeEffect} from './shared-render-resources.js';
 // Byte-identical official 00GameDevs Verdant Restoration VFX.
 // The effect is positioned at the caster's FEET and recycled on successive
 // authenticated channel pulses. No replacement particle art or hit collider.
@@ -8,7 +9,7 @@ export const RESTORATION_GROUND_SIZE=.42;
 export class VerdantRestorationChannel {
  constructor(scene){this.scene=scene;this.live=new Map();this.pool=[];this.failed=false;this.tmp=new THREE.Vector3();}
  make(){
-  const fx=verdantRestoration({size:RESTORATION_GROUND_SIZE,speed:1});
+  const fx=manageNativeEffect(verdantRestoration({size:RESTORATION_GROUND_SIZE,speed:1}));
   fx.group.name='00GameDevs original Verdant Restoration · flower crown';
   fx.group.userData.vfxSource='00GameDevs';
   fx.group.userData.vfxId='verdant-restoration';
@@ -27,7 +28,7 @@ export class VerdantRestorationChannel {
    renderer.render(stage,camera);
    renderer.setRenderTarget(previous);
    fx.group.visible=false;fx.reset();fx.group.removeFromParent();
-   this.pool.push(fx);
+   fx.group.userData.templeIdleSince=performance.now();this.pool.push(fx);
   }finally{
    renderer.setRenderTarget(previous);target.dispose();
    if(fx.group.parent===stage)fx.group.removeFromParent();
@@ -78,9 +79,10 @@ export class VerdantRestorationChannel {
  release(root,entry){
   this.live.delete(root);entry.fx.group.removeFromParent();
   entry.fx.group.visible=false;
-  if(this.pool.length<2){entry.fx.reset();this.pool.push(entry.fx);}
+  if(this.pool.length<2){entry.fx.reset();entry.fx.group.userData.templeIdleSince=performance.now();this.pool.push(entry.fx);}
   else entry.fx.dispose();
  }
+ idlePoolGroups(){return [{kind:'restorationVfx',list:this.pool,keep:1,idleMs:60000,root:e=>e.group,since:e=>e.group.userData.templeIdleSince,dispose:e=>e.dispose()}];}
  dispose(){
   for(const [root,entry] of [...this.live]){
    this.live.delete(root);entry.fx.group.removeFromParent();entry.fx.dispose();

@@ -1,3 +1,4 @@
+import {disposeOwnedVisual,manageNativeEffect,registerRenderOwner} from './shared-render-resources.js';
 import {createFlexibleGiraffe,animateFlexibleGiraffe} from './reletter/flexible-giraffe.js';
 import * as THREE from 'three';
 import {itemById} from './shared/catalog.js';
@@ -31,9 +32,8 @@ export class WeaponSignatureEffects {
   const e={obj,age:0,duration,update,key};this.scene.add(obj);this.active.push(e);return e;
  }
  disposeGroup(obj){
-  obj.removeFromParent();
-  obj.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry&&![sphere,geomBox,geomCone].includes(o.geometry))o.geometry.dispose();
-    if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});
+  if(obj.userData.nativeElectric){obj.userData.nativeElectric.dispose();delete obj.userData.nativeElectric;}
+  disposeOwnedVisual(obj,{borrowGeometry:g=>[sphere,geomBox,geomCone].includes(g)});
  }
  remove(e){
   const index=this.active.indexOf(e);if(index<0)return;
@@ -661,7 +661,7 @@ diffuseColor.a*=0.84+0.16*smoothstep(-0.6,0.6,vhsLine);`);
    // Recenter the rod about its midpoint BEFORE axial spin: the swept
    // collision radius is calibrated to the same outer end of this model.
    model.add(giraffe);group.add(model);
-   const nativeElectric=nativeArcRay({color:'#bd76ff',size:.42,density:.78,quantity:4});
+   const nativeElectric=manageNativeEffect(nativeArcRay({color:'#bd76ff',size:.42,density:.78,quantity:4}));
    nativeElectric.group.name='00GameDevs arc ray following articulated giraffe spine';
    nativeElectric.setEndpoints(new THREE.Vector3(0,-.16,0),new THREE.Vector3(0,.43,0));
    giraffe.userData.flexBones[5].add(nativeElectric.group);
