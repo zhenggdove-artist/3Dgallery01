@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {outfitTextureResources} from './shared-render-resources.js';
 // Keep a guard band and the full native bounding sphere. Never retire any
 // resource that could be drawn by the current camera.
 const sphere=new THREE.Sphere(),matrix=new THREE.Matrix4(),frustum=new THREE.Frustum(),eye=new THREE.Vector3();
@@ -53,6 +54,7 @@ export class RenderMemoryManager{
   this.retireLimit=mobile?2:4;this.maintenanceMs=mobile?1.5:3;
   this.counts=Object.create(null);this.wakes=Object.create(null);
   this.poolSnapshot={idle:0,reserved:0,surplus:0,eligible:0,estimatedBufferBytes:0};
+  this.accountNodeLimit=mobile?48:96;this.accounting=null;this.accountedNodes=0;
   this.beginFrame();
  }
  beginFrame(){this.frameRetires=0;this.frameMaintenanceMs=0;}
@@ -63,13 +65,11 @@ export class RenderMemoryManager{
  }
  recordWake(kind){this.wakes[kind]=(this.wakes[kind]||0)+1;}
  sweepPools(groups,now){
-  const candidates=[],seen=new Set();let idle=0,reserved=0,bytes=0;
-  const addArray=a=>{const b=a?.buffer;if(b&&!seen.has(b)){seen.add(b);bytes+=b.byteLength;}};
+  const candidates=[];let idle=0,reserved=0;
   for(const g of groups){
    idle+=g.list.length;reserved+=Math.min(g.keep,g.list.length);
    for(let i=0;i<g.list.length;i++){
     const e=g.list[i],root=g.root(e);
-    root?.traverse(o=>{const geom=o.geometry;if(geom){addArray(geom.index?.array);for(const a of Object.values(geom.attributes||{}))addArray(a.array||a.data?.array);}addArray(o.instanceMatrix?.array);addArray(o.instanceColor?.array);});
     if(i<g.keep||root?.parent)continue;
     const since=g.since(e);if(Number.isFinite(since)&&now-since>=g.idleMs)candidates.push({g,e,since});
    }
@@ -82,8 +82,26 @@ export class RenderMemoryManager{
    if(!this.retire(g.kind,()=>{g.list.splice(i,1);g.dispose(e);}))break;
    retired++;
   }
-  this.poolSnapshot={idle:idle-retired,reserved,surplus:Math.max(0,idle-reserved-retired),eligible:Math.max(0,candidates.length-retired),estimatedBufferBytes:bytes};
+  this.poolSnapshot={...this.poolSnapshot,idle:idle-retired,reserved,surplus:Math.max(0,idle-reserved-retired),eligible:Math.max(0,candidates.length-retired)};
+  if(!this.accounting){const roots=[];for(const g of groups)for(const e of g.list){const root=g.root(e);if(root&&!root.parent)roots.push(root);}this.accounting={stack:roots,seen:new WeakSet(),bytes:0,nodes:0};}
   return retired;
  }
- snapshot(){return {retired:{...this.counts},wakes:{...this.wakes},pools:{...this.poolSnapshot}};}
+ // Incremental observational accounting. Never traverses an entire scene in one call;
+ // active effects and owner-specific disposal remain authoritative.
+ advanceAccounting(){
+  const a=this.accounting;if(!a)return 0;
+  const available=Math.min(this.maintenanceMs-this.frameMaintenanceMs,.5);if(available<=0)return 0;
+  const start=performance.now();let n=0;
+  const add=attribute=>{const b=attribute?.buffer;if(b&&!a.seen.has(b)){a.seen.add(b);a.bytes+=b.byteLength;}};
+  while(a.stack.length&&n<this.accountNodeLimit&&performance.now()-start<available){
+   const o=a.stack.pop();if(!o)continue;n++;const g=o.geometry;
+   if(g){add(g.index?.array);for(const attr of Object.values(g.attributes||{}))add(attr.array||attr.data?.array);}
+   add(o.instanceMatrix?.array);add(o.instanceColor?.array);
+   for(const child of o.children||[])a.stack.push(child);
+  }
+  a.nodes+=n;this.frameMaintenanceMs+=performance.now()-start;
+  if(!a.stack.length){this.poolSnapshot.estimatedBufferBytes=a.bytes;this.accountedNodes=a.nodes;this.accounting=null;}
+  return n;
+ }
+ snapshot(){return {retired:{...this.counts},wakes:{...this.wakes},pools:{...this.poolSnapshot,accountingPending:!!this.accounting,accountedNodes:this.accountedNodes},sharedOutfitTextures:outfitTextureResources.snapshot()};}
 }

@@ -1,9 +1,9 @@
 import {staticPaintTexture} from '../paint-texture-source.js';
+import {acquireOutfitTexture,releaseOutfitTexture,disposeOutfitTexture} from '../shared-render-resources.js';
 import {softPorkGeometry,buildStreetOutfit,animateStreetOutfit,streetMotionStep} from './street-outfits.js';
 import {buildSoftGarbage,buildNewStreetProp,attachStreetMotion,animateExtraStreet,animateFaultyMutton,buildSoftCardboard,addSwayingPoleWires,buildTreeDisguise} from './street-outfit-motion.js';
 import {createHeadgear} from './headgear-model.js';
 // Clothing uses the original skinned surface, preserving animation and exposed face/hands.
-const sharedFabrics=new Map();
 function fabric(T,item){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');x.fillStyle=item.color;x.fillRect(0,0,512,512);
  // The Collector's suit uses a restrained pinstripe rather than the ordinary
  // playful outfit print. This texture is applied to the original skinned body.
@@ -71,8 +71,8 @@ function fabric(T,item){const c=document.createElement('canvas');c.width=c.heigh
  for(let y=32;y<512;y+=96)for(let xx=32;xx<512;xx+=96){x.save();x.translate(xx+(y%192?20:0),y);x.fillStyle=(xx+y)%192?'#eee4d8':'#756b85';x.globalAlpha=.7;if(p===1||p===4){x.beginPath();for(let k=0;k<10;k++){const a=k*Math.PI/5-Math.PI/2,r=k%2?6:15;x.lineTo(Math.cos(a)*r,Math.sin(a)*r);}x.closePath();x.fill();}else if(p===3){for(const [a,b,r]of [[0,0,12],[-9,-11,6],[9,-11,6]]){x.beginPath();x.arc(a,b,r,0,Math.PI*2);x.fill();}}else{x.beginPath();x.ellipse(0,0,11,7,-.4,0,Math.PI*2);x.fill();}x.restore();}
  // Fine woven threads remain subtle, with no additional draw calls.
  x.globalAlpha=.08;x.fillStyle='#ffffff';for(let i=0;i<512;i+=4){x.fillRect(i,0,1,512);x.fillRect(0,i,512,1);}const texture=staticPaintTexture(T,c);texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.anisotropy=2;return texture;}
-function acquireFabric(T,item){const key=JSON.stringify([item.color,item.design,item.creature,item.pattern]);let entry=sharedFabrics.get(key);if(!entry){entry={texture:fabric(T,item),refs:0};sharedFabrics.set(key,entry);}entry.refs++;return {key,texture:entry.texture};}
-function releaseFabric(record){const entry=sharedFabrics.get(record.fabricKey);if(!entry||entry.texture!==record.texture){record.texture.dispose();return;}if(--entry.refs===0){sharedFabrics.delete(record.fabricKey);const canvas=entry.texture.isCanvasTexture?entry.texture.image:null;entry.texture.dispose();if(canvas)canvas.width=canvas.height=0;}}
+function acquireFabric(T,item){const key='fabric:'+JSON.stringify([item.color,item.design,item.creature,item.pattern]);return {key,texture:acquireOutfitTexture(key,()=>fabric(T,item))};}
+function releaseFabric(record){if(!releaseOutfitTexture(record.fabricKey,record.texture))disposeOutfitTexture(record.texture);}
 // Compute an anatomical frame in the model's own local coordinates. Its
 // vertical axis follows head-to-feet, while shoulders determine facing.
 export function disguiseFrame(T,model,bones,headHeight){
@@ -658,7 +658,7 @@ function attachRockDisguise(T,model,bones,height,record,mat){
  if(d==='witch'){for(const side of [-1,1]){const cape=ball(chest,[side*.25,-.65,-.36],[.45,.85,.1],main);cape.rotation.z=side*.13;}ball(chest,[0,.12,.39],[.09,.12,.05],trim);if(hood){const h=anchor('Head');ball(h,[0,.65,0],[.85,.07,.73],dark);cone(h,[0,1,0],.5,.85,main);ball(h,[0,.75,.45],[.09,.09,.025],trim);}}
  if(d==='astronaut'){box(chest,[0,-.23,-.42],[.66,.7,.28],cream);for(const side of [-1,1])ball(chest,[side*.3,-.22,-.61],[.13,.4,.13],trim);box(chest,[0,-.15,.43],[.35,.3,.08],cream);for(let i=0;i<3;i++)ball(chest,[-.1+i*.1,-.12,.49],[.025,.025,.02],dark);if(hood){const h=anchor('Head'),glass=mat('#adc7cf');glass.transparent=true;glass.opacity=.15;glass.depthWrite=false;ball(h,[0,.32,.1],[.79,.83,.75],glass);const seal=add(h,new T.TorusGeometry(.61,.06,8,36),[0,-.2,.04],[1,1,1],cream);seal.rotation.x=Math.PI/2;}}
  return record;}
-export function disposeOutfit(record){if(!record)return;for(const r of record.surfaces){r.mesh.geometry=r.originalGeometry;r.mesh.material=r.originalMaterial;r.geometry.dispose();r.mats.forEach(m=>m.dispose());}const geometries=new Set();for(const root of record.parts){root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});root.removeFromParent();}geometries.forEach(g=>g.dispose());record.materials.forEach(m=>m.dispose());record.extraTextures?.forEach(t=>{t.dispose();if(t.isCanvasTexture&&t.image)t.image.width=t.image.height=0;});releaseFabric(record);}
+export function disposeOutfit(record){if(!record)return;for(const r of record.surfaces){r.mesh.geometry=r.originalGeometry;r.mesh.material=r.originalMaterial;r.geometry.dispose();r.mats.forEach(m=>m.dispose());}const geometries=new Set();for(const root of record.parts){root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});root.removeFromParent();}geometries.forEach(g=>g.dispose());record.materials.forEach(m=>m.dispose());record.extraTextures?.forEach(t=>{const key=record.sharedExtraTextures?.get(t);if(!key||!releaseOutfitTexture(key,t))disposeOutfitTexture(t);});releaseFabric(record);}
 
 export function animateOutfit(record,time,movingRoot=null,frameDt=1/60){if(!record)return;if(record.plushMotion)animatePlushBear(record,time,movingRoot,frameDt);if(record.riceMotion||record.colaMotion||record.trafficLights)animateStreetOutfit(record,time,movingRoot,frameDt);if(record.extraStreetMotion)animateExtraStreet(record,time,movingRoot,frameDt,streetMotionStep);if(record.muttonLight)animateFaultyMutton(record.muttonLight,time);if(record.teaMotion&&movingRoot)animateTeaMotion(record.teaMotion,time,movingRoot,frameDt);if(record.flexPipe)for(let i=0;i<record.flexPipe.length;i++){const q=record.flexPipe[i],v=q.userData.pipeBend||0;q.position.x=.48*v*v+Math.sin(time*3.2-i*.42)*v*.035;q.position.z=Math.cos(time*2.7-i*.35)*v*.025;q.rotation.z=-.43*v+Math.cos(time*3.2-i*.42)*v*.05;}if(record.blinkLight){const t=(time%5.6+5.6)%5.6;record.blinkLight.emissiveIntensity=t<.12||t>.31&&t<.43||t>2.8&&t<3.05?.04:t<.65?.35:1.35;}}
 

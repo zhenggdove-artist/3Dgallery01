@@ -1,8 +1,14 @@
 import {staticPaintTexture} from '../paint-texture-source.js';
+import {acquireOutfitTexture} from '../shared-render-resources.js';
 const TAU=Math.PI*2;
 function part(T,g,geo,mat,x=0,y=0,z=0,sx=1,sy=1,sz=1){const o=new T.Mesh(geo,mat);o.position.set(x,y,z);o.scale.set(sx,sy,sz);g.add(o);return o;}
 function sphere(T,g,mat,x,y,z,sx,sy,sz){return part(T,g,new T.SphereGeometry(1,16,10),mat,x,y,z,sx,sy,sz);}
-function tex(T,record,w,h,paint){const c=document.createElement('canvas');c.width=w;c.height=h;paint(c.getContext('2d'),w,h);const t=staticPaintTexture(T,c);t.colorSpace=T.SRGBColorSpace;record.extraTextures??=[];record.extraTextures.push(t);return t;}
+function tex(T,record,w,h,paint,key=null){
+ const create=()=>{const c=document.createElement('canvas');c.width=w;c.height=h;paint(c.getContext('2d'),w,h);const t=staticPaintTexture(T,c);t.colorSpace=T.SRGBColorSpace;return t;};
+ const t=key?acquireOutfitTexture(key,create):create();
+ if(key)(record.sharedExtraTextures??=new Map()).set(t,key);
+ record.extraTextures??=[];record.extraTextures.push(t);return t;
+}
 function flexible(record,mesh,amp,kind){record.softMeshes??=[];record.softMeshes.push({mesh,base:mesh.geometry.attributes.position.array.slice(),amp,kind});}
 export function buildSoftGarbage(T,g,record,mat){
  const plastic=mat('#111315',.06);plastic.roughness=.29;plastic.side=T.DoubleSide;
@@ -54,8 +60,8 @@ function paintCardboard(x,w,h,printed){
 export function buildSoftCardboard(T,g,record,mat){
  const card=mat('#ffffff'),printed=mat('#ffffff'),inner=mat('#795b39');
  for(const m of [card,printed,inner]){m.side=T.DoubleSide;m.roughness=.96;}
- card.map=tex(T,record,512,512,(x,w,h)=>paintCardboard(x,w,h,false));
- printed.map=tex(T,record,512,512,(x,w,h)=>paintCardboard(x,w,h,true));
+ card.map=tex(T,record,512,512,(x,w,h)=>paintCardboard(x,w,h,false),'street:cardboard-plain-v143');
+ printed.map=tex(T,record,512,512,(x,w,h)=>paintCardboard(x,w,h,true),'street:cardboard-fruit-v143');
  record.cardboard={walls:[],flaps:[]};
  for(let side=0;side<4;side++){
   const width=side%2?.65:.78,geo=new T.PlaneGeometry(width,.96,18,22),a=geo.attributes.position;
@@ -181,7 +187,7 @@ function batch(T,g,geo,mat,count){
 }
 const CHIMNEY_DENSITY=5;
 function smokeBatch(T,g,record){
- const texture=tex(T,record,64,64,(x)=>{const radial=x.createRadialGradient(32,32,1,32,32,31);radial.addColorStop(0,'rgba(17,16,18,.78)');radial.addColorStop(.4,'rgba(22,20,22,.55)');radial.addColorStop(1,'rgba(25,24,25,0)');x.fillStyle=radial;x.fillRect(0,0,64,64);});
+ const texture=tex(T,record,64,64,(x)=>{const radial=x.createRadialGradient(32,32,1,32,32,31);radial.addColorStop(0,'rgba(17,16,18,.78)');radial.addColorStop(.4,'rgba(22,20,22,.55)');radial.addColorStop(1,'rgba(25,24,25,0)');x.fillStyle=radial;x.fillRect(0,0,64,64);},'street:chimney-smoke-v143');
  const material=new T.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false});record.materials.push(material);
  // One camera-facing instanced batch replaces individual sprite draws.
  material.onBeforeCompile=shader=>{shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>',`
@@ -290,49 +296,78 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
  }}else d.credit=0;
  for(const b of d.batches)updateBatch(d,b,dt);
 }
+// Each stream has a moving breakup length, a curved liquid body and a rounded closed end.
+// Droplets leave the actual tip at their own emission time, following its tangent.
+function colaEnd(k,t){return k===0?1+.035*Math.sin(t*8.1)+.018*Math.sin(t*15.3):.94+.075*Math.sin(t*5.7+k*2.17)+.038*Math.sin(t*11.4+k*.91);}
+function colaPath(k,u,t,ca,sa,out){
+ const arm=k>0,p=t*10-u*15+k*1.7,breakup=Math.max(0,(u-.60)/.40),w=breakup*breakup;
+ if(arm){
+  const r=.03+.72*u+.035*w*Math.sin(p*1.3),side=.025*Math.sin(p)*u+.060*w*Math.sin(p*1.7+k);
+  out[0]=ca*r-sa*side;out[1]=1.98+1.02+3.8*u-4.5*u*u+.055*w*Math.sin(p*1.2+k);out[2]=sa*r+ca*side;
+ }else{
+  out[0]=.075*Math.sin(p)*u+.045*w*Math.sin(p*1.7);
+  out[1]=1.98+1.84*u+.045*w*Math.sin(p*1.2);out[2]=.07*Math.cos(p)*u+.045*w*Math.cos(p*1.3);
+ }
+}
+function colaRadius(k,u,t){
+ const p=t*10-u*15+k*1.7;
+ // The tail pulses but never tapers into a needle. A short rounded cap closes it.
+ return k>0?(.037+.012*Math.sin(p))*(.96-.52*Math.min(1,u)**2)+.004:
+  (.069+.037*Math.sin(Math.PI*Math.min(1,u))+.011*Math.sin(p))*(1-.52*Math.min(1,u)**6)+.005;
+}
 export function createColaStream(T,g,record,mat){
- // A solid rising liquid core, eight cylindrical curved jets, and fine detached droplets.
- // Reuse fixed buffers; no transparency sheets or per-frame mesh allocations.
  const n=40,sides=12,streams=9,positions=new Float32Array(streams*n*sides*3),indices=[];
- for(let k=0;k<streams;k++)for(let j=0;j<n;j++)for(let i=0;i<sides;i++){
-  const a=(k*n+j)*sides+i,b=(k*n+j)*sides+(i+1)%sides;positions[a*3+1]=1.96;
-  if(j<n-1)indices.push(a,a+sides,b,b,a+sides,b+sides);
+ const ring=Array.from({length:sides},(_,i)=>{const a=i*TAU/sides;return [Math.cos(a),Math.sin(a),Math.sin(3*a),Math.cos(3*a),Math.cos(5*a),Math.sin(5*a)];});
+ for(let k=0;k<streams;k++){
+  for(let j=0;j<n;j++)for(let i=0;i<sides;i++){
+   const a=(k*n+j)*sides+i,b=(k*n+j)*sides+(i+1)%sides;positions[a*3+1]=1.96;
+   if(j<n-1)indices.push(a,a+sides,b,b,a+sides,b+sides);
+  }
+  // The final small ring is closed, not an open sharp-edged tube or a zero-radius apex.
+  const tip=(k*n+n-1)*sides;for(let i=1;i<sides-1;i++)indices.push(tip,tip+i+1,tip+i);
  }
  const geo=new T.BufferGeometry();geo.setAttribute('position',new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage));geo.setIndex(indices);geo.computeVertexNormals();
+ geo.attributes.normal.setUsage(T.DynamicDrawUsage);
  const liquid=mat('#71331b');liquid.roughness=.15;liquid.metalness=.04;
  const mesh=part(T,g,geo,liquid);mesh.visible=false;mesh.frustumCulled=false;
  const splash=mat('#a35b32');splash.roughness=.13;splash.metalness=.03;
  const dropCount=64,drops=new T.InstancedMesh(new T.SphereGeometry(1,8,6),splash,dropCount);
  drops.instanceMatrix.setUsage(T.DynamicDrawUsage);drops.count=0;drops.visible=false;drops.frustumCulled=false;g.add(drops);
- record.colaMotion.jet={mesh,n,sides,streams,drops,dropCount,dummy:new T.Object3D(),up:new T.Vector3(0,1,0),direction:new T.Vector3()};
+ record.colaMotion.jet={mesh,n,sides,streams,drops,dropCount,ring,dummy:new T.Object3D(),up:new T.Vector3(0,1,0),direction:new T.Vector3(),tangent:new T.Vector3(),normal:new T.Vector3(),binormal:new T.Vector3(),p:new Float64Array(3),q:new Float64Array(3)};
 }
 export function updateColaStream(d,time){
- if(!d.jet)return;const {mesh,n,sides,streams,drops,dropCount,dummy,up,direction}=d.jet;
+ if(!d.jet)return;const {mesh,n,sides,streams,drops,dropCount,ring,dummy,up,direction,tangent,normal,binormal,p,q}=d.jet;
  const open=d.open;mesh.visible=drops.visible=open>.03;if(!mesh.visible){drops.count=0;return;}
- const a=mesh.geometry.attributes.position;
- for(let k=0;k<streams;k++)for(let j=0;j<n;j++){
-  const u=j/(n-1),phase=time*10-u*15+k*1.7,angle=(k-1)*TAU/(streams-1)+.11*Math.sin(time*2+k);
-  const ca=Math.cos(angle),sa=Math.sin(angle),arm=k>0;
-  const r=arm?(.03+.72*u):0,cy=arm?1.98+1.02+3.8*u-4.5*u*u:1.98+1.84*u;
-  const cx=arm?ca*r:.075*Math.sin(phase)*u,cz=arm?sa*r:.07*Math.cos(phase)*u;
-  const slope=arm?3.8-9*u:1,radial=arm?.72:0,inv=1/Math.hypot(slope,radial);
-  const nx=arm?ca*slope*inv:1,ny=arm?-radial*inv:0,nz=arm?sa*slope*inv:0,bx=arm?-sa:0,bz=arm?ca:1;
-  const radius=arm?(.036+.014*Math.sin(phase))*(.92-.80*u*u):(.069+.037*Math.sin(Math.PI*u)+.011*Math.sin(phase))*Math.max(.035,1-Math.pow(u,12));
-  for(let i=0;i<sides;i++){
-   const theta=i*TAU/sides,w=radius*(1+.14*Math.sin(theta*3+phase)+.08*Math.cos(theta*5-phase));
-   const c=Math.cos(theta)*w,ss=Math.sin(theta)*w;
-   a.setXYZ((k*n+j)*sides+i,(cx+nx*c+bx*ss)*open,1.98+(cy-1.98+ny*c)*open,(cz+nz*c+bz*ss)*open);
+ const a=mesh.geometry.attributes.position,body=n-4;
+ for(let k=0;k<streams;k++){
+  const end=colaEnd(k,time),angle=(k-1)*TAU/(streams-1)+.11*Math.sin(time*2+k),ca=Math.cos(angle),sa=Math.sin(angle),arm=k>0;
+  for(let j=0;j<n;j++){
+   const cap=j>=body,u=end*Math.min(1,j/(body-1)),phase=time*10-u*15+k*1.7;
+   colaPath(k,u,time,ca,sa,p);colaPath(k,u+.002,time,ca,sa,q);
+   tangent.set(q[0]-p[0],q[1]-p[1],q[2]-p[2]).normalize();
+   binormal.set(arm?-sa:0,0,arm?ca:1);normal.crossVectors(tangent,binormal).normalize();binormal.crossVectors(normal,tangent).normalize();
+   const radius=colaRadius(k,u,time),capAngle=cap?(j-body+1)/4*1.46:0,axial=radius*Math.sin(capAngle),round=Math.cos(capAngle);
+   const cx=p[0]+tangent.x*axial,cy=p[1]+tangent.y*axial,cz=p[2]+tangent.z*axial;
+   const s1=Math.sin(phase),c1=Math.cos(phase);
+   for(let i=0;i<sides;i++){
+    const [ct,st,s3,c3,c5,s5]=ring[i];
+    const w=radius*round*(1+.14*(s3*c1+c3*s1)+.08*(c5*c1+s5*s1));
+    const c=ct*w,ss=st*w;
+    a.setXYZ((k*n+j)*sides+i,(cx+normal.x*c+binormal.x*ss)*open,1.98+(cy-1.98+normal.y*c+binormal.y*ss)*open,(cz+normal.z*c+binormal.z*ss)*open);
+   }
   }
  }
  a.needsUpdate=true;mesh.geometry.computeVertexNormals();
  for(let i=0;i<dropCount;i++){
-  const phase=(time*(.76+(i%7)*.035)+i*.61803398875)%1,u=phase,angle=i*2.39996323+.1*Math.sin(time*2+i),ca=Math.cos(angle),sa=Math.sin(angle);
-  const radial=.15+(i%9)*.037,travel=.12+radial*u,vy=3.15+(i%5)*.12,gravity=4.7;
-  const y=1.98+1.04+vy*u-gravity*u*u;
-  dummy.position.set(ca*travel*open,1.98+(y-1.98)*open,sa*travel*open);
-  direction.set(ca*radial,vy-2*gravity*u,sa*radial).normalize();dummy.quaternion.setFromUnitVectors(up,direction);
-  const size=(.006+(i%11)*.0014)*open*Math.min(1,(1-u)*9,u*15+.1);
-  dummy.scale.set(size,size*(1.6+Math.abs(vy-2*gravity*u)*.42),size);dummy.updateMatrix();drops.setMatrixAt(i,dummy.matrix);
+  const k=i%streams,lifetime=.42+(i%7)*.039,phase=((time/lifetime+i*.61803398875)%1+1)%1,age=phase*lifetime,emitTime=time-age;
+  const u=colaEnd(k,emitTime),angle=(k-1)*TAU/(streams-1)+.11*Math.sin(emitTime*2+k),ca=Math.cos(angle),sa=Math.sin(angle);
+  colaPath(k,u,emitTime,ca,sa,p);colaPath(k,u+.002,emitTime,ca,sa,q);
+  tangent.set(q[0]-p[0],q[1]-p[1],q[2]-p[2]).normalize();
+  const speed=.74+(i%5)*.16,spread=i*2.39996323,vx=tangent.x*speed+Math.cos(spread)*.38,vy=tangent.y*speed+.28*Math.sin(spread),vz=tangent.z*speed+Math.sin(spread)*.38;
+  dummy.position.set((p[0]+vx*age)*open,1.98+(p[1]-1.98+vy*age-3.9*age*age)*open,(p[2]+vz*age)*open);
+  direction.set(vx,vy-7.8*age,vz).normalize();dummy.quaternion.setFromUnitVectors(up,direction);
+  const size=(.006+(i%11)*.0014)*open*Math.min(1,(1-phase)*9,phase*15+.1);
+  dummy.scale.set(size,size*(1.4+Math.hypot(vx,vy-7.8*age,vz)*.4),size);dummy.updateMatrix();drops.setMatrixAt(i,dummy.matrix);
  }
  drops.count=dropCount;drops.instanceMatrix.needsUpdate=true;
 }

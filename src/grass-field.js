@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {repackVisibleSpans} from './visible-spans.js';
 import {CITY_INNER_RADIUS,CITY_OUTER_RADIUS} from './shared/city-layout.js';
 import {TERRAIN_DEFAULTS,terrainStyle,terrainColorDelta} from './shared/terrain-style.js';
 
@@ -189,7 +190,7 @@ class GrassVisibility{
   this.buffer=new THREE.InstancedInterleavedBuffer(this.packed.slice(),6,1).setUsage(THREE.DynamicDrawUsage);
   for(const [name,size,offset] of [['aOffset',2,0],['aHeight',1,2],['aAngle',1,3],['aPhase',1,4],['aShade',1,5]])
    geometry.setAttribute(name,new THREE.InterleavedBufferAttribute(this.buffer,size,offset));
-  geometry.instanceCount=count;this.density=1;
+  geometry.instanceCount=count;this.density=1;this.packedSpans=this.boxes.map(tile=>tile.selected);
  }
  setDensity(density){
   if(density===this.density)return;this.density=density;
@@ -211,21 +212,20 @@ class GrassVisibility{
   let needed=0,uncovered=false;
   for(let i=0;i<this.boxes.length;i++){
    const tile=this.boxes[i],{box,count}=tile;
-   box.min.set(tile.minX-pad,-.1,tile.minZ-pad);box.max.set(tile.maxX+pad,tile.maxHeight*this.maxT*length+.10,tile.maxZ+pad);
+   if(this.boundsLength!==length||this.boundsPad!==pad){box.min.set(tile.minX-pad,-.1,tile.minZ-pad);box.max.set(tile.maxX+pad,tile.maxHeight*this.maxT*length+.10,tile.maxZ+pad);}
    const visible=frustum.intersectsBox(box);this.next[i]=+visible;
    if(visible){needed+=count;uncovered||=!this.active[i];}
   }
+  this.boundsLength=length;this.boundsPad=pad;
   // A previous superset is safe when it still contains the visible tiles.
   // Don't upload new buffers for minor movement while turning or shaking.
   if(!uncovered&&needed>=this.covered*.74)return;
   this.active.set(this.next);this.covered=needed;this.repack();
  }
  repack(){
-  const {geometry,buffer,active,boxes}=this,dst=buffer.array;
-  let n=0;
-  for(let i=0;i<boxes.length;i++)if(active[i]){const src=boxes[i].selected;dst.set(src,n);n+=src.length;}
-  geometry.instanceCount=n/6;
-  if(n){buffer.clearUpdateRanges();buffer.addUpdateRange(0,n);buffer.needsUpdate=true;}
+  const {geometry,buffer,active,boxes}=this,next=[];
+  for(let i=0;i<boxes.length;i++)if(active[i]&&boxes[i].selected.length)next.push(boxes[i].selected);
+  geometry.instanceCount=repackVisibleSpans(buffer,this.packedSpans,next)/6;this.packedSpans=next;
  }
 }
 // One tileable mipmapped texture encodes soil granules, compacted earth,

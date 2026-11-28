@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {repackVisibleSpans} from './visible-spans.js';
 // Keep the authored vertex buffers, lot IDs, shader deformation and collision
 // data intact. Only draw indices of batches that can intersect the camera.
 export class CityVisibleIndices{
@@ -21,7 +22,7 @@ export class CityVisibleIndices{
    while(end<this.source.length&&ids.getX(this.source[end])===id)end+=3;
    this.runs.push({start,end,view:this.source.subarray(start,end),box:bounds.get(id),active:true});start=end;
   }
-  index.setUsage(THREE.DynamicDrawUsage);geometry.setDrawRange(0,this.source.length);
+  index.setUsage(THREE.DynamicDrawUsage);geometry.setDrawRange(0,this.source.length);this.packedSpans=this.runs.map(run=>run.view);
   // Rendering compaction must not change picking/raycast results. The full
   // CPU index view is restored for raycasts only; never uploaded to the GPU.
   if(mesh){const raycast=mesh.raycast,full=new THREE.BufferAttribute(this.source,1);mesh.raycast=function(raycaster,hits){const draw=geometry.drawRange,count=draw.count,start=draw.start,renderIndex=geometry.index;geometry.index=full;geometry.setDrawRange(0,full.count);try{return raycast.call(this,raycaster,hits);}finally{geometry.index=renderIndex;geometry.setDrawRange(start,count);}};}
@@ -30,9 +31,7 @@ export class CityVisibleIndices{
   let changed=false;
   for(const run of this.runs){const visible=!run.box||frustum.intersectsBox(run.box);if(visible!==run.active){run.active=visible;changed=true;}}
   if(!changed)return;
-  const index=this.geometry.index;let n=0;
-  for(const run of this.runs)if(run.active){index.array.set(run.view,n);n+=run.view.length;}
-  this.geometry.setDrawRange(0,n);
-  if(n){index.clearUpdateRanges();index.addUpdateRange(0,n);index.needsUpdate=true;}
+  const next=[];for(const run of this.runs)if(run.active)next.push(run.view);
+  this.geometry.setDrawRange(0,repackVisibleSpans(this.geometry.index,this.packedSpans,next));this.packedSpans=next;
  }
 }
