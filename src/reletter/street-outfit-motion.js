@@ -397,18 +397,23 @@ function buildMobilityStreetProp(T,g,kind,record,mat){
   const points=[[.40,.08],[.43,.10],[.48,.25],[.54,.45],[.60,.65],[.66,.86],[.70,1.02]];
   const bowl=part(T,g,new T.LatheGeometry(points.map(p=>new T.Vector2(...p)),64),label);bowl.rotation.y=Math.PI/2;label.side=T.DoubleSide;
   c([0,.09,0],.43,.40,.055,cream);ring([0,1.025,0],.70,.031,cream);ring([0,.10,0],.42,.018,cream);
-  // Food uses one instanced curved strand and one garnish batch; center remains open.
+  // A closed, opaque, bowl-shaped food mass reaches the rim; actual 3D
+  // strands sit on the textured surface instead of hovering above an empty bowl.
+  const fill=buildNoodleFill(T,g,record,mat);
   const pts=[];for(let i=0;i<=20;i++){const u=i/20;pts.push(new T.Vector3((u-.5)*.31,Math.sin(u*TAU*2)*.018,Math.sin(u*TAU*2)*.045));}
   const strand=new T.TubeGeometry(new T.CatmullRomCurve3(pts),24,.013,6,false);
-  const strands=new T.InstancedMesh(strand,noodle,104),dummy=new T.Object3D();
-  for(let i=0;i<104;i++){const a=rand()*TAU,rr=.30+rand()*.29;dummy.position.set(Math.sin(a)*rr,.97+rand()*.065,Math.cos(a)*rr);dummy.rotation.set((rand()-.5)*.4,a+Math.PI/2,(rand()-.5)*.35);dummy.scale.setScalar(.75+rand()*.5);dummy.updateMatrix();strands.setMatrixAt(i,dummy.matrix);}g.add(strands);
+  const strands=new T.InstancedMesh(strand,noodle,192),dummy=new T.Object3D();strands.name='gg-noodle-packed-strands';
+  for(let i=0;i<104;i++){const a=rand()*TAU,rr=.30+rand()*.29;dummy.position.set(Math.sin(a)*rr,.97+rand()*.065,Math.cos(a)*rr);dummy.rotation.set((rand()-.5)*.4,a+Math.PI/2,(rand()-.5)*.35);dummy.scale.setScalar(.75+rand()*.5);dummy.updateMatrix();strands.setMatrixAt(i,dummy.matrix);}
+  // Keep the original outer strands and fill the middle with overlapping curls.
+  // Deterministic coverage, independent of whether the shared texture was cached.
+  for(let i=104;i<192;i++){const j=i-104,a=j*2.39996323,rr=.45*Math.sqrt((j+.5)/88),phase=j*1.73;dummy.position.set(Math.sin(a)*rr,.978+.020*Math.sin(phase)**2,Math.cos(a)*rr);dummy.rotation.set(.19*Math.sin(phase),a+.7*Math.sin(j*2.4),.16*Math.cos(phase));dummy.scale.setScalar(.84+.18*Math.sin(j*3.1)**2);dummy.updateMatrix();strands.setMatrixAt(i,dummy.matrix);}g.add(strands);
   const topping=new T.InstancedMesh(new T.IcosahedronGeometry(.026,1),sauce,32),scallion=new T.InstancedMesh(new T.TorusGeometry(.025,.007,5,10),green,20);
   for(const m of [topping,scallion]){for(let i=0;i<m.count;i++){const a=rand()*TAU,rr=.34+rand()*.28;dummy.position.set(Math.sin(a)*rr,1.02+rand()*.035,Math.cos(a)*rr);dummy.rotation.set(rand(),rand()*TAU,rand());dummy.scale.setScalar(.7+rand()*.7);dummy.updateMatrix();m.setMatrixAt(i,dummy.matrix);}g.add(m);}
   const lid=new T.Group();lid.position.set(0,1.045,-.70);g.add(lid);
   const top=mat('#ffffff');top.map=tex(T,record,512,512,(x,w,h)=>{x.fillStyle='#192586';x.fillRect(0,0,w,h);x.fillStyle='#f8f2df';x.fillRect(0,h*.52,w,h*.25);x.fillStyle='#e91b26';x.fillRect(0,h*.77,w,h*.23);x.fillStyle='#173080';x.textAlign='center';x.font='bold 52px sans-serif';x.fillText('重量碗',w/2,h*.68);x.fillStyle='#fff5d8';x.font='bold 34px sans-serif';x.fillText('110克 大份量',w/2,h*.89);x.fillStyle='#e3b73d';x.fillRect(0,h*.51,w,5);x.fillRect(0,h*.76,w,5);x.textAlign='center';x.fillStyle='#fff8e9';x.font='bold 82px sans-serif';x.fillText('GG炸醬麵',w/2,h*.25);x.font='italic bold 25px sans-serif';x.fillText('GG FRIED SAUCE NOODLES',w/2,h*.36);},'street:gg-noodle-lid-v151');
   const lidMesh=part(T,lid,new T.CircleGeometry(.724,64),top,0,.016,.70);lidMesh.rotation.x=-Math.PI/2;top.side=T.DoubleSide;
   c([0,0,.70],.724,.724,.018,foil,64,lid);ring([0,.012,.70],.716,.012,foil,lid);
-  record.noodleProp={lid,strand,noodle};
+  record.noodleProp={lid,strand,noodle,fill};
   return {openingY:.79,frontZ:.63};
  }
  if(kind==='wheelchair-disguise'){
@@ -501,4 +506,37 @@ function animateMobilityMotion(record,d,time,dt,speed,moving,active,teleport){
  if(chair){d.fireCredit+=active&&!teleport?dt*100:0;while(d.fireCredit>=1){d.fireCredit--;const w=chair.wheels[Math.floor(rng(d)*chair.wheels.length)],a=rng(d)*TAU;emit(d,d.fire,w.group.position.x,w.radius+Math.cos(a)*w.radius,w.group.position.z+Math.sin(a)*w.radius,.15,1.25,.13,.42);}updatePropPuffs(d,d.fire,dt,true);}
  if(!teleport&&(noodle?moving&&fast>.12:burner&&active)){d.credit+=dt*(noodle?5+fast*15:15);while(d.credit>=1){d.credit--;const a=rng(d)*TAU;emit(d,d.batches[0],Math.sin(a)*.48,noodle?1.05:1.72,Math.cos(a)*.48,noodle?1+fast*1.8:1.6,noodle?1.1+fast*1.6:2,.75+rng(d)*.6,noodle?1.1:2.5);}}
  for(const b of d.batches)updateBatch(d,b,dt);
+}
+
+
+// The entire serving is a contiguous solid, with a gently uneven top and
+// a lossless shared noodle-surface texture. No new runtime animation or pool.
+function buildNoodleFill(T,g,record,mat){
+ const N=64,vertices=[],uv=[],indices=[];
+ const profile=[[.418,.105],[.474,.25],[.534,.45],[.594,.65],[.654,.86],[.685,.967]];
+ for(let k=1;k<=10;k++)profile.push([.685*(1-k/11),.978]);
+ for(let j=0;j<profile.length;j++){const [r,y]=profile[j];
+  for(let i=0;i<=N;i++){const a=TAU*i/N,x=Math.cos(a)*r,z=Math.sin(a)*r;
+   const relief=j>=5?.011*Math.sin(x*29+z*19)*Math.cos(z*23-x*11)*Math.min(1,(.685-r)*12):0;
+   vertices.push(x,y+relief,z);uv.push(.5+x/1.37,.5+z/1.37);}
+ }
+ for(let j=0;j<profile.length-1;j++)for(let i=0;i<N;i++){const a=j*(N+1)+i,b=a+N+1;indices.push(a,b,a+1,a+1,b,b+1);}
+ const top=vertices.length/3;vertices.push(0,.978,0);uv.push(.5,.5);
+ const last=(profile.length-1)*(N+1);for(let i=0;i<N;i++)indices.push(last+i,top,last+i+1);
+ const bottom=vertices.length/3;vertices.push(0,.105,0);uv.push(.5,.5);
+ for(let i=0;i<N;i++)indices.push(i,i+1,bottom);
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
+ const mass=mat('#ffffff');mass.roughness=.62;
+ mass.map=tex(T,record,512,512,(x,w,h)=>{
+  x.fillStyle='#91602c';x.fillRect(0,0,w,h);x.lineCap='round';x.lineJoin='round';
+  let seed=152;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  // Interwoven sauce-coated noodle curves; each dark edge and golden highlight
+  // follows the same path. The base stays opaque even between individual curls.
+  for(let i=0;i<980;i++){const cx=rand()*w,cy=rand()*h,a=rand()*TAU,L=23+rand()*55,ca=Math.cos(a),sa=Math.sin(a),wave=5+rand()*10;
+   const point=(u,v)=>[cx+u*ca-v*sa,cy+u*sa+v*ca];
+   x.beginPath();x.moveTo(...point(-L/2,0));x.bezierCurveTo(...point(-L/3,wave),...point(-L/6,-wave),...point(0,0));x.bezierCurveTo(...point(L/6,wave),...point(L/3,-wave),...point(L/2,0));
+   x.strokeStyle='#80502a';x.lineWidth=8;x.stroke();x.strokeStyle=['#c3934b','#d5ad65','#cfa05b','#dfb973'][i%4];x.lineWidth=5.6;x.stroke();
+  }
+ },'street:gg-noodle-full-serving-v152');
+ const fill=part(T,g,geo,mass);fill.name='gg-noodle-solid-serving';return fill;
 }

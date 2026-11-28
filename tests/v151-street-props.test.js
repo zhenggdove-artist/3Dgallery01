@@ -48,3 +48,22 @@ test('burner is twice avatar height, emits smoke at rest and paper after movemen
  drive(r,root,40,.1,1);assert.ok(d.batches[0].mesh.count>0);disposeOutfit(r);
  const mat=new T.MeshStandardMaterial({color:'#fff'});animateFaultyMutton(mat,.4);assert.ok(mat.color.r>=.5&&mat.emissiveIntensity>0);animateFaultyMutton(mat,2);assert.equal(mat.color.r,1);mat.dispose();
 }));
+
+test('GG noodles form a solid full bowl with no center or rim gaps, and keep shared texture ownership',()=>withCanvas(()=>{
+ const before=outfitTextureResources.snapshot(),a=rig(),b=rig(),item=itemById('outfit-gg-noodle-disguise');
+ const one=attachOutfit(T,a.model,item),two=attachOutfit(T,b.model,item),fill=one.noodleProp.fill;
+ assert.equal(fill.name,'gg-noodle-solid-serving');assert.equal(fill.material.transparent,false);
+ assert.equal(fill.material.map,two.noodleProp.fill.material.map);
+ const mesh=new T.Mesh(fill.geometry,fill.material),ray=new T.Raycaster();
+ mesh.updateMatrixWorld(true);
+ // Direct top-down intersections sample the complete edible disk, including
+ // the former empty center. Ray tests run in canonical bowl coordinates.
+ for(let radius of [0,.1,.25,.4,.55,.65,.68])for(let i=0;i<24;i++){
+  const a=i*Math.PI/12;ray.set(new T.Vector3(Math.cos(a)*radius,2,Math.sin(a)*radius),new T.Vector3(0,-1,0));
+  const hit=ray.intersectObject(mesh,false)[0];assert.ok(hit,'empty region at '+radius+','+i);assert.ok(hit.point.y>.94&&hit.point.y<1.02);
+ }
+ const strands=one.extraStreetMotion.g.getObjectByName('gg-noodle-packed-strands');assert.equal(strands.count,192);
+ const matrix=new T.Matrix4(),position=new T.Vector3();let central=0;for(let i=0;i<strands.count;i++){strands.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);if(Math.hypot(position.x,position.z)<.18)central++;}
+ assert.ok(central>=10);assert.equal(one.extraStreetMotion.batches[0].particles.length,28);
+ const texture=fill.material.map;disposeOutfit(one);assert.ok(texture.image.width>0);disposeOutfit(two);assert.deepEqual(outfitTextureResources.snapshot(),before);
+}));
