@@ -14,7 +14,7 @@ export class SharedRenderResources{
  snapshot(){let bytes=0;for(const e of this.entries.values())bytes+=e.bytes;return {entries:this.entries.size,references:this.refs,estimatedPixelBytes:bytes};}
 }
 export const outfitTextureResources=new SharedRenderResources();
-export function disposeOutfitTexture(t){t.dispose();if(t.isCanvasTexture&&t.image)t.image.width=t.image.height=0;}
+export function disposeOutfitTexture(t){t.dispose();if(t.isCanvasTexture&&t.image)t.image.width=t.image.height=0;else if(t.isDataTexture&&t.image)t.image.data=null;}
 export function acquireOutfitTexture(key,create){return outfitTextureResources.acquire(key,create,disposeOutfitTexture,t=>(t.image?.width||0)*(t.image?.height||0)*4);}
 export function releaseOutfitTexture(key,t){return outfitTextureResources.release(key,t);}
 
@@ -48,7 +48,7 @@ export function wearableMaterial(T,materials,color,roughness,metalness){
 export function disposeWearableParts(roots,materials=[],geometries=[]){
  const mats=new Set(materials),geo=new Set(geometries),instances=new Set();
  for(const root of roots){root.traverse(o=>{
-  if(o.isInstancedMesh)instances.add(o);if(o.geometry)geo.add(o.geometry);
+  if(o.isInstancedMesh)instances.add(o);if(o.geometry&&!o.isSprite)geo.add(o.geometry);
   for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])mats.add(m);
  });root.removeFromParent();}
  for(const instance of instances)instance.dispose();

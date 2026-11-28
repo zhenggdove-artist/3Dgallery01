@@ -139,6 +139,7 @@ export function buildTreeDisguise(T,g,record,mat){
 }
 
 export function buildNewStreetProp(T,g,kind,record,mat){
+ const packageProp=buildPackageProp(T,g,kind,record,mat);if(packageProp)return packageProp;
  const newProp=buildMobilityStreetProp(T,g,kind,record,mat);if(newProp)return newProp;
  if(kind==='pharmacy-bag-disguise'){
   const white=mat('#ffffff');white.roughness=.35;white.side=T.DoubleSide;white.alphaTest=.5;
@@ -183,7 +184,7 @@ export function buildNewStreetProp(T,g,kind,record,mat){
  return null;
 }
 function batch(T,g,geo,mat,count){
- const mesh=new T.InstancedMesh(geo,mat,count);mesh.count=0;mesh.frustumCulled=false;g.add(mesh);
+ const mesh=new T.InstancedMesh(geo,mat,count);mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;g.add(mesh);
  return {mesh,particles:Array.from({length:count},()=>({age:99,life:0,p:new T.Vector3(),v:new T.Vector3(),angle:0,size:1,floor:0})),next:0};
 }
 const CHIMNEY_DENSITY=5;
@@ -204,12 +205,13 @@ function smokeBatch(T,g,record){
 }
 function envelopeGeometry(T){const shape=new T.Shape();shape.moveTo(-.11,-.07);shape.lineTo(.11,-.07);shape.lineTo(.11,.07);shape.lineTo(-.11,.07);shape.closePath();const geo=new T.ShapeGeometry(shape),uv=geo.attributes.uv,a=geo.attributes.position;for(let i=0;i<uv.count;i++)uv.setXY(i,a.getX(i)/.22+.5,a.getY(i)/.14+.5);return geo;}
 export function attachStreetMotion(T,g,kind,record,mat){
- if(!['chimney-disguise','trash-can-disguise','garbage-bag-disguise','fried-chicken-disguise','postbox-disguise','pharmacy-bag-disguise','goldfish-bowl-disguise','cardboard-disguise','utility-pole-disguise','tree-disguise','gg-noodle-disguise','wheelchair-disguise','joss-burner-disguise'].includes(kind))return;
+ if(!['chimney-disguise','trash-can-disguise','garbage-bag-disguise','fried-chicken-disguise','postbox-disguise','pharmacy-bag-disguise','goldfish-bowl-disguise','cardboard-disguise','utility-pole-disguise','tree-disguise','gg-noodle-disguise','wheelchair-disguise','joss-burner-disguise','naughty-snack-disguise','taiwan-beer-disguise'].includes(kind))return;
  const d={T,g,kind,pos:new T.Vector3(),last:null,delta:new T.Vector3(),inverse:new T.Matrix4(),dummy:new T.Object3D(),origin:new T.Vector3(),local:new T.Vector3(),worldScale:new T.Vector3(),run:0,air:0,grace:0,elapsed:0,credit:0,energy:0,floor:null,batches:[],seed:7823};
  record.extraStreetMotion=d;
  if(record.noodleProp||record.chairProp||record.burnerProp){attachMobilityMotion(T,g,record,mat,d);return;}
  const twoSided=color=>{const m=mat(color);m.side=T.DoubleSide;return m;};
  const add=(geo,m,n)=>{const b=batch(T,g,geo,m,n);d.batches.push(b);return b;};
+ if(record.cardboard||record.snackProp||record.beerProp){attachFoodSpill(T,g,record,mat,d);}
  if(kind==='chimney-disguise')d.smoke=smokeBatch(T,g,record);
  if(kind==='tree-disguise'){const leaf=mat('#62813c');leaf.side=T.DoubleSide;leaf.roughness=.85;add(record.treeMotion.leafGeo.clone(),leaf,220);}
  if(kind==='fried-chicken-disguise')add(new T.IcosahedronGeometry(1,0),mat('#d69a4a'),32);
@@ -286,6 +288,7 @@ export function animateExtraStreet(record,time,root,dt,streetMotionStep){
    smoke.mesh.count=n;smoke.mesh.visible=n>0;if(n)smoke.mesh.instanceMatrix.needsUpdate=true;
   return;
  }
+ if(record.cardboard||record.snackProp||record.beerProp){animateFoodSpill(record,d,time,dt,speed,moving,teleport);return;}
  const producing=!teleport&&(d.kind==='fried-chicken-disguise'?moving:active);
  if(producing&&d.batches.length){d.credit+=dt*(d.kind==='tree-disguise'?65:d.kind==='fried-chicken-disguise'?12:9);while(d.credit>=1){d.credit--;const b=d.batches[Math.floor(rng(d)*d.batches.length)],a=rng(d)*TAU;
   switch(d.kind){
@@ -539,4 +542,131 @@ function buildNoodleFill(T,g,record,mat){
   }
  },'street:gg-noodle-full-serving-v152');
  const fill=part(T,g,geo,mass);fill.name='gg-noodle-solid-serving';return fill;
+}
+
+
+// V154: packaging props share the original disguise frame, aperture shader,
+// immutable texture leases and fixed-capacity outfit particle lifecycle.
+function buildPackageProp(T,g,kind,record,mat){
+ if(kind==='naughty-snack-disguise'){
+  const film=mat('#ffffff'),green=mat('#43a620'),inside=mat('#555b35');film.roughness=.33;film.side=T.DoubleSide;green.side=T.DoubleSide;
+  film.map=tex(T,record,512,1024,paintNaughtyPackage,'street:naughty-package-v154');
+  // A rounded inflated pillow with creased edges and crimped sealed ends.
+  const W=36,H=44,vertices=[],uv=[],indices=[];
+  for(let j=0;j<=H;j++)for(let i=0;i<=W;i++){
+   const y=j/H,a=i/W*TAU-Math.PI/2,full=Math.pow(Math.max(.025,Math.sin(Math.PI*y)),.36),ca=Math.cos(a),sa=Math.sin(a);
+   const x=Math.sign(sa)*Math.pow(Math.abs(sa),.55)*(.54+.105*full);
+   const z=Math.sign(ca)*Math.pow(Math.abs(ca),.55)*(.055+.23*full)+.012*Math.sin(a*13+y*39)*Math.sin(Math.PI*y);
+   vertices.push(x,.05+1.78*y,z);uv.push(i/W,y);
+  }
+  for(let j=0;j<H;j++)for(let i=0;i<W;i++){const a=j*(W+1)+i,b=a+W+1;indices.push(a,a+1,b,a+1,b+1,b);}
+  const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
+  // The front panel is centered at u=.25, facing the player aperture.
+  part(T,g,geo,film);
+  part(T,g,new T.BoxGeometry(1.10,.07,.105),green,0,.035,0);
+  const mouth=part(T,g,new T.BoxGeometry(1.08,.025,.13),inside,0,1.80,0);
+  const lips=[];
+  for(const sign of [-1,1]){
+   const hinge=new T.Group();hinge.position.set(0,1.79,sign*.045);g.add(hinge);
+   const lip=part(T,hinge,new T.BoxGeometry(1.10,.19,.045),green,0,.095,0);
+   for(let i=0;i<2;i++)part(T,hinge,new T.BoxGeometry(1.10,.011,.049),inside,0,.13+i*.026,0);
+   lips.push({hinge,sign});
+  }
+  record.snackProp={lips,mouth};return {openingY:.71,frontZ:.28};
+ }
+ if(kind!=='taiwan-beer-disguise')return null;
+ const label=mat('#ffffff',.45),metal=mat('#c0c4c5',.78),dark=mat('#313735',.45);label.roughness=.35;metal.roughness=.26;
+ label.map=tex(T,record,1024,512,paintBeerPackage,'street:taiwan-beer-v154');
+ const profile=[[.38,.04],[.43,.08],[.46,.19],[.47,.30],[.47,1.67],[.45,1.81],[.39,1.94],[.38,1.99]];
+ const body=new T.LatheGeometry(profile.map(p=>new T.Vector2(...p)),64),uv=body.attributes.uv,pos=body.attributes.position;
+ for(let i=0;i<uv.count;i++)uv.setY(i,pos.getY(i)/2);
+ const shell=part(T,g,body,label);shell.rotation.y=-Math.PI/2;
+ const torus=(r,t,y)=>{const mesh=part(T,g,new T.TorusGeometry(r,t,10,64),metal,0,y,0);mesh.rotation.x=Math.PI/2;return mesh;};torus(.39,.025,1.99);torus(.39,.025,.04);
+ part(T,g,new T.CylinderGeometry(.39,.40,.04,64),metal,0,.045,0);
+ const disc=new T.Shape();disc.absarc(0,0,.382,0,TAU,false);const hole=new T.Path();hole.absellipse(0,-.16,.125,.087,0,TAU,true);disc.holes.push(hole);
+ const top=part(T,g,new T.ShapeGeometry(disc,48),metal,0,1.975,0);top.rotation.x=-Math.PI/2;
+ const cavity=part(T,g,new T.CylinderGeometry(.365,.365,.02,48),dark,0,1.91,0);
+ const flap=new T.Group();flap.position.set(0,1.982,.255);g.add(flap);
+ const cover=part(T,flap,new T.CircleGeometry(1,32),metal,0,0,-.095,.125,.087,1);cover.rotation.x=-Math.PI/2;metal.side=T.DoubleSide;
+ const tab=new T.Group();tab.position.set(0,2.00,-.025);g.add(tab);
+ const tabRing=part(T,tab,new T.TorusGeometry(.085,.024,10,32),metal,0,.012,-.11,1,.72,1);tabRing.rotation.x=Math.PI/2;
+ part(T,tab,new T.BoxGeometry(.10,.025,.11),metal,0,.007,.005);
+ record.beerProp={flap,tab,cavity};return {openingY:1.06,frontZ:.47};
+}
+function paintNaughtyPackage(x,w,h){
+ const half=w/2;
+ for(let side=0;side<2;side++){
+  x.save();x.translate(side*half,0);x.scale(half/256,h/1024);
+  const gradient=x.createLinearGradient(0,0,256,0);gradient.addColorStop(0,'#168c25');gradient.addColorStop(.22,'#b9e634');gradient.addColorStop(.62,'#d0eb44');gradient.addColorStop(1,'#159e32');x.fillStyle=gradient;x.fillRect(0,0,256,1024);
+  const ellipse=(cx,cy,rx,ry,fill,stroke=null,width=2)=>{x.beginPath();x.ellipse(cx,cy,rx,ry,0,0,TAU);x.fillStyle=fill;x.fill();if(stroke){x.strokeStyle=stroke;x.lineWidth=width;x.stroke();}};
+  x.fillStyle='#009638';x.fillRect(0,0,256,28);x.fillRect(0,996,256,28);for(let i=0;i<5;i++){x.fillStyle=i%2?'#6ebc27':'#c7df43';x.fillRect(0,4+i*4,256,2);x.fillRect(0,999+i*4,256,2);}
+  x.fillStyle='#fff';x.strokeStyle='#2b261b';x.lineWidth=9;x.beginPath();x.roundRect(16,104,224,418,80);x.fill();x.stroke();
+  ellipse(62,105,39,51,'#dc1520','#195bb5',4);x.font='bold 30px sans-serif';x.textAlign='center';x.fillStyle='#fff';x.fillText('不乖',62,115);x.font='bold 30px sans-serif';x.lineWidth=5;x.strokeStyle='#292511';x.strokeText('造句包',158,100);x.fillStyle='#ffdc31';x.fillText('造句包',158,100);
+  x.fillStyle='#d91d21';x.font='bold 33px sans-serif';x.fillText('不乖',169,239);x.strokeStyle='#3b332b';x.lineWidth=2;x.setLineDash([2,3]);for(const y of [288,403]){x.beginPath();x.moveTo(40,y);x.lineTo(218,y-27);x.stroke();}x.setLineDash([]);
+  x.font='bold 12px sans-serif';x.fillStyle='#184c96';x.fillText('做你的不乖　請用不乖造句',128,485);
+  // Mint-green mascot with magenta outline; the aperture passes through its face.
+  x.save();x.translate(-45,0);
+  for(let i=0;i<5;i++)ellipse(134-i*5,568+i*28,11,20,'#ffe694','#eb1d73',3);
+  x.fillStyle='#83efd6';x.strokeStyle='#e71e73';x.lineWidth=4;
+  x.beginPath();x.moveTo(129,849);x.bezierCurveTo(108,788,122,676,145,608);x.bezierCurveTo(165,542,201,535,205,587);x.bezierCurveTo(206,627,171,696,182,756);x.lineTo(187,857);x.quadraticCurveTo(165,890,153,831);x.quadraticCurveTo(132,899,117,868);x.closePath();x.fill();x.stroke();
+  x.beginPath();x.moveTo(135,715);x.lineTo(88,666);x.quadraticCurveTo(71,647,74,669);x.lineTo(133,752);x.closePath();x.fill();x.stroke();
+  ellipse(174,646,25,46,'#af1753','#e71e73',4);ellipse(173,645,19,29,'#fff4df','#ec176b',3);
+  ellipse(151,604,7,13,'#e62173');ellipse(155,775,21,38,'#ffe2aa','#ed2474',3);x.restore();
+  ellipse(60,794,41,55,'#fff','#187c42',4);ellipse(53,772,19,24,'#6fbb38');ellipse(68,766,18,12,'#fff5da','#bd9947',2);x.font='bold 18px sans-serif';x.fillStyle='#3b261c';x.fillText('奶油椰子',60,827);x.fillStyle='#fff';x.font='bold 23px sans-serif';x.fillText('綠 色 金 順',128,957);x.restore();
+ }
+}
+function paintBeerPackage(x,w,h){
+ const gradient=x.createLinearGradient(0,0,0,h);gradient.addColorStop(0,'#b8bdbb');gradient.addColorStop(.15,'#f4f4ed');gradient.addColorStop(.55,'#e8ece6');gradient.addColorStop(.9,'#f8f8ef');gradient.addColorStop(1,'#aab0ae');x.fillStyle=gradient;x.fillRect(0,0,w,h);
+ for(const cx of [w*.25,w*.75]){
+  x.save();x.translate(cx,h*.50);x.beginPath();x.ellipse(0,0,w*.205,h*.35,0,0,TAU);x.fillStyle='#176b38';x.fill();x.strokeStyle='#e5f2d1';x.lineWidth=5;x.stroke();x.beginPath();x.ellipse(0,0,w*.18,h*.305,0,0,TAU);x.strokeStyle='#b7d57a';x.lineWidth=3;x.stroke();
+  x.fillStyle='#e6efe0';x.beginPath();x.ellipse(0,-h*.12,w*.15,h*.085,0,0,TAU);x.fill();x.textAlign='center';x.fillStyle='#c62527';x.font='bold 25px sans-serif';x.fillText('金 牌',0,-h*.135);x.font='bold 13px sans-serif';x.fillText('Gold Medal',0,-h*.085);
+  x.fillStyle='#f6f9e8';x.font='bold 58px sans-serif';x.fillText('台灣 啤酒',0,h*.035);
+  x.fillStyle='#f1f2dd';x.fillRect(-w*.145,h*.085,w*.29,h*.125);x.fillStyle='#176b38';x.font='bold 29px serif';x.fillText('TAIWAN',0,h*.139);x.fillText('BEER',0,h*.195);x.fillStyle='#e5f2d1';x.font='bold 12px sans-serif';x.fillText('DISTINCTIVE FLAVOR LAGER BEER',0,-h*.235);x.restore();
+ }
+ let seed=154;for(let i=0;i<500;i++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;const a=seed/4294967296;seed=(Math.imul(seed,1664525)+1013904223)>>>0;x.fillStyle=i%2?'#ffffff16':'#363c3811';x.fillRect(a*w,seed/4294967296*h,2,2);}
+}
+function attachFoodSpill(T,g,record,mat,d){
+ const add=(geo,m,n)=>{const b=batch(T,g,geo,m,n);d.batches.push(b);return b;};
+ if(record.snackProp){
+  const geo=new T.CylinderGeometry(.055,.058,.145,14,5),p=geo.attributes.position;
+  for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),w=1+.09*Math.sin(x*217+y*91+z*137);p.setXYZ(i,x*w,y+.004*Math.sin(x*185+z*141),z*w);}geo.computeVertexNormals();
+  const cookie=mat('#edcb62');cookie.roughness=.97;add(geo,cookie,96);
+ }
+ if(record.beerProp){
+  const liquid=mat('#dca53c');liquid.transparent=true;liquid.opacity=.75;liquid.roughness=.13;liquid.depthWrite=false;add(new T.SphereGeometry(1,10,8),liquid,76);
+  const bubble=mat('#fff2ca');bubble.transparent=true;bubble.opacity=.75;bubble.roughness=.18;bubble.depthWrite=false;add(new T.SphereGeometry(1,8,6),bubble,112);
+  // Reuse the rounded liquid stream; translate its nozzle to the pull-tab aperture.
+  const jetRoot=new T.Group();jetRoot.position.z=.16;g.add(jetRoot);
+  const streamRecord={colaMotion:{}};const goldMat=color=>{const m=mat(color==='#884326'?'#e0a238':'#e9be60');return m;};
+  createColaStream(T,jetRoot,streamRecord,goldMat);record.beerProp.stream=streamRecord.colaMotion;jetRoot.scale.set(.65,.65,.65);jetRoot.position.y=1.98*(1-.65);
+ }
+ if(record.cardboard){
+  const water=mat('#ffffff'),melon=mat('#ffffff'),banana=mat('#e8c646'),apple=mat('#c93c31');
+  water.map=tex(T,record,256,128,(x,w,h)=>{x.fillStyle='#75a444';x.fillRect(0,0,w,h);for(let j=0;j<12;j++){x.fillStyle='#1c6132';x.beginPath();for(let i=0;i<=32;i++){const y=i*h/32,xx=j*w/12+3*Math.sin(i*.7+j);if(i===0)x.moveTo(xx,y);else x.lineTo(xx,y);}for(let i=32;i>=0;i--)x.lineTo(j*w/12+6+3*Math.sin(i*.7+j),i*h/32);x.fill();}},'street:fruit-watermelon-v154');
+  melon.map=tex(T,record,256,128,(x,w,h)=>{x.fillStyle='#b5b48a';x.fillRect(0,0,w,h);x.strokeStyle='#ede0b0';x.lineWidth=1.3;for(let j=0;j<16;j++){x.beginPath();for(let i=0;i<24;i++){const xx=i*w/23,yy=j*h/16+3*Math.sin(i*1.4+j);if(i===0)x.moveTo(xx,yy);else x.lineTo(xx,yy);}x.stroke();}for(let j=0;j<26;j++){x.beginPath();for(let i=0;i<18;i++){const yy=i*h/17,xx=j*w/26+3*Math.sin(i*1.6+j);if(i===0)x.moveTo(xx,yy);else x.lineTo(xx,yy);}x.stroke();}},'street:fruit-melon-v154');
+  add(new T.SphereGeometry(1,18,12),water,20);add(new T.SphereGeometry(1,18,12),melon,20);
+  const curve=new T.CatmullRomCurve3([new T.Vector3(-.72,.43,0),new T.Vector3(-.48,-.15,0),new T.Vector3(0,-.39,0),new T.Vector3(.48,-.12,0),new T.Vector3(.65,.46,0)]);
+  add(new T.TubeGeometry(curve,18,.19,9,false),banana,24);
+  const profile=[[0,-.82],[.45,-.80],[.76,-.55],[.93,-.08],[.95,.38],[.75,.73],[.46,.82],[.18,.67],[.095,.70],[.07,.98],[0,1.02]];
+  const appleGeo=new T.LatheGeometry(profile.map(p=>new T.Vector2(...p)),24),a=appleGeo.attributes.position,colors=[];
+  for(let i=0;i<a.count;i++){const stem=a.getY(i)>.69&&Math.hypot(a.getX(i),a.getZ(i))<.12;const c=new T.Color(stem?'#654222':'#c93c31');colors.push(c.r,c.g,c.b);}appleGeo.setAttribute('color',new T.Float32BufferAttribute(colors,3));apple.color.set('#ffffff');apple.vertexColors=true;add(appleGeo,apple,24);
+ }
+}
+function animateFoodSpill(record,d,time,dt,speed,moving,teleport){
+ const snack=record.snackProp,beer=record.beerProp,box=record.cardboard;
+ // Walking remains unchanged; fast movement opens new packages. Cardboard
+ // uses precisely the existing flap energy, so fruit starts as the flaps lift.
+ const running=moving&&speed>2.5&&!teleport;if(teleport)d.foodOpen=0;
+ const open=box?d.energy:(d.foodOpen=(d.foodOpen||0)+((running?1:0)-(d.foodOpen||0))*(1-Math.exp(-dt*12)));
+ if(snack){for(const {hinge,sign} of snack.lips)hinge.rotation.x=-sign*open*1.25;snack.mouth.scale.z=1+open*2.4;}
+ if(beer){beer.flap.rotation.x=open*1.40;beer.tab.rotation.x=-open*.75;beer.stream.open=open;updateColaStream(beer.stream,time);}
+ const emitting=!teleport&&(box?moving&&open>.25:running&&open>.25);
+ if(emitting){
+  d.credit+=dt*(snack?58:beer?100:38);while(d.credit>=1){d.credit--;const i=Math.floor(rng(d)*d.batches.length),b=d.batches[i],angle=rng(d)*TAU;
+   if(snack)emit(d,b,Math.cos(angle)*.22,1.87,Math.sin(angle)*.08,1.2+speed*.18,1.8+rng(d)*1.3,.8+rng(d)*.55,1.7);
+   else if(beer)emit(d,b,0,2,.16,.7+speed*.12,1.2+rng(d)*2.2,(i===0?.022:.032)+rng(d)*.028,1.05+rng(d)*.5);
+   else emit(d,b,(rng(d)-.5)*.35,1.02,(rng(d)-.5)*.26,1.3+speed*.10,1.35+rng(d)*1.7,.075+rng(d)*.075,2.6);
+  }
+ }else d.credit=0;
+ for(const b of d.batches){if(b.mesh.count||emitting||teleport)updateBatch(d,b,dt);}
 }

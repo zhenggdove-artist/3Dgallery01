@@ -81,7 +81,9 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   ['pharmacy-bag-disguise','NHI Pharmacy Medicine Bag','#e6e7e1',3,2950,2,{hp:1.5,defense:.10}],
   ['gg-noodle-disguise','GG Fried Sauce Noodles','#192586',3,2950,1.45,{}],
   ['wheelchair-disguise','Blue Wheelchair','#244e91',3,2950,1,{}],
-  ['joss-burner-disguise','Joss Paper Burner','#655e58',3,2950,2,{}]
+  ['joss-burner-disguise','Joss Paper Burner','#655e58',3,2950,2,{}],
+  ['naughty-snack-disguise','不乖餅乾袋','#88c62b',3,2950,2,{}],
+  ['taiwan-beer-disguise','台灣啤酒','#e5e8de',3,2950,2,{}]
  ];
  OUTFITS.push(...disguises.map(([creature,name,color,tier,templePrice,disguiseHeight,bonuses])=>({
   id:'outfit-'+creature,name,color,tier,price:templePrice,templePrice,slot:'outfit',family:'outfit',
@@ -93,6 +95,7 @@ OUTFITS.push(...r106Outfits.map(([creature,name,color,tier,templePrice,bonuses])
   ...(creature==='pooh-plush-disguise'?{shopRelease:123}:{}),
   ...(['goldfish-bowl-disguise','pharmacy-bag-disguise'].includes(creature)?{shopRelease:124}:{}),
   ...(['gg-noodle-disguise','wheelchair-disguise','joss-burner-disguise'].includes(creature)?{shopRelease:151}:{}),
+  ...(['naughty-snack-disguise','taiwan-beer-disguise'].includes(creature)?{shopRelease:154}:{}),
   ...(['luroufan-sign-disguise','luroufan-bowl-disguise','notok-sign-disguise','987-sign-disguise'].includes(creature)?{shopRelease:118}:{}),
   description:Object.entries(bonuses).map(([k,v])=>k==='hp'?'+'+Math.round(v*10)+' max HP':(v>=0?'+':'')+Math.round(v*100)+'% '+({defense:'damage reduction',speed:'movement speed'}[k]||k)).join(' · ')
  })));

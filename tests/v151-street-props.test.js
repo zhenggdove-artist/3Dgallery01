@@ -5,7 +5,7 @@ import {itemById,SHOP_ITEMS,shopPurchaseVariant} from '../src/shared/catalog.js'
 import {attachOutfit,disposeOutfit,animateOutfit,poseWheelchair} from '../src/reletter/outfit-model.js';
 import {outfitTextureResources,wearableResourceSnapshot} from '../src/shared-render-resources.js';
 import {animateFaultyMutton} from '../src/reletter/street-outfit-motion.js';
-const kinds=['gg-noodle','wheelchair','joss-burner'];
+const kinds=['gg-noodle','wheelchair','joss-burner','naughty-snack','taiwan-beer','cardboard'];
 function rig(){
  const root=new T.Group(),model=new T.Group();root.add(model);
  const add=(name,p,parent=model)=>{const b=new T.Bone();b.name=name;b.position.set(...p);parent.add(b);return b;};
@@ -13,7 +13,7 @@ function rig(){
  for(const [side,sign] of [['Left',1],['Right',-1]]){add(side+'Shoulder',[sign*.16,.14,0],spine);const thigh=add(side+'UpLeg',[sign*.13,-.04,0],hips),shin=add(side+'Leg',[0,-.40,0],thigh);const foot=add(side+'Foot',[0,-.40,0],shin);add(side+'ToeBase',[0,-.02,.1],foot);}
  root.updateMatrixWorld(true);return {root,model,hips};
 }
-function withCanvas(fn){const prior=globalThis.document;globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>new Proxy({},{get:(o,k)=>o[k]??(k==='createRadialGradient'?()=>({addColorStop(){}}):()=>{}),set:(o,k,v)=>(o[k]=v,true)})})};try{return fn();}finally{globalThis.document=prior;}}
+function withCanvas(fn){const prior=globalThis.document;globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>new Proxy({},{get:(o,k)=>o[k]??((k==='createRadialGradient'||k==='createLinearGradient')?()=>({addColorStop(){}}):()=>{}),set:(o,k,v)=>(o[k]=v,true)})})};try{return fn();}finally{globalThis.document=prior;}}
 function drive(record,root,n,step=.1,t=0){for(let i=1;i<=n;i++){root.position.x+=step;animateOutfit(record,t+i*.1,root,.1);}}
 test('three actual purchasable outfits have finite geometry and common ownership, repeated attach/dispose returns every lease',()=>withCanvas(()=>{
  const before=outfitTextureResources.snapshot(),active=wearableResourceSnapshot().outfit.active;
@@ -67,3 +67,22 @@ test('GG noodles form a solid full bowl with no center or rim gaps, and keep sha
  assert.ok(central>=10);assert.equal(one.extraStreetMotion.batches[0].particles.length,28);
  const texture=fill.material.map;disposeOutfit(one);assert.ok(texture.image.width>0);disposeOutfit(two);assert.deepEqual(outfitTextureResources.snapshot(),before);
 }));
+
+test('running opens both new packages and activates bounded food and beer effects; cardboard spills four fruits',()=>withCanvas(()=>{
+ for(const [id,counts] of [['naughty-snack',[96]],['taiwan-beer',[76,112]],['cardboard',[20,20,24,24]]]){
+  const {root,model}=rig(),r=attachOutfit(T,model,itemById('outfit-'+id+'-disguise')),d=r.extraStreetMotion;
+  assert.deepEqual(d.batches.map(b=>b.particles.length),counts);
+  animateOutfit(r,0,root,.1);drive(r,root,40,.7);assert.ok(d.batches.every(b=>b.mesh.count>0));
+  if(r.snackProp)assert.ok(r.snackProp.lips.every(l=>Math.abs(l.hinge.rotation.x)>1));
+  if(r.beerProp){assert.ok(r.beerProp.flap.rotation.x>1);assert.ok(r.beerProp.stream.jet.mesh.visible);}
+  for(let i=0;i<40;i++)animateOutfit(r,5+i*.1,root,.1);
+  assert.ok(d.batches.every(b=>b.mesh.count===0));disposeOutfit(r);
+ }
+}));
+test('owned Apple RGBA texture pixels are released only after the final shared lease',async()=>{
+ const {acquireOutfitTexture,releaseOutfitTexture}=await import('../src/shared-render-resources.js');
+ const a=acquireOutfitTexture('test:food-rgba',()=>new T.DataTexture(new Uint8Array(16),2,2));
+ const b=acquireOutfitTexture('test:food-rgba',()=>assert.fail('duplicate texture'));
+ releaseOutfitTexture('test:food-rgba',a);assert.ok(b.image.data);
+ releaseOutfitTexture('test:food-rgba',b);assert.equal(a.image.data,null);
+});

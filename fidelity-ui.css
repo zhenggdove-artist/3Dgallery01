@@ -1217,3 +1217,8 @@ body.panel-open #panel.terrain-style-floating{width:min(300px,calc(100vw - 16px)
 #panel .gm-roster-nav small{flex:1;min-width:80px;text-align:center}
 #panel [data-gm-player-detail]{padding:7px;background:#fff;border:1px solid #d3c1e4}
 #panel .gm-player-controls button:disabled{opacity:.5;cursor:default}
+
+#panel .gm-player-controls [data-gm-player]{display:grid;align-content:start;gap:4px;height:220px;overflow-y:auto;overscroll-behavior:contain;padding:4px;border:1px solid #9e80bb;background:#fff}
+#panel .gm-player-controls .gm-recipient{display:flex;align-items:center;justify-content:space-between;gap:6px;text-align:left;min-height:44px;background:#f4edf9;overflow-wrap:anywhere}
+#panel .gm-player-controls .gm-recipient span{font-size:11px;font-weight:400;text-align:right}
+#panel .gm-player-controls .gm-recipient[aria-pressed="true"]{background:#305db7;color:white;border-color:#173977}

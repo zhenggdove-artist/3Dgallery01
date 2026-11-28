@@ -25,7 +25,7 @@ export function setRemovedPreviewAssets(removed={}){
  for(const id of Object.keys(removedPreviewAssets)){if(Object.hasOwn(previous,id))continue;const item=itemById(id);if(!item)continue;const key=keyOf(item),url=finished.get(key);if(url?.startsWith('blob:'))URL.revokeObjectURL(url);finished.delete(key);failed.delete(key);failUntil.delete(key);void previewCache().then(cache=>cache?.delete(previewCacheKey(item))).catch(()=>{});}
 }
 const excludedPreview=item=>!!item&&Object.hasOwn(removedPreviewAssets,item.id);
-const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0)+(item.id==='outfit-luroufan-bowl-disguise'?':v065':item.id==='outfit-pooh-plush-disguise'?':v070':String(item.id).includes('cardboard-disguise')?':v143':item.id==='outfit-mutton-sign-disguise'?':v151':item.id==='outfit-gg-noodle-disguise'?':v152':'');
+const keyOf=item=>(item.family==='saber'?'saber-product-portrait':item.id)+':'+(item.updatedAt||0)+(item.id==='outfit-luroufan-bowl-disguise'?':v065':item.id==='outfit-pooh-plush-disguise'?':v070':String(item.id).includes('cardboard-disguise')?':v154':item.id==='outfit-mutton-sign-disguise'?':v151':item.id==='outfit-gg-noodle-disguise'?':v152':'');
 // Bump only the affected visual generation when model/material/portrait art changes.
 // A renderer-wide visual change requires bumping every entry. Gameplay-only
 // releases reuse identical full-resolution PNGs across deployments.

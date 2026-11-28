@@ -35,3 +35,12 @@ test('online guest including spectator may receive, offline guest cannot',()=>{
  const {w,act}=setup(),p=ensureProfile(w,'guest:123','Guest','#ffffff',now,false),body={action:'gm-gift-coins',targetKey:p.key,amount:100};
  assert.equal(act(body).error,'Guest is offline');assert.equal(act(body,undefined,{activeProfileKeys:new Set([p.key])}).gift.amount,100);
 });
+
+test('shop uses the same explicit, searchable row recipient picker as GM, without a duplicate product dropdown',async()=>{
+ const {readFileSync}=await import('node:fs'),s=readFileSync(new URL('../src/ui.js',import.meta.url),'utf8');
+ assert.match(s,/data-shop-gift=/);assert.match(s,/data-gm-recipient=/);assert.match(s,/gmRosterMarkup/);
+ assert.doesNotMatch(s,/<select[^>]*data-gm-player(?:\s|>)/);
+ assert.doesNotMatch(s,/data-gm-gift-item/);
+ assert.match(s,/Number\(b\.online\)-Number\(a\.online\)/);
+ assert.match(s,/itemId:gift\.itemId/);
+});

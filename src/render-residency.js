@@ -75,7 +75,7 @@ export class RenderMemoryManager{
    for(let i=0;i<g.list.length;i++){
     const e=g.list[i],root=g.root(e);
     if(i<g.keep||root?.parent)continue;
-    const since=g.since(e);if(Number.isFinite(since)&&now-since>=g.idleMs)candidates.push({g,e,since});
+    const since=g.since(e);if(Number.isFinite(since)&&now-since>=g.idleMs)candidates.push({g,ref:sampleRef(e),since});
    }
   }
   candidates.sort((a,b)=>a.since-b.since);
@@ -90,7 +90,7 @@ export class RenderMemoryManager{
  advancePoolRetirement(){
   let retired=0;
   while(this.retireCandidates.length&&this.frameRetires<this.retireLimit&&this.frameMaintenanceMs<this.maintenanceMs){
-   const {g,e,since}=this.retireCandidates[0],i=g.list.indexOf(e);
+   const {g,ref,since}=this.retireCandidates[0],e=sampleNode(ref),i=e?g.list.indexOf(e):-1;
    if(i<g.keep||g.root(e)?.parent||g.since(e)!==since){this.retireCandidates.shift();continue;}
    if(!this.retire(g.kind,()=>{g.list.splice(i,1);g.dispose(e);}))break;
    this.retireCandidates.shift();retired++;
